@@ -1,0 +1,11 @@
+{
+  "cause": "sweep-2026-10-16-igaku-native-arrow-zoom-source-cause.json",
+  "production_change": "Implement captured native GetZoom, GetZoomVariable and GetPulseInner formulas: field fit, pulse, positive-travel shrink, global and column Tiny. Share the identical field-fit expression with GetXPos.",
+  "native_reference_cases": 53,
+  "source_control": "Three pinned native C++ functions copied verbatim; independent g++ control reproduces all53 outputs. Test also covers Song/Current option approach before callbacks.",
+  "all_prior_110_live_and44_replay_assertions_and_full_acceptance_unchanged": true,
+  "runtime_native_getter_outputs_used_as_inputs": false,
+  "Igaku_full_repairs_spent": 0,
+  "Igaku_remaining_observed_original_failures": "Original report also contains alpha and Y differences. Verify actual retained entry and source-review remaining Y before a first full repair.",
+  "new_full_repair_started": false
+}

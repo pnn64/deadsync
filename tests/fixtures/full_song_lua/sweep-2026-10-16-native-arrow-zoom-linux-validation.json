@@ -1,0 +1,86 @@
+{
+  "source_root": "/home/parity/workspace/native-arrow-zoom-green-v1/deadsync",
+  "binary_sha256": "a785438f8c9bbdf891c31f903e76cb7a901cd2025abfe9f1eb30a791ce825a66",
+  "checks": [
+    {
+      "label": "target",
+      "exit_code": 0,
+      "seconds": 403.91058221901767,
+      "log_sha256": "4563ed7d2e058e20f24cc20aef52d77cee10acfce1560abb6617d7d61429fcac",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 647 filtered out; finished in 13.09s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 42.13247777998913,
+      "log_sha256": "eb398437dcb0c95ad104252a5293687b3bf3dcce420f7f3479cba28efe083b29",
+      "results": [
+        "test result: ok. 111 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 41.36s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 320.57531211397145,
+      "log_sha256": "88fb563228152afc7109be99c40e9bb3043d8a3cb0352fe45787ed321fc20efd",
+      "results": [
+        "test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 29.74s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 85.45305617700797,
+      "log_sha256": "2dfb8eaa2667f7afc750eb48235eb0051b141f9e2ed8fd6fc82ba2900e537e39",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.2093628619913943,
+      "log_sha256": "75eb1e181af617448034ceaf8c07484ffd01e0773ae15cd02875cb98036c58b0",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 647 filtered out; finished in 0.46s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 47.70856618997641,
+      "log_sha256": "bec4d4a3f778e9f2d54ef298fd2954c09f074aa9d008841115f22965df76bdf2",
+      "results": []
+    }
+  ],
+  "all_six_groups_both_hosts_passed": true,
+  "both_host_meaningful_red_observed": true,
+  "all_1175_sources_and50_assets_cross_platform_and_logs_verified": true,
+  "native_source_reference": {
+    "native_source_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "native_functions_copied_verbatim": true,
+    "native_functions_sha256": [
+      "7aea7807d50b744ba3e5f6a9df419cf525c85f2df881778613e12193fdfb5f33",
+      "48ccb86b0865bee9ba68518da9f2a0e04d2401d51dabd0debd10e05b63c73a2d",
+      "35c45d302f0f62bc6c3027ff5a901350de1ca26010d1e632ccd33c4f24f4e837"
+    ],
+    "cpp_sha256": "5ff8b30a2be20ef535e9c9c6c1fc402beda46ee6f5ca023f2cdfc06ab1e67501",
+    "case_count": 53,
+    "expected_outputs_used_in_song_runtime": false,
+    "output_sha256": "fde00f8c1874c69b34356d21ff9a5146c68c360778e5133dac5b9d55a851cb96",
+    "command": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-ffp-contract=off",
+      "/home/parity/jobs/arrow-zoom-native-reference-v1.cpp",
+      "-o",
+      "/home/parity/jobs/arrow-zoom-native-reference-verified-v1"
+    ],
+    "cases_reproduced": 53
+  },
+  "all_prior_110_live_and44_replay_test_sources_and_full_acceptance_unchanged": true,
+  "captured_expected_values_used_as_song_runtime_inputs": false
+}

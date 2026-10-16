@@ -1198,10 +1198,8 @@ pub fn create_arrow_effects_table(
         "GetRotationZ",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
     )?;
-    table.set(
-        "GetZoom",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
-    )?;
+    table.set("GetZoom", lua.create_function(move |lua, args: MultiValue|
+        arrow_effects_zoom(lua, &args, current_style_name))?)?;
     table.set(
         "GetAlpha",
         lua.create_function({
@@ -1314,7 +1312,7 @@ fn arrow_effects_x_pos(
     let two_sides = matches!(style.style_type, "StyleType_OnePlayerTwoSides" | "StyleType_TwoPlayersSharedSides");
     // _fallback GameplayMargins reserves 272px per side, 544px when centered.
     // ScreenGameplay clamps the resulting style fit zoom to one.
-    let field_zoom = ((if two_sides { 544.0 } else { 272.0 }) / style.width).min(1.0);
+    let field_zoom = arrow_effects_field_zoom(&style);
     let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
     let beat = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
     let seconds = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
@@ -1400,6 +1398,60 @@ fn arrow_effects_x_pos(
     x += base_x * field_zoom;
     if value("tiny")? != 0.0 { x *= 0.5f32.powf(value("tiny")?).min(1.0); }
     Ok(x)
+}
+
+fn arrow_effects_field_zoom(style: &crate::SongLuaStyleInfo) -> f32 {
+    let two_sides = matches!(style.style_type,
+        "StyleType_OnePlayerTwoSides" | "StyleType_TwoPlayersSharedSides");
+    ((if two_sides { 544.0 } else { 272.0 }) / style.width).min(1.0)
+}
+
+fn arrow_effects_zoom(
+    lua: &Lua, args: &MultiValue, current_style_name: fn(&Lua) -> String,
+) -> mlua::Result<f32> {
+    let options = arrow_effects_player_options(args)?;
+    let state = options.as_ref().map(|options|
+        options.raw_get::<Option<Table>>("__songlua_player_option_state"))
+        .transpose()?.flatten();
+    let value = |name: &str| -> mlua::Result<f32> {
+        Ok(state.as_ref().map(|state| state.raw_get::<Option<f32>>(name))
+            .transpose()?.flatten().unwrap_or(0.0))
+    };
+    let number = |index, default| -> mlua::Result<f32> {
+        match args.get(index).filter(|value| !value.is_nil()) {
+            Some(value) => lua.coerce_number(value.clone())?.map(|value| value as f32)
+                .ok_or_else(|| mlua::Error::runtime("expected numeric ArrowEffects argument")),
+            None => Ok(default),
+        }
+    };
+    let y = number(1, 0.0)?;
+    let style = crate::song_lua_style_info(&current_style_name(lua));
+    let column = number(2, 1.0)? as i32 - 1;
+    let column = usize::try_from(column).ok().filter(|column| *column < style.columns)
+        .ok_or_else(|| mlua::Error::runtime("ArrowEffects.GetZoom column out of range"))?;
+    let mut zoom = arrow_effects_field_zoom(&style);
+    let inner = value("pulseinner")?;
+    let outer = value("pulseouter")?;
+    if inner != 0.0 || outer != 0.0 {
+        let sine = ((y + 100.0 * value("pulseoffset")?)
+            / (0.4 * (64.0 + value("pulseperiod")? * 64.0))).sin();
+        let mut inner = inner * 0.5 + 1.0;
+        if inner == 0.0 { inner = 0.01; }
+        zoom *= sine * (outer * 0.5) + inner;
+    }
+    let shrink_mult = value("shrinkmult")?;
+    if shrink_mult != 0.0 && y >= 0.0 {
+        zoom *= 1.0 / (1.0 + y * (shrink_mult / 100.0));
+    }
+    let shrink_linear = value("shrinklinear")?;
+    if shrink_linear != 0.0 && y >= 0.0 {
+        zoom += y * (0.5 * shrink_linear / 64.0);
+    }
+    let tiny = value("tiny")?;
+    if tiny != 0.0 { zoom *= 0.5f32.powf(tiny); }
+    let tiny = value(&format!("tiny{}", column + 1))?;
+    if tiny != 0.0 { zoom *= 0.5f32.powf(tiny); }
+    Ok(zoom)
 }
 
 fn arrow_effects_alpha(

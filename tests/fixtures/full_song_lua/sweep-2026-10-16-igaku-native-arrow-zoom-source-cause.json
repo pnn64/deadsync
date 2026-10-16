@@ -1,5 +1,5 @@
 {
-  "status": "Actual first zoom source cause; implementation pending",
+  "status": "Source-qualified native zoom implementation; retained original entry pending",
   "source_simfile": "Igaku/Igaku.ssc",
   "position": 240,
   "full_repairs_spent": 0,
@@ -42,5 +42,11 @@
   },
   "captured_values_used_as_runtime_inputs": false,
   "full_acceptance_unchanged": true,
-  "Igaku_other_Y_differences_remain_separate": true
+  "Igaku_other_Y_differences_remain_separate": true,
+  "fix_added": true,
+  "all_six_groups_both_hosts_passed": true,
+  "native_reference_cases": 53,
+  "selection_evidence": "sweep-2026-10-16-native-arrow-zoom-selection.json",
+  "Igaku_full_repairs_spent": 0,
+  "first_actual_entry_verification_pending": true
 }

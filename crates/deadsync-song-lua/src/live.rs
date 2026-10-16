@@ -7007,4 +7007,60 @@ ArrowEffects.Update()
 assert(ArrowEffects.GetXPos(PS,1,0)~=-96, 'explicit native Update refreshes effect data')
 "#).exec().unwrap();
     }
+
+    #[test]
+    fn live_arrow_zoom_matches_native_source_and_column_tiny_lifecycle() {
+        let reference: serde_json::Value = serde_json::from_str(include_str!(
+            "../assets/itgmania/arrow-zoom-native-reference-v1.json")).unwrap();
+        let cases = reference["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 53);
+        for case in cases {
+            let column = case["column"].as_u64().unwrap();
+            let mut compiled = compile_with_context("native-arrow-zoom-source", "return Def.ActorFrame {}", |context| {
+                context.defer_initial_live_update = true;
+                context.style_name = if column > 4 { "double" } else { "single" }.into();
+            });
+            let scene = compiled.live_scene.take().unwrap();
+            let options = scene.lua.load(
+                "return GAMESTATE:GetPlayerState(PLAYER_1):GetCurrentPlayerOptions()"
+            ).eval::<Table>().unwrap();
+            for (name, value) in case["effects"].as_object().unwrap() {
+                options.get::<Function>(name.as_str()).unwrap()
+                    .call::<Value>((options.clone(), value.as_f64().unwrap())).unwrap();
+            }
+            let actual = scene.lua.load(format!(
+                "return ArrowEffects.GetZoom(GAMESTATE:GetPlayerState(PLAYER_1), {}, {})",
+                case["y"], column
+            )).eval::<f32>().unwrap();
+            let expected = &case["expected"];
+            let valid = match expected.as_str() {
+                Some("nan") => actual.is_nan(),
+                Some("infinity") => actual == f32::INFINITY,
+                Some("-infinity") => actual == f32::NEG_INFINITY,
+                _ => (actual - expected.as_f64().unwrap() as f32).abs() <= 0.0001,
+            };
+            assert!(valid, "native GetZoom must apply per-column Tiny and variable zoom: {} actual={actual:?}, expected={expected}", case["id"]);
+        }
+        let mut compiled = compile_with_context("native-arrow-zoom-current-lifecycle", "return Def.ActorFrame {}",
+            |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.lua.load(r#"
+PS=GAMESTATE:GetPlayerState(PLAYER_1)
+SONG=PS:GetPlayerOptions('ModsLevel_Song')
+SONG:Tiny4(-0.08752030434412367,10000)
+assert(ArrowEffects.GetZoom(PS,150,4)==1, 'Current remains separate until the next update')
+"#).exec().unwrap();
+        let frame = |time| SongLuaLiveFrame {music_seconds:time,beat:time*2.0,
+            screen_seconds:time,delta_seconds:0.1,..Default::default()};
+        assert!(scene.advance(frame(0.1)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+assert(math.abs(ArrowEffects.GetZoom(PS,150,4)-1.0625423192977905)<0.000001)
+assert(ArrowEffects.GetZoom(PS,150,1)==1, 'per-column Tiny does not affect another lane')
+SONG:Tiny4(-0.40300090498656843,10000)
+assert(math.abs(ArrowEffects.GetZoom(PS,150,4)-1.0625423192977905)<0.000001,
+    'native Current still exposes the prior Song target during the setter frame')
+"#).exec().unwrap();
+        assert!(scene.advance(frame(0.2)).unwrap().errors.is_empty());
+        scene.lua.load("assert(ArrowEffects.GetZoom(PS,150,4)>1.3)").exec().unwrap();
+    }
 }

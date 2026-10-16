@@ -1,0 +1,624 @@
+{
+  "source_proof": {
+    "native_source_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+    "native_functions_copied_verbatim": true,
+    "native_functions_sha256": [
+      "7aea7807d50b744ba3e5f6a9df419cf525c85f2df881778613e12193fdfb5f33",
+      "48ccb86b0865bee9ba68518da9f2a0e04d2401d51dabd0debd10e05b63c73a2d",
+      "35c45d302f0f62bc6c3027ff5a901350de1ca26010d1e632ccd33c4f24f4e837"
+    ],
+    "cpp_sha256": "5ff8b30a2be20ef535e9c9c6c1fc402beda46ee6f5ca023f2cdfc06ab1e67501",
+    "case_count": 53,
+    "expected_outputs_used_in_song_runtime": false,
+    "output_sha256": "fde00f8c1874c69b34356d21ff9a5146c68c360778e5133dac5b9d55a851cb96"
+  },
+  "cases": [
+    {
+      "id": "recorded-negative-Tiny4",
+      "column": 4,
+      "y": 153.25,
+      "effects": {
+        "Tiny4": -0.0875203013420105
+      },
+      "expected": 1.06254232
+    },
+    {
+      "id": "Tiny-0",
+      "column": 1,
+      "y": -128.5,
+      "effects": {
+        "Tiny": -0.5
+      },
+      "expected": 1.41421354
+    },
+    {
+      "id": "Tiny-1",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "Tiny": 0.75
+      },
+      "expected": 0.594603539
+    },
+    {
+      "id": "Tiny-2",
+      "column": 1,
+      "y": 93.75,
+      "effects": {
+        "Tiny": 1.25
+      },
+      "expected": 0.420448214
+    },
+    {
+      "id": "Tiny-3",
+      "column": 1,
+      "y": 384.25,
+      "effects": {
+        "Tiny": -2.0
+      },
+      "expected": 4.0
+    },
+    {
+      "id": "Tiny1-0",
+      "column": 1,
+      "y": -128.5,
+      "effects": {
+        "Tiny1": -0.5
+      },
+      "expected": 1.41421354
+    },
+    {
+      "id": "Tiny1-1",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "Tiny1": 0.75
+      },
+      "expected": 0.594603539
+    },
+    {
+      "id": "Tiny1-2",
+      "column": 1,
+      "y": 93.75,
+      "effects": {
+        "Tiny1": 1.25
+      },
+      "expected": 0.420448214
+    },
+    {
+      "id": "Tiny1-3",
+      "column": 1,
+      "y": 384.25,
+      "effects": {
+        "Tiny1": -2.0
+      },
+      "expected": 4.0
+    },
+    {
+      "id": "Tiny4-0",
+      "column": 4,
+      "y": -128.5,
+      "effects": {
+        "Tiny4": -0.5
+      },
+      "expected": 1.41421354
+    },
+    {
+      "id": "Tiny4-1",
+      "column": 4,
+      "y": 0,
+      "effects": {
+        "Tiny4": 0.75
+      },
+      "expected": 0.594603539
+    },
+    {
+      "id": "Tiny4-2",
+      "column": 4,
+      "y": 93.75,
+      "effects": {
+        "Tiny4": 1.25
+      },
+      "expected": 0.420448214
+    },
+    {
+      "id": "Tiny4-3",
+      "column": 4,
+      "y": 384.25,
+      "effects": {
+        "Tiny4": -2.0
+      },
+      "expected": 4.0
+    },
+    {
+      "id": "Tiny8-0",
+      "column": 8,
+      "y": -128.5,
+      "effects": {
+        "Tiny8": -0.5
+      },
+      "expected": 1.41421354
+    },
+    {
+      "id": "Tiny8-1",
+      "column": 8,
+      "y": 0,
+      "effects": {
+        "Tiny8": 0.75
+      },
+      "expected": 0.594603539
+    },
+    {
+      "id": "Tiny8-2",
+      "column": 8,
+      "y": 93.75,
+      "effects": {
+        "Tiny8": 1.25
+      },
+      "expected": 0.420448214
+    },
+    {
+      "id": "Tiny8-3",
+      "column": 8,
+      "y": 384.25,
+      "effects": {
+        "Tiny8": -2.0
+      },
+      "expected": 4.0
+    },
+    {
+      "id": "PulseInner-0",
+      "column": 1,
+      "y": -128.5,
+      "effects": {
+        "PulseInner": -0.5,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 0.75
+    },
+    {
+      "id": "PulseInner-1",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "PulseInner": 0.75,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 1.375
+    },
+    {
+      "id": "PulseInner-2",
+      "column": 1,
+      "y": 93.75,
+      "effects": {
+        "PulseInner": 1.25,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 1.625
+    },
+    {
+      "id": "PulseInner-3",
+      "column": 1,
+      "y": 384.25,
+      "effects": {
+        "PulseInner": -2.0,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 0.00999999978
+    },
+    {
+      "id": "PulseOuter-0",
+      "column": 1,
+      "y": -128.5,
+      "effects": {
+        "PulseOuter": -0.5,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 0.940205574
+    },
+    {
+      "id": "PulseOuter-1",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "PulseOuter": 0.75,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 1.2272557
+    },
+    {
+      "id": "PulseOuter-2",
+      "column": 1,
+      "y": 93.75,
+      "effects": {
+        "PulseOuter": 1.25,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 0.574281693
+    },
+    {
+      "id": "PulseOuter-3",
+      "column": 1,
+      "y": 384.25,
+      "effects": {
+        "PulseOuter": -2.0,
+        "PulseOffset": 0.125,
+        "PulsePeriod": -0.25
+      },
+      "expected": 0.0295506716
+    },
+    {
+      "id": "ShrinkMult-0",
+      "column": 1,
+      "y": -128.5,
+      "effects": {
+        "ShrinkMult": -0.5
+      },
+      "expected": 1.0
+    },
+    {
+      "id": "ShrinkMult-1",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "ShrinkMult": 0.75
+      },
+      "expected": 1.0
+    },
+    {
+      "id": "ShrinkMult-2",
+      "column": 1,
+      "y": 93.75,
+      "effects": {
+        "ShrinkMult": 1.25
+      },
+      "expected": 0.460431665
+    },
+    {
+      "id": "ShrinkMult-3",
+      "column": 1,
+      "y": 384.25,
+      "effects": {
+        "ShrinkMult": -2.0
+      },
+      "expected": -0.14958863
+    },
+    {
+      "id": "ShrinkLinear-0",
+      "column": 1,
+      "y": -128.5,
+      "effects": {
+        "ShrinkLinear": -0.5
+      },
+      "expected": 1.0
+    },
+    {
+      "id": "ShrinkLinear-1",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "ShrinkLinear": 0.75
+      },
+      "expected": 1.0
+    },
+    {
+      "id": "ShrinkLinear-2",
+      "column": 1,
+      "y": 93.75,
+      "effects": {
+        "ShrinkLinear": 1.25
+      },
+      "expected": 1.91552734
+    },
+    {
+      "id": "ShrinkLinear-3",
+      "column": 1,
+      "y": 384.25,
+      "effects": {
+        "ShrinkLinear": -2.0
+      },
+      "expected": -5.00390625
+    },
+    {
+      "id": "combined-0",
+      "column": 1,
+      "y": -175.5,
+      "effects": {
+        "Tiny": -0.35,
+        "Tiny1": -0.75,
+        "PulseInner": -2.0,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.767115414
+    },
+    {
+      "id": "combined-1",
+      "column": 2,
+      "y": 0,
+      "effects": {
+        "Tiny": 0.2,
+        "Tiny2": -0.65,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 1.67676699
+    },
+    {
+      "id": "combined-2",
+      "column": 3,
+      "y": 73.75,
+      "effects": {
+        "Tiny": 0.5,
+        "Tiny3": -0.55,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 1.0198797
+    },
+    {
+      "id": "combined-3",
+      "column": 4,
+      "y": 256.125,
+      "effects": {
+        "Tiny": 1.5,
+        "Tiny4": -0.44999999999999996,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.318545401
+    },
+    {
+      "id": "combined-4",
+      "column": 1,
+      "y": -175.5,
+      "effects": {
+        "Tiny": -0.35,
+        "Tiny1": -0.35,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 2.3114624
+    },
+    {
+      "id": "combined-5",
+      "column": 2,
+      "y": 0,
+      "effects": {
+        "Tiny": 0.2,
+        "Tiny2": -0.25,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 1.27075171
+    },
+    {
+      "id": "combined-6",
+      "column": 3,
+      "y": 73.75,
+      "effects": {
+        "Tiny": 0.5,
+        "Tiny3": -0.1499999999999999,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.772924244
+    },
+    {
+      "id": "combined-7",
+      "column": 4,
+      "y": 256.125,
+      "effects": {
+        "Tiny": 1.5,
+        "Tiny4": -0.04999999999999993,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.241412282
+    },
+    {
+      "id": "combined-8",
+      "column": 1,
+      "y": -175.5,
+      "effects": {
+        "Tiny": -0.35,
+        "Tiny1": 0.050000000000000044,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 1.75176084
+    },
+    {
+      "id": "combined-9",
+      "column": 2,
+      "y": 0,
+      "effects": {
+        "Tiny": 0.2,
+        "Tiny2": 0.15000000000000002,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.963049769
+    },
+    {
+      "id": "combined-10",
+      "column": 3,
+      "y": 73.75,
+      "effects": {
+        "Tiny": 0.5,
+        "Tiny3": 0.25,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.58576709
+    },
+    {
+      "id": "combined-11",
+      "column": 4,
+      "y": 256.125,
+      "effects": {
+        "Tiny": 1.5,
+        "Tiny4": 0.3500000000000001,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.182956293
+    },
+    {
+      "id": "combined-12",
+      "column": 1,
+      "y": -175.5,
+      "effects": {
+        "Tiny": -0.35,
+        "Tiny1": 0.4500000000000002,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 1.32758653
+    },
+    {
+      "id": "combined-13",
+      "column": 2,
+      "y": 0,
+      "effects": {
+        "Tiny": 0.2,
+        "Tiny2": 0.55,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.729855239
+    },
+    {
+      "id": "combined-14",
+      "column": 3,
+      "y": 73.75,
+      "effects": {
+        "Tiny": 0.5,
+        "Tiny3": 0.6500000000000001,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.44392845
+    },
+    {
+      "id": "combined-15",
+      "column": 4,
+      "y": 256.125,
+      "effects": {
+        "Tiny": 1.5,
+        "Tiny4": 0.75,
+        "PulseInner": 0.15,
+        "PulseOuter": 0.7,
+        "PulseOffset": 0.15,
+        "PulsePeriod": 0.3,
+        "ShrinkMult": 0.25,
+        "ShrinkLinear": -0.1
+      },
+      "expected": 0.138654932
+    },
+    {
+      "id": "shrink-pole",
+      "column": 1,
+      "y": 100,
+      "effects": {
+        "ShrinkMult": -1
+      },
+      "expected": "infinity"
+    },
+    {
+      "id": "pulse-pole",
+      "column": 1,
+      "y": 0,
+      "effects": {
+        "PulseOuter": 1,
+        "PulsePeriod": -1
+      },
+      "expected": "nan"
+    },
+    {
+      "id": "column-isolation",
+      "column": 2,
+      "y": 80,
+      "effects": {
+        "Tiny4": -0.5
+      },
+      "expected": 1.0
+    },
+    {
+      "id": "negative-travel-skips-shrink",
+      "column": 1,
+      "y": -300,
+      "effects": {
+        "ShrinkMult": 0.6,
+        "ShrinkLinear": 0.75
+      },
+      "expected": 1.0
+    }
+  ]
+}
