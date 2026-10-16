@@ -1,0 +1,86 @@
+{
+  "source_root": "/home/parity/workspace/native-option-frame-delta-green-v1/deadsync",
+  "binary_sha256": "c3d6023bc9a2a35295a7676942598325f53a83b5edf52920b4ebe2e401b6f4bd",
+  "checks": [
+    {
+      "label": "target",
+      "exit_code": 0,
+      "seconds": 403.3316519020009,
+      "log_sha256": "cbe6ac469f8a5be95befe9781e3d563c192160bd507c4ef1809235427dee2290",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 648 filtered out; finished in 8.01s"
+      ]
+    },
+    {
+      "label": "live-controls",
+      "exit_code": 0,
+      "seconds": 42.08892465400277,
+      "log_sha256": "570f2d61e95d1ed25a47f9ecaded4985fe80bcd5aa07cfc07f70d02c67a0f00d",
+      "results": [
+        "test result: ok. 112 passed; 0 failed; 0 ignored; 0 measured; 537 filtered out; finished in 41.31s"
+      ]
+    },
+    {
+      "label": "replay-controls",
+      "exit_code": 0,
+      "seconds": 380.1543845910346,
+      "log_sha256": "0ff6ff5aa941ea8013a31bdd18502fee430f5986d29232dece5c378c335b115d",
+      "results": [
+        "test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 302 filtered out; finished in 45.67s"
+      ]
+    },
+    {
+      "label": "profile-control",
+      "exit_code": 0,
+      "seconds": 111.70585261197994,
+      "log_sha256": "27a600194ef940a6e84d2ee44e16b8c209db662848f52fb6d209b0dae0bec792",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.02s"
+      ]
+    },
+    {
+      "label": "legacy-namespace-control",
+      "exit_code": 0,
+      "seconds": 1.8392675769864582,
+      "log_sha256": "dfd602e29eba648f6ee462ed0151ea4768cec95f94d36ca23eee56c721bb24a7",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 648 filtered out; finished in 0.78s"
+      ]
+    },
+    {
+      "label": "build",
+      "exit_code": 0,
+      "seconds": 68.19838130101562,
+      "log_sha256": "0aeaa26aef1a6af523d434ba5c574c8d7b0ef651c983580de11e9636adda5ab3",
+      "results": []
+    }
+  ],
+  "all_six_groups_both_hosts_passed": true,
+  "both_host_meaningful_red_observed": true,
+  "all_1175_sources_and51_assets_cross_platform_and_logs_verified": true,
+  "native_source_reference": {
+    "native_fapproach_source_sha256": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012",
+    "native_fapproach_function_sha256": "d6ec00aedf7fb0af7ae0e1cc8a2a9892747700cb477d2384b838a344baa8ba93",
+    "native_fapproach_copied_verbatim": true,
+    "cpp_sha256": "85fb1fd6fa4c6d5b30530f93acd205803f2fd2ba293ef66c41a5b796fd92b0c5",
+    "native_source_sha256": {
+      "PlayerState.cpp": "d54ad94985f1917627af53a55d96986777c9c0b3949768d7822074b09b796280",
+      "PlayerOptions.cpp": "8b650534e902301bc26b0ffa27d896f1677f1cd590d205159120dc3a01815595",
+      "RageUtil.cpp": "8487049a1d4ed4c2c1c9ae8e232f4039787eb01e7b854684b85394bf6c79c012"
+    },
+    "expected_outputs_used_as_runtime_inputs": false,
+    "output_sha256": "2c77e272741dd5e2cccdda48a6e2d93c7e496958ec0691254ad8180760dd7d52",
+    "command": [
+      "g++",
+      "-std=c++17",
+      "-O2",
+      "-ffp-contract=off",
+      "/home/parity/jobs/native-option-frame-delta-reference-v1.cpp",
+      "-o",
+      "/home/parity/jobs/native-option-frame-delta-reference-verified-v1"
+    ],
+    "cases_reproduced": 25
+  },
+  "all_prior_111_live_and44_replay_test_sources_and_full_acceptance_unchanged": true,
+  "captured_expected_values_used_as_song_runtime_inputs": false
+}

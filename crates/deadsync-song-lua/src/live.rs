@@ -1119,7 +1119,8 @@ impl SongLuaLiveScene {
                     &windows[player], frame.music_seconds as f32)?;
             }
         }
-        crate::song_tables::advance_option_levels(&self.lua, frame.screen_seconds)?;
+        crate::song_tables::advance_option_levels_with_frame_delta(
+            &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
         self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
         let lua = self.lua.clone();
         let root = self.root.clone();
@@ -7062,5 +7063,37 @@ assert(math.abs(ArrowEffects.GetZoom(PS,150,4)-1.0625423192977905)<0.000001,
 "#).exec().unwrap();
         assert!(scene.advance(frame(0.2)).unwrap().errors.is_empty());
         scene.lua.load("assert(ArrowEffects.GetZoom(PS,150,4)>1.3)").exec().unwrap();
+    }
+
+    #[test]
+    fn live_option_approach_uses_native_frame_delta_at_large_screen_time() {
+        let reference: serde_json::Value = serde_json::from_str(include_str!(
+            "../assets/itgmania/native-option-frame-delta-reference-v1.json")).unwrap();
+        let cases = reference["cases"].as_array().unwrap();
+        assert_eq!(cases.len(), 25);
+        for case in cases {
+            let mut compiled = compile_with_context("native-option-frame-delta", "return Def.ActorFrame {}",
+                |context| context.defer_initial_live_update = true);
+            let mut scene = compiled.live_scene.take().unwrap();
+            let screen = case["screen"].as_f64().unwrap() as f32;
+            let delta = case["delta"].as_f64().unwrap() as f32;
+            assert!(scene.advance(SongLuaLiveFrame {
+                screen_seconds: f64::from(screen), delta_seconds: 0.0, ..Default::default()
+            }).unwrap().errors.is_empty());
+            scene.lua.load(format!(r#"
+PS=GAMESTATE:GetPlayerState(PLAYER_1)
+PS:GetCurrentPlayerOptions():Beat({})
+PS:GetPlayerOptions('ModsLevel_Song'):Beat({}, {})
+"#,case["initial"],case["target"],case["speed"])).exec().unwrap();
+            assert!(scene.advance(SongLuaLiveFrame {
+                screen_seconds: f64::from(screen + delta), delta_seconds: f64::from(delta),
+                music_seconds: -1.0, ..Default::default()
+            }).unwrap().errors.is_empty());
+            let actual = scene.lua.load("return PS:GetCurrentPlayerOptions():Beat()")
+                .eval::<f32>().unwrap();
+            let expected = case["expected"].as_f64().unwrap() as f32;
+            assert!((actual-expected).abs() <= 0.0000001,
+                "native option approach must use frame delta rather than rounded screen time: {} actual={actual:?} expected={expected:?}",case["id"]);
+        }
     }
 }

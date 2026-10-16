@@ -1,0 +1,12 @@
+{
+  "cause": "sweep-2026-10-16-quarantine-native-option-frame-delta-source-cause.json",
+  "production_change": "Forward LiveScene frame.delta_seconds as f32 to Current option approach. Preserve legacy compile sample timing, native rate/speed multiplication and cumulative clock validation.",
+  "native_reference_cases": 25,
+  "source_control": "Pinned native RageUtil.cpp fapproach copied verbatim; independent C++ outputs cover actual Quarantine frame delta, long screen times, zero delta and approach speeds.",
+  "all_prior_111_live_and44_replay_assertions_and_full_acceptance_unchanged": true,
+  "runtime_native_getter_outputs_used_as_inputs": false,
+  "Quarantine_SSC_full_repairs_completed": 1,
+  "Quarantine_SSC_final_repair_started": false,
+  "actual_failure": "SSC first1 completed13575frames/0errors/10 residualX mismatches near authored Beat ramps; final whole replay remains required.",
+  "new_full_repair_started": false
+}

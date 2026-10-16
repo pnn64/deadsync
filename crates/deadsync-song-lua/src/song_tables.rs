@@ -206,6 +206,16 @@ fn assign_player_options(lua: &Lua, destination: &Table, source: &Table) -> mlua
 }
 
 pub(crate) fn advance_option_levels(lua: &Lua, seconds: f64) -> mlua::Result<()> {
+    advance_option_levels_inner(lua, seconds, None)
+}
+
+pub(crate) fn advance_option_levels_with_frame_delta(
+    lua: &Lua, seconds: f64, delta: f32,
+) -> mlua::Result<()> {
+    advance_option_levels_inner(lua, seconds, Some(delta))
+}
+
+fn advance_option_levels_inner(lua: &Lua, seconds: f64, frame_delta: Option<f32>) -> mlua::Result<()> {
     let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else {
         return Ok(());
     };
@@ -217,7 +227,12 @@ pub(crate) fn advance_option_levels(lua: &Lua, seconds: f64) -> mlua::Result<()>
     {
         return Err(mlua::Error::runtime("native option clock moved backwards"));
     }
-    let delta = ((time - levels.clock_us) as f64 / 1_000_000.0) as f32;
+    // PlayerState::Update passes its float frame delta directly to options.
+    // Subtracting rounded cumulative screen times loses precision as it grows.
+    let delta = frame_delta.unwrap_or(((time - levels.clock_us) as f64 / 1_000_000.0) as f32);
+    if !delta.is_finite() || delta < 0.0 {
+        return Err(mlua::Error::runtime("invalid native option frame delta"));
+    }
     levels.clock_us = time;
     let players = levels.players.clone();
     let songs = levels.songs.clone();

@@ -1,7 +1,7 @@
 {
   "source_simfile": "Quarantine/Quarantine.ssc",
   "position": 363,
-  "status": "First repair retained10 X mismatches; native option frame delta candidate in component qualification",
+  "status": "Source-qualified direct native frame delta implementation; Quarantine final whole repair remains required",
   "full_repairs_completed": 1,
   "full_repairs_started": 1,
   "second_full_repair_started": false,
@@ -103,10 +103,14 @@
   "native_control_cases": 25,
   "native_prediction_for_0_3_approaching0_at_actual_frame_delta": 0.255026996,
   "candidate_change": "Forward the explicit f32 live frame delta into shared option approach logic; retain absolute clock validation and the legacy compile sampling path. No ArrowEffects formulas or whole-song comparisons change.",
-  "numeric_attribution_status": "Source delta discrepancy and independent native fapproach predictions verified. Reproduction on both platforms and retained whole replay after candidate selection are pending; no acceptance claimed.",
+  "numeric_attribution_status": "Both-platform red/green component qualification complete; retained whole replay remains unproven",
   "captured_getter_outputs_used_as_runtime_inputs": false,
   "native_capture_reused": true,
   "original_uncompressed_capture_sha256": "8a54df1b6626f5392594954ac89090c2bb7c7c36965562244975615e59af38ad",
   "acceptance_unchanged": true,
-  "Mawaru9_deferred": true
+  "Mawaru9_deferred": true,
+  "fix_added": true,
+  "all_six_groups_both_hosts_passed": true,
+  "native_reference_cases": 25,
+  "selection_evidence": "sweep-2026-10-16-native-option-frame-delta-selection.json"
 }
