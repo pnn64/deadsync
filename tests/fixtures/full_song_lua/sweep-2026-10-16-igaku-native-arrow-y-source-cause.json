@@ -1,0 +1,115 @@
+{
+  "source_simfile": "Igaku/Igaku.ssc",
+  "position": 240,
+  "status": "Concrete original Y failure with missing native Wave and cached Tipsy paths; retained updated diagnostic running; no Y implementation selected",
+  "full_repairs_spent": 0,
+  "original_trace_sha256": "cbef59377be83fab2841cd2188e16a54580fa84997d30c57efbe9b3beb2b5cf5",
+  "first_original_y_failure": {
+    "seq": 520866,
+    "seconds": 77.68203735351562,
+    "beat": 220.05091857910156,
+    "actor": "MultitapP1_12",
+    "native_y": 309.7397766113281,
+    "owned_y": 309.7412109375,
+    "source": "song:/lua/default.lua",
+    "native_caller_line": 2152
+  },
+  "authored_modifiers": [
+    {
+      "line": 158,
+      "source": "{beat=220, len=8, mod='Tipsy', val=1, ease='Rebound4'},"
+    },
+    {
+      "line": 159,
+      "source": "{beat=220, len=8, mod='Drunk', val=0.25, ease='Rebound4'},"
+    },
+    {
+      "line": 169,
+      "source": "{beat=220, len=1, mod='Wave', val=0.5, ease='SmoothStart2'},"
+    }
+  ],
+  "original_template_sha256": "7a13d4a99c5d1be439c6a82a3ec5971893fe9623121be68dc0f9dfd013435e4e",
+  "original_default_sha256": "c638e27ceb5e5a59c9d24c98028e14cba27ec96afd9bc8cc30f6abbedaec41f9",
+  "source_calls": {
+    "y_offset": "GetYOffset(ps,lane,beat+pos) - GetYOffset(ps,lane,beat)",
+    "y": "GetYPos(ps,lane,y_off) + optional authored extra Y",
+    "payload_lines": [
+      2164,
+      2174
+    ]
+  },
+  "native_ArrowEffects_cpp_sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8",
+  "native_path": {
+    "GetYOffset": "For nonnegative raw travel, native adds Wave * WaveModMagnitude * sin(rawY / (WavePeriod*WaveModHeight+WaveModHeight)) before scroll-speed multiplication. Negative raw travel returns early.",
+    "GetYPos": "Applies native reverse shift/scale, then Current Tipsy/TanTipsy times the prior completed ArrowEffects.Update column cache, AttenuateY and cached BeatY, followed by the theme quantization policy.",
+    "Update": "ScreenGameplay refreshes ArrowEffects after actor callbacks. UpdateTipsy uses native GetTime, current timer/offset/speed, column geometry and original theme metrics."
+  },
+  "owned_gap": "Current GetYOffset computes basic timing and speed without Wave acceleration. Current GetYPos only applies reverse/Mini/Centered and omits cached Tipsy/TanTipsy and the remaining native Y effects.",
+  "adjacent_native_option_setter_requests": [
+    {
+      "seq": 520617,
+      "seconds": 77.66889190673828,
+      "beat": 220.013671875,
+      "operation": "PlayerOptions.Tipsy",
+      "args": [
+        0.013601939523084638,
+        10000
+      ]
+    },
+    {
+      "seq": 520618,
+      "seconds": 77.66889190673828,
+      "beat": 220.013671875,
+      "operation": "PlayerOptions.Drunk",
+      "args": [
+        0.0034004848807711596,
+        10000
+      ]
+    },
+    {
+      "seq": 520621,
+      "seconds": 77.66889190673828,
+      "beat": 220.013671875,
+      "operation": "PlayerOptions.Wave",
+      "args": [
+        9.34600830078125e-05,
+        10000
+      ]
+    },
+    {
+      "seq": 520763,
+      "seconds": 77.68203735351562,
+      "beat": 220.05091857910156,
+      "operation": "PlayerOptions.Tipsy",
+      "args": [
+        0.04995454074961059,
+        10000
+      ]
+    },
+    {
+      "seq": 520764,
+      "seconds": 77.68203735351562,
+      "beat": 220.05091857910156,
+      "operation": "PlayerOptions.Drunk",
+      "args": [
+        0.012488635187402647,
+        10000
+      ]
+    },
+    {
+      "seq": 520767,
+      "seconds": 77.68203735351562,
+      "beat": 220.05091857910156,
+      "operation": "PlayerOptions.Wave",
+      "args": [
+        0.0012963508488610387,
+        10000
+      ]
+    }
+  ],
+  "attribution_limits": "The native source omissions and authored active effects are concrete. Relative numerical contributions at the first native Y event remain to be reproduced with independent copied native functions; no captured getter output will supply runtime state.",
+  "next_work": "Finish the retained through78 diagnostic on the qualified X/zoom helper, reproduce authored Y paths against pinned native code, then fix and qualify the actual failures before Igaku first full repair.",
+  "qualified_zoom_fix_commit": "1d3b83abed5560a9bb73eae09e83a3ea13da63ee",
+  "native_capture_reused": true,
+  "acceptance_criteria_unchanged": true
+}
