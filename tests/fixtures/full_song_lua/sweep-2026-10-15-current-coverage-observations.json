@@ -1,6 +1,6 @@
 {
   "scope": "latest recorded coverage observations for original source simfiles",
-  "updated_utc": "2026-10-16T05:07:54Z",
+  "updated_utc": "2026-10-16T05:16:41Z",
   "coverage_is_separate_from_existing_full_replay_acceptance": true,
   "passing_charts_replayed_or_investigated": false,
   "rows": [
@@ -1820,9 +1820,20 @@
       "fixture_status": "pending",
       "pending_coverage": [
         "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.finishtweening, Actor.hibernate, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.texturetranslate, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt",
-        "native drawable state/resources: BitmapText, Model, Quad, Sprite"
+        "native drawable state/resources: BitmapText, Model, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ],
-      "evidence": "sweep-2026-10-12-results.json"
+      "evidence": "sweep-2026-10-16-quarantine-sm-native-arrow-x-first1-v1.json"
     },
     {
       "position": 363,

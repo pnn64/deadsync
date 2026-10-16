@@ -1,14 +1,14 @@
 {
-  "generated_utc": "2026-10-16T05:07:54.968675+00:00",
-  "concrete_ledger_sha256": "2ae5d34daf6e8d5e5f65b7dfb8ed1f07305007329c4af21e3fff4e2d44b38bce",
+  "generated_utc": "2026-10-16T05:16:41.944264+00:00",
+  "concrete_ledger_sha256": "2be0b5f55b1e2748832210e86ed2d870f62685e09937b81433411726baaf252b",
   "counts": {
     "passed": 403,
     "pending": 98,
     "unprocessed": 0
   },
   "maximum_published_terminal_attempt_histogram": {
-    "0": 75,
-    "1": 12,
+    "0": 74,
+    "1": 13,
     "2": 11
   },
   "pending_sources": 98,
@@ -23,33 +23,13 @@
   "no_chart_replays_or_source_mutations": true,
   "additional_running_repairs_not_counted_as_terminal": [
     {
-      "source_simfile": "Quarantine/Quarantine.sm",
-      "position": 362,
-      "stage": "quarantine-sm-native-arrow-x-first1-v1",
-      "started_full_repairs": 1,
-      "completed_full_repairs": 0,
-      "running": true,
-      "observed_utc": "2026-10-16T05:08:00.417353+00:00",
-      "pid": 550586,
-      "command": [
-        "/home/parity/jobs/native-arrow-x-linux-green-v3/full-song-lua",
-        "--archive",
-        "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/d8cfd32c076285e3048db7d55365510eebd993e1a15fa3af5dd740a7b55cdd9f.tar.zst",
-        "--report",
-        "/home/parity/jobs/quarantine-sm-native-arrow-x-first1-v1/chart-362/report.json"
-      ],
-      "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 16193,
-      "native_frames": 17554
-    },
-    {
       "source_simfile": "E2/E.sm",
       "position": 180,
       "stage": "e2-sm-qualified-runtime-first1-v1",
       "started_full_repairs": 1,
       "completed_full_repairs": 0,
       "running": true,
-      "observed_utc": "2026-10-16T05:08:00.420422+00:00",
+      "observed_utc": "2026-10-16T05:16:47.503442+00:00",
       "pid": 681922,
       "command": [
         "/home/parity/jobs/native-arrow-zoom-linux-green-v1/full-song-lua",
@@ -59,8 +39,26 @@
         "/home/parity/jobs/e2-sm-qualified-runtime-first1-v1/chart-180/report.json"
       ],
       "actual_process_command_and_cwd_verified": true,
-      "observed_replayed_frames": 11132,
+      "observed_replayed_frames": 14231,
       "native_frames": 14578
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "position": 363,
+      "stage": "quarantine-native-option-frame-delta-final2-v1",
+      "started_full_repairs": 2,
+      "completed_full_repairs": 1,
+      "running": true,
+      "observed_utc": "2026-10-16T05:16:47.508371+00:00",
+      "pid": 900381,
+      "command": [
+        "/home/parity/jobs/native-option-frame-delta-linux-green-v1/full-song-lua",
+        "--archive",
+        "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/f62e218bca95f91c0ad6342a5d4ba8849f5aa131998e5e1a32fe7ce6e7cb732d.tar.zst",
+        "--report",
+        "/home/parity/jobs/quarantine-native-option-frame-delta-final2-v1/chart-363/report.json"
+      ],
+      "actual_process_command_and_cwd_verified": true
     }
   ]
 }
