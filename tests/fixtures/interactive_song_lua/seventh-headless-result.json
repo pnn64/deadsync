@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "source_commit": "e20801707a1750b4f409e115cea1e6b780e096e8",
+  "date": "2026-10-16",
+  "problem": "Null-renderer reference skipped the AFT branch; redundant live actor state transfers caused high CPU frame time and made opening-wave undersampling persistent.",
+  "builds": {
+    "development": {
+      "path": "target/debug/deadsync.exe",
+      "bytes": 138443776,
+      "sha256": "9c4af24ed7b0e861fd3ab18d5e5712966ba4bab1944dce72b31ab1c062fd93d0"
+    },
+    "development_copy": {
+      "path": "target/debug/deadsync-seventh-headless-fixed.exe",
+      "bytes": 138443776,
+      "sha256": "9c4af24ed7b0e861fd3ab18d5e5712966ba4bab1944dce72b31ab1c062fd93d0"
+    },
+    "optimized": {
+      "path": "target/debug/deadsync-seventh-optimized.exe",
+      "bytes": 48581120,
+      "sha256": "3ac4181d9b9a437e2a0d9be5382b41911fc7b9de041bccf892b14d36fd3060b2"
+    },
+    "optimized_profile": "release, lto=false"
+  },
+  "harness": {
+    "implementation_commit": "d3fd930",
+    "documentation_commit": "c04adfa",
+    "cli": {
+      "path": "C:/GitHub/itgmania-harness/target/release/itgmania-harness-rs.exe",
+      "bytes": 6319104,
+      "sha256": "0afee90fd2503d9ee0e4e4837ebfefe84afcab1569922eab90a901294f3562a2"
+    },
+    "native_binary": {
+      "path": "C:/GitHub/itgmania-harness/target/native-engine-source/Program/ITGmania-harness-trace.exe",
+      "bytes": 13163520,
+      "sha256": "29399e8f84fd5cccf7892377cbc9497b6bb18669837ab617043c786c659ade3d"
+    },
+    "runtime_tests_passed": 14,
+    "legacy_adapter_rejected_before_launch": true
+  },
+  "native_capture": {
+    "path": "target/seventh-effects/native-headless-opening.json",
+    "bytes": 219615768,
+    "sha256": "b39e74c49d08051c63ad5181985a9d1a3421bcbb13a4c45855e27a6c92b7c8b7",
+    "headless_graphics": true,
+    "window_visible": false,
+    "video_renderers": "opengl",
+    "actor_definitions": 485,
+    "aft_definitions": 3,
+    "drawable_samples": 120966,
+    "update_frames": 700,
+    "until_beat": 24.03546714782715,
+    "dropped_events": 0,
+    "dropped_drawable_samples": 0,
+    "complete_song": false
+  },
+  "opening_pose_comparison": {
+    "fixture": {
+      "path": "tests/fixtures/interactive_song_lua/seventh-headless-opening-poses.json",
+      "bytes": 360154,
+      "sha256": "54324dd37ae0c125cad53e51e110f8410c2c6b7760eac0eb7c8179f99fde0f30"
+    },
+    "frames": 700,
+    "passed": 10148,
+    "failed": 0,
+    "absolute_float_tolerance": 0.0001,
+    "actors": [
+      "HSliceC1",
+      "HSliceR1",
+      "HStrip1",
+      "HStrip36",
+      "VStripInnerFrame1",
+      "VStripInnerFrame64"
+    ],
+    "native_frame_clocks_preserved": true,
+    "expected_poses_fed_into_vm": false
+  },
+  "performance": {
+    "scope": "Lua scene advance only; not full application FPS",
+    "matched_development_before": {
+      "frames": 645,
+      "mean_ms": 65.8706023,
+      "p95_ms": 96.3501,
+      "worst_ms": 118.5441
+    },
+    "matched_development_after": {
+      "frames": 645,
+      "mean_ms": 16.540743410852716,
+      "p95_ms": 20.8926,
+      "worst_ms": 44.755
+    },
+    "optimized_after_new_headless_capture": {
+      "frames": 700,
+      "mean_ms": 12.735473000000008,
+      "p95_ms": 19.6762,
+      "worst_ms": 32.060199999999995
+    },
+    "native_clock_fixture_for_matched_development": {
+      "path": "target/seventh-effects/native-opening-poses.json",
+      "bytes": 662602,
+      "sha256": "484e38012b7ecefb09abc01bd79d2e90f241b1676e11390bd166d939467ed9d2"
+    }
+  },
+  "library_tests": {
+    "baseline_binary": {
+      "path": "target/debug/deps/deadsync_song_lua-56732b93ec3c04c0.exe",
+      "bytes": 72062464,
+      "sha256": "a22e955beda0a87c86b3393a683fc8a927f9722ea9fb8a6dc3fd56f93e61951e"
+    },
+    "baseline_passed": 640,
+    "current_passed": 646,
+    "baseline_failed": 15,
+    "current_failed": 15,
+    "introduced_failures": [],
+    "unchanged_failure_names": [
+      "multitap::tests::multitap_travel_obeys_chart_timing_and_speedmod",
+      "tests::compile_song_lua_accepts_skewy_probe_calls",
+      "tests::compile_song_lua_accepts_stage_stat_and_high_score_helpers",
+      "tests::compile_song_lua_exposes_save_your_tears_compat_helpers",
+      "tests::compile_song_lua_exposes_theme_branch_and_path_helpers",
+      "tests::compile_song_lua_extracts_sound_actor_assets",
+      "tests::compile_song_lua_keeps_combo_child_callback",
+      "tests::compile_song_lua_supports_named_player_tap_note_shim",
+      "tests::screen_request_keeps_current_name",
+      "tests::song_steps_match_native",
+      "tests::sound_length_reload",
+      "tests::startup_reload_accepts_zero_delta_updates",
+      "tests::startup_reload_bounds_endless_requests",
+      "tests::startup_reload_keeps_globals_and_deletes_old_queues",
+      "tests::startup_reload_matches_native"
+    ],
+    "final_focused_passed": {
+      "scalar_and_getter": 2,
+      "update_rate": 1,
+      "custom_draw": 1,
+      "hibernation": 6,
+      "update_callback": 1
+    }
+  },
+  "scope": {
+    "visible_game_launched_after_headless_request": false,
+    "song_sources_edited": false,
+    "installed_sync_or_profiles_edited": false,
+    "full_application_fps_certified": false,
+    "full_native_rendering_parity_proven": false,
+    "whole_song_parity_proven": false,
+    "native_draw_comparator_still_has_aft_viewport_and_startup_phase_mismatches": true
+  }
+}

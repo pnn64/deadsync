@@ -37,19 +37,28 @@ agree when driven by the same native frame clocks. The song is unchanged.
 The live bridge was republishing an unchanged full tween pose for every scalar
 setter and idle actor, then reading the complete scene again during Draw even
 without authored draw callbacks. These redundant copies and allocations are
-removed. Scalar reads and capture resets batch VM access. Traversal timing scratch stays
-in Rust, and private callback/rate reads bypass public method lookup. Tests retain coverage
-of queued tween ownership, callback order, and custom Draw.
+removed. Scalar reads and capture resets batch VM access. Traversal timing
+scratch stays in Rust, and private callback/rate reads bypass public method
+lookup. Tests retain coverage of queued tween ownership, callback order, and
+custom Draw.
 
-The earlier development-profile Lua-only baseline averaged 65.87 ms per frame.
-After the fixes, the optimized headless run averages 12.74 ms (P95 19.68 ms) over
-700 frames, with 10,148 opening-pose comparisons passing. These use different
-build profiles; the optimized figure is not a full application FPS measurement.
+Using the same development profile and the same 645 recorded frame clocks, the
+Lua-only workload fell from 65.87 ms to 16.54 ms per frame (P95 from 96.35 ms to
+20.89 ms). The optimized headless run averages 12.74 ms (P95 19.68 ms) over the
+new 700-frame capture, with 10,148 opening-pose comparisons passing. These are
+component timings, not measurements of full application FPS.
+
 The full Lua suite records 646 passes and 15 failures. An older binary records
 640 passes and the exact same 15 failures, with no newly introduced failures.
-The current scalar/getter regressions and all 14 harness runtime tests also pass. The native drawable comparator still
+Current scalar/getter, update rate, callback, hibernation and custom Draw checks
+pass, as do all 14 harness runtime tests. The native drawable comparator still
 reports AFT viewport/startup-phase differences; full rendering parity and
 whole-song acceptance remain unproven.
+
+The normal executable and an optimized build are rebuilt without launching a
+visible application. The retained headless receipt records build hashes and
+measured scope in
+[`seventh-headless-result.json`](../tests/fixtures/interactive_song_lua/seventh-headless-result.json).
 
 ## Previous startup proxy repair
 
