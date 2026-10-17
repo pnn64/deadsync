@@ -6,11 +6,11 @@
   "repair_limit_per_sweep": 2,
   "acceptance": "Existing full_song_lua tests; no new acceptance gates; uncompressed full comparisons",
   "counts": {
-    "passed_fixtures": 425,
-    "pending_charts": 75,
+    "passed_fixtures": 426,
+    "pending_charts": 74,
     "ignored_charts": 1,
-    "new_passing_fixtures": 1,
-    "processed_this_sweep": 1
+    "new_passing_fixtures": 2,
+    "processed_this_sweep": 2
   },
   "ignored": [
     {
@@ -22,10 +22,60 @@
     {
       "position": 154,
       "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
-      "status": "queued",
-      "repair_attempts": 0,
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-empty-actor-second-repair.json",
       "simfile_sha256": "779a1edad17f928364f588986bbeca52ee452dba597728bd509ab478e2be2ea9",
-      "prior_failure": "preparation did not retain a Lua scene"
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": "preparation did not retain a Lua scene",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": null,
+        "replay_exit": 1,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "226394a750ef28d6607697c34c22815a7c513b6b354c458918c1f0d56088f954",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-154/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 151.91543594899122,
+      "native_frames": 115058,
+      "replayed_frames": 115058,
+      "compared_stage_fields": 1254,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "74ceb1e3c35d574dfabb362cc6b1dbac51ba4d58d4b57c7f6860b474016f8af0",
+      "archive": "c2be9163f31b73e544df8ec14136647a3394f8401dcbb851e45b07c099cbd816.tar.zst",
+      "archive_sha256": "c2be9163f31b73e544df8ec14136647a3394f8401dcbb851e45b07c099cbd816",
+      "compressed_bytes": 6694858,
+      "harness_version": "0.1.80",
+      "title": "Crab Nicholson Extreme Sleepover",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/sweep-20261017-pending/phase-02/chart-154",
+      "sweep_phase": "phase-02",
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "build_receipt": "target/song-lua-sweep-20261017/phase-02/build-receipt.json",
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Crab Nicholson Extreme Sleepover",
+        "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+        "harness_version": "0.1.0",
+        "archive": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021.tar.zst",
+        "sha256": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021",
+        "compressed_bytes": 852974,
+        "uncompressed_sha256": "d5693f661d0e51103ba710014c946017180943a65d630412fb610af426701f4f",
+        "compression_level": 22,
+        "aliases": [
+          "911e6b7700481aa49f35cbb4a3436d3bedd65ee0900d996c875ab5244cc666ee.tar.zst"
+        ]
+      }
     },
     {
       "position": 151,
@@ -737,5 +787,5 @@
       "prior_failure": "comparison command_query_count: native=1430179; deadsync=1425260"
     }
   ],
-  "updated_utc": "2026-10-17T07:50:11Z"
+  "updated_utc": "2026-10-17T07:56:13Z"
 }

@@ -1977,15 +1977,12 @@
     {
       "title": "Crab Nicholson Extreme Sleepover",
       "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
-      "harness_version": "0.1.0",
-      "archive": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021.tar.zst",
-      "sha256": "b4df330b5fcbd3f71c5065c215156f431145bc2f8d4b5bc8853c63765f050021",
-      "compressed_bytes": 852974,
-      "uncompressed_sha256": "d5693f661d0e51103ba710014c946017180943a65d630412fb610af426701f4f",
-      "compression_level": 22,
-      "aliases": [
-        "911e6b7700481aa49f35cbb4a3436d3bedd65ee0900d996c875ab5244cc666ee.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c2be9163f31b73e544df8ec14136647a3394f8401dcbb851e45b07c099cbd816.tar.zst",
+      "compressed_bytes": 6694858,
+      "sha256": "c2be9163f31b73e544df8ec14136647a3394f8401dcbb851e45b07c099cbd816",
+      "uncompressed_sha256": "226394a750ef28d6607697c34c22815a7c513b6b354c458918c1f0d56088f954",
+      "aliases": []
     },
     {
       "title": "\u30af\u30ec\u30a4\u30b8\u30fc\u30af\u30ec\u30a4\u30b8\u30fc",
