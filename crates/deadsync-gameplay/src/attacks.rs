@@ -940,6 +940,7 @@ pub enum SongLuaColumnTransformTarget {
 pub struct SongLuaSplineData {
     pub coefficients: std::sync::Arc<[[[f32; 4]; 3]]>,
     pub constant: bool,
+    pub looping: bool,
     pub beats_per_t: f32,
     pub receptor_t: f32,
     pub subtract_song_beat: bool,
@@ -947,9 +948,7 @@ pub struct SongLuaSplineData {
 
 /// Solve native non-looping cubic coefficients at the load boundary.
 pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
-    let mut out = Vec::new();
-    solve_song_lua_spline_into(points, &mut out, &mut Vec::new());
-    out
+    SongLuaSplineSolver::default().solve(points).to_vec()
 }
 
 /// Load-lifetime spline workspace. A solve within retained capacity allocates
@@ -959,11 +958,18 @@ pub fn solve_song_lua_spline(points: &[[f32; 3]]) -> Vec<[[f32; 4]; 3]> {
 pub struct SongLuaSplineSolver {
     coefficients: Vec<[[f32; 4]; 3]>,
     diagonals: Vec<f32>,
+    multiples: Vec<f32>,
+    right_column: Vec<f32>,
 }
 
 impl SongLuaSplineSolver {
     pub fn solve(&mut self, points: &[[f32; 3]]) -> &[[[f32; 4]; 3]] {
-        solve_song_lua_spline_into(points, &mut self.coefficients, &mut self.diagonals);
+        self.solve_with_loop(points, false)
+    }
+
+    pub fn solve_with_loop(&mut self, points: &[[f32; 3]], looping: bool) -> &[[[f32; 4]; 3]] {
+        solve_song_lua_spline_into(points, &mut self.coefficients, &mut self.diagonals,
+            looping, &mut self.multiples, &mut self.right_column);
         &self.coefficients
     }
 }
@@ -972,6 +978,9 @@ fn solve_song_lua_spline_into(
     points: &[[f32; 3]],
     out: &mut Vec<[[f32; 4]; 3]>,
     diagonals: &mut Vec<f32>,
+    looping: bool,
+    multiples: &mut Vec<f32>,
+    right_column: &mut Vec<f32>,
 ) {
     let size = points.len();
     out.clear();
@@ -1005,6 +1014,69 @@ fn solve_song_lua_spline_into(
     diagonals.clear();
     diagonals.reserve_exact(size);
     diagonals.resize(size, 4.0);
+    if looping {
+        // CubicSpline.cpp's cyclic elimination, preserving its float order.
+        right_column.clear();
+        right_column.resize(size - 1, 0.0);
+        right_column[0] = 1.0;
+        right_column[size - 2] = 1.0;
+        multiples.clear();
+        multiples.reserve(3 * size - 3);
+        for i in 0..size - 2 {
+            let reciprocal = 1.0 / diagonals[i];
+            diagonals[i + 1] -= reciprocal;
+            right_column[i + 1] -= right_column[i] * reciprocal;
+            multiples.push(reciprocal);
+        }
+        let reciprocal = 1.0 / diagonals[size - 2];
+        diagonals[size - 1] -= right_column[size - 2] * reciprocal;
+        multiples.push(reciprocal);
+        for i in (1..size - 1).rev() {
+            let reciprocal = 1.0 / diagonals[i];
+            right_column[i - 1] -= right_column[i] * reciprocal;
+            multiples.push(reciprocal);
+        }
+        let reciprocal = 1.0 / diagonals[0];
+        right_column[0] -= right_column[1] * reciprocal;
+        multiples.push(reciprocal);
+        multiples.extend(right_column.iter().map(|value| value / diagonals[size - 1]));
+        for axis in 0..3 {
+            if !active[axis] { continue; }
+            for i in 0..size {
+                out[i][axis][1] = 3.0 * (points[(i + 1) % size][axis]
+                    - points[(i + size - 1) % size][axis]);
+            }
+            for i in 0..size - 1 {
+                out[i + 1][axis][1] -= out[i][axis][1] * multiples[i];
+            }
+            let mut next = size - 1;
+            for i in (1..size - 1).rev() {
+                out[i - 1][axis][1] -= out[i][axis][1] * multiples[next];
+                next += 1;
+            }
+            out[size - 1][axis][1] -= out[0][axis][1] * multiples[next];
+            next += 1;
+            for i in 0..size - 1 {
+                out[i][axis][1] -= out[size - 1][axis][1] * multiples[next];
+                next += 1;
+            }
+            for i in 0..size {
+                out[i][axis][1] /= diagonals[i];
+            }
+            for i in 0..size {
+                let next = (i + 1) % size;
+                let diff = points[next][axis] - points[i][axis];
+                let slope = out[i][axis][1];
+                let next_slope = out[next][axis][1];
+                out[i][axis][2] = 3.0 * diff - 2.0 * slope - next_slope;
+                out[i][axis][3] = 2.0 * -diff + slope + next_slope;
+                for coefficient in &mut out[i][axis][1..] {
+                    if coefficient.is_nan() { *coefficient = 0.0; }
+                }
+            }
+        }
+        return;
+    }
     diagonals[0] = 2.0;
     diagonals[size - 1] = 2.0;
     if active.iter().filter(|&&axis| axis).count() == 1 {
@@ -1125,6 +1197,7 @@ impl SongLuaSplineData {
             absolute: true,
             coefficients: &self.coefficients,
             constant: self.constant,
+            looping: self.looping,
             points: std::array::from_fn(|point| {
                 std::array::from_fn(|axis| {
                     self.coefficients
@@ -1146,6 +1219,7 @@ pub struct SongLuaPositionSpline<'a> {
     pub absolute: bool,
     pub coefficients: &'a [[[f32; 4]; 3]],
     pub constant: bool,
+    pub looping: bool,
     pub points: [[f32; 3]; 2],
     pub beats_per_t: f32,
     pub receptor_t: f32,
@@ -1159,6 +1233,7 @@ impl Default for SongLuaPositionSpline<'_> {
             absolute: false,
             coefficients: &[],
             constant: true,
+            looping: false,
             points: [[0.0; 3]; 2],
             beats_per_t: 1.0,
             receptor_t: 0.0,
@@ -1213,7 +1288,11 @@ impl SongLuaPositionSpline<'_> {
         if !self.coefficients.is_empty() {
             let integer = t as i64;
             let last = self.coefficients.len() - 1;
-            let (index, fraction) = if integer < 0 {
+            let (index, fraction) = if self.looping {
+                let mut wrapped = t % self.coefficients.len() as f32;
+                if wrapped < 0.0 { wrapped += self.coefficients.len() as f32; }
+                (wrapped as usize, wrapped - wrapped.trunc())
+            } else if integer < 0 {
                 (0, 0.0)
             } else if integer as usize >= last {
                 (last, 0.0)

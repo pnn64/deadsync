@@ -1309,6 +1309,7 @@ mod tests {
         let data = |points: &[[f32; 3]]| SongLuaSplineData {
             coefficients: deadsync_gameplay::solve_song_lua_spline(points).into(),
             constant: false,
+            looping: false,
             beats_per_t: 0.5,
             receptor_t: 0.25,
             subtract_song_beat: false,
@@ -3225,6 +3226,7 @@ mod tests {
                 position: Some(deadsync_gameplay::SongLuaSplineData {
                     coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
                     constant: false,
+                    looping: false,
                     beats_per_t: 8.0,
                     receptor_t: 0.0,
                     subtract_song_beat: true,
@@ -3233,6 +3235,7 @@ mod tests {
                     coefficients: deadsync_gameplay::solve_song_lua_spline(&[[0.75; 3], [1.25; 3]])
                         .into(),
                     constant: false,
+                    looping: false,
                     beats_per_t: 8.0,
                     receptor_t: 0.25,
                     subtract_song_beat: true,

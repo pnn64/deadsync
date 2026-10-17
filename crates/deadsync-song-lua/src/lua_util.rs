@@ -16120,11 +16120,8 @@ fn solve_spline_table(lua: &Lua, spline: &Table) -> mlua::Result<()> {
         points.push(read_spline_point(&table, index)?);
     }
     let looping = spline.get::<bool>("__songlua_spline_loop")?;
-    if looping && points.windows(2).any(|pair| pair[0] != pair[1]) {
-        return Err(mlua::Error::runtime("Nonconstant looping splines are unsupported"));
-    }
     let mut solver = deadsync_gameplay::SongLuaSplineSolver::default();
-    let coefficients = solver.solve(&points);
+    let coefficients = solver.solve_with_loop(&points, looping);
     let table = lua.create_table()?;
     for (index, point) in coefficients.iter().enumerate() {
         let axes = lua.create_table()?;
@@ -16143,7 +16140,11 @@ fn eval_spline_table(lua: &Lua, spline: &Table, t: f32) -> mlua::Result<Table> {
         // CubicSpline::p_and_tfrac_from_t truncates, including negative
         // fractions, and clamps at the final knot for non-looping splines.
         let index = t as i32;
-        let (index, fraction) = if index < 0 {
+        let (index, fraction) = if spline.get::<bool>("__songlua_spline_loop")? {
+            let mut wrapped = t % size as f32;
+            if wrapped < 0.0 { wrapped += size as f32; }
+            (wrapped as usize, wrapped - wrapped.trunc())
+        } else if index < 0 {
             (0, 0.0)
         } else if index as usize >= size - 1 {
             (size - 1, 0.0)
@@ -16423,6 +16424,7 @@ pub(crate) struct ColumnSplineReadScratch {
     points: Vec<[f32; 3]>,
     solver: deadsync_gameplay::SongLuaSplineSolver,
     recent: Option<std::sync::Arc<[[[f32; 4]; 3]]>>,
+    recent_looping: bool,
 }
 
 fn spline_points_match(points: &[[f32; 3]], coefficients: &[[[f32; 4]; 3]]) -> bool {
@@ -16486,7 +16488,9 @@ fn read_position_spline(
     let points = &mut scratch.points;
     points.clear();
     points.reserve_exact(size);
-    let mut unchanged = previous.is_some_and(|spline| spline.coefficients.len() == size);
+    let looping = spline.get::<bool>("__songlua_spline_loop").map_err(|err| err.to_string())?;
+    let mut unchanged = previous.is_some_and(|spline|
+        spline.coefficients.len() == size && spline.looping == looping);
     for index in 1..=size {
         let values = read_spline_point(&table, index).map_err(|err| err.to_string())?;
         if values.iter().any(|value| !value.is_finite()) {
@@ -16506,24 +16510,19 @@ fn read_position_spline(
         points.push(values);
     }
     let constant = points.iter().all(|point| *point == points[0]);
-    if spline
-        .get::<bool>("__songlua_spline_loop")
-        .map_err(|err| err.to_string())?
-        && !constant
-    {
-        return Err("Nonconstant looping position splines are unsupported".into());
-    }
     let result = deadsync_gameplay::SongLuaSplineData {
         coefficients: if unchanged {
             std::sync::Arc::clone(&previous.expect("matching spline exists").coefficients)
         } else if let Some(recent) = &scratch.recent
+            && scratch.recent_looping == looping
             && spline_points_match(points, recent)
         {
             std::sync::Arc::clone(recent)
         } else {
-            std::sync::Arc::from(scratch.solver.solve(points))
+            std::sync::Arc::from(scratch.solver.solve_with_loop(points, looping))
         },
         constant,
+        looping,
         beats_per_t,
         receptor_t,
         subtract_song_beat: handler
@@ -16539,6 +16538,7 @@ fn read_position_spline(
             .is_some_and(|recent| std::sync::Arc::ptr_eq(recent, &result.coefficients))
     {
         scratch.recent = Some(std::sync::Arc::clone(&result.coefficients));
+        scratch.recent_looping = looping;
     }
     Ok(Some(result))
 }

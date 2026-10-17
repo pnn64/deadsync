@@ -25135,6 +25135,27 @@ return Def.ActorFrame{
         }
         let last = position.coefficients[7];
         assert_eq!([last[0][0], last[1][0], last[2][0]], [9.0, 0.0, 0.0]);
+        lua.load(r#"
+            spline = column:GetPosHandler():GetSpline()
+            spline:set_size(4):set_loop(true)
+            for i, x in ipairs({0, 96, 0, -96}) do spline:set_point(i, {x,0,0}) end
+            spline:solve()
+            assert(spline:get_loop())
+            assert(spline:evaluate(-0.25)[1] == spline:evaluate(3.75)[1])
+            assert(spline:evaluate(4.5)[1] == spline:evaluate(0.5)[1])
+            assert(spline:evaluate(0.5)[1] == 66)
+        "#).exec().unwrap();
+        let mut scratch = crate::lua_util::ColumnSplineReadScratch::default();
+        crate::lua_util::read_column_position_splines(&lua, |_, _| None,
+            &mut scratch, &mut frames).unwrap();
+        let looped = frames.clone();
+        assert!(looped[0].2.position.as_ref().unwrap().looping);
+        lua.load("spline:set_loop(false):solve()").exec().unwrap();
+        crate::lua_util::read_column_position_splines(&lua,
+            |_, _| Some(&looped[0].2), &mut scratch, &mut frames).unwrap();
+        let straight = frames[0].2.position.as_ref().unwrap();
+        assert!(!straight.looping);
+        assert_ne!(straight.coefficients, looped[0].2.position.as_ref().unwrap().coefficients);
     }
 
     #[test]

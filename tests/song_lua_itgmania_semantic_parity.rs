@@ -1781,6 +1781,7 @@ fn position_spline_curves_match_native_cpp() {
         let data = deadsync_gameplay::SongLuaSplineData {
             coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
             constant: points.iter().all(|point| *point == points[0]),
+            looping: false,
             beats_per_t: case["beats_per_t"].as_f64().expect("beats per t") as f32,
             receptor_t: case["receptor_t"].as_f64().expect("receptor t") as f32,
             subtract_song_beat: case["subtract_song_beat"].as_bool().expect("beat mode"),
@@ -1807,6 +1808,44 @@ fn position_spline_curves_match_native_cpp() {
         }
     }
     assert_eq!(checks, 6426);
+}
+
+#[test]
+fn looping_position_spline_curves_match_native_cpp() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let native: Value = serde_json::from_slice(&fs::read(root.join(
+        "tests/fixtures/itgmania-song-lua-micro/position-spline-looped-native.json",
+    )).expect("native looping spline fixture")).expect("native JSON");
+    assert_eq!(native["oracle"], "itgmania_native_actor_conformance");
+    let mut checks = 0;
+    for case in native["splines"].as_array().expect("native cases") {
+        let points: Vec<[f32; 3]> = case["points"].as_array().expect("points").iter()
+            .map(|point| std::array::from_fn(|axis| point[axis].as_f64().unwrap() as f32)).collect();
+        let data = deadsync_gameplay::SongLuaSplineData {
+            coefficients: deadsync_gameplay::SongLuaSplineSolver::default()
+                .solve_with_loop(&points, true).into(),
+            constant: points.iter().all(|point| *point == points[0]),
+            looping: true,
+            beats_per_t: case["beats_per_t"].as_f64().unwrap() as f32,
+            receptor_t: case["receptor_t"].as_f64().unwrap() as f32,
+            subtract_song_beat: case["subtract_song_beat"].as_bool().unwrap(),
+        };
+        for sample in case["samples"].as_array().unwrap() {
+            let song = sample["song_beat"].as_f64().unwrap() as f32;
+            let note = sample["note_beat"].as_f64().unwrap() as f32;
+            let (position, derivative) = data.view().sample(song, note);
+            for (key, actual) in [("position", position), ("derivative", derivative),
+                ("receptor", data.view().receptor(song))] {
+                for axis in 0..3 {
+                    let expected = sample[key][axis].as_f64().unwrap() as f32;
+                    assert!((actual[axis] - expected).abs() <= 0.0002,
+                        "{key} axis {axis}, song {song}, note {note}: {} vs {expected}", actual[axis]);
+                    checks += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checks, 2808);
 }
 
 #[test]
