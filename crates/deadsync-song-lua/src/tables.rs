@@ -2191,8 +2191,10 @@ pub fn create_timing_table(
                             deadsync_core::timing::beat_to_note_row(value),
                         ),
                     ),
-                    "GetElapsedTimeFromBeat" => timing.get_time_for_beat_exact(value),
-                    _ => timing.get_beat_for_time(value),
+                    // Lua exposes ITGmania's float timing traversal. The
+                    // integer timeline remains the note-judgment clock.
+                    "GetElapsedTimeFromBeat" => timing.get_song_time_for_beat(value, 1.0),
+                    _ => timing.get_song_position(value).beat,
                 })
             })?,
         )?;
@@ -3177,6 +3179,27 @@ mod tests {
             "songs/pack/song.ogg"
         );
         assert!(has_path.call::<bool>(MultiValue::new()).unwrap());
+    }
+
+    #[test]
+    fn native_float_timing_queries_preserve_separate_offset_inputs() {
+        use deadsync_rules::timing::{TimingData, TimingSegments};
+        let mut timing = TimingData::from_segments(0.01, 0.0, &TimingSegments {
+            bpms: vec![(0.0, 130.0)], ..Default::default()
+        }, &[]);
+        timing.shift_group_offset_seconds(-0.009);
+        timing.set_global_offset_seconds(-0.008);
+        let lua = Lua::new();
+        let table = create_timing_table(&lua, [130.0, 130.0], Some(&timing)).unwrap();
+        for (method, input, expected) in [
+            // C++ float order: (-song_offset - group_offset) - global_offset.
+            ("GetElapsedTimeFromBeat", 0.0_f32, 0.026999998837709427_f32),
+            ("GetBeatFromElapsedTime", 0.027732426300644875_f32, 0.0015869262861087918_f32),
+        ] {
+            let value = table.get::<mlua::Function>(method).unwrap()
+                .call::<f32>((table.clone(), input)).unwrap();
+            assert_eq!(value.to_bits(), expected.to_bits(), "native {method}");
+        }
     }
 
     #[test]

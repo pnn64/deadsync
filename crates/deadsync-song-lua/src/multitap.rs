@@ -1440,7 +1440,8 @@ mod tests {
                     crate::create_song_runtime_table(&lua, &context).unwrap(),
                 )
                 .unwrap();
-            crate::set_compile_song_runtime_values(&lua, 6.0, 3.0).unwrap();
+            // This clock takes elapsed wall time; beat 6 is music second 3.
+            crate::set_compile_song_runtime_values(&lua, 6.0, 3.0 / rate).unwrap();
             globals
                 .set(
                     "ArrowEffects",
@@ -1462,7 +1463,7 @@ mod tests {
                 local options = {__songlua_reference_bpm=240}
                 options[speed_method] = function() return speed_value end
                 local ps = {GetPlayerNumber=function() return "PlayerNumber_P1" end,
-                    GetPlayerOptions=function() return options end}
+                    GetCurrentPlayerOptions=function() return options end}
                 return ArrowEffects.GetYOffset(ps, 1, 10) - ArrowEffects.GetYOffset(ps, 1, 6)
             "#,
                 )
@@ -1470,7 +1471,7 @@ mod tests {
                 .unwrap();
             assert!(
                 (actual - expected).abs() < 0.001,
-                "Lua ArrowEffects {speed:?}"
+                "Lua ArrowEffects {speed:?}: actual {actual}, expected {expected}"
             );
         }
     }
