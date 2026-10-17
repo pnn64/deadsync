@@ -82,9 +82,9 @@ pub(crate) fn observes_song_callback(callback: &Function) -> bool {
 
 // Trace logging observes the live VM without replacing callbacks or query results.
 pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &str) {
-    if !query_trace_ready(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
-        || !observes_song_callback(command) { return; }
+    if !query_trace_ready(lua) || !observes_song_callback(command) { return; }
     callback_phase(lua, phase == "begin");
+    if !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return; }
     let info = command.info();
     let Some(source) = info.source else { return; };
     if let Ok((beat, seconds)) = crate::compile_song_runtime_values(lua) {
@@ -1001,8 +1001,10 @@ impl SongLuaLiveScene {
         let screen: Table = self.lua.globals().raw_get("__songlua_top_screen")?;
         let children = crate::actor_children(&self.lua, &screen)?;
         let overlay: Table = children.raw_get("Overlay")?;
+        let owner = crate::actor_children(&self.lua, &overlay)?
+            .raw_get::<Option<Table>>("ITGmaniaHarnessTraceProbe")?.unwrap_or(overlay);
         self.lua.set_app_data(OverlayStageObserver {
-            actor: overlay.to_pointer() as usize,
+            actor: owner.to_pointer() as usize,
             step_count: self.context.song_steps.len(), observation: None,
         });
         Ok(())

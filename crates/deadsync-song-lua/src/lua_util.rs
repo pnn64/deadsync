@@ -3912,6 +3912,26 @@ fn run_guarded_actor_command(
             actor_debug_label(actor)
         ))
     });
+    // Actor::RunCommands reports native theme script errors and returns to the
+    // message loop. SongLuaTrace wraps authored commands only; keep theme
+    // diagnostics separate while preserving authored callback failures.
+    let result = match result {
+        Err(error) if !crate::live::observes_song_callback(command) => {
+            log::warn!("Native theme callback: {error}");
+            #[cfg(feature = "test-support")]
+            {
+                if lua.app_data_ref::<SongLuaMessageCoverage>().is_none() {
+                    lua.set_app_data(SongLuaMessageCoverage::default());
+                }
+                let gap = format!("native capture omits theme callback errors: {} {name}",
+                    command.info().source.unwrap_or_default());
+                if let Some(mut coverage) = lua.app_data_mut::<SongLuaMessageCoverage>()
+                    && coverage.seen.insert(gap.clone()) { coverage.pending.push(gap); }
+            }
+            Ok(())
+        },
+        result => result,
+    };
     if observed { crate::live::trace_command(lua, command, name, "end"); }
     #[cfg(feature = "test-support")]
     if let Some(prior) = prior_update {
@@ -14358,42 +14378,6 @@ return {
             actor.set("__songlua_top_screen_child_name", "Underlay")?;
             install_underlay_theme_children(lua, &actor, create_dummy_actor, create_named_child_actor)?;
         }
-        if name.eq_ignore_ascii_case("Overlay") {
-            // Simply Love's FailOnHoldStart owns its judgment latch under
-            // the overlay. Its Off runs after LeaveGameplay's AllFailed
-            // decision and before SongForeground (DRAW_ORDER_OVERLAY + 1).
-            let fail = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
-            fail.raw_set("__songlua_parent", actor.clone())?;
-            let commands = lua.load(r#"
-local usedAutoplay = {}
-return {
-    JudgmentMessageCommand = function(self, params)
-        if params.Player == nil then return end
-        if IsAutoplay(params.Player) then usedAutoplay[params.Player] = true end
-    end,
-    OffCommand = function(self)
-        local stage = STATSMAN:GetCurStageStats()
-        local fail = false
-        if stage.GaveUp then fail = stage:GaveUp()
-        else fail = GAMESTATE:GetCurMusicSeconds() < GAMESTATE:GetCurrentSong():GetLastSecond() end
-        if GAMESTATE:IsCourseMode() then
-            local course = GAMESTATE:GetCurrentCourse()
-            if GAMESTATE:GetCourseSongIndex() + 1 < course:GetNumCourseEntries() then fail = true end
-        end
-        for player in ivalues(GAMESTATE:GetEnabledPlayers()) do
-            if fail or usedAutoplay[player] then
-                STATSMAN:GetCurStageStats():GetPlayerStageStats(player):FailPlayer()
-            end
-        end
-    end,
-}
-"#).set_name("@theme:/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua").eval::<Table>()?;
-            for command in ["JudgmentMessageCommand", "OffCommand"] {
-                fail.raw_set(command, commands.raw_get::<Function>(command)?)?;
-            }
-            push_sequence_child_once(&actor, fail.clone())?;
-            actor_children(lua, &actor)?.raw_set("", fail)?;
-        }
         return Ok(Some(actor));
     }
     if top_screen_steps_display_index(name).is_some() {
@@ -22670,6 +22654,76 @@ return {mutate, verify}
     }
 }
 
+
+fn load_native_gameplay_overlay(lua: &Lua, environment: &Table, path: &str, args: MultiValue) -> mlua::Result<Value> {
+    let name = path.strip_prefix("./").unwrap_or(path);
+    let source = match name {
+        "default.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua"),
+        "WhoIsCurrentlyWinning.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua"),
+        "FailOnHoldStart.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua"),
+        "TrackTimeSpentInGameplay.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua"),
+        "JudgmentOffsetTracking.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua"),
+        "TrackExScoreJudgments.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua"),
+        "TrackFailTime.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua"),
+        "PerColumnJudgmentTracking.lua" => include_str!("../assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua"),
+        _ => return Err(mlua::Error::runtime(format!("unknown native Overlay resource {path}"))),
+    };
+    lua.load(source).set_environment(environment.clone())
+        .set_name(format!("@theme:/BGAnimations/ScreenGameplay overlay/{name}"))
+        .call(args)
+}
+
+pub(crate) fn install_native_gameplay_overlay(
+    lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
+    context: &SongLuaCompileContext,
+) -> mlua::Result<()> {
+    let install_methods = install_methods.or_else(|| lua.app_data_ref::<ActorDefinitionHost>()
+        .map(|host| host.install_methods))
+        .ok_or_else(|| mlua::Error::runtime("Overlay requires its actor host"))?;
+    let globals = lua.globals();
+    let environment = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.raw_set("__index", globals.clone())?;
+    mt.raw_set("__newindex", globals.clone())?;
+    environment.set_metatable(Some(mt))?;
+    globals.raw_set("__songlua_overlay_environment", environment.clone())?;
+    environment.raw_set("LoadActor", lua.create_function(|lua, args: MultiValue| {
+        let path = args.front().cloned().and_then(read_string)
+            .ok_or_else(|| mlua::Error::runtime("native LoadActor requires a path"))?;
+        let environment = lua.globals().raw_get::<Table>("__songlua_overlay_environment")?;
+        load_native_gameplay_overlay(lua, &environment, &path,
+            MultiValue::from_vec(args.into_iter().skip(1).collect()))
+    })?)?;
+    let definition = load_native_gameplay_overlay(lua, &environment, "default.lua", MultiValue::new())?;
+    let Value::Table(theme) = own_actor_root(lua, definition, install_methods)? else {
+        return Err(mlua::Error::runtime("native Overlay must load an actor"));
+    };
+    let screen = globals.raw_get::<Table>("__songlua_top_screen")?;
+    let overlay = actor_children(lua, &screen)?.raw_get::<Table>("Overlay")?;
+    theme.raw_set("__songlua_parent", overlay.clone())?;
+    native_step_statistics_lookup(lua, &theme)?;
+    run_actor_init_commands_for_table(lua, &theme)?;
+    push_sequence_child_once(&overlay, theme.clone())?;
+    actor_children(lua, &overlay)?.raw_set("", theme)?;
+    let theme: Table = actor_children(lua, &overlay)?.raw_get("")?;
+    native_step_statistics_command(lua, &theme, "BeginCommand")?;
+    native_step_statistics_command(lua, &theme, "OnCommand")?;
+    // The capture tool wraps the base overlay and appends this real ActorFrame.
+    // Reproduce that observable input tree only in diagnostic replay profiles.
+    #[cfg(feature = "test-support")]
+    if context.capture_overlay_probe {
+        let host = lua.app_data_ref::<ActorDefinitionHost>()
+            .ok_or_else(|| mlua::Error::runtime("Overlay requires its actor host"))?;
+        let probe = create_named_actor(lua, "ActorFrame", "ITGmaniaHarnessTraceProbe", host.create_dummy_actor)?;
+        drop(host);
+        probe.raw_set("__songlua_parent", overlay.clone())?;
+        push_sequence_child_once(&overlay, probe.clone())?;
+        actor_children(lua, &overlay)?.raw_set("ITGmaniaHarnessTraceProbe", probe)?;
+    }
+    #[cfg(not(feature = "test-support"))]
+    let _ = context;
+    Ok(())
+}
 
 fn load_native_step_statistics(lua: &Lua, environment: &Table, path: &str, args: MultiValue) -> mlua::Result<Value> {
     let name = path.strip_prefix("./").unwrap_or(path);

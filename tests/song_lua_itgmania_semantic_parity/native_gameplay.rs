@@ -875,6 +875,42 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn native_overlay_preserves_theme_tree_and_capture_probe_input() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-native-overlay-tree-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("tree.lua");
+        std::fs::write(&entry, r#"
+return Def.Actor { OnCommand=function(self)
+    local overlay = SCREENMAN:GetTopScreen():GetChild('Overlay')
+    local children = overlay:GetChildren()
+    local theme = children['']
+    assert(theme:GetNumChildren() == 6, 'base single-player Simply Love overlay retains its logic actors')
+    local logic = theme:GetChildren()['']
+    assert(#logic == 6 and tostring(logic[1]):match('ActorFrame'))
+    assert(tostring(logic[2]):match('Actor %('))
+    local probe = children.ITGmaniaHarnessTraceProbe
+    assert(overlay:GetNumChildren() == (probe and 2 or 1))
+    if probe then assert(probe:GetNumChildren() == 0 and probe:GetParent() == overlay) end
+    MESSAGEMAN:Broadcast(probe and 'CapturedOverlay' or 'NormalOverlay')
+end }
+"#).unwrap();
+        for captured in [false, true] {
+            let mut context = SongLuaCompileContext::new(&dir, "native Overlay tree");
+            context.live = true;
+            context.players[1].enabled = false;
+            context.capture_overlay_probe = captured;
+            let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+                SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+                |_| None, |_,_| None).unwrap();
+            let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!(output.broadcasts.iter().any(|(_, name, _)|
+                name == if captured { "CapturedOverlay" } else { "NormalOverlay" }));
+        }
+    }
+
+    #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
         use std::{fs, sync::Arc};
@@ -3715,6 +3751,7 @@ pub(crate) fn replay_with_command_observer(
     // This is a capture-tool observation contract, not a gameplay input.
     // No native command events, query results or expected values enter the VM.
     context.trace_dynamic_commands = dynamic_commands;
+    context.capture_overlay_probe = trace["update_frame_phase"].as_str() == Some("gameplay-overlay-probe");
     let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
         trace, 1, song.background_lua_changes.len())?;
     context.message_actor_order = creation_order;

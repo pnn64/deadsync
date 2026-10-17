@@ -1513,6 +1513,9 @@ pub struct SongLuaCompileContext {
     /// Observational capture profile; does not change actor dispatch or queries.
     #[cfg(feature = "test-support")]
     pub trace_dynamic_commands: bool,
+    /// Include the capture tool's visible Overlay probe when replaying its input.
+    #[cfg(feature = "test-support")]
+    pub capture_overlay_probe: bool,
     pub music_length_seconds: f32,
     pub style_name: String,
     /// Song charts in simfile load order; never synthesize missing difficulties.
@@ -1573,6 +1576,8 @@ impl SongLuaCompileContext {
             message_actor_order: Vec::new(),
             #[cfg(feature = "test-support")]
             trace_dynamic_commands: false,
+            #[cfg(feature = "test-support")]
+            capture_overlay_probe: false,
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
             song_steps: Vec::new(),
