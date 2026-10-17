@@ -2232,15 +2232,12 @@
     {
       "title": "\u5922\u54b2\u304dAfter school",
       "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b3daab83450b74e25c3d7d58a499296f426d4c3b5bbaa230e7c464d01799a433.tar.zst",
-      "sha256": "b3daab83450b74e25c3d7d58a499296f426d4c3b5bbaa230e7c464d01799a433",
-      "compressed_bytes": 512765,
-      "uncompressed_sha256": "c0f9f40481f09ad95d56291d4f8ef286bb8be2936099fe14ede4d1bd803fadf3",
-      "compression_level": 22,
-      "aliases": [
-        "e6787a55deb62281d1d11be8fda40629771c0839b2e5fbf32d9cf0949a4194fb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "5239a79f19a8c9473f63ce1456d28a80274988579e3f2bc92fa55b25c178000d.tar.zst",
+      "compressed_bytes": 12007938,
+      "sha256": "5239a79f19a8c9473f63ce1456d28a80274988579e3f2bc92fa55b25c178000d",
+      "uncompressed_sha256": "75710c4b9caa056a2c10cc8eb00c29fa08c19d70730c7773cbec584377ebc302",
+      "aliases": []
     },
     {
       "title": "e",
