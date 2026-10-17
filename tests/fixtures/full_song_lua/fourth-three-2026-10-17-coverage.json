@@ -1,0 +1,24 @@
+{
+  "scope": "Missing coverage is recorded separately; existing acceptance is unchanged",
+  "prior_coverage": "sweep-2026-10-17-coverage.json",
+  "charts": {
+    "Crazy Crazy/Crazy Crazy.ssc": {
+      "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetSecsIntoEffect, Actor.SetHeight, Actor.SetWidth, Actor.accelerate, Actor.blend, Actor.bounceend, Actor.cropbottom, Actor.croptop, Actor.diffuseshift, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadeleft, Actor.faderight, Actor.finishtweening, Actor.playcommand, Actor.rotationy, Actor.scaletofit, Actor.stopeffect, Actor.z, ActorFrame.SetDrawByZPosition, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.GetTexture, ActorFrameTexture.SetTextureName, BitmapText.GetText, BitmapText.settext, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Boomerang, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.MaxScrollBPM, PlayerOptions.Mini, PlayerOptions.Overhead, PlayerOptions.Passmark, PlayerOptions.RandAttack, PlayerOptions.RandomSpeed, PlayerOptions.RandomVanish, PlayerOptions.Roll, PlayerOptions.ScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.TimeSpacing, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.Xmode, ScreenManager.SystemMessage, Song.GetBackgroundPath, Sprite.SetTexture, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    }
+  }
+}

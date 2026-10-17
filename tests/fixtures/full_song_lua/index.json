@@ -1983,17 +1983,15 @@
       "aliases": []
     },
     {
-      "title": "\u30af\u30ec\u30a4\u30b8\u30fc\u30af\u30ec\u30a4\u30b8\u30fc",
+      "title": "Crazy Crazy",
       "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
-      "harness_version": "0.1.0",
-      "archive": "56fee7dfc761783575357ef80a043317ad0bf45b971a38e884f32e257ff25210.tar.zst",
-      "sha256": "56fee7dfc761783575357ef80a043317ad0bf45b971a38e884f32e257ff25210",
-      "compressed_bytes": 1459598,
-      "uncompressed_sha256": "1e006e06167607e38b2961d148a941e7b605674d766c02f7003e3045e815f84c",
-      "compression_level": 22,
-      "aliases": [
-        "efe67031131431c451338cb1d585a5616e3fa1d841df6a0728dc0b6e4bb04ee5.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c37d64e24f0d44ebbcc3acc647beeabbefee645976e01f50d8d3622e72a8bce5.tar.zst",
+      "compressed_bytes": 126024926,
+      "sha256": "c37d64e24f0d44ebbcc3acc647beeabbefee645976e01f50d8d3622e72a8bce5",
+      "uncompressed_sha256": "50c65b53d1421891b5b95852a4154643f0aae7352f2595993d6309993e30722d",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "crew -All Hands on the Deck-",
