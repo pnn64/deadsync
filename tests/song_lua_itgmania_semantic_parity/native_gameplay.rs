@@ -911,6 +911,74 @@ end }
     }
 
     #[test]
+    fn native_gameplay_decorations_retain_children_while_hibernating() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-native-decorations-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("decorations.lua");
+        std::fs::write(&entry, r#"
+return Def.Actor { OnCommand=function()
+    local screen = SCREENMAN:GetTopScreen()
+    local header, footer = screen:GetChild('Header'), screen:GetChild('Footer')
+    assert(header:GetParent() == screen and footer:GetParent() == screen)
+    assert(header:GetNumChildren() == 2)
+    local children = header:GetChildren()
+    assert(children[''] and children.HeaderText)
+    assert(children.HeaderText:GetX() == 10 and children.HeaderText:GetY() == 15)
+    assert(math.abs(children.HeaderText:GetTweenTimeLeft() - 0.43) < 0.00001)
+    assert(header:GetTweenTimeLeft() == math.huge)
+    -- Quad inherits Sprite's Lua binding in ITGmania.
+    assert(tostring(footer):match('Sprite') and footer:GetY() == 32,
+        tostring(footer)..' y='..tostring(footer:GetY()))
+    assert(footer:GetTweenTimeLeft() == math.huge)
+    MESSAGEMAN:Broadcast('NativeDecorations')
+end }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "native decorations");
+        context.live = true;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.broadcasts.iter().any(|(_, name, _)| name == "NativeDecorations"));
+    }
+
+    #[test]
+    fn native_plain_actor_draws_do_not_consume_geometry_budget() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-plain-actor-draws-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("draws.lua");
+        std::fs::write(&entry, r#"
+local actors = {}
+local root = Def.ActorFrame {
+    OnCommand=function(self)
+        self:SetDrawFunction(function()
+            for _,actor in ipairs(actors) do actor:Draw() end
+            MESSAGEMAN:Broadcast('LogicDrawsCompleted', {count=#actors})
+        end)
+    end,
+}
+for i=1,300 do
+    root[#root+1] = Def.Actor { InitCommand=function(self) actors[#actors+1] = self end }
+end
+return root
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "plain Actor draws");
+        context.live = true;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
+            music_seconds: 0.25, screen_seconds: 0.25, beat: 0.5, delta_seconds: 0.25,
+            ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.source_broadcasts.iter().any(|event| event.name == "LogicDrawsCompleted"));
+    }
+
+    #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
         use std::{fs, sync::Arc};

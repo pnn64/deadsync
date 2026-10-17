@@ -280,6 +280,11 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .raw_get::<Option<String>>("__songlua_top_screen_child_name")?
                     .is_some()
                     || actor.raw_get::<Option<String>>("__songlua_player_child_name")?.is_some();
+                // Actor::DrawPrimitives is empty. Logic actors still receive
+                // explicit Draw calls, but submit no geometry or draw payload.
+                if kind.eq_ignore_ascii_case("Actor") {
+                    return Ok(());
+                }
                 if !external
                     && (kind.eq_ignore_ascii_case("ActorFrame")
                         || kind.eq_ignore_ascii_case("ActorFrameTexture"))

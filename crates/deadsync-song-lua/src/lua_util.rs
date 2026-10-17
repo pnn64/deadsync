@@ -22744,6 +22744,52 @@ pub(crate) fn install_native_gameplay_overlay(
     Ok(())
 }
 
+pub(crate) fn install_native_gameplay_decorations(
+    lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
+) -> mlua::Result<()> {
+    let install_methods = install_methods.or_else(|| lua.app_data_ref::<ActorDefinitionHost>()
+        .map(|host| host.install_methods))
+        .ok_or_else(|| mlua::Error::runtime("decorations require their actor host"))?;
+    let globals = lua.globals();
+    let screen = globals.raw_get::<Table>("__songlua_top_screen")?;
+    let screen_name = actor_name(&screen)?;
+    let environment = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.raw_set("__index", globals.clone())?;
+    environment.set_metatable(Some(mt))?;
+    environment.raw_set("ScreenString", lua.create_function(move |lua, key: String|
+        lua.create_string(crate::theme_string(&screen_name, &key)))?)?;
+    for (name, source) in [
+        ("Header", include_str!("../assets/simply-love/Graphics/_header.lua")),
+        ("Footer", include_str!("../assets/simply-love/Graphics/_footer.lua")),
+    ] {
+        let definition = lua.load(source).set_environment(environment.clone())
+            .set_name(format!("@theme:/Graphics/_{}.lua", name.to_ascii_lowercase())).eval::<Value>()?;
+        let Value::Table(actor) = own_actor_root(lua, definition, install_methods)? else {
+            return Err(mlua::Error::runtime("native decoration must load an actor"));
+        };
+        let children = actor_children(lua, &screen)?;
+        let previous = children.raw_get::<Table>(name)?;
+        actor.raw_set("__songlua_parent", screen.clone())?;
+        native_step_statistics_lookup(lua, &actor)?;
+        run_actor_init_commands_for_table(lua, &actor)?;
+        // StandardDecorationFromFile merges ScreenGameplay's metric command.
+        // Both decorations remain present while hibernating, including children.
+        let on = lua.load("return function(self) self:hibernate(math.huge) end")
+            .set_name("@theme:/metrics/ScreenGameplay.lua").eval::<Function>()?;
+        actor.raw_set("OnCommand", on)?;
+        for index in 1..=screen.raw_len() {
+            if screen.raw_get::<Option<Table>>(index)?.is_some_and(|known| known.to_pointer() == previous.to_pointer()) {
+                screen.raw_set(index, actor.clone())?;
+            }
+        }
+        children.raw_set(name, actor.clone())?;
+        native_step_statistics_command(lua, &actor, "BeginCommand")?;
+        native_step_statistics_command(lua, &actor, "OnCommand")?;
+    }
+    Ok(())
+}
+
 fn load_native_step_statistics(lua: &Lua, environment: &Table, path: &str, args: MultiValue) -> mlua::Result<Value> {
     let name = path.strip_prefix("./").unwrap_or(path);
     let source = match name {

@@ -127,6 +127,7 @@ pub(crate) fn replace_gameplay_screen(
     crate::runtime::reset_song_runtime_position(lua)?;
     crate::lua_util::install_native_gameplay_underlay(lua, None)?;
     crate::lua_util::install_native_gameplay_overlay(lua, None, &context)?;
+    crate::lua_util::install_native_gameplay_decorations(lua, None)?;
     Ok(())
 }
 
@@ -168,6 +169,7 @@ pub fn install_compile_host(
     install_file_loader_globals(lua, context.song_dir.clone(), create_dummy_actor)?;
     crate::lua_util::install_native_gameplay_underlay(lua, Some(install_actor_methods))?;
     crate::lua_util::install_native_gameplay_overlay(lua, Some(install_actor_methods), context)?;
+    crate::lua_util::install_native_gameplay_decorations(lua, Some(install_actor_methods))?;
     Ok(())
 }
 
