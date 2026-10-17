@@ -4361,15 +4361,12 @@
     {
       "title": "Perfectly Normal Saitama 2000 From UKSRT1",
       "source_simfile": "saitama2000/Saitama2000.sm",
-      "harness_version": "0.1.0",
-      "archive": "3b197018a82aff5a619526cac3c023b7272da38eaa55e6c432012b3671a05e39.tar.zst",
-      "sha256": "3b197018a82aff5a619526cac3c023b7272da38eaa55e6c432012b3671a05e39",
-      "compressed_bytes": 509621,
-      "uncompressed_sha256": "dbb17a9dab1d80828a29a1426a2d1fcd1f5904cee3f5aeb41dc627b0a8c79fb1",
-      "compression_level": 22,
-      "aliases": [
-        "84719218fe8f86e1c43ba2374b5203d75bb212ec5ef747d10035213ebeabbd50.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b57a570f1a27af36f2c2ba5cfa9919b1b26df40dcca3a598fbf7fb4b1ce7106c.tar.zst",
+      "compressed_bytes": 6204992,
+      "sha256": "b57a570f1a27af36f2c2ba5cfa9919b1b26df40dcca3a598fbf7fb4b1ce7106c",
+      "uncompressed_sha256": "da3d7ed615229eddc86f1a35d0bf9d4f1b5224fcc26dcfdd24e8fa5707d07b2c",
+      "aliases": []
     },
     {
       "title": "Perfectly Normal Saitama 2000 From UKSRT1",

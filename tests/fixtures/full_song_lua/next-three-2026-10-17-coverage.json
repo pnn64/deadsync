@@ -83,6 +83,24 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "saitama2000/Saitama2000.sm": {
+      "source_simfile": "saitama2000/Saitama2000.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addx, Actor.addy, Actor.blend, Actor.bounce, Actor.clearzbuffer, Actor.effectclock, Actor.horizalign, Actor.rotationx, Actor.stopeffect, Actor.wag, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.ztest, Actor.zwrite, PlayerOptions.XMod",
+        "native drawable state/resources: Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
