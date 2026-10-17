@@ -4960,15 +4960,12 @@
     {
       "title": "\u4eca\u5e74\u3082\u300c\u96ea\u964d\u308a\u3001\u30e1\u30ea\u30af\u30ea\u300d\u76ee\u6307\u3057\u3066\u987d\u5f20\u308a\u307e\u3059\uff01\uff01",
       "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
-      "harness_version": "0.1.0",
-      "archive": "17d9dd0bce10fd4b992f93127eec828efa4fd7ae8ab25d0f2c687cb2be728e0d.tar.zst",
-      "sha256": "17d9dd0bce10fd4b992f93127eec828efa4fd7ae8ab25d0f2c687cb2be728e0d",
-      "compressed_bytes": 119891,
-      "uncompressed_sha256": "658e43369c77208bf69802eeb454f82387b57e6f52969aa5e7bc442c940ed354",
-      "compression_level": 22,
-      "aliases": [
-        "07524f23b0a061543fe0caa2be708cca1aa28e344e292984cb16ffb4e9cab44c.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "ee916455cc149148df2bc601b555913b829bb2131259bc5a6d8be8607421aeca.tar.zst",
+      "compressed_bytes": 16185175,
+      "sha256": "ee916455cc149148df2bc601b555913b829bb2131259bc5a6d8be8607421aeca",
+      "uncompressed_sha256": "d23586d7ccb3a8b8c12ee52c53b93c5b172999e906db82beceba7aeb52f8882c",
+      "aliases": []
     },
     {
       "title": "Toho Mathematics FOR LOOSERS",
