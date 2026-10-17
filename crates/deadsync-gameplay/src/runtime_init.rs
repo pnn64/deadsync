@@ -1048,6 +1048,7 @@ where
 
     let mut state = GameplayRuntimeState {
         note_field_tap_callback: None,
+        step_callback: None,
         tap_row_judgment_callback: None,
         hold_judgment_callback: None,
         avoided_mine_judgment_callback: None,

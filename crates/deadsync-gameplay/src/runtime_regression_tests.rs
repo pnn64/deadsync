@@ -4432,6 +4432,19 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn step_callback_reports_ghost_presses_without_release_or_explosion_messages() {
+        let mut state = regression_state();
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let observed = Arc::clone(&calls);
+        state.step_callback = Some(Box::new(move |_, column| observed.lock().unwrap().push(column)));
+        assert!(!state.judge_a_tap(0, -10_000_000_000));
+        assert_eq!(*calls.lock().unwrap(), [0], "ghost presses are still Player::Step calls");
+        let _ = state.judge_a_lift(0, -10_000_000_000);
+        state.spawn_tap_explosion_for_grade(1, JudgeGrade::Great, false);
+        assert_eq!(*calls.lock().unwrap(), [0], "releases and feedback do not synthesize presses");
+    }
+
+    #[test]
     fn note_field_tap_callback_runs_before_mask_and_each_ghost() {
         let profile = TestProfile {
             tap_explosion_options: TapExplosionOptions {

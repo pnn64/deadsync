@@ -1689,6 +1689,7 @@ local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
 local meter = SCREENMAN:GetTopScreen():GetLifeMeter(PLAYER_1)
 local taps = 0
 local judgments = 0
+local steps = 0
 return Def.ActorFrame {
     OnCommand = function(self)
         MESSAGEMAN:Broadcast('EngineStartup', {music=GAMESTATE:GetCurMusicSeconds()})
@@ -1712,6 +1713,18 @@ return Def.ActorFrame {
     end,
     TapNestedCommand = function()
         MESSAGEMAN:Broadcast('EngineTapNested', {beat=GAMESTATE:GetSongBeat()})
+    end,
+    StepMessageCommand = function(_, params)
+        assert(params.PlayerNumber == PLAYER_1 and params.Column == 0)
+        assert(params.MultiPlayer == nil)
+        assert(judgments == 0 and meter:GetLife() == 0.25)
+        steps = steps + 1
+        MESSAGEMAN:Broadcast('EngineStep', {steps=steps})
+    end,
+    StepP1MessageCommand = function(_, params)
+        assert(type(params) == 'table' and next(params) == nil)
+        assert(steps == 1)
+        MESSAGEMAN:Broadcast('EngineStepP1')
     end,
     JudgmentMessageCommand = function(_, params)
         assert(params.Player == PLAYER_1 and params.FirstTrack == 0)
@@ -1797,6 +1810,10 @@ return Def.ActorFrame {
         assert_eq!(state.gameplay.players_runtime.players[0].life, 0.125,
             "native judgment dispatch applies Lua writes before row scoring and foreground update");
         assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "EngineJudgment").count(), 1);
+        let step_order: Vec<_> = output.source_broadcasts.iter().map(|event| event.name.as_str())
+            .filter(|name| matches!(*name, "EngineJudgment" | "EngineStep" | "EngineStepP1" | "EngineObserve")).collect();
+        assert_eq!(step_order, ["EngineStep", "EngineStepP1", "EngineJudgment", "EngineObserve"],
+            "Player::Step broadcasts before row judgment and foreground update");
         assert_eq!(output.source_broadcasts.iter().filter(|event| event.name == "EngineTap").count(), 1,
             "clock={} notes={:?} scores={:?} scene={} hook={}",
             state.gameplay.clock.song_position.current_music_time_ns,
@@ -1828,6 +1845,7 @@ return Def.ActorFrame {
         let next = state.take_song_lua_output();
         assert!(next.errors.is_empty(), "{:?}", next.errors);
         assert!(!next.source_broadcasts.iter().any(|event| event.name == "EngineJudgment"));
+        assert!(!next.source_broadcasts.iter().any(|event| event.name.starts_with("EngineStep")));
         assert_eq!(state.gameplay.players_runtime.players[0].life, 0.125);
         let hold_time = state.gameplay.chart_runtime.hold_end_time_cache_ns[0];
         let delta = (hold_time - tap_time - 100_000_000) as f32 / 1_000_000_000.0;
@@ -1839,6 +1857,8 @@ return Def.ActorFrame {
         let held = state.take_song_lua_output();
         assert!(held.errors.is_empty(), "{:?}", held.errors);
         assert_eq!(held.source_broadcasts.iter().filter(|event| event.name == "EngineHold").count(), 1);
+        assert!(!held.source_broadcasts.iter().any(|event| event.name.starts_with("EngineStep")),
+            "finishing a hold does not synthesize another press");
         assert_eq!(state.gameplay.players_runtime.players[0].life, 0.0625,
             "completed native hold judgments also reach the retained VM during autoplay");
         state.set_live_autoplay_enabled(false);

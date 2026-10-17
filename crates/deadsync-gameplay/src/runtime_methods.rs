@@ -2215,6 +2215,15 @@ where
 
     #[inline(always)]
     pub fn judge_a_tap(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
+        let hit = self.judge_a_tap_internal(column, current_time_ns);
+        if let Some(mut callback) = self.step_callback.take() {
+            callback(self, column);
+            self.step_callback = Some(callback);
+        }
+        hit
+    }
+
+    fn judge_a_tap_internal(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
         let rate = normalized_song_rate(self.music_rate());
         let timing_hit_log = timing_hit_log_enabled();
         let input_log = gameplay_input_log_enabled();

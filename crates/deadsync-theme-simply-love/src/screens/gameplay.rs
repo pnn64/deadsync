@@ -967,6 +967,7 @@ impl State {
         scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
             .map_err(|error| error.to_string())?;
         scene.install_tap_row_judgment_callback(&mut self.gameplay);
+        scene.install_step_callback(&mut self.gameplay);
         scene.install_hold_judgment_callback(&mut self.gameplay);
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }

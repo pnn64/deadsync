@@ -1413,6 +1413,43 @@ impl SongLuaLiveScene {
 
     pub fn context(&self) -> &SongLuaCompileContext { &self.context }
 
+    pub fn install_step_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        let lua = self.lua.clone();
+        let stage = self.stage.clone();
+        let players = self.players.clone();
+        let song_timing = self.context.song_timing.clone();
+        game.step_callback = Some(Box::new(move |game, column| {
+            let result = (|| -> mlua::Result<()> {
+                let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
+                feed_live_stats(&stage, &players, &frame)?;
+                let music_rate = crate::song_tables::current_music_rate(&lua)?;
+                let beat = song_timing.as_ref().map_or(frame.beat as f32,
+                    |timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate).beat);
+                crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
+                crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
+                lua.set_app_data(LivePlayers(frame.players));
+                let player = game.player_for_col(column);
+                let params = lua.create_table()?;
+                params.raw_set("PlayerNumber", crate::player_number_name(player))?;
+                params.raw_set("Column", column - player * game.cols_per_player())?;
+                // PlayerState initializes MultiPlayer to Invalid. Enum::Push
+                // exposes that as nil, so ordinary cabinet play has no key.
+                crate::lua_util::broadcast_native_song_lua_message(&lua, "Step", Some(Value::Table(params)))?;
+                crate::lua_util::broadcast_native_song_lua_message(&lua,
+                    &format!("StepP{}", player + 1), Some(Value::Table(lua.create_table()?)))
+            })();
+            if let Err(error) = result
+                && let Ok(screen) = lua.globals().raw_get::<Table>("__songlua_top_screen") {
+                let _ = crate::lua_util::report_update_error(&lua, &screen,
+                    "__songlua_step_error_reported", "StepMessage", &error);
+            }
+            let writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
+            apply_player_writes(writes, game);
+        }));
+    }
+
     pub fn install_tap_row_judgment_callback<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
         &self, game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
     ) {
