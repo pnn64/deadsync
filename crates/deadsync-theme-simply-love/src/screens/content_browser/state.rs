@@ -22,6 +22,7 @@ use deadsync_online::beginner::{BeginnerPhase, BeginnerSnapshot};
 use deadsync_online::itgdb::{ItgdbSnapshot, normalize_name};
 use deadsync_online::pack_page::PageSnapshot;
 use deadsync_online::popular_packs::{PopularPhase, PopularSnapshot};
+use deadsync_online::rip_packs::{AuthorsSnapshot, RipSnapshot};
 use deadsync_online::smo_describe::{DescribeSnapshot, View, ViewPhase};
 use deadsync_online::smo_details::{DetailsPhase, DetailsSnapshot, PackDetails};
 use deadsync_online::smo_search::{SearchPhase, SearchSnapshot};
@@ -83,6 +84,10 @@ pub(super) enum Zone {
     /// The library grid, which is two columns rather than a list.
     Installed,
     Detail,
+    /// The Rip Packs options and the stage beside them. The picker and the
+    /// text prompt open over it rather than being zones of their own, as the
+    /// original's do: they are questions about a row, not places to go.
+    Rip,
 }
 
 /// One pack already in the library.
@@ -214,6 +219,9 @@ pub(super) enum Tab {
     Doubles,
     /// Grouped by the year they were added to the site.
     Years,
+    /// Booster packs: fifteen songs from fifteen packs, ripped at random
+    /// within a few limits. Not a list at all -- see `rip`.
+    Rip,
     Installed,
 }
 
@@ -221,7 +229,7 @@ pub(super) enum Tab {
 /// browser answers, and a tab vanishing because the catalog shifted would be
 /// worse than one that is occasionally thin.
 /// The strip, in the original's own order.
-pub(super) const TABS: [Tab; 9] = [
+pub(super) const TABS: [Tab; 10] = [
     Tab::Search,
     Tab::Pad,
     Tab::Keyboard,
@@ -230,6 +238,7 @@ pub(super) const TABS: [Tab; 9] = [
     Tab::Stamina,
     Tab::Doubles,
     Tab::Years,
+    Tab::Rip,
     Tab::Installed,
 ];
 
@@ -261,6 +270,7 @@ impl Tab {
             Self::Stamina => "content_browser/stamina.png",
             Self::AllAround => "content_browser/tech.png",
             Self::Years => "content_browser/year.png",
+            Self::Rip => "content_browser/rip.png",
             Self::Installed => "content_browser/installed.png",
         }
     }
@@ -275,6 +285,7 @@ impl Tab {
             Self::Stamina => "STAMINA",
             Self::AllAround => "ALL AROUND",
             Self::Years => "YEARS",
+            Self::Rip => "RIP PACKS",
             Self::Installed => "INSTALLED",
         }
     }
@@ -621,6 +632,9 @@ pub struct State {
     pub(super) pending_songs: Vec<super::preview::SongRequest>,
     pub(super) pending_audio: Vec<deadsync_theme::AudioRequest>,
     pub(super) pending_reload_dirs: Vec<PathBuf>,
+    /// The Rip Packs tab: its options, which live for the session as the
+    /// original's do, and the stage's timeline.
+    pub(super) rip: super::rip::Rip,
 }
 
 pub fn init() -> State {
@@ -703,6 +717,7 @@ pub fn init() -> State {
         pending_songs: Vec::new(),
         pending_audio: Vec::new(),
         pending_reload_dirs: Vec::new(),
+        rip: super::rip::Rip::default(),
     }
 }
 
@@ -742,6 +757,9 @@ pub fn on_enter(state: &mut State) {
     // A review left running was cancelled by the shell on the way out.
     state.pack_sync_overlay = crate::screens::pack_sync::OverlayState::Hidden;
     state.pack_sync_group = None;
+    // The rip's options and the pack on its table stay, as the original's
+    // do; a picker or a prompt left open is not still being asked.
+    super::rip::on_enter(&mut state.rip);
     // The tab survives leaving and coming back, so the landing zone has to
     // follow it: two of the tabs do not have a single list to land in, and
     // dropping the cursor into one that is not drawn strands it.
@@ -759,6 +777,7 @@ pub fn update(state: &mut State, delta_time: f32) {
     if delta_time <= 0.0 || !delta_time.is_finite() {
         return;
     }
+    super::rip::update(state, delta_time);
     super::sync_dialog::tick(state);
     // While the pack sync review is up it is the screen: nothing behind it
     // moves.
@@ -799,6 +818,10 @@ pub struct Services {
     /// The chart preview's answer and the single songs on their way in.
     pub song_preview: Arc<PreviewSnapshot>,
     pub song_installs: Arc<SongInstallsSnapshot>,
+    /// The rip on the table and its keep, and the charters the author
+    /// picker offers.
+    pub rip: Arc<RipSnapshot>,
+    pub rip_authors: Arc<AuthorsSnapshot>,
     /// Artwork that is not coming, so a row can stop waiting for it.
     pub banner_failed: Arc<HashSet<u64>>,
     /// Whether `MachinePackIniOffsets` is on. Off by default, and while it is
@@ -825,6 +848,8 @@ impl Default for Services {
             describe: Arc::new(DescribeSnapshot::default()),
             song_preview: Arc::new(PreviewSnapshot::default()),
             song_installs: Arc::new(SongInstallsSnapshot::default()),
+            rip: Arc::new(RipSnapshot::default()),
+            rip_authors: Arc::new(AuthorsSnapshot::default()),
             banner_failed: Arc::new(HashSet::new()),
             pack_ini_offsets_on: false,
             pack_sync_confidence: DEFAULT_PACK_SYNC_CONFIDENCE,
@@ -856,6 +881,8 @@ pub fn sync_stepmaniaonline(
         describe,
         song_preview,
         song_installs,
+        rip,
+        rip_authors,
         banner_failed,
         pack_ini_offsets_on,
         pack_sync_confidence,
@@ -868,6 +895,7 @@ pub fn sync_stepmaniaonline(
     state.song_preview = song_preview;
     state.song_installs = song_installs;
     super::preview::sync(state);
+    super::rip::sync(&mut state.rip, rip, rip_authors);
     state.banner_failed = banner_failed;
     state.pack_ini_offsets_on = pack_ini_offsets_on;
     // A view landing changes which packs a list holds. A lookup landing only
@@ -1259,7 +1287,8 @@ pub(super) fn search_field_showing(state: &State) -> bool {
 /// of packs with nothing saying what filtered it.
 ///
 /// The tabs missing from this table are the ones that head themselves: PAD has
-/// the grid, YEARS has the year strip, INSTALLED has its own count line.
+/// the grid, YEARS has the year strip, INSTALLED has its own count line, and
+/// RIP PACKS has its stage's heading.
 pub(super) fn band(state: &State) -> Option<(&'static str, &'static str)> {
     if !state.query.is_empty() {
         return Some((
@@ -1288,7 +1317,7 @@ pub(super) fn band(state: &State) -> Option<(&'static str, &'static str)> {
             "BEGINNER FRIENDLY",
             "Popular packs whose beginner charts are mostly 1s to 4s.",
         )),
-        Tab::Search | Tab::Pad | Tab::Years | Tab::Installed => None,
+        Tab::Search | Tab::Pad | Tab::Years | Tab::Rip | Tab::Installed => None,
     }
 }
 
@@ -1373,9 +1402,10 @@ pub(super) fn awaiting_order(state: &State) -> bool {
         );
     }
     // The other CSV views are ordered by pack id, which the catalogue has from
-    // the start, so they wait for nothing.
+    // the start, so they wait for nothing. Nor do the library and the rip
+    // stage, which are not lists of the catalogue at all.
     if !state.query.is_empty()
-        || tab(state) == Tab::Installed
+        || matches!(tab(state), Tab::Installed | Tab::Rip)
         || state.index.csv_view(tab(state)).is_some()
     {
         return false;
@@ -1414,6 +1444,12 @@ pub(super) fn years_showing(state: &State) -> bool {
 /// The library grid replaces the single list entirely, the way doubles does.
 pub(super) fn installed_showing(state: &State) -> bool {
     tab(state) == Tab::Installed && state.query.is_empty()
+}
+
+/// Whether the Rip Packs tab is the one open. It never has a query: typing
+/// on it does not carry the reader to SEARCH.
+pub fn rip_showing(state: &State) -> bool {
+    tab(state) == Tab::Rip
 }
 
 pub(super) const fn installed_page(state: &State) -> usize {
@@ -1986,8 +2022,8 @@ pub(super) fn rebuild_results(state: &mut State, keep_id: Option<u64>) {
                 }
                 // The library grid builds itself from the song cache rather
                 // than from the catalogue, so the single list is not what
-                // this tab shows.
-                Tab::Installed => false,
+                // this tab shows. Nor is it the rip stage's.
+                Tab::Installed | Tab::Rip => false,
             }
         });
     }
@@ -2086,6 +2122,11 @@ pub fn wanted_banners(state: &State) -> Vec<(u64, String)> {
                 out.push((song_art_key(url), url.to_owned()));
             }
         }
+    }
+
+    // The rip's cards, by the same song-art keys, while the stage is open.
+    if rip_showing(state) {
+        super::rip::wanted_art(&state.rip, &mut out);
     }
     out
 }
@@ -3207,10 +3248,10 @@ mod tests {
         assert!(!wants_beginner_walk(&state));
     }
 
-    /// Nine tabs, in the original's order. The strip is what a reader learns
+    /// Ten tabs, in the original's order. The strip is what a reader learns
     /// first, so a port that reorders it is a port they have to relearn.
     #[test]
-    fn the_strip_is_the_originals_nine_in_its_own_order() {
+    fn the_strip_is_the_originals_ten_in_its_own_order() {
         assert_eq!(
             TABS.map(Tab::label),
             [
@@ -3222,9 +3263,33 @@ mod tests {
                 "STAMINA",
                 "DOUBLES",
                 "YEARS",
+                "RIP PACKS",
                 "INSTALLED",
             ]
         );
+        // PAD stays where init() lands, and YEARS where the benchmark finds it.
+        assert_eq!(TABS[1], Tab::Pad);
+        assert_eq!(TABS[7], Tab::Years);
+    }
+
+    /// Every tab's icon is a file the theme ships and registers -- BEGINNER's
+    /// was named for years without either, and drew nothing.
+    #[test]
+    fn every_tab_icon_is_shipped_and_registered() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for tab in TABS {
+            let icon = tab.icon();
+            assert!(
+                root.join("assets/graphics").join(icon).is_file(),
+                "{icon} is not in assets/graphics"
+            );
+            assert!(
+                crate::resources::CONTENT_BROWSER_TEXTURE_ASSETS
+                    .iter()
+                    .any(|asset| asset.key == icon),
+                "{icon} is not registered"
+            );
+        }
     }
 
     /// Every view without the featured grid above it is headed by the band.
@@ -3240,9 +3305,11 @@ mod tests {
             (Tab::AllAround, Some("ALL AROUND")),
             (Tab::Stamina, Some("HARD CONTENT / STAMINA")),
             (Tab::Doubles, Some("DOUBLES")),
-            // these three head themselves: the grid, the year strip, a count
+            // these head themselves: the grid, the year strip, the rip
+            // stage, a count
             (Tab::Pad, None),
             (Tab::Years, None),
+            (Tab::Rip, None),
             (Tab::Installed, None),
         ] {
             select_tab(&mut state, wanted);

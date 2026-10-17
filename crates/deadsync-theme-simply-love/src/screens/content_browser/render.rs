@@ -19,6 +19,8 @@ use std::fmt::Write as _;
 use super::chart_window;
 use super::detail;
 use super::layout as lo;
+use super::rip;
+use super::rip_render;
 use super::spinner;
 use super::state::{
     FEATURED_VISIBLE, ReloadPrompt, SmoSync, State, TABS, Tab, Zone, awaiting_order, band,
@@ -26,9 +28,9 @@ use super::state::{
     beginner_showing, details_for, doubles_column, doubles_cursor, doubles_showing,
     featured_heading, focused_pack, grid_showing, install_for, installed_catalog_entry,
     installed_page, installed_pages, installed_showing, installed_smo_sync, is_installed,
-    list_page, more_mark, row_count, search_capped, search_field_showing, search_running,
-    selected_pack, smo_sync_of, tab, total_pages, visible_rows, window_start, year_at,
-    year_indexing, year_label, years_showing,
+    list_page, more_mark, rip_showing, row_count, search_capped, search_field_showing,
+    search_running, selected_pack, smo_sync_of, tab, total_pages, visible_rows, window_start,
+    year_at, year_indexing, year_label, years_showing,
 };
 use super::sync_dialog::{self, PackCheck, SHIFT_MS, SyncAction, SyncDialog, SyncStep};
 use crate::act;
@@ -46,8 +48,8 @@ pub(super) const Z_ART: i16 = 16;
 pub(super) const Z_TEXT: i16 = 20;
 pub(super) const Z_BADGE: i16 = 24;
 const Z_MODAL_SCRIM: i16 = 80;
-const Z_MODAL_PANEL: i16 = 84;
-const Z_MODAL_TEXT: i16 = 90;
+pub(super) const Z_MODAL_PANEL: i16 = 84;
+pub(super) const Z_MODAL_TEXT: i16 = 90;
 /// Just under the shared pack sync review, which draws at 1496 and up.
 const Z_PACK_SYNC_SCRIM: i16 = 1490;
 
@@ -121,6 +123,14 @@ pub fn push_actors(
         return;
     }
 
+    // So does a rip's text prompt, as the original hides the whole browser
+    // behind its text entry screen.
+    if rip_showing(state) && state.rip.prompt.is_some() {
+        rip_render::push_prompt(actors, state, asset_manager, w, h);
+        rip_render::push_toast(actors, state, w);
+        return;
+    }
+
     push_tabs(actors, state);
     push_readout(actors, state, w);
 
@@ -138,6 +148,8 @@ pub fn push_actors(
         push_doubles(actors, state);
     } else if installed_showing(state) {
         push_installed(actors, state, w);
+    } else if rip_showing(state) {
+        rip_render::push_rip(actors, state, asset_manager, w, h);
     } else {
         push_list(actors, state);
         push_info_pane(actors, state);
@@ -152,6 +164,12 @@ pub fn push_actors(
         push_sync_dialog(actors, state, dialog, w, h);
     } else if let Some(prompt) = state.reload_prompt.as_ref() {
         push_reload_dialog(actors, state, prompt, w, h);
+    }
+
+    // A refused rip or reset says why, over everything, as the original's
+    // toast does.
+    if rip_showing(state) {
+        rip_render::push_toast(actors, state, w);
     }
 
     // DeadSync's pack sync review, over everything once a measure starts.
@@ -201,16 +219,8 @@ fn push_reload_dialog(
     );
     // The original's words for what changed: it said "New Packs Installed"
     // over a single song, because it only ever knew that something had.
-    let packs = state
-        .installed_dirs
-        .iter()
-        .filter(|dir| {
-            dir.file_name()
-                .and_then(|name| name.to_str())
-                .is_none_or(|name| name != deadsync_online::smo_songs::SINGLES_GROUP)
-        })
-        .count();
-    let songs = super::preview::songs_added(state);
+    let (packs, booster_songs) = installed_counts(state);
+    let songs = super::preview::songs_added(state) + booster_songs;
     let title = if packs == 0 && songs > 0 {
         "NEW SONGS INSTALLED"
     } else {
@@ -298,6 +308,36 @@ fn push_reload_dialog(
         diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
         z(Z_MODAL_TEXT)
     ));
+}
+
+/// The folders installed since the last rescan, as packs and songs.
+///
+/// The singles folder is neither: its songs are counted one by one. A booster
+/// this session kept is a pack folder too, but what the player asked for was
+/// its songs, so it is counted as them -- "15 songs added", not "1 pack".
+fn installed_counts(state: &State) -> (usize, usize) {
+    let mut packs = 0;
+    let mut songs = 0;
+    for dir in &state.installed_dirs {
+        let name = dir.file_name();
+        if name
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == deadsync_online::smo_songs::SINGLES_GROUP)
+        {
+            continue;
+        }
+        let booster = name
+            .filter(|name| {
+                name.to_str()
+                    .is_some_and(deadsync_online::rip_packs::is_booster_folder)
+            })
+            .and_then(|name| rip::kept_songs(&state.rip, name));
+        match booster {
+            Some(got) => songs += got,
+            None => packs += 1,
+        }
+    }
+    (packs, songs)
 }
 
 /// The sync dialog: what the pack says about itself, then DeadSync's ways of
@@ -819,6 +859,8 @@ fn push_readout(actors: &mut Vec<Actor>, state: &State, w: f32) {
 fn readout_text(state: &State) -> String {
     match tab(state) {
         Tab::Installed => format!("{} installed", state.installed.len()),
+        // The rip stage has its own heading, and nothing to count or page.
+        Tab::Rip => String::new(),
         // Never a status here. The year view says it is indexing with the
         // progress bar beside this line, and a second indicator that flips
         // between "indexing..." and a count reads as a glitch rather than as
@@ -2261,6 +2303,8 @@ fn push_footer(actors: &mut Vec<Actor>, state: &State, w: f32) {
 fn footer_hint(state: &State) -> String {
     let exit = if state.zone == Zone::Tabs {
         "BACK exit"
+    } else if state.zone == Zone::Rip && state.rip.picking.is_some() {
+        "BACK done"
     } else {
         "BACK back"
     };
@@ -2291,6 +2335,8 @@ fn footer_hint(state: &State) -> String {
         }
         Zone::Detail => "UP/DOWN songs   LEFT/RIGHT page   SELECT preview   START song options",
         Zone::Tabs if tab(state) == Tab::Search => "LEFT/RIGHT views   START type a search",
+        Zone::Tabs if tab(state) == Tab::Rip => "LEFT/RIGHT views   DOWN options",
+        Zone::Rip => rip_render::footer(state),
         Zone::Tabs => "LEFT/RIGHT views   DOWN open   SELECT reload",
         Zone::Years => "LEFT/RIGHT year   DOWN packs   UP views   SELECT reload",
         Zone::Featured => "LEFT/RIGHT packs   START details   DOWN the list",
@@ -2311,7 +2357,7 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
 }
 
 /// A line's width in logical pixels at zoom 1, as the font will lay it out.
-fn text_width(asset_manager: &AssetManager, font: &str, text: &str) -> f32 {
+pub(super) fn text_width(asset_manager: &AssetManager, font: &str, text: &str) -> f32 {
     asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font(font, |measure| {
@@ -2357,6 +2403,67 @@ mod tests {
         assert_eq!(format_date("2026-03-14", true), "Mar 14, 2026");
         assert_eq!(format_date("Mar. 14, 2026", false), "Mar. 14, 2026");
         assert_eq!(format_date("", false), "");
+    }
+
+    /// A booster kept this session is a pack folder on disk, but what the
+    /// player asked for was its songs: the way out counts it as them.
+    #[test]
+    fn a_kept_booster_is_counted_as_its_songs() {
+        use deadsync_online::rip_packs::{KeepPhase, KeepState, RipPhase, RipSnapshot, SongState};
+        let booster = "Content Booster Pack 3 - 2026-10-17";
+        let mut state = super::super::state::init();
+        let snapshot = std::sync::Arc::new(RipSnapshot {
+            phase: RipPhase::Ready,
+            set: 1,
+            keep: Some(std::sync::Arc::new(KeepState {
+                set: 1,
+                folder: booster.to_owned(),
+                phase: KeepPhase::Done,
+                songs: std::sync::Arc::from(vec![SongState::Done; 12]),
+                done_bytes: 12,
+                total_bytes: 12,
+                got: 12,
+                failed: 0,
+                group_dir: Some(std::path::PathBuf::from("Songs").join(booster)),
+                message: None,
+            })),
+            revision: 1,
+            ..RipSnapshot::default()
+        });
+        let authors = std::sync::Arc::clone(&state.rip.authors);
+        rip::sync(&mut state.rip, snapshot, authors);
+
+        state.installed_dirs = vec![std::path::PathBuf::from("Songs").join(booster)];
+        assert_eq!(installed_counts(&state), (0, 12));
+        let words = |state: &State| {
+            let mut actors = Vec::new();
+            push_reload_dialog(&mut actors, state, &ReloadPrompt::default(), 854.0, 480.0);
+            actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Text { content, .. } => Some(content.as_str().to_owned()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let only = words(&state);
+        assert!(only.iter().any(|word| word == "NEW SONGS INSTALLED"));
+        assert!(only.iter().any(|word| word == "12 songs added."));
+
+        state
+            .installed_dirs
+            .push(std::path::PathBuf::from("Songs/Some Pack"));
+        assert_eq!(installed_counts(&state), (1, 12));
+        assert!(
+            words(&state)
+                .iter()
+                .any(|word| word == "1 pack and 12 songs added.")
+        );
+        // a booster folder this session did not keep is just a pack
+        state.installed_dirs = vec![std::path::PathBuf::from(
+            "Songs/Content Booster Pack 1 - 2026-01-01",
+        )];
+        assert_eq!(installed_counts(&state), (1, 0));
     }
 
     #[test]
