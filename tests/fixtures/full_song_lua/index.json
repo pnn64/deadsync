@@ -3410,15 +3410,12 @@
     {
       "title": "Lower Times",
       "source_simfile": "Lower Times/Lower Times.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f1ec8b1e685fa966dfa18aacdb6f65a98097258a4091d1c6c40f3d14d976eac3.tar.zst",
-      "sha256": "f1ec8b1e685fa966dfa18aacdb6f65a98097258a4091d1c6c40f3d14d976eac3",
-      "compressed_bytes": 318264,
-      "uncompressed_sha256": "8b95ae56ca4782b61e1b5d7acc04950c60d7fd9f191febb249da9de04c7e6dbd",
-      "compression_level": 22,
-      "aliases": [
-        "fb3640b93dd7d9a7b6175a3d6f4ae2521ca7cb99ae72d5a01388f1346a89ce57.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "83f55612d16ffbfe4dcdc6a7688c5ea0c23e5f3ab53b47f11e81debafd6d897e.tar.zst",
+      "compressed_bytes": 6628717,
+      "sha256": "83f55612d16ffbfe4dcdc6a7688c5ea0c23e5f3ab53b47f11e81debafd6d897e",
+      "uncompressed_sha256": "f2f5ef47ffbd972a1a82faed813e31cff6b36e3177114c0a8b579b815115cb8b",
+      "aliases": []
     },
     {
       "title": "\u30ed\u30a6\u30ef\u30fc [Tier 3]",
