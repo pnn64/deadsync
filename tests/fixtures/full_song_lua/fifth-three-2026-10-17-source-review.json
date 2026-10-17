@@ -1,0 +1,259 @@
+{
+  "scope": "Three more complete fixtures; existing acceptance unchanged",
+  "baseline_commit": "ee9bae8b1",
+  "baseline_counts": {
+    "passed_fixtures": 447,
+    "pending_charts": 53,
+    "ignored_charts": 1
+  },
+  "repairs": [
+    {
+      "commit": "a6fbd4e29",
+      "charts": [
+        "Think About You/Think About You.sm",
+        "Think About You/Think About You.ssc"
+      ],
+      "cause": "Lua selected double style and double Steps, but gameplay entry retained the original single session and rejected dance-double payloads. Carry the constructed style in compiled metadata and replace session/style/charts/payloads together before runtime ownership."
+    },
+    {
+      "commit": "a6fbd4e29",
+      "chart": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+      "cause": "Sound.get_length exposed decoded sample precision; native RageSound returns integer reader milliseconds /1000.f. Quantize the cached metadata value to match the native API.",
+      "diagnostic": {
+        "frames": 6605,
+        "through_second": 2,
+        "native_sleep": 6.914000034332275,
+        "owned_sleep": 6.914716720581055,
+        "full_baseline_stopped_after_concrete_diagnostic": true,
+        "proof": {
+          "path": "/home/parity/jobs/fifth-three-fixtures-20261017/chart-179-attempt-1/chart-179/sound-prefix-report.json",
+          "sha256": "764842209412b2bd1946b9af3728fb8cec953da61863a0a3e38d2ed167013c1f",
+          "frames": 6605,
+          "mismatches": [
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0008",
+                "args": [
+                  6.914000034332275
+                ],
+                "beat": 2.7109522819519043,
+                "caller": {
+                  "line": 28,
+                  "source": "song:/lua/bgm.lua",
+                  "tail_call": false
+                },
+                "command": "PlayCommand",
+                "definition_id": "def-0008",
+                "detail": {
+                  "native_tween_time_left": 6.914000034332275
+                },
+                "kind": "call",
+                "line": 28,
+                "operation": "Actor.sleep",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 1.6034693717956543,
+                "seq": 10227,
+                "source": "song:/lua/bgm.lua",
+                "tween_time_left": 6.914000034332275
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "call",
+                "operation": "Actor.sleep",
+                "source": "song:/lua/bgm.lua",
+                "line": 28,
+                "phase": "callback",
+                "beat": 2.7109522819519043,
+                "seconds": 1.6034693717956543,
+                "args": [
+                  6.914716720581055
+                ],
+                "tween_time_left": 6.914716720581055
+              }
+            },
+            {
+              "field": "command_query_event",
+              "native": {
+                "actor": "def-0008",
+                "args": [
+                  "BGMDelay"
+                ],
+                "beat": 2.7109522819519043,
+                "caller": {
+                  "line": 28,
+                  "source": "song:/lua/bgm.lua",
+                  "tail_call": false
+                },
+                "command": "PlayCommand",
+                "definition_id": "def-0008",
+                "detail": {
+                  "native_tween_time_left": 6.914000034332275
+                },
+                "kind": "call",
+                "line": 28,
+                "operation": "Actor.queuecommand",
+                "phase": "callback",
+                "scene": 1,
+                "seconds": 1.6034693717956543,
+                "seq": 10228,
+                "source": "song:/lua/bgm.lua",
+                "tween_time_left": 6.914000034332275
+              },
+              "deadsync": {
+                "scene": 1,
+                "kind": "call",
+                "operation": "Actor.queuecommand",
+                "source": "song:/lua/bgm.lua",
+                "line": 28,
+                "phase": "callback",
+                "beat": 2.7109522819519043,
+                "seconds": 1.6034693717956543,
+                "args": [
+                  "BGMDelay"
+                ],
+                "tween_time_left": 6.914716720581055
+              }
+            }
+          ],
+          "diagnostic_only": true,
+          "archive_accepted": false
+        }
+      }
+    },
+    {
+      "commit": "a61c9be28",
+      "chart": "Think About You/Think About You.ssc",
+      "cause": "The Lua Steps catalog omitted authored couple and routine entries, so the double chart identity was 2 instead of native 4. Preserve all native catalog metadata and map Lua selections back to playable payloads without making unsupported styles playable. Both SM/SSC four-entry reload regressions pass; SM remains pending after its two permitted full attempts."
+    },
+    {
+      "commit": "725ca17a9530501d628bf70f6f2cb8319dd0b253",
+      "chart": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "cause": "Background.cpp wraps Lua backgrounds in UpperLeft.lua. That effect merges its native root On/GainFocus/LoseFocus callbacks with authored callbacks before creation. Missing that merge gave the root On a song command identity and added two command events, shifting 172550 comparisons. Run the real effect callbacks and preserve merged ActorDef command provenance; comparison rules are unchanged."
+    }
+  ],
+  "native_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameState.cpp",
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "finding": "SetCurrentStyle selects the requested style and checks joined sides"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ScreenGameplay.cpp",
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "finding": "Reload constructs the selected style note fields and selected Steps"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\RageSound.cpp",
+      "sha256": "400405ca3b0cad0163673ca5413f4a290c7cc8376e2e76a53d62446b0ac4edb2",
+      "finding": "GetLengthSeconds returns the reader integer milliseconds divided by1000.f"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\RageSoundReader_Vorbisfile.cpp",
+      "sha256": "09f539daaf2c35d537db0bd77694899f6f6872af34c6e1df533174d88b9eb3c9",
+      "finding": "Vorbis GetLength truncates total seconds*1000 to an integer"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\RageSoundReader_WAV.cpp",
+      "sha256": "dea1ba5be463556b1ed1d83ec8c3800c0b9a38cd498a00e5535788415a27fbd9",
+      "finding": "PCM GetLength computes whole milliseconds with integer data byte arithmetic"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ModsGroup.h",
+      "sha256": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0",
+      "finding": "Update ignores the supplied actor delta and reads its own RageTimer before approaching options"
+    },
+    {
+      "path": "C:\\GitHub\\Simply-Love-SM5\\BGAnimations\\ScreenGameplay underlay\\PerPlayer\\NoteField\\default.lua",
+      "sha256": "47231e3ffed11e082b553364d53eea72c7f677e37ee2c8a9080773a58d5b86c2",
+      "finding": "Simply Love builds note-field children from the selected native style"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\Think About You\\lua\\default.lua",
+      "sha256": "998be4e8e41584a0c8f524f864d7925d02d4c971d5d0b25061ebdc3ea4dd33fa",
+      "finding": "One-player startup forces double Steps and ScreenGameplay reload"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\Dreams Bloom After School\\lua\\bgm.lua",
+      "sha256": "2ea904bc225c06929d8841163a5e6d5f00a06f98cb5aaa5e48e9ff7bfd104b85",
+      "finding": "Queues the second sound with sleep(firstSound:get_length())"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Song.cpp",
+      "sha256": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+      "finding": "Song.GetAllSteps returns the native Steps vector in load order"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameManager.cpp",
+      "sha256": "2eee53b9f0088acac643bb0e7f04a29933fc9913cb194f75bdbedb5fea7df1cc",
+      "finding": "Native Steps types include couple and routine"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Background.cpp",
+      "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c",
+      "finding": "CreateBackground defaults Lua files and Lua directories to UpperLeft and loads the effect declaration"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\BackgroundEffects\\UpperLeft.lua",
+      "sha256": "f8c948a7f83b1caf1cb09716a6a94ed9d8237ee8a4a69427babc8d6aa47cd359",
+      "finding": "Concatenates native On, GainFocus and LoseFocus with the loaded song actor"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\Themes\\_fallback\\Scripts\\02 ActorDef.lua",
+      "sha256": "e146db352c0328d94e5225b4a7705abb4cc7253b81cf217c2bea3f6f7f7cd093",
+      "finding": "MergeTables composes colliding function values into a new fallback Lua callback"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\probe_theme\\SongLuaTrace.lua",
+      "sha256": "3b9797a139e33223d51e54700ac1289a7367befabdd95a05130496de9772900a",
+      "finding": "Native declaration observers retain merged command function source; song call sites remain visible"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\Cyberpunk 2077\\lua\\default.lua",
+      "sha256": "41bea1b78972b8f783adad7798eee4ba6df0a5c35379bf6b8d0996d6a1b5d52a",
+      "finding": "Background root On initializes current Steps, update callback and input callback"
+    }
+  ],
+  "retained_pending": [
+    {
+      "positions": [
+        363,
+        239,
+        240
+      ],
+      "cause": "Small Beat-fade X differences use native ModsGroup independent timer deltas absent from the retained captures. Existing actor-frame deltas cannot reproduce those independent clock inputs exactly. No output calibration or comparator tolerance change."
+    },
+    {
+      "position": 482,
+      "cause": "21 command/query ordering differences between queued CheckCommand and foreground callbacks nearbeat83; retained pending."
+    },
+    {
+      "position": 440,
+      "attempts": 2,
+      "cause": "After the style fix, all 38435 frames replay; three Steps identity comparisons remain native index4 versus owned2. The catalog repair is committed, but no third full attempt is permitted this sweep."
+    },
+    {
+      "position": 259,
+      "attempts": 1,
+      "cause": "159927-frame full replay retains30 mismatches: two terminal life-history values (native0 owned0.5), an extra construction SystemMessage broadcast (two comparisons), and26 tween-time command comparisons from alphabet transforms."
+    },
+    {
+      "position": 497,
+      "attempts": 1,
+      "cause": "Preparation exhausts the Lua stack while constructing the large falling-sand actor grid; no retained scene is available for the5040-frame replay."
+    }
+  ],
+  "missing_coverage": "fifth-three-2026-10-17-coverage.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "full_reports_verified": 3,
+    "current_source_hashes_verified": 27,
+    "native_tests_passed": 54,
+    "oversized_fixtures_gitignored": 14,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-17T22:27:07Z"
+  }
+}

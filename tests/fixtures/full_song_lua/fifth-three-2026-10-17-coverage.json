@@ -134,7 +134,8 @@
         "missing captured subscriber identity for ScreenGameplay/2/7/2",
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
         "missing captured subscriber identity for ScreenGameplay/2/9/2"
-      ]
+      ],
+      "uncompared_owned_operation_counts": {}
     },
     "Dreams Bloom After School/Dreams Bloom After School.ssc": {
       "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
@@ -165,7 +166,8 @@
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
         "missing captured subscriber identity for ScreenGameplay/2/9/2",
         "owned gameplay overlay observation phase is unavailable"
-      ]
+      ],
+      "uncompared_owned_operation_counts": {}
     },
     "Jumper/Jumper.sm": {
       "source_simfile": "Jumper/Jumper.sm",
@@ -202,7 +204,8 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
-      ]
+      ],
+      "uncompared_owned_operation_counts": {}
     }
   },
   "actual_failure_missing_inputs": [

@@ -1,6 +1,17 @@
 # Full song Lua fixtures
 
-The [latest three-fixture pass](fourth-three-2026-10-17-summary.json) brings the
+The [latest three-fixture pass](fifth-three-2026-10-17-summary.json) brings the
+total to **450 accepted fixtures, 50 pending charts, and one ignored chart**
+(Mawaru9). Dreams Bloom After School SSC, Think About You SSC, and Cyberpunk
+2077 SSC pass their complete native replays. Reloads retain the constructed
+style and the native authored chart catalog. Sound lengths expose native
+whole milliseconds, and Lua backgrounds merge their native UpperLeft effect
+callbacks before construction. All 54 native replay unit tests pass.
+[Concrete pending failures](fifth-three-2026-10-17-pending.json) and
+[missing coverage](fifth-three-2026-10-17-coverage.json) remain separate.
+All files over 100,000,000 bytes remain gitignored.
+
+The [preceding three-fixture pass](fourth-three-2026-10-17-summary.json) brought the
 total to **447 accepted fixtures, 53 pending charts, and one ignored chart**
 (Mawaru9). Crazy Crazy SSC, Spectrum SSC, and The Boys Are Back in Town (to kill
 you) SSC pass their complete native replays. Fixes restore native judgment enum
