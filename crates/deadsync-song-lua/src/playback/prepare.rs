@@ -75,6 +75,14 @@ impl<S> PreparedGameplaySongLua<S> {
             .find_map(|compiled| compiled.loaded_steps)
     }
 
+    /// Style that owns the constructed note fields, including a Lua reload.
+    pub fn loaded_style(&self) -> Option<&str> {
+        self.primary.iter().map(|primary| &primary.compiled)
+            .chain(self.background_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .find_map(|compiled| compiled.loaded_style.as_deref())
+    }
+
     pub fn startup(&self) -> crate::SongLuaStartup {
         let mut startup = crate::SongLuaStartup::default();
         for compiled in self

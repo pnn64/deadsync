@@ -544,7 +544,8 @@ where
             .get::<Option<usize>>(COMPILE_LAYER_KEY).map(|layer| layer.unwrap_or(primary_index))
             .map_err(|err| err.to_string())).collect::<Result<Vec<_>, _>>()?;
         let mut out = CompiledSongLua {
-            startup, loaded_steps: Some(context.player_step_indices), startup_reloads: reloads,
+            startup, loaded_steps: Some(context.player_step_indices),
+            loaded_style: Some(context.style_name.clone()), startup_reloads: reloads,
             entry_path: trace_entry_path.clone(),
             screen_width: context.screen_width, screen_height: context.screen_height,
             screen_overlay_index: Some(screen_index), hidden_players,
@@ -626,6 +627,7 @@ where
     let mut out = CompiledSongLua {
         startup,
         loaded_steps: Some(context.player_step_indices),
+        loaded_style: Some(context.style_name.clone()),
         startup_reloads: reloads,
         entry_path: entry_paths[primary_index].clone(),
         screen_width: context.screen_width,
@@ -1673,6 +1675,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
 
     for output in &mut outputs {
         output.loaded_steps = compiled.loaded_steps;
+        output.loaded_style = compiled.loaded_style.clone();
         output.startup_reloads = compiled.startup_reloads;
     }
     let primary = &mut outputs[primary_index];

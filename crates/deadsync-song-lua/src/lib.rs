@@ -1957,6 +1957,7 @@ pub struct CompiledSongLua<OverlayActor> {
     pub live_indices: Vec<usize>,
     /// Charts whose note fields were constructed after startup reloads.
     pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
+    pub loaded_style: Option<String>,
     pub startup_reloads: u32,
     pub startup: SongLuaStartup,
     pub entry_path: PathBuf,
@@ -2011,6 +2012,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             live_scene: None,
             live_indices: Vec::new(),
             loaded_steps: None,
+            loaded_style: None,
             startup_reloads: 0,
             startup: SongLuaStartup::default(),
             entry_path: PathBuf::new(),

@@ -9594,7 +9594,7 @@ impl App {
                     play_style,
                 );
 
-                let gameplay_session = gameplay_session();
+                let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
                     lobby_views::refresh(),
@@ -9626,7 +9626,7 @@ impl App {
                 );
                 match crate::gameplay_entry::apply_song_lua_reload(
                     &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
-                    &gameplay_session, cfg.global_offset_seconds,
+                    &mut gameplay_session, cfg.global_offset_seconds,
                 ) {
                     Ok(true) => crate::gameplay_runtime::refresh_chart_view(
                         &mut gameplay_init_view, &cfg, &song_arc, &charts,
@@ -10087,7 +10087,7 @@ impl App {
                     cfg.tournament,
                     play_style,
                 );
-                let gameplay_session = gameplay_session();
+                let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
                     self.gameplay_lobby.refresh_now(),
@@ -10154,7 +10154,7 @@ impl App {
                     };
                     if crate::gameplay_entry::apply_song_lua_reload(
                         &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
-                        &gameplay_session, gameplay_config.global_offset_seconds,
+                        &mut gameplay_session, gameplay_config.global_offset_seconds,
                     )? {
                         crate::gameplay_runtime::refresh_chart_view(
                             &mut gameplay_init_view, &init_config, &song_arc, &charts,

@@ -996,6 +996,94 @@ end }
     }
 
     #[test]
+    fn gameplay_reload_rebuilds_a_single_session_as_double() {
+        use deadsync_song_lua::{SongLuaLiveFrame, SongLuaLiveRequest};
+        paths::init();
+        let dir = std::env::temp_dir().join(format!("deadsync-single-double-reload-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let simfile = dir.join("mixed.sm");
+        std::fs::write(&simfile, "#TITLE:Style reload;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;\n#NOTES:dance-single:Single:Challenge:1:0,0,0,0,0:\n0001\n0000\n0000\n0000\n;\n#NOTES:dance-double:Double:Challenge:1:0,0,0,0,0:\n00000001\n00000000\n00000000\n00000000\n;").unwrap();
+        std::fs::write(dir.join("default.lua"), r#"
+return Def.ActorFrame { OnCommand=function(self)
+    self:sleep(9999)
+    if GAMESTATE:GetCurrentStyle():GetName() == 'single' then
+        GAMESTATE:SetCurrentStyle('double')
+        GAMESTATE:SetCurrentSteps(PLAYER_1,
+            GAMESTATE:GetCurrentSong():GetStepsByStepsType('StepsType_Dance_Double')[1])
+        SCREENMAN:SetNewScreen('ScreenGameplay')
+    else
+        assert(#SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'):GetColumnActors() == 8)
+        MESSAGEMAN:Broadcast('ReloadedDoubleReady')
+    end
+end }
+"#).unwrap();
+        let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
+        let mut session = GameplaySession::default();
+        let mut charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+        let first = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], -0.008).unwrap().remove(0));
+        let mut payloads = [first.clone(), first];
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let viewport = GameplayViewport::default();
+        let config = GameplayConfig { global_offset_seconds: -0.008, ..Default::default() };
+        let context = deadsync_shell::gameplay_entry::song_lua_context(&song, &charts,
+            std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0, viewport,
+            (854,480), 16.0/9.0, 0.0, &session, &config, "null", 1, true).unwrap();
+        let mut prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
+            deadsync_assets::song_lua::compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
+        let mut scene = prepared.take_live_scene().unwrap().unwrap();
+        let frame = SongLuaLiveFrame { music_seconds: 0.1, screen_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default() };
+        let output = scene.advance(frame.clone()).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        let prepared = deadsync_song_lua::playback::reload_song_lua(&song, scene,
+            deadsync_assets::song_lua::reload_song_lua).unwrap();
+        assert_eq!(prepared.loaded_style(), Some("double"));
+        deadsync_shell::gameplay_entry::apply_song_lua_reload(&song, &mut charts,
+            &mut payloads, &prepared, &mut session, -0.008).unwrap();
+        assert_eq!(session.play_style, deadsync_gameplay::GameplayInputPlayStyle::Double);
+        assert_eq!(session.joined_sides, [true,false]);
+        assert_eq!(charts[0].chart_type, "dance-double");
+        let mut state = gameplay::init(song, charts, payloads, viewport, session, config,
+            5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
+            None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
+            [0; 2], prepared, Default::default());
+        assert_eq!(state.gameplay.cols_per_player(), 8);
+        let output = state.song_lua.as_mut().unwrap().advance(frame).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.source_broadcasts.iter().any(|event| event.name == "ReloadedDoubleReady"));
+    }
+
+    #[test]
+    fn native_sound_length_exposes_whole_milliseconds() {
+        let dir = std::env::temp_dir().join(format!("deadsync-judgment-sound-millis-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let frames = 12_345_u32;
+        let mut wav = Vec::new();
+        wav.extend_from_slice(b"RIFF"); wav.extend_from_slice(&(36 + frames * 2).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt "); wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes()); wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&8_000_u32.to_le_bytes()); wav.extend_from_slice(&16_000_u32.to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes()); wav.extend_from_slice(&16_u16.to_le_bytes());
+        wav.extend_from_slice(b"data"); wav.extend_from_slice(&(frames * 2).to_le_bytes());
+        wav.resize(wav.len() + frames as usize * 2, 0);
+        std::fs::write(dir.join("fractional.wav"), wav).unwrap();
+        let source = format!(r#"
+return Def.Sound {{ File=[=[{}]=], OnCommand=function(self)
+    local length = self:get():get_length()
+    assert(math.abs(length - 1.543) < 0.0000001,
+        'RageSound returns whole milliseconds: length='..tostring(length)..' File='..tostring(self.File))
+    assert(self:get():get_length() == length, 'cached length preserves the same native value')
+    MESSAGEMAN:Broadcast('NativeSoundMillis')
+end }}
+"#, dir.join("fractional.wav").display());
+        let mut state = owned_judgment_control("sound-millis", "0000\n0000\n0000\n0000\n", &source, 0.0);
+        let output = update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        assert!(output.source_broadcasts.iter().any(|event| event.name == "NativeSoundMillis"));
+    }
+
+    #[test]
     fn native_capture_rejects_incomplete_or_failed_traces() {
         let complete = serde_json::json!({
             "oracle": "itgmania_song_lua_semantic_trace",
@@ -3611,12 +3699,13 @@ pub(crate) fn replay_with_command_observer(
      -> Result<Box<gameplay::State>, String> {
         let mut charts = charts.clone();
         let mut payloads = payloads.clone();
+        let mut session = session.clone();
         deadsync_shell::gameplay_entry::apply_song_lua_reload(
             &song,
             &mut charts,
             &mut payloads,
             &prepared,
-            &session,
+            &mut session,
             config.global_offset_seconds,
         )?;
         let mut state = Box::new(gameplay::init(

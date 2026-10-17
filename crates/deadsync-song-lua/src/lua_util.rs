@@ -6294,6 +6294,9 @@ fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .and_then(|path| {
                         deadlib_audio_decode::file_length_seconds(&path, Default::default()).ok()
                     })
+                    // RageSound::GetLengthSeconds converts its reader's whole
+                    // milliseconds to seconds, rather than exposing samples.
+                    .map(|seconds| (seconds * 1000.0).trunc() / 1000.0)
                     .unwrap_or(-1.0);
                 *cached = Some((file, length));
                 Ok(length)

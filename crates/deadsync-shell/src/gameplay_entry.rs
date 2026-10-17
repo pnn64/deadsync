@@ -174,16 +174,35 @@ pub fn apply_song_lua_reload(
     charts: &mut [Arc<ChartData>; MAX_PLAYERS],
     payloads: &mut [Arc<GameplayChartData>; MAX_PLAYERS],
     prepared: &PreparedGameplaySongLua,
-    session: &deadsync_gameplay::GameplaySession,
+    session: &mut deadsync_gameplay::GameplaySession,
     global_offset_seconds: f32,
 ) -> Result<bool, String> {
     let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
-    let indices = reload_chart_indices(song, steps, session)?;
+    let mut selected_session = session.clone();
+    if let Some(style) = prepared.loaded_style() {
+        use deadsync_gameplay::GameplayInputPlayStyle as Style;
+        selected_session.play_style = match (session.play_style.is_pump(), style) {
+            (false, "single") => Style::Single,
+            (false, "double") => Style::Double,
+            (false, "versus") => Style::Versus,
+            (true, "single") => Style::PumpSingle,
+            (true, "double") => Style::PumpDouble,
+            (true, "versus") => Style::PumpVersus,
+            _ => return Err(format!("Lua reload selected unsupported style {style}")),
+        };
+        // GameState::SetCurrentStyle preserves joined sides and rejects styles
+        // that require a different number of them.
+        if selected_session.play_style.player_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
+            return Err(format!("Lua reload style {style} is incompatible with joined sides"));
+        }
+    }
+    let indices = reload_chart_indices(song, steps, &selected_session)?;
     let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(song, &indices, global_offset_seconds)?;
     // Update only after both players loaded successfully. ChartData carries
     // the selected chart's music path, which gameplay uses to start audio.
     *payloads = take_player_charts(loaded);
     *charts = std::array::from_fn(|player| Arc::new(song.charts[indices[player]].clone()));
+    *session = selected_session;
     Ok(true)
 }
 
