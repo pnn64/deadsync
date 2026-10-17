@@ -64,7 +64,8 @@ It records allocation calls, requested bytes, preparation time and a fingerprint
 of the compiled data. `scripts/benchmark_song_lua.py` also collects hardware CPU
 cycles and instructions with Linux `perf`, and compares output fingerprints.
 Measured results and scope are recorded in
-[the song Lua performance report](../../../docs/perf-1872-song-lua.md).
+[the first performance report](../../../docs/perf-1872-song-lua.md) and the
+[second optimization pass](../../../docs/perf-1872-song-lua-pass2.md).
 
 Without a selector, the target prints help and exits successfully. This keeps
 an ordinary `cargo test` from unexpectedly running the expensive full corpus.
