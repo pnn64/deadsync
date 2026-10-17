@@ -2010,15 +2010,12 @@
     {
       "title": "Botanic Panic",
       "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
-      "harness_version": "0.1.0",
-      "archive": "2c35a614d4d02167e14c74984f911f573b2c07d2dea7dddae4f9cb69d422ea7d.tar.zst",
-      "sha256": "2c35a614d4d02167e14c74984f911f573b2c07d2dea7dddae4f9cb69d422ea7d",
-      "compressed_bytes": 5537763,
-      "uncompressed_sha256": "0076795ecaa45a12c41d2658a6a8a7df958486c005f672913ce2b8892f260473",
-      "compression_level": 22,
-      "aliases": [
-        "9a2ac4234c212cd772c324bfa0f744571d5f64de8a36cfc0075916c9565e7fbb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "a117399b12110fdd9e25667e3876644df41ee739dff619c564ad5b79b24ba983.tar.zst",
+      "compressed_bytes": 30747155,
+      "sha256": "a117399b12110fdd9e25667e3876644df41ee739dff619c564ad5b79b24ba983",
+      "uncompressed_sha256": "b116f88732fcdf3f7d307c2740012b74802703bde8ca5df034a4a36e792e6e73",
+      "aliases": []
     },
     {
       "title": "Cursed 2",
