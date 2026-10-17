@@ -524,6 +524,7 @@ mod tests {
     #[test]
     fn background_cache_reuses_owners_and_replays_focus_schedule() {
         paths::init();
+        super::start_call_log(100_000).unwrap();
         let dir = std::env::temp_dir().join(format!("deadsync-live-background-cache-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("test directory");
         for name in ["A", "B"] {
@@ -590,6 +591,12 @@ return Def.ActorFrame {{
             &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
             0.0, |_| 0.0).unwrap();
         assert_eq!(song.background_lua_changes.len(), 2, "metadata preserves cached owner cardinality");
+        let calls = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        assert!(calls.iter().any(|event| event["operation"] == "Actor.x" && event["phase"] == "callback"),
+            "authored calls inside a native merged background command remain callback observations");
+        assert!(!calls.iter().any(|event| event["kind"] == "command" && event["command"] == "OnCommand"
+            && event["source"].as_str().is_some_and(|source| source.contains(dir.to_str().unwrap()))),
+            "UpperLeft merges root On with the native effect; its command identity belongs to ActorDef, not the song");
     }
 
     use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,

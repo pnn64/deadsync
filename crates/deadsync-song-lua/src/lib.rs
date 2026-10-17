@@ -1479,6 +1479,8 @@ pub struct SongLuaCompileContext {
     pub layer_start_beats: Vec<f32>,
     /// Native background layer and complete activation schedule per cached owner.
     pub background_activations: Vec<(u8, Vec<deadsync_chart::song::SongBackgroundLuaActivation>)>,
+    /// Native UpperLeft effect colors for cached Lua background owners.
+    pub background_upper_left_colors: Vec<Option<[f32; 4]>>,
     /// Authored foreground filenames, in foreground entry order. Empty when
     /// compiling standalone actors without simfile foreground declarations.
     pub foreground_names: Vec<String>,
@@ -1550,6 +1552,7 @@ impl SongLuaCompileContext {
             background_layer_count: 0,
             layer_start_beats: Vec::new(),
             background_activations: Vec::new(),
+            background_upper_left_colors: Vec::new(),
             foreground_names: Vec::new(),
             live: false,
             defer_initial_live_update: false,

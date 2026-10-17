@@ -227,6 +227,12 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     context.background_layer_count = paths.len();
     context.background_activations = song.background_lua_changes.iter()
         .map(|change| (change.layer, change.activations.clone())).collect();
+    context.background_upper_left_colors = song.background_lua_changes.iter().map(|owner| {
+        let changes = if owner.layer == 0 { &song.background_changes } else { &song.background_layer2_changes };
+        changes.iter().find(|change| change.start_beat == owner.start_beat).and_then(|change|
+            (change.effect.is_empty() || change.effect_is("UpperLeft"))
+                .then_some(change.color1.unwrap_or([1.0; 4])))
+    }).collect();
     context.foreground_names.clear();
     for (index, change) in song.foreground_lua_changes.iter().enumerate() {
         if !change.path.is_file() {

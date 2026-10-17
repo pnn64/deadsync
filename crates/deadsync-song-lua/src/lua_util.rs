@@ -4245,6 +4245,24 @@ pub fn install_actor_metatable(
     Ok(())
 }
 
+/// Background.cpp loads Lua files through UpperLeft.lua, whose declaration
+/// concatenates native callbacks with the authored root before actor creation.
+pub(crate) fn install_background_upper_left(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
+    let factory: Function = lua.load(r#"
+return function(color)
+    return {
+        OnCommand = function(self)
+            self:diffuse(color):effectclock('music')
+            if self.GetTexture then self:GetTexture():rate(self:GetParent():GetUpdateRate()) end
+        end,
+        GainFocusCommand = function(self) self:play() end,
+        LoseFocusCommand = function(self) self:pause() end,
+    }
+end
+"#).set_name("@theme:/BackgroundEffects/UpperLeft.lua").eval()?;
+    merge_actor_concat(lua, actor, &factory.call::<Table>(color.to_vec())?)
+}
+
 fn merge_actor_concat(lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {
     for pair in rhs.pairs::<Value, Value>() {
         let (key, value) = pair?;
