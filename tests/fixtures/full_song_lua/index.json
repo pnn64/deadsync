@@ -4946,17 +4946,14 @@
       "aliases": []
     },
     {
-      "title": "The Video Boaboaboaboaboaboaboab",
+      "title": "The Video Boaboaboaboaboaboaboab (Go to Settings after song to fix bug)",
       "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
-      "harness_version": "0.1.0",
-      "archive": "89e15e6decb405ab0d2bdf05f0e87d143ae6cdcfb9dc9493e7a0fd5e813de36e.tar.zst",
-      "sha256": "89e15e6decb405ab0d2bdf05f0e87d143ae6cdcfb9dc9493e7a0fd5e813de36e",
-      "compressed_bytes": 113872,
-      "uncompressed_sha256": "924d23c4cbac4ce63795d58b220d26a8ac3e1dbedd86dc5451c7c74e2c505ba8",
-      "compression_level": 22,
-      "aliases": [
-        "a76e7882eaa56fc2523849064947352ecaf0b7455897b25f9708dccdd40bb3dd.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "86e8c326902dada122d517b557a817a5785cf37bbeba5862d62fe4b3af939b61.tar.zst",
+      "compressed_bytes": 9633587,
+      "sha256": "86e8c326902dada122d517b557a817a5785cf37bbeba5862d62fe4b3af939b61",
+      "uncompressed_sha256": "7eb4f265748c3003a24f0a9eea81fdc5e99e62ce4a3233ec12ce4c4c33210ae3",
+      "aliases": []
     },
     {
       "title": "THE WORLD REVOLVING",
