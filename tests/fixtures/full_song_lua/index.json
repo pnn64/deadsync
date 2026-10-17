@@ -2661,15 +2661,12 @@
     {
       "title": "GREAT GREAT",
       "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ebdf899d701a29a8ac56dde990179d19e2d1219a40dfbfa29d87b4673845d86d.tar.zst",
-      "sha256": "ebdf899d701a29a8ac56dde990179d19e2d1219a40dfbfa29d87b4673845d86d",
-      "compressed_bytes": 57908,
-      "uncompressed_sha256": "d20d1a28a2049061dba57943eeadbc9763695c07ad8b49a0806b4c3fa90e099c",
-      "compression_level": 22,
-      "aliases": [
-        "1758f4af636127148c9773f570a830e93b4eb9936377973ea0c627c3cc26668a.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6.tar.zst",
+      "compressed_bytes": 2371625,
+      "sha256": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6",
+      "uncompressed_sha256": "c0826b85cb615b23b55b45859795e975d859502a02d4066b87d1f382544a8196",
+      "aliases": []
     },
     {
       "title": "Hallways",
