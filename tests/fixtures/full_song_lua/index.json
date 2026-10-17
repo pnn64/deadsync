@@ -5052,15 +5052,12 @@
     {
       "title": "TRIP MACHINE -Resuscitation MIX-",
       "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
-      "harness_version": "0.1.0",
-      "archive": "41ca641ece28c407d4c8dc386cf90e7fcc0f6f625b89c175864063199d6d9164.tar.zst",
-      "sha256": "41ca641ece28c407d4c8dc386cf90e7fcc0f6f625b89c175864063199d6d9164",
-      "compressed_bytes": 79570,
-      "uncompressed_sha256": "7d657fcaeb6f07b658d83746c96ec5868b8216ac8b9b5b0349833df01e7f8352",
-      "compression_level": 22,
-      "aliases": [
-        "0c7e813aecdc0fbf5b5c46b3a819a7260641c4eb2d18d4f3cacd275655e63d94.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "eafcd480234ac42960a427f5c800d1a73383f4214ef2be02639750c958ce4b8a.tar.zst",
+      "compressed_bytes": 6465002,
+      "sha256": "eafcd480234ac42960a427f5c800d1a73383f4214ef2be02639750c958ce4b8a",
+      "uncompressed_sha256": "07770d3ea2d676676bfac733a1f78c9ec66fa8af6b1c1d74e6339309e5ef8c00",
+      "aliases": []
     },
     {
       "title": "\u2200",
