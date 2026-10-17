@@ -2928,15 +2928,12 @@
     {
       "title": "In the Hall of the Mountain King",
       "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829.tar.zst",
-      "sha256": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829",
-      "compressed_bytes": 705541,
-      "uncompressed_sha256": "c183bcb18f7db47b290d494661058f3641cf1d43ae84f89bf92061fef6fd78de",
-      "compression_level": 22,
-      "aliases": [
-        "49b1268e19a8323b7c68d9c44cf0635505c888e95665a100bfc71baa479bbc04.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7ff66934ddc8f51fa05b7e2b2aa714c3f2fc4c7afaf09281f4eb50f9f3502fcc.tar.zst",
+      "compressed_bytes": 4358964,
+      "sha256": "7ff66934ddc8f51fa05b7e2b2aa714c3f2fc4c7afaf09281f4eb50f9f3502fcc",
+      "uncompressed_sha256": "0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd",
+      "aliases": []
     },
     {
       "title": "INAZUMA (Gio)",

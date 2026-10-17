@@ -666,13 +666,175 @@
           }
         }
       ]
+    },
+    {
+      "position": 244,
+      "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-13-mountain-listed-lua-final-repair.json",
+      "simfile_sha256": "fa95ab0c13007ddba2a9c4f194258e939fa9f802880a12ef90dc13a7552666d6",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 1,
+        "first_concrete_mismatches": [
+          {
+            "field": "command_query_count",
+            "native": 1429,
+            "deadsync": 715
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd",
+      "retained_candidate": "/home/parity/jobs/mountain-listed-lua-final-repair-v1/chart-244/candidates/0d4d14881bf71b4e9baab9d6c7f90fbbd6a961a7771567146236736eeb5ab8cd.tar",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 241.61091121297795,
+      "native_frames": 56068,
+      "replayed_frames": 56068,
+      "compared_stage_fields": 1100,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "037a7932945daf1f000749ed3b61f64871883eb6629d66730a45b08fd8f8d3c3",
+      "archive": "7ff66934ddc8f51fa05b7e2b2aa714c3f2fc4c7afaf09281f4eb50f9f3502fcc.tar.zst",
+      "archive_sha256": "7ff66934ddc8f51fa05b7e2b2aa714c3f2fc4c7afaf09281f4eb50f9f3502fcc",
+      "compressed_bytes": 4358964,
+      "harness_version": "0.1.80",
+      "title": "In the Hall of the Mountain King",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/three-fixtures-20261017/chart-244-attempt-1/chart-244",
+      "fix_commit": "b5091789b8ce61dd1bc4cb9c832448e9bb8a805d",
+      "binary_sha256": "6abb03fb61ee28840b7eca106841507e9135b34ad3d47540b418afa61a2b9359",
+      "build_receipt": {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--no-run"
+        ],
+        "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+        "source_base_commit": "33b148c80",
+        "exit_code": 0,
+        "seconds": 31.122311738028657,
+        "modified_sources": {
+          "crates/deadsync-song-lua/src/tables.rs": "9e3d8d2b0d08a425ae400c63ff34608ae1d557dcd9d803a2e3ef6cf20c7879f1",
+          "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "388f336694264aa13bbee31c3126bca020860f474676401b1b4847b21427328f",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+          "crates/deadsync-song-lua/src/live.rs": "9b5f636731c01a823956655907f468f5c51d95f57f73050734e61935c6aedf56",
+          "crates/deadsync-rules/src/timing.rs": "f7f017a5b9df94fac6d5c76a3ac5b4a72243b4fb889e054ff5d7a5b7faca5d11",
+          "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+          "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+          "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+          "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+          "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2",
+          "crates/deadsync-song-lua/src/song_tables.rs": "7634c0a91951ea626dee4802641c5b19802edd7b4f711cf2de3bb8fb578f4e86",
+          "crates/deadsync-song-lua/src/host.rs": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed",
+          "crates/deadsync-gameplay/src/note_timing.rs": "a4686c460d5ea8918af86408624a681bdb31209257da61824fd5b2f8b1eb4bea",
+          "crates/deadsync-gameplay/src/tests.rs": "75e3b0438b6811d03fc52414c66a759abcde54a048790d360a2dd8ca1a9fad27",
+          "crates/deadsync-gameplay/src/runtime_init.rs": "16055bf6d2f7c70a68fbafd9d2f81a885383bbe6662bbb83b524ee7e61212259",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "5100ea78300ff24b824fd0612f2dee548c9c483723f73d7987b98bfdb4d89f7f",
+          "crates/deadsync-gameplay/src/runtime_state.rs": "f46f9826cfc6e0336ec7548538f3903f35f4f9f36d2b263efc8f3e524594a247",
+          "crates/deadsync-gameplay/src/runtime_regression_tests.rs": "71669cd88db4271d37c27b294d7a5c63402f57aa245fd418a2685d67e12f93da",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "cac9523faf59318f38e1e4c559dc66a8df5d3bc4684d288fb88824b1c8560d98"
+        },
+        "binary": "/home/parity/jobs/three-fixtures-20261017/full-song-lua-step-messages-v2",
+        "binary_sha256": "6abb03fb61ee28840b7eca106841507e9135b34ad3d47540b418afa61a2b9359",
+        "targeted_checks": [
+          {
+            "command": [
+              "/home/parity/.cargo/bin/cargo",
+              "test",
+              "--offline",
+              "--locked",
+              "--release",
+              "--jobs",
+              "8",
+              "--target-dir",
+              "/home/parity/build/deadsync-sweep-release",
+              "--config",
+              "profile.release.lto=false",
+              "-p",
+              "deadsync-gameplay",
+              "--lib",
+              "step_callback_reports_ghost_presses"
+            ],
+            "exit_code": 0,
+            "log": "/home/parity/jobs/three-fixtures-20261017/step-messages-v2-unit-0.log",
+            "log_sha256": "8fb3786f0591616f324db6cd22005c39a0a5e5eca43f14190623055a0a327349"
+          },
+          {
+            "command": [
+              "/home/parity/.cargo/bin/cargo",
+              "test",
+              "--offline",
+              "--locked",
+              "--release",
+              "--jobs",
+              "8",
+              "--target-dir",
+              "/home/parity/build/deadsync-sweep-release",
+              "--config",
+              "profile.release.lto=false",
+              "--test",
+              "song_lua_itgmania_semantic_parity",
+              "gameplay_note_field_tap_runs_owned_lua_before_actor_update"
+            ],
+            "exit_code": 0,
+            "log": "/home/parity/jobs/three-fixtures-20261017/step-messages-v2-unit-1.log",
+            "log_sha256": "64cc532140e6e443ddd9fad6e59b4cf4ef9f08b64b316d4313d3a34060d180d5"
+          }
+        ],
+        "fix_commit": "b5091789b8ce61dd1bc4cb9c832448e9bb8a805d"
+      },
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 1429,
+          "deadsync": 715
+        }
+      ],
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "In the Hall of the Mountain King",
+        "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+        "harness_version": "0.1.0",
+        "archive": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829.tar.zst",
+        "sha256": "0cc72e88f7d3817ceaecf12b2d973af098e004c89e55432acb95ff1730c8d829",
+        "compressed_bytes": 705541,
+        "uncompressed_sha256": "c183bcb18f7db47b290d494661058f3641cf1d43ae84f89bf92061fef6fd78de",
+        "compression_level": 22,
+        "aliases": [
+          "49b1268e19a8323b7c68d9c44cf0635505c888e95665a100bfc71baa479bbc04.tar.zst"
+        ]
+      }
     }
   ],
   "counts": {
-    "new_passing_fixtures": 1,
-    "passed_fixtures": 437,
-    "pending_charts": 63,
+    "new_passing_fixtures": 2,
+    "passed_fixtures": 438,
+    "pending_charts": 62,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-17T14:27:13Z"
+  "updated_utc": "2026-10-17T14:50:03Z"
 }
