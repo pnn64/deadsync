@@ -465,7 +465,10 @@ impl SongPositionCache {
         let beat_start_ns = timing.beat_start_time_ns();
         Self {
             start: GetBeatStarts::default(),
-            time: timing_ns_to_seconds(beat_start_ns),
+            // TimingData::GetBeatAndBPSFromElapsedTimeNoOffset subtracts the
+            // original float offsets separately. Reconstructing their sum
+            // from integer nanoseconds changes the initial native beat.
+            time: -timing.native_song_offset_sec - timing.native_group_offset_sec,
             last_seconds: f32::NAN,
             beat_start_ns,
             global_offset_ns: timing.global_offset_ns,
@@ -2912,6 +2915,22 @@ pub fn compute_window_counts_blue_ms(notes: &[Note], blue_window_ms: f32) -> Win
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn song_clock_separate_float_offsets_match_native_dongo_input() {
+        let mut timing = TimingData::from_segments(0.01, -0.008, &TimingSegments {
+            bpms: vec![(0.0, 130.0)], ..Default::default()
+        }, &[]);
+        timing.shift_group_offset_seconds(-0.009);
+        // Recorded native input clock and song position from Dongo Bongo.
+        // These differ from reconstructing the combined offsets through ns.
+        let actual = timing.get_song_position(0.027732426300644875).beat;
+        assert_eq!(actual.to_bits(), (0.0015869262861087918_f32).to_bits());
+        let mut cache = SongPositionCache::new(&timing);
+        assert_eq!(timing.get_song_position_cached(0.027732426300644875, &mut cache).beat.to_bits(), actual.to_bits());
+        let _ = timing.get_song_position_cached(1.0, &mut cache);
+        assert_eq!(timing.get_song_position_cached(0.027732426300644875, &mut cache).beat.to_bits(), actual.to_bits());
+    }
+
     #[test]
     fn song_clock_group_shift_preserves_integer_timing() {
         let mut original=TimingData::from_segments(0.532426,-0.008,&TimingSegments {
