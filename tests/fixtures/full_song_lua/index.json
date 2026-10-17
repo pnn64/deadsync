@@ -4944,17 +4944,14 @@
       "aliases": []
     },
     {
-      "title": "Episode 12",
+      "title": "Episode 12 Think About You",
       "source_simfile": "Think About You/Think About You.sm",
-      "harness_version": "0.1.0",
-      "archive": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b.tar.zst",
-      "sha256": "21d9f2425baa2f04a119eb6c84bd05902781eb7559282e838c29605370be582b",
-      "compressed_bytes": 26526,
-      "uncompressed_sha256": "992f0707a15b64539b5ab1773bfbc4486e6bf22c2abebc7cca8c80813d10b1e4",
-      "compression_level": 22,
-      "aliases": [
-        "b56e954d0c7512bb43e6382cd7217dd640d52f9449db83e13492a3a57265f49d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "57e2f70e96e4ecf5c70bdc8ab02d317053cd820005c492850a52532f0b440e51.tar.zst",
+      "compressed_bytes": 25386877,
+      "sha256": "57e2f70e96e4ecf5c70bdc8ab02d317053cd820005c492850a52532f0b440e51",
+      "uncompressed_sha256": "4d83f3dd94561b2692bf707deabd410195c3268a8db55c919863bc548245ef34",
+      "aliases": []
     },
     {
       "title": "Episode 12 Think About You",
