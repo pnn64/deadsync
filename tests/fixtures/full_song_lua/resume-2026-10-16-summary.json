@@ -1,0 +1,642 @@
+{
+  "complete": true,
+  "scope": "501 original simfiles; existing full replay acceptance; Mawaru9 excluded by user",
+  "counts": {
+    "passed_fixtures": 424,
+    "pending_charts": 76,
+    "ignored_charts": 1,
+    "new_passing_fixtures": 20,
+    "recorded_outcomes": 96
+  },
+  "acceptance": "Existing full_song_lua tests; every accepted candidate compared uncompressed, then compressed and byte-verified",
+  "ignored": [
+    {
+      "source_simfile": "mawaru9/mawaru9.sm",
+      "reason": "explicit user exclusion"
+    }
+  ],
+  "missing_coverage": "resume-2026-10-16-coverage.json",
+  "new_passing_fixtures": [
+    {
+      "source_simfile": "Happy Now Remastered/Happy Now.sm",
+      "archive": "259ab04ad65a6aebe890dbd508623e2bfc2412c759cdf2acc400ece8817618b2.tar.zst",
+      "native_frames": 158600,
+      "replayed_frames": 158600
+    },
+    {
+      "source_simfile": "Happy Now Remastered/Happy Now.ssc",
+      "archive": "5f9232153aa3b8eb1b90650db260e28ab7fafb3196ff188edaa067386658bf11.tar.zst",
+      "native_frames": 156964,
+      "replayed_frames": 156964
+    },
+    {
+      "source_simfile": "Happy Now/Happy Now.sm",
+      "archive": "acb0e9e5d14752e6555d2b9da0fb9506358aa8778a45de2b079e7a11541d6423.tar.zst",
+      "native_frames": 151941,
+      "replayed_frames": 151941
+    },
+    {
+      "source_simfile": "Happy Now/Happy Now.ssc",
+      "archive": "2d593c336223218398eefd84e4e8d2d8f96e05c8aab4d277d9a172c8398e462e.tar.zst",
+      "native_frames": 153609,
+      "replayed_frames": 153609
+    },
+    {
+      "source_simfile": "INAZUMA (Gio)/INAZUMA.ssc",
+      "archive": "bf02bf5a33a96b32b7639d4d0e5eb349a9208ce4a706e48b51d0618eb77f6f8a.tar.zst",
+      "native_frames": 157190,
+      "replayed_frames": 157190
+    },
+    {
+      "source_simfile": "My Penny/My Penny.ssc",
+      "archive": "311ee5ed6f5a27c0ab7b5e528fcc539efe6c4158463eba38a6de3b3f05bad2dd.tar.zst",
+      "native_frames": 22993,
+      "replayed_frames": 22993
+    },
+    {
+      "source_simfile": "Young Dumb And Broke/YDB.sm",
+      "archive": "4e0a2477264b7c00a578002042169ab1903b9c6e57b175c4e80c493bdd402acc.tar.zst",
+      "native_frames": 117382,
+      "replayed_frames": 117382
+    },
+    {
+      "source_simfile": "Young Dumb And Broke/YDB.ssc",
+      "archive": "a2878b466f009d3ae3351a9d10c0814acad8b7b362c9af5a3a00a4b6435e54d9.tar.zst",
+      "native_frames": 119215,
+      "replayed_frames": 119215
+    },
+    {
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.sm",
+      "archive": "1ee4a0c613cdc1a98f40785a6b0becb56a603e86656bf0deaed509549ec9312f.tar.zst",
+      "native_frames": 100091,
+      "replayed_frames": 100091
+    },
+    {
+      "source_simfile": "flores sulphuris - [Zaia]/flores sulphuris.ssc",
+      "archive": "d60d63584b92c0eb64200ef18fa847b75b72764c22d080504b924defbb610e0f.tar.zst",
+      "native_frames": 157950,
+      "replayed_frames": 157950
+    },
+    {
+      "source_simfile": "THE WORLD REVOLVING [TaroNuke]/steps.sm",
+      "archive": "094bded99b321b1461efce49b0b423811110326fe6a88d606bdc6c0b58f337bb.tar.zst",
+      "native_frames": 35306,
+      "replayed_frames": 35306
+    },
+    {
+      "source_simfile": "U-0 - [PCBoyGames]/Srezcat - U-0.ssc",
+      "archive": "b2ebdd8b26c93bcc8625726b6dcbbb9854429955494bbe878c21ff2538410730.tar.zst",
+      "native_frames": 48783,
+      "replayed_frames": 48783
+    },
+    {
+      "source_simfile": "Do the Mario/DoTheMario.ssc",
+      "archive": "ca27e465c3274701e6c170ed02e8791bcd7bd785b2ad34d1793c937bc18c25d3.tar.zst",
+      "native_frames": 26388,
+      "replayed_frames": 26388
+    },
+    {
+      "source_simfile": "I (Ai)/I (Ai).ssc",
+      "archive": "506d9089f738dafdffe08188477dc7e59583d8898e190c4dc1f07498971be228.tar.zst",
+      "native_frames": 20720,
+      "replayed_frames": 20720
+    },
+    {
+      "source_simfile": "Cursed 2/Cursed 2.sm",
+      "archive": "38de4899009870c7c8ff93ef5ea75477cf04fdfaff21d66023efa059828a99b0.tar.zst",
+      "native_frames": 82996,
+      "replayed_frames": 82996
+    },
+    {
+      "source_simfile": "Cursed 2/Cursed 2.ssc",
+      "archive": "fcc9f5a12a337bd7584352c7bcdd77ff166efe332019000f010c811c79c61ef2.tar.zst",
+      "native_frames": 81089,
+      "replayed_frames": 81089
+    },
+    {
+      "source_simfile": "Trancing Pulse (Random)/Trancing Pulse (Random).ssc",
+      "archive": "0330e534ac949b8487647f0e61bb656690b2f0f5dc94426134ae3f77767c0421.tar.zst",
+      "native_frames": 34544,
+      "replayed_frames": 34544
+    },
+    {
+      "source_simfile": "flowers [R.I.G.H.T.S]/flowers.ssc",
+      "archive": "8e9849d0cb9f793c1282fd9efda26ed737bb286ffe4fffc40dc5270ec2525e21.tar.zst",
+      "native_frames": 50828,
+      "replayed_frames": 50828
+    },
+    {
+      "source_simfile": "Delightful Day/Delightful Day.ssc",
+      "archive": "02b9b22e9f67e55055e1a080486da4f0fce0ed7f2e6f1c5da56063941f8d0967.tar.zst",
+      "native_frames": 125901,
+      "replayed_frames": 125901
+    },
+    {
+      "source_simfile": "Delightful Day/Delightful Day.sm",
+      "archive": "0ee7948154211080042ab77ad092b3626ca0324698063f6d6e669f71fc7a3582.tar.zst",
+      "native_frames": 126203,
+      "replayed_frames": 126203
+    }
+  ],
+  "pending_charts": [
+    {
+      "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+      "repair_attempts": 2,
+      "failure": "preparation did not retain a Lua scene",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Cold/Cold.ssc",
+      "repair_attempts": 2,
+      "failure": "{'field': 'command_query_count', 'native': 417711, 'deadsync': 532586}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "repair_attempts": 2,
+      "failure": "{'phase': 'progress', 'seconds': 48.077754974365234, 'field': 'failed', 'native': False, 'deadsync': True}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "repair_attempts": 2,
+      "failure": "{'field': 'command_query_event', 'native': {'actor': 'def-0027', 'args': [], 'beat': 0.0014322162605822086, 'command': 'OnCommand', 'definition_id': 'def-0027', 'detail': {'name': 'OnCommand'}, 'kind': 'command', 'line': 3, 'operation': 'command.begin', 'scene': 1, 'seconds': 0.14251700043678284, 'seq': 95, 'source': 'song:/bg/default.lua'}, 'deadsync': {'scene': 1, 'kind': 'command', 'operation': 'command.begin', 'command': 'OnCommand', 'source': 'song:/bg/default.lua', 'line': 3, 'beat': 0.0, 'seconds': 0.0, 'args': None}}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "repair_attempts": 2,
+      "failure": "{'field': 'command_query_count', 'native': 608498, 'deadsync': 605974}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "freg/freg.sm",
+      "repair_attempts": 2,
+      "failure": "{'phase': 'progress', 'seconds': 20.000022888183594, 'field': 'failed', 'native': True, 'deadsync': False}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+      "repair_attempts": 2,
+      "failure": "{'field': 'command_query_event', 'native': {'actor': 'stage:current', 'args': ['PlayerNumber_P1'], 'beat': 12.502771377563477, 'caller': {'line': 30, 'source': 'song:/.//default.lua', 'tail_call': False}, 'command': 'JudgmentMessageCommand', 'definition_id': 'def-0001', 'detail': {'results': [{'path': 'stage:current/player:PlayerNumber_P1', 'type': 'PlayerStageStats'}]}, 'kind': 'query', 'line': 30, 'operation': 'StageStats.GetPlayerStageStats', 'phase': 'callback', 'scene': 1, 'seconds': 4.676417350769043, 'seq': 207, 'source': 'song:/.//default.lua', 'results': [{'path': 'stage:current/player:PlayerNumber_P1', 'type': 'PlayerStageStats'}]}, 'deadsync': {'scene': 1, 'kind': 'query', 'operation': 'StageStats.GetPlayerStageStats', 'source': 'song:/.//default.lua', 'line': 30, 'phase': 'callback', 'beat': 12.502771377563477, 'seconds': 4.676417350769043, 'args': ['PlayerNumber_P1'], 'results': [{'type': 'PlayerStageStats', 'path': 'stage:current/player:P1'}]}}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "repair_attempts": 2,
+      "failure": "{'field': 'command_query_count', 'native': 1429, 'deadsync': 715}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "repair_attempts": 2,
+      "failure": "{'field': 'screen_end_navigation_clock', 'native': 113.77668762207031, 'deadsync': 113.76746368408203}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Koi [UPS2016]/koi.sm",
+      "repair_attempts": 2,
+      "failure": "{'phase': 'progress', 'seconds': 202.0003204345703, 'field': 'failed', 'native': True, 'deadsync': False}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Lower Times/Lower Times.ssc",
+      "repair_attempts": 2,
+      "failure": "{'phase': 'progress', 'seconds': 209.0005645751953, 'field': 'failed', 'native': True, 'deadsync': False}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "repair_attempts": 2,
+      "failure": "{'field': 'command_query_event', 'native': {'actor': 'def-0086', 'args': [-97.45635986328125], 'beat': 289.2825012207031, 'callback': 'SetUpdateFunction', 'caller': {'line': 998, 'source': 'song:/multitap/default.lua', 'tail_call': False}, 'command': 'InitCommand', 'definition_id': 'def-0132', 'detail': {'native_tween_time_left': 0}, 'kind': 'call', 'line': 998, 'operation': 'Actor.x', 'phase': 'callback', 'scene': 1, 'seconds': 105.22977447509766, 'seq': 839486, 'source': 'song:/multitap/default.lua', 'tween_time_left': 0}, 'deadsync': {'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/multitap/default.lua', 'line': 998, 'phase': 'callback', 'beat': 289.2825012207031, 'seconds': 105.22977447509766, 'args': [-97.45569610595703], 'results': [{'actor': '0x5647efb46fe0', 'name': 'MultitapP1_1', 'path': 'ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1'}], 'tween_time_left': 0.0}}",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "repair_attempts": 2,
+      "failure": "callback: UpdateCommand failed for Quad: runtime error: [string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpmg...\"]:485: attempt to call method 'GetChild' (a nil value)\nstack traceback:\n\t[C]: in method 'GetChild'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpmg...\"]:485: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpmg...\"]:445>; comparison source_broadcast_count: native=43; deadsync=0",
+      "reported_mismatches": 26879
+    },
+    {
+      "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=172553; deadsync=172555",
+      "reported_mismatches": 172551
+    },
+    {
+      "source_simfile": "Happiness/Happiness.ssc",
+      "repair_attempts": 0,
+      "failure": "diva/diva.lua:1092 indexes nil local length; Loop1Command reads FAST_BREAKS[cur_break] without a guard before length[1]/length[2]",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "repair_attempts": 0,
+      "failure": "native OnCommand: argument #3 to original missing; lua/default.lua:867 and matching ha actors call effectmagnitude(0.9)",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "repair_attempts": 1,
+      "failure": "/Songs/Harness/Probe/fade in/default.lua:21: attempt to index a nil value",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-49736-1792191245707584000-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-49736-1792191245707584000-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Intro Outro/intro.ssc",
+      "repair_attempts": 1,
+      "failure": "/Songs/Harness/Probe/lua/default.lua:1021: attempt to index a nil value; /Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46152-1792191998392063900-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46152-1792191998392063900-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "negator/NEGATOR.sm",
+      "repair_attempts": 2,
+      "failure": "callback: UpdateCommand failed for Sprite 'actor_c': BlindOnMessageCommand failed for Sprite 'actor_c': runtime error: [string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:959: attempt to call method 'GetChild' (a nil value)\nstack traceback:\n\t[C]: in method 'GetChild'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:959: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:953>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:944: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:178>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"; comparison source_broadcast_count: native=33; deadsync=2",
+      "reported_mismatches": 4
+    },
+    {
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-49820-1792192225673583500-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-49820-1792192225673583500-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "repair_attempts": 0,
+      "failure": "FourthSetMessageCommand: numeric argument is nil; lua/default.lua:1075 onwards tests P1 before updating P2 clone with P2 coordinates",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "repair_attempts": 2,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 2134.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-16164-1792195376084500800-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-16164-1792195376084500800-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "repair_attempts": 2,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 2134.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-51692-1792194808444141200-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-51692-1792194808444141200-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "repair_attempts": 0,
+      "failure": "native staged song cannot be found; saved/ contains only the SSC; its MUSIC and FGCHANGES paths refer to files absent from that directory",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "james/james.sm",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-50076-1792194472846963800-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-50076-1792194472846963800-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "james/james.ssc",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12896-1792194802034995800-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12896-1792194802034995800-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "repair_attempts": 0,
+      "failure": "native charts CLI: ITGmania loaded no charts; file has zero #NOTES tags; native gameplay cannot select a dance-single Challenge chart",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Metronogik/Song.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=666652; deadsync=664476",
+      "reported_mismatches": 664381
+    },
+    {
+      "source_simfile": "Hallways/hallways.ssc",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=375; deadsync=377",
+      "reported_mismatches": 340
+    },
+    {
+      "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison failed: native=False; deadsync=True",
+      "reported_mismatches": 7
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.sm",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_event: native={'actor': 'def-0086', 'args': [-101.30033111572266], 'beat': 289.0962829589844, 'callback': 'SetUpdateFunction', 'caller': {'line': 998, 'source': 'song:/multitap/default.lua', 'ta; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/multitap/default.lua', 'line': 998, 'phase': 'callback', 'beat': 289.0962829589844, 'seconds': 105.16204071044",
+      "reported_mismatches": 21
+    },
+    {
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "repair_attempts": 2,
+      "failure": "comparison failed: native=True; deadsync=False",
+      "reported_mismatches": 1
+    },
+    {
+      "source_simfile": "HOPE/HOPE.ssc",
+      "repair_attempts": 2,
+      "failure": "callback: draw callback for ActorFrame './' at beat 3403.019: custom draw capture exceeds its song budget\nstack traceback:\n\t[C]: in ?\n\t>[C]: in function 'Actor.Draw'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpgj...\"]:228: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpgj...\"]:9>\n; comparison command_query_count: native=410155; deadsync=399665",
+      "reported_mismatches": 399254
+    },
+    {
+      "source_simfile": "Think About You/Think About You.sm",
+      "repair_attempts": 2,
+      "failure": "Lua reload selected incompatible chart type dance-double",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Think About You/Think About You.ssc",
+      "repair_attempts": 2,
+      "failure": "Lua reload selected incompatible chart type dance-double",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "repair_attempts": 1,
+      "failure": "Failed to compile shared gameplay lua session for 'Mr. Sandman': out of Lua stack, too many arguments to a Lua function or too many return values from a callback; retrying layers independently",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Igaku/Igaku.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0021', 'args': [-96.13861083984375], 'beat': 92.08849334716797, 'callback': 'SetUpdateFunction', 'caller': {'line': 2152, 'source': 'song:/lua/default.lua', 'tail_ca; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/lua/default.lua', 'line': 2152, 'phase': 'callback', 'beat': 92.08849334716797, 'seconds': 32.518821716308594,",
+      "reported_mismatches": 991
+    },
+    {
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_event: native={'actor': 'def-0003', 'args': [], 'beat': 36.962669372558594, 'command': 'SpinCommand', 'definition_id': 'def-0003', 'detail': {'name': 'SpinCommand'}, 'kind': 'command', 'line': 6; deadsync={'scene': 1, 'kind': 'command', 'operation': 'command.begin', 'command': 'SpinCommand', 'source': 'song:/bg/default.lua', 'line': 6, 'beat': 36.964908599853516, 'seconds': 22.03129",
+      "reported_mismatches": 4
+    },
+    {
+      "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=402665; deadsync=376989",
+      "reported_mismatches": 376723
+    },
+    {
+      "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=383931; deadsync=383933",
+      "reported_mismatches": 88698
+    },
+    {
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "repair_attempts": 1,
+      "failure": "comparison life_latest: native=0.515999972820282; deadsync=0.5320000052452087",
+      "reported_mismatches": 64
+    },
+    {
+      "source_simfile": "Igaku/Igaku.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0021', 'args': [-96.1680908203125], 'beat': 92.06562805175781, 'callback': 'SetUpdateFunction', 'caller': {'line': 2152, 'source': 'song:/lua/default.lua', 'tail_cal; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/lua/default.lua', 'line': 2152, 'phase': 'callback', 'beat': 92.06562805175781, 'seconds': 32.51074981689453, ",
+      "reported_mismatches": 550
+    },
+    {
+      "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'external-0054', 'args': [213.5], 'beat': 132.28652954101562, 'caller': {'line': 975, 'source': 'song:/lua/default.lua', 'tail_call': False}, 'command': 'UpdateCommand', ; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/lua/default.lua', 'line': 975, 'phase': 'callback', 'beat': 132.28652954101562, 'seconds': 48.927188873291016,",
+      "reported_mismatches": 110
+    },
+    {
+      "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'args': [], 'beat': 83.00955963134766, 'callback': 'SetUpdateFunction', 'caller': {'line': 57, 'source': 'song:/lua/default.lua', 'tail_call': False}, 'command': 'OnCommand', 'def; deadsync={'scene': 1, 'kind': 'command', 'operation': 'command.begin', 'command': 'CheckCommand', 'source': 'song:/lua/bg.lua', 'line': 9, 'beat': 83.00955963134766, 'seconds': 25.628934860",
+      "reported_mismatches": 21
+    },
+    {
+      "source_simfile": "LORELEI/LORELEI.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=493200; deadsync=493202",
+      "reported_mismatches": 423854
+    },
+    {
+      "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'external-0027', 'args': [True], 'beat': 381.006103515625, 'callback': 'SetUpdateFunction', 'caller': {'line': 148, 'source': 'song:/lua/_script.lua', 'tail_call': False}; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.visible', 'source': 'song:/lua/_script.lua', 'line': 148, 'phase': 'callback', 'beat': 381.006103515625, 'seconds': 164.91201782226",
+      "reported_mismatches": 1
+    },
+    {
+      "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=132944; deadsync=132949",
+      "reported_mismatches": 2806
+    },
+    {
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "repair_attempts": 2,
+      "failure": "submitted_clip_uv_color_or_topology differs at frame 80 for def-0003 and def-0005",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=163581; deadsync=161925",
+      "reported_mismatches": 161873
+    },
+    {
+      "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=261327; deadsync=261213",
+      "reported_mismatches": 261115
+    },
+    {
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "repair_attempts": 2,
+      "failure": "callback: OnCommand failed for Sprite: runtime error: native actor method drop has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.drop'\n\t[string \"/tmp/.tmphx79ga/song/despair/default.lua\"]:283: in function <[string \"/tmp/.tmphx79ga/song/despair/default.lua\"]:281>\n; comparison command_query_count: native=1493717; deadsync=860227",
+      "reported_mismatches": 860171
+    },
+    {
+      "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'args': ['ModsLevel_Song'], 'beat': 12.031805992126465, 'callback': 'SetUpdateFunction', 'caller': {'line': 2, 'source': 'song:/lua/default.lua', 'tail_call': False}, 'command': '; deadsync={'scene': 1, 'kind': 'query', 'operation': 'GameState.GetSongOptionsObject', 'source': 'song:/lua/default.lua', 'line': 2, 'phase': 'callback', 'beat': 12.031599044799805, 'seconds",
+      "reported_mismatches": 179162
+    },
+    {
+      "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=208533; deadsync=208477",
+      "reported_mismatches": 208219
+    },
+    {
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=885845; deadsync=894577",
+      "reported_mismatches": 755057
+    },
+    {
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=182777; deadsync=182059",
+      "reported_mismatches": 182007
+    },
+    {
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0343', 'args': [67.5877914428711], 'beat': 228.0682830810547, 'callback': 'SetUpdateFunction', 'caller': {'line': 2724, 'source': 'song:/lua/default.lua', 'tail_call; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/lua/default.lua', 'line': 2724, 'phase': 'callback', 'beat': 228.0682830810547, 'seconds': 69.98326873779297, ",
+      "reported_mismatches": 74
+    },
+    {
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0343', 'args': [69.32035064697266], 'beat': 228.0521240234375, 'callback': 'SetUpdateFunction', 'caller': {'line': 2724, 'source': 'song:/lua/default.lua', 'tail_cal; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.x', 'source': 'song:/lua/default.lua', 'line': 2724, 'phase': 'callback', 'beat': 228.0521240234375, 'seconds': 69.9687271118164, '",
+      "reported_mismatches": 120
+    },
+    {
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=846483; deadsync=854379",
+      "reported_mismatches": 722328
+    },
+    {
+      "source_simfile": "saitama2000/Saitama2000.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0046', 'args': [], 'beat': 332.0003662109375, 'command': 'OnCommand', 'definition_id': 'def-0046', 'detail': {'name': 'OnCommand'}, 'kind': 'command', 'line': 5, 'op; deadsync={'scene': 1, 'kind': 'command', 'operation': 'command.begin', 'command': 'OnCommand', 'source': 'song:/crowd3/default.lua', 'line': 4, 'beat': 332.0003662109375, 'seconds': 102.356",
+      "reported_mismatches": 79
+    },
+    {
+      "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=266087; deadsync=266089",
+      "reported_mismatches": 265966
+    },
+    {
+      "source_simfile": "saitama2000/Saitama2000.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0046', 'args': [], 'beat': 332.00140380859375, 'command': 'OnCommand', 'definition_id': 'def-0046', 'detail': {'name': 'OnCommand'}, 'kind': 'command', 'line': 5, 'o; deadsync={'scene': 1, 'kind': 'command', 'operation': 'command.begin', 'command': 'OnCommand', 'source': 'song:/crowd3/default.lua', 'line': 4, 'beat': 332.00140380859375, 'seconds': 102.35",
+      "reported_mismatches": 79
+    },
+    {
+      "source_simfile": "Hispanic Panic/sm.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=985; deadsync=986",
+      "reported_mismatches": 986
+    },
+    {
+      "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "repair_attempts": 1,
+      "failure": "callback: OnCommand failed for ActorFrame 'lua': script 'chara/sans/savefile' not found relative to '/tmp/.tmp6FvPHI/song'\nstack traceback:\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmp6FvPHI/song/lua/default.lua\"]:519: in upvalue 'sans_init'\n\t[string \"/tmp/.tmp6FvPHI/song/lua/default.lua\"]:2491: in function <[string \"/tmp/.tmp6FvPHI/song/lua/default.lua\"]:2490>\n; comparison life_latest: native=0; deadsync=0.5",
+      "reported_mismatches": 7
+    },
+    {
+      "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0045', 'args': [], 'beat': 0, 'command': 'InitCommand', 'definition_id': 'def-0045', 'detail': {'name': 'InitCommand'}, 'kind': 'command', 'line': 19, 'operation': '; deadsync={'scene': 1, 'kind': 'command', 'operation': 'command.begin', 'command': 'InitCommand', 'source': 'song:/./point3.lua', 'line': 14, 'beat': 0.0, 'seconds': 0.0, 'args': None}",
+      "reported_mismatches": 66
+    },
+    {
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+      "repair_attempts": 2,
+      "failure": "comparison source_broadcast_count: native=5375; deadsync=10834",
+      "reported_mismatches": 5080
+    },
+    {
+      "source_simfile": "REASON for RED/reasonforgay.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_event: native={'actor': 'def-0005', 'args': [-31], 'beat': 32.0168342590332, 'caller': {'line': 185, 'source': 'song:/red/default.lua', 'tail_call': False}, 'command': 'TimerUpdateCommand', 'def; deadsync={'scene': 1, 'kind': 'call', 'operation': 'Actor.rotationz', 'source': 'song:/red/default.lua', 'line': 185, 'phase': 'callback', 'beat': 32.0168342590332, 'seconds': 12.1478233337",
+      "reported_mismatches": 10747
+    },
+    {
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "repair_attempts": 2,
+      "failure": "cannot create a Lua reference, out of auxiliary stack space (used 7996 slots)",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Jumper/Jumper.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison life_latest: native=0; deadsync=0.5",
+      "reported_mismatches": 30
+    },
+    {
+      "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=372682; deadsync=372684",
+      "reported_mismatches": 371538
+    },
+    {
+      "source_simfile": "Jumper/Jumper.sm",
+      "repair_attempts": 1,
+      "failure": "comparison life_latest: native=0; deadsync=0.5",
+      "reported_mismatches": 30
+    },
+    {
+      "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+      "repair_attempts": 1,
+      "failure": "native scene 2 differs from independent scene 1 at frame 43823",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=101219; deadsync=101364",
+      "reported_mismatches": 99176
+    },
+    {
+      "source_simfile": "Mamono/sm.sm",
+      "repair_attempts": 2,
+      "failure": "comparison command_query_count: native=14227; deadsync=14228",
+      "reported_mismatches": 13449
+    },
+    {
+      "source_simfile": "mawaru7/mawaru7.sm",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=1430179; deadsync=1425260",
+      "reported_mismatches": 1393347
+    }
+  ],
+  "fix_commits": [
+    "a4b8962f3",
+    "bda0989fc",
+    "b069a2bdc",
+    "492c06e5d"
+  ],
+  "harness_fix_commit": "2acea34",
+  "validation": [
+    {
+      "test": "final_visibility_preserves_native_integer_boolean_setters",
+      "passed": 1
+    },
+    {
+      "test": "background_fit_modes",
+      "passed": 1
+    },
+    {
+      "test": "large_live_actor_snapshot_",
+      "passed": 2
+    },
+    {
+      "test": "recursive_begin_handles_large_actor_tree_in_order",
+      "passed": 1
+    },
+    {
+      "test": "native_reload_starts_with_the_requested_style",
+      "passed": 1
+    },
+    {
+      "test": "native_double_session_selects_double_steps_and_runs_eight_column_scene",
+      "passed": 1
+    },
+    {
+      "test": "harness::stages_an_isolated_portable_probe_install",
+      "passed": 1
+    }
+  ],
+  "oversize_fixture_audit": {
+    "limit_bytes": 100000000,
+    "files": 10,
+    "all_gitignored": true
+  },
+  "updated_utc": "2026-10-17T02:52:44Z"
+}

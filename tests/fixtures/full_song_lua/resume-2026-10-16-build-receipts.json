@@ -1,0 +1,226 @@
+{
+  "sweep-20261016-current": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "exit_code": 0,
+    "seconds": 32.910994784964714,
+    "binary": "/home/parity/jobs/sweep-20261016-current/full-song-lua",
+    "binary_sha256": "ab0c20fa38f088b4742186f2d2a073b2fcfdb60e24a3ef8fb52a31f3b04e9b2d",
+    "initial_source_tar_sha256": "7b126bc678fde021ceafd949011ad69d9964d885e4f0c25edd2993eb2851c4c6",
+    "source_tar_sha256": "51d6333030e18f20fccbb0b66636bc46a473aa12ea8998f6b22427a70ddfaaba",
+    "source_base_commit": "a4b8962f3"
+  },
+  "sweep-20261017-repairs": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "exit_code": 0,
+    "seconds": 32.910994784964714,
+    "binary": "/home/parity/jobs/sweep-20261016-current/full-song-lua-style-input",
+    "binary_sha256": "14efc546cfb4e0492255395af98771f5971d4c5dd795d293ecef5c4e81337a9b",
+    "initial_source_tar_sha256": "7b126bc678fde021ceafd949011ad69d9964d885e4f0c25edd2993eb2851c4c6",
+    "source_tar_sha256": "51d6333030e18f20fccbb0b66636bc46a473aa12ea8998f6b22427a70ddfaaba",
+    "source_base_commit": "a4b8962f3",
+    "repair": "Use initial requested style before gameplay reload; hide internal background-fit preference query from song trace",
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "b19a4014e6ea7d86f55a360857990f62a16d286895150e17efdb2d4cc41ca10d",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70"
+    }
+  },
+  "sweep-20261017-actor-handles": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "exit_code": 0,
+    "seconds": 297.6835727869766,
+    "binary": "/home/parity/jobs/sweep-20261017-actor-handles/full-song-lua",
+    "binary_sha256": "029003204ae4d921bfa1a00267a69a67cd0d0e6480d18d64a9c222ac7e4419d2",
+    "repair": "Reuse canonical actor handles in child and message snapshots; preserve identity and dispatch order",
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70"
+    },
+    "fix_commit": "492c06e5d702607baaa8604e344551d87bf86665",
+    "targeted_unit_validation": {
+      "command": [
+        "/home/parity/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--release",
+        "--jobs",
+        "8",
+        "--target-dir",
+        "/home/parity/build/deadsync-sweep-release",
+        "--config",
+        "profile.release.lto=false",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "large_live_actor_snapshot_"
+      ],
+      "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+      "exit_code": 0,
+      "seconds": 374.09512438595993,
+      "passed": 2
+    },
+    "initial_source_tar_sha256": "7b126bc678fde021ceafd949011ad69d9964d885e4f0c25edd2993eb2851c4c6",
+    "source_tar_sha256": "51d6333030e18f20fccbb0b66636bc46a473aa12ea8998f6b22427a70ddfaaba",
+    "source_base_commit": "a4b8962f3"
+  },
+  "sweep-20261017-terminal-repairs": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "exit_code": 0,
+    "seconds": 297.6835727869766,
+    "binary": "/home/parity/jobs/sweep-20261017-actor-handles/full-song-lua",
+    "binary_sha256": "029003204ae4d921bfa1a00267a69a67cd0d0e6480d18d64a9c222ac7e4419d2",
+    "repair": "Canonical actor references for auxiliary-stack panic; serialize confirmed OOM failures and wait for 50 GB available memory",
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70"
+    },
+    "fix_commit": "492c06e5d702607baaa8604e344551d87bf86665",
+    "targeted_unit_validation": {
+      "command": [
+        "/home/parity/.cargo/bin/cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--release",
+        "--jobs",
+        "8",
+        "--target-dir",
+        "/home/parity/build/deadsync-sweep-release",
+        "--config",
+        "profile.release.lto=false",
+        "-p",
+        "deadsync-song-lua",
+        "--lib",
+        "large_live_actor_snapshot_"
+      ],
+      "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+      "exit_code": 0,
+      "seconds": 374.09512438595993,
+      "passed": 2
+    },
+    "initial_source_tar_sha256": "7b126bc678fde021ceafd949011ad69d9964d885e4f0c25edd2993eb2851c4c6",
+    "source_tar_sha256": "51d6333030e18f20fccbb0b66636bc46a473aa12ea8998f6b22427a70ddfaaba",
+    "source_base_commit": "a4b8962f3",
+    "kernel_oom_evidence": {
+      "lines": [
+        "Oct 16 22:47:02 itgmania-parity kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0-1,global_oom,task_memcg=/user.slice/user-1000.slice/session-513393.scope,task=full-song-lua,pid=1444119,uid=1000",
+        "Oct 16 22:47:02 itgmania-parity kernel: Out of memory: Killed process 1444119 (full-song-lua) total-vm:39647024kB, anon-rss:39401588kB, file-rss:4480kB, shmem-rss:0kB, UID:1000 pgtables:77296kB oom_score_adj:0",
+        "Oct 16 22:56:23 itgmania-parity kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=/,mems_allowed=0-1,global_oom,task_memcg=/user.slice/user-1000.slice/session-513393.scope,task=full-song-lua,pid=1448121,uid=1000",
+        "Oct 16 22:56:23 itgmania-parity kernel: Out of memory: Killed process 1448121 (full-song-lua) total-vm:17190484kB, anon-rss:16922164kB, file-rss:5760kB, shmem-rss:0kB, UID:1000 pgtables:33300kB oom_score_adj:0"
+      ],
+      "chart_pids": {
+        "340": 1448121,
+        "490": 1444119
+      }
+    }
+  },
+  "actor_snapshot_validation": {
+    "passed": 2,
+    "fix_commit": "492c06e5d702607baaa8604e344551d87bf86665",
+    "red": "Both regression tests failed with StackError before the fix",
+    "green": "Both regression tests pass; existing recursive_begin_handles_large_actor_tree_in_order also passes",
+    "source_sha256": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+    "native_reference_contract": {
+      "ActorFrame.cpp": "PushChildrenTable reads each existing Actor pointer without retaining a second Lua handle per child",
+      "MessageManager.cpp": "Subscriber snapshots preserve identity-set delivery order"
+    },
+    "native_reference_sha256": {
+      "ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+      "MessageManager.cpp": "d7b8f7873062039d81d7d5b3b052f785c182deea731d4c4ed5d473499689c311"
+    }
+  },
+  "harness_theme_assets": {
+    "source_root": "C:/GitHub/itgmania-harness",
+    "source_commit": "2acea34",
+    "binary": "C:/GitHub/itgmania-harness/target/release/itgmania-harness-theme-assets.exe",
+    "binary_sha256": "ea84711d9576b79a75a701a388b183233a908f92ba74ed9245965c3e936b1c02",
+    "build_command": "cargo rustc --offline --release --bin itgmania-harness-rs -- --emit=link=target/release/itgmania-harness-theme-assets.exe",
+    "build_exit": 0,
+    "unit_test": "song_lua_runtime::tests::stages_an_isolated_portable_probe_install",
+    "unit_tests_passed": 1,
+    "reason": "SL asset discovery uses the current probe theme directory; stage fallback asset directories alongside its scripts"
+  },
+  "current_windows_replay": {
+    "code_fix_commit": "b069a2bdc",
+    "prior_code_fix_commit": "a4b8962f3",
+    "source_binary": "C:/GitHub/deadsync/target/release/deps/full_song_lua-current.exe",
+    "installed_binary": "C:/GitHub/deadsync/target/release/deps/full_song_lua-ed8ed852b25206a4.exe",
+    "prior_binary_sha256": "c20f662e91f403ad93f6df509d236fcc9906ad3062e512126ff1504247839219",
+    "binary_sha256": "921b1b9931604ae30d398b2a184badd00e08609c6cf0ff0384d8db90e8c41d39",
+    "build_exit": 0,
+    "installed_utc": "2026-10-16T23:41:12Z",
+    "behavior": "atomic replacement after running replays release the executable; existing comparisons are not restarted"
+  },
+  "harness_default_cli": {
+    "build_exit": 0,
+    "source_commit": "2acea34",
+    "binary_sha256": "4d400c4b3a60de8d6605cc48bce96dbe15dd5840ef170480279d83fe72a4725e"
+  }
+}
