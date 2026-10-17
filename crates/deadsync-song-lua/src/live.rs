@@ -6266,13 +6266,19 @@ ACTORS = {}
 local function actor(name, kind, curve)
     return Def.Actor { Name=name,
         InitCommand=function(self) ACTORS[name]=self;self:x(0) end,
-        OnCommand=function(self) self:tween(1,kind,curve):x(100) end }
+        OnCommand=function(self)
+            if name == 'drop' then
+                assert(self:drop(1) == self)
+                self:x(100)
+            else self:tween(1,kind,curve):x(100) end
+        end }
 end
 return Def.ActorFrame { InitCommand=function(self) TWEEN_ROOT=self end,
     actor('linear',0,0), actor('accelerate','TweenType_Accelerate'),
     actor('decelerate','DECELERATE'), actor('spring',3),
     actor('bezier4',4,{0.2,-0.3,1.4,1.3}),
-    actor('bezier8','TweenType_Bezier',{-0.2,0.1,0.1,-0.4,0.85,1.4,1.2,0.9}) }
+    actor('bezier8','TweenType_Bezier',{-0.2,0.1,0.1,-0.4,0.85,1.4,1.2,0.9}),
+    actor('drop') }
 "#, |context| context.defer_initial_live_update = true);
         let mut scene = compiled.live_scene.take().unwrap();
         let output = scene.advance(SongLuaLiveFrame::default()).unwrap();
@@ -6292,6 +6298,7 @@ for _,a in pairs(ACTORS) do assert(a:GetTweenTimeLeft()==1) end
             ("spring", [0.0, 1.2186763, 1.2828426, 0.71572936, 1.0000001]),
             ("bezier4", [0.2, 0.17500003, 0.6000001, 1.0999999, 1.3]),
             ("bezier8", [0.026412196, 0.22954142, 0.5226672, 0.80551004, 0.98091364]),
+            ("drop", [0.0, 0.5078125, 0.6875, 0.7734375, 1.0]),
         ];
         for step in 1..=3 {
             let seconds = f64::from(step) * 0.25;
@@ -6310,6 +6317,7 @@ for _,a in pairs(ACTORS) do assert(a:GetTweenTimeLeft()==1) end
         for (curve, expected) in [
             ("bezier(0.2,-0.3,1.4,1.3)", probes[4].1),
             ("bezier(-0.2,0.1,0.1,-0.4,0.85,1.4,1.2,0.9)", probes[5].1),
+            ("bezier(0,0,0.33333334,1,0.6666667,0.5,1,1)", probes[6].1),
         ] {
             for (index, expected) in expected.into_iter().enumerate() {
                 let factor = deadsync_gameplay::song_lua_ease_factor(

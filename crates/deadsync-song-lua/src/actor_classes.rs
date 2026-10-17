@@ -344,7 +344,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "bouncebegin",
         "bounceend",
         "smooth",
-        "drop",
         "compound",
         "hide_if",
         "player",
@@ -390,6 +389,13 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     // _fallback/Scripts/02 Actor.lua defines these in native actor primitives.
     lua.load(
         r##"
+-- _fallback/Scripts/02 Actor.lua: the drop helper is a two-dimensional
+-- Bezier tween, using the same native tween queue and argument checks.
+function Actor:drop(t)
+    self:tween(t, "TweenType_Bezier", {0, 0, 1/3, 1, 2/3, 0.5, 1, 1})
+    return self
+end
+
 function BitmapText:PixelFont()
     self:SetTextureFiltering(false)
     return self
