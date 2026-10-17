@@ -4855,15 +4855,12 @@
     {
       "title": "The Boys Are Back in Town (to kill you)",
       "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
-      "harness_version": "0.1.0",
-      "archive": "532ec728623e8d26b0fbe9870baae63a0956af54c1a6631d671d7bb5f8f76c98.tar.zst",
-      "sha256": "532ec728623e8d26b0fbe9870baae63a0956af54c1a6631d671d7bb5f8f76c98",
-      "compressed_bytes": 357100,
-      "uncompressed_sha256": "834ee233ae56b72e9781872114d1dcce746661b0934fbf958bf1f98b1f3ba4d9",
-      "compression_level": 22,
-      "aliases": [
-        "c8a1f223111bebed583282e9ab33a0f2291d973214ba0bbbbe0e15e1b179698b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "d59d5288ac9f4af89a4f1c0ea1ae24efb3239db137f6ee1977d4fb93f693cea8.tar.zst",
+      "compressed_bytes": 8251468,
+      "sha256": "d59d5288ac9f4af89a4f1c0ea1ae24efb3239db137f6ee1977d4fb93f693cea8",
+      "uncompressed_sha256": "a79eb8ce97868808d5b52de078643cab0dce3082a4c6426548b2aa04a3f5b3e2",
+      "aliases": []
     },
     {
       "title": "The Entity",

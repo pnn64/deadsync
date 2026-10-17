@@ -19,6 +19,58 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc": {
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetX, Actor.GetY, Actor.SetHeight, Actor.SetWidth, Actor.blend, Actor.bob, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.hibernate, Actor.smooth, Actor.texturetranslate, Actor.xy, Actor.z, ActorFrame.fov, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.GetTexture, ActorFrameTexture.SetTextureName, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, GameState.GetEnabledPlayers, GameState.GetSongBPS, GameState.IsHumanPlayer, PlayerOptions.Alternate, PlayerOptions.AttackMines, PlayerOptions.BMRize, PlayerOptions.Backwards, PlayerOptions.Beat, PlayerOptions.Big, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Boomerang, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Dizzy, PlayerOptions.DrainSetting, PlayerOptions.Drunk, PlayerOptions.Echo, PlayerOptions.Expand, PlayerOptions.FailSetting, PlayerOptions.Flip, PlayerOptions.Floored, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.HoldRolls, PlayerOptions.Invert, PlayerOptions.Left, PlayerOptions.LifeSetting, PlayerOptions.Little, PlayerOptions.MaxScrollBPM, PlayerOptions.MinTNSToHideNotes, PlayerOptions.Mines, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.MuteOnError, PlayerOptions.NoAttack, PlayerOptions.NoFakes, PlayerOptions.NoHands, PlayerOptions.NoHolds, PlayerOptions.NoJumps, PlayerOptions.NoLifts, PlayerOptions.NoMines, PlayerOptions.NoQuads, PlayerOptions.NoRolls, PlayerOptions.NoStretch, PlayerOptions.NoteSkin, PlayerOptions.Passmark, PlayerOptions.Planted, PlayerOptions.PlayerAutoPlay, PlayerOptions.Quick, PlayerOptions.RandAttack, PlayerOptions.RandomSpeed, PlayerOptions.RandomVanish, PlayerOptions.Right, PlayerOptions.Roll, PlayerOptions.ScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.Shuffle, PlayerOptions.Skew, PlayerOptions.Skippy, PlayerOptions.SoftShuffle, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Stomp, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.SuperShuffle, PlayerOptions.Tilt, PlayerOptions.TimeSpacing, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.TurnNone, PlayerOptions.Twirl, PlayerOptions.Twister, PlayerOptions.Wave, PlayerOptions.Wide, PlayerOptions.Xmode, Screen.GetScreenType, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, ActorProxy, Model, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/5/4",
+        "missing captured subscriber identity for ScreenGameplay/2/7/1",
+        "missing captured subscriber identity for ScreenGameplay/2/7/2",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/2/9/2"
+      ]
+    },
+    "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc": {
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, GameState.GetSongPosition, Player.SetLife, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetTimingData, Sprite.GetNumStates, Sprite.setstate",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4/1",
+        "missing captured subscriber identity for ScreenGameplay/2/8/3",
+        "missing captured subscriber identity for ScreenGameplay/2/8/4",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
