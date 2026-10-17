@@ -2567,6 +2567,14 @@ for _,pn in ipairs{'P1','P2'} do
     if container then rawset(container:GetChild('')[1], 'JudgmentMessageCommand', nil) end
 end
 "#).exec().expect("isolate original lone Judgment subscriber fixture");
+        for actor in crate::song_lua_actor_registry(&scene.lua).unwrap().sequence_values::<Table>() {
+            let actor = actor.unwrap();
+            if let Value::Function(callback) = actor.raw_get::<Value>("JudgmentMessageCommand").unwrap()
+                && !callback.info().source.is_some_and(|source| source.ends_with("FailOnHoldStart.lua"))
+            {
+                actor.raw_set("JudgmentMessageCommand", Value::Nil).unwrap();
+            }
+        }
         let mut frame = SongLuaLiveFrame {
             music_seconds: 60.0, screen_seconds: 60.0, beat: 120.0,
             delta_seconds: 0.01, ..Default::default()
