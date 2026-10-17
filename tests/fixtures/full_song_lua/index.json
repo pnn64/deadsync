@@ -4030,17 +4030,14 @@
       "aliases": []
     },
     {
-      "title": "PARTY",
+      "title": "PARTY ~~pArTy EDiTioN~~",
       "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44.tar.zst",
-      "sha256": "b805d2a8b59293694db65ac87b92368f08f471c8d812bc53b9cbc71c96735f44",
-      "compressed_bytes": 34708,
-      "uncompressed_sha256": "420c3c2937126b84f72e7237f51ec0a2783aa89276097e2cdf86b8c84263c813",
-      "compression_level": 22,
-      "aliases": [
-        "5781fc0ebf9c34776a73fe017dc24b479d511001493abfdc682612e51662bdef.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "2f5366e04bc1357754dfe61cc348e1c17037e89f735332cad07cb685fee8e454.tar.zst",
+      "compressed_bytes": 8007580,
+      "sha256": "2f5366e04bc1357754dfe61cc348e1c17037e89f735332cad07cb685fee8e454",
+      "uncompressed_sha256": "d8d38cde9dafe107ff338549e783838b71fff78eb10b3eb40ed9318522371a7b",
+      "aliases": []
     },
     {
       "title": "paw, paw!",

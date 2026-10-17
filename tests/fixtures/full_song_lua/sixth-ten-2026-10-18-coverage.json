@@ -54,6 +54,23 @@
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
         "missing captured subscriber identity for ScreenGameplay/2/9/2"
       ]
+    },
+    "PARTY [pArTy eDiTioN]/Party.ssc": {
+      "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "pending_coverage": [
+        "uncompared song operations: GameState.GetHumanPlayers, PlayerOptions.Bumpy, PlayerOptions.Confusion, PlayerOptions.Dizzy, PlayerOptions.Mini, PlayerOptions.Wave, PlayerState.GetSongPosition",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
