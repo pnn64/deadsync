@@ -22700,12 +22700,31 @@ pub(crate) fn install_native_gameplay_overlay(
     };
     let screen = globals.raw_get::<Table>("__songlua_top_screen")?;
     let overlay = actor_children(lua, &screen)?.raw_get::<Table>("Overlay")?;
-    theme.raw_set("__songlua_parent", overlay.clone())?;
+    #[cfg(feature = "test-support")]
+    let captured = context.capture_overlay_probe;
+    #[cfg(not(feature = "test-support"))]
+    let captured = false;
+    if captured {
+        theme.raw_set("__songlua_parent", overlay.clone())?;
+        push_sequence_child_once(&overlay, theme.clone())?;
+        actor_children(lua, &overlay)?.raw_set("", theme.clone())?;
+    } else {
+        // ScreenWithMenuElements names the loaded base actor Overlay directly.
+        // Only the capture tool inserts another ActorFrame around that actor.
+        theme.raw_set("__songlua_parent", screen.clone())?;
+        set_actor_name(&theme, lua.create_string("Overlay")?)?;
+        theme.raw_set("Name", "Overlay")?;
+        let order = overlay.raw_get::<Option<i32>>("__songlua_state_draw_order")?.unwrap_or(0);
+        theme.raw_set("__songlua_state_draw_order", order)?;
+        for index in 1..=screen.raw_len() {
+            if screen.raw_get::<Option<Table>>(index)?.is_some_and(|known| known.to_pointer() == overlay.to_pointer()) {
+                screen.raw_set(index, theme.clone())?;
+            }
+        }
+        actor_children(lua, &screen)?.raw_set("Overlay", theme.clone())?;
+    }
     native_step_statistics_lookup(lua, &theme)?;
     run_actor_init_commands_for_table(lua, &theme)?;
-    push_sequence_child_once(&overlay, theme.clone())?;
-    actor_children(lua, &overlay)?.raw_set("", theme)?;
-    let theme: Table = actor_children(lua, &overlay)?.raw_get("")?;
     native_step_statistics_command(lua, &theme, "BeginCommand")?;
     native_step_statistics_command(lua, &theme, "OnCommand")?;
     // The capture tool wraps the base overlay and appends this real ActorFrame.

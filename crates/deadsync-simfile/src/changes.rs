@@ -195,6 +195,8 @@ pub fn extract_background_lua_change_set(
         layer_1.push(([String::new(), "-songbackground-".to_owned(), String::new(), String::new(), String::new()], SerializableSongBackgroundLuaChange {
             start_beat,
             path: path.to_string_lossy().into_owned(),
+            effect: String::new(),
+            color1: None,
             layer: 0,
             activations: vec![SerializableSongBackgroundLuaActivation { start_beat, rate: 1.0, transition: String::new() }],
         }));
@@ -260,9 +262,13 @@ fn append_background_lua_changes<'a>(
                 normalized_background_lua_color(fields.get(9).map(AsRef::as_ref)),
                 normalized_background_lua_color(fields.get(10).map(AsRef::as_ref)),
             ];
+            let effect = key[0].clone();
+            let color1 = fields.get(9).and_then(|field| parse_bgchange_color(&field.replace('^', ",")));
             out.push((key, SerializableSongBackgroundLuaChange {
                 start_beat,
                 path: path.to_string_lossy().into_owned(),
+                effect,
+                color1,
                 layer: 0,
                 activations: vec![SerializableSongBackgroundLuaActivation {
                     start_beat, rate: parse_bgchange_rate(fields.get(2).map(AsRef::as_ref)),
@@ -917,7 +923,7 @@ mod tests {
         fs::write(&layer_2_lua, b"lua").unwrap();
 
         let simfile = b"#BGCHANGES:8=Layer1=1=0=0=0=0;\
-            #BGCHANGES2:0=Layer2=1=0=0=0=0;";
+            #BGCHANGES2:0=Layer2=1=0=0=1=UpperLeft===0.5^0.25^1^1;";
         let changes = extract_background_lua_changes(&song_dir, simfile, "");
 
         assert_eq!(changes.len(), 2);
@@ -925,6 +931,14 @@ mod tests {
         assert_eq!(PathBuf::from(&changes[0].path), layer_1_lua);
         assert_eq!(changes[1].start_beat, 0.0);
         assert_eq!(PathBuf::from(&changes[1].path), layer_2_lua);
+        assert_eq!(changes[1].effect, "UpperLeft");
+        assert_eq!(changes[1].color1, Some([0.5, 0.25, 1.0, 1.0]));
+        let encoded = bincode::encode_to_vec(&changes[1], bincode::config::standard()).unwrap();
+        let (cached, _) = bincode::decode_from_slice::<SerializableSongBackgroundLuaChange, _>(
+            &encoded, bincode::config::standard()).unwrap();
+        let owned = deadsync_chart::song::SongBackgroundLuaChange::from(cached);
+        assert_eq!(owned.effect, "UpperLeft");
+        assert_eq!(owned.color1, Some([0.5, 0.25, 1.0, 1.0]));
         assert!(simfile_uses_lua(&song_dir, simfile, ""));
     }
 

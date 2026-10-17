@@ -213,6 +213,8 @@ fn path_fixture(file: &str, count: usize) -> CachedSong {
         SerializableSongBackgroundLuaChange {
             start_beat: 0.0,
             path: file.into(),
+            effect: String::new(),
+            color1: None,
             layer: 0,
             activations: Vec::new(),
         };

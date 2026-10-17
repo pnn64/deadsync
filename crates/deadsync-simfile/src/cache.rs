@@ -26,8 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Retain native song bounds and authored foreground order, including ties.
-pub const SONG_CACHE_VERSION: u8 = 71;
+// Retain native Lua background effect definitions independently of media layers.
+pub const SONG_CACHE_VERSION: u8 = 72;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -289,6 +289,8 @@ pub struct SerializableSongForegroundChange {
 pub struct SerializableSongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: String,
+    pub effect: String,
+    pub color1: Option<[f32; 4]>,
     pub layer: u8,
     pub activations: Vec<SerializableSongBackgroundLuaActivation>,
 }
@@ -445,6 +447,8 @@ impl From<&SongBackgroundLuaChange> for SerializableSongBackgroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: change.path.to_string_lossy().into_owned(),
+            effect: change.effect.clone(),
+            color1: change.color1,
             layer: change.layer,
             activations: change.activations.iter().map(|activation| SerializableSongBackgroundLuaActivation {
                 start_beat: activation.start_beat, rate: activation.rate, transition: activation.transition.clone(),
@@ -458,6 +462,8 @@ impl From<SerializableSongBackgroundLuaChange> for SongBackgroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: PathBuf::from(change.path),
+            effect: change.effect,
+            color1: change.color1,
             layer: change.layer,
             activations: change.activations.into_iter().map(|activation| deadsync_chart::song::SongBackgroundLuaActivation {
                 start_beat: activation.start_beat, rate: activation.rate, transition: activation.transition,
