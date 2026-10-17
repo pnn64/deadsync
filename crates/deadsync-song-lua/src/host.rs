@@ -122,8 +122,9 @@ pub(crate) fn replace_gameplay_screen(
     install_screen_manager_globals(lua, top.top_screen, top.players)?;
     crate::tables::reset_stage_stats(lua, &context)?;
     // LoadNextSong calls ResetMusicStatistics before loading authored actors.
-    // End callbacks still observe the outgoing clock; constructors start at 0.
-    crate::set_compile_song_runtime_values(lua, 0.0, 0.0)?;
+    // End callbacks still observe the outgoing clock; constructors see the
+    // reset SongPosition, including its native 10 BPS before the first update.
+    crate::runtime::reset_song_runtime_position(lua)?;
     crate::lua_util::install_native_gameplay_underlay(lua, None)?;
     Ok(())
 }

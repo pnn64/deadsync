@@ -6629,6 +6629,46 @@ end }
     }
 
     #[test]
+    fn live_reload_resets_constructor_song_position() {
+        let mut compiled = compile_with_context("reload-song-position", r#"
+CLOCK_SCENE = (CLOCK_SCENE or 0) + 1
+local scene = CLOCK_SCENE
+local bps = GAMESTATE:GetSongBPS()
+assert(bps == 10, 'constructors observe SongPosition::Reset, including on reload')
+assert(GAMESTATE:GetSongPosition():GetCurBPS() == 10)
+assert(GAMESTATE:GetPlayerState(PLAYER_1):GetSongPosition():GetCurBPS() == 10)
+return Def.ActorFrame {
+    InitCommand=function(self) CLOCK_ACTOR = self end,
+    OnCommand=function(self)
+        assert(math.abs(GAMESTATE:GetSongBPS() - 155/60) < 0.00001,
+            'the first update replaces reset BPS with song timing')
+        self:smooth(8/bps):rotationz(90)
+        if scene == 1 then SCREENMAN:SetNewScreen('ScreenGameplay') end
+    end,
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.song_timing_bpms = vec![(0.0, 155.0)];
+        });
+        let mut scene = compiled.live_scene.take().expect("first scene");
+        let frame = SongLuaLiveFrame::default();
+        let output = scene.advance(frame.clone()).expect("first song update");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.request, Some(SongLuaLiveRequest::NewScreen("ScreenGameplay".into())));
+        let mut layers = crate::reload_song_lua_with_default_host(scene,
+            |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None::<crate::SongLuaOverlayModelLayer<()>>, |_, _| None).expect("replacement constructors");
+        let mut scene = layers[0].live_scene.take().expect("replacement scene");
+        let output = scene.advance(frame).expect("replacement first update");
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let actor: Table = scene.lua.globals().get("CLOCK_ACTOR").expect("replacement tween owner");
+        let remaining = crate::lua_util::actor_tween_time_left(&scene.lua, &actor).unwrap();
+        assert!((remaining - 0.8).abs() < 1e-6,
+            "replacement tween uses its cached construction BPS: {remaining}");
+    }
+
+    #[test]
     fn live_reload_updates() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-reload-updates-{}", std::process::id()));
         fs::create_dir_all(&dir).expect("reload directory");

@@ -138,6 +138,28 @@ fn compile_song_runtime_table(lua: &Lua) -> mlua::Result<Table> {
     lua.globals().get(SONG_LUA_RUNTIME_KEY)
 }
 
+pub(crate) fn reset_song_runtime_position(lua: &Lua) -> mlua::Result<()> {
+    fn reset(position: &Table) -> mlua::Result<()> {
+        position.set(SONG_LUA_RUNTIME_BEAT_KEY, 0.0)?;
+        position.set(SONG_LUA_RUNTIME_SECONDS_KEY, 0.0)?;
+        position.set(SONG_LUA_RUNTIME_BPS_KEY, 10.0)?;
+        position.set("__songlua_freeze", false)?;
+        position.set("__songlua_delay", false)
+    }
+    // GameState::ResetMusicStatistics resets both the global SongPosition
+    // and each PlayerState position before replacement actors are loaded.
+    let runtime = compile_song_runtime_table(lua)?;
+    reset(&runtime)?;
+    runtime.set(SONG_LUA_RUNTIME_DELTA_BEAT_KEY, 0.0)?;
+    runtime.set(SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, 0.0)?;
+    if let Some(positions) = runtime.raw_get::<Option<Table>>(PLAYER_SONG_POSITIONS_KEY)? {
+        for position in positions.sequence_values::<Table>() {
+            reset(&position?)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn song_lua_side_effect_count(lua: &Lua) -> mlua::Result<i64> {
     Ok(lua
         .globals()
