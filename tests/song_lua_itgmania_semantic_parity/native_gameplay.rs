@@ -169,16 +169,25 @@ fn compare_calls(
             .to_string_lossy()
             .replace('\\', "/")
     );
-    let (actual, dropped) = CALL_EVENTS.with_borrow_mut(|capture| {
+    let (actual, dropped, uncompared_actual) = CALL_EVENTS.with_borrow_mut(|capture| {
         for event in capture.events.iter().filter(|event| event["kind"] == "trace-error") {
             mismatches.push(json!({"field":"call_trace_error","deadsync":event}));
         }
         let mut actual_handles = BTreeMap::new();
+        let mut uncompared = Vec::new();
         let actual: Vec<Value> = std::mem::take(&mut capture.events)
             .into_iter()
             .filter_map(|mut event| {
                 if !normalize_call_source(&mut event, &song_dir) { return None; }
                 normalize_paths(&mut event, &song_dir);
+                // Keep the same comparison domain on both sides. The raw
+                // owned observer also records methods outside CALL_OPERATIONS
+                // (for example AFT.GetTexture); native events for those methods
+                // are retained in the archive but excluded below.
+                if !compared_call_operation(&event) {
+                    uncompared.push(event);
+                    return None;
+                }
                 let scene = event["scene"].as_u64().unwrap_or(0);
                 normalize_query_handles(&mut event["args"], &mut actual_handles, scene);
                 if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
@@ -187,7 +196,7 @@ fn compare_calls(
                 Some(event)
             })
             .collect();
-        (actual, capture.dropped)
+        (actual, capture.dropped, uncompared)
     });
     if dropped != 0 {
         mismatches.push(json!({"field":"dropped_call_trace","deadsync":dropped}));
@@ -195,6 +204,7 @@ fn compare_calls(
     if trace["capabilities"]["native_event_scenes"] != true {
         let mut calls = json!({"compared":false,"reason":"native command/query events have no scene epochs"});
         calls["actual"] = Value::Array(actual);
+        calls["uncompared_actual"] = Value::Array(uncompared_actual);
         return Ok(calls);
     }
     let mut native_handles = BTreeMap::new();
@@ -209,11 +219,7 @@ fn compare_calls(
                 .as_str()
                 .is_some_and(|source| source.starts_with("song:/"))
         })
-        .filter(|event| {
-            event["operation"]
-                .as_str()
-                .is_some_and(|operation| CALL_OPERATIONS.contains(&operation))
-        })
+        .filter(|event| compared_call_operation(event))
         .filter(|event| {
             !matches!(
                 event["operation"].as_str(),
@@ -267,7 +273,12 @@ fn compare_calls(
     let mut calls = json!({"compared":true,"native_count":native.len(),"actual_count":actual.len()});
     calls["actual"] = Value::Array(actual);
     calls["native"] = Value::Array(native);
+    calls["uncompared_actual"] = Value::Array(uncompared_actual);
     Ok(calls)
+}
+
+fn compared_call_operation(event: &Value) -> bool {
+    event["operation"].as_str().is_some_and(|operation| CALL_OPERATIONS.contains(&operation))
 }
 
 fn same_call_event(trace: &Value, native: &Value, actual: &Value) -> Result<bool, String> {
@@ -583,6 +594,38 @@ return Def.ActorFrame {{
 
     use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
         GameplayStreamClockSnapshot, GameplayViewport, Arc, json};
+
+    #[test]
+    fn call_comparison_uses_the_same_method_domain_without_losing_value_checks() {
+        use serde_json::json;
+        let outside = json!({"scene":1,"kind":"query","operation":"ActorFrameTexture.GetTexture",
+            "source":"song:/control.lua","line":10,"phase":"callback","seconds":0.0,"beat":0.0,
+            "args":[],"results":[{"type":"RageTexture"}]});
+        let inside = json!({"scene":1,"kind":"query","operation":"Sprite.GetTexture",
+            "source":"song:/control.lua","line":10,"phase":"callback","seconds":0.0,"beat":0.0,
+            "args":[],"results":[{"type":"nil"}]});
+        let mut native_outside = outside.clone();
+        native_outside["detail"] = json!({"results":outside["results"]});
+        let mut native_inside = inside.clone();
+        native_inside["detail"] = json!({"results":inside["results"]});
+        let trace = json!({"capabilities":{"native_event_scenes":true,"native_constructor_queries":true},
+            "events":[native_outside,native_inside]});
+        for wrong_value in [false, true] {
+            super::start_call_log(4).unwrap();
+            super::record_call_event(outside.clone());
+            let mut observed = inside.clone();
+            if wrong_value { observed["results"] = json!([{"type":"RageTexture"}]); }
+            super::record_call_event(observed);
+            let mut mismatches = Vec::new();
+            let report = super::compare_calls(&trace, std::path::Path::new("control/control.ssc"),
+                1, 0.0, super::Scope::Full, &mut mismatches).unwrap();
+            assert_eq!(report["native_count"], 1);
+            assert_eq!(report["actual_count"], 1);
+            assert_eq!(report["uncompared_actual"], json!([outside]));
+            assert_eq!(mismatches.len(), usize::from(wrong_value), "compared getter values still fail");
+            if wrong_value { assert_eq!(mismatches[0]["field"], "command_query_event"); }
+        }
+    }
 
     #[test]
     fn call_trace_capacity_keeps_overflow_visible() {
