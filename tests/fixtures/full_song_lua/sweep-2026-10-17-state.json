@@ -6,11 +6,11 @@
   "repair_limit_per_sweep": 2,
   "acceptance": "Existing full_song_lua tests; no new acceptance gates; uncompressed full comparisons",
   "counts": {
-    "passed_fixtures": 426,
-    "pending_charts": 74,
+    "passed_fixtures": 427,
+    "pending_charts": 73,
     "ignored_charts": 1,
-    "new_passing_fixtures": 2,
-    "processed_this_sweep": 2
+    "new_passing_fixtures": 3,
+    "processed_this_sweep": 5
   },
   "ignored": [
     {
@@ -80,18 +80,668 @@
     {
       "position": 151,
       "source_simfile": "Cold/Cold.ssc",
-      "status": "queued",
-      "repair_attempts": 0,
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-factory-ownership-repairs.json",
       "simfile_sha256": "0b81c6037cfb2151fd0419d07217dfd72fd373d46ab72f99eddb5867b559f1ca",
-      "prior_failure": "{'field': 'command_query_count', 'native': 417711, 'deadsync': 532586}"
+      "status": "pending",
+      "previous_concrete_failure": {
+        "failure_text": "{'field': 'command_query_count', 'native': 417711, 'deadsync': 532586}",
+        "callback_errors": [],
+        "mismatch_count": 417396,
+        "first_concrete_mismatches": [
+          {
+            "field": "command_query_count",
+            "native": 417711,
+            "deadsync": 532586
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0130",
+              "args": [
+                0.48927084207534793
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 1332,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0130",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 1332,
+              "operation": "Actor.zoom",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 290,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.zoom",
+              "source": "song:/lua/default.lua",
+              "line": 1332,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                1.1
+              ],
+              "results": [
+                {
+                  "actor": "0x62a0525631a0",
+                  "name": "",
+                  "path": "ScreenGameplay/SongForeground"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0009",
+              "args": [],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0,
+                "results": [
+                  {
+                    "actor": "def-0049",
+                    "name": "",
+                    "path": "ScreenGameplay/SongForeground/lua/default.lua"
+                  }
+                ]
+              },
+              "kind": "query",
+              "line": 967,
+              "operation": "Actor.GetParent",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 538,
+              "source": "song:/lua/default.lua",
+              "results": [
+                {
+                  "actor": 4,
+                  "name": "",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua"
+                }
+              ]
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "query",
+              "operation": "GameState.GetCurrentStyle",
+              "source": "song:/lua/default.lua",
+              "line": 1048,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [],
+              "results": [
+                {
+                  "type": "Style",
+                  "name": "single"
+                }
+              ]
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0049",
+              "args": [
+                213.25
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 967,
+              "operation": "Actor.x",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 540,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "query",
+              "operation": "Actor.GetParent",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [],
+              "results": [
+                {
+                  "actor": 4,
+                  "name": "",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua"
+                }
+              ]
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0049",
+              "args": [
+                240
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 967,
+              "operation": "Actor.y",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 542,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.x",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                0
+              ],
+              "results": [
+                {
+                  "actor": "0x62a0524f23e0",
+                  "name": "",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "external-0135",
+              "args": [
+                "NoteField"
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0,
+                "results": [
+                  {
+                    "actor": "external-0137",
+                    "name": "NoteField",
+                    "path": "ScreenGameplay/PlayerP1/NoteField"
+                  }
+                ]
+              },
+              "kind": "query",
+              "line": 967,
+              "operation": "ActorFrame.GetChild",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 547,
+              "source": "song:/lua/default.lua",
+              "results": [
+                {
+                  "actor": 3,
+                  "name": "NoteField",
+                  "path": "ScreenGameplay/PlayerP1/NoteField"
+                }
+              ]
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.y",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                0
+              ],
+              "results": [
+                {
+                  "actor": "0x62a0524f23e0",
+                  "name": "",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0009",
+              "args": [
+                0
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 967,
+              "operation": "Actor.x",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 549,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "query",
+              "operation": "ActorFrame.GetChild",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                "NoteField"
+              ],
+              "results": [
+                {
+                  "actor": 3,
+                  "name": "NoteField",
+                  "path": "ScreenGameplay/PlayerP1/NoteField"
+                }
+              ]
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0009",
+              "args": [
+                10
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 967,
+              "operation": "Actor.y",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 551,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.x",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                0
+              ],
+              "results": [
+                {
+                  "actor": "0x62a051339d80",
+                  "name": "MultitapFrameP1",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua/MultitapFrameP1"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0009",
+              "args": [
+                0
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 967,
+              "operation": "Actor.rotationz",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 559,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.y",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                0
+              ],
+              "results": [
+                {
+                  "actor": "0x62a051339d80",
+                  "name": "MultitapFrameP1",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua/MultitapFrameP1"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0009",
+              "args": [
+                1
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 967,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 967,
+              "operation": "Actor.zoomx",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 561,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.rotationz",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                0
+              ],
+              "results": [
+                {
+                  "actor": "0x62a051339d80",
+                  "name": "MultitapFrameP1",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua/MultitapFrameP1"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0011",
+              "args": [
+                false
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 1048,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 1048,
+              "operation": "Actor.visible",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 569,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.zoomx",
+              "source": "song:/lua/default.lua",
+              "line": 967,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [
+                1
+              ],
+              "results": [
+                {
+                  "actor": "0x62a051339d80",
+                  "name": "MultitapFrameP1",
+                  "path": "ScreenGameplay/SongForeground/lua/default.lua/MultitapFrameP1"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0069",
+              "args": [
+                false
+              ],
+              "beat": 0.002051020273938775,
+              "callback": "SetUpdateFunction",
+              "caller": {
+                "line": 1048,
+                "source": "song:/lua/default.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0129",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 1048,
+              "operation": "Actor.visible",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0.008911564946174622,
+              "seq": 631,
+              "source": "song:/lua/default.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "query",
+              "operation": "GameState.GetCurrentStyle",
+              "source": "song:/lua/default.lua",
+              "line": 1048,
+              "phase": "callback",
+              "beat": 0.002051020273938775,
+              "seconds": 0.008911564946174622,
+              "args": [],
+              "results": [
+                {
+                  "type": "Style",
+                  "name": "single"
+                }
+              ]
+            }
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "disposition": "no complete retained candidate; original native capture failure retained",
+      "local_chart": "/home/parity/jobs/sweep-20261017-pending/phase-02/chart-151",
+      "sweep_phase": "phase-02",
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "build_receipt": "target/song-lua-sweep-20261017/phase-02/build-receipt.json"
     },
     {
       "position": 178,
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
-      "status": "queued",
-      "repair_attempts": 0,
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-dreaming-sound-volume-repairs.json",
       "simfile_sha256": "0e7c2c767ce9e342b4ed9ec53e6c6d5ff4ba6f55acad41173fe9f91cf20360d3",
-      "prior_failure": "{'phase': 'progress', 'seconds': 48.077754974365234, 'field': 'failed', 'native': False, 'deadsync': True}"
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": "{'phase': 'progress', 'seconds': 48.077754974365234, 'field': 'failed', 'native': False, 'deadsync': True}",
+        "callback_errors": [],
+        "mismatch_count": 1,
+        "first_concrete_mismatches": [
+          {
+            "phase": "progress",
+            "seconds": 48.077754974365234,
+            "field": "failed",
+            "native": false,
+            "deadsync": true
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "28f0309e49d011a4f3649df3836c2d8466a463d2a7d71f6883e5cec2a358b05d",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v4-2/chart-178/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 254.49337624805048,
+      "native_frames": 32257,
+      "replayed_frames": 32257,
+      "compared_stage_fields": 627,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "6361f43e0399e4de20cabf287fc7316795c8d86d5ec91ee2e0e6311d5fb5b0e3",
+      "archive": "93ca146c9950796bb6a18f98c1d63cd1f0fdd6df66c0d2bc000240452ef90e6c.tar.zst",
+      "archive_sha256": "93ca146c9950796bb6a18f98c1d63cd1f0fdd6df66c0d2bc000240452ef90e6c",
+      "compressed_bytes": 5406908,
+      "harness_version": "0.1.80",
+      "title": "DREAMING-ING!!",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/sweep-20261017-pending/phase-02/chart-178",
+      "sweep_phase": "phase-02",
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "build_receipt": "target/song-lua-sweep-20261017/phase-02/build-receipt.json",
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "DREAMING-ING!!",
+        "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+        "harness_version": "0.1.0",
+        "archive": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740.tar.zst",
+        "sha256": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740",
+        "compressed_bytes": 572508,
+        "uncompressed_sha256": "ef9a8bdae6b51d4d2ee49250f781ff8fcbc3607fa7eb271a39b568975b29a0e4",
+        "compression_level": 22,
+        "aliases": [
+          "7b74d0efb9dae85f205224dc20c82f8339360d051934ca22ae6896ba57ebc71b.tar.zst"
+        ]
+      }
     },
     {
       "position": 157,
@@ -597,10 +1247,2058 @@
     {
       "position": 490,
       "source_simfile": "Dongo Bongo/dongobongo2.ssc",
-      "status": "queued",
-      "repair_attempts": 0,
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-7.json",
       "simfile_sha256": "b0057ebbdf4f8465cc34fda1fe7327d1a4edbf2978ed04b7c98eef0fe43f4dd0",
-      "prior_failure": "callback: OnCommand failed for Sprite: runtime error: native actor method drop has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.drop'\n\t[string \"/tmp/.tmphx79ga/song/despair/default.lua\"]:283: in function <[string \"/tmp/.tmphx79ga/song/despair/default.lua\"]:281>\n; comparison command_query_count: native=1493717; deadsync=860227"
+      "status": "pending",
+      "previous_concrete_failure": {
+        "failure_text": "callback: OnCommand failed for Sprite: runtime error: native actor method drop has no semantic implementation\nstack traceback:\n\t[C]: in function 'Actor.drop'\n\t[string \"/tmp/.tmphx79ga/song/despair/default.lua\"]:283: in function <[string \"/tmp/.tmphx79ga/song/despair/default.lua\"]:281>\n; comparison command_query_count: native=1493717; deadsync=860227",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": null,
+        "replay_exit": -9,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "8cda636ea2055bcbcd7b89d5f3440425ae5cb8689da06b67bcb2195bab2ac93f",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-7/chart-490/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 2,
+      "replay_seconds": 434.60776572296163,
+      "native_frames": 31651,
+      "replayed_frames": 31651,
+      "compared_stage_fields": 2310,
+      "archive_accepted": false,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 1296025,
+      "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 1493717,
+          "deadsync": 1494439
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.0015869262861087918,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.12879405915737152
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.12879405915737152
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.033212125301361084
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.033212125301361084
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 27.14095115661621
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 27.14095115661621
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 27.14095115661621
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.378793239593506
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 27.14095115661621
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 27.14095115661621
+              },
+              "native_tween_time_left": 27.14095115661621
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.027732426300644875,
+            "seq": 1827,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 27.14095115661621
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.001586930244229734,
+            "seconds": 0.027732426300644875,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 27.140953063964844
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.28222185373306274,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.24959605932235718
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.24959605932235718
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.00401412695646286
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.00401412695646286
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 27.01175308227539
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 27.01175308227539
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 27.01175308227539
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.2495951652526855
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 27.01175308227539
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 27.01175308227539
+              },
+              "native_tween_time_left": 27.01175308227539
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.15725623071193695,
+            "seq": 2284,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 27.01175308227539
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.28222185373306274,
+            "seconds": 0.15725623071193695,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 27.011754989624023
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.35115233063697815,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.21750305593013763
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.21750305593013763
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.07192112505435944
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.07192112505435944
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.979660034179688
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.979660034179688
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.979660034179688
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.2175021171569824
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.979660034179688
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.979660034179688
+              },
+              "native_tween_time_left": 26.979660034179688
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.18907029926776886,
+            "seq": 2407,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.979660034179688
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.35115233063697815,
+            "seconds": 0.18907029926776886,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.97966194152832
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.37694600224494934,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.20572005212306976
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.20572005212306976
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.06013812497258186
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.06013812497258186
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.967876434326172
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.967876434326172
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.967876434326172
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.205719232559204
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.967876434326172
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.967876434326172
+              },
+              "native_tween_time_left": 26.967876434326172
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.20097506046295166,
+            "seq": 2464,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.967876434326172
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.37694600224494934,
+            "seconds": 0.20097506046295166,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.967878341674805
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.3944365382194519,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.19748204946517944
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.19748204946517944
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.05190012603998184
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.05190012603998184
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.959638595581055
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.959638595581055
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.959638595581055
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.197481155395508
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.959638595581055
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.959638595581055
+              },
+              "native_tween_time_left": 26.959638595581055
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.2090476155281067,
+            "seq": 2521,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.959638595581055
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.3944365382194519,
+            "seconds": 0.2090476155281067,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.959640502929688
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.41286057233810425,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.17045405507087708
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.17045405507087708
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.024872126057744026
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.024872126057744026
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.9326114654541
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.9326114654541
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.9326114654541
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.1704530715942383
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.9326114654541
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.9326114654541
+              },
+              "native_tween_time_left": 26.9326114654541
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.21755102276802063,
+            "seq": 2578,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.9326114654541
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.41286057233810425,
+            "seconds": 0.21755102276802063,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.932613372802734
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.4293402433395386,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.1625620573759079
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.1625620573759079
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.0169801265001297
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.0169801265001297
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.924718856811523
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.924718856811523
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.924718856811523
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.1625611782073975
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.924718856811523
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.924718856811523
+              },
+              "native_tween_time_left": 26.924718856811523
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.2251570224761963,
+            "seq": 2602,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.924718856811523
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.4293402433395386,
+            "seconds": 0.2251570224761963,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.924720764160156
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.4368174076080322,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.15910805761814117
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.15910805761814117
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.013526126742362976
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.013526126742362976
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.9212646484375
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.9212646484375
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.9212646484375
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.159107208251953
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.9212646484375
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.9212646484375
+              },
+              "native_tween_time_left": 26.9212646484375
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.22860802710056305,
+            "seq": 2663,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.9212646484375
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.4368174076080322,
+            "seconds": 0.22860802710056305,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.921266555786133
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.4143836200237274,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.1534530520439148
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.1534530520439148
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.007871126756072044
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.007871126756072044
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.91560935974121
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.91560935974121
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.91560935974121
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.153452157974243
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.91560935974121
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.91560935974121
+              },
+              "native_tween_time_left": 26.91560935974121
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.2182539701461792,
+            "seq": 2687,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.91560935974121
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.4143836200237274,
+            "seconds": 0.2182539701461792,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.915611267089844
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.42234280705451965,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.14979204535484314
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.14979204535484314
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.004210126586258411
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.004210126586258411
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.911949157714844
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.911949157714844
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.911949157714844
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.1497912406921387
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.911949157714844
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.911949157714844
+              },
+              "native_tween_time_left": 26.911949157714844
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.2219274342060089,
+            "seq": 2711,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.911949157714844
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.42234280705451965,
+            "seconds": 0.2219274342060089,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.911951065063477
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0092",
+            "args": [
+              false
+            ],
+            "beat": 0.43216896057128906,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 192,
+              "source": "song:/despair/default.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0007",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 50,
+                                "line": 43,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              },
+                              "On": {
+                                "last_line": 53,
+                                "line": 51,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/DensityGraph.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 0.14530204236507416
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "Init": {
+                        "last_line": 67,
+                        "line": 65,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/StepStatistics/default.lua"
+                      }
+                    },
+                    "name": "StepStatsPaneP1",
+                    "time_left": 0.14530204236507416
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 213,
+                                        "line": 198,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnText",
+                                    "time_left": 0.09972012788057327
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column4",
+                                "time_left": 0.09972012788057327
+                              },
+                              {
+                                "children": [
+                                  {
+                                    "children": [],
+                                    "commands": {
+                                      "Init": {
+                                        "last_line": 170,
+                                        "line": 159,
+                                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                                      }
+                                    },
+                                    "name": "ColumnFlash",
+                                    "time_left": 26.907459259033203
+                                  }
+                                ],
+                                "commands": [],
+                                "name": "Column1",
+                                "time_left": 26.907459259033203
+                              }
+                            ],
+                            "commands": {
+                              "Init": {
+                                "last_line": 86,
+                                "line": 81,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/ColumnCues.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 26.907459259033203
+                          },
+                          {
+                            "children": [],
+                            "commands": {
+                              "Init": {
+                                "last_line": 15,
+                                "line": 8,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              },
+                              "On": {
+                                "last_line": 18,
+                                "line": 16,
+                                "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua"
+                              }
+                            },
+                            "name": "",
+                            "time_left": 3.145301342010498
+                          }
+                        ]
+                      }
+                    ],
+                    "commands": {
+                      "On": {
+                        "last_line": 33,
+                        "line": 9,
+                        "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/PerPlayer/NoteField/default.lua"
+                      }
+                    },
+                    "name": "NoteFieldContainerP1",
+                    "time_left": 26.907459259033203
+                  }
+                ],
+                "commands": {
+                  "On": {
+                    "last_line": 60,
+                    "line": 56,
+                    "source": "@/Themes/Harness Simply Love/BGAnimations/ScreenGameplay underlay/default.lua"
+                  }
+                },
+                "name": "Underlay",
+                "time_left": 26.907459259033203
+              },
+              "native_tween_time_left": 26.907459259033203
+            },
+            "kind": "call",
+            "line": 192,
+            "operation": "Actor.visible",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0.22646258771419525,
+            "seq": 2735,
+            "source": "song:/despair/default.lua",
+            "tween_time_left": 26.907459259033203
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/despair/default.lua",
+            "line": 192,
+            "phase": "callback",
+            "beat": 0.43216896057128906,
+            "seconds": 0.22646258771419525,
+            "args": [
+              false
+            ],
+            "results": [
+              {
+                "actor": "0x5b2761f4e020",
+                "name": "Underlay",
+                "path": "ScreenGameplay/Underlay"
+              }
+            ],
+            "tween_time_left": 26.907461166381836
+          }
+        }
+      ],
+      "report_sha256": "62af1566dacf8b60f55180d89fe3323477936a6225a1098244a77c44820dd003",
+      "local_chart": "/home/parity/jobs/sweep-20261017-pending/phase-01/chart-490",
+      "sweep_phase": "phase-01",
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "build_receipt": "target/song-lua-sweep-20261017/phase-01/build-receipt.json"
     },
     {
       "position": 437,
@@ -787,5 +3485,5 @@
       "prior_failure": "comparison command_query_count: native=1430179; deadsync=1425260"
     }
   ],
-  "updated_utc": "2026-10-17T07:56:13Z"
+  "updated_utc": "2026-10-17T08:02:16Z"
 }

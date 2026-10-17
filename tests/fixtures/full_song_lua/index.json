@@ -2229,15 +2229,12 @@
     {
       "title": "DREAMING-ING!!",
       "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740.tar.zst",
-      "sha256": "a5d30b95279d60cfcf76d1b7e863ef6d0cd9157037842ca09e20466166a0d740",
-      "compressed_bytes": 572508,
-      "uncompressed_sha256": "ef9a8bdae6b51d4d2ee49250f781ff8fcbc3607fa7eb271a39b568975b29a0e4",
-      "compression_level": 22,
-      "aliases": [
-        "7b74d0efb9dae85f205224dc20c82f8339360d051934ca22ae6896ba57ebc71b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "93ca146c9950796bb6a18f98c1d63cd1f0fdd6df66c0d2bc000240452ef90e6c.tar.zst",
+      "compressed_bytes": 5406908,
+      "sha256": "93ca146c9950796bb6a18f98c1d63cd1f0fdd6df66c0d2bc000240452ef90e6c",
+      "uncompressed_sha256": "28f0309e49d011a4f3649df3836c2d8466a463d2a7d71f6883e5cec2a358b05d",
+      "aliases": []
     },
     {
       "title": "\u5922\u54b2\u304dAfter school",

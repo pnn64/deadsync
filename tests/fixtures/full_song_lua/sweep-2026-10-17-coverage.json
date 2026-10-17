@@ -28,6 +28,42 @@
       "pending_coverage": [
         "native actor definitions are missing"
       ]
+    },
+    "Dongo Bongo/dongobongo2.ssc": {
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.CenterX, Actor.accelerate, Actor.addrotationz, Actor.diffusebottomedge, Actor.diffuselowerright, Actor.diffusetopedge, Actor.drop, Actor.hibernate, Actor.horizalign, Actor.shadowcolor, Actor.shadowlengthx, Actor.shadowlengthy, Actor.xy, BitmapText.jitter, BitmapText.settext, GameState.ApplyGameCommand",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    },
+    "DREAMING-ING!!/DREAMING-ING!!.ssc": {
+      "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.SetHeight, Actor.SetTextureFiltering, Actor.SetWidth, Actor.addx, Actor.addy, Actor.blend, Actor.diffuseshift, Actor.effectclock, Actor.horizalign, Actor.pause, Actor.play, Actor.playcommand, Actor.stoptweening, Actor.stretchto, Actor.vertalign, Actor.z, ActorFrame.SetDrawByZPosition, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, ActorSound.get, ActorSound.play, ActorSound.stop, BitmapText.GetText, BitmapText.settext, GameState.GetCurMusicSeconds, GameState.GetEnabledPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.MaxScrollBPM, PlayerOptions.ScrollSpeed, PlayerOptions.TimeSpacing, PlayerOptions.XMod, Screen.AddInputCallback, Screen.RemoveInputCallback, Song.GetDisplayBpms, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorFrameTexture, BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
