@@ -3318,6 +3318,7 @@ fn source_broadcast_table(table: Table, depth: usize, seen: &mut Vec<usize>) -> 
 
 pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, params: Option<&Value>) {
     if lua.app_data_ref::<LiveSourceBroadcasts>().is_none() { return; }
+    if !crate::live::observes_source_call(lua) { return; }
     let beat = runtime_broadcast_beat(lua);
     let music_seconds = compile_song_runtime_values(lua).map_or(0.0, |(_, seconds)| f64::from(seconds));
     let params = match params {
@@ -6462,13 +6463,23 @@ pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result
 pub fn make_actor_finish_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |lua, _args: MultiValue| {
-        prepare_capture_scope_actor(lua, &actor)?;
-        clear_spin_queue(&actor, true)?;
-        clear_replay_tweens(lua, &actor, true)?;
-        clear_actor_queue(lua, &actor)?;
-        finish_actor_tweening(lua, &actor)?;
+        finish_actor_tree_tweening(lua, &actor)?;
         Ok(actor.clone())
     })
+}
+
+fn finish_actor_tree_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    prepare_capture_scope_actor(lua, actor)?;
+    clear_spin_queue(actor, true)?;
+    clear_replay_tweens(lua, actor, true)?;
+    clear_actor_queue(lua, actor)?;
+    finish_actor_tweening(lua, actor)?;
+    // ActorFrame::FinishTweening finishes self, then each direct child.
+    // Queued commands are discarded, never dispatched by FinishTweening.
+    for child in actor_direct_children(lua, actor)? {
+        finish_actor_tree_tweening(lua, &child)?;
+    }
+    Ok(())
 }
 
 fn clear_actor_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -14398,9 +14409,10 @@ return {
         set_actor_texture_from_path(&actor, load_native_blank_texture()?)?;
         return Ok(Some(actor));
     }
-    if name.eq_ignore_ascii_case("SongBackground")
-        || name.eq_ignore_ascii_case("SongForeground")
-    {
+    if name.eq_ignore_ascii_case("SongBackground") {
+        return create_native_song_background(lua, create_dummy_actor).map(Some);
+    }
+    if name.eq_ignore_ascii_case("SongForeground") {
         return Ok(Some(create_named_actor(
             lua,
             "ActorFrame",
@@ -14409,6 +14421,43 @@ return {
         )?));
     }
     Ok(None)
+}
+
+fn create_native_song_background(
+    lua: &Lua, create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+) -> mlua::Result<Table> {
+    let background = create_named_actor(lua, "ActorFrame", "SongBackground", create_dummy_actor)?;
+    let implementation = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+    implementation.raw_set("__songlua_parent", background.clone())?;
+    push_sequence_child_once(&background, implementation.clone())?;
+    let width = lua.globals().get::<f32>("SCREEN_WIDTH")?;
+    let height = lua.globals().get::<f32>("SCREEN_HEIGHT")?;
+    // BackgroundImpl::Init owns four border Quads and BrightnessOverlay.
+    // _fallback's Background metrics use the full logical screen rectangle.
+    for (left, top, right, bottom) in [(0.0, 0.0, 0.0, height), (0.0, 0.0, width, 0.0),
+        (width, 0.0, width, height), (0.0, height, width, height)] {
+        let quad = create_named_actor(lua, "Quad", "", create_dummy_actor)?;
+        quad.raw_set("__songlua_parent", implementation.clone())?;
+        quad.get::<Function>("stretchto")?.call::<()>((quad.clone(), left, top, right, bottom))?;
+        quad.get::<Function>("diffuse")?.call::<()>((quad.clone(), 0.0, 0.0, 0.0, 1.0))?;
+        push_sequence_child_once(&implementation, quad)?;
+    }
+    let brightness = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;
+    brightness.raw_set("__songlua_parent", implementation.clone())?;
+    push_sequence_child_once(&implementation, brightness.clone())?;
+    // BrightnessOverlay in Background.cpp uses a 40-pixel center band.
+    let side = width / 2.0 - 20.0;
+    let prefs = lua.globals().raw_get::<Table>("PREFSMAN")?;
+    let level = prefs.get::<Function>("GetPreference")?.call::<f32>((prefs, "BGBrightness"))?;
+    for (left, right) in [(0.0, side), (width - side, width), (side, width - side)] {
+        let quad = create_named_actor(lua, "Quad", "BrightnessOverlay", create_dummy_actor)?;
+        quad.raw_set("__songlua_parent", brightness.clone())?;
+        quad.get::<Function>("stretchto")?.call::<()>((quad.clone(), left, 0.0, right, height))?;
+        quad.get::<Function>("diffuse")?.call::<()>((quad.clone(), 0.0, 0.0, 0.0, 1.0 - level))?;
+        push_sequence_child_once(&brightness, quad)?;
+    }
+    native_step_statistics_lookup(lua, &background)?;
+    Ok(background)
 }
 
 pub fn create_underlay_theme_actor(
@@ -22786,6 +22835,39 @@ pub(crate) fn install_native_gameplay_decorations(
         children.raw_set(name, actor.clone())?;
         native_step_statistics_command(lua, &actor, "BeginCommand")?;
         native_step_statistics_command(lua, &actor, "OnCommand")?;
+    }
+    Ok(())
+}
+
+pub(crate) fn install_native_gameplay_transitions(
+    lua: &Lua, install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>,
+) -> mlua::Result<()> {
+    let install_methods = install_methods.or_else(|| lua.app_data_ref::<ActorDefinitionHost>()
+        .map(|host| host.install_methods))
+        .ok_or_else(|| mlua::Error::runtime("transitions require their actor host"))?;
+    let screen = lua.globals().raw_get::<Table>("__songlua_top_screen")?;
+    for wrapper in actor_direct_children(lua, &screen)? {
+        let Some(role) = wrapper.raw_get::<Option<String>>("__songlua_screen_actor_role")? else { continue; };
+        let (source, path) = match role.as_str() {
+            "Toasty" => (include_str!("../assets/simply-love/BGAnimations/ScreenGameplay toasty.lua"),
+                "@theme:/BGAnimations/ScreenGameplay toasty.lua"),
+            "NextSong" => (include_str!("../assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua"),
+                "@theme:/BGAnimations/ScreenGameplay next course song/default.lua"),
+            "Ready" | "Go" | "Failed" => ("return Def.Actor{};", "@theme:/BGAnimations/_blank.lua"),
+            _ => continue,
+        };
+        let definition = lua.load(source).set_name(path).eval::<Value>()?;
+        let Value::Table(child) = own_actor_root(lua, definition, install_methods)? else {
+            return Err(mlua::Error::runtime("native transition must load an actor"));
+        };
+        // Transition::Load retains exactly one AutoActor and adds it as a child.
+        child.raw_set("__songlua_parent", wrapper.clone())?;
+        wrapper.raw_set("__songlua_transition_child", child.clone())?;
+        push_sequence_child_once(&wrapper, child.clone())?;
+        actor_children(lua, &wrapper)?.raw_set("", child.clone())?;
+        wrapper.get::<Function>("visible")?.call::<()>((wrapper.clone(), true))?;
+        native_step_statistics_lookup(lua, &wrapper)?;
+        run_actor_init_commands_for_table(lua, &child)?;
     }
     Ok(())
 }

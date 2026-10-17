@@ -22,6 +22,17 @@ where
         }
     }
 
+    /// PlayerStageStats can record a failed exit without changing LifeMeter.
+    /// Runtime history timestamps use the same music-time domain as judgments.
+    pub fn record_player_life_from_script(&mut self, player: usize, life: f32) {
+        if player >= self.setup.num_players.min(MAX_PLAYERS) { return; }
+        let seconds = self.current_music_time_seconds();
+        let runtime = &mut self.players_runtime.players[player];
+        let before = runtime.life_history.last().map_or(runtime.life, |&(_, life)| life);
+        deadsync_rules::life::record_life_change(&mut runtime.life_history, seconds, before, life);
+        self.display.density_graph.life_dirty[player] = true;
+    }
+
     #[inline(always)]
     pub fn player_blue_window_ms(&self, player_idx: usize) -> f32 {
         let base = self.default_fa_plus_window_s();

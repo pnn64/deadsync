@@ -979,6 +979,222 @@ return root
     }
 
     #[test]
+    fn native_live_draw_payload_can_exceed_the_baked_operation_count() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-live-draw-payload-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("draws.lua");
+        std::fs::write(&entry, r#"
+local quad
+return Def.ActorFrame {
+    OnCommand=function(self) self:SetDrawFunction(function()
+        for i=1,355 do quad:x(i):Draw() end
+        MESSAGEMAN:Broadcast('AllNativeDrawsCompleted')
+    end) end,
+    Def.Quad { InitCommand=function(self) quad=self end },
+}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "live draw payload");
+        context.live = true;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
+            music_seconds: 0.25, screen_seconds: 0.25, beat: 0.5, delta_seconds: 0.25,
+            ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.source_broadcasts.iter().any(|event| event.name == "AllNativeDrawsCompleted"));
+    }
+
+    #[test]
+    fn native_finish_tweening_propagates_and_source_broadcasts_keep_callback_scope() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-finish-tree-scope-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("commands.lua");
+        std::fs::write(&entry, r#"
+local helper = assert(loadstring("return function(name) MESSAGEMAN:Broadcast(name) end", '@theme:/message-helper.lua'))()
+MESSAGEMAN:Broadcast('DirectConstruction')
+helper('ThemeConstruction')
+return Def.ActorFrame {
+    OnCommand=function(self) helper('ThemeCallback'); self:queuecommand('Finish') end,
+    FinishCommand=function(self)
+        self:finishtweening()
+        local leaf = self:GetChild('Nested'):GetChild('Leaf')
+        assert(leaf:GetX() == 80 and leaf:GetTweenTimeLeft() == 0)
+        assert(self:GetTweenTimeLeft() == 0)
+        MESSAGEMAN:Broadcast('FinishedTree')
+    end,
+    Def.ActorFrame { Name='Nested', Def.Quad { Name='Leaf',
+        OnCommand=function(self) self:linear(1):x(80):queuecommand('Forbidden') end,
+        ForbiddenCommand=function() error('FinishTweening must discard queued commands') end,
+    } },
+}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "finish tree and source scope");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let scene = compiled.live_scene.as_mut().unwrap();
+        let mut output = scene.take_startup_output();
+        output.append(scene.advance(SongLuaLiveFrame {
+            music_seconds: 0.1, screen_seconds: 0.1, beat: 0.2, delta_seconds: 0.1,
+            ..Default::default()
+        }).unwrap());
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let names: Vec<_> = output.source_broadcasts.iter().map(|event| event.name.as_str()).collect();
+        assert_eq!(names, ["DirectConstruction", "ThemeCallback", "FinishedTree"]);
+        assert!(output.broadcasts.iter().any(|(_, name, _)| name == "ThemeConstruction"),
+            "observer provenance must not suppress actual message delivery");
+    }
+
+    #[test]
+    fn native_failed_exit_records_history_without_emptying_the_meter() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-exit-life-record-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("history.lua");
+        std::fs::write(&entry, "return Def.ActorFrame {}").unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "failed exit life history");
+        context.live = true;
+        context.players[1].enabled = false;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let scene = compiled.live_scene.as_mut().unwrap();
+        let mut frame = SongLuaLiveFrame {
+            music_seconds: 2.0, screen_seconds: 4.0, beat: 4.0, delta_seconds: 0.01,
+            gameplay_outro: true, ..Default::default()
+        };
+        frame.players[0].life = 0.5;
+        frame.players[0].life_record_latest = Some(0.5);
+        frame.players[0].failed = true;
+        scene.advance(frame.clone()).unwrap();
+        let output = scene.advance(frame).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(!output.player_writes.is_empty());
+        let mut state = owned_judgment_control("life-history-owner", "1000\n0000\n0000\n1000\n", "return Def.ActorFrame {}", 0.0);
+        scene.apply_output_player_writes(&output, &mut state.gameplay);
+        let player = &state.gameplay.players_runtime.players[0];
+        assert_eq!(player.life, 0.5);
+        assert_eq!(player.life_history.last().unwrap().1, 0.0);
+        let actual = deadsync_song_lua::SongLuaLivePlayer::from_player(player, 0);
+        assert_eq!(actual.life_record_latest, Some(0.0));
+    }
+
+    #[test]
+    fn native_event_mode_reads_the_owned_preference_without_nested_api_calls() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        super::start_call_log(2_000_000).unwrap();
+        let dir = std::env::temp_dir().join(format!("deadsync-event-mode-owner-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("event-mode.lua");
+        std::fs::write(&entry, r#"
+PREFSMAN:SetPreference('EventMode', false)
+assert(GAMESTATE:IsEventMode() == false)
+PREFSMAN:SetPreference('EventMode', true)
+assert(GAMESTATE:IsEventMode() == true)
+assert(PREFSMAN:GetPreference('EventMode') == true)
+return Def.ActorFrame {}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "event mode preference owner");
+        context.live = true;
+        compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let explicit = events.iter().filter(|event| event["operation"] == "PrefsManager.GetPreference"
+            && event["args"] == serde_json::json!(["EventMode"])).collect::<Vec<_>>();
+        assert_eq!(explicit.len(), 1, "only the explicit Lua getter is observed");
+        assert_eq!(explicit[0]["results"], serde_json::json!([true]));
+    }
+
+    #[test]
+    fn native_gameplay_transitions_retain_their_loaded_auto_actors() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-native-transition-children-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("transitions.lua");
+        std::fs::write(&entry, r#"
+return Def.Actor { OnCommand=function()
+    local screen = SCREENMAN:GetTopScreen()
+    local transitions = screen:GetChildren()['']
+    assert(#transitions == 5)
+    local course, blank, hidden = 0, 0, 0
+    for _,wrapper in ipairs(transitions) do
+        assert(wrapper:GetVisible() and wrapper:GetParent() == screen)
+        assert(wrapper:GetNumChildren() == 1 and wrapper:GetTweenTimeLeft() == 0)
+        local child = wrapper:GetChildren()['']
+        assert(child:GetParent() == wrapper)
+        if tostring(child):match('ActorFrame') then
+            course = course + 1
+            assert(child:GetNumChildren() == 2)
+            local visuals = child:GetChildren()['']
+            assert(#visuals == 2 and visuals[1]:GetParent() == child)
+            assert(visuals[1]:GetZoomedWidth() == _screen.w)
+            assert(visuals[1]:GetZoomedHeight() == _screen.h)
+        else
+            assert(tostring(child):match('Actor %('))
+            blank = blank + 1
+            if not child:GetVisible() then hidden = hidden + 1 end
+        end
+    end
+    assert(course == 1 and blank == 4 and hidden == 1)
+    MESSAGEMAN:Broadcast('NativeTransitionChildren')
+end }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "native transition children");
+        context.live = true;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.broadcasts.iter().any(|(_, name, _)| name == "NativeTransitionChildren"));
+    }
+
+    #[test]
+    fn native_background_retains_borders_and_duplicate_brightness_quads() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        let dir = std::env::temp_dir().join(format!("deadsync-native-background-children-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("background.lua");
+        std::fs::write(&entry, r#"
+return Def.Actor { OnCommand=function()
+    local background = SCREENMAN:GetTopScreen():GetChild('SongBackground')
+    assert(background:GetNumChildren() == 1)
+    local implementation = background:GetChildren()['']
+    assert(implementation:GetParent() == background and implementation:GetNumChildren() == 5)
+    local parts = implementation:GetChildren()['']
+    assert(#parts == 5)
+    local borders = { {0,_screen.cy}, {_screen.cx,0}, {_screen.w,_screen.cy}, {_screen.cx,_screen.h} }
+    for i=1,4 do
+        assert(parts[i]:GetX() == borders[i][1] and parts[i]:GetY() == borders[i][2])
+    end
+    local brightness = parts[5]
+    assert(brightness:GetNumChildren() == 3)
+    local quads = brightness:GetChildren().BrightnessOverlay
+    assert(#quads == 3)
+    assert(quads[1]:GetX() == _screen.cx/2 - 10)
+    assert(quads[2]:GetX() == _screen.w - (_screen.cx/2 - 10))
+    assert(quads[3]:GetX() == _screen.cx and quads[3]:GetZoomedWidth() == 40)
+    MESSAGEMAN:Broadcast('NativeBackgroundChildren')
+end }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "native background children");
+        context.live = true;
+        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(output.broadcasts.iter().any(|(_, name, _)| name == "NativeBackgroundChildren"));
+    }
+
+    #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
         use std::{fs, sync::Arc};
@@ -3590,14 +3806,15 @@ fn compare_stage_sample(
         json!({"possible":observed.possible_points, "current_possible":observed.current_possible_points,
             "actual":observed.actual_points, "misses":observed.tap_scores[4],
             "w1":observed.tap_scores[9], "w2":observed.tap_scores[8],
-            "failed":observed.failed, "life_latest":observed.life,
+            "failed":observed.failed, "life_latest":observed.life_record_latest.unwrap_or(observed.life),
             "difficulty":format!("Difficulty_{}", metadata.difficulty),
             "description":metadata.description, "meter":metadata.meter})
     } else {
         json!({"possible":score.possible_grade_points, "current_possible":player.current_possible_points,
         "actual":player.earned_grade_points, "misses":player.judgment_counts[5],
         "w1":player.judgment_counts[0], "w2":player.judgment_counts[1],
-        "failed":player.stage_failed || player.fail_time.is_some(), "life_latest":player.life,
+        "failed":player.stage_failed || player.fail_time.is_some(),
+        "life_latest":player.life_history.last().map_or(0.0, |&(_, life)| life),
         "difficulty":format!("Difficulty_{}", metadata.difficulty),
         "description":metadata.description, "meter":metadata.meter})
     };

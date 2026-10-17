@@ -128,6 +128,7 @@ pub(crate) fn replace_gameplay_screen(
     crate::lua_util::install_native_gameplay_underlay(lua, None)?;
     crate::lua_util::install_native_gameplay_overlay(lua, None, &context)?;
     crate::lua_util::install_native_gameplay_decorations(lua, None)?;
+    crate::lua_util::install_native_gameplay_transitions(lua, None)?;
     Ok(())
 }
 
@@ -170,6 +171,7 @@ pub fn install_compile_host(
     crate::lua_util::install_native_gameplay_underlay(lua, Some(install_actor_methods))?;
     crate::lua_util::install_native_gameplay_overlay(lua, Some(install_actor_methods), context)?;
     crate::lua_util::install_native_gameplay_decorations(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_transitions(lua, Some(install_actor_methods))?;
     Ok(())
 }
 
@@ -2496,7 +2498,9 @@ pub fn install_game_state_globals(
         "IsEventMode",
         lua.create_function(|lua, _args: MultiValue| {
             let prefs: Table = lua.globals().get("PREFSMAN")?;
-            prefs.get::<Function>("GetPreference")?.call::<bool>((prefs, "EventMode"))
+            // GameState reads the native preference directly. Calling its
+            // public Lua getter here would create an extra observed API call.
+            prefs.raw_get::<Table>("__songlua_preference_values")?.raw_get::<bool>("EventMode")
         })?,
     )?;
     gamestate.set(

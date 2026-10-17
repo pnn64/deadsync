@@ -374,12 +374,13 @@ where
                     .get::<Table>("__songlua_top_screen")
                     .map_err(|err| err.to_string())?;
                 let children = crate::actor_children(&lua, &screen).map_err(|err| err.to_string())?;
-                let name = if index < context.background_layer_count {
-                    "SongBackground"
+                // BackgroundImpl::Layer::CreateBackground calls MakeActor
+                // without a parent; its Layer map owns the result separately.
+                let parent = if index < context.background_layer_count {
+                    None
                 } else {
-                    "SongForeground"
+                    Some(children.get::<Table>("SongForeground").map_err(|err| err.to_string())?)
                 };
-                let parent = children.get::<Table>(name).map_err(|err| err.to_string())?;
                 if context.live && let Some(&beat) = context.layer_start_beats.get(index)
                 {
                     let key = if index < context.background_layer_count {
@@ -391,10 +392,10 @@ where
                     actor.raw_set("__songlua_defer_on", true).map_err(|err| err.to_string())?;
                     actor.raw_set("__songlua_live_inactive", true).map_err(|err| err.to_string())?;
                 }
-                actor
-                    .set("__songlua_parent", parent.clone())
-                    .map_err(|err| err.to_string())?;
-                Some(parent)
+                if let Some(parent) = &parent {
+                    actor.set("__songlua_parent", parent.clone()).map_err(|err| err.to_string())?;
+                }
+                parent
             } else {
                 None
             };
@@ -424,8 +425,13 @@ where
                     actor.get::<mlua::Function>("visible").map_err(|err| err.to_string())?
                         .call::<()>((actor.clone(), false)).map_err(|err| err.to_string())?;
                 }
-                crate::lua_util::push_sequence_child_once(&parent, actor.clone())
-                    .map_err(|err| err.to_string())?;
+                // BackgroundImpl's Layer owns background actors separately;
+                // they are not part of ActorFrame::GetChildren. Foreground
+                // adds its initialized entries to the ordinary child list.
+                if index >= context.background_layer_count {
+                    crate::lua_util::push_sequence_child_once(&parent, actor.clone())
+                        .map_err(|err| err.to_string())?;
+                }
             }
             roots
                 .raw_set(index + 1, root)

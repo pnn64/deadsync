@@ -118,7 +118,12 @@ fn push(lua: &Lua, op: RawOp) -> mlua::Result<()> {
         _ => 0,
     };
     let bytes = std::mem::size_of::<RawCall>() + extra;
-    if capture.calls.len() >= MAX_OPS || capture.bytes.saturating_add(bytes) > MAX_BYTES {
+    // Baked whole-song payloads retain a per-frame operation bound. A live
+    // replay discards the previous frame and uses the byte bound instead:
+    // native actors have no 256-Draw limit (HOPE submits 355 explicit calls).
+    if (!crate::live::active(lua) && capture.calls.len() >= MAX_OPS)
+        || capture.bytes.saturating_add(bytes) > MAX_BYTES
+    {
         return Err(mlua::Error::external(
             "custom draw capture exceeds its song budget",
         ));

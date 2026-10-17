@@ -103,6 +103,17 @@ pub(crate) fn callback_phase(lua: &Lua, entering: bool) {
     }
 }
 
+pub(crate) fn observes_source_call(lua: &Lua) -> bool {
+    if lua.app_data_ref::<QueryTrace>().is_some_and(|trace| trace.commands != 0) {
+        return true;
+    }
+    let source = (1..32).find_map(|level| lua.inspect_stack(level, |debug| {
+        let info = debug.source();
+        (info.what != "C").then(|| info.source.map(|source| source.into_owned()))
+    }).flatten());
+    !source.flatten().is_some_and(|source| source.starts_with("@theme:"))
+}
+
 pub(crate) fn trace_stage_query(lua: &Lua, operation: &str, points: i64) {
     trace_method(lua, "query", operation, || serde_json::json!({"args":[],"results":[points]}));
 }
@@ -340,10 +351,14 @@ pub(crate) fn query_phase(lua: &Lua, entering: bool) {
 }
 
 pub(crate) fn install_query_trace(lua: &Lua) -> mlua::Result<()> {
-    if !active(lua) || !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return Ok(()); }
+    if !active(lua) { return Ok(()); }
     if lua.app_data_ref::<QueryTrace>().is_none() { lua.set_app_data(QueryTrace::default()); }
     let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
-    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.scene = scene; trace.depth += 1; }
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.scene = scene; }
+    // Source message provenance needs callback scope even without diagnostic
+    // logging. Only the method hooks and event payloads depend on that logger.
+    if !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) { return Ok(()); }
+    if let Some(mut trace) = lua.app_data_mut::<QueryTrace>() { trace.depth += 1; }
     let install = || -> mlua::Result<()> {
         use serde_json::json;
         let globals = lua.globals();
@@ -418,6 +433,8 @@ pub struct SongLuaLivePlayer {
     pub actual_points: i32,
     pub current_possible_points: i32,
     pub life: f32,
+    /// PlayerStageStats history is separate from the current LifeMeter value.
+    pub life_record_latest: Option<f32>,
     pub failed: bool,
     pub combo: u32,
     pub miss_combo: u32,
@@ -470,6 +487,7 @@ pub(crate) fn observe_overlay_stage(lua: &Lua, actor: &Table) -> mlua::Result<()
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SongLuaLivePlayerWrite {
     SetLife { player: usize, life: f32 },
+    RecordLife { player: usize, life: f32 },
     Fail { player: usize },
 }
 
@@ -505,12 +523,26 @@ pub(crate) fn player_health_state(lua: &Lua, player: usize) -> Option<&'static s
 
 pub(crate) fn set_player_life(lua: &Lua, player: usize, life: f32) -> mlua::Result<()> {
     if let Some(mut values) = lua.app_data_mut::<LivePlayers>()
-        && let Some(value) = values.0.get_mut(player) { value.life = life; }
+        && let Some(value) = values.0.get_mut(player) {
+        value.life = life;
+        value.life_record_latest = Some(life);
+    }
     if let Some(stats) = lua.app_data_ref::<LiveStats>()
         .and_then(|stats| stats.0.get(player).cloned()) {
         stats.raw_set("__songlua_life", life)?;
     }
     queue_player_write(lua, SongLuaLivePlayerWrite::SetLife { player, life });
+    Ok(())
+}
+
+fn record_player_life(lua: &Lua, player: usize, life: f32) -> mlua::Result<()> {
+    if let Some(mut values) = lua.app_data_mut::<LivePlayers>()
+        && let Some(value) = values.0.get_mut(player) { value.life_record_latest = Some(life); }
+    if let Some(stats) = lua.app_data_ref::<LiveStats>()
+        .and_then(|stats| stats.0.get(player).cloned()) {
+        stats.raw_set("__songlua_life", life)?;
+    }
+    queue_player_write(lua, SongLuaLivePlayerWrite::RecordLife { player, life });
     Ok(())
 }
 
@@ -527,6 +559,7 @@ fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
     for write in writes {
         match write {
             SongLuaLivePlayerWrite::SetLife { player, life } => game.set_player_life_from_script(player, life),
+            SongLuaLivePlayerWrite::RecordLife { player, life } => game.record_player_life_from_script(player, life),
             SongLuaLivePlayerWrite::Fail { player } => game.mark_player_stage_failed_from_script(player),
         }
     }
@@ -753,7 +786,8 @@ impl SongLuaLivePlayer {
         Self {
             possible_points, actual_points: player.earned_grade_points,
             current_possible_points: player.current_possible_points,
-            life: player.life, failed: player.stage_failed || player.fail_time.is_some(),
+            life: player.life, life_record_latest: player.life_history.last().map(|&(_, life)| life),
+            failed: player.stage_failed || player.fail_time.is_some(),
             fail_enabled: player.fail_type != deadsync_gameplay::GameplayFailType::Off,
             combo: player.combo, miss_combo: player.miss_combo,
             tap_scores: [0, player.mines_hit, player.mines_avoided, player.checkpoints_missed,
@@ -802,7 +836,7 @@ fn feed_live_stats(stage: &Table, players: &[Table; LUA_PLAYERS], frame: &SongLu
         stats.raw_set("__songlua_actual_dance_points", value.actual_points)?;
         stats.raw_set("__songlua_current_possible_dance_points", value.current_possible_points)?;
         stats.raw_set("__songlua_failed", value.failed)?;
-        stats.raw_set("__songlua_life", value.life)?;
+        stats.raw_set("__songlua_life", value.life_record_latest.unwrap_or(value.life))?;
         if let Some(meter) = stats.raw_get::<Option<Table>>("__songlua_life_meter")? {
             meter.raw_set("__songlua_life", value.life)?;
         }
@@ -1182,9 +1216,15 @@ impl SongLuaLiveScene {
             // LeaveGameplay tweens successful screens off immediately. For
             // AllFailed it posts BeginFailed, handled after the next Update.
             let mut all_failed = true;
-            for (player, context) in self.players.iter().zip(&self.context.players) {
-                if context.enabled && !player.raw_get::<bool>("__songlua_failed")? {
-                    all_failed = false;
+            for (index, (player, context)) in self.players.iter().zip(&self.context.players).enumerate() {
+                if context.enabled {
+                    if player.raw_get::<bool>("__songlua_failed")? {
+                        // NotesEnded records failure in PlayerStageStats before
+                        // LeaveGameplay/Off. It does not empty the LifeMeter.
+                        record_player_life(&self.lua, index, 0.0)?;
+                    } else {
+                        all_failed = false;
+                    }
                 }
             }
             self.outro_failed = all_failed;

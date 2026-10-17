@@ -18617,16 +18617,26 @@ return Def.ActorFrame {
 return Def.ActorFrame {{
     Name="{name}",
     InitCommand=function(self)
-        assert(self:GetParent():GetName() == "{parent}")
-        assert(self:GetParent():GetChildren()[self:GetName()] == nil,
-            "layer must attach the root after Init")
+        if "{parent}" == "SongBackground" then
+            assert(self:GetParent() == nil, 'native background MakeActor has no parent')
+        else
+            assert(self:GetParent():GetName() == "{parent}")
+            assert(self:GetParent():GetChildren()[self:GetName()] == nil,
+                "layer must attach the root after Init")
+        end
     end,
     OnCommand=function(self)
         local screen = SCREENMAN:GetTopScreen()
         local layer = screen:GetChild("{parent}")
-        assert(self:GetParent() == layer)
         assert(layer:GetParent() == screen)
-        assert(layer:GetChildren()[self:GetName()] == self)
+        if "{parent}" == "SongBackground" then
+            local owner = layer:GetChildren()['']
+            assert(self:GetParent() == nil and owner:GetParent() == layer)
+            assert(owner:GetChildren()[self:GetName()] == nil,
+                'Background Layer keeps authored roots outside the ActorFrame child tree')
+        else
+            assert(self:GetParent() == layer and layer:GetChildren()[self:GetName()] == self)
+        end
         mod_actions = mod_actions or {{}}
         table.insert(mod_actions, {{1,"{name}:{parent}",true}})
     end,
