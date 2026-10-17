@@ -5099,25 +5099,14 @@ pub fn capture_block_set_vec2(
 }
 
 pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::Result<()> {
-    capture_block_set_f32(lua, actor, "x", f32::midpoint(rect[0], rect[2]))?;
-    capture_block_set_f32(lua, actor, "y", f32::midpoint(rect[1], rect[3]))?;
-    let value = lua.create_table_with_capacity(4, 0)?;
-    value.raw_set(1, rect[0])?;
-    value.raw_set(2, rect[1])?;
-    value.raw_set(3, rect[2])?;
-    value.raw_set(4, rect[3])?;
-    if !record_overlay_update_capture(
-        lua,
-        actor,
-        "stretch_rect",
-        SongLuaOverlayUpdateValue::Vec4(rect),
-    ) {
-        let block = actor_current_capture_block(lua, actor)?;
-        block.set("stretch_rect", value.clone())?;
-        block.set("__songlua_has_changes", true)?;
-    }
-    actor.set("__songlua_state_stretch_rect", value)?;
-    Ok(())
+    // Actor::StretchTo keeps m_size and sets the destination scale on each axis.
+    let (base_width, base_height) = actor_base_size(actor)?;
+    let width = rect[2] - rect[0];
+    let height = rect[3] - rect[1];
+    capture_block_set_f32(lua, actor, "x", rect[0] + width / 2.0)?;
+    capture_block_set_f32(lua, actor, "y", rect[1] + height / 2.0)?;
+    capture_block_set_f32(lua, actor, "zoom_x", width / base_width)?;
+    capture_block_set_f32(lua, actor, "zoom_y", height / base_height)
 }
 
 pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
@@ -10340,8 +10329,10 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         lua.create_function({
             let actor = actor.clone();
             move |_, _self: Option<Value>| {
+                // Actor::GetZoom aliases the destination X scale.
                 Ok(actor
-                    .get::<Option<f32>>("__songlua_state_zoom")?
+                    .get::<Option<f32>>("__songlua_state_zoom_x")?
+                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
                     .unwrap_or(1.0_f32))
             }
         })?,

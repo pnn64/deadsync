@@ -11599,10 +11599,9 @@ return Def.ActorFrame{
         assert_eq!(overlay.initial_state.x, 320.0);
         assert_eq!(overlay.initial_state.y, 240.0);
         assert_eq!(overlay.initial_state.cropright, 0.5);
-        assert_eq!(
-            overlay.initial_state.stretch_rect,
-            Some([0.0, 0.0, 640.0, 480.0])
-        );
+        assert_eq!(overlay.initial_state.stretch_rect, None);
+        assert_eq!(overlay.initial_state.zoom_x, 640.0);
+        assert_eq!(overlay.initial_state.zoom_y, 480.0);
         assert_eq!(overlay.message_commands.len(), 1);
         assert_eq!(overlay.message_commands[0].message, "SlideDoor");
         assert_eq!(overlay.message_commands[0].blocks.len(), 2);
@@ -12659,10 +12658,9 @@ return Def.ActorFrame{
         assert_eq!(compiled.screen_height, 480.0);
         assert_eq!(overlay.initial_state.x, 427.0);
         assert_eq!(overlay.initial_state.y, 240.0);
-        assert_eq!(
-            overlay.initial_state.stretch_rect,
-            Some([0.0, 0.0, 854.0, 480.0])
-        );
+        assert_eq!(overlay.initial_state.stretch_rect, None);
+        assert_eq!(overlay.initial_state.zoom_x, 854.0);
+        assert_eq!(overlay.initial_state.zoom_y, 480.0);
     }
 
     #[test]
@@ -14995,6 +14993,8 @@ return Def.ActorFrame{
     Def.Quad{
         OnCommand=function(self)
             self:FullScreen():Center()
+            assert(self:GetZoom() == 1280 and self:GetZoomX() == 1280 and self:GetZoomY() == 720)
+            assert(self:GetZoomedWidth() == 1280 and self:GetZoomedHeight() == 720)
             mod_actions = {
                 {1, string.format("%.0f:%.0f:%.0f:%.0f", self:GetX(), self:GetY(), self:GetWidth(), self:GetHeight()), true},
             }
@@ -15010,7 +15010,35 @@ return Def.ActorFrame{
         context.screen_height = 720.0;
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.messages.len(), 1);
-        assert_eq!(compiled.messages[0].message, "640:360:1280:720");
+        assert_eq!(compiled.messages[0].message, "640:360:1:1");
+    }
+
+
+    #[test]
+    fn compile_song_lua_stretch_keeps_native_intrinsic_size_and_scale() {
+        let song_dir = test_dir("native-stretch-scale");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"return Def.Quad { OnCommand=function(native_target)
+
+native_target:setsize(1440,1080):zoom(2)
+native_target:stretchto(0,0,640,480)
+assert(native_target:GetWidth() == 1440 and native_target:GetHeight() == 1080)
+assert(native_target:GetZoom() == native_target:GetZoomX())
+assert(native_target:GetZoom() == 0.4444444477558136)
+assert(native_target:GetZoomedWidth() == 640 and native_target:GetZoomedHeight() == 480)
+assert(native_target:GetX() == 320 and native_target:GetY() == 240)
+native_target:zoomx(0.25)
+assert(native_target:GetZoom() == 0.25 and native_target:GetZoomY() == 0.4444444477558136)
+native_target:zoom(1.1)
+assert(native_target:GetZoom() == 1.100000023841858 and native_target:GetZoomY() == 1.100000023841858)
+assert(native_target:GetZoomedWidth() == 1584)
+native_target:stretchto(10,20,330,260)
+assert(native_target:GetWidth() == 1440 and native_target:GetHeight() == 1080)
+assert(native_target:GetX() == 170 and native_target:GetY() == 140)
+assert(native_target:GetZoomedWidth() == 320 and native_target:GetZoomedHeight() == 240)
+
+        end }"#).unwrap();
+        test_compile_song_lua(&entry, &SongLuaCompileContext::new(&song_dir, "Native StretchTo")).unwrap();
     }
 
     #[test]
