@@ -3,7 +3,8 @@
 Find Content, on the title menu, browses stepmaniaonline.net from inside the
 game: packs by tab, search, each pack's own page, and a preview of any song's
 charts before anything is downloaded. Packs and single songs install straight
-into the library. It started as a port of the ITGmania Content Browser module.
+into the library, and Rip Packs makes booster packs of fifteen songs from all
+over the site. It started as a port of the ITGmania Content Browser module.
 
 This document is for working on it: where the code lives, how the pieces talk
 to each other, and the rules the network code keeps.
@@ -21,6 +22,8 @@ to each other, and the rules the network code keeps.
 | `crates/deadsync-online/src/smo_search.rs` | Search over pack names, chart credits and song titles. |
 | `crates/deadsync-online/src/beginner.rs`, `popular_packs.rs`, `itgdb.rs`, `banners.rs` | The Beginner tab, the featured strip, the curated doubles list and banner images. |
 | `crates/deadsync-online/src/pack_archive.rs`, `smo_songs.rs`, `song_preview.rs` | Reading single songs out of pack zips, for the preview and for single-song installs. |
+| `crates/deadsync-online/src/rip_packs/` | Rip Packs: `search.rs` finds a rip's songs, `pages.rs` reads song pages and chart descriptions, `dates.rs` dates packs, songs and charts, `keep.rs` downloads a kept rip, `authors.rs` the author list, `lists.rs` fetches and caches the site's published files, and `share.rs` reports rips and keeps to the site. `mod.rs` is the runtime and the API the screen and shell use. |
+| `crates/deadsync-theme-simply-love/src/screens/content_browser/rip.rs`, `rip_render.rs` | The Rip Packs tab: its options, pickers, prompts and keys, and the stage it draws. |
 | `crates/deadsync-simfile/src/song.rs` (`parse_song_bytes`) | Parses a simfile held in memory. |
 | `crates/deadsync-theme-simply-love/src/screens/components/shared/noteskin_draw.rs` | Noteskin pieces drawn outside gameplay, shared with Player Options. |
 | `crates/deadsync-shell/src/app/mod.rs` (`sync_content_browser_stepmaniaonline`) | The per-frame wiring between the services and the screen. |
@@ -57,8 +60,10 @@ the calls above.
 | Host | Used for |
 | --- | --- |
 | `stepmaniaonline.net` | `/api/packs` (the catalogue CSV), `/api/packs/datatables` (banners, dates, chart types), `/pack/<id>` (a pack's page), `/api/search` (charter and song-title search), `/download/pack/<id>/` (pack downloads, previews and single songs) |
+| `stepmaniaonline.net` (Rip Packs) | `/song/<id>` (a song's charts) and `/api/chart/<id>` (one chart's author and meter), besides the above |
 | `api.arrowcloud.dance` | Pack popularity, for the featured strip |
 | `itgdb.net` | The curated list of doubles packs |
+| `itgcontent.net` | `/booster/authors.json`, `pack-dates.json` and `chart-firsts.json`, the indexes Rip Packs reads; `/api/rips` and `/api/rips/kept`, where rips are reported and marked kept (see below) |
 
 **Every request to `/download/pack/<id>/` counts as a download of that pack on
 the site, `HEAD` included.** The preview and single-song code is built around
@@ -149,6 +154,97 @@ The window draws the first joined player's noteskin, or the machine default.
 `browser_skin.rs` loads it on a worker when the browser opens and uploads one
 texture a frame; until it is ready the window draws plain shapes. Taps press
 their receptor as they reach it; mines scroll past without pressing anything.
+
+---
+
+## Rip Packs
+
+A rip is fifteen songs, each from a different pack, picked at random within
+the options on the tab: eras, chart authors to take or avoid, the Expert
+(singles Challenge) meter range, and whether every singles difficulty must be
+there. Nothing is downloaded until the player keeps the rip. The selection
+rules are the ITGmania relay's, run here against stepmaniaonline.net itself.
+
+**Finding the songs** (`search.rs`). The free pages decide first. For a
+random pack, its page lists the songs; for a random song, its own page lists
+its singles charts and their meters; `/api/chart/<id>` says who made the
+Challenge chart. Only a song that passes every one of those costs a counted
+request: its pack's zip index, which gives the song's folder, its download
+size and the dates its files carry. Indexes that were paid for are kept in
+`cache/rip-packs/indexes/`, keyed by the catalogue's size for the pack, so
+the same pack is never paid for twice.
+
+**Eras** (`dates.rs`). A pack is dated by the official game it rips, else
+itgdb's release date, else its `Pack.ini` Year, its name and its zip's file
+dates, under the ceiling of its SMO upload. A song is older than its pack
+when its own files are over a year older, and its Expert chart older still
+when the same chart by the same charter is in an older pack. Each of the
+three must fall in a ticked era, and the card shows the chart's year. A pack
+whose listing already rules it out is never opened, and a pack's `Pack.ini`
+is read only when it lies in the index's tail, never with a request of its
+own.
+
+**The site's indexes** (`lists.rs`). The author list and the two date
+indexes (`pack-dates.json`: each pack's upload and release dates;
+`chart-firsts.json`: the packs each charter's songs are in) take a crawl of
+the whole site to build, so a scheduled job builds them and the game fetches
+the results from `LISTS_BASE`. Each is kept in `cache/rip-packs/` beside a
+`.meta.json` holding its validators, and asked for again, conditionally, once
+it is a day old, so an unchanged file costs a 304. A file that does not parse
+is turned away and the copy on disk stays. With the site unreachable the copy
+on disk is used however old. With no copy at all, the first search kept to
+eras waits up to five seconds for one and then dates songs without it (any
+other search starts at once with whatever has arrived), and the author
+picker says it could not reach the site and offers a retry. A file still
+missing is asked for again at most every five minutes, or at once on that
+retry.
+
+A search has budgets: eight packs at once, six hundred opened, forty seconds,
+and 45 counted requests. A song holds its place in the rip before it is paid
+for, so a full rip never pays for a song it then throws away. A rip that runs
+out of budget is short and says so. A new rip, a reset or leaving the screen
+makes a running search stale: it sends nothing more.
+
+**Keeping** (`keep.rs`). The pack is numbered one past the larger of
+`save/content-boosters.txt` and every `Content Booster Pack <n>` folder in
+Songs, staged under a `._` folder the scanner skips, and renamed into place
+once it is done. Songs come one at a time, each folder in one request with
+the source pack's `Pack.ini` read in the same request and the `.oldsync`
+backups left out. Two songs with the same folder name get `(2)`, `(3)` and
+so on.
+
+Every booster is null-synced, as single songs are. A song whose pack declares
+ITG, by its own `Pack.ini` or else the catalogue, or declares nothing (taken
+as ITG) has its offsets moved by `ITG_SYNC_OFFSET_SECONDS`. The booster's
+`Pack.ini` says `SyncOffset=NULL` and lists where each song came from and
+whether it was moved.
+
+**The author list** (`authors.rs`). The charters credited on at least a third
+of the songs of a pack they uploaded in the last two years, ranked by how many
+of those packs are on arrowcloud's most-played list, then by how many they
+released: the site's `authors.json`, as the site ranks it.
+
+**Sharing** (`share.rs`). While the machine's Share Rips option is on (Online
+Score Services, on by default; the shell hands it over through
+`runtime_set_sharing` at startup and whenever the machine config changes),
+each rip is reported to itgcontent.net once its cards are dealt:
+`POST /api/rips` with what it asked for (eras, meter range, full, authors and
+avoided names) and, per card, its key, pack and song ids, folder, Expert
+credit and meter, year, declared sync, simfile names and size, plus `x`, the
+keys a re-rip threw back. A re-rip that found nothing, or was stopped by
+leaving or by a reset, sends `x` alone. The folder and simfile names are
+spelled as the site's relay spells them: the zip's raw name bytes read as
+UTF-8, split at `/` (`ZipEntry::site_name`), which for a zip without the
+UTF-8 flag is not the `zip` crate's CP437 reading. A value the site would
+refuse is sent as none, so one song cannot cost the whole report: a meter
+outside 1-30, a year outside 1998 to next year (UTC), a credit over 255
+characters. Titles and pack names are not sent (the site reads them from SMO
+and checks every song there), and nothing about the player is. The site
+answers with the rip's id, and KEEP posts `rip=<id>` to `/api/rips/kept` as
+soon as the id is known, even if the rip was reset or replaced by then. Each
+request runs on a thread of its own with short timeouts, is never retried,
+and a failure only reaches the debug log. The requests go through a `Wire`,
+which the tests replace with a recorder.
 
 ---
 
