@@ -534,17 +534,19 @@ pub fn install_basic_globals(
         create_string_enum_table(
             lua,
             &[
-                "TapNoteScore_W1",
-                "TapNoteScore_W2",
-                "TapNoteScore_W3",
-                "TapNoteScore_W4",
-                "TapNoteScore_W5",
-                "TapNoteScore_Miss",
+                // GameConstantsAndTypes.h ranks scores from None upward;
+                // Lua's Reverse() exposes those zero-based native values.
+                "TapNoteScore_None",
                 "TapNoteScore_HitMine",
                 "TapNoteScore_AvoidMine",
                 "TapNoteScore_CheckpointMiss",
+                "TapNoteScore_Miss",
+                "TapNoteScore_W5",
+                "TapNoteScore_W4",
+                "TapNoteScore_W3",
+                "TapNoteScore_W2",
+                "TapNoteScore_W1",
                 "TapNoteScore_CheckpointHit",
-                "TapNoteScore_None",
             ],
         )?,
     )?;

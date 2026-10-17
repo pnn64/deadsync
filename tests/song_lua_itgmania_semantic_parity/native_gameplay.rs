@@ -1482,6 +1482,48 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn native_tap_score_ranks_drive_scripted_judgment_life_changes() {
+        let mut state = owned_judgment_control("tap-score-ranks", "0000\n1000\n0000\n1000\n", r#"
+local ranks = TapNoteScore:Reverse()
+assert(ranks.TapNoteScore_None == 0 and ranks.TapNoteScore_W4 == 6)
+assert(ranks.TapNoteScore_W1 == 9 and ranks.TapNoteScore_CheckpointHit == 10)
+local replacements = {[ranks.TapNoteScore_W1] = ranks.TapNoteScore_W4}
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+local meter = SCREENMAN:GetTopScreen():GetLifeMeter(PLAYER_1)
+return Def.ActorFrame {
+    OnCommand=function(self)
+        self:sleep(9999)
+        self:addcommand('JudgmentMessage', function(_, params)
+            local score = ranks[params.TapNoteScore]
+            if score and score > 6 then
+                local replacement = TapNoteScore[replacements[score] + 1]
+                assert(replacement == 'TapNoteScore_W4')
+                player:SetLife(meter:GetLife()
+                    - THEME:GetMetric('LifeMeterBar', 'LifePercentChangeW1')
+                    + THEME:GetMetric('LifeMeterBar', 'LifePercentChangeW4') * 0.8)
+                MESSAGEMAN:Broadcast('RankedJudgmentApplied')
+            end
+        end)
+    end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        let times = state.gameplay.chart_runtime.note_time_cache_ns.clone();
+        assert_eq!(times.len(), 2);
+        for (index, time) in times.into_iter().enumerate() {
+            let output = update_judgment_control(&mut state, time + 1_000_000,
+                2_000_000_000 + index as u64 * 1_000_000_000);
+            assert_eq!(output.source_broadcasts.iter()
+                .filter(|event| event.name == "RankedJudgmentApplied").count(), 1);
+            // Release autoplay suppresses the automatic life gain, while the
+            // chart's rank-based JudgmentMessage still subtracts its W1 metric.
+            let expected_life = 0.5 - 0.008 * (index + 1) as f32;
+            assert!((state.gameplay.players()[0].life - expected_life).abs() < 1e-6,
+                "native score ranks must drive each scripted life change");
+        }
+    }
+
+    #[test]
     fn gameplay_autoplay_judges_at_native_float_row_boundary() {
         let notes = (0..90).map(|measure| (0..16).map(|row| {
             let beat = measure as f32 * 4.0 + row as f32 / 4.0;
