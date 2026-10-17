@@ -190,6 +190,482 @@
         ]
       },
       "archive_git_ignored": true
+    },
+    {
+      "position": 174,
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-background-effect-owner-repairs.json",
+      "simfile_sha256": "e7ad12886de72b1939cb18e6dd586a14d0807977dd428abe5b0347be6b5dcf41",
+      "status": "pending",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 4,
+        "first_concrete_mismatches": [
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0003",
+              "args": [],
+              "beat": 36.962669372558594,
+              "command": "SpinCommand",
+              "definition_id": "def-0003",
+              "detail": {
+                "name": "SpinCommand"
+              },
+              "kind": "command",
+              "line": 6,
+              "operation": "command.begin",
+              "scene": 1,
+              "seconds": 22.030000686645508,
+              "seq": 15867,
+              "source": "song:/bg/default.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.begin",
+              "command": "SpinCommand",
+              "source": "song:/bg/default.lua",
+              "line": 6,
+              "beat": 36.964908599853516,
+              "seconds": 22.031291961669922,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0003",
+              "args": [
+                0.007
+              ],
+              "beat": 36.962669372558594,
+              "caller": {
+                "line": 6,
+                "source": "song:/bg/default.lua",
+                "tail_call": false
+              },
+              "command": "SpinCommand",
+              "definition_id": "def-0003",
+              "detail": {
+                "native_tween_time_left": 0.007000000216066837
+              },
+              "kind": "call",
+              "line": 6,
+              "operation": "Actor.sleep",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 22.030000686645508,
+              "seq": 15869,
+              "source": "song:/bg/default.lua",
+              "tween_time_left": 0.007000000216066837
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.sleep",
+              "source": "song:/bg/default.lua",
+              "line": 6,
+              "phase": "callback",
+              "beat": 36.964908599853516,
+              "seconds": 22.031291961669922,
+              "args": [
+                0.007
+              ],
+              "tween_time_left": 0.007000000216066837
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0003",
+              "args": [
+                "Spin"
+              ],
+              "beat": 36.962669372558594,
+              "caller": {
+                "line": 6,
+                "source": "song:/bg/default.lua",
+                "tail_call": false
+              },
+              "command": "SpinCommand",
+              "definition_id": "def-0003",
+              "detail": {
+                "native_tween_time_left": 0.007000000216066837
+              },
+              "kind": "call",
+              "line": 6,
+              "operation": "Actor.queuecommand",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 22.030000686645508,
+              "seq": 15870,
+              "source": "song:/bg/default.lua",
+              "tween_time_left": 0.007000000216066837
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.queuecommand",
+              "source": "song:/bg/default.lua",
+              "line": 6,
+              "phase": "callback",
+              "beat": 36.964908599853516,
+              "seconds": 22.031291961669922,
+              "args": [
+                "Spin"
+              ],
+              "tween_time_left": 0.007000000216066837
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0003",
+              "args": [],
+              "beat": 36.962669372558594,
+              "command": "SpinCommand",
+              "definition_id": "def-0003",
+              "detail": {
+                "name": "SpinCommand"
+              },
+              "kind": "command",
+              "line": 6,
+              "operation": "command.end",
+              "scene": 1,
+              "seconds": 22.030000686645508,
+              "seq": 15871,
+              "source": "song:/bg/default.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.end",
+              "command": "SpinCommand",
+              "source": "song:/bg/default.lua",
+              "line": 6,
+              "beat": 36.964908599853516,
+              "seconds": 22.031291961669922,
+              "args": null
+            }
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "101cf4a646457f7c223db429bcd866899bd66cb5b1e45ddc224228ea008f560c",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v4-1/chart-174/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 2,
+      "replay_seconds": 138.26053188898368,
+      "native_frames": 89422,
+      "replayed_frames": 89422,
+      "compared_stage_fields": 1133,
+      "archive_accepted": false,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 4,
+      "concrete_failures": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 36.962669372558594,
+            "command": "SpinCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "SpinCommand"
+            },
+            "kind": "command",
+            "line": 6,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 22.030000686645508,
+            "seq": 15867,
+            "source": "song:/bg/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "SpinCommand",
+            "source": "song:/bg/default.lua",
+            "line": 6,
+            "beat": 36.964908599853516,
+            "seconds": 22.031291961669922,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [
+              0.007
+            ],
+            "beat": 36.962669372558594,
+            "caller": {
+              "line": 6,
+              "source": "song:/bg/default.lua",
+              "tail_call": false
+            },
+            "command": "SpinCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": 0.007000000216066837
+            },
+            "kind": "call",
+            "line": 6,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 22.030000686645508,
+            "seq": 15869,
+            "source": "song:/bg/default.lua",
+            "tween_time_left": 0.007000000216066837
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.sleep",
+            "source": "song:/bg/default.lua",
+            "line": 6,
+            "phase": "callback",
+            "beat": 36.964908599853516,
+            "seconds": 22.031291961669922,
+            "args": [
+              0.007
+            ],
+            "tween_time_left": 0.007000000216066837
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [
+              "Spin"
+            ],
+            "beat": 36.962669372558594,
+            "caller": {
+              "line": 6,
+              "source": "song:/bg/default.lua",
+              "tail_call": false
+            },
+            "command": "SpinCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": 0.007000000216066837
+            },
+            "kind": "call",
+            "line": 6,
+            "operation": "Actor.queuecommand",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 22.030000686645508,
+            "seq": 15870,
+            "source": "song:/bg/default.lua",
+            "tween_time_left": 0.007000000216066837
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.queuecommand",
+            "source": "song:/bg/default.lua",
+            "line": 6,
+            "phase": "callback",
+            "beat": 36.964908599853516,
+            "seconds": 22.031291961669922,
+            "args": [
+              "Spin"
+            ],
+            "tween_time_left": 0.007000000216066837
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 36.962669372558594,
+            "command": "SpinCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "SpinCommand"
+            },
+            "kind": "command",
+            "line": 6,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 22.030000686645508,
+            "seq": 15871,
+            "source": "song:/bg/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "SpinCommand",
+            "source": "song:/bg/default.lua",
+            "line": 6,
+            "beat": 36.964908599853516,
+            "seconds": 22.031291961669922,
+            "args": null
+          }
+        }
+      ],
+      "report_sha256": "6ba117616c84ff7eaa50171158a65cfd1ca1e17c9a22c14b59c2ce6305889b4d",
+      "local_chart": "/home/parity/jobs/three-fixtures-20261017/chart-174-attempt-1/chart-174",
+      "fix_commit": "46edfb205cc638116a4d45a368eb8d6caea77e58",
+      "binary_sha256": "e169fecaea2bae7d60fea6c45365fdecaf6b6cb43d16bcca3b70960ee4e8a62d",
+      "build_receipt": {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--no-run"
+        ],
+        "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+        "source_base_commit": "33b148c80",
+        "exit_code": 0,
+        "seconds": 363.28005669201957,
+        "modified_sources": {
+          "crates/deadsync-song-lua/src/tables.rs": "9e3d8d2b0d08a425ae400c63ff34608ae1d557dcd9d803a2e3ef6cf20c7879f1",
+          "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+          "crates/deadsync-song-lua/src/live.rs": "becd8579a4244dfb89503d2b667aba6f0dfa4ff61af6c16b2295269525333e38",
+          "crates/deadsync-rules/src/timing.rs": "f7f017a5b9df94fac6d5c76a3ac5b4a72243b4fb889e054ff5d7a5b7faca5d11",
+          "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+          "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+          "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+          "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+          "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2",
+          "crates/deadsync-song-lua/src/song_tables.rs": "7634c0a91951ea626dee4802641c5b19802edd7b4f711cf2de3bb8fb578f4e86",
+          "crates/deadsync-song-lua/src/host.rs": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed",
+          "crates/deadsync-gameplay/src/note_timing.rs": "a4686c460d5ea8918af86408624a681bdb31209257da61824fd5b2f8b1eb4bea",
+          "crates/deadsync-gameplay/src/tests.rs": "75e3b0438b6811d03fc52414c66a759abcde54a048790d360a2dd8ca1a9fad27"
+        },
+        "binary": "/home/parity/jobs/three-fixtures-20261017/full-song-lua-fractional-end",
+        "binary_sha256": "e169fecaea2bae7d60fea6c45365fdecaf6b6cb43d16bcca3b70960ee4e8a62d",
+        "targeted_checks": [
+          {
+            "command": [
+              "/home/parity/.cargo/bin/cargo",
+              "test",
+              "--offline",
+              "--locked",
+              "--release",
+              "--jobs",
+              "8",
+              "--target-dir",
+              "/home/parity/build/deadsync-sweep-release",
+              "--config",
+              "profile.release.lto=false",
+              "-p",
+              "deadsync-gameplay",
+              "--lib",
+              "song_audio_end_time"
+            ],
+            "exit_code": 0,
+            "log": "/home/parity/jobs/three-fixtures-20261017/fractional-end-unit-0.log",
+            "log_sha256": "bded846b6cbabaebd51860968ab95c423688ae0cb156aca97a97c4a41223d6f7"
+          }
+        ],
+        "fix_commit": "46edfb205cc638116a4d45a368eb8d6caea77e58"
+      },
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [],
+            "beat": 36.962669372558594,
+            "command": "SpinCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "name": "SpinCommand"
+            },
+            "kind": "command",
+            "line": 6,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 22.030000686645508,
+            "seq": 15867,
+            "source": "song:/bg/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "SpinCommand",
+            "source": "song:/bg/default.lua",
+            "line": 6,
+            "beat": 36.964908599853516,
+            "seconds": 22.031291961669922,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0003",
+            "args": [
+              0.007
+            ],
+            "beat": 36.962669372558594,
+            "caller": {
+              "line": 6,
+              "source": "song:/bg/default.lua",
+              "tail_call": false
+            },
+            "command": "SpinCommand",
+            "definition_id": "def-0003",
+            "detail": {
+              "native_tween_time_left": 0.007000000216066837
+            },
+            "kind": "call",
+            "line": 6,
+            "operation": "Actor.sleep",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 22.030000686645508,
+            "seq": 15869,
+            "source": "song:/bg/default.lua",
+            "tween_time_left": 0.007000000216066837
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.sleep",
+            "source": "song:/bg/default.lua",
+            "line": 6,
+            "phase": "callback",
+            "beat": 36.964908599853516,
+            "seconds": 22.031291961669922,
+            "args": [
+              0.007
+            ],
+            "tween_time_left": 0.007000000216066837
+          }
+        }
+      ]
     }
   ],
   "counts": {
@@ -198,5 +674,5 @@
     "pending_charts": 63,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-17T14:11:34Z"
+  "updated_utc": "2026-10-17T14:27:13Z"
 }
