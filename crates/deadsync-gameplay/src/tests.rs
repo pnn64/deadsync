@@ -14797,6 +14797,16 @@ mod tests {
     }
 
     #[test]
+    fn song_audio_end_time_keeps_fractional_native_note_endpoint() {
+        let mut song = test_song(135.0, 136.00887);
+        song.total_length_seconds = 135;
+        song.precise_note_last_second_seconds = Some(134.10841);
+        assert_eq!(song_audio_end_time_ns(&song), song_time_ns_from_seconds(134.10841));
+        song.last_second_hint = 135.25;
+        assert_eq!(song_audio_end_time_ns(&song), song_time_ns_from_seconds(135.25));
+    }
+
+    #[test]
     fn stage_music_cut_uses_negative_lead_in() {
         let cut = stage_music_cut(2.5);
         assert_eq!(cut.start_sec, -2.5);

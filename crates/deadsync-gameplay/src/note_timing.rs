@@ -363,7 +363,12 @@ impl GameplayEndTimingState {
 #[inline(always)]
 #[must_use]
 pub fn song_audio_end_time_ns(song: &SongData) -> SongTimeNs {
-    let chart_end = song.precise_last_second();
+    // The scan's integer length can round above the native note endpoint.
+    // ScreenGameplay::GetMusicEndTiming starts with Song::GetLastSecond;
+    // audio EOF only constrains the later fade calculation, not that bound.
+    let chart_end = song.precise_note_last_second_seconds
+        .unwrap_or_else(|| song.precise_last_second())
+        .max(song.last_second_hint);
     let audio_len = song.music_length_seconds;
     let end_seconds = match (
         chart_end.is_finite() && chart_end > 0.0,
