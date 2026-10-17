@@ -4740,15 +4740,12 @@
     {
       "title": "STEVE VERY HARD",
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
-      "harness_version": "0.1.0",
-      "archive": "0763cb254f5e99045b4e68d802ca6ce5d75b4b90e160630cdfd0a3fb3b8e7068.tar.zst",
-      "sha256": "0763cb254f5e99045b4e68d802ca6ce5d75b4b90e160630cdfd0a3fb3b8e7068",
-      "compressed_bytes": 139597,
-      "uncompressed_sha256": "3823c85baddf7eb05f1683413bc051717494d3c1526af51a79df119a18f006c2",
-      "compression_level": 22,
-      "aliases": [
-        "70b87ab3acbbb17829d15b852c1c1ec66f0ed6804f2317fffee4eb98216aa3fe.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "53e0ac17d80a057466b357f4165658624d15afab3e5849ad344c332d67f2c491.tar.zst",
+      "compressed_bytes": 9204854,
+      "sha256": "53e0ac17d80a057466b357f4165658624d15afab3e5849ad344c332d67f2c491",
+      "uncompressed_sha256": "2e92a0a629194a9e1f5c1439af104b9c9b236fa1d55ad91186158db2dabbcad6",
+      "aliases": []
     },
     {
       "title": "Stuck In The Abyss",
