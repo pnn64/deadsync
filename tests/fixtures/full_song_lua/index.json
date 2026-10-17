@@ -1944,15 +1944,13 @@
     {
       "title": "Cold",
       "source_simfile": "Cold/Cold.ssc",
-      "harness_version": "0.1.0",
-      "archive": "186c365bb0dec8d5457769327b6935067bb34717083b668114eb370d9c0b4fc1.tar.zst",
-      "sha256": "186c365bb0dec8d5457769327b6935067bb34717083b668114eb370d9c0b4fc1",
-      "compressed_bytes": 3214539,
-      "uncompressed_sha256": "6ada51ff35655fd2668460eadef33e839c99f4796152b073d3f0153ba080301a",
-      "compression_level": 22,
-      "aliases": [
-        "1e51ee1a7c60684b8e86fa14bf996d13d3739c27a7fdc8f6a86b81115db3561d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "9601470ab9bd1e0d7d95770e91f2227cde3e767a261c00e6d1874fec5f613979.tar.zst",
+      "compressed_bytes": 184273056,
+      "sha256": "9601470ab9bd1e0d7d95770e91f2227cde3e767a261c00e6d1874fec5f613979",
+      "uncompressed_sha256": "46c17d30a5112adc93bf633240323f9369550f86a569cf7433cd0882bdb089d5",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "copter",
