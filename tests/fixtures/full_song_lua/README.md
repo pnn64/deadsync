@@ -1,6 +1,15 @@
 # Full song Lua fixtures
 
-The [latest three-fixture pass](next-three-2026-10-17-summary.json) brings the
+The [latest three-fixture pass](third-three-2026-10-17-summary.json) brings the
+total to **444 accepted fixtures, 56 pending charts, and one ignored chart**
+(Mawaru9). Reach The Light Switch SSC, TRIP MACHINE -Resuscitation MIX- SSC,
+and LORELEI SSC pass their complete native replays. The comparator now applies
+its existing method list to both native and owned observations, retaining
+out-of-scope observations separately. All 50 native replay unit tests pass.
+[Missing coverage](third-three-2026-10-17-coverage.json) stays separate from
+acceptance, and all files over 100,000,000 bytes remain gitignored.
+
+The [preceding three-fixture pass](next-three-2026-10-17-summary.json) brought the
 total to **441 accepted fixtures, 59 pending charts, and one ignored chart**
 (Mawaru9). Rainbow Road SSC and Saitama2000 SM/SSC pass their complete native
 replays. The fixes include unplayed native charts in song bounds and preserve

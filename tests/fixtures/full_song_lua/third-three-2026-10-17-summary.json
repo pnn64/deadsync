@@ -1,0 +1,67 @@
+{
+  "complete": true,
+  "objective": "Three additional accepted fixtures, starting with faster pending charts",
+  "baseline_passed": 441,
+  "baseline_pending": 59,
+  "counts": {
+    "new_passing_fixtures": 3,
+    "passed_fixtures": 444,
+    "pending_charts": 56,
+    "ignored_charts": 1
+  },
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "source_review": "third-three-2026-10-17-source-review.json",
+  "missing_coverage": "third-three-2026-10-17-coverage.json",
+  "details": "third-three-2026-10-17-state.json",
+  "new_passing_fixtures": [
+    {
+      "position": 370,
+      "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "archive": "8e0c8052ebcd9245f9008b6b21743a1407763503e4548588247f9928452716a5.tar.zst",
+      "archive_sha256": "8e0c8052ebcd9245f9008b6b21743a1407763503e4548588247f9928452716a5",
+      "native_frames": 85035,
+      "replayed_frames": 85035,
+      "repair_attempts": 1,
+      "report_sha256": "a94aa077d93e44291186c1105b122f452d9083611a5f52fa4d0d2c3c0187b6fd"
+    },
+    {
+      "position": 448,
+      "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+      "archive": "eafcd480234ac42960a427f5c800d1a73383f4214ef2be02639750c958ce4b8a.tar.zst",
+      "archive_sha256": "eafcd480234ac42960a427f5c800d1a73383f4214ef2be02639750c958ce4b8a",
+      "native_frames": 69148,
+      "replayed_frames": 69148,
+      "repair_attempts": 1,
+      "report_sha256": "ef3cb477c52fecef4ed54aca4ea4d7601393f2a089373e0fd2b698cfd5c58779"
+    },
+    {
+      "position": 288,
+      "source_simfile": "LORELEI/LORELEI.ssc",
+      "archive": "689f5ec8aa14d87ac676eaba1c4ecab23d5eadbf62400d0c859cccc2df33346f.tar.zst",
+      "archive_sha256": "689f5ec8aa14d87ac676eaba1c4ecab23d5eadbf62400d0c859cccc2df33346f",
+      "native_frames": 34652,
+      "replayed_frames": 34652,
+      "repair_attempts": 1,
+      "report_sha256": "e648acc90c031d01df7b759b1c5c314a8234926821faa88c017277fb491efb43"
+    }
+  ],
+  "pending_attempted_this_pass": [],
+  "remaining_pending_scope": "56 pending charts from the prior 59, after removing these three accepted simfiles; others carried forward without new acceptance gates",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "oversize_file_audit": {
+    "full_reports_verified": 3,
+    "current_source_hashes_verified": 22,
+    "oversized_fixtures_gitignored": 13,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-17T20:17:49Z"
+  },
+  "updated_utc": "2026-10-17T20:17:49Z",
+  "prior_status": "next-three-2026-10-17-summary.json",
+  "carried_pending_failure_ledger": "sweep-2026-10-17-summary.json",
+  "carried_pending_updates": [
+    "three-more-2026-10-17-state.json",
+    "next-three-2026-10-17-state.json"
+  ]
+}

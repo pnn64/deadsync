@@ -1,0 +1,61 @@
+{
+  "scope": "Three additional accepted complete fixtures from baseline441; same native captures, comparison method list, values and timing rules",
+  "baseline_commit": "7a860877b",
+  "repairs": [
+    {
+      "commit": "f8dc6577a",
+      "chart": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "cause": "Same-beat foreground ordering; this pass reuses the preceding committed correction and confirms the entire retained capture"
+    },
+    {
+      "commit": "3044f19fb",
+      "charts": [
+        "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+        "LORELEI/LORELEI.ssc"
+      ],
+      "cause": "Native command/query events were restricted to CALL_OPERATIONS, while owned events outside that domain still shifted the sequence. Those observations are retained separately; the existing compared method list and value/time checks are unchanged.",
+      "new_gate_added": false,
+      "compared_method_list_sha256": "d18da7d4059c9166d59b7584ad61fb8546d184ccbef94ae1706247bcba327ff0",
+      "regressions": {
+        "native_tests_passed": 50,
+        "failed": 0,
+        "domain_control": "Out-of-domain AFT.GetTexture remains visible separately; wrong in-domain Sprite.GetTexture result still fails comparison."
+      }
+    }
+  ],
+  "native_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\probe_theme\\SongLuaTrace.lua",
+      "sha256": "3b9797a139e33223d51e54700ac1289a7367befabdd95a05130496de9772900a",
+      "finding": "install_class_hook records native method calls; the comparator selects CALL_OPERATIONS afterward"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ActorFrameTexture.cpp",
+      "sha256": "38d918bd700777bb0a4ce3978c084fca2764e5d6c11a070fd2f9f9c5fc2b6893",
+      "finding": "LunaActorFrameTexture.GetTexture returns the existing native texture or nil"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Sprite.cpp",
+      "sha256": "5e734fbf27ca87b298caa34828e21904323e963a4be370927d6c8dc1411b7385",
+      "finding": "Sprite.GetTexture is a distinct class binding already in CALL_OPERATIONS"
+    },
+    {
+      "path": "C:\\GitHub\\Simply-Love-SM5\\BGAnimations\\ScreenGameplay overlay\\FailOnHoldStart.lua",
+      "sha256": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+      "finding": "Owned overlay lifecycle remains unchanged"
+    }
+  ],
+  "missing_coverage": "third-three-2026-10-17-coverage.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "full_reports_verified": 3,
+    "current_source_hashes_verified": 22,
+    "oversized_fixtures_gitignored": 13,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-17T20:17:49Z",
+    "comparison_method_list_unchanged": true,
+    "value_and_timing_comparisons_unchanged": true
+  }
+}
