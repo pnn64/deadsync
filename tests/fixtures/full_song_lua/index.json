@@ -5028,17 +5028,14 @@
       "aliases": []
     },
     {
-      "title": "\u6642\u3092\u523b\u3080\u5504",
+      "title": "\u6642\u3092\u523b\u3080\u5504 (Nhato Remix)",
       "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
-      "harness_version": "0.1.0",
-      "archive": "c86e848232f0272bb5589cca64a27546b0031a28d4744c1e5ffc52f02115d456.tar.zst",
-      "sha256": "c86e848232f0272bb5589cca64a27546b0031a28d4744c1e5ffc52f02115d456",
-      "compressed_bytes": 98321,
-      "uncompressed_sha256": "80625a5e5adc8e92481b92161e2180de58b7c5a23eae7fae7373394b038945b0",
-      "compression_level": 22,
-      "aliases": [
-        "1279406b68f8b9e5862c5b0dd3719d25e5c124e17d30efd8b88dc26ae1ba003b.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "47bb5abeb3dccaba7f23bb11e2a9dce9d8f156572143362356f914b0f19754bf.tar.zst",
+      "compressed_bytes": 14538891,
+      "sha256": "47bb5abeb3dccaba7f23bb11e2a9dce9d8f156572143362356f914b0f19754bf",
+      "uncompressed_sha256": "85a794a51cae7bf38514fb4269f3b70beb4e76660f8ca6bf66d2cc3ac9760026",
+      "aliases": []
     },
     {
       "title": "Tower Power Pokey Battle",
