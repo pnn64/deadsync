@@ -2,8 +2,8 @@
 
 Run on Linux with release full_song_lua and song_lua_performance executables.
 The JSON config supplies named fixture/archive or compile/simfile cases. All
-reports remain uncompressed; temporary extraction paths alone are normalized
-when hashing complete fixture reports for before/after equality checks.
+reports remain uncompressed; extraction paths and opaque actor addresses are
+normalized when hashing complete reports. Actor alias relationships remain exact.
 """
 from pathlib import Path
 import argparse
@@ -13,13 +13,36 @@ import os
 import re
 import shlex
 import subprocess
+from collections import deque
 
 
 def normalized_report_hash(path):
     digest = hashlib.sha256()
     temporary = re.compile(rb"/tmp/\.tmp[A-Za-z0-9]+")
+    actor = re.compile(rb'^(\s*"actor": ")0x([0-9a-fA-F]+)(",?\s*)$')
+    scene_line = re.compile(rb'^        "scene": (\d+),?\s*$')
+    name_line = re.compile(rb'^\s*"name": ".*",\s*$')
+    path_line = re.compile(rb'^\s*"path": ".*"\s*$')
+    handles = {}
+    scene = 0
     with path.open("rb") as stream:
-        for line in stream:
+        pending = deque()
+        lines = iter(stream)
+        def take():
+            return pending.popleft() if pending else next(lines, b"")
+        while line := take():
+            if match := scene_line.match(line):
+                scene = int(match[1])
+            if match := actor.match(line):
+                # Only the recorder's actor/name/path handle shape qualifies.
+                # Preserve names, ancestry and alias relationships; arbitrary
+                # hexadecimal strings remain part of the exact comparison.
+                name, ancestry = take(), take()
+                pending.extendleft((ancestry, name))
+                if name_line.match(name) and path_line.match(ancestry):
+                    key = (scene, match[2])
+                    identifier = handles.setdefault(key, len(handles) + 1)
+                    line = match[1] + f"<actor:{identifier}>".encode() + match[3]
             digest.update(temporary.sub(b"/tmp/<extracted>", line))
     return digest.hexdigest()
 
