@@ -44,6 +44,28 @@ cargo test --test full_song_lua -- --list
 cargo test --test full_song_lua -- --all
 ```
 
+Use `--jobs N` to replay independent fixtures on multiple CPU cores:
+
+```powershell
+cargo test --release --test full_song_lua -- --jobs 4 <first-archive.tar.zst> <second-archive.tar.zst>
+cargo test --release --test full_song_lua -- --jobs 4 --all
+```
+
+Each worker owns its process, Lua VM and trace. Frames and callbacks within a
+fixture retain their chronological order. The default worker count is one.
+
+Build the compiler measurement tool with production dependencies:
+
+```powershell
+cargo run --release -p deadsync-shell --features song-lua-performance --bin song_lua_compile_performance -- --compile "path/to/chart.ssc" --report compile-metrics.json --iterations 3 --renderer "opengl,software"
+```
+
+It records allocation calls, requested bytes, preparation time and a fingerprint
+of the compiled data. `scripts/benchmark_song_lua.py` also collects hardware CPU
+cycles and instructions with Linux `perf`, and compares output fingerprints.
+Measured results and scope are recorded in
+[the song Lua performance report](../../../docs/perf-1872-song-lua.md).
+
 Without a selector, the target prints help and exits successfully. This keeps
 an ordinary `cargo test` from unexpectedly running the expensive full corpus.
 
