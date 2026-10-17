@@ -4374,15 +4374,12 @@
     {
       "title": "Perfectly Normal Saitama 2000 From UKSRT1",
       "source_simfile": "saitama2000/Saitama2000.ssc",
-      "harness_version": "0.1.0",
-      "archive": "da2bd41518716d9f7be7180ee81f3e0c1b0692427209881d92edf5b4d0db1f34.tar.zst",
-      "sha256": "da2bd41518716d9f7be7180ee81f3e0c1b0692427209881d92edf5b4d0db1f34",
-      "compressed_bytes": 509456,
-      "uncompressed_sha256": "5b8fb61e8525ddd5a89d86a0cbbe99109511a8189789e82d0d64f47f03494450",
-      "compression_level": 22,
-      "aliases": [
-        "6f66a210d4170d6ec57b8cef2b6b4212782228604c7e61ae1ef79bab06f242cf.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "4ec54a1d33f7b8b4a5ff430187da76ad3bbb8063f768c7086911753feb2264f0.tar.zst",
+      "compressed_bytes": 6145616,
+      "sha256": "4ec54a1d33f7b8b4a5ff430187da76ad3bbb8063f768c7086911753feb2264f0",
+      "uncompressed_sha256": "cefc1789a1f64295ae6b81035f4c719a25de8eb84f3b84c911e3bc45cb48353a",
+      "aliases": []
     },
     {
       "title": "Episode 02 Save Your Tears",
