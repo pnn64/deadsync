@@ -26,6 +26,14 @@ pub struct PreparedGameplaySongLua<S> {
 }
 
 impl<S> PreparedGameplaySongLua<S> {
+    /// Inspect compiled data without preparation timings or transferring a VM.
+    #[cfg(feature = "test-support")]
+    pub fn compiled_layers(&self) -> impl Iterator<Item = &CompiledSongLua<S>> {
+        self.background_layers.iter().map(|layer| &layer.compiled)
+            .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))
+            .chain(self.primary.iter().map(|primary| &primary.compiled))
+    }
+
     /// Transfer the shared VM to the screen before the domain consumes the
     /// prepared visual windows. Bind global actor positions to their final
     /// root/background/foreground slots without cloning the VM.

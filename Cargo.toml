@@ -88,6 +88,11 @@ name = "live_song_lua"
 path = "tests/live_song_lua.rs"
 harness = false
 
+[[test]]
+name = "song_lua_performance"
+path = "tests/song_lua_performance.rs"
+harness = false
+
 [dependencies]
 deadlib-audio = { path = "crates/deadlib-audio" }
 deadlib-platform = { path = "crates/deadlib-platform" }
