@@ -176,7 +176,7 @@
       ],
       "disposition": "Pending after one full replay per chart. A repair requires an owned gameplay step-event bridge for manual/autoplay steps with native scoring and message order.",
       "additional_observed": {
-        "306": "Mawaru7 completed70609frames,0callbackerrors,1393347mismatches. Native1430179events vs owned1425260. First divergence is StepP1MessageCommand at song:/lua/default.lua:1302, beat68.00077056884766 seconds21.664377212524414; owned continues with JudgmentMessageCommand. Missing step-message production bridge is established; all later mismatches are retained."
+        "306": "Mawaru7 completed 70,609 frames with 0 callback errors and 1,393,347 mismatches. Native event count 1,430,179; owned count 1,425,260. The first divergence is StepP1MessageCommand at song:/lua/default.lua:1302, beat 68.00077056884766, seconds 21.664377212524414; owned continues with JudgmentMessageCommand. Missing step-message delivery is established; all later mismatches are retained."
       }
     }
   ]
