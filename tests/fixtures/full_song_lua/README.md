@@ -1,5 +1,13 @@
 # Full song Lua fixtures
 
+The [latest three-fixture pass](next-three-2026-10-17-summary.json) brings the
+total to **441 accepted fixtures, 59 pending charts, and one ignored chart**
+(Mawaru9). Rainbow Road SSC and Saitama2000 SM/SSC pass their complete native
+replays. The fixes include unplayed native charts in song bounds and preserve
+authored foreground order at equal beats. All 260 simfile tests pass; 16 are
+ignored. [Missing coverage](next-three-2026-10-17-coverage.json) remains separate
+from acceptance, and all files over 100,000,000 bytes remain gitignored.
+
 The [2026-10-17 bounded sweep](sweep-2026-10-17-summary.json) processed the
 76 previously pending simfiles: 12 new full replays passed, bringing the total
 to 436 passing fixtures and 64 pending charts. Mawaru9 was excluded. The report

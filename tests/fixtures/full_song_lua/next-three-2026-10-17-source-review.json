@@ -1,0 +1,82 @@
+{
+  "scope": "Concrete failures in this three-fixture pass; existing comparators and acceptance unchanged",
+  "baseline_commit": "1fdc3376e",
+  "baseline_counts": {
+    "passed_fixtures": 438,
+    "pending_charts": 62,
+    "ignored_charts": 1
+  },
+  "native_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Song.cpp",
+      "sha256": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+      "finding": "ReCalculateStepStatsAndLastSecond includes every native chart except lights and excluded Edits"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\NoteDataUtil.cpp",
+      "sha256": "c4a4fcf5a846751968312b03c8b3025bb40205b08284429fc215d75d01918d8f",
+      "finding": "LoadFromSMNoteDataStringWithPlayer note syntax, row rounding, hold resolution"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameManager.cpp",
+      "sha256": "2eee53b9f0088acac643bb0e7f04a29933fc9913cb194f75bdbedb5fea7df1cc",
+      "finding": "Native StepsTypeInfo track counts"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\BackgroundUtil.cpp",
+      "sha256": "72839c7ee3a7b95fc26251843fbf9846407cee15b2a4f10895390a105758d447",
+      "finding": "AddBackgroundChange inserts at upper_bound by beat, retaining tied order"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Foreground.cpp",
+      "sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+      "finding": "Load and update traverse the authored foreground change sequence"
+    },
+    {
+      "path": "C:\\GitHub\\Simply-Love-SM5\\BGAnimations\\ScreenGameplay overlay\\FailOnHoldStart.lua",
+      "sha256": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+      "finding": "OffCommand marks an autoplay user failed when the gameplay transition reaches the overlay"
+    }
+  ],
+  "repairs": [
+    {
+      "commit": "a581a514ee475a8c75ede839acebbf7a0cf5ad7e",
+      "chart": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "failure": "Owned stage failure at music seconds89-95; native only fails from96",
+      "cause": "The omitted dance-solo chart extends the native note endpoint to94.652 seconds; loaded dance-single/double charts end at88.075035 or earlier",
+      "native_chart_cli_output_sha256": "97826c3ea6b10f6f024a069ddd0611231bc8e313360ad6d5dafdfe6d54ddc7db",
+      "tests": {
+        "suite": "deadsync-simfile --lib",
+        "passed": 259,
+        "failed": 0,
+        "ignored": 16
+      }
+    },
+    {
+      "charts": [
+        "saitama2000/Saitama2000.sm",
+        "saitama2000/Saitama2000.ssc"
+      ],
+      "failure": "At beat332 native executes effects2 before crowd3; owned executes crowd3 first, shifting79 command comparisons",
+      "cause": "Foreground extraction sorted equal beats by path instead of preserving the native upper_bound insertion sequence",
+      "commit": "f8dc6577a",
+      "tests": {
+        "suite": "deadsync-simfile --lib",
+        "passed": 260,
+        "failed": 0,
+        "ignored": 16
+      }
+    }
+  ],
+  "missing_coverage": "next-three-2026-10-17-coverage.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "full_reports_verified": 3,
+    "current_source_hashes_verified": 22,
+    "oversized_fixtures_gitignored": 13,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-17T20:03:50Z"
+  }
+}
