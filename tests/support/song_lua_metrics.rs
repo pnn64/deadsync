@@ -65,7 +65,15 @@ impl PerfControl {
     fn command(&mut self, command: &[u8]) {
         self.control.write_all(command).expect("control perf counters");
         let mut ack = [0; 4];
-        self.ack.read_exact(&mut ack).expect("perf counter acknowledgement");
+        let mut filled = 0;
+        while filled < ack.len() {
+            let mut byte = [0];
+            self.ack.read_exact(&mut byte).expect("perf counter acknowledgement");
+            // Some perf releases include a trailing NUL after "ack\n".
+            if filled == 0 && byte[0] == 0 { continue; }
+            ack[filled] = byte[0];
+            filled += 1;
+        }
         assert_eq!(&ack, b"ack\n");
     }
 }
@@ -90,6 +98,7 @@ impl Measurement {
         if let Some(control) = &mut self.control { control.command(b"disable\n"); }
         serde_json::json!({"wall_seconds":elapsed.as_secs_f64(),
             "allocations":ALLOCS.load(Relaxed),"reallocations":REALLOCS.load(Relaxed),
-            "allocated_bytes":BYTES.load(Relaxed)})
+            "allocated_bytes":BYTES.load(Relaxed),
+            "allocation_scope":"current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"})
     }
 }
