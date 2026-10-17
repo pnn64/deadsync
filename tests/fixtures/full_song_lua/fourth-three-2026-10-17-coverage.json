@@ -18,7 +18,10 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
-      ]
+      ],
+      "uncompared_owned_operation_counts": {
+        "ActorFrameTexture.GetTexture": 1
+      }
     },
     "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc": {
       "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
@@ -48,7 +51,10 @@
         "missing captured subscriber identity for ScreenGameplay/2/7/2",
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
         "missing captured subscriber identity for ScreenGameplay/2/9/2"
-      ]
+      ],
+      "uncompared_owned_operation_counts": {
+        "ActorFrameTexture.GetTexture": 222
+      }
     },
     "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc": {
       "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
@@ -70,7 +76,8 @@
         "missing captured subscriber identity for ScreenGameplay/2/8/3",
         "missing captured subscriber identity for ScreenGameplay/2/8/4",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
-      ]
+      ],
+      "uncompared_owned_operation_counts": {}
     }
   }
 }

@@ -1,0 +1,63 @@
+{
+  "complete": true,
+  "objective": "Three additional accepted fixtures, starting with faster pending charts",
+  "baseline_passed": 444,
+  "baseline_pending": 56,
+  "counts": {
+    "new_passing_fixtures": 3,
+    "passed_fixtures": 447,
+    "pending_charts": 53,
+    "ignored_charts": 1
+  },
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "source_review": "fourth-three-2026-10-17-source-review.json",
+  "missing_coverage": "fourth-three-2026-10-17-coverage.json",
+  "details": "fourth-three-2026-10-17-state.json",
+  "new_passing_fixtures": [
+    {
+      "position": 155,
+      "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "archive": "c37d64e24f0d44ebbcc3acc647beeabbefee645976e01f50d8d3622e72a8bce5.tar.zst",
+      "archive_sha256": "c37d64e24f0d44ebbcc3acc647beeabbefee645976e01f50d8d3622e72a8bce5",
+      "native_frames": 59841,
+      "replayed_frames": 59841,
+      "repair_attempts": 1,
+      "report_sha256": "0af8e589c04118a45378547a2e9791cddad6ea8f2f007497aa97eb8edf523372"
+    },
+    {
+      "position": 430,
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "archive": "d59d5288ac9f4af89a4f1c0ea1ae24efb3239db137f6ee1977d4fb93f693cea8.tar.zst",
+      "archive_sha256": "d59d5288ac9f4af89a4f1c0ea1ae24efb3239db137f6ee1977d4fb93f693cea8",
+      "native_frames": 28766,
+      "replayed_frames": 28766,
+      "repair_attempts": 2,
+      "report_sha256": "7355b9006c6976ab59672df26fdd677f73a552638c5462ee6154cf411976141d"
+    },
+    {
+      "position": 407,
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "archive": "7512061d5df64d6d64302b75a82c1cbd524224d5ef1b5c95bd7bc07356df6518.tar.zst",
+      "archive_sha256": "7512061d5df64d6d64302b75a82c1cbd524224d5ef1b5c95bd7bc07356df6518",
+      "native_frames": 112654,
+      "replayed_frames": 112654,
+      "repair_attempts": 2,
+      "report_sha256": "9042138873fdb9917b23f41a7448dea04b7c952eb16c102ae297e9d6d31eeb66"
+    }
+  ],
+  "pending_attempted_this_pass": [],
+  "remaining_pending_scope": "53 pending charts from the prior 56, after removing these three accepted simfiles; others carried forward without new acceptance gates",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "oversize_file_audit": {
+    "full_reports_verified": 3,
+    "current_source_hashes_verified": 25,
+    "oversized_fixtures_gitignored": 14,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-17T21:22:37Z"
+  },
+  "updated_utc": "2026-10-17T21:22:37Z",
+  "prior_status": "third-three-2026-10-17-summary.json",
+  "carried_pending_failure_ledger": "fourth-three-2026-10-17-pending.json"
+}

@@ -1,6 +1,16 @@
 # Full song Lua fixtures
 
-The [latest three-fixture pass](third-three-2026-10-17-summary.json) brings the
+The [latest three-fixture pass](fourth-three-2026-10-17-summary.json) brings the
+total to **447 accepted fixtures, 53 pending charts, and one ignored chart**
+(Mawaru9). Crazy Crazy SSC, Spectrum SSC, and The Boys Are Back in Town (to kill
+you) SSC pass their complete native replays. Fixes restore native judgment enum
+ranks, reset song positions before reload constructors, and preserve the queued
+immediate-failure outro. All 52 native replay unit tests and three reload tests
+pass. [Concrete pending failures](fourth-three-2026-10-17-pending.json) and
+[missing coverage](fourth-three-2026-10-17-coverage.json) are recorded separately.
+All files over 100,000,000 bytes remain gitignored.
+
+The [preceding three-fixture pass](third-three-2026-10-17-summary.json) brought the
 total to **444 accepted fixtures, 56 pending charts, and one ignored chart**
 (Mawaru9). Reach The Light Switch SSC, TRIP MACHINE -Resuscitation MIX- SSC,
 and LORELEI SSC pass their complete native replays. The comparator now applies

@@ -1,0 +1,121 @@
+{
+  "scope": "Three additional full accepted fixtures from baseline444; no acceptance changes",
+  "baseline_commit": "6845bf32f",
+  "baseline_counts": {
+    "passed_fixtures": 444,
+    "pending_charts": 56,
+    "ignored_charts": 1
+  },
+  "repairs": [
+    {
+      "commit": "3044f19fb",
+      "charts": [
+        "Crazy Crazy/Crazy Crazy.ssc",
+        "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc"
+      ],
+      "cause": "Reuse the prior comparator domain correction for AFT.GetTexture observations. Crazy Crazy passes; Spectrum also requires the concrete reload clock repair below."
+    },
+    {
+      "commit": "9b289dd9c",
+      "chart": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "cause": "The host enum array was best-first, exposing W1=0 instead of native9; the authored rank>6 branch never adjusted life. Restore native enum order for both forward array and zero-based Reverse().",
+      "regression": "Real release-autoplay rows invoke a dynamically installed JudgmentMessage callback, map W1 to W4, and apply the authored metric subtraction through SetLife. Automatic autoplay life gains remain suppressed."
+    },
+    {
+      "kind": "reload_clock",
+      "commit": "606071152",
+      "chart": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "cause": "On screen replacement the owned host reset beat/seconds but retained the preceding BPS. Native construction queries return10, followed by155/60 on the first real update. Spectrum caches the construction value for its first recursive rotation tweens. Reset global and player song positions before replacement actors load.",
+      "regression": "A retained VM reload checks both constructor clocks, the first live BPS, and the tween derived from the cached construction BPS."
+    },
+    {
+      "kind": "failed_exit",
+      "commit": "fa9ef0d77",
+      "chart": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "cause": "After the enum correction all recorded stage fields match, leaving24 missing draw calls across three frozen-clock frames at immediate failure. Native ScreenGameplay queues NotesEnded, BeginFailed, then completes its blank failed Transition on the next update. The owned screen now remains active through that sequence.",
+      "regression": "A real autoplay judgment drains life and marks failure; three draws, delayed Off, and End/navigation on the fourth update are asserted. Successful outro timing retains its existing regression."
+    }
+  ],
+  "native_sources": [
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameConstantsAndTypes.h",
+      "sha256": "fc8fa11e346b42cab44f53bc86583f7140b9b33a1fd33e545e3315ccee244879",
+      "finding": "TapNoteScore native enum values: None0 through W1=9 and CheckpointHit10"
+    },
+    {
+      "path": "C:\\GitHub\\Simply-Love-SM5\\Scripts\\SL_Init.lua",
+      "sha256": "a85b52a9100e0eed3ddc3a2c873b8b1b211d6a9d99108c306ea8ae9b536089a9",
+      "finding": "ITG life metric values used by the authored judgment remapping"
+    },
+    {
+      "path": "C:\\GitHub\\rework\\lua-songs\\The Boys Are Back in Town (to kill you)\\code\\update.lua",
+      "sha256": "2c6d1d5d1b646670afb6a994835086bee8e0d12696f32db70cf456638cbfecfb",
+      "finding": "Only ranks>6 receive the authored life adjustment; replacements index TapNoteScore[value+1]"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\probe_theme\\SongLuaTrace.lua",
+      "sha256": "3b9797a139e33223d51e54700ac1289a7367befabdd95a05130496de9772900a",
+      "finding": "Native trace observation and callback wrapping"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Song.cpp",
+      "sha256": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+      "finding": "Pinned engine stores note-bound seconds at load and leaves LASTSECONDHINT absolute"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameState.cpp",
+      "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77",
+      "finding": "ResetMusicStatistics resets global and all player song positions"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\SongPosition.h",
+      "sha256": "bdbb3a0ebbd0ffb932ce48a4b46720c4472fe2cbe38fd118b6880532f36528a6",
+      "finding": "SongPosition::Reset sets beat/seconds0, BPS10, freeze/delayfalse"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ScreenGameplay.cpp",
+      "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b",
+      "finding": "Immediate failure posts NotesEnded; LeaveGameplay posts BeginFailed before starting the failed transition"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Transition.cpp",
+      "sha256": "b8262c86c0656fa5c9c31ecbc95db81c0232d60cbb55add41d297a4e3d5e41f9",
+      "finding": "A finished blank transition dispatches completion on its next UpdateInternal"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\BGAnimations\\ScreenGameplay failed.redir",
+      "sha256": "130ce35772ded9394bc9f89ffee75b07eff713361d0326100aa4f4157ee7480b",
+      "finding": "Fallback failed transition resolves to _blank"
+    },
+    {
+      "path": "C:\\GitHub\\itgmania-harness\\vendor\\itgmania\\Themes\\_fallback\\BGAnimations\\_blank.lua",
+      "sha256": "46f63c1a18015d9f93642674f81233b2c4c3049b14e72a11c55ec904214b0a84",
+      "finding": "The fallback blank Actor has no timed tween"
+    }
+  ],
+  "pending_capture_diagnosis": {
+    "chart": "Hallways/hallways.ssc",
+    "status": "pending",
+    "fresh_capture_complete": true,
+    "native_frames": 31199,
+    "window_visible": false,
+    "candidate_sha256": "191a544679206f06681885decf17f87d9fdd373f161ae20ea5bdde346abcf93f",
+    "native_getters": {
+      "first_second": 9.017000198364258,
+      "last_second": 103.50299835205078
+    },
+    "concrete_unresolved": "Fresh background callback calls remain construction-phase observations with no background command.begin/end; prior full replay has340 command/query mismatches (native375 events, owned377). Host Song first/last getters still use placeholders. No acceptance change or fixture publication for this chart.",
+    "capture_receipt": "target/song-lua-fourth-three-20261017/native-recovery/chart-220-attempt1/result.json"
+  },
+  "missing_coverage": "fourth-three-2026-10-17-coverage.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "full_reports_verified": 3,
+    "current_source_hashes_verified": 25,
+    "oversized_fixtures_gitignored": 14,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-17T21:22:37Z"
+  }
+}
