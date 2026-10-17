@@ -27,7 +27,7 @@ pub struct PreparedGameplaySongLua<S> {
 
 impl<S> PreparedGameplaySongLua<S> {
     /// Inspect compiled data without preparation timings or transferring a VM.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(feature = "test-support", feature = "performance"))]
     pub fn compiled_layers(&self) -> impl Iterator<Item = &CompiledSongLua<S>> {
         self.background_layers.iter().map(|layer| &layer.compiled)
             .chain(self.foreground_layers.iter().map(|layer| &layer.compiled))

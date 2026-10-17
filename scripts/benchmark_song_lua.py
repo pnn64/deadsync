@@ -68,6 +68,10 @@ def main():
             if case["kind"] == "compile":
                 program = [str(args.compile_runner.resolve()), "--compile", case["simfile"],
                     "--report", str(report.resolve()), "--iterations", "1"]
+                if "renderer" in case:
+                    program += ["--renderer", case["renderer"]]
+                if "chart_index" in case:
+                    program += ["--chart-index", str(case["chart_index"])]
             else:
                 environment.append("DEADSYNC_SONG_LUA_METRICS=" + str((folder / "allocations.json").resolve()))
                 program = [str(args.fixture_runner.resolve()), "--archive", case["archive"],

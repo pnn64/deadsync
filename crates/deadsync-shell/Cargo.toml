@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+song-lua-performance = ["deadsync-song-lua/performance"]
+
+[[bin]]
+name = "song_lua_compile_performance"
+path = "../../tests/song_lua_performance.rs"
+required-features = ["song-lua-performance"]
+
 [dependencies]
 deadlib-audio = { path = "../deadlib-audio" }
 deadlib-assets = { path = "../deadlib-assets" }
