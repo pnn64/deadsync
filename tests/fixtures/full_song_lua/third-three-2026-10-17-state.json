@@ -1,0 +1,694 @@
+{
+  "objective": "Three additional accepted fixtures, starting with faster pending charts",
+  "baseline_passed": 441,
+  "baseline_pending": 59,
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "repair_limit_per_chart": 2,
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "results": [
+    {
+      "position": 370,
+      "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json",
+      "simfile_sha256": "483ce56a841d250956961fcd0199d08564d029ef0304d1e44683be0d2a2a35a0",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 66,
+        "first_concrete_mismatches": [
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0045",
+              "args": [],
+              "beat": 0,
+              "command": "InitCommand",
+              "definition_id": "def-0045",
+              "detail": {
+                "name": "InitCommand"
+              },
+              "kind": "command",
+              "line": 19,
+              "operation": "command.begin",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 92,
+              "source": "song:/./switch2.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.begin",
+              "command": "InitCommand",
+              "source": "song:/./point3.lua",
+              "line": 14,
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0045",
+              "args": [
+                0.25
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 19,
+                "source": "song:/./switch2.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0045",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 19,
+              "operation": "Actor.zoom",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 93,
+              "source": "song:/./switch2.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.zoom",
+              "source": "song:/./point3.lua",
+              "line": 14,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                0.25
+              ],
+              "results": [
+                {
+                  "actor": "0x56bb2d05d640",
+                  "name": "Point",
+                  "path": "ScreenGameplay/SongForeground/Point"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0045",
+              "args": [],
+              "beat": 0,
+              "caller": {
+                "line": 19,
+                "source": "song:/./switch2.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0045",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 19,
+              "operation": "Actor.Center",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 94,
+              "source": "song:/./switch2.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.Center",
+              "source": "song:/./point3.lua",
+              "line": 14,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [],
+              "results": [
+                {
+                  "actor": "0x56bb2d05d640",
+                  "name": "Point",
+                  "path": "ScreenGameplay/SongForeground/Point"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0045",
+              "args": [
+                "Blink"
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 19,
+                "source": "song:/./switch2.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0045",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 19,
+              "operation": "Actor.queuecommand",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 97,
+              "source": "song:/./switch2.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.queuecommand",
+              "source": "song:/./point3.lua",
+              "line": 14,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                "Blink"
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0045",
+              "args": [],
+              "beat": 0,
+              "command": "InitCommand",
+              "definition_id": "def-0045",
+              "detail": {
+                "name": "InitCommand"
+              },
+              "kind": "command",
+              "line": 19,
+              "operation": "command.end",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 98,
+              "source": "song:/./switch2.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.end",
+              "command": "InitCommand",
+              "source": "song:/./point3.lua",
+              "line": 14,
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0046",
+              "args": [],
+              "beat": 0,
+              "command": "InitCommand",
+              "definition_id": "def-0046",
+              "detail": {
+                "name": "InitCommand"
+              },
+              "kind": "command",
+              "line": 41,
+              "operation": "command.begin",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 99,
+              "source": "song:/./switch2.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.begin",
+              "command": "InitCommand",
+              "source": "song:/./point3.lua",
+              "line": 47,
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0046",
+              "args": [
+                999
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 41,
+                "source": "song:/./switch2.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0046",
+              "detail": {
+                "native_tween_time_left": 999
+              },
+              "kind": "call",
+              "line": 41,
+              "operation": "Actor.sleep",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 100,
+              "source": "song:/./switch2.lua",
+              "tween_time_left": 999
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.sleep",
+              "source": "song:/./point3.lua",
+              "line": 47,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                999
+              ],
+              "tween_time_left": 999.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0046",
+              "args": [],
+              "beat": 0,
+              "command": "InitCommand",
+              "definition_id": "def-0046",
+              "detail": {
+                "name": "InitCommand"
+              },
+              "kind": "command",
+              "line": 41,
+              "operation": "command.end",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 101,
+              "source": "song:/./switch2.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.end",
+              "command": "InitCommand",
+              "source": "song:/./point3.lua",
+              "line": 47,
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0048",
+              "args": [],
+              "beat": 0,
+              "command": "InitCommand",
+              "definition_id": "def-0048",
+              "detail": {
+                "name": "InitCommand"
+              },
+              "kind": "command",
+              "line": 14,
+              "operation": "command.begin",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 102,
+              "source": "song:/./point3.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "command",
+              "operation": "command.begin",
+              "command": "InitCommand",
+              "source": "song:/./switch2.lua",
+              "line": 19,
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": null
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0048",
+              "args": [
+                0.25
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 14,
+                "source": "song:/./point3.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0048",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 14,
+              "operation": "Actor.zoom",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 103,
+              "source": "song:/./point3.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.zoom",
+              "source": "song:/./switch2.lua",
+              "line": 19,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                0.25
+              ],
+              "results": [
+                {
+                  "actor": "0x56bb2d0d1290",
+                  "name": "Switch",
+                  "path": "ScreenGameplay/SongForeground/Switch"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0048",
+              "args": [],
+              "beat": 0,
+              "caller": {
+                "line": 14,
+                "source": "song:/./point3.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0048",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 14,
+              "operation": "Actor.Center",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 104,
+              "source": "song:/./point3.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.Center",
+              "source": "song:/./switch2.lua",
+              "line": 19,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [],
+              "results": [
+                {
+                  "actor": "0x56bb2d0d1290",
+                  "name": "Switch",
+                  "path": "ScreenGameplay/SongForeground/Switch"
+                }
+              ],
+              "tween_time_left": 0.0
+            }
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0048",
+              "args": [
+                "Blink"
+              ],
+              "beat": 0,
+              "caller": {
+                "line": 14,
+                "source": "song:/./point3.lua",
+                "tail_call": false
+              },
+              "command": "InitCommand",
+              "definition_id": "def-0048",
+              "detail": {
+                "native_tween_time_left": 0
+              },
+              "kind": "call",
+              "line": 14,
+              "operation": "Actor.queuecommand",
+              "phase": "callback",
+              "scene": 1,
+              "seconds": 0,
+              "seq": 108,
+              "source": "song:/./point3.lua",
+              "tween_time_left": 0
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "call",
+              "operation": "Actor.queuecommand",
+              "source": "song:/./switch2.lua",
+              "line": 19,
+              "phase": "callback",
+              "beat": 0.0,
+              "seconds": 0.0,
+              "args": [
+                "Blink"
+              ],
+              "tween_time_left": 0.0
+            }
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "8e5ed95dbfdb85d3a603023d0a6b5e646d4e23a843b918e7530b1c78ad5616da",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-370/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 296.1173923930037,
+      "native_frames": 85035,
+      "replayed_frames": 85035,
+      "compared_stage_fields": 1232,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "a94aa077d93e44291186c1105b122f452d9083611a5f52fa4d0d2c3c0187b6fd",
+      "archive": "8e0c8052ebcd9245f9008b6b21743a1407763503e4548588247f9928452716a5.tar.zst",
+      "archive_sha256": "8e0c8052ebcd9245f9008b6b21743a1407763503e4548588247f9928452716a5",
+      "compressed_bytes": 4692803,
+      "harness_version": "0.1.80",
+      "title": "Reach The Light Switch, Without Asking you",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/third-three-fixtures-20261017/chart-370-attempt-1/chart-370",
+      "fix_commit": "7a860877b77951e62a65a892db8abee4008625d0",
+      "binary_sha256": "510f1f79e2b0ded492664eb47262bad25557b6f1a3081a9b0da82e0917d8056f",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "/home/parity/jobs/next-three-fixtures-20261017/full-song-lua-foreground-order",
+        "binary_sha256": "510f1f79e2b0ded492664eb47262bad25557b6f1a3081a9b0da82e0917d8056f",
+        "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+        "source_base_commit": "f8dc6577a",
+        "modified_sources": {
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/src/compile.rs": "99ba9e8a8e4f54405d9242a295e1fc5a763dcabd45796c990c8f4942b71ce181",
+          "crates/deadsync-song-lua/src/host.rs": "8f9440d988ad0232e431aa91629be00547ca4e13a3db54ecf2d6ef861393f31c",
+          "crates/deadsync-song-lua/src/lib.rs": "293749bde9ee0b5e4bbb903019ca3b9f34acfdcf4a56d58b8b80d686e1c663ee",
+          "crates/deadsync-song-lua/src/live.rs": "b5bf6bc8ababbf33fe58af3aec1a965c6e2cc64d8e5124df13ebcd9e7883709e",
+          "crates/deadsync-song-lua/src/lua_util.rs": "76791285e48909868960d8953b22d01324137ac635990e7e81dbe1d8f28c1c02",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "7dd55de9887d1b911df221ff8c673b4469c9707c2f44177f2aa1aef7c71d7b18",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "656fc1042af9c22bb5001f649e3167ffa85fa364a37d42575e214a26e7e05473",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-simfile/src/song.rs": "7e2d54da3ac33691a5d020075e221a9c688fe9ef4d463f98b6327f6e4ed4d490",
+          "crates/deadsync-simfile/src/cache.rs": "a7a70da695648b4200c6ebcc3711321d5eaa94bf5edba1f68d31e0f67fbbba53",
+          "crates/deadsync-simfile/src/changes.rs": "708d9d5a709e12c51a9f651e20aea40d922c85152e67e8f29aeb8983236df8f1"
+        },
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--no-run"
+        ],
+        "seconds": 215.06102198601002,
+        "targeted_checks": [
+          {
+            "log": "/home/parity/jobs/next-three-fixtures-20261017/foreground-full-simfile-tests.log",
+            "sha256": "e5b145d97258daefd0456595481c0d208fec834d23ce202de4172005aca8522b",
+            "passed": 260,
+            "failed": 0,
+            "ignored": 16
+          }
+        ],
+        "fix_commit": "7a860877b77951e62a65a892db8abee4008625d0"
+      },
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0045",
+            "args": [],
+            "beat": 0,
+            "command": "InitCommand",
+            "definition_id": "def-0045",
+            "detail": {
+              "name": "InitCommand"
+            },
+            "kind": "command",
+            "line": 19,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 92,
+            "source": "song:/./switch2.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "InitCommand",
+            "source": "song:/./point3.lua",
+            "line": 14,
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0045",
+            "args": [
+              0.25
+            ],
+            "beat": 0,
+            "caller": {
+              "line": 19,
+              "source": "song:/./switch2.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0045",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 19,
+            "operation": "Actor.zoom",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 93,
+            "source": "song:/./switch2.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.zoom",
+            "source": "song:/./point3.lua",
+            "line": 14,
+            "phase": "callback",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [
+              0.25
+            ],
+            "results": [
+              {
+                "actor": "0x59677b2652c0",
+                "name": "Point",
+                "path": "ScreenGameplay/SongForeground/Point"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Reach The Light Switch, Without Asking you",
+        "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+        "harness_version": "0.1.0",
+        "archive": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3.tar.zst",
+        "sha256": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3",
+        "compressed_bytes": 153422,
+        "uncompressed_sha256": "afafbbd746d28adabd3478eb317dfdd02edd14f95587ee8503677845f5b91161",
+        "compression_level": 22,
+        "aliases": [
+          "743c25c6d634a5fccb8d38bd949bb3a5f8b6d3555424faddb63fd3f3fdcb52ca.tar.zst"
+        ]
+      }
+    }
+  ],
+  "counts": {
+    "new_passing_fixtures": 1,
+    "passed_fixtures": 442,
+    "pending_charts": 58,
+    "ignored_charts": 1
+  },
+  "updated_utc": "2026-10-17T20:10:26Z"
+}

@@ -4245,15 +4245,12 @@
     {
       "title": "Reach The Light Switch, Without Asking you",
       "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3.tar.zst",
-      "sha256": "a9a66b0076cbc68d677253b09a5e289c5ce20c98d3579498c0d2472bfd3447c3",
-      "compressed_bytes": 153422,
-      "uncompressed_sha256": "afafbbd746d28adabd3478eb317dfdd02edd14f95587ee8503677845f5b91161",
-      "compression_level": 22,
-      "aliases": [
-        "743c25c6d634a5fccb8d38bd949bb3a5f8b6d3555424faddb63fd3f3fdcb52ca.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "8e0c8052ebcd9245f9008b6b21743a1407763503e4548588247f9928452716a5.tar.zst",
+      "compressed_bytes": 4692803,
+      "sha256": "8e0c8052ebcd9245f9008b6b21743a1407763503e4548588247f9928452716a5",
+      "uncompressed_sha256": "8e5ed95dbfdb85d3a603023d0a6b5e646d4e23a843b918e7530b1c78ad5616da",
+      "aliases": []
     },
     {
       "title": "REASON for RED",
