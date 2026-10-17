@@ -6260,6 +6260,26 @@ end }
     }
 
     #[test]
+    fn live_deprecated_hidden_preserves_lua_truthiness_and_reports_warning() {
+        compile("deprecated-hidden", r#"
+local warnings = 0
+return Def.ActorFrame { Name='hidden-check',
+    ScriptErrorMessageCommand=function(self, params)
+        assert(params.message == 'hidden is deprecated, use visible instead. (used on hidden-check)')
+        warnings = warnings + 1
+    end,
+    OnCommand=function(self)
+        assert(self:hidden(true) == nil and not self:GetVisible())
+        assert(self:hidden(false) == nil and self:GetVisible())
+        assert(self:hidden(0) == nil and not self:GetVisible())
+        assert(self:hidden(nil) == nil and self:GetVisible())
+        assert(warnings == 4)
+    end,
+}
+"#);
+    }
+
+    #[test]
     fn live_native_tween_curves_match_native_probes() {
         let mut compiled = compile_with_context("native-tween-curves", r#"
 ACTORS = {}

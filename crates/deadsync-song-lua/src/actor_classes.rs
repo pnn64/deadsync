@@ -362,7 +362,6 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
         "thump",
         "heartbeat",
         "SetSize",
-        "hidden",
     ] {
         forward(lua, &class, method)?;
     }
@@ -394,6 +393,11 @@ pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
 function Actor:drop(t)
     self:tween(t, "TweenType_Bezier", {0, 0, 1/3, 1, 2/3, 0.5, 1, 1})
     return self
+end
+
+function Actor:hidden(bHide)
+    lua.ReportScriptError("hidden is deprecated, use visible instead. (used on " .. self:GetName() .. ")")
+    self:visible(not bHide)
 end
 
 function BitmapText:PixelFont()
