@@ -185,6 +185,24 @@
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
         "owned gameplay overlay observation phase is unavailable"
       ]
+    },
+    "Cyberpunk 2077/Cyberpunk 2077.ssc": {
+      "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Screen.AddInputCallback",
+        "native drawable state/resources: Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   },
   "actual_failure_missing_inputs": [

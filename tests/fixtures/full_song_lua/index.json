@@ -2046,15 +2046,12 @@
     {
       "title": "Cyberpunk 2077",
       "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1da1984b3b8fa6c85257b5cade2db84ac94626d202ba6e6d5ad9792a4fb76ca2.tar.zst",
-      "sha256": "1da1984b3b8fa6c85257b5cade2db84ac94626d202ba6e6d5ad9792a4fb76ca2",
-      "compressed_bytes": 287942,
-      "uncompressed_sha256": "a46d2c51632749a64d27fed7e7e442dcd8add68adb3c764da467d817434e811c",
-      "compression_level": 22,
-      "aliases": [
-        "ac35ea824b04096ad0b325d9037bc9ab8a7cf3f10300485b2770ff07663d99b7.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "3f0404368ddd09c3f9b9ac778d19d433100126b71b0251aab6cd353d51378abf.tar.zst",
+      "compressed_bytes": 15302098,
+      "sha256": "3f0404368ddd09c3f9b9ac778d19d433100126b71b0251aab6cd353d51378abf",
+      "uncompressed_sha256": "14f0154dea5922af78f48175897a70165f68d0f05c602d39855e634056c3b95d",
+      "aliases": []
     },
     {
       "title": "Dance Robot",
