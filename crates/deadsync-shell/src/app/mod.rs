@@ -5923,21 +5923,20 @@ impl App {
                                 result,
                             );
                         }
+                        // Not gated on AllowSongDeletion. That option guards the
+                        // music wheel's one-key song delete; this one comes from
+                        // the Installed tab's own Start-then-confirm question, the
+                        // way the ITGmania browser removes packs, and delete_pack
+                        // keeps its own rules about what it may remove.
                         SimplyLoveContentRequest::DeletePack { group_name } => {
-                            let config = config::runtime::get();
-                            let result = if config.allow_song_deletion {
-                                let songs_root = self.dirs.songs_dir();
-                                let roots = deadsync_simfile::app_runtime::collect_song_scan_roots(
-                                    &songs_root,
-                                );
-                                crate::content_reload::delete_pack(
-                                    &group_name,
-                                    &roots,
-                                    &self.dirs.extra_song_roots(),
-                                )
-                            } else {
-                                Err("AllowSongDeletion is disabled".to_owned())
-                            };
+                            let songs_root = self.dirs.songs_dir();
+                            let roots =
+                                deadsync_simfile::app_runtime::collect_song_scan_roots(&songs_root);
+                            let result = crate::content_reload::delete_pack(
+                                &group_name,
+                                &roots,
+                                &self.dirs.extra_song_roots(),
+                            );
                             match &result {
                                 Ok(done) if done.kept.is_empty() => {
                                     debug!(
