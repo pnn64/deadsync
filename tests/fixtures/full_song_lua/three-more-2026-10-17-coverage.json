@@ -68,5 +68,8 @@
         "missing captured subscriber identity for ScreenGameplay/2/9/2"
       ]
     }
+  },
+  "production_compilation": {
+    "step_messages": "The new Step/StepP* bridge validates the existing test-support live scene. Lowering these handlers into production Rust playback is not added by this change; production still requires compiled song data."
   }
 }
