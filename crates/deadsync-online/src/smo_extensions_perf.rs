@@ -16,6 +16,9 @@ fn index(files: &[String]) -> PackIndex {
             uncompressed: 0,
             local_header: 0,
             end: 0,
+            day: 0,
+            crc: 0,
+            site_name: None,
         })
         .collect();
     let audio = (0..entries.len())

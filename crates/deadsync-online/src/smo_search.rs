@@ -237,7 +237,7 @@ impl Accumulator {
         self.hits.sort_by(|a, b| {
             b.score
                 .cmp(&a.score)
-                .then_with(|| date_of(b.pack_id).cmp(&date_of(a.pack_id)))
+                .then_with(|| date_of(b.pack_id).cmp(date_of(a.pack_id)))
                 .then_with(|| a.pack_id.cmp(&b.pack_id))
         });
         self.capped = self.hits.len() > MAX_ROWS;
@@ -339,7 +339,7 @@ fn title_why(result: &SearchResult) -> String {
 /// Some carry a bracketed index (`[11] RED Zone.`), some a pipe-separated
 /// path (`316|TECH SOUP|[lv.Rosewood] VAY`). The original strips the bracket
 /// twice because it has seen it doubled; the pipe form it never had.
-fn clean_song_label(raw: &str) -> String {
+pub(crate) fn clean_song_label(raw: &str) -> String {
     let tail = raw.rsplit('|').next().unwrap_or(raw);
     let mut text = tail.trim();
     for _ in 0..2 {
@@ -380,19 +380,114 @@ struct SearchResponse {
 }
 
 fn fetch(agent: &network::HttpAgent, query: &str, kind: &str) -> Result<Vec<SearchResult>, String> {
+    let body = fetch_body(agent, query, kind, false)?;
+    let parsed: SearchResponse =
+        serde_json::from_str(body.as_str()).map_err(|error| format!("search response: {error}"))?;
+    Ok(parsed.results)
+}
+
+fn fetch_body(
+    agent: &network::HttpAgent,
+    query: &str,
+    kind: &str,
+    exact: bool,
+) -> Result<String, String> {
     let url = format!(
-        "{SEARCH_URL}?query={}&type={kind}&exact=0",
-        percent_encode(query)
+        "{SEARCH_URL}?query={}&type={kind}&exact={}",
+        percent_encode(query),
+        u8::from(exact)
     );
     let response = agent
         .get(url)
         .call()
         .map_err(|error| format!("{:?}", network::error_from_ureq(error)))?;
-    let body = network::read_text_body_bounded(response, MAX_BODY_BYTES)
-        .map_err(|error| format!("{error:?}"))?;
-    let parsed: SearchResponse =
-        serde_json::from_str(body.as_str()).map_err(|error| format!("search response: {error}"))?;
-    Ok(parsed.results)
+    network::read_text_body_bounded(response, MAX_BODY_BYTES).map_err(|error| format!("{error:?}"))
+}
+
+// --- whole credits, for Rip Packs ----------------------------------------------
+
+/// A pack the site credits somebody in, by their whole credit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CreditPack {
+    pub(crate) id: u64,
+    pub(crate) name: String,
+    /// The games the site says it charts for -- `dance`, `pump` -- or `None`
+    /// when it says nothing.
+    pub(crate) types: Option<Vec<String>>,
+    pub(crate) songs_count: usize,
+    /// The songs in it credited to them, by title.
+    pub(crate) matching_songs: Vec<String>,
+}
+
+impl CreditPack {
+    /// Whether it is a pack for a dance pad at all. A pack the site gives no
+    /// type is kept, as the relay kept it: absent data is not a foreign game.
+    pub(crate) fn is_dance(&self) -> bool {
+        self.types.as_ref().is_none_or(|types| {
+            types
+                .iter()
+                .any(|kind| kind.trim().eq_ignore_ascii_case("dance"))
+        })
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct ExactResult {
+    id: u64,
+    #[serde(default)]
+    name: String,
+    /// A list of game names on every response seen; read loosely all the
+    /// same, so an odd one costs the pack its type rather than the search.
+    #[serde(default, rename = "type")]
+    types: Option<serde_json::Value>,
+    #[serde(default)]
+    songs_count: usize,
+    #[serde(default)]
+    matching_songs: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct ExactResponse {
+    #[serde(default)]
+    results: Vec<ExactResult>,
+}
+
+/// The packs that credit a chart to exactly `credit` -- the whole credit,
+/// case aside, which is the site's own `exact=1` -- and which songs. Rip
+/// Packs builds an author's pool from this. Blocks on the network; worker
+/// threads only.
+pub(crate) fn exact_credit_packs(
+    agent: &network::HttpAgent,
+    credit: &str,
+) -> Result<Vec<CreditPack>, String> {
+    let body = fetch_body(agent, credit, "credit", true)?;
+    parse_exact_credit(&body)
+}
+
+fn parse_exact_credit(body: &str) -> Result<Vec<CreditPack>, String> {
+    let parsed: ExactResponse =
+        serde_json::from_str(body).map_err(|error| format!("search response: {error}"))?;
+    Ok(parsed
+        .results
+        .into_iter()
+        .map(|result| CreditPack {
+            id: result.id,
+            name: result.name,
+            types: match result.types {
+                Some(serde_json::Value::Array(kinds)) => Some(
+                    kinds
+                        .iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .collect(),
+                ),
+                Some(serde_json::Value::String(kind)) => Some(vec![kind]),
+                _ => None,
+            },
+            songs_count: result.songs_count,
+            matching_songs: result.matching_songs,
+        })
+        .collect())
 }
 
 /// Percent-encode a query for a URL.
@@ -505,6 +600,55 @@ mod tests {
         assert_eq!(parsed.results[0].id, 8851);
         assert_eq!(parsed.results[0].songs_count, 11);
         assert_eq!(parsed.results[0].matching_songs.len(), 2);
+    }
+
+    /// `/api/search/?query=Mad%20Matt&type=credit&exact=1`, three of its 164
+    /// results, and one with no type at all.
+    const EXACT_CREDIT: &str = r#"{"results": [
+        {"id": 120, "name": "Ace's Picks 1 - Arrows of Amiability", "songs_count": 136,
+         "type": ["dance", "pump"], "matching_songs": ["The Second Truth From The Left"]},
+        {"id": 327, "name": "Bearpocalypse", "songs_count": 13, "type": ["dance"],
+         "matching_songs": ["Superluminal", "To Make the End of Battle", "V.L.S.I.", "Whazamup"]},
+        {"id": 9001, "name": "Pump It Up Somewhere", "songs_count": 40, "type": ["pump"],
+         "matching_songs": ["Witch Doctor"]},
+        {"id": 9002, "name": "Untyped", "songs_count": 2, "matching_songs": ["A", "B"]}
+    ]}"#;
+
+    #[test]
+    fn an_exact_credit_search_keeps_each_packs_name_type_and_songs() {
+        let packs = parse_exact_credit(EXACT_CREDIT).unwrap();
+        assert_eq!(packs.len(), 4);
+        assert_eq!(packs[1].id, 327);
+        assert_eq!(packs[1].name, "Bearpocalypse");
+        assert_eq!(packs[1].songs_count, 13);
+        assert_eq!(packs[1].matching_songs.len(), 4);
+        assert_eq!(
+            packs[0].types.as_deref(),
+            Some(&["dance".to_owned(), "pump".to_owned()][..])
+        );
+        assert!(packs[3].types.is_none());
+    }
+
+    /// Dance packs, and packs the site gives no type, are a pad's; a pump-only
+    /// pack is not.
+    #[test]
+    fn only_dance_packs_are_a_pads() {
+        let dance: Vec<u64> = parse_exact_credit(EXACT_CREDIT)
+            .unwrap()
+            .into_iter()
+            .filter(CreditPack::is_dance)
+            .map(|pack| pack.id)
+            .collect();
+        assert_eq!(dance, vec![120, 327, 9002]);
+    }
+
+    #[test]
+    fn an_odd_type_field_costs_the_pack_its_type_not_the_search() {
+        let body = r#"{"results": [{"id": 5, "type": "dance"}, {"id": 6, "type": 7}]}"#;
+        let packs = parse_exact_credit(body).unwrap();
+        assert_eq!(packs[0].types.as_deref(), Some(&["dance".to_owned()][..]));
+        assert!(packs[1].types.is_none());
+        assert!(parse_exact_credit("{}").unwrap().is_empty());
     }
 }
 

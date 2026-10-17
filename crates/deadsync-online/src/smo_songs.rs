@@ -76,10 +76,10 @@ const MAX_TITLE_SCAN_BYTES: u64 = 32 * 1024 * 1024;
 /// megabytes; past this it is not a preview any more.
 const MAX_AUDIO_BYTES: u64 = 64 * 1024 * 1024;
 /// One song's folder, video and all.
-const MAX_SONG_BYTES: u64 = 512 * 1024 * 1024;
+pub(crate) const MAX_SONG_BYTES: u64 = 512 * 1024 * 1024;
 /// How far a download gets between progress publishes. Each publish clones a
 /// snapshot under the lock, so per-chunk would be churn the bar cannot show.
-const PROGRESS_STEP_BYTES: u64 = 256 * 1024;
+pub(crate) const PROGRESS_STEP_BYTES: u64 = 256 * 1024;
 /// Pack indexes kept. One is a few hundred kilobytes for a big pack.
 const MAX_PACK_INDEXES: usize = 4;
 /// Simfile text kept per pack once it has been read, so a second song from
@@ -318,8 +318,8 @@ impl KnownCharts {
 // ------------------------------------------------------------------- packs
 
 /// A pack's index, and what has been read out of it so far.
-struct PackCache {
-    index: PackIndex,
+pub(crate) struct PackCache {
+    pub(crate) index: PackIndex,
     songs: Mutex<PackSongs>,
 }
 
@@ -361,7 +361,7 @@ fn lock_songs(cache: &PackCache) -> MutexGuard<'_, PackSongs> {
 
 /// Why a song could not be had, before it is put in the reader's words.
 #[derive(Debug)]
-enum Failure {
+pub(crate) enum Failure {
     Archive(ArchiveError),
     /// Already in the reader's words.
     Reader(String),
@@ -376,7 +376,7 @@ impl From<ArchiveError> for Failure {
 }
 
 impl Failure {
-    fn into_message(self) -> String {
+    pub(crate) fn into_message(self) -> String {
         match self {
             Self::Archive(error) => error.to_string(),
             Self::Reader(message) => message,
@@ -416,7 +416,7 @@ fn cached_pack(pack_id: u64) -> Option<Arc<PackCache>> {
 
 /// The pack's index, from the cache or the site. Asked for only while
 /// `wanted` says the answer still matters.
-fn pack(
+pub(crate) fn pack(
     agent: &network::HttpAgent,
     pack_id: u64,
     wanted: &dyn Fn() -> bool,
@@ -454,6 +454,23 @@ fn pack(
     Ok(cache)
 }
 
+/// An index read some other way -- kept on disk by Rip Packs -- made this
+/// cache's own, so the next song from that pack finds it here.
+pub(crate) fn adopt_index(index: PackIndex) -> Arc<PackCache> {
+    let pack_id = index.pack_id;
+    let cache = Arc::new(PackCache {
+        index,
+        songs: Mutex::new(PackSongs::default()),
+    });
+    let mut packs = lock_packs();
+    packs.retain(|known| known.index.pack_id != pack_id);
+    packs.push_back(Arc::clone(&cache));
+    while packs.len() > MAX_PACK_INDEXES {
+        packs.pop_front();
+    }
+    cache
+}
+
 /// Run `work` against the pack's index -- and once more against a fresh one
 /// when the pack turns out to have been replaced on the site meanwhile.
 /// `wanted` is asked before every request this makes or `work` hands it to;
@@ -482,7 +499,7 @@ fn with_pack<T>(
 
 /// A song found in its pack: its folder, and its simfile when finding it meant
 /// reading it.
-type Resolved = (usize, Option<Arc<[u8]>>);
+pub(crate) type Resolved = (usize, Option<Arc<[u8]>>);
 
 /// The folder of the song with this title, and its simfile when finding it
 /// meant reading it.
@@ -499,7 +516,7 @@ type Resolved = (usize, Option<Arc<[u8]>>);
 ///
 /// The pack's read simfiles stay locked through the request, so a second
 /// thread after the same pack waits and then finds them read.
-fn resolve_song(
+pub(crate) fn resolve_song(
     agent: &network::HttpAgent,
     cache: &PackCache,
     title: &str,
@@ -1405,6 +1422,13 @@ fn write_pack_ini_if_absent(group_dir: &Path) {
 /// [`ITG_SYNC_OFFSET_SECONDS`] with DeadSync's own offset writer. Returns how
 /// many simfiles it rewrote.
 fn null_sync_song(folder: &Path) -> Result<usize, String> {
+    shift_song_folder(folder, ITG_SYNC_OFFSET_SECONDS)
+}
+
+/// Every `#OFFSET` in every `.sm` and `.ssc` directly in `folder` moved by
+/// `delta` seconds, with DeadSync's own offset writer. Returns how many
+/// simfiles it rewrote.
+pub(crate) fn shift_song_folder(folder: &Path, delta: f32) -> Result<usize, String> {
     let mut rewritten = 0;
     let entries = fs::read_dir(folder).map_err(|error| error.to_string())?;
     for entry in entries {
@@ -1417,7 +1441,8 @@ fn null_sync_song(folder: &Path) -> Result<usize, String> {
         }
         let path = entry.path();
         let bytes = fs::read(&path).map_err(|error| error.to_string())?;
-        let shifted = null_synced_simfile(&bytes)
+        let shifted = sync_offset::shift_simfile_offsets(&bytes, delta)
+            .map(|(shifted, _)| shifted)
             .map_err(|error| format!("{}: {error}", name.to_string_lossy()))?;
         fs::write(&path, shifted).map_err(|error| error.to_string())?;
         rewritten += 1;
@@ -1426,13 +1451,14 @@ fn null_sync_song(folder: &Path) -> Result<usize, String> {
 }
 
 /// The engine reads `.ssc` and `.sm`; a `.dwi` beside them is left as it is.
-fn is_chart_simfile(name: &str) -> bool {
+pub(crate) fn is_chart_simfile(name: &str) -> bool {
     let extension = extension_of(name);
     extension.eq_ignore_ascii_case("sm") || extension.eq_ignore_ascii_case("ssc")
 }
 
 /// One simfile's text, moved from ITG to NULL sync. A simfile with no
 /// `#OFFSET` is at zero, so the writer gives it one.
+#[cfg(test)]
 fn null_synced_simfile(bytes: &[u8]) -> Result<Vec<u8>, String> {
     sync_offset::shift_simfile_offsets(bytes, ITG_SYNC_OFFSET_SECONDS).map(|(shifted, _)| shifted)
 }
@@ -1445,7 +1471,7 @@ fn null_synced_simfile(bytes: &[u8]) -> Result<Vec<u8>, String> {
 /// the same way a pack name is: Windows' forbidden characters become `_`,
 /// trailing dots and spaces go, a reserved device name is prefixed, and a
 /// name the scanner would skip (`._`) is not produced.
-fn song_folder_name(raw: &str) -> String {
+pub(crate) fn song_folder_name(raw: &str) -> String {
     let trimmed = raw.trim();
     let mut name = String::with_capacity(trimmed.len());
     let mut chars = 0;
@@ -1478,12 +1504,12 @@ fn song_folder_name(raw: &str) -> String {
     name
 }
 
-fn io(action: &'static str, error: std::io::Error) -> StepManiaOnlineError {
+pub(crate) fn io(action: &'static str, error: std::io::Error) -> StepManiaOnlineError {
     stepmaniaonline::io_error(action, error)
 }
 
 /// A song install's failure, in the reader's words.
-fn describe_song_error(error: &StepManiaOnlineError) -> String {
+pub(crate) fn describe_song_error(error: &StepManiaOnlineError) -> String {
     match error {
         StepManiaOnlineError::Network(network::NetworkError::HttpStatus(status)) => {
             format!("the song did not arrive (HTTP {status})")
@@ -1543,6 +1569,9 @@ mod tests {
             uncompressed: 0,
             local_header: 0,
             end: 0,
+            day: 0,
+            crc: 0,
+            site_name: None,
         }
     }
 
