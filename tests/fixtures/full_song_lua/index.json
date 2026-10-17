@@ -4960,17 +4960,14 @@
       ]
     },
     {
-      "title": "Episode 12",
+      "title": "Episode 12 Think About You",
       "source_simfile": "Think About You/Think About You.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a9a8b95a86398a5759891ba0ed098e569f019bc22d2d1a8510f7b2fc1ebdb376.tar.zst",
-      "sha256": "a9a8b95a86398a5759891ba0ed098e569f019bc22d2d1a8510f7b2fc1ebdb376",
-      "compressed_bytes": 26724,
-      "uncompressed_sha256": "8774e3574df6ca6a6e4cd492a6167be1bea8bc59f16c3c67375b52775d37024c",
-      "compression_level": 22,
-      "aliases": [
-        "a440402bc15eae12f60cbeeeb54508a1d5d0450753779209e1639b88fdf4b865.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "85f4f66ed0c5aa49591d057c5b384d697ac591a34fc3a7c35a85935ed0edcef9.tar.zst",
+      "compressed_bytes": 25909475,
+      "sha256": "85f4f66ed0c5aa49591d057c5b384d697ac591a34fc3a7c35a85935ed0edcef9",
+      "uncompressed_sha256": "8efb7944c12e4ca9ae490961d36e8f6a70d0807a3a9de6b5679241838e339759",
+      "aliases": []
     },
     {
       "title": "\u4eca\u5e74\u3082\u300c\u96ea\u964d\u308a\u3001\u30e1\u30ea\u30af\u30ea\u300d\u76ee\u6307\u3057\u3066\u987d\u5f20\u308a\u307e\u3059\uff01\uff01",
