@@ -1,0 +1,153 @@
+{
+  "scope": "Concrete failures in this bounded sweep; no acceptance changes or reopening of passing charts",
+  "cases": [
+    {
+      "positions": [
+        161
+      ],
+      "native_sources": [
+        "Background.cpp:365-379",
+        "BackgroundEffects/UpperLeft.lua:5-15",
+        "Themes/_fallback/Scripts/02 ActorDef.lua:24-27"
+      ],
+      "observed": "Native trace seq4/18 belongs to the fallback MergeTables closure; nested song queries retain caller song:/lua/default.lua:38. Owned trace instead emits OnCommand begin/end at song line38. Counts native172553, owned172555.",
+      "cause": "Background effect construction merges the song root OnCommand with UpperLeft OnCommand. The owned loader executes the root directly and SongBackgroundLuaChange does not retain the effect/color definition.",
+      "disposition": "Pending after one full replay. A faithful repair needs background definition metadata, effect construction and the merged callback; dropping command events would only hide the failure.",
+      "source_proofs": [
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Background.cpp",
+          "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\BackgroundEffects\\UpperLeft.lua",
+          "sha256": "f8c948a7f83b1caf1cb09716a6a94ed9d8237ee8a4a69427babc8d6aa47cd359"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\Themes\\_fallback\\Scripts\\02 ActorDef.lua",
+          "sha256": "e146db352c0328d94e5225b4a7705abb4cc7253b81cf217c2bea3f6f7f7cd093"
+        }
+      ]
+    },
+    {
+      "positions": [
+        239,
+        240,
+        191,
+        362,
+        363
+      ],
+      "native_sources": [
+        "src/ArrowEffects.cpp",
+        "src/TimingData.cpp"
+      ],
+      "observed": "Multitap Actor.x values diverge despite matching callback song beat; first Igaku.sm native -96.1680908203125, owned -96.16799926757812 at beat92.06562805175781.",
+      "cause": "Unresolved float/ArrowEffects difference; no bounded source repair established. Native lookup stride counts timing segments, and normal NoteField display uses Steps timing; neither supports changing lookup policy or global timing.",
+      "disposition": "Pending; acceptance tolerances and compared samples unchanged.",
+      "source_proofs": [
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ArrowEffects.cpp",
+          "sha256": "31e6b200d05430099cf4ed2bac8a6111cab961d5cc93ff8d41d5029ecbb681e8"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\TimingData.cpp",
+          "sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+        }
+      ]
+    },
+    {
+      "positions": [
+        215
+      ],
+      "native_sources": [
+        "src/HoldJudgment.cpp",
+        "Themes/Simply Love/metrics.ini Held/LetGo"
+      ],
+      "observed": "Godspeed Actor.x args213.5 match, but native PlayerP1 descendant tween time is0.800000011920929 and owned is0 at beat132.28652954101562.",
+      "cause": "Owned hold judgment animation contract is implemented and its focused test passes; cause of this chart queue absence remains unproved.",
+      "disposition": "Pending after one replay; no synthetic tween metadata or guessed hold-tail clock repair.",
+      "source_proofs": [
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\HoldJudgment.cpp",
+          "sha256": "95f1d6f2e531d8145941657ded3c7158a846dd1fa935c84243b298b16de0a1de"
+        },
+        {
+          "path": "C:\\GitHub\\Simply-Love-SM5\\metrics.ini",
+          "sha256": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80"
+        }
+      ]
+    },
+    {
+      "positions": [
+        440,
+        441
+      ],
+      "native_sources": [
+        "src/ScreenGameplay.cpp",
+        "src/GameState.cpp"
+      ],
+      "observed": "Production apply_song_lua_reload errors at crates/deadsync-shell/src/gameplay_entry.rs:160 when a single session selects dance-double steps during reload.",
+      "cause": "Current immutable initial GameplaySession prevents the style/input geometry transition native gameplay performs.",
+      "disposition": "Pending after one replay; requires a real session/style transition, not removal of the compatibility check.",
+      "source_proofs": [
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ScreenGameplay.cpp",
+          "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameState.cpp",
+          "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77"
+        }
+      ]
+    },
+    {
+      "positions": [
+        437
+      ],
+      "native_sources": [
+        "src/TimingData.cpp:672-675",
+        "src/TimingData.cpp:893-896"
+      ],
+      "observed": "First rate-change discrepancy native beat12.031805992126465 vs owned12.031599044799805 at identical music seconds4.689093112945557.",
+      "cause": "Native elapsed time adds currentMusicRate*globalOffset; owned float song-position API used rate1 after authored ApplyGameCommand changed rate.",
+      "disposition": "Rate-aware clock and Lua TimingData repair in validation; full replay budget remains one.",
+      "source_proofs": [
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\TimingData.cpp",
+          "sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\TimingData.cpp",
+          "sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+        }
+      ]
+    },
+    {
+      "positions": [
+        484
+      ],
+      "observed": "Native reaches ScreenGameplay destruction at34:03.820 and loads ScreenEvaluationStage at34:05.428; no semantic trace is written before2134s deadline. Final log warning is ActorFrameTexture: Cannot have width or height less than1.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-42324-1792228516735168200-0",
+      "native_sources": [
+        "src/ActorFrameTexture.cpp:45-61",
+        "src/LuaManager.cpp:817-833",
+        "Themes/Simply Love/BGAnimations/ScreenEvaluationStage background.lua"
+      ],
+      "cause": "The capture does not finalize despite native gameplay exit. The final warning alone does not prove the root cause; no speculative timeout extension or theme rewrite applied.",
+      "disposition": "Pending after one actual native capture; preserved complete run directory and logs."
+    },
+    {
+      "positions": [
+        244
+      ],
+      "observed": "Full replay56068frames across2scenes: native1429 command/query events vs owned715. All715 owned events match the native prefix; first omitted native event is puzzle.lua:577 StepMessageCommand at beat160.00074768066406, seconds58.995670318603516.",
+      "cause": "Player.cpp:2770-2782 broadcasts Step and StepP1 for nonrelease steps, including autoplay. Owned gameplay has no Step message bridge; this loses714 callback begin/end events after puzzle activation.",
+      "source_proofs": [
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\Player.cpp",
+          "sha256": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+        }
+      ],
+      "disposition": "Pending after one replay; requires a gameplay step-event bridge including autoplay and manual step ordering. No native events filtered from acceptance."
+    }
+  ]
+}
