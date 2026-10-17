@@ -3781,17 +3781,15 @@
       "aliases": []
     },
     {
-      "title": "NEGATOR",
+      "title": "negator",
       "source_simfile": "negator/NEGATOR.sm",
-      "harness_version": "0.1.0",
-      "archive": "954185d36cf7fb2fef1f029b1ea5a110c8940354d79e8c13f98847a4d9017ae6.tar.zst",
-      "sha256": "954185d36cf7fb2fef1f029b1ea5a110c8940354d79e8c13f98847a4d9017ae6",
-      "compressed_bytes": 254667,
-      "uncompressed_sha256": "622314b5928bde70c3baf9c6ca763a6ee2c0487c374f8082738a636b3069f79a",
-      "compression_level": 22,
-      "aliases": [
-        "0a02729861c2ac3854ddd3d2c86f1ca3a3035bf07c9158014070eabdad217f7d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1ead74d2eebe78087c27180486fac21cc9309ef47cad977c97e9c1b7247c714a.tar.zst",
+      "compressed_bytes": 113958939,
+      "sha256": "1ead74d2eebe78087c27180486fac21cc9309ef47cad977c97e9c1b7247c714a",
+      "uncompressed_sha256": "d7c7271d0db659f412692af49845c6d27db6872d6ede0d1217b0397bf7e69ca5",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "[11] Neon Nights",

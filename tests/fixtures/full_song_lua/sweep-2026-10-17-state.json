@@ -6,11 +6,11 @@
   "repair_limit_per_sweep": 2,
   "acceptance": "Existing full_song_lua tests; no new acceptance gates; uncompressed full comparisons",
   "counts": {
-    "passed_fixtures": 428,
-    "pending_charts": 72,
+    "passed_fixtures": 429,
+    "pending_charts": 71,
     "ignored_charts": 1,
-    "new_passing_fixtures": 4,
-    "processed_this_sweep": 14
+    "new_passing_fixtures": 5,
+    "processed_this_sweep": 15
   },
   "ignored": [
     {
@@ -2074,10 +2074,75 @@
     {
       "position": 324,
       "source_simfile": "negator/NEGATOR.sm",
-      "status": "queued",
-      "repair_attempts": 0,
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-12-original-partition-1.json",
       "simfile_sha256": "bce483f796258fc00bd7d61f415c881cdecb3a56c416e35da508f891cf8c81a1",
-      "prior_failure": "callback: UpdateCommand failed for Sprite 'actor_c': BlindOnMessageCommand failed for Sprite 'actor_c': runtime error: [string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:959: attempt to call method 'GetChild' (a nil value)\nstack traceback:\n\t[C]: in method 'GetChild'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:959: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:953>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:944: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:178>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"; comparison source_broadcast_count: native=33; deadsync=2"
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": "callback: UpdateCommand failed for Sprite 'actor_c': BlindOnMessageCommand failed for Sprite 'actor_c': runtime error: [string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:959: attempt to call method 'GetChild' (a nil value)\nstack traceback:\n\t[C]: in method 'GetChild'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:959: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:953>\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:944: in function <[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"]:178>\nstack traceback:\n\t[C]: in function 'MESSAGEMAN.Broadcast'\n\t[string \"C:/Users/PERFEC~1/AppData/Local/Temp/.tmpSe...\"; comparison source_broadcast_count: native=33; deadsync=2",
+        "callback_errors": [],
+        "mismatch_count": null,
+        "first_concrete_mismatches": [],
+        "capture_exit": 1,
+        "replay_exit": null,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "d7c7271d0db659f412692af49845c6d27db6872d6ede0d1217b0397bf7e69ca5",
+      "retained_candidate": "/home/parity/jobs/sweep-20261017-pending/captures/chart-324/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 315.74554240796715,
+      "native_frames": 122300,
+      "replayed_frames": 122300,
+      "compared_stage_fields": 1430,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "260247101aea6a789a702a0eff634ddeee34d10f36ff0849614aa58f6608d34c",
+      "archive": "1ead74d2eebe78087c27180486fac21cc9309ef47cad977c97e9c1b7247c714a.tar.zst",
+      "archive_sha256": "1ead74d2eebe78087c27180486fac21cc9309ef47cad977c97e9c1b7247c714a",
+      "compressed_bytes": 113958939,
+      "harness_version": "0.1.80",
+      "title": "negator",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "input_repair": {
+        "position": 324,
+        "source_simfile": "negator/NEGATOR.sm",
+        "candidate_sha256": "d7c7271d0db659f412692af49845c6d27db6872d6ede0d1217b0397bf7e69ca5",
+        "original_candidate_sha256": "5f9c1c3695354fab85391c8e83ddb008920614983b9997964f38dc54bb26dd5c",
+        "all_original_members_unchanged": true,
+        "trace_sha256": "9f0b8e5ec5c5a32517d719e0f76728f802f8ee14d32b04b51f968f9fe5ae5779",
+        "native_capture_reused": true,
+        "theme_asset_files_added": 479,
+        "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-42432-1792192969097808600-0\\Themes\\itgmania-harness",
+        "harness_fix_commit": "fa4bee3",
+        "harness_binary_sha256": "1b86ce30bd594ba91a290a3764b7f2d94070ef34811fccbf42c8636f10ae1807",
+        "compressed_private_sha256": "b13d76c2f4a6ffabff502b2ac550763db13f32e88a88d9debc9c9c52e1dc7b3d"
+      },
+      "local_chart": "/home/parity/jobs/sweep-20261017-pending/phase-03/chart-324",
+      "sweep_phase": "phase-03",
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "build_receipt": "target/song-lua-sweep-20261017/phase-03/build-receipt.json",
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "NEGATOR",
+        "source_simfile": "negator/NEGATOR.sm",
+        "harness_version": "0.1.0",
+        "archive": "954185d36cf7fb2fef1f029b1ea5a110c8940354d79e8c13f98847a4d9017ae6.tar.zst",
+        "sha256": "954185d36cf7fb2fef1f029b1ea5a110c8940354d79e8c13f98847a4d9017ae6",
+        "compressed_bytes": 254667,
+        "uncompressed_sha256": "622314b5928bde70c3baf9c6ca763a6ee2c0487c374f8082738a636b3069f79a",
+        "compression_level": 22,
+        "aliases": [
+          "0a02729861c2ac3854ddd3d2c86f1ca3a3035bf07c9158014070eabdad217f7d.tar.zst"
+        ]
+      },
+      "archive_git_ignored": true
     },
     {
       "position": 460,
@@ -4614,5 +4679,5 @@
       "prior_failure": "comparison command_query_count: native=1430179; deadsync=1425260"
     }
   ],
-  "updated_utc": "2026-10-17T08:09:57Z"
+  "updated_utc": "2026-10-17T08:14:24Z"
 }

@@ -100,6 +100,24 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "negator/NEGATOR.sm": {
+      "source_simfile": "negator/NEGATOR.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.accelerate, Actor.addx, Actor.addy, Actor.finishtweening, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.zoomy, GameState.GetCurMusicSeconds, GameState.IsHumanPlayer, PlayerOptions.XMod",
+        "native drawable state/resources: Model, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
