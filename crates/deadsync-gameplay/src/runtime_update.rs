@@ -170,6 +170,7 @@ where
             log::debug!("All joined players failed. Transitioning to evaluation.");
             self.progress.stage.song_completed_naturally = false;
             self.push_audio_command(GameplayAudioCommand::StopMusic);
+            self.begin_outro_attack_clear();
             return Some(GameplayAction::Navigate(GameplayExit::Complete));
         }
 

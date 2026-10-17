@@ -1251,6 +1251,7 @@ end }
         let mut context = deadsync_song_lua::SongLuaCompileContext::new(&dir, name);
         context.live = true;
         context.defer_initial_live_update = true;
+        context.players[1].enabled = false;
         context.song_timing = song.song_timing.clone();
         let profiles = std::array::from_fn(|_| {
             let mut profile = deadsync_profile::Profile::default();
@@ -1478,6 +1479,54 @@ return Def.ActorFrame {
             let output = update_judgment_control(&mut state, seconds * 1_000_000_000, (seconds as u64 + 1) * 1_000_000_000);
             assert!(output.source_broadcasts.iter().any(|event| event.name == "AttackOptionsRebuilt"),
                 "music={} output={output:?}", state.gameplay.clock.song_position.current_music_time_ns);
+        }
+    }
+
+    #[test]
+    fn gameplay_immediate_failure_draws_until_native_blank_transition_finishes() {
+        use deadsync_theme_simply_love::SimplyLoveEffect as Effect;
+        use deadsync_theme_simply_love::screens::SimplyLoveScreen;
+        let mut state = owned_judgment_control("immediate-failure-draw", "0000\n1000\n0000\n1000\n", r#"
+local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+return Def.ActorFrame {
+    OnCommand=function(self)
+        self:sleep(9999)
+        self:SetDrawFunction(function() MESSAGEMAN:Broadcast('FailureDraw') end)
+        self:addcommand('JudgmentMessage', function(_, params)
+            if params.TapNoteScore == 'TapNoteScore_W1' then
+                player:SetLife(0)
+                STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):FailPlayer()
+            end
+        end)
+    end,
+    OffCommand=function() MESSAGEMAN:Broadcast('FailureOff') end,
+    EndCommand=function() MESSAGEMAN:Broadcast('FailureEnd') end,
+}
+"#, 0.0);
+        state.gameplay.setup.config.default_fail_type = deadsync_gameplay::GameplayFailType::Immediate;
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        let time = state.gameplay.chart_runtime.note_time_cache_ns[0] + 1_000_000;
+        for frame in 0..4 {
+            let host = 2_000_000_000 + frame * 2_000_000;
+            let mut effects = Vec::new();
+            gameplay::update(&mut state, 0.002, GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot { music_nanos: time,
+                    has_music_mapping: true, valid_at_host_nanos: host, ..Default::default() },
+                ..Default::default()
+            }, || host, &mut effects);
+            let output = state.take_song_lua_output();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let names: Vec<_> = output.source_broadcasts.iter().map(|event| event.name.as_str()).collect();
+            assert_eq!(names, match frame {
+                0 | 1 => vec!["FailureDraw"],
+                2 => vec!["FailureOff", "FailureDraw"],
+                _ => vec!["FailureEnd"],
+            }, "native queued failure phase {frame}");
+            if frame < 3 {
+                assert!(effects.is_empty(), "failure stays on screen through the last draw");
+            } else {
+                assert!(matches!(effects.as_slice(), [Effect::NavigateNoFade(SimplyLoveScreen::Evaluation)]));
+            }
         }
     }
 

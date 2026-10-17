@@ -963,6 +963,7 @@ pub struct SongLuaLiveScene {
     outro_started: bool,
     outro_options_reset: bool,
     outro_off_pending: bool,
+    outro_failed: bool,
     ended: bool,
     updated: bool,
     chart_attacks: [LiveChartAttacks; LUA_PLAYERS],
@@ -1075,7 +1076,8 @@ impl SongLuaLiveScene {
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), visual_targets: Default::default(), context, entry_paths, primary_index, last_beat,
             last_music_seconds: -9999.0, backgrounds, background_layers, background_order, foregrounds, startup_output,
-            outro_started: false, outro_options_reset: false, outro_off_pending: false, ended: false, updated: false,
+            outro_started: false, outro_options_reset: false, outro_off_pending: false, outro_failed: false,
+            ended: false, updated: false,
             chart_attacks: std::array::from_fn(|_| LiveChartAttacks::default()) })
     }
 
@@ -1183,6 +1185,7 @@ impl SongLuaLiveScene {
                     all_failed = false;
                 }
             }
+            self.outro_failed = all_failed;
             if all_failed { self.outro_off_pending = true; }
             else { self.tween_off_screen()?; }
         }
@@ -1565,6 +1568,10 @@ impl SongLuaLiveScene {
     /// LeaveGameplay has dispatched Off; its out transition can now advance.
     pub fn outro_off_dispatched(&self) -> bool {
         self.outro_options_reset && !self.outro_off_pending
+    }
+
+    pub fn failed_outro(&self) -> bool {
+        self.outro_failed
     }
 
     pub fn apply_pending_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(

@@ -1031,7 +1031,13 @@ impl State {
         if self.song_lua_out.is_none() && scene.outro_off_dispatched() {
             // ScreenGameplay handles LeaveGameplay after its actor Update.
             // The newly started Transition receives its first delta next frame.
-            self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
+            self.song_lua_out = Some(if scene.failed_outro() {
+                // The fallback ScreenGameplay failed actor is _blank. Native
+                // Transition dispatches completion on its following update.
+                SongLuaOut { phase: 2, left: 0.0 }
+            } else {
+                SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY }
+            });
         } else if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
             let target = scene.next_screen_name().map_err(|error| error.to_string())?;
             let destination = song_lua_transition_screen(target.as_deref())?;
@@ -2757,7 +2763,7 @@ pub fn update_with_input(
         GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)
             if state.song_lua_out.is_some() || (state.song_lua.is_some()
-                && state.gameplay.progress.stage.song_completed_naturally) =>
+                && state.gameplay.mods.attacks.cleared_for_outro) =>
         {
             // The owned scene handles NotesEnded, Off and the out transition.
             // Repeated Core completion requests keep its original clock.
