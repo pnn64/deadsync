@@ -2456,15 +2456,12 @@
     {
       "title": "freg.",
       "source_simfile": "freg/freg.sm",
-      "harness_version": "0.1.0",
-      "archive": "4fa980e2db74d35f2935d60fa9163d0cceec209fa34b04988388b2f2a04018c4.tar.zst",
-      "sha256": "4fa980e2db74d35f2935d60fa9163d0cceec209fa34b04988388b2f2a04018c4",
-      "compressed_bytes": 9883,
-      "uncompressed_sha256": "2caf0f39d4ddfcafe7dff934cd4e824cf95a5e91d7a81f08fca414d847d03dcc",
-      "compression_level": 22,
-      "aliases": [
-        "d3bd7dcb47e0a7a8b96019e2bc0879fec3a8f3c89c7b7bea48d94c6ce1fb1197.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554.tar.zst",
+      "compressed_bytes": 1508259,
+      "sha256": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554",
+      "uncompressed_sha256": "4be2dbf1ff59a34ff3029c5e9e4ef64991bea951de5abb6395c849bd64bf1f43",
+      "aliases": []
     },
     {
       "title": "FTW",
