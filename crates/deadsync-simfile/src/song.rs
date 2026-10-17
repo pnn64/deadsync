@@ -348,7 +348,8 @@ fn parse_song_source(
     };
     let song_music_path = media_dir.and_then(|dir| resolve_music_path(dir, &summary.music_path));
     let music_length_seconds = final_music_len(&summary, music_len(song_music_path.as_deref()));
-    Ok(build_song_data(
+    let additional_bounds = unplayed_chart_note_bounds(&parsed, &source.extension);
+    let mut song = build_song_data(
         summary,
         SongBuildInput {
             path: source.path,
@@ -359,7 +360,122 @@ fn parse_song_source(
             options,
             parsed_notes,
         },
-    ))
+    );
+    update_precise_song_bounds(&mut song, 0.0);
+    if let Some([first, last]) = additional_bounds {
+        song.first_second = if song.precise_note_last_second_seconds.is_some() {
+            song.first_second.min(first)
+        } else { first };
+        let last = song.precise_note_last_second_seconds.map_or(last, |value| value.max(last));
+        song.precise_note_last_second_seconds = Some(last);
+        song.precise_last_second_seconds = song.precise_last_second_seconds.max(last);
+        song.total_length_seconds = song.total_length_seconds.max(last as i32);
+    }
+    Ok(song)
+}
+
+/// Song.cpp includes native charts that the gameplay analyzer does not load.
+/// Their notes still determine when ScreenGameplay transitions out.
+fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, extension: &str) -> Option<[f32; 2]> {
+    use rssp::timing::{compute_timing_segments, steps_timing_allowed, TimingFormat};
+    let format = if extension.eq_ignore_ascii_case("ssc") { TimingFormat::Ssc } else { TimingFormat::Sm };
+    let version = rssp::parse::parse_version(parsed.version, format);
+    let own_timing_allowed = steps_timing_allowed(version, format);
+    let mut bounds: Option<[f32; 2]> = None;
+    for entry in &parsed.notes_list {
+        let Ok(kind) = std::str::from_utf8(entry.fields[0]) else { continue; };
+        let kind = kind.trim().to_ascii_lowercase();
+        if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() { continue; }
+        // GameManager.cpp's native StepsTypeInfo table. Lights never contribute.
+        let lanes = match kind.as_str() {
+            "dance-threepanel" => 3,
+            "dance-solo" | "pump-halfdouble" | "bm-single5" | "bm-versus5" | "kickbox-insect" => 6,
+            "dance-couple" | "dance-routine" | "ds3ddx-single" | "techno-single8" | "techno-double4" | "bm-single7" | "bm-versus7" => 8,
+            "pump-couple" | "pump-routine" | "ez2-double" | "techno-double5" => 10,
+            "kb7-single" | "ez2-real" => 7,
+            "ez2-single" | "para-single" | "pnm-five" | "techno-single5" => 5,
+            "maniax-single" | "techno-single4" | "kickbox-quadarm" => 4,
+            "bm-double5" => 12,
+            "bm-double7" | "techno-double8" => 16,
+            "maniax-double" => 8,
+            "pnm-nine" => 9,
+            "kickbox-human" => 4,
+            "kickbox-arachnid" => 8,
+            _ => continue,
+        };
+        if parsed.notes_list.len() > 1 && entry.fields[2].eq_ignore_ascii_case(b"Edit") { continue; }
+        let Some([first, last]) = native_note_row_bounds(entry.note_data, lanes) else { continue; };
+        if last == 0 { continue; }
+        let own = own_timing_allowed && [entry.chart_bpms.as_deref(), entry.chart_stops.as_deref(),
+            entry.chart_delays.as_deref(), entry.chart_warps.as_deref(), entry.chart_speeds.as_deref(),
+            entry.chart_scrolls.as_deref(), entry.chart_fakes.as_deref(), entry.chart_offset.as_deref(),
+            entry.chart_time_signatures.as_deref(), entry.chart_labels.as_deref(),
+            entry.chart_tickcounts.as_deref(), entry.chart_combos.as_deref()].iter().any(Option::is_some);
+        let text = |value: Option<&[u8]>| value.map(|value| String::from_utf8_lossy(value).into_owned());
+        let tags = [(entry.chart_bpms.as_deref(), parsed.bpms), (entry.chart_stops.as_deref(), parsed.stops),
+            (entry.chart_delays.as_deref(), parsed.delays), (entry.chart_warps.as_deref(), parsed.warps)];
+        let tags = tags.map(|(chart, global)| (text(if own_timing_allowed { chart } else { None }),
+            text(if own { None } else { global }).unwrap_or_default()));
+        let segments = compute_timing_segments(tags[0].0.as_deref(), &tags[0].1,
+            tags[1].0.as_deref(), &tags[1].1, tags[2].0.as_deref(), &tags[2].1,
+            tags[3].0.as_deref(), &tags[3].1, None, "", None, "", None, "", format, false);
+        let offset = rssp::parse::parse_offset_seconds(if own_timing_allowed {
+            entry.chart_offset.as_deref().or(parsed.offset)
+        } else { parsed.offset }) as f32;
+        let timing = deadsync_rules::timing::TimingData::from_segments(-offset, 0.0,
+            &crate::timing::timing_segments_from_rssp(&segments), &[]);
+        let first = timing.get_time_for_beat(first as f32 / 48.0);
+        let last = timing.get_time_for_beat(last as f32 / 48.0);
+        if first.is_finite() && last.is_finite() {
+            bounds = Some(bounds.map_or([first, last], |old| [old[0].min(first), old[1].max(last)]));
+        }
+    }
+    bounds
+}
+
+fn native_note_row_bounds(data: &[u8], lanes: usize) -> Option<[i32; 2]> {
+    // NoteDataUtil::LoadFromSMNoteDataStringWithPlayer keeps keysounds and fake
+    // notes, resolves hold tails, and discards unterminated holds. Routine
+    // player blocks share one native note grid.
+    let mut tracks = vec![std::collections::BTreeMap::<i32, Option<i32>>::new(); lanes];
+    for player in data.split(|byte| *byte == b'&') {
+        for (measure, data) in player.split(|byte| *byte == b',').enumerate() {
+            let rows: Vec<_> = data.split(|byte| *byte == b'\n').filter_map(|line| {
+                let end = line.windows(2).position(|value| value == b"//").unwrap_or(line.len());
+                let line = line[..end].trim_ascii();
+                (!line.is_empty()).then_some(line)
+            }).collect();
+            for (index, line) in rows.iter().enumerate() {
+                let beat = (measure as f32 + index as f32 / rows.len() as f32) * 4.0;
+                let row = (beat * 48.0).round() as i32;
+                let mut cursor = 0;
+                for track in &mut tracks {
+                    let Some(&cell) = line.get(cursor) else { break; };
+                    cursor += 1;
+                    if line.get(cursor) == Some(&b'[') {
+                        cursor += 1;
+                        while cursor < line.len() && line[cursor] != b']' { cursor += 1; }
+                        cursor += usize::from(cursor < line.len());
+                    }
+                    match cell {
+                        b'2' | b'4' => { track.insert(row, None); }
+                        b'3' => {
+                            if let Some((_, tail)) = track.range_mut(..row).rev().find(|(_, tail)| tail.is_none()) {
+                                *tail = Some(row);
+                            }
+                        }
+                        b'1' | b'M' | b'L' | b'F' | b'K' => { track.insert(row, Some(row)); }
+                        _ => {},
+                    }
+                }
+            }
+        }
+    }
+    let mut rows = tracks.iter().flat_map(|track| track.iter()
+        .filter_map(|(&head, tail)| tail.map(|tail| [head, tail])));
+    let mut result = rows.next()?;
+    for [first, last] in rows { result = [result[0].min(first), result[1].max(last)]; }
+    Some(result)
 }
 
 pub fn parse_song_meta_file(
@@ -375,12 +491,10 @@ pub fn parse_song_meta_file(
 pub fn parse_song_data_file(
     path: &Path,
     options: &ParseSongOptions,
-    global_offset_seconds: f32,
+    _global_offset_seconds: f32,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
-    let mut song = parse_song_file(path, options, music_len)?;
-    update_precise_song_bounds(&mut song, global_offset_seconds);
-    Ok(song)
+    parse_song_file(path, options, music_len)
 }
 
 pub fn parse_song_data_file_in(
@@ -388,12 +502,10 @@ pub fn parse_song_data_file_in(
     options: &ParseSongOptions,
     analyzer: &SongAnalyzer,
     scratch: &mut SongParseScratch,
-    global_offset_seconds: f32,
+    _global_offset_seconds: f32,
     music_len: impl FnOnce(Option<&Path>) -> f32,
 ) -> Result<SerializableSongData, String> {
-    let mut song = parse_song_file_in(path, options, analyzer, scratch, music_len)?;
-    update_precise_song_bounds(&mut song, global_offset_seconds);
-    Ok(song)
+    parse_song_file_in(path, options, analyzer, scratch, music_len)
 }
 
 /// What a song finds in its folder rather than in its simfile.
@@ -1274,6 +1386,34 @@ mod tests {
 
         assert!((song.precise_first_second() - 4.0).abs() <= 1e-6);
         assert!((song.precise_last_second() - 8.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn unplayed_native_charts_extend_song_bounds_without_becoming_playable() {
+        let root = test_dir("unplayed-note-bounds");
+        fs::create_dir_all(&root).unwrap();
+        let simfile = root.join("bounds.ssc");
+        fs::write(&simfile, "#VERSION:0.83;#TITLE:Unplayed bounds;#BPMS:0=60;\n\
+#NOTEDATA:;#STEPSTYPE:dance-single;#DIFFICULTY:Challenge;#METER:1;#NOTES:\n1000\n,\n1000\n;\n\
+#NOTEDATA:;#STEPSTYPE:dance-solo;#DIFFICULTY:Medium;#METER:1;#BPMS:0=60;#STOPS:4=0.25;#NOTES:\n000000\n001000\n000000\n000000\n,\n000000\n,\nM00000\n;\n\
+#NOTEDATA:;#STEPSTYPE:dance-solo;#DIFFICULTY:Edit;#METER:1;#NOTES:\n000000\n,\n000000\n,\n000000\n,\n100000\n;\n\
+#NOTEDATA:;#STEPSTYPE:lights-cabinet;#DIFFICULTY:Hard;#METER:1;#NOTES:\n00000000\n,\n00000000\n,\n00000000\n,\n10000000\n;").unwrap();
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for song in [parse_song_data_file(&simfile, &options, 0.125, |_| 20.0).unwrap(),
+            parse_song_bytes(&fs::read(&simfile).unwrap(), "ssc", &simfile, &options, |_| 20.0).unwrap()] {
+            assert_eq!(song.charts.len(), 1, "unplayed charts do not enter gameplay selection");
+            assert_eq!(song.first_second, 0.0);
+            assert_eq!(song.precise_note_last_second_seconds, Some(8.25));
+            assert_eq!(song.precise_last_second_seconds, 8.25);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn native_note_bounds_resolve_holds_keysounds_and_routine_players() {
+        assert_eq!(native_note_row_bounds(b"000000\n200000\n000000\n300000\n,\n00000K[12]\n", 6), Some([48, 192]));
+        assert_eq!(native_note_row_bounds(b"200000\n,\n000000\n", 6), None);
+        assert_eq!(native_note_row_bounds(b"10000000\n,\n00000000\n&\n00000000\n,\n0000000F\n", 8), Some([0, 192]));
     }
 
     #[test]
