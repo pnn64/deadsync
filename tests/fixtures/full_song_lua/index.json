@@ -3389,15 +3389,12 @@
     {
       "title": "LORELEI",
       "source_simfile": "LORELEI/LORELEI.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8a651ca7788d9cb9b9ef6ffa8a9377bcaff6ff7dcca479a42ec07f608a9b6157.tar.zst",
-      "sha256": "8a651ca7788d9cb9b9ef6ffa8a9377bcaff6ff7dcca479a42ec07f608a9b6157",
-      "compressed_bytes": 413487,
-      "uncompressed_sha256": "96c8406b3e35a57ed8c6d972bab51ab7fab2d62c794994221e0fbc262acf0acd",
-      "compression_level": 22,
-      "aliases": [
-        "520605ba74cd9ce0ba460b9329c0ee4524e621c0c83598ff6f3e34aff97d5602.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "689f5ec8aa14d87ac676eaba1c4ecab23d5eadbf62400d0c859cccc2df33346f.tar.zst",
+      "compressed_bytes": 14063805,
+      "sha256": "689f5ec8aa14d87ac676eaba1c4ecab23d5eadbf62400d0c859cccc2df33346f",
+      "uncompressed_sha256": "19827cbfb3213b70e0a7ad62ea7fcf33ea7d362f4f0e36beab96de24812c155e",
+      "aliases": []
     },
     {
       "title": "Lower Times",

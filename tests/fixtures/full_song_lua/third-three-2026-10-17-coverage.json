@@ -37,6 +37,24 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "LORELEI/LORELEI.ssc": {
+      "source_simfile": "LORELEI/LORELEI.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetHeight, Actor.SetWidth, Actor.addcommand, Actor.blend, Actor.clearzbuffer, Actor.cropright, Actor.playcommand, Actor.scaletofit, Actor.xy, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.GetTexture, GameState.GetSongPosition, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
