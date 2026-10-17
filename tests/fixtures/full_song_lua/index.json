@@ -5076,15 +5076,12 @@
     {
       "title": "Ultimate taste",
       "source_simfile": "Ultimate taste/Ultimate taste.ssc",
-      "harness_version": "0.1.0",
-      "archive": "187636c8511cebb1d704300ba06120739f35d3000d379117b5dba2a2069e7ec8.tar.zst",
-      "sha256": "187636c8511cebb1d704300ba06120739f35d3000d379117b5dba2a2069e7ec8",
-      "compressed_bytes": 381296,
-      "uncompressed_sha256": "120ef55b70573f9d84e66f0b5324e0f5b84f4a4810587a5a4bb0fa53b38d00be",
-      "compression_level": 22,
-      "aliases": [
-        "9c3de140b19afbd09c510945ac22e2855ae6f6a7dcf09e43fd7d932eb25d8a0f.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "eeff4b4c46a5ec7d515815df061d309d2711c67325533ac18af16936a6f5c821.tar.zst",
+      "compressed_bytes": 18671787,
+      "sha256": "eeff4b4c46a5ec7d515815df061d309d2711c67325533ac18af16936a6f5c821",
+      "uncompressed_sha256": "e2abeae0f8ea7d32448a6fc8b5b9f289dc7c8057671ad60d5c386a6ba25ab980",
+      "aliases": []
     },
     {
       "title": "Ultra B+K",
