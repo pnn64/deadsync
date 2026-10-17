@@ -263,9 +263,48 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
     let mt = lua.create_table()?;
     let proxy_for_index = proxy.clone();
     let globals_for_index = globals.clone();
+    let target_key = lua.create_string("__songlua_env_target")?;
     mt.set(
         "__index",
-        lua.create_function(move |_, (_self, key): (Table, Value)| {
+        lua.create_function(move |lua, (_self, key): (Table, Value)| {
+            let mut resolved = false;
+            // Ordinary globals need no Rust Table/Value round trip for each
+            // intermediate lookup. Metamethods, invalid targets and rebinding
+            // still use the original reader below, including its error paths.
+            // SAFETY: exec_raw roots proxy/key/globals/target-key at 1..=4.
+            // Reserve three slots, inspect types before raw lookup, and return
+            // only an owned mlua Value. No authored Lua runs in this fast path.
+            let value = unsafe {
+                lua.exec_raw::<Value>((&proxy_for_index, &key, &globals_for_index, &target_key), |state| {
+                    use mlua::ffi;
+                    ffi::luaL_checkstack(state, 3, c"environment read".as_ptr());
+                    ffi::lua_pushvalue(state, 4);
+                    ffi::lua_rawget(state, 1);
+                    if ffi::lua_type(state, 5) == ffi::LUA_TTABLE {
+                        ffi::lua_pushvalue(state, 2);
+                        ffi::lua_rawget(state, 5);
+                        if ffi::lua_type(state, 6) != ffi::LUA_TNIL {
+                            resolved = true;
+                        } else {
+                            ffi::lua_pop(state, 1);
+                            if ffi::lua_getmetatable(state, 5) == 0 {
+                                ffi::lua_pushvalue(state, 2);
+                                ffi::lua_rawget(state, 3);
+                                resolved = ffi::lua_type(state, 6) != ffi::LUA_TNIL
+                                    || ffi::lua_getmetatable(state, 3) == 0;
+                            }
+                        }
+                    }
+                    if resolved {
+                        ffi::lua_replace(state, 1);
+                        ffi::lua_settop(state, 1);
+                    } else {
+                        ffi::lua_settop(state, 0);
+                        ffi::lua_pushnil(state);
+                    }
+                })?
+            };
+            if resolved { return Ok(value); }
             let target: Table = proxy_for_index.get("__songlua_env_target")?;
             let value = target.get::<Value>(key.clone())?;
             if !matches!(value, Value::Nil) {
@@ -305,6 +344,75 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
     )?;
     let _ = proxy.set_metatable(Some(mt));
     Ok(proxy)
+}
+
+#[cfg(test)]
+mod chunk_environment_tests {
+    use super::*;
+
+    fn original_reader(lua: &Lua, target: Table) -> Table {
+        let proxy = lua.create_table().unwrap();
+        proxy.set("__songlua_env_target", target).unwrap();
+        let owner = proxy.clone();
+        let globals = lua.globals();
+        let mt = lua.create_table().unwrap();
+        mt.set("__index", lua.create_function(move |_, (_self, key): (Table, Value)| {
+            let target: Table = owner.get("__songlua_env_target")?;
+            let value = target.get::<Value>(key.clone())?;
+            if !value.is_nil() { return Ok(value); }
+            globals.get::<Value>(key)
+        }).unwrap()).unwrap();
+        proxy.set_metatable(Some(mt)).unwrap();
+        proxy
+    }
+
+    #[test]
+    fn chunk_environment_reads_preserve_rebinding_metamethods_false_and_errors() {
+        let lua = Lua::new();
+        let target = lua.create_table().unwrap();
+        target.raw_set("present", 42).unwrap();
+        target.raw_set("disabled", false).unwrap();
+        lua.globals().raw_set("fallback", 17).unwrap();
+        let original = original_reader(&lua, target.clone());
+        let current = create_chunk_env_proxy(&lua, target.clone()).unwrap();
+        for key in ["present", "disabled", "fallback", "missing"] {
+            assert_eq!(original.get::<Value>(key).unwrap(), current.get::<Value>(key).unwrap());
+        }
+        let replacement = lua.create_table().unwrap();
+        replacement.raw_set("present", 84).unwrap();
+        for proxy in [&original, &current] {
+            proxy.raw_set("__songlua_env_target", replacement.clone()).unwrap();
+        }
+        assert_eq!(current.get::<i32>("present").unwrap(), 84);
+        let mt = lua.create_table().unwrap();
+        mt.raw_set("__index", lua.load(r#"return function(_, key)
+            LOOKUPS = LOOKUPS + 1
+            if key == 'disabled' then return false end
+            if key == 'fault' then error('environment read fault') end
+        end"#).set_name("environment metamethod").eval::<Function>().unwrap()).unwrap();
+        replacement.set_metatable(Some(mt.clone())).unwrap();
+        for key in ["disabled", "fallback", "missing", "fault"] {
+            lua.globals().raw_set("LOOKUPS", 0).unwrap();
+            let expected = original.get::<Value>(key).map_err(|error| error.to_string());
+            let lookups = lua.globals().get::<i32>("LOOKUPS").unwrap();
+            lua.globals().raw_set("LOOKUPS", 0).unwrap();
+            let actual = current.get::<Value>(key).map_err(|error| error.to_string());
+            assert_eq!(actual, expected, "lookup {key}");
+            assert_eq!(lua.globals().get::<i32>("LOOKUPS").unwrap(), lookups);
+        }
+        // A missing value can invoke the same global __index twice. Preserve
+        // those calls, even when the global table is also the target.
+        lua.globals().set_metatable(Some(mt)).unwrap();
+        for proxy in [&original, &current] {
+            proxy.raw_set("__songlua_env_target", lua.globals()).unwrap();
+            lua.globals().raw_set("LOOKUPS", 0).unwrap();
+            assert!(proxy.get::<Value>("missing").unwrap().is_nil());
+            assert_eq!(lua.globals().get::<i32>("LOOKUPS").unwrap(), 2);
+            proxy.raw_set("__songlua_env_target", false).unwrap();
+        }
+        assert_eq!(original.get::<Value>("present").unwrap_err().to_string(),
+            current.get::<Value>("present").unwrap_err().to_string());
+    }
 }
 
 pub fn initial_chunk_environment(lua: &Lua, path: &Path) -> mlua::Result<Table> {

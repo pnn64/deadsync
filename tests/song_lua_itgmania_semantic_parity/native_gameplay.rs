@@ -121,18 +121,20 @@ impl log::Log for CallLog {
             eprintln!("{}: {}", record.target(), record.args());
             return;
         }
-        CALL_EVENTS.with_borrow_mut(|capture| {
-            if capture.events.len() >= capture.limit {
-                capture.dropped += 1;
-                return;
-            }
-            capture.events.push(
-                serde_json::from_str(&record.args().to_string())
-                    .unwrap_or_else(|error| json!({"kind":"trace-error","error":error.to_string()})),
-            );
-        });
+        record_call_event(serde_json::from_str(&record.args().to_string())
+            .unwrap_or_else(|error| json!({"kind":"trace-error","error":error.to_string()})));
     }
     fn flush(&self) {}
+}
+
+fn record_call_event(event: Value) {
+    CALL_EVENTS.with_borrow_mut(|capture| {
+        if capture.events.len() >= capture.limit {
+            capture.dropped += 1;
+        } else {
+            capture.events.push(event);
+        }
+    });
 }
 
 fn start_call_log(limit: usize) -> Result<(), String> {
@@ -147,6 +149,7 @@ fn start_call_log(limit: usize) -> Result<(), String> {
         capture.limit = limit;
     });
     log::set_max_level(log::LevelFilter::Trace);
+    deadsync_song_lua::trace_capture::set_sink(Some(record_call_event));
     Ok(())
 }
 
@@ -166,20 +169,19 @@ fn compare_calls(
             .to_string_lossy()
             .replace('\\', "/")
     );
-    let (actual, dropped) = CALL_EVENTS.with_borrow(|capture| {
+    let (actual, dropped) = CALL_EVENTS.with_borrow_mut(|capture| {
         for event in capture.events.iter().filter(|event| event["kind"] == "trace-error") {
             mismatches.push(json!({"field":"call_trace_error","deadsync":event}));
         }
         let mut actual_handles = BTreeMap::new();
-        let actual: Vec<Value> = capture.events
-            .iter()
-            .filter_map(|event| {
+        let actual: Vec<Value> = std::mem::take(&mut capture.events)
+            .into_iter()
+            .filter_map(|mut event| {
                 let source = event["source"].as_str()?.replace('\\', "/");
                 let source = source
                     .split_once(&song_dir)
                     .map(|(_, path)| format!("song:/{path}"))
                     .or_else(|| source.starts_with("song:/").then(|| source.clone()))?;
-                let mut event = event.clone();
                 event["source"] = json!(source);
                 normalize_paths(&mut event, &song_dir);
                 let scene = event["scene"].as_u64().unwrap_or(0);
@@ -196,9 +198,9 @@ fn compare_calls(
         mismatches.push(json!({"field":"dropped_call_trace","deadsync":dropped}));
     }
     if trace["capabilities"]["native_event_scenes"] != true {
-        return Ok(
-            json!({"compared":false,"reason":"native command/query events have no scene epochs","actual":actual}),
-        );
+        let mut calls = json!({"compared":false,"reason":"native command/query events have no scene epochs"});
+        calls["actual"] = Value::Array(actual);
+        return Ok(calls);
     }
     let mut native_handles = BTreeMap::new();
     let native: Vec<Value> = trace["events"]
@@ -267,9 +269,10 @@ fn compare_calls(
                 .push(json!({"field":"command_query_event","native":native,"deadsync":actual}));
         }
     }
-    Ok(
-        json!({"compared":true,"native_count":native.len(),"actual_count":actual.len(),"actual":actual,"native":native}),
-    )
+    let mut calls = json!({"compared":true,"native_count":native.len(),"actual_count":actual.len()});
+    calls["actual"] = Value::Array(actual);
+    calls["native"] = Value::Array(native);
+    Ok(calls)
 }
 
 fn same_call_event(trace: &Value, native: &Value, actual: &Value) -> Result<bool, String> {
@@ -294,7 +297,9 @@ fn same_call_event(trace: &Value, native: &Value, actual: &Value) -> Result<bool
 fn normalize_paths(value: &mut Value, song_dir: &str) {
     match value {
         Value::String(value) => {
-            let normalized = value.replace('\\', "/");
+            let normalized = if value.contains('\\') {
+                std::borrow::Cow::Owned(value.replace('\\', "/"))
+            } else { std::borrow::Cow::Borrowed(value.as_str()) };
             if let Some((_, relative)) = normalized.split_once(song_dir) {
                 *value = format!("song:/{relative}");
             }
@@ -3720,8 +3725,7 @@ pub(crate) fn replay_with_command_observer(
         let mut coverage = coverage(&trace, scope, &calls, used_frames, frames.len());
         coverage["pending"].as_array_mut().unwrap()
             .extend(runtime_coverage.iter().map(|gap| json!(gap)));
-        return Ok(
-            json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
+        let mut report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
             "scope":match scope { Scope::Entry => "entry", Scope::FirstQuery => "first-point-query",
                 Scope::ThroughSecond(_) => "through-second", Scope::Full => "full" },
             "through_second":match scope { Scope::ThroughSecond(at) => Some(at), _ => None },
@@ -3730,9 +3734,10 @@ pub(crate) fn replay_with_command_observer(
             "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
             "mismatches":mismatches,"errors":errors,"lua_requests":requests,
             "stage_observations":observations,
-            "command_queries":calls,
-            "pending_coverage":coverage["pending"],"coverage":coverage}),
-        );
+            "command_queries":null,
+            "pending_coverage":coverage["pending"],"coverage":coverage});
+        report["command_queries"] = calls;
+        return Ok(report);
     }
     let expected_samples = samples
         .iter()
@@ -3824,8 +3829,9 @@ pub(crate) fn replay_with_command_observer(
         "frames_after_domain_navigation":frames_after_navigation,
         "stage_observations":observations,
         "broadcast_params_compared":true,
-        "command_queries":calls,
+        "command_queries":null,
         "pending_coverage":coverage["pending"],"coverage":coverage});
+    report["command_queries"] = calls;
     report["interactive"] = draw_checks.report(input_cursor);
     report["capture_completed_gameplay"] = json!(trace["completion"]["reason"] == "gameplay-exit");
     if input_cursor != input_events.len() || draw_cursor != draw_samples.len() {

@@ -1161,7 +1161,7 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
 }
 
-const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry|--first-query|--through-second SECONDS]\n\nDiagnostic cutoffs preserve all preceding frames and cannot accept an archive.\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry|--first-query|--through-second SECONDS]\n\nDiagnostic cutoffs preserve all preceding frames and cannot accept an archive.\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nUse --jobs N with --all or multiple positional selectors to replay independent fixtures on multiple cores. Each fixture preserves chronological Lua execution.\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
 
 fn select_archive<'a>(
     index: &'a ArchiveIndex,
@@ -1226,6 +1226,14 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
                 | "--quiet"
         )
     });
+    let jobs = if let Some(index) = args.iter().position(|arg| arg == "--jobs") {
+        let Some(jobs) = args.get(index + 1).and_then(|s| s.parse::<usize>().ok()).filter(|&n| n > 0) else {
+            eprintln!("--jobs requires a positive worker count");
+            return ExitCode::FAILURE;
+        };
+        args.drain(index..=index + 1);
+        jobs
+    } else { 1 };
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
@@ -1304,32 +1312,43 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             .iter()
             .filter(|entry| archive_available(entry))
             .collect::<Vec<_>>()
-    } else if args.len() == 1 && !args[0].starts_with('-') {
-        match select_archive(&index, &args[0]) {
-            Ok(entry) if archive_available(entry) => vec![entry],
-            Ok(entry) => {
-                eprintln!(
-                    "{} is a local-only archive; generate it with the harness before selecting it",
-                    entry.archive
-                );
-                return ExitCode::FAILURE;
-            }
-            Err(matches) => {
-                eprintln!(
-                    "selector {:?} matched {} archives; choose one filename from --list",
-                    args[0],
-                    matches.len()
-                );
-                for entry in matches.iter().take(20) {
-                    eprintln!("  {}  {}", entry.archive, entry.source_simfile);
+    } else if !args.is_empty() && args.iter().all(|arg| !arg.starts_with('-')) {
+        let mut selected = Vec::with_capacity(args.len());
+        for selector in &args {
+            match select_archive(&index, selector) {
+                Ok(entry) if archive_available(entry) => {
+                    if !selected.iter().any(|prior: &&ArchiveEntry| prior.archive == entry.archive) {
+                        selected.push(entry);
+                    }
                 }
-                return ExitCode::FAILURE;
+                Ok(entry) => {
+                    eprintln!(
+                        "{} is a local-only archive; generate it with the harness before selecting it",
+                        entry.archive
+                    );
+                    return ExitCode::FAILURE;
+                }
+                Err(matches) => {
+                    eprintln!(
+                        "selector {:?} matched {} archives; choose one filename from --list",
+                        selector,
+                        matches.len()
+                    );
+                    for entry in matches.iter().take(20) {
+                        eprintln!("  {}  {}", entry.archive, entry.source_simfile);
+                    }
+                    return ExitCode::FAILURE;
+                }
             }
         }
+        selected
     } else {
         eprintln!("invalid arguments: {}\n\n{USAGE}", args.join(" "));
         return ExitCode::FAILURE;
     };
+    if jobs > 1 && selected.len() > 1 {
+        return run_parallel_archives(&selected, jobs);
+    }
     crate::paths::init();
     let started = std::time::Instant::now();
     let mut failed = 0;
@@ -1441,6 +1460,43 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+fn run_parallel_archives(entries: &[&ArchiveEntry], jobs: usize) -> std::process::ExitCode {
+    use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+    let executable = std::env::current_exe().expect("fixture runner executable");
+    let next = AtomicUsize::new(0);
+    let passed = AtomicUsize::new(0);
+    let started = std::time::Instant::now();
+    // Processes isolate Lua VMs, asset services and per-fixture trace logs.
+    // Frames within each fixture retain their original chronological order.
+    std::thread::scope(|scope| {
+        for _ in 0..jobs.min(entries.len()) {
+            scope.spawn(|| loop {
+                let index = next.fetch_add(1, Relaxed);
+                let Some(entry) = entries.get(index) else { break; };
+                eprintln!("[worker {}/{}] {}", index + 1, entries.len(), entry.source_simfile);
+                let mut command = std::process::Command::new(&executable);
+                command.arg(&entry.archive)
+                    .env_remove("DEADSYNC_PERF_CONTROL")
+                    .env_remove("DEADSYNC_PERF_ACK");
+                if let Some(mut metrics) = std::env::var_os("DEADSYNC_SONG_LUA_METRICS") {
+                    metrics.push(format!(".worker-{index}.json"));
+                    command.env("DEADSYNC_SONG_LUA_METRICS", metrics);
+                }
+                match command.status() {
+                    Ok(status) if status.success() => { passed.fetch_add(1, Relaxed); },
+                    Ok(status) => eprintln!("{} failed: {status}", entry.source_simfile),
+                    Err(error) => eprintln!("{} failed to start: {error}", entry.source_simfile),
+                }
+            });
+        }
+    });
+    let passed = passed.load(Relaxed);
+    eprintln!("{passed}/{} fixtures passed with {} workers in {:.2}s",
+        entries.len(), jobs.min(entries.len()), started.elapsed().as_secs_f64());
+    if passed == entries.len() { std::process::ExitCode::SUCCESS }
+    else { std::process::ExitCode::FAILURE }
 }
 
 fn replay_native_archive(

@@ -89,7 +89,7 @@ pub(crate) fn trace_command(lua: &Lua, command: &Function, name: &str, phase: &s
     let Some(source) = info.source else { return; };
     if let Ok((beat, seconds)) = crate::compile_song_runtime_values(lua) {
         let scene = lua.app_data_ref::<LiveMode>().map_or(0, |mode| mode.0);
-        log::trace!(target: "deadsync_song_lua::trace", "{}", serde_json::json!({
+        emit_trace(serde_json::json!({
             "scene":scene,"kind":"command","operation":format!("command.{phase}"),
             "command":name,"source":source,"line":info.line_defined,"beat":beat,"seconds":seconds
         }));
@@ -153,8 +153,15 @@ fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -
         if let Some(details) = details().as_object() {
             event.as_object_mut().expect("trace event is an object").extend(details.clone());
         }
-        log::trace!(target: "deadsync_song_lua::trace", "{event}");
+        emit_trace(event);
     }
+}
+
+fn emit_trace(event: serde_json::Value) {
+    #[cfg(feature = "test-support")]
+    crate::trace_capture::emit(event);
+    #[cfg(not(feature = "test-support"))]
+    log::trace!(target: "deadsync_song_lua::trace", "{event}");
 }
 
 // Diagnostic-only registry, owned by the Lua VM. It retains identities and
@@ -1764,7 +1771,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
-    let mut state = crate::lua_util::actor_overlay_live_state(lua, actor).map_err(mlua::Error::external)?;
+    let mut state = crate::lua_util::actor_overlay_state_batched(lua, actor).map_err(mlua::Error::external)?;
     crate::lua_util::replay_tween_pose(lua, actor, &mut state);
     state.spin_baked = crate::lua_util::spin_render_pose(actor)?.is_some();
     Ok(state)

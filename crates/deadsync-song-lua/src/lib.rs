@@ -1,4 +1,6 @@
 pub mod gameplay;
+#[cfg(feature = "test-support")]
+pub mod trace_capture;
 // Playback is tested with concrete asset fixtures by tests/playback.rs.
 #[cfg(not(test))]
 pub mod playback;

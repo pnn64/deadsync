@@ -18475,25 +18475,40 @@ pub fn read_color_args(args: &MultiValue) -> Option<[f32; 4]> {
     read_color_values(args.iter().skip(method_arg_offset(args)))
 }
 
+struct CaptureResetKeys(Table);
+
+fn capture_reset_keys(lua: &Lua) -> mlua::Result<Table> {
+    if let Some(keys) = lua.app_data_ref::<CaptureResetKeys>() {
+        return Ok(keys.0.clone());
+    }
+    let keys = lua.create_sequence_from([
+        "__songlua_capture_cursor", "__songlua_capture_duration",
+        "__songlua_capture_tween_time_left", "__songlua_startup_queue_seconds",
+        "__songlua_capture_easing", "__songlua_capture_opt1", "__songlua_capture_opt2",
+        "__songlua_capture_block", "__songlua_capture_immediate_block",
+    ])?;
+    lua.set_app_data(CaptureResetKeys(keys.clone()));
+    Ok(keys)
+}
+
 pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if crate::live::active(lua) {
+        let keys = capture_reset_keys(lua)?;
         // These are private audit fields, not actor commands. Reset them under
-        // one VM lock instead of entering Lua ten times per actor per frame.
-        // SAFETY: exec_raw roots the actor at index 1. Two reserved stack slots
-        // hold a string key and primitive value; every raw_set consumes both.
+        // one VM lock, using keys interned once for this VM. The compiler must
+        // still replace the blocks table: saved captures can retain the old one.
+        // SAFETY: exec_raw roots actor/keys at indices 1/2. Two reserved slots
+        // hold an interned key and primitive value; rawset consumes both.
         unsafe {
-            lua.exec_raw::<()>(actor, |state| {
+            lua.exec_raw::<()>((actor, keys), |state| {
                 ffi::luaL_checkstack(state, 2, c"capture reset".as_ptr());
-                for key in ["__songlua_capture_cursor", "__songlua_capture_duration",
-                    "__songlua_capture_tween_time_left"] {
-                    ffi::lua_pushlstring(state, key.as_ptr().cast(), key.len());
+                for index in 1..=3 {
+                    ffi::lua_rawgeti(state, 2, index);
                     ffi::lua_pushnumber(state, 0.0);
                     ffi::lua_rawset(state, 1);
                 }
-                for key in ["__songlua_startup_queue_seconds", "__songlua_capture_easing",
-                    "__songlua_capture_opt1", "__songlua_capture_opt2",
-                    "__songlua_capture_block", "__songlua_capture_immediate_block"] {
-                    ffi::lua_pushlstring(state, key.as_ptr().cast(), key.len());
+                for index in 4..=9 {
+                    ffi::lua_rawgeti(state, 2, index);
                     ffi::lua_pushnil(state);
                     ffi::lua_rawset(state, 1);
                 }
@@ -19163,21 +19178,34 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
     )
 }
 
-pub(crate) fn actor_overlay_live_state(
+struct ActorScalarKeys(Table);
+
+fn actor_scalar_keys(lua: &Lua) -> mlua::Result<Table> {
+    if let Some(keys) = lua.app_data_ref::<ActorScalarKeys>() {
+        return Ok(keys.0.clone());
+    }
+    let keys = lua.create_sequence_from(ActorNumberField::KEYS.iter()
+        .chain(ActorFlagField::KEYS).copied())?;
+    lua.set_app_data(ActorScalarKeys(keys.clone()));
+    Ok(keys)
+}
+
+pub(crate) fn actor_overlay_state_batched(
     lua: &Lua,
     actor: &Table,
 ) -> Result<SongLuaOverlayState, String> {
     let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
     let mut flags = [None; ActorFlagField::KEYS.len()];
     let mut copied = false;
+    let keys = actor_scalar_keys(lua).map_err(|error| error.to_string())?;
     // SAFETY: exec_raw locks the VM and owns the actor at stack index 1. We
     // reserve two slots, use raw table lookup, check types before conversion,
     // and pop every value. Only primitive Rust copies leave this stack frame.
     unsafe {
-        lua.exec_raw::<()>(actor, |state| {
+        lua.exec_raw::<()>((actor, keys), |state| {
             if ffi::lua_checkstack(state, 2) != 0 {
-                for (index, key) in ActorNumberField::KEYS.iter().enumerate() {
-                    ffi::lua_pushlstring(state, key.as_ptr().cast(), key.len());
+                for index in 0..ActorNumberField::KEYS.len() {
+                    ffi::lua_rawgeti(state, 2, (index + 1) as ffi::lua_Integer);
                     ffi::lua_rawget(state, 1);
                     numbers[index] = if ffi::lua_type(state, -1) == ffi::LUA_TNIL {
                         ActorNumberValue::Value(None)
@@ -19190,8 +19218,8 @@ pub(crate) fn actor_overlay_live_state(
                     };
                     ffi::lua_pop(state, 1);
                 }
-                for (index, key) in ActorFlagField::KEYS.iter().enumerate() {
-                    ffi::lua_pushlstring(state, key.as_ptr().cast(), key.len());
+                for index in 0..ActorFlagField::KEYS.len() {
+                    ffi::lua_rawgeti(state, 2, (ActorNumberField::KEYS.len() + index + 1) as ffi::lua_Integer);
                     ffi::lua_rawget(state, 1);
                     if ffi::lua_type(state, -1) != ffi::LUA_TNIL {
                         flags[index] = Some(ffi::lua_toboolean(state, -1) != 0);
@@ -19222,11 +19250,34 @@ mod actor_state_read_tests {
     use super::*;
 
     #[test]
+    fn capture_reset_preserves_compiler_snapshots_and_reuses_live_blocks() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        let blocks = lua.create_sequence_from([42]).unwrap();
+        actor.raw_set("__songlua_capture_blocks", blocks.clone()).unwrap();
+        actor.raw_set("__songlua_capture_cursor", 3.0).unwrap();
+        actor.raw_set("__songlua_capture_block", blocks.clone()).unwrap();
+        reset_actor_capture(&lua, &actor).unwrap();
+        assert_eq!(blocks.raw_get::<i32>(1).unwrap(), 42, "saved compiler captures retain their data");
+        let fresh = actor.raw_get::<Table>("__songlua_capture_blocks").unwrap();
+        assert_ne!(fresh, blocks);
+        assert_eq!(actor.raw_get::<f32>("__songlua_capture_cursor").unwrap(), 0.0);
+        assert!(actor.raw_get::<Value>("__songlua_capture_block").unwrap().is_nil());
+        fresh.raw_set(1, 17).unwrap();
+        lua.set_app_data(crate::live::LiveMode(1));
+        reset_actor_capture(&lua, &actor).unwrap();
+        assert_eq!(actor.raw_get::<Table>("__songlua_capture_blocks").unwrap(), fresh);
+        assert_eq!(fresh.raw_len(), 0);
+        actor.raw_set("__songlua_capture_blocks", false).unwrap();
+        assert!(reset_actor_capture(&lua, &actor).is_err(), "live reset retains type validation");
+    }
+
+    #[test]
     fn live_scalar_read_preserves_defaults_coercions_and_errors() {
         let lua = Lua::new();
         let actor = lua.create_table().unwrap();
         assert_eq!(
-            actor_overlay_live_state(&lua, &actor).unwrap(),
+            actor_overlay_state_batched(&lua, &actor).unwrap(),
             actor_overlay_initial_state(&actor).unwrap()
         );
         for numeric in [
@@ -19246,7 +19297,7 @@ mod actor_state_read_tests {
                     actor.raw_set(*key, truthy.clone()).unwrap();
                 }
                 let expected = actor_overlay_initial_state(&actor).unwrap();
-                let actual = actor_overlay_live_state(&lua, &actor).unwrap();
+                let actual = actor_overlay_state_batched(&lua, &actor).unwrap();
                 assert_eq!(actual, expected);
                 if matches!(truthy, Value::Number(_)) {
                     assert!(actual.visible, "Lua zero is truthy");
@@ -19260,7 +19311,7 @@ mod actor_state_read_tests {
         actor.raw_set("__songlua_state_x", f32::NAN).unwrap();
         actor.raw_set("__songlua_state_z", f32::INFINITY).unwrap();
         let mut expected = actor_overlay_initial_state(&actor).unwrap();
-        let mut actual = actor_overlay_live_state(&lua, &actor).unwrap();
+        let mut actual = actor_overlay_state_batched(&lua, &actor).unwrap();
         assert_eq!(actual.x.to_bits(), expected.x.to_bits());
         actual.x = 0.0;
         expected.x = 0.0;
@@ -19269,7 +19320,7 @@ mod actor_state_read_tests {
             .raw_set("__songlua_state_x", lua.create_table().unwrap())
             .unwrap();
         assert_eq!(
-            actor_overlay_live_state(&lua, &actor).unwrap_err(),
+            actor_overlay_state_batched(&lua, &actor).unwrap_err(),
             actor_overlay_initial_state(&actor).unwrap_err()
         );
         assert_eq!(lua.load("return 6*7").eval::<u32>().unwrap(), 42);
