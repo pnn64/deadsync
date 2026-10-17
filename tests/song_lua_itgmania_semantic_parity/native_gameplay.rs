@@ -177,12 +177,7 @@ fn compare_calls(
         let actual: Vec<Value> = std::mem::take(&mut capture.events)
             .into_iter()
             .filter_map(|mut event| {
-                let source = event["source"].as_str()?.replace('\\', "/");
-                let source = source
-                    .split_once(&song_dir)
-                    .map(|(_, path)| format!("song:/{path}"))
-                    .or_else(|| source.starts_with("song:/").then(|| source.clone()))?;
-                event["source"] = json!(source);
+                if !normalize_call_source(&mut event, &song_dir) { return None; }
                 normalize_paths(&mut event, &song_dir);
                 let scene = event["scene"].as_u64().unwrap_or(0);
                 normalize_query_handles(&mut event["args"], &mut actual_handles, scene);
@@ -294,6 +289,19 @@ fn same_call_event(trace: &Value, native: &Value, actual: &Value) -> Result<bool
         && (number(native, "beat")? - number(actual, "beat")?).abs() <= 1e-6)
 }
 
+fn normalize_call_source(event: &mut Value, song_dir: &str) -> bool {
+    let Some(Value::String(source)) = event.get_mut("source") else { return false; };
+    if source.contains('\\') {
+        *source = source.replace('\\', "/");
+    }
+    if let Some(start) = source.find(song_dir) {
+        source.replace_range(..start + song_dir.len(), "song:/");
+        true
+    } else {
+        source.starts_with("song:/")
+    }
+}
+
 fn normalize_paths(value: &mut Value, song_dir: &str) {
     match value {
         Value::String(value) => {
@@ -316,7 +324,7 @@ fn normalize_paths(value: &mut Value, song_dir: &str) {
 
 fn normalize_query_handles(
     value: &mut Value,
-    handles: &mut BTreeMap<(u64, String), usize>,
+    handles: &mut BTreeMap<u64, BTreeMap<String, usize>>,
     scene: u64,
 ) {
     match value {
@@ -364,8 +372,15 @@ fn normalize_query_handles(
                 && values.get("path").is_some_and(Value::is_string)
                 && let Some(id) = values.get("actor").and_then(Value::as_str)
             {
-                let next = handles.len() + 1;
-                let id = *handles.entry((scene, id.to_string())).or_insert(next);
+                let id = if let Some(id) = handles.get(&scene).and_then(|handles| handles.get(id)) {
+                    *id
+                } else {
+                    // Allocate an identity string only for its first sighting.
+                    // Numbering remains global across scene epochs.
+                    let next = handles.values().map(BTreeMap::len).sum::<usize>() + 1;
+                    handles.entry(scene).or_default().insert(id.to_owned(), next);
+                    next
+                };
                 values.insert("actor".into(), json!(id));
             }
             values
@@ -2307,6 +2322,43 @@ end}
         let mut unnamed = json!({"actor":"external-0099"});
         super::normalize_query_handles(&mut unnamed, &mut BTreeMap::new(), 1);
         assert_eq!(unnamed, json!({"actor":"external-0099"}));
+    }
+
+    #[test]
+    fn query_handle_numbering_remains_global_across_scene_epochs() {
+        let mut handles = std::collections::BTreeMap::new();
+        for (scene, address, expected) in [(1, "a", 1), (2, "a", 2),
+            (1, "b", 3), (3, "a", 4), (2, "a", 2), (1, "a", 1)] {
+            let mut value = serde_json::json!({"actor":address,"name":"Child","path":"Screen/Child"});
+            super::normalize_query_handles(&mut value, &mut handles, scene);
+            assert_eq!(value["actor"], expected);
+            assert_eq!(value["name"], "Child");
+            assert_eq!(value["path"], "Screen/Child");
+        }
+    }
+
+    #[test]
+    fn call_source_normalization_preserves_original_path_rules() {
+        for directory in ["/tmp/song/", "C:/Songs/Song/", "/songs/音楽/"] {
+            for source in [format!("@{directory}default.lua"), format!("prefix{directory}default.lua"),
+                format!("@{directory}nested/{directory}default.lua"),
+                format!("@{directory}default.lua").replace('/', "\\"),
+                "song:/default.lua".into(), "song:/nested\\default.lua".into(),
+                "@theme:/default.lua".into(), "".into()] {
+                let normalized = source.replace('\\', "/");
+                let expected = normalized.split_once(directory)
+                    .map(|(_, relative)| format!("song:/{relative}"))
+                    .or_else(|| normalized.starts_with("song:/").then(|| normalized.clone()));
+                let mut event = serde_json::json!({"source":source,"other":"unchanged"});
+                assert_eq!(super::normalize_call_source(&mut event, directory), expected.is_some());
+                if let Some(expected) = expected { assert_eq!(event["source"], expected); }
+                assert_eq!(event["other"], "unchanged");
+            }
+        }
+        for source in [serde_json::Value::Null, serde_json::json!(42)] {
+            let mut event = serde_json::json!({"source":source});
+            assert!(!super::normalize_call_source(&mut event, "/tmp/song/"));
+        }
     }
 
     #[test]

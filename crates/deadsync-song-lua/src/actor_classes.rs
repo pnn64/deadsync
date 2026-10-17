@@ -626,20 +626,16 @@ pub(crate) fn lookup(lua: &Lua, (actor, key): (Table, Value)) -> mlua::Result<Va
     };
     let name = name.to_str()?;
     let kind = actor
-        .raw_get::<Option<String>>("__songlua_actor_type")?
-        .unwrap_or_else(|| "Actor".into());
-    if let Some(class) = lua.globals().get::<Option<Table>>(class_name(&kind))? {
+        .raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_actor_type")?;
+    let kind = kind.as_ref().map_or("Actor", |kind| kind.as_str());
+    if let Some(class) = lua.globals().get::<Option<Table>>(class_name(kind))? {
         let method = class.get::<Value>(key.clone())?;
-        if !method.is_nil() {
-            return Ok(method);
-        }
-        if is_core(&kind) {
-            return Ok(Value::Nil);
-        }
+        if !method.is_nil() { return Ok(method); }
+        if is_core(kind) { return Ok(Value::Nil); }
     }
     // Unlinked classes retain their existing own adapters until their native
     // inventories are audited. Frame callbacks are never inherited by Actor.
-    if !is_frame(&kind)
+    if !is_frame(kind)
         && matches!(
             name.as_ref(),
             "SetUpdateFunction" | "SetDrawFunction" | "GetDrawFunction"
@@ -665,4 +661,96 @@ pub(crate) fn assign(_: &Lua, (actor, key, value): (Table, Value, Value)) -> mlu
         }
     }
     actor.raw_set(key, value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn original(lua: &Lua, (actor, key): (Table, Value)) -> mlua::Result<Value> {
+        let Value::String(name) = &key else { return Ok(Value::Nil); };
+        let name = name.to_str()?;
+        let kind = actor.raw_get::<Option<String>>("__songlua_actor_type")?
+            .unwrap_or_else(|| "Actor".into());
+        if let Some(class) = lua.globals().get::<Option<Table>>(class_name(&kind))? {
+            let value = class.get::<Value>(key.clone())?;
+            if !value.is_nil() { return Ok(value); }
+            if is_core(&kind) { return Ok(Value::Nil); }
+        }
+        if !is_frame(&kind) && matches!(name.as_ref(), "SetUpdateFunction" | "SetDrawFunction" | "GetDrawFunction") {
+            return Ok(Value::Nil);
+        }
+        match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
+            Some(methods) => methods.raw_get(key),
+            None => Ok(Value::Nil),
+        }
+    }
+
+    fn compare(lua: &Lua, actor: &Table, key: Value) {
+        let globals = lua.globals();
+        globals.raw_set("LOOKUPS", 0).unwrap();
+        let expected = original(lua, (actor.clone(), key.clone())).map_err(|e| e.to_string());
+        let calls = globals.raw_get::<usize>("LOOKUPS").unwrap();
+        globals.raw_set("LOOKUPS", 0).unwrap();
+        let actual = lookup(lua, (actor.clone(), key)).map_err(|e| e.to_string());
+        assert_eq!(actual, expected);
+        assert_eq!(globals.raw_get::<usize>("LOOKUPS").unwrap(), calls);
+    }
+
+    #[test]
+    fn class_name_reads_preserve_lookup_hooks_identity_and_errors() {
+        let lua = Lua::new();
+        let globals = lua.globals();
+        lua.load(r#"
+            LOOKUPS = 0
+            Actor = {base = 17, disabled = false}
+            ActorFrame = setmetatable({own = 42}, {__index = Actor})
+            Sprite = setmetatable({}, {__index = ActorFrame})
+        "#).exec().unwrap();
+        let actor = lua.create_table().unwrap();
+        let methods = lua.create_table().unwrap();
+        methods.raw_set("fallback", 91).unwrap();
+        methods.raw_set("SetUpdateFunction", 92).unwrap();
+        actor.raw_set(METHODS_KEY, methods).unwrap();
+        for kind in [Value::Nil, Value::String(lua.create_string("Actor").unwrap()),
+            Value::String(lua.create_string("ActorFrame").unwrap()),
+            Value::String(lua.create_string("Quad").unwrap()),
+            Value::String(lua.create_string("GraphDisplay").unwrap()),
+            Value::String(lua.create_string("custom".repeat(40)).unwrap()),
+            Value::String(lua.create_string([0xff]).unwrap()), Value::Integer(42), Value::Boolean(false)] {
+            actor.raw_set("__songlua_actor_type", kind).unwrap();
+            for key in ["base", "own", "disabled", "fallback", "missing", "SetUpdateFunction"] {
+                compare(&lua, &actor, Value::String(lua.create_string(key).unwrap()));
+            }
+            compare(&lua, &actor, Value::Integer(42));
+            compare(&lua, &actor, Value::String(lua.create_string([0xff]).unwrap()));
+        }
+        actor.raw_set("__songlua_actor_type", "ActorFrame").unwrap();
+        lua.load(r#"
+            setmetatable(Actor, {__index = function(_, name)
+                LOOKUPS = LOOKUPS + 1
+                if name == 'fault' then error('inherited method fault') end
+                if name == 'hook' then return false end
+            end})
+        "#).exec().unwrap();
+        for key in ["base", "own", "missing", "hook", "fault"] {
+            compare(&lua, &actor, Value::String(lua.create_string(key).unwrap()));
+        }
+        lua.load(r#"
+            CLASS = ActorFrame
+            ActorFrame = nil
+            setmetatable(_G, { __index = function(_, name)
+                LOOKUPS = LOOKUPS + 1
+                if name == 'ActorFrame' then return CLASS end
+            end })
+        "#).exec().unwrap();
+        for key in ["base", "own", "missing", "hook", "fault"] {
+            compare(&lua, &actor, Value::String(lua.create_string(key).unwrap()));
+        }
+        globals.set_metatable(None).unwrap();
+        for value in [Value::Nil, Value::Boolean(false)] {
+            globals.raw_set("ActorFrame", value).unwrap();
+            compare(&lua, &actor, Value::String(lua.create_string("fallback").unwrap()));
+        }
+    }
 }

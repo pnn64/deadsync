@@ -150,8 +150,8 @@ fn trace_method(lua: &Lua, kind: &str, operation: &str, details: impl FnOnce() -
         } else { "construction" };
         let mut event = serde_json::json!({"scene":scene,"kind":kind,"operation":operation,
             "source":source,"line":line,"phase":phase,"beat":beat,"seconds":seconds});
-        if let Some(details) = details().as_object() {
-            event.as_object_mut().expect("trace event is an object").extend(details.clone());
+        if let serde_json::Value::Object(details) = details() {
+            event.as_object_mut().expect("trace event is an object").extend(details);
         }
         emit_trace(event);
     }

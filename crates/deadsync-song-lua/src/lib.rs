@@ -29,6 +29,7 @@ mod input;
 pub use input::{SongLuaInputEvent, SongLuaInputType};
 mod json;
 mod lua_util;
+mod raw_vm;
 mod live;
 pub use live::{SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
 #[cfg(feature = "test-support")]

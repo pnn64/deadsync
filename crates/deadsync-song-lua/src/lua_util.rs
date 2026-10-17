@@ -118,7 +118,7 @@ impl mlua::FromLua for ActorScriptDir {
 
 // Short, transient Lua fields stay on the stack. Keep String's coercions and
 // diagnostics, including the direct-stack UTF-8 error, for existing scripts.
-struct LuaFieldText<const N: usize>(smallvec::SmallVec<[u8; N]>)
+pub(crate) struct LuaFieldText<const N: usize>(smallvec::SmallVec<[u8; N]>)
 where
     [u8; N]: smallvec::Array<Item = u8>;
 
@@ -126,7 +126,7 @@ impl<const N: usize> LuaFieldText<N>
 where
     [u8; N]: smallvec::Array<Item = u8>,
 {
-    fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         std::str::from_utf8(&self.0).expect("LuaFieldText contains validated UTF-8")
     }
 }
@@ -12469,8 +12469,47 @@ enum SongLuaCompileUpdateJob {
     },
 }
 
+#[derive(Clone, Default)]
 struct SongLuaCompileUpdatePlan {
     jobs: Arc<[SongLuaCompileUpdateJob]>,
+    slots: Arc<[CompileUpdateSlots]>,
+    actor_count: usize,
+}
+
+#[derive(Clone, Copy)]
+struct CompileUpdateSlots {
+    actor: usize,
+    parent: Option<usize>,
+}
+
+impl SongLuaCompileUpdatePlan {
+    fn new(jobs: Vec<SongLuaCompileUpdateJob>) -> Self {
+        let mut actors = FxHashMap::default();
+        let slots = jobs.iter().map(|job| {
+            let actor = match job {
+                SongLuaCompileUpdateJob::Enter { actor, .. }
+                | SongLuaCompileUpdateJob::Advance { actor, .. }
+                | SongLuaCompileUpdateJob::Recurring { actor, .. }
+                | SongLuaCompileUpdateJob::Callback { actor, .. }
+                | SongLuaCompileUpdateJob::Texture { actor }
+                | SongLuaCompileUpdateJob::PlayerFeedback { actor }
+                | SongLuaCompileUpdateJob::Transition { actor } => actor,
+            };
+            // Aliases and repeated visits retain the same delta slot, just as
+            // the pointer-keyed map did. Only the immutable plan resolves IDs.
+            let next = actors.len();
+            let actor = *actors.entry(actor.to_pointer() as usize).or_insert(next);
+            let parent = if let SongLuaCompileUpdateJob::Enter { parent: Some(parent), .. } = job {
+                Some(*actors.get(&(parent.to_pointer() as usize)).expect("parent entered before child"))
+            } else { None };
+            CompileUpdateSlots { actor, parent }
+        }).collect::<Vec<_>>();
+        Self { jobs: jobs.into(), slots: slots.into(), actor_count: actors.len() }
+    }
+
+    fn iter(&self) -> std::slice::Iter<'_, SongLuaCompileUpdateJob> {
+        self.jobs.iter()
+    }
 }
 
 pub(crate) fn invalidate_compile_update_plan(lua: &Lua) {
@@ -12573,7 +12612,7 @@ fn collect_compile_update_self_jobs(
     Ok(())
 }
 
-fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaCompileUpdateJob]>> {
+fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<SongLuaCompileUpdatePlan> {
     if lua.app_data_ref::<SongLuaCompileUpdatePlan>().is_none() {
         let mut jobs = Vec::new();
         let mut order = 0;
@@ -12628,11 +12667,11 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
         if let Some(screen) = lua.globals().raw_get::<Option<Table>>("__songlua_top_screen")? {
             jobs.push(SongLuaCompileUpdateJob::Callback { actor: screen, order });
         }
-        lua.set_app_data(SongLuaCompileUpdatePlan { jobs: jobs.into() });
+        lua.set_app_data(SongLuaCompileUpdatePlan::new(jobs));
     }
     Ok(lua
         .app_data_ref::<SongLuaCompileUpdatePlan>()
-        .map(|plan| plan.jobs.clone())
+        .map(|plan| (*plan).clone())
         .unwrap_or_default())
 }
 
@@ -13033,7 +13072,7 @@ struct ActorCompileUpdateDeltas {
 }
 
 #[derive(Default)]
-struct CompileUpdateDeltaScratch(FxHashMap<usize, ActorCompileUpdateDeltas>);
+struct CompileUpdateDeltaScratch(Vec<ActorCompileUpdateDeltas>);
 
 pub(crate) fn run_actor_compile_update_functions_with_entry(
     lua: &Lua,
@@ -13044,11 +13083,12 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
     let Value::Table(root) = root else {
         return Ok(());
     };
-    // Own one shared handle, without borrowing app data across callbacks:
+    // Retain the immutable plan without borrowing app data across callbacks:
     // callbacks can invalidate the plan while this frame finishes its jobs.
     let jobs = compile_update_jobs(lua, root)?;
     let mut deltas = lua.remove_app_data::<CompileUpdateDeltaScratch>().unwrap_or_default().0;
-    deltas.clear();
+    deltas.resize(jobs.actor_count, ActorCompileUpdateDeltas::default());
+    deltas.fill(ActorCompileUpdateDeltas::default());
     if lua.app_data_ref::<SongLuaCompileUpdatePhase>().is_none() {
         lua.set_app_data(SongLuaCompileUpdatePhase {
             active: false,
@@ -13060,12 +13100,12 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
         .app_data_ref::<SongLuaCompileUpdatePhase>()
         .expect("phase installed");
     let result = (|| {
-        for job in jobs.iter() {
+        for (job, slots) in jobs.iter().zip(jobs.slots.iter()) {
             if let SongLuaCompileUpdateJob::Transition { actor } = job {
                 // Transition::UpdateInternal gates its child, after the base
                 // Actor has advanced its own queue. Completion is checked
                 // before the child's last Update, as in Transition.cpp.
-                let current = deltas.get_mut(&(actor.to_pointer() as usize)).expect("actor entered");
+                let current = &mut deltas[slots.actor];
                 if current.children.0.is_some() {
                     if actor.raw_get::<u8>("__songlua_transition_state")? != 1 {
                         current.children.0 = None;
@@ -13089,13 +13129,13 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
             let (actor, order) = match job {
                 SongLuaCompileUpdateJob::Enter {
                     actor,
-                    parent,
+                    parent: _,
                     delta_source,
                 } => {
                     before_enter(actor)?;
-                    let (mut incoming, mut span) = match parent {
+                    let (mut incoming, mut span) = match slots.parent {
                         Some(parent) => {
-                            let parent = deltas.get(&(parent.to_pointer() as usize)).expect("parent entered");
+                            let parent = &deltas[parent];
                             match delta_source {
                                 SongLuaCompileParentDelta::Children => parent.children,
                                 SongLuaCompileParentDelta::Wrappers => parent.wrappers,
@@ -13128,9 +13168,9 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                         (_, Some(_), Some(_)) => Some(0.0),
                         _ => None,
                     };
-                    deltas.insert(actor.to_pointer() as usize, ActorCompileUpdateDeltas {
+                    deltas[slots.actor] = ActorCompileUpdateDeltas {
                         input, wrappers: (delta, span), children: (None, None),
-                    });
+                    };
                     continue;
                 }
                 SongLuaCompileUpdateJob::Advance { actor, order, .. }
@@ -13139,7 +13179,7 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
                 SongLuaCompileUpdateJob::Texture { .. } | SongLuaCompileUpdateJob::PlayerFeedback { .. }
                 | SongLuaCompileUpdateJob::Transition { .. } => unreachable!("host jobs handled above"),
             };
-            let current = deltas.get_mut(&(actor.to_pointer() as usize)).expect("actor entered");
+            let current = &mut deltas[slots.actor];
             if matches!(job, SongLuaCompileUpdateJob::Advance { .. }) {
                 // Wrappers may have changed the owner's rate since Enter.
                 let rate = actor_update_rate(actor)? as f32;
@@ -19196,17 +19236,18 @@ pub(crate) fn actor_overlay_state_batched(
 ) -> Result<SongLuaOverlayState, String> {
     let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
     let mut flags = [None; ActorFlagField::KEYS.len()];
-    let mut copied = false;
     let keys = actor_scalar_keys(lua).map_err(|error| error.to_string())?;
-    // SAFETY: exec_raw locks the VM and owns the actor at stack index 1. We
-    // reserve two slots, use raw table lookup, check types before conversion,
-    // and pop every value. Only primitive Rust copies leave this stack frame.
+    // SAFETY: actor and interned keys are rooted in four reserved slots.
+    // Only raw reads and primitive conversions run under this lock. They
+    // neither allocate Lua objects nor call authored code or metamethods.
     unsafe {
-        lua.exec_raw::<()>((actor, keys), |state| {
-            if ffi::lua_checkstack(state, 2) != 0 {
+        crate::raw_vm::with_read_stack(lua, 4, |raw, base| {
+                let state = raw.state();
+                raw.push(actor)?;
+                raw.push(keys)?;
                 for index in 0..ActorNumberField::KEYS.len() {
-                    ffi::lua_rawgeti(state, 2, (index + 1) as ffi::lua_Integer);
-                    ffi::lua_rawget(state, 1);
+                    ffi::lua_rawgeti(state, base + 2, (index + 1) as ffi::lua_Integer);
+                    ffi::lua_rawget(state, base + 1);
                     numbers[index] = if ffi::lua_type(state, -1) == ffi::LUA_TNIL {
                         ActorNumberValue::Value(None)
                     } else if ffi::lua_isnumber(state, -1) != 0 {
@@ -19219,21 +19260,16 @@ pub(crate) fn actor_overlay_state_batched(
                     ffi::lua_pop(state, 1);
                 }
                 for index in 0..ActorFlagField::KEYS.len() {
-                    ffi::lua_rawgeti(state, 2, (ActorNumberField::KEYS.len() + index + 1) as ffi::lua_Integer);
-                    ffi::lua_rawget(state, 1);
+                    ffi::lua_rawgeti(state, base + 2, (ActorNumberField::KEYS.len() + index + 1) as ffi::lua_Integer);
+                    ffi::lua_rawget(state, base + 1);
                     if ffi::lua_type(state, -1) != ffi::LUA_TNIL {
                         flags[index] = Some(ffi::lua_toboolean(state, -1) != 0);
                     }
                     ffi::lua_pop(state, 1);
                 }
-                copied = true;
-            }
-            ffi::lua_settop(state, 0);
+                Ok(())
         })
         .map_err(|error| error.to_string())?;
-    }
-    if !copied {
-        return actor_overlay_initial_state(actor);
     }
     read_actor_overlay_state(
         actor,
@@ -19248,6 +19284,53 @@ pub(crate) fn actor_overlay_state_batched(
 #[cfg(test)]
 mod actor_state_read_tests {
     use super::*;
+
+    #[test]
+    fn compile_update_slots_preserve_alias_visits_and_plan_rebuilds() {
+        let lua = Lua::new();
+        let root = lua.load(r#"
+            events = {}
+            local function update(_, delta) events[#events+1] = delta end
+            local shared = { __songlua_update_function = update }
+            local root = {
+                { shared, __songlua_update_rate = 2 },
+                { shared, __songlua_update_rate = 3 },
+            }
+            return root
+        "#).eval::<Table>().unwrap();
+        run_actor_compile_update_functions_with_delta(&lua, &Value::Table(root.clone()), 1.0).unwrap();
+        let events: Vec<f64> = lua.globals().get::<Table>("events").unwrap()
+            .sequence_values().collect::<mlua::Result<_>>().unwrap();
+        assert_eq!(events, [2.0, 3.0], "shared actors retain each parent's chronological delta");
+        let new_actor = lua.load(r#"return { __songlua_update_function = function(_, delta)
+            events[#events+1] = delta
+        end, __songlua_update_rate = 5 }"#).eval::<Table>().unwrap();
+        root.raw_set(3, new_actor).unwrap();
+        invalidate_compile_update_plan(&lua);
+        run_actor_compile_update_functions_with_delta(&lua, &Value::Table(root), 0.5).unwrap();
+        let events: Vec<f64> = lua.globals().get::<Table>("events").unwrap()
+            .sequence_values().collect::<mlua::Result<_>>().unwrap();
+        assert_eq!(events, [2.0, 3.0, 1.0, 1.5, 2.5], "rebuilds resize scratch without retaining old deltas");
+    }
+
+    #[test]
+    fn short_class_fields_keep_string_coercions_spills_and_errors() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        for value in [Value::Nil, Value::String(lua.create_string("ActorFrame").unwrap()),
+            Value::String(lua.create_string("x".repeat(200)).unwrap()),
+            Value::String(lua.create_string([0xff, 0xfe]).unwrap()),
+            Value::Integer(42), Value::Number(1.5), Value::Boolean(false),
+            Value::Table(lua.create_table().unwrap())] {
+            actor.raw_set("__songlua_actor_type", value).unwrap();
+            let expected = actor.raw_get::<Option<String>>("__songlua_actor_type")
+                .map_err(|err| err.to_string());
+            let actual = actor.raw_get::<Option<LuaFieldText<64>>>("__songlua_actor_type")
+                .map(|value| value.map(|value| value.as_str().to_owned()))
+                .map_err(|err| err.to_string());
+            assert_eq!(actual, expected);
+        }
+    }
 
     #[test]
     fn capture_reset_preserves_compiler_snapshots_and_reuses_live_blocks() {

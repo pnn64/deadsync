@@ -271,37 +271,35 @@ pub fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {
             // Ordinary globals need no Rust Table/Value round trip for each
             // intermediate lookup. Metamethods, invalid targets and rebinding
             // still use the original reader below, including its error paths.
-            // SAFETY: exec_raw roots proxy/key/globals/target-key at 1..=4.
-            // Reserve three slots, inspect types before raw lookup, and return
-            // only an owned mlua Value. No authored Lua runs in this fast path.
+            // SAFETY: all keys/values already exist and are rooted below.
+            // Ten slots cover four arguments, raw lookups and conversion.
+            // No allocating Lua operation or authored callback runs here.
             let value = unsafe {
-                lua.exec_raw::<Value>((&proxy_for_index, &key, &globals_for_index, &target_key), |state| {
+                crate::raw_vm::with_read_stack(lua, 10, |raw, base| {
                     use mlua::ffi;
-                    ffi::luaL_checkstack(state, 3, c"environment read".as_ptr());
-                    ffi::lua_pushvalue(state, 4);
-                    ffi::lua_rawget(state, 1);
-                    if ffi::lua_type(state, 5) == ffi::LUA_TTABLE {
-                        ffi::lua_pushvalue(state, 2);
-                        ffi::lua_rawget(state, 5);
-                        if ffi::lua_type(state, 6) != ffi::LUA_TNIL {
+                    let state = raw.state();
+                    raw.push(&proxy_for_index)?;
+                    raw.push(&key)?;
+                    raw.push(&globals_for_index)?;
+                    raw.push(&target_key)?;
+                    ffi::lua_pushvalue(state, base + 4);
+                    ffi::lua_rawget(state, base + 1);
+                    if ffi::lua_type(state, base + 5) == ffi::LUA_TTABLE {
+                        ffi::lua_pushvalue(state, base + 2);
+                        ffi::lua_rawget(state, base + 5);
+                        if ffi::lua_type(state, base + 6) != ffi::LUA_TNIL {
                             resolved = true;
                         } else {
                             ffi::lua_pop(state, 1);
-                            if ffi::lua_getmetatable(state, 5) == 0 {
-                                ffi::lua_pushvalue(state, 2);
-                                ffi::lua_rawget(state, 3);
-                                resolved = ffi::lua_type(state, 6) != ffi::LUA_TNIL
-                                    || ffi::lua_getmetatable(state, 3) == 0;
+                            if ffi::lua_getmetatable(state, base + 5) == 0 {
+                                ffi::lua_pushvalue(state, base + 2);
+                                ffi::lua_rawget(state, base + 3);
+                                resolved = ffi::lua_type(state, base + 6) != ffi::LUA_TNIL
+                                    || ffi::lua_getmetatable(state, base + 3) == 0;
                             }
                         }
                     }
-                    if resolved {
-                        ffi::lua_replace(state, 1);
-                        ffi::lua_settop(state, 1);
-                    } else {
-                        ffi::lua_settop(state, 0);
-                        ffi::lua_pushnil(state);
-                    }
+                    if resolved { raw.pop::<Value>() } else { Ok(Value::Nil) }
                 })?
             };
             if resolved { return Ok(value); }
@@ -372,10 +370,12 @@ mod chunk_environment_tests {
         let target = lua.create_table().unwrap();
         target.raw_set("present", 42).unwrap();
         target.raw_set("disabled", false).unwrap();
+        target.raw_set("object", lua.create_table().unwrap()).unwrap();
+        target.raw_set("function", lua.create_function(|_, ()| Ok(42)).unwrap()).unwrap();
         lua.globals().raw_set("fallback", 17).unwrap();
         let original = original_reader(&lua, target.clone());
         let current = create_chunk_env_proxy(&lua, target.clone()).unwrap();
-        for key in ["present", "disabled", "fallback", "missing"] {
+        for key in ["present", "disabled", "fallback", "missing", "object", "function"] {
             assert_eq!(original.get::<Value>(key).unwrap(), current.get::<Value>(key).unwrap());
         }
         let replacement = lua.create_table().unwrap();
