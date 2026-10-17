@@ -1090,8 +1090,9 @@ impl SongLuaLiveScene {
         // GameState.cpp::UpdateSongPosition maintains global Song timing apart
         // from each Player's selected Steps timing. The domain frame carries
         // the player's beat; Lua's GAMESTATE and music effects use the song.
+        let music_rate = crate::song_tables::current_music_rate(&self.lua)?;
         let position = self.context.song_timing.as_ref()
-            .map(|timing| timing.get_song_position(frame.music_seconds as f32));
+            .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
         let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
         self.feed_stats(&frame)?;
         let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
@@ -1116,7 +1117,7 @@ impl SongLuaLiveScene {
             let owned: Table = positions.raw_get(player + 1)?;
             let position = self.context.player_timing[player].as_ref()
                 .or(self.context.song_timing.as_ref())
-                .map(|timing| timing.get_song_position(frame.music_seconds as f32));
+                .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
             owned.raw_set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, frame.music_seconds as f32)?;
             owned.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY,
                 position.as_ref().map_or(frame.beat as f32, |position| position.beat))?;
@@ -1382,8 +1383,9 @@ impl SongLuaLiveScene {
                     else { return Ok(tap); };
                 let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
                 feed_live_stats(&stage, &players, &frame)?;
+                let music_rate = crate::song_tables::current_music_rate(&lua)?;
                 let beat = song_timing.as_ref().map_or(frame.beat as f32,
-                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                    |timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate).beat);
                 crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
                 crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
                 lua.set_app_data(LivePlayers(frame.players));
@@ -1422,8 +1424,9 @@ impl SongLuaLiveScene {
             let result = (|| -> mlua::Result<()> {
                 let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
                 feed_live_stats(&stage, &players, &frame)?;
+                let music_rate = crate::song_tables::current_music_rate(&lua)?;
                 let beat = song_timing.as_ref().map_or(frame.beat as f32,
-                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                    |timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate).beat);
                 crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
                 crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
                 lua.set_app_data(LivePlayers(frame.players));
@@ -1451,8 +1454,9 @@ impl SongLuaLiveScene {
             let dispatched = (|| -> mlua::Result<()> {
                 let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
                 feed_live_stats(&stage, &players, &frame)?;
+                let music_rate = crate::song_tables::current_music_rate(&lua)?;
                 let beat = song_timing.as_ref().map_or(frame.beat as f32,
-                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                    |timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate).beat);
                 crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
                 crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
                 lua.set_app_data(LivePlayers(frame.players));
@@ -1492,8 +1496,9 @@ impl SongLuaLiveScene {
             let dispatched = (|| -> mlua::Result<()> {
                 let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
                 feed_live_stats(&stage, &players, &frame)?;
+                let music_rate = crate::song_tables::current_music_rate(&lua)?;
                 let beat = song_timing.as_ref().map_or(frame.beat as f32,
-                    |timing| timing.get_song_position(frame.music_seconds as f32).beat);
+                    |timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate).beat);
                 crate::set_compile_song_runtime_values(&lua, beat, frame.music_seconds as f32)?;
                 crate::lua_util::set_live_frame(&lua, frame.screen_seconds, f64::from(beat), 0.0);
                 lua.set_app_data(LivePlayers(frame.players));
@@ -2237,6 +2242,58 @@ return Def.ActorFrame {
             }
         }
         assert!(requested, "finite sibling queue reaches the authored reload beat beside an infinite sleep");
+    }
+
+    #[test]
+    fn live_song_clock_and_timing_queries_follow_current_music_rate() {
+        let mut compiled = compile_with_context("current-rate-clock", r#"
+return Def.ActorFrame { OnCommand = function(self)
+    self:SetUpdateFunction(function()
+        local timing = GAMESTATE:GetCurrentSong():GetTimingData()
+        CLOCK = {GAMESTATE:GetSongBeat(),
+            GAMESTATE:GetSongPosition():GetSongBeat(),
+            timing:GetBeatFromElapsedTime(1), timing:GetElapsedTimeFromBeat(2)}
+    end)
+end }
+"#, |context| {
+            context.song_timing = Some(deadsync_rules::timing::TimingData::from_segments(
+                0.0, 0.04, &deadsync_rules::timing::TimingSegments {
+                    bpms: vec![(0.0, 120.0)], ..Default::default()
+                }, &[]));
+        });
+        let mut scene = compiled.live_scene.take().unwrap();
+        for rate in [1.0_f32, 1.25, 0.75, 1.0] {
+            scene.lua.load(format!("GAMESTATE:ApplyGameCommand('mod,{rate}xmusic')"))
+                .exec().unwrap();
+            let output = scene.advance(SongLuaLiveFrame { music_seconds: 1.0,
+                screen_seconds: 1.0, delta_seconds: 0.01, ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let clock: Table = scene.lua.globals().get("CLOCK").unwrap();
+            // TimingData.cpp adds rate*globalOffset before the 120 BPM
+            // traversal; its inverse subtracts it after the traversal.
+            let beat = (1.0_f32 + rate * 0.04) * 2.0;
+            for index in 1..=3 {
+                assert_eq!(clock.get::<f32>(index).unwrap().to_bits(), beat.to_bits());
+            }
+            assert_eq!(clock.get::<f32>(4).unwrap().to_bits(),
+                (1.0_f32 - rate * 0.04).to_bits());
+        }
+        scene.lua.load(r#"
+assert(GAMESTATE:ApplyGameCommand('stagemod,0.75xmusic;mod,1.25xmusic') == GAMESTATE)
+for _, level in ipairs({'Preferred','Stage','Song','Current'}) do
+    assert(GAMESTATE:GetSongOptionsObject('ModsLevel_'..level):MusicRate() == 1.25)
+end
+GAMESTATE:ApplyGameCommand('mod,1.25xmusic;stagemod,0.75xmusic')
+assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Preferred'):MusicRate() == 1.25)
+for _, level in ipairs({'Stage','Song','Current'}) do
+    assert(GAMESTATE:GetSongOptionsObject('ModsLevel_'..level):MusicRate() == 0.75)
+end
+GAMESTATE:ApplyGameCommand('mod,50% drunk', 1)
+for _, level in ipairs({'Preferred','Stage','Song','Current'}) do
+    assert(GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_'..level):Drunk() == 0.5)
+    assert(GAMESTATE:GetPlayerState(PLAYER_2):GetPlayerOptions('ModsLevel_'..level):Drunk() == 0)
+end
+"#).exec().unwrap();
     }
 
     #[test]

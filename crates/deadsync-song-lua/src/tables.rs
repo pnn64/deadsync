@@ -2179,7 +2179,7 @@ pub fn create_timing_table(
         let timing = timing.clone();
         table.set(
             method,
-            lua.create_function(move |_, args: MultiValue| {
+            lua.create_function(move |lua, args: MultiValue| {
                 let value = method_arg(&args, 0)
                     .cloned()
                     .and_then(read_f32)
@@ -2193,8 +2193,10 @@ pub fn create_timing_table(
                     ),
                     // Lua exposes ITGmania's float timing traversal. The
                     // integer timeline remains the note-judgment clock.
-                    "GetElapsedTimeFromBeat" => timing.get_song_time_for_beat(value, 1.0),
-                    _ => timing.get_song_position(value).beat,
+                    "GetElapsedTimeFromBeat" => timing.get_song_time_for_beat(value,
+                        crate::song_tables::current_music_rate(lua)?),
+                    _ => timing.get_song_position_with_rate(value,
+                        crate::song_tables::current_music_rate(lua)?).beat,
                 })
             })?,
         )?;

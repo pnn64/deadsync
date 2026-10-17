@@ -60,6 +60,13 @@ pub(crate) struct SongLuaOptionLevels {
     pub clock_us: i64,
 }
 
+pub(crate) fn current_music_rate(lua: &Lua) -> mlua::Result<f32> {
+    // Read the owned native option state, independently of public Lua method
+    // overrides and query instrumentation (TimingData.cpp uses GetCurrent()).
+    lua.app_data_ref::<SongLuaOptionLevels>()
+        .map_or(Ok(1.0), |levels| levels.songs[3].raw_get("__songlua_music_rate"))
+}
+
 pub(crate) fn restart_stage_options(lua: &Lua) -> mlua::Result<()> {
     let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else { return Ok(()); };
     levels.clock_us = 0;
@@ -526,11 +533,50 @@ pub(crate) fn apply_stage_modifiers(
 ) -> mlua::Result<()> {
     // GameState::ApplyStageModifiers uses ModsGroup::FromString, which
     // modifies Stage, Song and Current in place without resetting options.
-    for options in &player[1..] {
+    apply_modifiers_from_level(lua, player, song, text, 1)
+}
+
+pub(crate) fn apply_modifiers_from_level(
+    lua: &Lua, player: &[Table; 4], song: &[Table; 4], text: &str, level: usize,
+) -> mlua::Result<()> {
+    for options in &player[level..] {
         apply_player_options_string(lua, options, text)?;
     }
-    for options in &song[1..] {
+    for options in &song[level..] {
         apply_song_options_string(options, text)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn apply_game_command_modifiers(
+    lua: &Lua, text: &str, player: Option<usize>,
+) -> mlua::Result<()> {
+    let Some(levels) = lua.app_data_ref::<SongLuaOptionLevels>() else { return Ok(()); };
+    let players = levels.players.clone();
+    let songs = levels.songs.clone();
+    drop(levels);
+    let mut start = 0;
+    let mut quote = None;
+    // Command.cpp splits semicolons outside quotes; LoadOne rejoins the
+    // comma-separated arguments. GameCommand::Apply applies each clause in
+    // authored order, including later preferred writes overriding stage ones.
+    for (index, ch) in text.char_indices().chain(std::iter::once((text.len(), ';'))) {
+        if index == text.len() || ch == ';' && quote.is_none() {
+            let clause = &text[start..index];
+            let (name, value) = clause.split_once(',').unwrap_or((clause, ""));
+            let level = match name.trim() {
+                "mod" => Some(0), "stagemod" => Some(1), _ => None,
+            };
+            if let Some(level) = level {
+                for (index, options) in players.iter().enumerate() {
+                    if player.is_none_or(|player| player == index) {
+                        apply_modifiers_from_level(lua, options, &songs, value, level)?;
+                    }
+                }
+            }
+            start = index + 1;
+        } else if quote == Some(ch) { quote = None; }
+        else if quote.is_none() && matches!(ch, '\'' | '"') { quote = Some(ch); }
     }
     Ok(())
 }

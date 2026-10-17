@@ -2538,9 +2538,25 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "ApplyGameCommand",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(())
+        lua.create_function({
+            let state = gamestate.clone();
+            move |lua, args: MultiValue| {
+                let text = method_arg(&args, 0).cloned().and_then(read_string)
+                    .ok_or_else(|| mlua::Error::runtime("Expected game command string"))?;
+                // GameState's legacy numeric player argument is one-based.
+                let player = match method_arg(&args, 1) {
+                    None | Some(Value::Nil) => None,
+                    Some(value) => Some(match value {
+                        Value::Integer(value) => (*value - 1).try_into().ok(),
+                        Value::Number(value) => ((*value as i64) - 1).try_into().ok(),
+                        _ => player_index_from_value(value),
+                    }.filter(|&player| player < LUA_PLAYERS)
+                        .ok_or_else(|| mlua::Error::runtime("Expected PlayerNumber"))?),
+                };
+                crate::song_tables::apply_game_command_modifiers(lua, &text, player)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(state.clone())
+            }
         })?,
     )?;
     gamestate.set(

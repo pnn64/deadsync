@@ -956,7 +956,14 @@ impl TimingData {
     /// this separate from the integer clock used for note judgment.
     #[must_use]
     pub fn get_song_position(&self, seconds: f32) -> BeatInfo {
-        self.get_song_position_cached(seconds, &mut SongPositionCache::new(self))
+        self.get_song_position_with_rate(seconds, 1.0)
+    }
+
+    /// Native TimingData applies the current music rate to the global offset,
+    /// even though the supplied timestamp is already in music seconds.
+    #[must_use]
+    pub fn get_song_position_with_rate(&self, seconds: f32, music_rate: f32) -> BeatInfo {
+        self.get_song_position_cached_with_rate(seconds, music_rate, &mut SongPositionCache::new(self))
     }
 
     #[must_use]
@@ -965,7 +972,17 @@ impl TimingData {
         seconds: f32,
         cache: &mut SongPositionCache,
     ) -> BeatInfo {
-        let seconds = seconds + self.global_offset_sec;
+        self.get_song_position_cached_with_rate(seconds, 1.0, cache)
+    }
+
+    #[must_use]
+    pub fn get_song_position_cached_with_rate(
+        &self,
+        seconds: f32,
+        music_rate: f32,
+        cache: &mut SongPositionCache,
+    ) -> BeatInfo {
+        let seconds = seconds + music_rate * self.global_offset_sec;
         if cache.global_offset_ns != self.global_offset_ns
             || cache.beat_start_ns != self.beat_start_time_ns()
             || cache.last_seconds.is_nan()

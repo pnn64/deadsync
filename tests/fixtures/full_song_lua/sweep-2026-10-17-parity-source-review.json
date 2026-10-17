@@ -105,10 +105,13 @@
       ],
       "native_sources": [
         "src/TimingData.cpp:672-675",
-        "src/TimingData.cpp:893-896"
+        "src/TimingData.cpp:893-896",
+        "src/GameState.cpp:236-252,1838-1848,2705-2720",
+        "src/GameCommand.cpp:258-269,659-688",
+        "src/ModsGroup.h:FromString"
       ],
       "observed": "First rate-change discrepancy native beat12.031805992126465 vs owned12.031599044799805 at identical music seconds4.689093112945557.",
-      "cause": "Native elapsed time adds currentMusicRate*globalOffset; owned float song-position API used rate1 after authored ApplyGameCommand changed rate.",
+      "cause": "ApplyGameCommand was a side-effect-only stub, so mod clauses never updated options. Independently, native elapsed time adds currentMusicRate*globalOffset while owned float song-position used rate1. The clock regression stayed2.08instead of2.10at1.25rate withglobaloffset.04until the command handler was implemented.",
       "disposition": "Rate-aware clock and Lua TimingData repair in validation; full replay budget remains one.",
       "source_proofs": [
         {
@@ -118,6 +121,18 @@
         {
           "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\TimingData.cpp",
           "sha256": "e93614b8d5c4904ed97b71b8316f64c2fefd5296fb986276b8a1225adb2738b1"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameState.cpp",
+          "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\GameCommand.cpp",
+          "sha256": "222f1ffedca26abb3bb01b859c65195dcc10f777fb7cf24637a3e4175fb36504"
+        },
+        {
+          "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ModsGroup.h",
+          "sha256": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0"
         }
       ]
     },
