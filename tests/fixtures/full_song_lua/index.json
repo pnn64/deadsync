@@ -4185,15 +4185,12 @@
     {
       "title": "Rainbow Road",
       "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
-      "harness_version": "0.1.0",
-      "archive": "5f2c75c1c78ab4d15f7db1dddaa751dc9728036f30fcae04a6a70246c521c6df.tar.zst",
-      "sha256": "5f2c75c1c78ab4d15f7db1dddaa751dc9728036f30fcae04a6a70246c521c6df",
-      "compressed_bytes": 2514600,
-      "uncompressed_sha256": "5e8b778b6772580e66a96c65dafa8ca73da86c6ec331db53d5fc95071539123b",
-      "compression_level": 22,
-      "aliases": [
-        "ae0dda26757012b09bb97714998d379c245b603f90b71cc5511f7636ecd991b3.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "5c623b5f7f46a93dffdd5819bfbc9bce0069041cbff616a16b1f2f376685f74b.tar.zst",
+      "compressed_bytes": 12599463,
+      "sha256": "5c623b5f7f46a93dffdd5819bfbc9bce0069041cbff616a16b1f2f376685f74b",
+      "uncompressed_sha256": "7474413ae20958624e231ede617ebc7b5fa5ef25670ae27328031fda470f96fc",
+      "aliases": []
     },
     {
       "title": "Rapture",
