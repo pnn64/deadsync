@@ -417,6 +417,7 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
                 SimplyLoveQrLoginPolicy::Disabled => config::theme::ArrowCloudQrLoginWhen::Disabled,
             });
         }
+        Request::ShareRips(enabled) => config::runtime_update::update_share_rips(enabled),
     }
 }
 

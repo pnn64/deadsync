@@ -4384,6 +4384,9 @@ impl App {
                 config.lights_com_port.as_str(),
                 config.pac_drive_light_ordering,
             );
+            // Rip Packs reports rips to itgcontent.net only while Share Rips
+            // is on; a change made on any screen reaches it this frame.
+            deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
             self.frame_config = config;
             self.frame_config_generation = generation;
             self.frame_policy = FramePolicy::from_config(&config);
@@ -5173,6 +5176,9 @@ impl App {
         let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
         let select_course_policy = SelectCourseFramePolicy::from_config(&config);
         let evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
+        // Share Rips as the machine starts with it; every later change comes
+        // with the config snapshot in the frame loop.
+        deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
         let ui_sfx =
             audio_requests::UiSfx::prepare(&mut audio, deadsync_theme_simply_love::SFX_PATHS);
         let audio_options = audio_requests::options_view(&audio);
