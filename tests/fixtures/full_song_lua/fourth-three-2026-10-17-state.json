@@ -1518,13 +1518,444 @@
           "c8a1f223111bebed583282e9ab33a0f2291d973214ba0bbbbe0e15e1b179698b.tar.zst"
         ]
       }
+    },
+    {
+      "position": 407,
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "completed_full_repairs": 1,
+      "evidence": "sweep-2026-10-14-original-partition-v5-4.json",
+      "simfile_sha256": "029596d9d093479e06f71010fdda42b381856414c3bc8678f62ddf4aa70025ee",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 99214,
+        "first_concrete_mismatches": [
+          {
+            "field": "source_broadcast_params_unsupported",
+            "deadsync": {
+              "seconds": 3.1648752689361572,
+              "beat": 8.049345016479492,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 3.1648752689361572,
+              "beat": 8.049345016479492,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange",
+                [
+                  {
+                    "last_line": 382,
+                    "line": 368,
+                    "source": "song:/spectrum/default.lua",
+                    "type": "function"
+                  }
+                ]
+              ]
+            },
+            "deadsync": {
+              "seconds": 3.1648752689361572,
+              "beat": 8.049345016479492,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast_params_unsupported",
+            "deadsync": {
+              "seconds": 120.83149719238281,
+              "beat": 312.03216552734375,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 120.83149719238281,
+              "beat": 312.03216552734375,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange",
+                [
+                  {
+                    "last_line": 431,
+                    "line": 419,
+                    "source": "song:/spectrum/default.lua",
+                    "type": "function"
+                  }
+                ]
+              ]
+            },
+            "deadsync": {
+              "seconds": 120.83149719238281,
+              "beat": 312.03216552734375,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast_params_unsupported",
+            "deadsync": {
+              "seconds": 121.01934051513672,
+              "beat": 312.6300354003906,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 121.01934051513672,
+              "beat": 312.6300354003906,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange",
+                [
+                  {
+                    "last_line": 382,
+                    "line": 368,
+                    "source": "song:/spectrum/default.lua",
+                    "type": "function"
+                  },
+                  1.5
+                ]
+              ]
+            },
+            "deadsync": {
+              "seconds": 121.01934051513672,
+              "beat": 312.6300354003906,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast_params_unsupported",
+            "deadsync": {
+              "seconds": 121.61492156982422,
+              "beat": 314.0679016113281,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 121.61492156982422,
+              "beat": 314.0679016113281,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange",
+                [
+                  {
+                    "last_line": 445,
+                    "line": 433,
+                    "source": "song:/spectrum/default.lua",
+                    "type": "function"
+                  }
+                ]
+              ]
+            },
+            "deadsync": {
+              "seconds": 121.61492156982422,
+              "beat": 314.0679016113281,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast_params_unsupported",
+            "deadsync": {
+              "seconds": 121.80301666259766,
+              "beat": 314.64837646484375,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 121.80301666259766,
+              "beat": 314.64837646484375,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange",
+                [
+                  {
+                    "last_line": 382,
+                    "line": 368,
+                    "source": "song:/spectrum/default.lua",
+                    "type": "function"
+                  },
+                  1.5
+                ]
+              ]
+            },
+            "deadsync": {
+              "seconds": 121.80301666259766,
+              "beat": 314.64837646484375,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast_params_unsupported",
+            "deadsync": {
+              "seconds": 127.02242279052734,
+              "beat": 328.0219421386719,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          },
+          {
+            "field": "source_broadcast",
+            "native": {
+              "seconds": 127.02242279052734,
+              "beat": 328.0219421386719,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange",
+                [
+                  {
+                    "last_line": 445,
+                    "line": 433,
+                    "source": "song:/spectrum/default.lua",
+                    "type": "function"
+                  }
+                ]
+              ]
+            },
+            "deadsync": {
+              "seconds": 127.02242279052734,
+              "beat": 328.0219421386719,
+              "name": "GradientChange",
+              "args": [
+                "GradientChange"
+              ],
+              "params_error": "broadcast function trace remains pending"
+            }
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 1,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-4/chart-407/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 2,
+      "replay_exit": 0,
+      "replay_seconds": 860.0495690359967,
+      "native_frames": 112654,
+      "replayed_frames": 112654,
+      "compared_stage_fields": 2464,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "9042138873fdb9917b23f41a7448dea04b7c952eb16c102ae297e9d6d31eeb66",
+      "archive": "7512061d5df64d6d64302b75a82c1cbd524224d5ef1b5c95bd7bc07356df6518.tar.zst",
+      "archive_sha256": "7512061d5df64d6d64302b75a82c1cbd524224d5ef1b5c95bd7bc07356df6518",
+      "compressed_bytes": 17890687,
+      "harness_version": "0.1.80",
+      "title": "Spectrum (Odyssey's Prism Mix)",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/fourth-three-fixtures-20261017/chart-407-attempt-2/chart-407",
+      "fix_commit": "606071152ed6b4b044195a4334bc8870c362b3da",
+      "binary_sha256": "9dbf2343bda07d3e97086a3a7fdd8b24816b4d55678e7e334b43ea5d24763eba",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "/home/parity/jobs/fourth-three-fixtures-20261017/full-song-lua-native-lifecycle",
+        "binary_sha256": "9dbf2343bda07d3e97086a3a7fdd8b24816b4d55678e7e334b43ea5d24763eba",
+        "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+        "source_base_commit": "9b289dd9c",
+        "modified_sources": {
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/src/compile.rs": "99ba9e8a8e4f54405d9242a295e1fc5a763dcabd45796c990c8f4942b71ce181",
+          "crates/deadsync-song-lua/src/host.rs": "491fbab242705cf2ba1c7010e5fea61e4801c12306a461fbb3c18c438e438d79",
+          "crates/deadsync-song-lua/src/lib.rs": "293749bde9ee0b5e4bbb903019ca3b9f34acfdcf4a56d58b8b80d686e1c663ee",
+          "crates/deadsync-song-lua/src/live.rs": "dfce347dbe7621f9602b12a031ca57af095eb94cb9f08c6dd0fcedc97e8a4cd9",
+          "crates/deadsync-song-lua/src/lua_util.rs": "76791285e48909868960d8953b22d01324137ac635990e7e81dbe1d8f28c1c02",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "7dd55de9887d1b911df221ff8c673b4469c9707c2f44177f2aa1aef7c71d7b18",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "021bb7dc0ae4f3a84880d060bd036aa4179e8f41837bcc0b91dea10469b6dad4",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-simfile/src/song.rs": "7e2d54da3ac33691a5d020075e221a9c688fe9ef4d463f98b6327f6e4ed4d490",
+          "crates/deadsync-simfile/src/cache.rs": "a7a70da695648b4200c6ebcc3711321d5eaa94bf5edba1f68d31e0f67fbbba53",
+          "crates/deadsync-simfile/src/changes.rs": "708d9d5a709e12c51a9f651e20aea40d922c85152e67e8f29aeb8983236df8f1",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "0f5839e0f132e7670f71986820892da52b4682176b21e4012b1980805541d97f",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "420e95b3ac68c08934d22aa546b90e10b977e91ac34d156ad314b63f272a6288"
+        },
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--no-run"
+        ],
+        "seconds": 32.62873864296125,
+        "targeted_checks": [
+          {
+            "log": "/home/parity/jobs/fourth-three-fixtures-20261017/reload-clock-reload-tests.log",
+            "sha256": "ee387fe317872d4d37daa5ce90ae8573de6ade493a9fd22d5bab64a7b69233c5",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "log": "/home/parity/jobs/fourth-three-fixtures-20261017/reload-clock-native-tests.log",
+            "sha256": "fb1fbfe0768cf67b01af095213c46ba1d0b9a8caeca3c08869c47f7459fde4c9",
+            "passed": 52,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "fix_commit": "606071152ed6b4b044195a4334bc8870c362b3da"
+      },
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 101219,
+          "deadsync": 101364
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0157",
+            "args": [],
+            "beat": 0,
+            "caller": {
+              "line": 559,
+              "source": "song:/spectrum/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0157",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                {
+                  "actor": "def-0001",
+                  "name": "",
+                  "path": "ScreenGameplay/SongForeground"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 559,
+            "operation": "Actor.GetParent",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 0,
+            "seq": 589,
+            "source": "song:/spectrum/default.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "",
+                "path": "ScreenGameplay/SongForeground"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrameTexture.GetTexture",
+            "source": "song:/spectrum/default.lua",
+            "line": 559,
+            "phase": "callback",
+            "beat": 0.0,
+            "seconds": 0.0,
+            "args": [],
+            "results": [
+              {
+                "type": "RageTexture"
+              }
+            ]
+          }
+        }
+      ],
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Spectrum",
+        "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+        "harness_version": "0.1.0",
+        "archive": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5.tar.zst",
+        "sha256": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5",
+        "compressed_bytes": 1069864,
+        "uncompressed_sha256": "47cd27f360e9eb47fb8bdf17520555084af8c5b462ee77d5d93dc956dbb3f121",
+        "compression_level": 22,
+        "aliases": [
+          "f7cb4fd1fdd6799a683c0f11bf07f73daf21bae2e1173ce50140d75dcd9ee689.tar.zst"
+        ]
+      }
     }
   ],
   "counts": {
-    "new_passing_fixtures": 2,
-    "passed_fixtures": 446,
-    "pending_charts": 54,
+    "new_passing_fixtures": 3,
+    "passed_fixtures": 447,
+    "pending_charts": 53,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-17T21:09:03Z"
+  "updated_utc": "2026-10-17T21:21:20Z"
 }

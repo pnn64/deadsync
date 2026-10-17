@@ -4614,17 +4614,14 @@
       "aliases": []
     },
     {
-      "title": "Spectrum",
+      "title": "Spectrum (Odyssey's Prism Mix)",
       "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
-      "harness_version": "0.1.0",
-      "archive": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5.tar.zst",
-      "sha256": "dcd16b42cd90cf994dc5f7a147c0982b5105a79b243ee379a2f024e488e764d5",
-      "compressed_bytes": 1069864,
-      "uncompressed_sha256": "47cd27f360e9eb47fb8bdf17520555084af8c5b462ee77d5d93dc956dbb3f121",
-      "compression_level": 22,
-      "aliases": [
-        "f7cb4fd1fdd6799a683c0f11bf07f73daf21bae2e1173ce50140d75dcd9ee689.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7512061d5df64d6d64302b75a82c1cbd524224d5ef1b5c95bd7bc07356df6518.tar.zst",
+      "compressed_bytes": 17890687,
+      "sha256": "7512061d5df64d6d64302b75a82c1cbd524224d5ef1b5c95bd7bc07356df6518",
+      "uncompressed_sha256": "3acf5805c3838749c446ffc8277eef7b74c76f5715c43c35e5ba0a1ab4f082e9",
+      "aliases": []
     },
     {
       "title": "Spectrum Sequence",
