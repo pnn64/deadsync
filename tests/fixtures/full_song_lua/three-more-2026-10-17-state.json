@@ -1,0 +1,202 @@
+{
+  "objective": "Three additional accepted fixtures, starting with faster pending charts",
+  "baseline_passed": 436,
+  "baseline_pending": 64,
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "repair_limit_per_chart": 2,
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "results": [
+    {
+      "position": 462,
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "completed_full_repairs": 0,
+      "evidence": "sweep-2026-10-14-original-partition-v5-3.json",
+      "simfile_sha256": "087b03ce6f9b7fe18df6061b9f0c2e99435db870e4d18b165cda3e9d6139dcdb",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 3,
+        "first_concrete_mismatches": [
+          {
+            "phase": "progress",
+            "seconds": 135.00001525878906,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "field": "command_query_count",
+            "native": 4,
+            "deadsync": 5
+          },
+          {
+            "field": "command_query_event",
+            "native": {
+              "actor": "def-0001",
+              "args": [],
+              "beat": 1.7504605054855347,
+              "command": "OnCommand",
+              "definition_id": "def-0001",
+              "detail": {
+                "name": "OnCommand"
+              },
+              "kind": "command",
+              "line": 7,
+              "operation": "command.end",
+              "scene": 1,
+              "seconds": -0.7861904501914978,
+              "seq": 16,
+              "source": "song:/bg/default.lua"
+            },
+            "deadsync": {
+              "scene": 1,
+              "kind": "query",
+              "operation": "PrefsManager.GetPreference",
+              "source": "song:/bg/default.lua",
+              "line": 7,
+              "phase": "callback",
+              "beat": 1.7504605054855347,
+              "seconds": -0.7861904501914978,
+              "args": [
+                "BackgroundFitMode"
+              ],
+              "results": [
+                "BackgroundFitMode_CoverPreserve"
+              ]
+            }
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "7a71b5730c90ccd2393bb10306b3746320c3eca9ee26c3bb85b3b73cc57809f1",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-parallel-v5-3/chart-462/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 1,
+      "replay_exit": 0,
+      "replay_seconds": 90.92562238301616,
+      "native_frames": 67455,
+      "replayed_frames": 67455,
+      "compared_stage_fields": 1551,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "874827e1b57beb770d3d5b319d06efa206b9c1b55f5d114c546318ef1d4b7874",
+      "archive": "b6bbfc129fafe5d0ef455cf7b7cd939e48d35b709fd26235f372ae53f04add7b.tar.zst",
+      "archive_sha256": "b6bbfc129fafe5d0ef455cf7b7cd939e48d35b709fd26235f372ae53f04add7b",
+      "compressed_bytes": 106857676,
+      "harness_version": "0.1.80",
+      "title": "VTuber\u6b7b\u306a\u306a\u3044",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/three-fixtures-20261017/chart-462-attempt-1/chart-462",
+      "fix_commit": "da54b82960ad0258dfcee257d745b70709916002",
+      "binary_sha256": "e169fecaea2bae7d60fea6c45365fdecaf6b6cb43d16bcca3b70960ee4e8a62d",
+      "build_receipt": {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--no-run"
+        ],
+        "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+        "source_base_commit": "33b148c80",
+        "exit_code": 0,
+        "seconds": 363.28005669201957,
+        "modified_sources": {
+          "crates/deadsync-song-lua/src/tables.rs": "9e3d8d2b0d08a425ae400c63ff34608ae1d557dcd9d803a2e3ef6cf20c7879f1",
+          "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+          "crates/deadsync-song-lua/src/live.rs": "becd8579a4244dfb89503d2b667aba6f0dfa4ff61af6c16b2295269525333e38",
+          "crates/deadsync-rules/src/timing.rs": "f7f017a5b9df94fac6d5c76a3ac5b4a72243b4fb889e054ff5d7a5b7faca5d11",
+          "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+          "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+          "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+          "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+          "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2",
+          "crates/deadsync-song-lua/src/song_tables.rs": "7634c0a91951ea626dee4802641c5b19802edd7b4f711cf2de3bb8fb578f4e86",
+          "crates/deadsync-song-lua/src/host.rs": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed",
+          "crates/deadsync-gameplay/src/note_timing.rs": "a4686c460d5ea8918af86408624a681bdb31209257da61824fd5b2f8b1eb4bea",
+          "crates/deadsync-gameplay/src/tests.rs": "75e3b0438b6811d03fc52414c66a759abcde54a048790d360a2dd8ca1a9fad27"
+        },
+        "binary": "/home/parity/jobs/three-fixtures-20261017/full-song-lua-fractional-end",
+        "binary_sha256": "e169fecaea2bae7d60fea6c45365fdecaf6b6cb43d16bcca3b70960ee4e8a62d",
+        "targeted_checks": [
+          {
+            "command": [
+              "/home/parity/.cargo/bin/cargo",
+              "test",
+              "--offline",
+              "--locked",
+              "--release",
+              "--jobs",
+              "8",
+              "--target-dir",
+              "/home/parity/build/deadsync-sweep-release",
+              "--config",
+              "profile.release.lto=false",
+              "-p",
+              "deadsync-gameplay",
+              "--lib",
+              "song_audio_end_time"
+            ],
+            "exit_code": 0,
+            "log": "/home/parity/jobs/three-fixtures-20261017/fractional-end-unit-0.log",
+            "log_sha256": "bded846b6cbabaebd51860968ab95c423688ae0cb156aca97a97c4a41223d6f7"
+          }
+        ],
+        "fix_commit": "da54b82960ad0258dfcee257d745b70709916002"
+      },
+      "prior_sweep_failure": [
+        {
+          "phase": "progress",
+          "seconds": 135.00001525878906,
+          "player_index": 0,
+          "field": "failed",
+          "native": true,
+          "deadsync": false
+        }
+      ],
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "VTuber\u6b7b\u306a\u306a\u3044",
+        "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+        "harness_version": "0.1.0",
+        "archive": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1.tar.zst",
+        "sha256": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1",
+        "compressed_bytes": 37019,
+        "uncompressed_sha256": "8f2fcded6fb05bc6538321a89917b62e46e6e090e11a6aecbc9ca585d2321518",
+        "compression_level": 22,
+        "aliases": [
+          "37fa732fa04e426035ffdeb5afe2d95b1eb1b220e3df63f9768d860d8ed63f75.tar.zst"
+        ]
+      },
+      "archive_git_ignored": true
+    }
+  ],
+  "counts": {
+    "new_passing_fixtures": 1,
+    "passed_fixtures": 437,
+    "pending_charts": 63,
+    "ignored_charts": 1
+  },
+  "updated_utc": "2026-10-17T14:11:34Z"
+}

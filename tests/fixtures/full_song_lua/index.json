@@ -5216,15 +5216,13 @@
     {
       "title": "VTuber\u6b7b\u306a\u306a\u3044",
       "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1.tar.zst",
-      "sha256": "1a04009c0d983b115c690a260f8b2a7a627cf2fb0429ae78cd1d30656a434ab1",
-      "compressed_bytes": 37019,
-      "uncompressed_sha256": "8f2fcded6fb05bc6538321a89917b62e46e6e090e11a6aecbc9ca585d2321518",
-      "compression_level": 22,
-      "aliases": [
-        "37fa732fa04e426035ffdeb5afe2d95b1eb1b220e3df63f9768d860d8ed63f75.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "b6bbfc129fafe5d0ef455cf7b7cd939e48d35b709fd26235f372ae53f04add7b.tar.zst",
+      "compressed_bytes": 106857676,
+      "sha256": "b6bbfc129fafe5d0ef455cf7b7cd939e48d35b709fd26235f372ae53f04add7b",
+      "uncompressed_sha256": "7a71b5730c90ccd2393bb10306b3746320c3eca9ee26c3bb85b3b73cc57809f1",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "WAH-LEVEN (DDRIllini Remix)",

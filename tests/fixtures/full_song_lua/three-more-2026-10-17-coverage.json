@@ -1,0 +1,24 @@
+{
+  "scope": "Missing coverage is recorded separately; existing acceptance is unchanged",
+  "prior_coverage": "sweep-2026-10-17-coverage.json",
+  "charts": {
+    "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc": {
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.scale_or_crop_background, GameState.GetMasterPlayerNumber",
+        "native drawable state/resources: Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    }
+  }
+}
