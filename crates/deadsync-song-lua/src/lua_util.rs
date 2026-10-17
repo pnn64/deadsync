@@ -2393,7 +2393,7 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
         let Value::Table(child) = value? else {
             continue;
         };
-        seen.push(&mut out, child);
+        seen.push(&mut out, canonical_live_actor_handle(lua, child));
     }
     // Named keys do not participate in child identity or first-seen order.
     // Raw callback traversal avoids retaining a cloned iterator key.
@@ -2404,11 +2404,11 @@ pub fn actor_direct_children(lua: &Lua, actor: &Table) -> mlua::Result<Vec<Table
         if actor_is_child_group(&child)? {
             for group_value in child.sequence_values::<Value>() {
                 if let Value::Table(group_child) = group_value? {
-                    seen.push(&mut out, group_child);
+                    seen.push(&mut out, canonical_live_actor_handle(lua, group_child));
                 }
             }
         } else {
-            seen.push(&mut out, child);
+            seen.push(&mut out, canonical_live_actor_handle(lua, child));
         }
         Ok(())
     })?;
@@ -3399,6 +3399,7 @@ fn broadcast_song_lua_message_impl(
             if !matches!(actor.get::<Value>(command.as_str())?, Value::Function(_)) {
                 continue;
             }
+            let actor = canonical_live_actor_handle(lua, actor);
             actors.push((actor.to_pointer() as usize, actor));
         }
         // MessageManager.cpp stores subscribers in an identity-ordered set.
@@ -12648,6 +12649,12 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<Arc<[SongLuaComp
 // handle per actor across the live registry and update jobs, instead of reading
 // the same Lua object into a new auxiliary reference at every tree traversal.
 struct CanonicalLiveActorHandles(FxHashMap<usize, Table>);
+
+fn canonical_live_actor_handle(lua: &Lua, actor: Table) -> Table {
+    lua.app_data_ref::<CanonicalLiveActorHandles>()
+        .and_then(|cache| cache.0.get(&(actor.to_pointer() as usize)).cloned())
+        .unwrap_or(actor)
+}
 
 pub(crate) fn prepare_live_actor_handle_cache(
     lua: &Lua,
@@ -22400,6 +22407,52 @@ pub fn method_arg_offset(args: &MultiValue) -> usize {
 #[cfg(test)]
 mod snapshot_tests {
     use super::*;
+
+    fn large_live_actor_snapshot(lua: &Lua, message: bool) -> (Table, Vec<Table>) {
+        let root = lua.create_table().unwrap();
+        let command = lua.load("return function(self) SEEN[#SEEN + 1] = self.ordinal end")
+            .eval::<Function>().unwrap();
+        lua.globals().set("SEEN", lua.create_table().unwrap()).unwrap();
+        for ordinal in 1..=6000 {
+            let actor = lua.create_table().unwrap();
+            actor.raw_set("Name", format!("Child{ordinal}")).unwrap();
+            actor.raw_set("ordinal", ordinal).unwrap();
+            if message { actor.raw_set("GoMessageCommand", command.clone()).unwrap(); }
+            root.raw_set(ordinal, actor).unwrap();
+        }
+        actor_named_children(lua, &root).unwrap();
+        let actors = root.sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        let registry = lua.create_sequence_from(actors.iter().cloned()).unwrap();
+        lua.globals().raw_set("__songlua_actor_registry", registry).unwrap();
+        prepare_live_actor_handle_cache(lua, actors.iter().cloned()).unwrap();
+        (root, actors)
+    }
+
+    #[test]
+    fn large_live_actor_snapshot_children_share_retained_handles() {
+        let lua = Lua::new();
+        let (root, actors) = large_live_actor_snapshot(&lua, false);
+        let children = actor_direct_children(&lua, &root)
+            .expect("copying native child pointers must not double auxiliary Lua references");
+        assert_eq!(children.len(), actors.len());
+        for (child, actor) in children.iter().zip(&actors) {
+            assert_eq!(child.to_pointer(), actor.to_pointer());
+        }
+    }
+
+    #[test]
+    fn large_live_actor_snapshot_broadcast_preserves_identity_order() {
+        let lua = Lua::new();
+        let (_root, mut actors) = large_live_actor_snapshot(&lua, true);
+        broadcast_song_lua_message(&lua, "Go", None)
+            .expect("native subscriber snapshots must reuse retained actor handles");
+        actors.sort_unstable_by_key(|actor| actor.to_pointer() as usize);
+        let seen: Table = lua.globals().get("SEEN").unwrap();
+        assert_eq!(seen.raw_len(), actors.len());
+        for (index, actor) in actors.iter().enumerate() {
+            assert_eq!(seen.raw_get::<usize>(index + 1).unwrap(), actor.raw_get::<usize>("ordinal").unwrap());
+        }
+    }
 
     #[test]
     fn recursive_begin_handles_large_actor_tree_in_order() {
