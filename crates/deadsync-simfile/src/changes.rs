@@ -144,12 +144,11 @@ fn extract_foreground_change_sets_with(
             }
         }
     }
-    sort_dedup_path_changes(
+    sort_foreground_changes(
         &mut media,
         |change| change.start_beat,
-        |change| &change.path,
     );
-    sort_dedup_path_changes(&mut lua, |change| change.start_beat, |change| &change.path);
+    sort_foreground_changes(&mut lua, |change| change.start_beat);
     ForegroundChangeSets {
         media,
         lua,
@@ -650,19 +649,15 @@ fn parse_start_beat(fields: &[Cow<'_, str>]) -> Option<f32> {
         .filter(|value| value.is_finite())
 }
 
-fn sort_dedup_path_changes<T>(
+fn sort_foreground_changes<T>(
     out: &mut Vec<T>,
     start_beat: impl Fn(&T) -> f32,
-    path: impl Fn(&T) -> &str,
 ) {
-    out.sort_by(|left, right| {
-        start_beat(left)
-            .total_cmp(&start_beat(right))
-            .then_with(|| path(left).cmp(path(right)))
-    });
-    out.dedup_by(|left, right| {
-        start_beat(left).to_bits() == start_beat(right).to_bits() && path(left) == path(right)
-    });
+    // Song::AddForegroundChange inserts at upper_bound by beat. Equal beats
+    // keep authored order, including duplicate paths and either signed zero.
+    // parse_start_beat rejects nonfinite values before they enter this list.
+    out.sort_by(|left, right| start_beat(left).partial_cmp(&start_beat(right))
+        .expect("foreground beats are finite"));
 }
 
 #[cfg(test)]
@@ -786,6 +781,20 @@ mod tests {
         assert_eq!(changes.lua[0].start_beat, -10.0);
         assert_eq!(PathBuf::from(&changes.lua[0].path), default_lua);
         assert!(simfile_uses_lua(&song_dir, simfile, ""));
+    }
+
+    #[test]
+    fn foreground_equal_beats_preserve_authored_order_and_duplicate_instances() {
+        let root = test_dir("foreground-order");
+        fs::create_dir_all(&root).unwrap();
+        for name in ["z.lua", "a.lua", "later.lua", "middle.lua"] {
+            fs::write(root.join(name), "return Def.ActorFrame{}").unwrap();
+        }
+        let changes = extract_foreground_lua_changes(&root,
+            b"#FGCHANGES:0=z.lua=1=0=0=0,-0=a.lua=1=0=0=0,0=z.lua=1=0=0=0,8=later.lua=1=0=0=0,4=middle.lua=1=0=0=0;");
+        let names: Vec<_> = changes.iter().map(|change| change.name.as_str()).collect();
+        assert_eq!(names, ["z.lua", "a.lua", "z.lua", "middle.lua", "later.lua"]);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
