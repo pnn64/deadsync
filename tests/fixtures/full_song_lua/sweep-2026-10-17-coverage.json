@@ -154,6 +154,120 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc": {
+      "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.halign, Actor.valign, Actor.xy, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetLineWidth, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, GameState.GetHumanPlayers, Screen.AddInputCallback",
+        "native drawable state/resources: ActorMultiVertex, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/5/4",
+        "missing captured subscriber identity for ScreenGameplay/2/7/1",
+        "missing captured subscriber identity for ScreenGameplay/2/7/2",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/2/9/2"
+      ]
+    },
+    "It's Showtime/mettaton.ssc": {
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.bob, Actor.hidden, Actor.horizalign, Actor.vertalign, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, BitmapText.settext, GameState.GetSongPosition, Screen.AddInputCallback, Screen.SetNextScreenName, Song.GetOneSteps",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/5/4",
+        "missing captured subscriber identity for ScreenGameplay/2/7/1",
+        "missing captured subscriber identity for ScreenGameplay/2/7/2",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/2/9/2"
+      ]
+    },
+    "Cold/Cold.ssc": {
+      "source_simfile": "Cold/Cold.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.baserotationz, Actor.blend, Actor.hibernate, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: Model, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    },
+    "Igaku/Igaku.sm": {
+      "source_simfile": "Igaku/Igaku.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.Draw, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.SetHeight, Actor.SetWidth, Actor.accelerate, Actor.addx, Actor.draworder, Actor.horizalign, Actor.rotationx, Actor.rotationy, Actor.stoptweening, Actor.valign, Actor.vertalign, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.SetTextureName, GameState.GetCurrentGame, GameState.GetEnabledPlayers, GameState.GetHumanPlayers, GameState.GetNumPlayersEnabled, PlayerOptions.BeatPeriod, PlayerOptions.CMod, PlayerOptions.Drunk, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Mirror, PlayerOptions.MoveX1, PlayerOptions.MoveX4, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.NoteSkin, PlayerOptions.ParabolaX, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Stealth, PlayerOptions.Tilt, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Wave, PlayerOptions.XMod, Song.GetBackgroundPath, Song.GetDisplayBpms, Song.GetDisplayMainTitle",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    },
+    "Koi [UPS2016]/koi.sm": {
+      "source_simfile": "Koi [UPS2016]/koi.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetDestX, Actor.GetDestY, Actor.MaskDest, Actor.MaskSource, Actor.clearzbuffer, Actor.cropright",
+        "native drawable state/resources: Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }

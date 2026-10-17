@@ -3201,15 +3201,12 @@
     {
       "title": "Koi",
       "source_simfile": "Koi [UPS2016]/koi.sm",
-      "harness_version": "0.1.0",
-      "archive": "6458de2168208bd687e73f0271ea7bb8d2ecad9aade655e14fd54b9d4ddc3c5e.tar.zst",
-      "sha256": "6458de2168208bd687e73f0271ea7bb8d2ecad9aade655e14fd54b9d4ddc3c5e",
-      "compressed_bytes": 3641834,
-      "uncompressed_sha256": "eb8692b5bc4ffe6aff628d5c54aa354ad0bcfe78d4b3b4439d8676198966d3b9",
-      "compression_level": 22,
-      "aliases": [
-        "62858d1ca45c4b6bd9ae73aca103847dba5f228e47803b7e8d27c7d1464de062.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f2c478eead3aec53653931ca4298f18841b44aac5b87a03ac2a862bf3cc23854.tar.zst",
+      "compressed_bytes": 13840417,
+      "sha256": "f2c478eead3aec53653931ca4298f18841b44aac5b87a03ac2a862bf3cc23854",
+      "uncompressed_sha256": "4d39fd730470637e80f595cac7581a1d3cb2861c0824090536c7c608668ad7f6",
+      "aliases": []
     },
     {
       "title": "Koi",
