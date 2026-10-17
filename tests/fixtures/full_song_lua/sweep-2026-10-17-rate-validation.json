@@ -1,0 +1,26 @@
+{
+  "source_fix_commit": "e3a51a4bf57909e15cb70a4369441c2eb6686598",
+  "source_hashes": {
+    "crates/deadsync-rules/src/timing.rs": "f7f017a5b9df94fac6d5c76a3ac5b4a72243b4fb889e054ff5d7a5b7faca5d11",
+    "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+    "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+    "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+    "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+    "crates/deadsync-song-lua/src/tables.rs": "9e3d8d2b0d08a425ae400c63ff34608ae1d557dcd9d803a2e3ef6cf20c7879f1",
+    "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+    "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+    "crates/deadsync-song-lua/src/live.rs": "becd8579a4244dfb89503d2b667aba6f0dfa4ff61af6c16b2295269525333e38",
+    "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+    "crates/deadsync-song-lua/src/host.rs": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed",
+    "crates/deadsync-song-lua/src/song_tables.rs": "7634c0a91951ea626dee4802641c5b19802edd7b4f711cf2de3bb8fb578f4e86"
+  },
+  "linux_validation": "50 core timing tests;1 live rate/command regression;17 Lua timing tests (including the same regression)",
+  "linux_passed_checks": 68,
+  "windows_regression": {
+    "passed": 1,
+    "log": "target\\song-lua-sweep-20261017\\current-rate-game-command-windows.log",
+    "log_sha256": "9274bc868673da8ea0050c91d4a7751054072d1004b4291a62f9b2aba1f3a7d0"
+  },
+  "binary_sha256": "54c2a4e4525c926626dc859671139dd19c25b1bc39f9c173187c5ffd986175c7"
+}

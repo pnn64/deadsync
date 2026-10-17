@@ -1,5 +1,13 @@
 # Full song Lua fixtures
 
+The [2026-10-17 bounded sweep](sweep-2026-10-17-summary.json) processed the
+76 previously pending simfiles: 12 new full replays passed, bringing the total
+to 436 passing fixtures and 64 pending charts. Mawaru9 was excluded. The report
+lists each pending chart's concrete failure; [missing coverage](sweep-2026-10-17-coverage.json)
+is recorded separately. Passing candidates were compared uncompressed before
+packing and verified again after decompression. All files over 100,000,000 bytes
+are gitignored.
+
 Run a complete fixture from the repository root:
 
 ```powershell

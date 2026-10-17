@@ -1,0 +1,36 @@
+{
+  "complete": true,
+  "phases": [],
+  "parallel_queued_results": [
+    {
+      "position": 306,
+      "serial_owner_pid": 1562045,
+      "serial_replay_pid": 1636175,
+      "serial_replay_position": 420,
+      "owner_identity": "python3 - ",
+      "owner_rss_kb": 74340,
+      "available_kb": 64438544,
+      "status": "pending",
+      "repair_attempts": 1,
+      "candidate_sha256": "52f42c6c6d1576dd9026d5a7b43092040367466c54fb194db3a929b9c457dcef"
+    },
+    {
+      "position": 294,
+      "serial_owner_pid": 1562045,
+      "serial_replay_pid": 1719001,
+      "serial_replay_position": 265,
+      "owner_identity": "python3 - ",
+      "owner_rss_kb": 80812,
+      "available_kb": 53924264,
+      "status": "pending",
+      "repair_attempts": 1,
+      "candidate_sha256": "bde1951c118452ab0725c8b59a2572e0411d31830f20d578ad5376cda3f9b80d"
+    }
+  ],
+  "last_parallel": {
+    "complete": true,
+    "position": 407,
+    "status": "pending",
+    "repair_attempts": 1
+  }
+}

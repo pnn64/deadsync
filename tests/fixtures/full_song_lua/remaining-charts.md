@@ -1,5 +1,8 @@
 # Remaining song Lua captures
 
+This is the historical 2026-10-07 capture audit. For the latest replay results
+and all 64 pending chart failures, see the [2026-10-17 sweep](sweep-2026-10-17-summary.json).
+
 Audited all 501 simfiles in `lua-songs`. The harness repair recovered 71 additional complete archives: 483 simfiles now have indexed captures and 18 remain pending.
 
 Only captures with zero runtime errors, zero dropped observations, and the full native endpoint were published. Archive and member hashes, dependencies, original simfile bytes, and unchanged contents after level-22 recompression were verified. All existing fixtures were preserved. DeadSync fixture tests were not run.

@@ -1,0 +1,17 @@
+{
+  "complete": true,
+  "smoke_passed": true,
+  "results": [
+    {
+      "position": 294,
+      "result_bytes": 11623,
+      "serial_consumed_completed_result": true
+    },
+    {
+      "position": 407,
+      "result_bytes": 24690,
+      "serial_consumed_completed_result": true
+    }
+  ],
+  "all_result_pipes_replaced": true
+}

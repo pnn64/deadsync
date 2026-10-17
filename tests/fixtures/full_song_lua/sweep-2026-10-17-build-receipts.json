@@ -1,0 +1,463 @@
+{
+  "phase-01": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 311.95190382300643,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+      "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-drop",
+    "binary_sha256": "0bdb557a6fec22fbcdb58af0956ef1f2f9d632bc70b461d00e538f1843d2e6d2",
+    "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+    "targeted_validation": {
+      "test": "live_native_tween_curves_match_native_probes",
+      "passed": 1,
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "source_hashes": {
+        "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+        "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+      },
+      "reference": "local ITGmania _fallback/Scripts/02 Actor.lua:77-90; drop uses native 2D Bezier controls and tween argument checks"
+    }
+  },
+  "phase-02": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 311.95190382300643,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+      "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-drop",
+    "binary_sha256": "0bdb557a6fec22fbcdb58af0956ef1f2f9d632bc70b461d00e538f1843d2e6d2",
+    "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+    "targeted_validation": {
+      "test": "live_native_tween_curves_match_native_probes",
+      "passed": 1,
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "source_hashes": {
+        "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+        "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+      },
+      "reference": "local ITGmania _fallback/Scripts/02 Actor.lua:77-90; drop uses native 2D Bezier controls and tween argument checks"
+    }
+  },
+  "phase-03": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 311.95190382300643,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+      "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-drop",
+    "binary_sha256": "0bdb557a6fec22fbcdb58af0956ef1f2f9d632bc70b461d00e538f1843d2e6d2",
+    "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+    "targeted_validation": {
+      "test": "live_native_tween_curves_match_native_probes",
+      "passed": 1,
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "source_hashes": {
+        "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+        "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+      },
+      "reference": "local ITGmania _fallback/Scripts/02 Actor.lua:77-90; drop uses native 2D Bezier controls and tween argument checks"
+    }
+  },
+  "phase-04": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 311.95190382300643,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "fdc39e39adda7e76818f358906703c807b917e29c3ca476ed4aade03c5bc1bff",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+      "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-drop",
+    "binary_sha256": "0bdb557a6fec22fbcdb58af0956ef1f2f9d632bc70b461d00e538f1843d2e6d2",
+    "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+    "targeted_validation": {
+      "test": "live_native_tween_curves_match_native_probes",
+      "passed": 1,
+      "fix_commit": "71b11d5fe4fd763686e0370e9cc6b38e1d188868",
+      "source_hashes": {
+        "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+        "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373"
+      },
+      "reference": "local ITGmania _fallback/Scripts/02 Actor.lua:77-90; drop uses native 2D Bezier controls and tween argument checks"
+    }
+  },
+  "phase-05": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 357.4684389519971,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "ded4ec00704e462a284dd327322ee8598372d05896729eb5c8db1de4255ef2d7",
+      "crates/deadsync-song-lua/src/lua_util.rs": "3ca10122ff48befc268300eafb5e830c6323b329783115d3b185fbb8e7e50fc5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+      "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373",
+      "crates/deadsync-rules/src/timing.rs": "047d21b18ea214764ff3497d18cd2d2d860c1158cb47c51f1db8b29a0eed5a67",
+      "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-clock-final",
+    "binary_sha256": "e9ab881998587c0a6eb6a846afe9b03e84791f65b04a4bb9c10abaac1f191909",
+    "fix_commit": "ff0fa1c59f4e81d236a0ad915513cf700a0153fe",
+    "targeted_validation": {
+      "test": "12 Lua timing tests plus50 core timing tests",
+      "passed": 62,
+      "fix_commit": "ff0fa1c59f4e81d236a0ad915513cf700a0153fe",
+      "source_hashes": {
+        "crates/deadsync-song-lua/src/actor_classes.rs": "a7bc4b122d3b840eec8dd94adb8bea0708c2e4c69d11d37ed01ddf85f9f6f969",
+        "crates/deadsync-song-lua/src/live.rs": "f4829d56268d5c914faad0c24ea6f6f0a15e840073eae0b49057f337a7091373",
+        "crates/deadsync-rules/src/timing.rs": "047d21b18ea214764ff3497d18cd2d2d860c1158cb47c51f1db8b29a0eed5a67",
+        "crates/deadsync-song-lua/src/tables.rs": "ded4ec00704e462a284dd327322ee8598372d05896729eb5c8db1de4255ef2d7",
+        "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1"
+      },
+      "reference": "Native TimingData.cpp offset initialization and LunaTimingData float queries; unit baseline preserved"
+    }
+  },
+  "phase-06": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 326.4857631989871,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "ded4ec00704e462a284dd327322ee8598372d05896729eb5c8db1de4255ef2d7",
+      "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+      "crates/deadsync-song-lua/src/live.rs": "1e14ce2d088b5f53ed70b6aa871e0c28167b364156f6bd5904757e5607a75f14",
+      "crates/deadsync-rules/src/timing.rs": "047d21b18ea214764ff3497d18cd2d2d860c1158cb47c51f1db8b29a0eed5a67",
+      "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+      "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+      "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+      "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+      "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-native-primitives",
+    "binary_sha256": "f01e6426b461d7a5bcdda05c0c8012fd805cd43152ad44da10b524c89e9a5f38",
+    "fix_commit": "395474a7e694a297bfcd487e7f8446185e048dd0",
+    "targeted_validation": {
+      "test": "62 timing tests;4 spline Lua tests;2 native spline comparisons(9234 scalar checks);1 hidden helper test;4 native stretch tests",
+      "passed": 73,
+      "fix_commit": "395474a7e694a297bfcd487e7f8446185e048dd0",
+      "source_hashes": {
+        "crates/deadsync-rules/src/timing.rs": "047d21b18ea214764ff3497d18cd2d2d860c1158cb47c51f1db8b29a0eed5a67",
+        "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+        "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+        "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+        "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+        "crates/deadsync-song-lua/src/tables.rs": "ded4ec00704e462a284dd327322ee8598372d05896729eb5c8db1de4255ef2d7",
+        "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+        "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+        "crates/deadsync-song-lua/src/live.rs": "1e14ce2d088b5f53ed70b6aa871e0c28167b364156f6bd5904757e5607a75f14",
+        "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2"
+      },
+      "reference": "Native CubicSpline.cpp solve_looped/evaluate; Actor::StretchTo and Actor::GetZoom; fallback02Actor.hidden"
+    }
+  },
+  "phase-07": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 326.4857631989871,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "ded4ec00704e462a284dd327322ee8598372d05896729eb5c8db1de4255ef2d7",
+      "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+      "crates/deadsync-song-lua/src/live.rs": "1e14ce2d088b5f53ed70b6aa871e0c28167b364156f6bd5904757e5607a75f14",
+      "crates/deadsync-rules/src/timing.rs": "047d21b18ea214764ff3497d18cd2d2d860c1158cb47c51f1db8b29a0eed5a67",
+      "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+      "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+      "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+      "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+      "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-native-primitives",
+    "binary_sha256": "f01e6426b461d7a5bcdda05c0c8012fd805cd43152ad44da10b524c89e9a5f38",
+    "fix_commit": "395474a7e694a297bfcd487e7f8446185e048dd0",
+    "targeted_validation": {
+      "test": "62 timing tests;4 spline Lua tests;2 native spline comparisons(9234 scalar checks);1 hidden helper test;4 native stretch tests",
+      "passed": 73,
+      "fix_commit": "395474a7e694a297bfcd487e7f8446185e048dd0",
+      "source_hashes": {
+        "crates/deadsync-rules/src/timing.rs": "047d21b18ea214764ff3497d18cd2d2d860c1158cb47c51f1db8b29a0eed5a67",
+        "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+        "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+        "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+        "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+        "crates/deadsync-song-lua/src/tables.rs": "ded4ec00704e462a284dd327322ee8598372d05896729eb5c8db1de4255ef2d7",
+        "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+        "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+        "crates/deadsync-song-lua/src/live.rs": "1e14ce2d088b5f53ed70b6aa871e0c28167b364156f6bd5904757e5607a75f14",
+        "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2"
+      },
+      "reference": "Native CubicSpline.cpp solve_looped/evaluate; Actor::StretchTo and Actor::GetZoom; fallback02Actor.hidden"
+    }
+  },
+  "phase-08": {
+    "command": [
+      "/home/parity/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--release",
+      "--jobs",
+      "8",
+      "--target-dir",
+      "/home/parity/build/deadsync-sweep-release",
+      "--config",
+      "profile.release.lto=false",
+      "--test",
+      "full_song_lua",
+      "--no-run"
+    ],
+    "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+    "source_base_commit": "33b148c80",
+    "exit_code": 0,
+    "seconds": 354.9161504249787,
+    "modified_sources": {
+      "crates/deadsync-song-lua/src/tables.rs": "9e3d8d2b0d08a425ae400c63ff34608ae1d557dcd9d803a2e3ef6cf20c7879f1",
+      "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+      "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+      "crates/deadsync-song-lua/src/live.rs": "becd8579a4244dfb89503d2b667aba6f0dfa4ff61af6c16b2295269525333e38",
+      "crates/deadsync-rules/src/timing.rs": "f7f017a5b9df94fac6d5c76a3ac5b4a72243b4fb889e054ff5d7a5b7faca5d11",
+      "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+      "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+      "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+      "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+      "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2",
+      "crates/deadsync-song-lua/src/song_tables.rs": "7634c0a91951ea626dee4802641c5b19802edd7b4f711cf2de3bb8fb578f4e86",
+      "crates/deadsync-song-lua/src/host.rs": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed"
+    },
+    "binary": "/home/parity/jobs/sweep-20261017-pending/full-song-lua-current-rate",
+    "binary_sha256": "54c2a4e4525c926626dc859671139dd19c25b1bc39f9c173187c5ffd986175c7",
+    "targeted_checks": [
+      {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "-p",
+          "deadsync-rules",
+          "--lib",
+          "timing::tests"
+        ],
+        "exit_code": 0,
+        "log": "/home/parity/jobs/sweep-20261017-pending/rate-clock-validation-0.log",
+        "passed": 50
+      },
+      {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "-p",
+          "deadsync-song-lua",
+          "--lib",
+          "live_song_clock_and_timing_queries_follow_current_music_rate"
+        ],
+        "exit_code": 0,
+        "log": "/home/parity/jobs/sweep-20261017-pending/rate-clock-validation-1.log",
+        "passed": 1
+      },
+      {
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "-p",
+          "deadsync-song-lua",
+          "--lib",
+          "timing"
+        ],
+        "exit_code": 0,
+        "log": "/home/parity/jobs/sweep-20261017-pending/rate-clock-validation-2.log",
+        "passed": 17
+      }
+    ],
+    "fix_commit": "e3a51a4bf57909e15cb70a4369441c2eb6686598",
+    "targeted_validation": {
+      "test": "50 core timing tests;1 live rate/command regression;17 Lua timing tests (including the same regression)",
+      "passed": 68,
+      "fix_commit": "e3a51a4bf57909e15cb70a4369441c2eb6686598",
+      "source_hashes": {
+        "crates/deadsync-rules/src/timing.rs": "f7f017a5b9df94fac6d5c76a3ac5b4a72243b4fb889e054ff5d7a5b7faca5d11",
+        "crates/deadsync-gameplay/src/attacks.rs": "83cb715d9bbb6551a661a92ad6441189e3b20590745a098e9adb47e2f84c24ea",
+        "crates/deadsync-notefield/src/frame_feedback.rs": "776ba2341e7ade4b2309245af1af24067292bcbae57d046c09cc03fd3df07095",
+        "crates/deadsync-song-lua/src/lib.rs": "9e0831024030e3d3bedb1539d25aa6005994f2551cd151cf9e19a0fc934209a4",
+        "crates/deadsync-song-lua/src/lua_util.rs": "99d70e6496fa7d8075be42e9e4307160967cef451f2fb7e4432efadc10e2e2a5",
+        "crates/deadsync-song-lua/src/tables.rs": "9e3d8d2b0d08a425ae400c63ff34608ae1d557dcd9d803a2e3ef6cf20c7879f1",
+        "crates/deadsync-song-lua/src/multitap.rs": "f71427788eda9a3b907a9b359cd6ba4d4866cc9ff3ede160c7b0af42bbf52ef1",
+        "crates/deadsync-song-lua/src/actor_classes.rs": "1e4632be483e49a3958ff9e61841f4592a867c6302fa8039081e7829cd29290f",
+        "crates/deadsync-song-lua/src/live.rs": "becd8579a4244dfb89503d2b667aba6f0dfa4ff61af6c16b2295269525333e38",
+        "tests/song_lua_itgmania_semantic_parity.rs": "763e12dd2abe41dd102354bcdfbab3af62fc873cf7ee7e193975cc7b9b9907c2",
+        "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9390072939c40298a74c25b08b6ee2afdcf881c7e7cbfb2e655e6674cacd0a70",
+        "crates/deadsync-song-lua/src/host.rs": "6d1640329bca08fd1b347ec75a5553d39422b20e4b089a5f0ce1e566a2aeb7ed",
+        "crates/deadsync-song-lua/src/song_tables.rs": "7634c0a91951ea626dee4802641c5b19802edd7b4f711cf2de3bb8fb578f4e86"
+      },
+      "reference": "Native TimingData.cpp:672-675; GameState.cpp ApplyGameCommand/ApplyPreferredModifiers; GameCommand.cpp Apply in authored order; ModsGroup.h FromString",
+      "logs": [
+        "/home/parity/jobs/sweep-20261017-pending/rate-clock-validation-0.log",
+        "/home/parity/jobs/sweep-20261017-pending/rate-clock-validation-1.log",
+        "/home/parity/jobs/sweep-20261017-pending/rate-clock-validation-2.log"
+      ]
+    }
+  }
+}

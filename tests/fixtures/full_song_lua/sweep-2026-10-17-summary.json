@@ -1,0 +1,518 @@
+{
+  "complete": true,
+  "scope": "New bounded sweep of all 76 remaining pending original simfiles; 424 passing fixtures stay closed",
+  "counts": {
+    "passed_fixtures": 436,
+    "pending_charts": 64,
+    "ignored_charts": 1,
+    "new_passing_fixtures": 12,
+    "processed_this_sweep": 76
+  },
+  "acceptance": "Existing full_song_lua tests; no new acceptance gates; uncompressed full comparisons",
+  "ignored": [
+    {
+      "source_simfile": "mawaru9/mawaru9.sm",
+      "reason": "explicit user exclusion"
+    }
+  ],
+  "missing_coverage": "sweep-2026-10-17-coverage.json",
+  "source_reviews": [
+    "sweep-2026-10-17-native-source-review.json",
+    "sweep-2026-10-17-parity-source-review.json"
+  ],
+  "new_passing_fixtures": [
+    {
+      "source_simfile": "Crab Nicholson Extreme Sleepover/Crab Nicholson Extreme Sleepover.sm",
+      "archive": "c2be9163f31b73e544df8ec14136647a3394f8401dcbb851e45b07c099cbd816.tar.zst",
+      "native_frames": 115058,
+      "replayed_frames": 115058,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "Cold/Cold.ssc",
+      "archive": "9601470ab9bd1e0d7d95770e91f2227cde3e767a261c00e6d1874fec5f613979.tar.zst",
+      "native_frames": 21803,
+      "replayed_frames": 21803,
+      "repair_attempts": 2,
+      "archive_git_ignored": true
+    },
+    {
+      "source_simfile": "DREAMING-ING!!/DREAMING-ING!!.ssc",
+      "archive": "93ca146c9950796bb6a18f98c1d63cd1f0fdd6df66c0d2bc000240452ef90e6c.tar.zst",
+      "native_frames": 32257,
+      "replayed_frames": 32257,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "Cuphead [TaroNuke]/botanic.sm",
+      "archive": "a117399b12110fdd9e25667e3876644df41ee739dff619c564ad5b79b24ba983.tar.zst",
+      "native_frames": 8024,
+      "replayed_frames": 8024,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "freg/freg.sm",
+      "archive": "7272e712a5831f51bf927fa96b966950ac8beb175e43a0e2437681446caa7554.tar.zst",
+      "native_frames": 24013,
+      "replayed_frames": 24013,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "GREAT GREAT/GREAT GREAT.ssc",
+      "archive": "538c45fbf448d048d9b9f754463de3874777a79502e5eec55375e280d0710eb6.tar.zst",
+      "native_frames": 8419,
+      "replayed_frames": 8419,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "It's Showtime/mettaton.ssc",
+      "archive": "bcefa60e00ba411b03b72b96de54d4eb60ff958876ce9e9b0b71c5da7fa5ff9b.tar.zst",
+      "native_frames": 145878,
+      "replayed_frames": 145878,
+      "repair_attempts": 2,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "Koi [UPS2016]/koi.sm",
+      "archive": "f2c478eead3aec53653931ca4298f18841b44aac5b87a03ac2a862bf3cc23854.tar.zst",
+      "native_frames": 145074,
+      "replayed_frames": 145074,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "Lower Times/Lower Times.ssc",
+      "archive": "83f55612d16ffbfe4dcdc6a7688c5ea0c23e5f3ab53b47f11e81debafd6d897e.tar.zst",
+      "native_frames": 114997,
+      "replayed_frames": 114997,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "negator/NEGATOR.sm",
+      "archive": "1ead74d2eebe78087c27180486fac21cc9309ef47cad977c97e9c1b7247c714a.tar.zst",
+      "native_frames": 122300,
+      "replayed_frames": 122300,
+      "repair_attempts": 1,
+      "archive_git_ignored": true
+    },
+    {
+      "source_simfile": "Toki o Kizamu Uta (Nhato Remix)/Toki o Kizamu Uta (Nhato Remix).ssc",
+      "archive": "47bb5abeb3dccaba7f23bb11e2a9dce9d8f156572143362356f914b0f19754bf.tar.zst",
+      "native_frames": 51688,
+      "replayed_frames": 51688,
+      "repair_attempts": 1,
+      "archive_git_ignored": null
+    },
+    {
+      "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+      "archive": "86e8c326902dada122d517b557a817a5785cf37bbeba5862d62fe4b3af939b61.tar.zst",
+      "native_frames": 99701,
+      "replayed_frames": 99701,
+      "repair_attempts": 2,
+      "archive_git_ignored": null
+    }
+  ],
+  "pending_charts": [
+    {
+      "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:1791 at beat 209.55661010742188; Actor.x args native=[-14.693567276000977], owned=[-14.701055526733398]",
+      "reported_mismatches": 1738
+    },
+    {
+      "source_simfile": "In the Hall of the Mountain King [dbk2]/In the Hall of the Mountain King.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison command_query_count: native=1429; deadsync=715",
+      "reported_mismatches": 1
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/multitap/default.lua:998 at beat 289.2825012207031; Actor.x args native=[-97.45635986328125], owned=[-97.45569610595703]",
+      "reported_mismatches": 10
+    },
+    {
+      "source_simfile": "Crazy Crazy/Crazy Crazy.ssc",
+      "repair_attempts": 2,
+      "failure": "song:/lua/default.lua:753 at beat 0; operation native=command.end, owned=ActorFrameTexture.GetTexture",
+      "reported_mismatches": 986540
+    },
+    {
+      "source_simfile": "Cyberpunk 2077/Cyberpunk 2077.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:38 at beat 0.0006024260073900223; operation native=GameState.GetCurrentSong, owned=command.begin",
+      "reported_mismatches": 172551
+    },
+    {
+      "source_simfile": "Happiness/Happiness.ssc",
+      "repair_attempts": 0,
+      "failure": "diva/diva.lua:1092 indexes nil local length; Loop1Command reads FAST_BREAKS[cur_break] without a guard before length[1]/length[2]",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "repair_attempts": 0,
+      "failure": "native OnCommand: argument #3 to original missing; lua/default.lua:867 and matching ha actors call effectmagnitude(0.9)",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "repair_attempts": 0,
+      "failure": "/Songs/Harness/Probe/fade in/default.lua:21: attempt to index a nil value",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "repair_attempts": 2,
+      "failure": "Native ITGmania crash: Access Violation; C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46500-1792226372965190300-0\\crashinfo.txt",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Intro Outro/intro.ssc",
+      "repair_attempts": 0,
+      "failure": "/Songs/Harness/Probe/lua/default.lua:1021: attempt to index a nil value; /Songs/Harness/Probe/lua/default.lua:999: attempt to index a nil value",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "repair_attempts": 1,
+      "failure": "Native ITGmania crash: Access Violation; C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46724-1792226395946740900-0\\crashinfo.txt",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "repair_attempts": 1,
+      "failure": "Native ITGmania crash: Access Violation; C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45140-1792226402554182000-0\\crashinfo.txt",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "repair_attempts": 0,
+      "failure": "FourthSetMessageCommand: numeric argument is nil; lua/default.lua:1075 onwards tests P1 before updating P2 clone with P2 coordinates",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 2134.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-42324-1792228516735168200-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-42324-1792228516735168200-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 2134.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-21136-1792230656426358400-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-21136-1792230656426358400-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "repair_attempts": 0,
+      "failure": "native staged song cannot be found; saved/ contains only the SSC; its MUSIC and FGCHANGES paths refer to files absent from that directory",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "james/james.sm",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12044-1792226408573899100-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12044-1792226408573899100-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "james/james.ssc",
+      "repair_attempts": 1,
+      "failure": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-47840-1792227611287025400-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-47840-1792227611287025400-0",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "repair_attempts": 0,
+      "failure": "native charts CLI: ITGmania loaded no charts; file has zero #NOTES tags; native gameplay cannot select a dance-single Challenge chart",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Metronogik/Song.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/core/main.lua:31 at beat -5.745951175689697; operation native=command.begin, owned=Actor.GetName",
+      "reported_mismatches": 664381
+    },
+    {
+      "source_simfile": "Hallways/hallways.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/background.lua:7 at beat 10.000251770019531; operation native=ScreenManager.GetTopScreen, owned=command.begin",
+      "reported_mismatches": 340
+    },
+    {
+      "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison failed: native=False; deadsync=True",
+      "reported_mismatches": 7
+    },
+    {
+      "source_simfile": "Quarantine/Quarantine.sm",
+      "repair_attempts": 1,
+      "failure": "song:/multitap/default.lua:998 at beat 289.0962829589844; Actor.x args native=[-101.30033111572266], owned=[-101.3006820678711]",
+      "reported_mismatches": 21
+    },
+    {
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison failed: native=True; deadsync=False",
+      "reported_mismatches": 1
+    },
+    {
+      "source_simfile": "HOPE/HOPE.ssc",
+      "repair_attempts": 2,
+      "failure": "callback: draw callback for ActorFrame './' at beat 3403.019: custom draw capture exceeds its song budget\nstack traceback:\n\t[C]: in ?\n\t>[C]: in function 'Actor.Draw'\n\t[string \"/tmp/.tmpyfQvfl/song/code/draw.lua\"]:228: in function <[string \"/tmp/.tmpyfQvfl/song/code/draw.lua\"]:9>\n; comparison command_query_count: native=410155; deadsync=399665",
+      "reported_mismatches": 399254
+    },
+    {
+      "source_simfile": "Think About You/Think About You.sm",
+      "repair_attempts": 1,
+      "failure": "Lua reload selected incompatible chart type dance-double",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Think About You/Think About You.ssc",
+      "repair_attempts": 1,
+      "failure": "Lua reload selected incompatible chart type dance-double",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "repair_attempts": 1,
+      "failure": "Failed to compile shared gameplay lua session for 'Mr. Sandman': out of Lua stack, too many arguments to a Lua function or too many return values from a callback; retrying layers independently",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Igaku/Igaku.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:2152 at beat 92.08849334716797; Actor.x args native=[-96.13861083984375], owned=[-96.13676452636719]",
+      "reported_mismatches": 991
+    },
+    {
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "repair_attempts": 1,
+      "failure": "song:/bg/default.lua:6 at beat 36.962669372558594; command.begin beat native=36.962669372558594, owned=36.964908599853516",
+      "reported_mismatches": 4
+    },
+    {
+      "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/code/update.lua:446 at beat -2.1418426036834717; ActorFrame.GetNumChildren command native=OnCommand, owned=None",
+      "reported_mismatches": 376723
+    },
+    {
+      "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/mods.lua:160 at beat 0.0004744890611618757; operation native=GameState.GetPlayerState, owned=command.begin",
+      "reported_mismatches": 88698
+    },
+    {
+      "source_simfile": "The Boys Are Back in Town (to kill you)/The Boys Are Back in Town (to kill you).ssc",
+      "repair_attempts": 1,
+      "failure": "comparison life_latest: native=0.515999972820282; deadsync=0.5320000052452087",
+      "reported_mismatches": 64
+    },
+    {
+      "source_simfile": "Igaku/Igaku.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:2152 at beat 92.06562805175781; Actor.x args native=[-96.1680908203125], owned=[-96.16799926757812]",
+      "reported_mismatches": 550
+    },
+    {
+      "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:975 at beat 132.28652954101562; Actor.x descendant tween time native=0.800000011920929, owned=0.0",
+      "reported_mismatches": 110
+    },
+    {
+      "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:57 at beat 83.00955963134766; operation native=ScreenManager.GetTopScreen, owned=command.begin",
+      "reported_mismatches": 21
+    },
+    {
+      "source_simfile": "LORELEI/LORELEI.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/code/draw.lua:54 at beat -3.4369406700134277; operation native=Actor.diffusealpha, owned=ActorFrameTexture.GetTexture",
+      "reported_mismatches": 423854
+    },
+    {
+      "source_simfile": "TRIP MACHINE -Resuscitation MIX-/TRIP MACHINE -Resuscitation MIX-.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:134 at beat 264.94439697265625; operation native=Actor.diffusealpha, owned=ActorFrameTexture.GetTexture",
+      "reported_mismatches": 2806
+    },
+    {
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "repair_attempts": 0,
+      "failure": "Native drawable geometry differs at frame80: immediate AFT parent OnCommand draws Quad/Sprite at their initial size before child OnCommands. Owned capture drops that draw and the comparator uses the final fullscreen pose.",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "repair_attempts": 1,
+      "failure": "song:/code/update.lua:43 at beat -2.376021146774292; ActorFrame.GetNumChildren command native=OnCommand, owned=None",
+      "reported_mismatches": 161873
+    },
+    {
+      "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/.//default.lua:67 at beat 0; operation native=Actor.diffuse, owned=GameState.GetCurrentSong",
+      "reported_mismatches": 261023
+    },
+    {
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "repair_attempts": 2,
+      "failure": "song:/despair/default.lua:668 at beat 59.60885238647461; operation native=Actor.diffuse, owned=Actor.sleep",
+      "reported_mismatches": 1292388
+    },
+    {
+      "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/code/update.lua:431 at beat -7.532960414886475; ActorFrame.GetNumChildren command native=OnCommand, owned=None",
+      "reported_mismatches": 208219
+    },
+    {
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/Ambience/snow-simple.lua:83 at beat 84.512939453125; operation native=command.end, owned=Actor.visible",
+      "reported_mismatches": 755057
+    },
+    {
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/code/update.lua:43 at beat -2.3859763145446777; ActorFrame.GetNumChildren command native=OnCommand, owned=None",
+      "reported_mismatches": 182007
+    },
+    {
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:2724 at beat 228.0682830810547; Actor.x args native=[67.5877914428711], owned=[67.58834838867188]",
+      "reported_mismatches": 70
+    },
+    {
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:2724 at beat 228.0521240234375; Actor.x args native=[69.32035064697266], owned=[69.32008361816406]",
+      "reported_mismatches": 116
+    },
+    {
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/Ambience/snow-simple.lua:83 at beat 84.21338653564453; operation native=command.end, owned=Actor.visible",
+      "reported_mismatches": 722328
+    },
+    {
+      "source_simfile": "saitama2000/Saitama2000.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/effects2/default.lua:5 at beat 332.0003662109375; command.begin source native=song:/effects2/default.lua, owned=song:/crowd3/default.lua",
+      "reported_mismatches": 79
+    },
+    {
+      "source_simfile": "Dreams Bloom After School/Dreams Bloom After School.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/bgm.lua:28 at beat 2.7109522819519043; Actor.sleep args native=[6.914000034332275], owned=[6.914716720581055]",
+      "reported_mismatches": 2
+    },
+    {
+      "source_simfile": "saitama2000/Saitama2000.sm",
+      "repair_attempts": 1,
+      "failure": "song:/effects2/default.lua:5 at beat 332.00140380859375; command.begin source native=song:/effects2/default.lua, owned=song:/crowd3/default.lua",
+      "reported_mismatches": 79
+    },
+    {
+      "source_simfile": "Hispanic Panic/sm.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/music.lua:0 at beat 0; operation native=GameState.IsPlayerEnabled, owned=PrefsManager.GetPreference",
+      "reported_mismatches": 986
+    },
+    {
+      "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "repair_attempts": 1,
+      "failure": "callback: OnCommand failed for ActorFrame 'lua': script 'chara/sans/savefile' not found relative to '/tmp/.tmpGkpF4f/song'\nstack traceback:\n\t[C]: in function 'LoadActor'\n\t[string \"/tmp/.tmpGkpF4f/song/lua/default.lua\"]:519: in upvalue 'sans_init'\n\t[string \"/tmp/.tmpGkpF4f/song/lua/default.lua\"]:2491: in function <[string \"/tmp/.tmpGkpF4f/song/lua/default.lua\"]:2490>\n; comparison life_latest: native=0; deadsync=0.5",
+      "reported_mismatches": 7
+    },
+    {
+      "source_simfile": "Reach The Light Switch, Without Asking you/Reach The Light Switch, Without Asking you.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/./switch2.lua:19 at beat 0; command.begin source native=song:/./switch2.lua, owned=song:/./point3.lua",
+      "reported_mismatches": 66
+    },
+    {
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+      "repair_attempts": 1,
+      "failure": "comparison source_broadcast_count: native=5375; deadsync=10834",
+      "reported_mismatches": 5080
+    },
+    {
+      "source_simfile": "REASON for RED/reasonforgay.sm",
+      "repair_attempts": 1,
+      "failure": "song:/red/default.lua:185 at beat 32.0168342590332; Actor.rotationz args native=[-31], owned=[-23]",
+      "reported_mismatches": 25847
+    },
+    {
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "repair_attempts": 1,
+      "failure": "cannot create a Lua reference, out of auxiliary stack space (used 7996 slots)",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Jumper/Jumper.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/lua/AlphabetCharacterMT.lua:34 at beat 0.0002489062608219683; Actor.diffusealpha descendant tween time native=0, owned=0.44999998807907104",
+      "reported_mismatches": 30
+    },
+    {
+      "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/bg/default.lua:1036 at beat 0.00016649563622195274; operation native=Actor.sleep, owned=command.begin",
+      "reported_mismatches": 371538
+    },
+    {
+      "source_simfile": "Jumper/Jumper.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/AlphabetCharacterMT.lua:34 at beat 0.0013252529315650463; Actor.diffusealpha descendant tween time native=0, owned=0.44999998807907104",
+      "reported_mismatches": 30
+    },
+    {
+      "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+      "repair_attempts": 1,
+      "failure": "native scene 2 differs from independent scene 1 at frame 43823; preceding callback errors: [\"TickCommand failed for Sprite: runtime error: [string \\\"/tmp/.tmpOMyIHw/song/plinko.lua\\\"]:493: attempt to call method 'pitch' (a nil value)\\nstack traceback:\\n\\t[C]: in method 'pitch'\\n\\t[string \\\"/tmp/.tmpOMyIHw/song/plinko.lua\\\"]:493: in function <[string \\\"/tmp/.tmpOMyIHw/song/plinko.lua\\\"]:450>\"]",
+      "reported_mismatches": null
+    },
+    {
+      "source_simfile": "Spectrum (Odyssey's Prism Mix) [Telperion]/spectrod.ssc",
+      "repair_attempts": 1,
+      "failure": "song:/spectrum/default.lua:559 at beat 0; operation native=Actor.GetParent, owned=ActorFrameTexture.GetTexture",
+      "reported_mismatches": 99176
+    },
+    {
+      "source_simfile": "Mamono/sm.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/mamono.lua:0 at beat 0; operation native=GameState.IsPlayerEnabled, owned=PrefsManager.GetPreference",
+      "reported_mismatches": 13449
+    },
+    {
+      "source_simfile": "mawaru7/mawaru7.sm",
+      "repair_attempts": 1,
+      "failure": "song:/lua/default.lua:1302 at beat 68.00077056884766; command.begin command native=StepP1MessageCommand, owned=JudgmentMessageCommand",
+      "reported_mismatches": 1393347
+    }
+  ],
+  "oversize_fixture_audit": {
+    "limit_bytes": 100000000,
+    "files": 12,
+    "all_gitignored": true
+  },
+  "worker_completion": {
+    "active_replays_or_captures": [],
+    "phase_05_completed_rows": 47,
+    "non_regular_result_files": []
+  },
+  "updated_utc": "2026-10-17T13:22:02Z"
+}
