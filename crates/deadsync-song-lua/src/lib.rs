@@ -1515,6 +1515,8 @@ pub struct SongLuaCompileContext {
     pub style_name: String,
     /// Song charts in simfile load order; never synthesize missing difficulties.
     pub song_steps: Vec<SongLuaStep>,
+    /// Lua catalog entries map to playable payloads; an empty map is identity.
+    pub song_step_chart_indices: Vec<Option<usize>>,
     pub player_step_indices: [Option<usize>; LUA_PLAYERS],
     pub event_mode: bool,
     pub global_offset_seconds: f32,
@@ -1571,6 +1573,7 @@ impl SongLuaCompileContext {
             music_length_seconds: 0.0,
             style_name: "single".to_string(),
             song_steps: Vec::new(),
+            song_step_chart_indices: Vec::new(),
             player_step_indices: [None; LUA_PLAYERS],
             // PrefsManager defaults EventMode to true in ITGmania.
             event_mode: true,

@@ -999,13 +999,32 @@ end }
     fn gameplay_reload_rebuilds_a_single_session_as_double() {
         use deadsync_song_lua::{SongLuaLiveFrame, SongLuaLiveRequest};
         paths::init();
-        let dir = std::env::temp_dir().join(format!("deadsync-single-double-reload-{}", std::process::id()));
+        for extension in ["sm", "ssc"] {
+        let dir = std::env::temp_dir().join(format!("deadsync-single-double-reload-{extension}-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let simfile = dir.join("mixed.sm");
-        std::fs::write(&simfile, "#TITLE:Style reload;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;\n#NOTES:dance-single:Single:Challenge:1:0,0,0,0,0:\n0001\n0000\n0000\n0000\n;\n#NOTES:dance-double:Double:Challenge:1:0,0,0,0,0:\n00000001\n00000000\n00000000\n00000000\n;").unwrap();
+        let simfile = dir.join(format!("mixed.{extension}"));
+        let mut source = "#VERSION:0.83;#TITLE:Style reload;#BPMS:0=120;#FGCHANGES:0=default.lua=1=0=0=1;\n".to_owned();
+        for (kind, description, notes) in [
+            ("dance-single", "Single", "0001\n0000\n0000\n0000"),
+            ("dance-couple", "Couple", "00000001\n00000000\n00000000\n00000000"),
+            ("dance-routine", "Routine", "00000001\n00000000\n00000000\n00000000"),
+            ("dance-double", "Double", "00000001\n00000000\n00000000\n00000000"),
+        ] {
+            if extension == "sm" {
+                source.push_str(&format!("#NOTES:{kind}:{description}:Challenge:1:0,0,0,0,0:\n{notes}\n;\n"));
+            } else {
+                source.push_str(&format!("#NOTEDATA:;#STEPSTYPE:{kind};#DESCRIPTION:{description};#CHARTNAME:{description};#CREDIT:Author;#DIFFICULTY:Challenge;#METER:1;#NOTES:\n{notes}\n;\n"));
+            }
+        }
+        std::fs::write(&simfile, source).unwrap();
         std::fs::write(dir.join("default.lua"), r#"
 return Def.ActorFrame { OnCommand=function(self)
     self:sleep(9999)
+    local all = GAMESTATE:GetCurrentSong():GetAllSteps()
+    assert(#all == 4)
+    assert(all[2]:GetStepsType() == 'StepsType_Dance_Couple')
+    assert(all[3]:GetStepsType() == 'StepsType_Dance_Routine')
+    assert(all[4] == GAMESTATE:GetCurrentSong():GetStepsByStepsType('StepsType_Dance_Double')[1])
     if GAMESTATE:GetCurrentStyle():GetName() == 'single' then
         GAMESTATE:SetCurrentStyle('double')
         GAMESTATE:SetCurrentSteps(PLAYER_1,
@@ -1029,6 +1048,8 @@ end }
         let context = deadsync_shell::gameplay_entry::song_lua_context(&song, &charts,
             std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0, viewport,
             (854,480), 16.0/9.0, 0.0, &session, &config, "null", 1, true).unwrap();
+        assert_eq!(song.charts.len(), 2, "couple and routine remain outside playable selection");
+        assert_eq!(context.song_step_chart_indices, vec![Some(0), None, None, Some(1)]);
         let mut prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
             deadsync_assets::song_lua::compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
         let mut scene = prepared.take_live_scene().unwrap().unwrap();
@@ -1040,6 +1061,7 @@ end }
         let prepared = deadsync_song_lua::playback::reload_song_lua(&song, scene,
             deadsync_assets::song_lua::reload_song_lua).unwrap();
         assert_eq!(prepared.loaded_style(), Some("double"));
+        assert_eq!(prepared.loaded_steps().unwrap()[0], Some(1), "native catalog selection maps to its playable payload");
         deadsync_shell::gameplay_entry::apply_song_lua_reload(&song, &mut charts,
             &mut payloads, &prepared, &mut session, -0.008).unwrap();
         assert_eq!(session.play_style, deadsync_gameplay::GameplayInputPlayStyle::Double);
@@ -1053,6 +1075,7 @@ end }
         let output = state.song_lua.as_mut().unwrap().advance(frame).unwrap();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert!(output.source_broadcasts.iter().any(|event| event.name == "ReloadedDoubleReady"));
+        }
     }
 
     #[test]
@@ -3446,7 +3469,11 @@ fn compare_stage_sample(
         state.song_lua.as_ref().ok_or("missing Lua metadata")?
             .selected_context().map_err(|error| error.to_string())?.player_step_indices[p]
     }.ok_or("GAMESTATE has no selected P1 chart")?;
-    let metadata = song.charts.get(selected).ok_or("GAMESTATE selected an absent chart")?;
+    let context = state.song_lua.as_ref().ok_or("missing Lua metadata")?.context();
+    let chart_index = if context.song_step_chart_indices.is_empty() { Some(selected) }
+        else { context.song_step_chart_indices.get(selected).copied().flatten() }
+        .ok_or("GAMESTATE selected an unplayable chart")?;
+    let metadata = song.charts.get(chart_index).ok_or("GAMESTATE selected an absent chart")?;
     let actual = if let Some(observation) = overlay_observation {
         let observed = &observation.players[p];
         json!({"possible":observed.possible_points, "current_possible":observed.current_possible_points,

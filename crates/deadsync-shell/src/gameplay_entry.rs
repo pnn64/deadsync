@@ -262,6 +262,43 @@ pub fn song_lua_context(
         context.song_step_notes.push(notes.into());
         context.song_step_row_beats.push(row_beats.into());
     }
+    let catalog = deadsync_simfile::song::load_native_step_metadata(song)?;
+    let playable_steps = std::mem::take(&mut context.song_steps);
+    let playable_timing = std::mem::take(&mut context.song_step_timing);
+    let playable_notes = std::mem::take(&mut context.song_step_notes);
+    let playable_rows = std::mem::take(&mut context.song_step_row_beats);
+    context.song_step_chart_indices = catalog.iter().map(|step| step.playable_index).collect();
+    context.player_step_indices = context.player_step_indices.map(|selected|
+        selected.and_then(|index| context.song_step_chart_indices.iter().position(|value| *value == Some(index))));
+    for step in catalog {
+        if let Some(index) = step.playable_index {
+            context.song_steps.push(playable_steps[index].clone());
+            context.song_step_timing.push(playable_timing[index].clone());
+            context.song_step_notes.push(playable_notes[index].clone());
+            context.song_step_row_beats.push(playable_rows[index].clone());
+        } else {
+            use deadsync_song_lua::SongLuaDifficulty as Difficulty;
+            let difficulty = match step.difficulty.to_ascii_lowercase().as_str() {
+                "beginner" => Difficulty::Beginner, "easy" | "basic" | "light" => Difficulty::Easy,
+                "medium" | "another" | "standard" => Difficulty::Medium,
+                "hard" | "difficult" | "heavy" => Difficulty::Hard,
+                "challenge" | "expert" | "oni" => Difficulty::Challenge, _ => Difficulty::Edit,
+            };
+            let steps_type = step.chart_type.split('-').map(|part| {
+                let mut chars = part.chars();
+                chars.next().map_or_else(String::new, |first| format!("{}{}", first.to_ascii_uppercase(), chars.as_str()))
+            }).collect::<Vec<_>>().join("_");
+            context.song_steps.push(deadsync_song_lua::SongLuaStep {
+                steps_type: format!("StepsType_{steps_type}"), difficulty,
+                description: step.description, chart_name: step.chart_name,
+                credit: step.credit, meter: step.meter, music_file: step.music_file,
+                possible_grade_points: 0,
+            });
+            context.song_step_timing.push(context.song_timing.clone().unwrap_or_else(|| playable_timing[0].clone()));
+            context.song_step_notes.push(Default::default());
+            context.song_step_row_beats.push(Default::default());
+        }
+    }
     for (player, profile) in context.players.iter_mut().zip(player_profiles) {
         let Some(choice) = deadsync_assets::textures::resolve_texture_choice_entry(
             profile.judgment_graphic.texture_key(),

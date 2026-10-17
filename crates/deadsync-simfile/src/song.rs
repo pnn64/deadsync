@@ -374,6 +374,78 @@ fn parse_song_source(
     Ok(song)
 }
 
+/// Authored Steps retain their Song::GetAllSteps order even when their style
+/// cannot be selected for gameplay in DeadSync.
+pub struct NativeStepMetadata {
+    pub chart_type: String,
+    pub difficulty: String,
+    pub description: String,
+    pub chart_name: String,
+    pub credit: String,
+    pub meter: u32,
+    pub music_file: String,
+    pub playable_index: Option<usize>,
+}
+
+pub fn load_native_step_metadata(song: &deadsync_chart::SongData) -> Result<Vec<NativeStepMetadata>, String> {
+    let data = std::fs::read(&song.simfile_path).map_err(|error| error.to_string())?;
+    let extension = song.simfile_path.extension().and_then(|value| value.to_str()).unwrap_or("sm");
+    let parsed = rssp::parse::extract_sections(&data, extension).map_err(|error| error.to_string())?;
+    let ssc = extension.eq_ignore_ascii_case("ssc");
+    let format = if ssc { rssp::timing::TimingFormat::Ssc } else { rssp::timing::TimingFormat::Sm };
+    let version = rssp::parse::parse_version(parsed.version, format);
+    let text = |bytes: &[u8]| rssp::parse::decode_unescape(bytes)
+        .trim_matches(['\r', '\n', '\t', ' ']).to_owned();
+    let mut playable = 0;
+    let mut steps = Vec::new();
+    for entry in &parsed.notes_list {
+        if entry.field_count < 5 { continue; }
+        let kind = text(entry.fields[0]).to_ascii_lowercase();
+        if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() {
+            let chart = song.charts.get(playable).ok_or("native Steps catalog exceeds playable charts")?;
+            steps.push(NativeStepMetadata {
+                chart_type: chart.chart_type.clone(), difficulty: chart.difficulty.clone(),
+                description: chart.description.clone(), chart_name: chart.chart_name.clone(),
+                credit: chart.step_artist.clone(), meter: chart.meter,
+                music_file: chart.music_file.clone(), playable_index: Some(playable),
+            });
+            playable += 1;
+        } else if native_unplayed_step_lanes(&kind).is_some() || kind == "lights-cabinet" {
+            let legacy_name = ssc && version < rssp::parse::SSC_VERSION_CHART_NAME_TAG;
+            let description = text(entry.fields[1]);
+            steps.push(NativeStepMetadata {
+                chart_type: kind, difficulty: text(entry.fields[2]),
+                chart_name: if !ssc || legacy_name { description.clone() }
+                    else { text(entry.chart_name.unwrap_or_default()) },
+                credit: if ssc { text(entry.fields[4]) } else { description.clone() },
+                description: if legacy_name { String::new() } else { description },
+                meter: text(entry.fields[3]).parse().unwrap_or(1),
+                music_file: entry.chart_music.as_deref().map(&text).unwrap_or_default(),
+                playable_index: None,
+            });
+        }
+    }
+    if playable != song.charts.len() { return Err("native Steps catalog is missing playable charts".into()); }
+    Ok(steps)
+}
+
+fn native_unplayed_step_lanes(kind: &str) -> Option<usize> {
+    Some(match kind {
+        "dance-threepanel" => 3,
+        "dance-solo" | "pump-halfdouble" | "bm-single5" | "bm-versus5" | "kickbox-insect" => 6,
+        "dance-couple" | "dance-routine" | "ds3ddx-single" | "techno-single8" | "techno-double4" | "bm-single7" | "bm-versus7" => 8,
+        "pump-couple" | "pump-routine" | "ez2-double" | "techno-double5" => 10,
+        "kb7-single" | "ez2-real" => 7,
+        "ez2-single" | "para-single" | "pnm-five" | "techno-single5" => 5,
+        "maniax-single" | "techno-single4" | "kickbox-quadarm" | "kickbox-human" => 4,
+        "bm-double5" => 12,
+        "bm-double7" | "techno-double8" => 16,
+        "maniax-double" | "kickbox-arachnid" => 8,
+        "pnm-nine" => 9,
+        _ => return None,
+    })
+}
+
 /// Song.cpp includes native charts that the gameplay analyzer does not load.
 /// Their notes still determine when ScreenGameplay transitions out.
 fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, extension: &str) -> Option<[f32; 2]> {
@@ -387,22 +459,7 @@ fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, exten
         let kind = kind.trim().to_ascii_lowercase();
         if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() { continue; }
         // GameManager.cpp's native StepsTypeInfo table. Lights never contribute.
-        let lanes = match kind.as_str() {
-            "dance-threepanel" => 3,
-            "dance-solo" | "pump-halfdouble" | "bm-single5" | "bm-versus5" | "kickbox-insect" => 6,
-            "dance-couple" | "dance-routine" | "ds3ddx-single" | "techno-single8" | "techno-double4" | "bm-single7" | "bm-versus7" => 8,
-            "pump-couple" | "pump-routine" | "ez2-double" | "techno-double5" => 10,
-            "kb7-single" | "ez2-real" => 7,
-            "ez2-single" | "para-single" | "pnm-five" | "techno-single5" => 5,
-            "maniax-single" | "techno-single4" | "kickbox-quadarm" => 4,
-            "bm-double5" => 12,
-            "bm-double7" | "techno-double8" => 16,
-            "maniax-double" => 8,
-            "pnm-nine" => 9,
-            "kickbox-human" => 4,
-            "kickbox-arachnid" => 8,
-            _ => continue,
-        };
+        let Some(lanes) = native_unplayed_step_lanes(&kind) else { continue; };
         if parsed.notes_list.len() > 1 && entry.fields[2].eq_ignore_ascii_case(b"Edit") { continue; }
         let Some([first, last]) = native_note_row_bounds(entry.note_data, lanes) else { continue; };
         if last == 0 { continue; }

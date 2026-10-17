@@ -544,7 +544,9 @@ where
             .get::<Option<usize>>(COMPILE_LAYER_KEY).map(|layer| layer.unwrap_or(primary_index))
             .map_err(|err| err.to_string())).collect::<Result<Vec<_>, _>>()?;
         let mut out = CompiledSongLua {
-            startup, loaded_steps: Some(context.player_step_indices),
+            startup, loaded_steps: Some(context.player_step_indices.map(|index| index.and_then(|index|
+                if context.song_step_chart_indices.is_empty() { Some(index) }
+                else { context.song_step_chart_indices.get(index).copied().flatten() }))),
             loaded_style: Some(context.style_name.clone()), startup_reloads: reloads,
             entry_path: trace_entry_path.clone(),
             screen_width: context.screen_width, screen_height: context.screen_height,
@@ -626,7 +628,9 @@ where
     let globals = lua.globals();
     let mut out = CompiledSongLua {
         startup,
-        loaded_steps: Some(context.player_step_indices),
+        loaded_steps: Some(context.player_step_indices.map(|index| index.and_then(|index|
+            if context.song_step_chart_indices.is_empty() { Some(index) }
+            else { context.song_step_chart_indices.get(index).copied().flatten() }))),
         loaded_style: Some(context.style_name.clone()),
         startup_reloads: reloads,
         entry_path: entry_paths[primary_index].clone(),
