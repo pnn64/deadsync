@@ -3004,15 +3004,12 @@
     {
       "title": "It's Showtime!",
       "source_simfile": "It's Showtime/mettaton.ssc",
-      "harness_version": "0.1.0",
-      "archive": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812.tar.zst",
-      "sha256": "ded69a669947efef11c80f8824ecb31ef46e5c8dbe830598cd33827145a19812",
-      "compressed_bytes": 16861763,
-      "uncompressed_sha256": "9391e2212562601762c4f9255a84aae17a1a2dacbd5a9221fa712f1c324544a7",
-      "compression_level": 22,
-      "aliases": [
-        "67bdf7433f19802517a5ebe2d0ac76d525a05e085e8159fc4dee8dbf61a91f61.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "bcefa60e00ba411b03b72b96de54d4eb60ff958876ce9e9b0b71c5da7fa5ff9b.tar.zst",
+      "compressed_bytes": 21501200,
+      "sha256": "bcefa60e00ba411b03b72b96de54d4eb60ff958876ce9e9b0b71c5da7fa5ff9b",
+      "uncompressed_sha256": "378bedd6129e825b38ebb4cdf6fbd210820f86f9c366036dab669ca89d079f29",
+      "aliases": []
     },
     {
       "title": "bloodrush itg do not use a speedmod over 250 scroll speed unless brave",

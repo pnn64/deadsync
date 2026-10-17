@@ -358,6 +358,101 @@
         "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
         "missing captured subscriber identity for ScreenGameplay/2/9/1"
       ]
+    },
+    "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm": {
+      "source_simfile": "The Video Boaboaboaboab/The Video Boab Oyedivuth.sm",
+      "pending_coverage": [
+        "uncompared song operations: GameState.ApplyGameCommand, GameState.GetMasterPlayerNumber",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    },
+    "Hallways/hallways.ssc": {
+      "source_simfile": "Hallways/hallways.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.glow, Actor.xy, GameState.GetHumanPlayers, Player.SetLife, PlayerOptions.FailSetting, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetFirstSecond, Song.GetLastSecond",
+        "native drawable state/resources: BitmapText, Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4/1",
+        "missing captured subscriber identity for ScreenGameplay/2/8/3",
+        "missing captured subscriber identity for ScreenGameplay/2/8/4",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "native scene 1: no captured factory identity for 1 background entries; foreground ranks retained"
+      ]
+    },
+    "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc": {
+      "source_simfile": "Rainbow Road [chairodactyl] - Cameron Wiggers/Rainbow Road.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.accelerate, Actor.blend, Actor.xy",
+        "native drawable state/resources: Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "owned gameplay overlay observation phase is unavailable"
+      ]
+    },
+    "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc": {
+      "source_simfile": "Vtubers Never Die! [Gpop]/Vtubers Never Die!.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.scale_or_crop_background, GameState.GetMasterPlayerNumber",
+        "native drawable state/resources: Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
+    },
+    "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm": {
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.addrotationz",
+        "native drawable state/resources: Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1"
+      ]
     }
   }
 }
