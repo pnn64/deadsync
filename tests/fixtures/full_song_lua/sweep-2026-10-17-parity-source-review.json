@@ -112,7 +112,7 @@
       ],
       "observed": "First rate-change discrepancy native beat12.031805992126465 vs owned12.031599044799805 at identical music seconds4.689093112945557.",
       "cause": "ApplyGameCommand was a side-effect-only stub, so mod clauses never updated options. Independently, native elapsed time adds currentMusicRate*globalOffset while owned float song-position used rate1. The clock regression stayed2.08instead of2.10at1.25rate withglobaloffset.04until the command handler was implemented.",
-      "disposition": "Rate-aware clock and Lua TimingData repair in validation; full replay budget remains one.",
+      "disposition": "Resolved by source fix e3a51a4bf; full final replay passed and compressed fixture committed as a68c1bf0b. Passing chart closed.",
       "source_proofs": [
         {
           "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\TimingData.cpp",
@@ -134,7 +134,18 @@
           "path": "C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\src\\ModsGroup.h",
           "sha256": "69eed3b53a0781add857158dae13e47804d287a57047a41cadf3c50dedb321a0"
         }
-      ]
+      ],
+      "resolved_full_replay": {
+        "archive": "86e8c326902dada122d517b557a817a5785cf37bbeba5862d62fe4b3af939b61.tar.zst",
+        "candidate_sha256": "7eb4f265748c3003a24f0a9eea81fdc5e99e62ce4a3233ec12ce4c4c33210ae3",
+        "native_frames": 99701,
+        "replayed_frames": 99701,
+        "repair_attempts": 2,
+        "archive_accepted": true,
+        "complete_uncompressed_replay_passed": true,
+        "decoded_packed_bytes_verified": true,
+        "local_decompressed_bytes_verified": true
+      }
     },
     {
       "positions": [
