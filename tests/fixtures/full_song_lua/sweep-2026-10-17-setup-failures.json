@@ -1,0 +1,30 @@
+{
+  "cause": "Native engine symbol build conflicted with a hardlinked executable used by an active capture; the three subsequent CLI startups failed before launching ITGmania",
+  "recovery": "Engine rebuilt successfully after all captures exited; source charts and native captures unchanged; startup-only failures consume no chart repair attempt",
+  "cases": [
+    {
+      "position": 492,
+      "source_simfile": "james/james.ssc",
+      "chart_execution_started": false,
+      "repair_attempts_consumed": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: could not open ITGmania executable C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\Program\\ITGmania-harness-trace.exe: The system cannot find the file specified. (os error 2)\n",
+      "retained_cli_record": "C:/GitHub/deadsync/target/song-lua-sweep-20261017/native-recovery/chart-492-attempt1/result.json"
+    },
+    {
+      "position": 484,
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "chart_execution_started": false,
+      "repair_attempts_consumed": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: could not open ITGmania executable C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\Program\\ITGmania-harness-trace.exe: The system cannot find the file specified. (os error 2)\n",
+      "retained_cli_record": "C:/GitHub/deadsync/target/song-lua-sweep-20261017/native-recovery/chart-484-attempt1/result.json"
+    },
+    {
+      "position": 485,
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super]/ArrowQuest.sm",
+      "chart_execution_started": false,
+      "repair_attempts_consumed": 0,
+      "failure": "error: ITGmania song Lua semantic trace failed: could not open ITGmania executable C:\\GitHub\\itgmania-harness\\target\\native-engine-source\\Program\\ITGmania-harness-trace.exe: The system cannot find the file specified. (os error 2)\n",
+      "retained_cli_record": "C:/GitHub/deadsync/target/song-lua-sweep-20261017/native-recovery/chart-485-attempt1/result.json"
+    }
+  ]
+}

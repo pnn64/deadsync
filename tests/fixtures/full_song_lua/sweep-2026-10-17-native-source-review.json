@@ -1,0 +1,101 @@
+{
+  "scope": "Current source review of seven native failures; unchanged authored inputs retained; this does not alter replay acceptance",
+  "cases": [
+    {
+      "source_simfile": "Happiness/Happiness.ssc",
+      "observed_failure": "diva/diva.lua:1092 indexes nil local length",
+      "source": "Loop1Command reads FAST_BREAKS[cur_break] without a guard before length[1]/length[2]",
+      "disposition": "native Lua error retained; source unchanged",
+      "position": 221,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\Happiness\\diva\\diva.lua",
+      "source_sha256": "0027fdca6be4a6095cf5013ea63cf55b01c8215b024c1a221c5d55135b0922c7",
+      "simfile_sha256": "8efb7562272cde881e6061fecef4aa76c53998620b6006ad2e6182d9d481cb5b",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    },
+    {
+      "source_simfile": "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "observed_failure": "native OnCommand: argument #3 to original missing",
+      "source": "lua/default.lua:867 and matching ha actors call effectmagnitude(0.9)",
+      "native_contract": "Actor.effectmagnitude requires x, y and z numeric arguments",
+      "disposition": "native source error remains pending; no DeadSync change can make the unmodified native capture pass",
+      "position": 226,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\Haxo (Sharks Remix) [sorae]\\lua\\default.lua",
+      "source_sha256": "ee2e4d1151aa4ee7c37f1c4721688e8493cc673078ebaa4aa21dd44609bfba3b",
+      "simfile_sha256": "d02a73daed864c71d7c0a94e5a8780c2800796ba72db07f98b79790c12eecc72",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    },
+    {
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "observed_failure": "native OnCommand at fade in/default.lua:21: attempt to index a nil value",
+      "source": "fade in/default.lua:20-22 calls PlayerP2:decelerate without checking that PlayerP2 exists in Single mode",
+      "native_contract": "ScreenGameplay exposes enabled player actors; the captured Single session has no PlayerP2",
+      "disposition": "unmodified source error remains pending; no synthetic disabled-player actor or silent Versus substitution",
+      "position": 227,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\Hello Gordon [chairodactyl] - Cameron Wiggers\\fade in\\default.lua",
+      "source_sha256": "8cb62be9883838d7e2305d7a9489266e44de84d0ffd814a0467a832851fa9aad",
+      "simfile_sha256": "24202fda58b5285d06b8fed5aab5db33014eae5bfa043ac9ca630f9f671198c7",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    },
+    {
+      "source_simfile": "Intro Outro/intro.ssc",
+      "observed_failure": "native ShakeXMessageCommand at lua/default.lua:1021 and StopStopMessageCommand at line 999 index nil",
+      "source": "both message handlers call PlayerP2 methods without checking for an enabled second player",
+      "native_contract": "the captured Single session has no PlayerP2 actor",
+      "disposition": "native authored Single-mode error remains pending; source unchanged",
+      "position": 248,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\Intro Outro\\lua\\default.lua",
+      "source_sha256": "2e9fbc26f1b12430cb20e67da2cb33f55c3dbb502b1a540f80db6deab3347399",
+      "simfile_sha256": "8214dcbee76704e940f10dbedc814c541fb615f0f1fdfcbccc230b750a82649d",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    },
+    {
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "observed_failure": "FourthSetMessageCommand: numeric argument is nil",
+      "source": "lua/default.lua:1075 onwards tests P1 before updating P2 clone with P2 coordinates",
+      "disposition": "single-player source path can use unset P2 coordinates; original remains unchanged",
+      "position": 474,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\wndrwll\\lua\\default.lua",
+      "source_sha256": "faab1c6005e65cefa5e7d3672682c77c2a5fbb0b857ab20cd3348a6200b2a465",
+      "simfile_sha256": "26433a3ef9255d76659f20b47b4e1e63afabea0ecea9b128a8ee2904433cf2fe",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    },
+    {
+      "source_simfile": "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "observed_failure": "native staged song cannot be found",
+      "source": "saved/ contains only the SSC; its MUSIC and FGCHANGES paths refer to files absent from that directory",
+      "native_metadata": "native metadata loader reads four charts, while required gameplay resources are absent at authored relative paths",
+      "disposition": "missing source resources remain pending; no silent parent-folder substitution",
+      "position": 489,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\Cursed Metamorph - [Zaia]\\saved\\Cursed Metamorph.ssc",
+      "source_sha256": "08f8865ca23a834cbed37f92c94f5c5439c2cf6eec65fbaff66d9d827e60aa50",
+      "simfile_sha256": "08f8865ca23a834cbed37f92c94f5c5439c2cf6eec65fbaff66d9d827e60aa50",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    },
+    {
+      "source_simfile": "Lesson by DJ/Lesson by DJ.sm",
+      "observed_failure": "native charts CLI: ITGmania loaded no charts",
+      "source": "file has zero #NOTES tags; native gameplay cannot select a dance-single Challenge chart",
+      "disposition": "unplayable source artifact remains pending; SSC peer is a separate source",
+      "position": 493,
+      "source_file": "C:\\GitHub\\rework\\lua-songs\\Lesson by DJ\\Lesson by DJ.sm",
+      "source_sha256": "c5300bc691048803db427d58d9e76b7dbd159cfba2c9bffee3bf8b632964b840",
+      "simfile_sha256": "c5300bc691048803db427d58d9e76b7dbd159cfba2c9bffee3bf8b632964b840",
+      "reviewed_in_sweep": "2026-10-17",
+      "status": "pending",
+      "repair_attempts": 0
+    }
+  ],
+  "native_actor_cpp_sha256": "c5991992c937e7be25147697a4116397743fae547a1046ba96bb28c83482c150"
+}
