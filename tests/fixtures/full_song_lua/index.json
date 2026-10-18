@@ -5417,6 +5417,17 @@
       "uncompressed_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
       "aliases": [],
       "local_only": true
+    },
+    {
+      "title": "Dongo Bongo",
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "harness_version": "0.1.86",
+      "archive": "9d2c9525dfc15fdaf92e750224b1717266d537af239076ca188c32042917b8cc.tar.zst",
+      "compressed_bytes": 132970317,
+      "sha256": "9d2c9525dfc15fdaf92e750224b1717266d537af239076ca188c32042917b8cc",
+      "uncompressed_sha256": "f537b455407d794e2f35913af9420314dabae2d6b8501da4be35e5dead7343b3",
+      "aliases": [],
+      "local_only": true
     }
   ],
   "compression_level": 22
