@@ -1,0 +1,101 @@
+{
+  "complete": false,
+  "goal": "Ten additional accepted fixtures",
+  "counts": {
+    "new_passing_fixtures": 9,
+    "passed_fixtures": 459,
+    "pending_charts": 41,
+    "ignored_charts": 1
+  },
+  "blocker": "The headless replay host 192.168.1.33 is unreachable by SSH and local network checks. Megalovania and Mamono have no confirmed complete current result.",
+  "saved_fixtures": [
+    {
+      "position": 440,
+      "source_simfile": "Think About You/Think About You.sm",
+      "archive": "57e2f70e96e4ecf5c70bdc8ab02d317053cd820005c492850a52532f0b440e51.tar.zst",
+      "native_frames": 38435,
+      "replayed_frames": 38435,
+      "archive_sha256": "57e2f70e96e4ecf5c70bdc8ab02d317053cd820005c492850a52532f0b440e51",
+      "candidate_sha256": "4d83f3dd94561b2692bf707deabd410195c3268a8db55c919863bc548245ef34"
+    },
+    {
+      "position": 351,
+      "source_simfile": "PARTY [pArTy eDiTioN]/Party.ssc",
+      "archive": "2f5366e04bc1357754dfe61cc348e1c17037e89f735332cad07cb685fee8e454.tar.zst",
+      "native_frames": 31283,
+      "replayed_frames": 31283,
+      "archive_sha256": "2f5366e04bc1357754dfe61cc348e1c17037e89f735332cad07cb685fee8e454",
+      "candidate_sha256": "d8d38cde9dafe107ff338549e783838b71fff78eb10b3eb40ed9318522371a7b"
+    },
+    {
+      "position": 453,
+      "source_simfile": "Ultimate taste/Ultimate taste.ssc",
+      "archive": "eeff4b4c46a5ec7d515815df061d309d2711c67325533ac18af16936a6f5c821.tar.zst",
+      "native_frames": 95127,
+      "replayed_frames": 95127,
+      "archive_sha256": "eeff4b4c46a5ec7d515815df061d309d2711c67325533ac18af16936a6f5c821",
+      "candidate_sha256": "e2abeae0f8ea7d32448a6fc8b5b9f289dc7c8057671ad60d5c386a6ba25ab980"
+    },
+    {
+      "position": 420,
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.ssc",
+      "archive": "53e0ac17d80a057466b357f4165658624d15afab3e5849ad344c332d67f2c491.tar.zst",
+      "native_frames": 77402,
+      "replayed_frames": 77402,
+      "archive_sha256": "53e0ac17d80a057466b357f4165658624d15afab3e5849ad344c332d67f2c491",
+      "candidate_sha256": "2e92a0a629194a9e1f5c1439af104b9c9b236fa1d55ad91186158db2dabbcad6"
+    },
+    {
+      "position": 442,
+      "source_simfile": "This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!/This year, too, we will strive to aim for [Snowfall, Merry Christmas]!!.ssc",
+      "archive": "ee916455cc149148df2bc601b555913b829bb2131259bc5a6d8be8607421aeca.tar.zst",
+      "native_frames": 86573,
+      "replayed_frames": 86573,
+      "archive_sha256": "ee916455cc149148df2bc601b555913b829bb2131259bc5a6d8be8607421aeca",
+      "candidate_sha256": "d23586d7ccb3a8b8c12ee52c53b93c5b172999e906db82beceba7aeb52f8882c"
+    },
+    {
+      "position": 228,
+      "source_simfile": "Hispanic Panic/sm.sm",
+      "archive": "7d3d2939d23dae05ea2a057c33b0f615480bcdf5ad34377693fd19e7faede993.tar.zst",
+      "native_frames": 175700,
+      "replayed_frames": 175700,
+      "archive_sha256": "7d3d2939d23dae05ea2a057c33b0f615480bcdf5ad34377693fd19e7faede993",
+      "candidate_sha256": "8aecad38ea92ef397a1bed91fc0f7549f5afd39ff570cbd83cde0cba14c19dd7"
+    },
+    {
+      "position": 395,
+      "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "archive": "c0e87ceaf1b5d72eab4c21ebea3e99708582eb20a0b1a0385d076fe8820074fb.tar.zst",
+      "native_frames": 44354,
+      "replayed_frames": 44354,
+      "archive_sha256": "c0e87ceaf1b5d72eab4c21ebea3e99708582eb20a0b1a0385d076fe8820074fb",
+      "candidate_sha256": "4ff6be4b6a6c9b4395217222627ede7550367696785bd94d63bfb3abae0ad5e7"
+    },
+    {
+      "position": 259,
+      "source_simfile": "Jumper/Jumper.sm",
+      "archive": "f987c61f160c5670eec7a6d4ae46dfc4772f717efb8957bef9942d9f1be2c483.tar.zst",
+      "native_frames": 159927,
+      "replayed_frames": 159927,
+      "archive_sha256": "f987c61f160c5670eec7a6d4ae46dfc4772f717efb8957bef9942d9f1be2c483",
+      "candidate_sha256": "3f92140d14f02b0067ec7e813bf304583014029aee18bc3e2d1ce857cb2502a3"
+    },
+    {
+      "position": 260,
+      "source_simfile": "Jumper/Jumper.ssc",
+      "archive": "fa5d1c213051d1a69c4a2307223b12629218a2f5ac3195899af5a7b2ea826abe.tar.zst",
+      "native_frames": 169429,
+      "replayed_frames": 169429,
+      "archive_sha256": "fa5d1c213051d1a69c4a2307223b12629218a2f5ac3195899af5a7b2ea826abe",
+      "candidate_sha256": "4e7269016c13b64a4b189bfd04b1ad834a0a6178156f22c00940a496e38e7742"
+    }
+  ],
+  "pending_failures": "sixth-ten-2026-10-18-pending.json",
+  "missing_coverage": "sixth-ten-2026-10-18-coverage.json",
+  "source_review": "sixth-ten-2026-10-18-source-review.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "utc": "2026-10-18T01:07:29Z"
+}

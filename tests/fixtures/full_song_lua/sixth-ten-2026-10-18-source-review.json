@@ -1,0 +1,294 @@
+{
+  "scope": "Ten additional complete accepted fixtures; existing acceptance unchanged",
+  "baseline_commit": "b861ba269",
+  "baseline_counts": {
+    "passed_fixtures": 450,
+    "pending_charts": 50,
+    "ignored_charts": 1
+  },
+  "workflow": {
+    "headless": true,
+    "compare_uncompressed": true,
+    "reuse_captures": true,
+    "repair_limit_per_chart": 2,
+    "missing_coverage_separate": true,
+    "no_new_acceptance_gates": true,
+    "runtime_lua_feature_enabled": false
+  },
+  "repairs": [
+    {
+      "commit": "93c35b23b",
+      "cause": "Preserve the actual Simply Love single-player Overlay tree and the optional outer capture-probe wrapper; native theme command errors remain separate coverage diagnostics.",
+      "sources": [
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay overlay/default.lua",
+        "itgmania-harness/probe_theme/ScreenGameplay overlay.lua",
+        "itgmania/src/Actor.cpp"
+      ],
+      "source_sha256": {
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+        "itgmania-harness/probe_theme/ScreenGameplay overlay.lua": "e823515b341602e9811eb3eeb6006a49a5643bf80eb534e5fc7b53a41bd8653b",
+        "itgmania/src/Actor.cpp": "1dc2f98fd812fc48e6ad557391064ba21c27485682bee8eeeead918acd2781ce"
+      }
+    },
+    {
+      "commit": "751479d90",
+      "cause": "Keep background effect/color metadata on each Lua background owner, including directories in BGCHANGES2, through the simfile cache. Use that metadata when merging native UpperLeft callbacks.",
+      "sources": [
+        "itgmania/src/Background.cpp",
+        "itgmania/src/BackgroundUtil.cpp",
+        "itgmania/BackgroundEffects/UpperLeft.lua"
+      ],
+      "source_sha256": {
+        "itgmania/src/Background.cpp": "6830a9fbc28899b6eea80a5f8b38e6bb8eeed7a09fcdbb2f13596d0099409947",
+        "itgmania/src/BackgroundUtil.cpp": "400fe58513c89133ad2a817f62639efcf11c73a956148f3cecd6ab2b6692e12e",
+        "itgmania/BackgroundEffects/UpperLeft.lua": "f8c948a7f83b1caf1cb09716a6a94ed9d8237ee8a4a69427babc8d6aa47cd359"
+      }
+    },
+    {
+      "commit": "b5bebc31c",
+      "cause": "Isolate the pre-existing lone Judgment subscriber test from additional native theme subscribers; retain the real theme callbacks in the implementation.",
+      "sources": [
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua"
+      ],
+      "source_sha256": {
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269"
+      }
+    },
+    {
+      "commit": "97be9c807",
+      "cause": "Load native Header/Footer actors with their real children and ScreenGameplay hibernation commands. Actor::DrawPrimitives is empty, so plain logic Actors submit no geometry.",
+      "sources": [
+        "Simply-Love-SM5/Graphics/_header.lua",
+        "Simply-Love-SM5/Graphics/_footer.lua",
+        "Simply-Love-SM5/metrics.ini",
+        "itgmania/src/Actor.h"
+      ],
+      "source_sha256": {
+        "Simply-Love-SM5/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+        "Simply-Love-SM5/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+        "Simply-Love-SM5/metrics.ini": "221b449c94e5ed38bbdfb4cee157582f20c85ffa8e234398309768945b370a80",
+        "itgmania/src/Actor.h": "76ff31b0dad5cc1198d01dbe735fed769aac40d309017fbb501bcdcef958219b"
+      }
+    },
+    {
+      "commit": "34a46686a",
+      "cause": "FinishTweening propagates to descendants and discards queued commands. Source message observation retains direct song construction and nested song callbacks while excluding autonomous theme helpers. Callback scope is available without enabling trace logging.",
+      "sources": [
+        "itgmania/src/ActorFrame.cpp",
+        "itgmania/src/Actor.cpp",
+        "itgmania-harness/probe_theme/SongLuaTrace.lua"
+      ],
+      "source_sha256": {
+        "itgmania/src/ActorFrame.cpp": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac",
+        "itgmania/src/Actor.cpp": "1dc2f98fd812fc48e6ad557391064ba21c27485682bee8eeeead918acd2781ce",
+        "itgmania-harness/probe_theme/SongLuaTrace.lua": "3b9797a139e33223d51e54700ac1289a7367befabdd95a05130496de9772900a"
+      }
+    },
+    {
+      "commit": "34a46686a",
+      "cause": "NotesEnded writes zero to already-failed players' life history before Off, without emptying their LifeMeter. GetCurrentLife and stage observations read the history. The runtime records its history in its existing music-time domain.",
+      "sources": [
+        "itgmania/src/ScreenGameplay.cpp",
+        "itgmania/src/PlayerStageStats.cpp"
+      ],
+      "source_sha256": {
+        "itgmania/src/ScreenGameplay.cpp": "402dd3e1bbd3d655978332110ee7420353328b496146d59989d566cb42afd86f",
+        "itgmania/src/PlayerStageStats.cpp": "e067b3bba22adc5d016e32fd6384393d2a03d9a1bbbd2b8fe36216b03b4e7497"
+      }
+    },
+    {
+      "commit": "34a46686a",
+      "cause": "Live capture discards the preceding frame and keeps the payload byte bound instead of the baked per-frame operation cap; HOPE's retained native frame contains 355 explicit Draw calls. The complete replay comparator and baked bounds remain unchanged.",
+      "sources": [
+        "itgmania/src/Actor.cpp"
+      ],
+      "source_sha256": {
+        "itgmania/src/Actor.cpp": "1dc2f98fd812fc48e6ad557391064ba21c27485682bee8eeeead918acd2781ce"
+      }
+    },
+    {
+      "commit": "34a46686a",
+      "cause": "GameState::IsEventMode reads the owned preference directly instead of calling a separately observable Lua PrefsManager getter.",
+      "sources": [
+        "itgmania/src/GameState.cpp"
+      ],
+      "source_sha256": {
+        "itgmania/src/GameState.cpp": "def59dcb2b4daf7a81ba4b9204c2420b56fd1d7c4b0866a9d57fe7c460a3e2f3"
+      }
+    },
+    {
+      "commit": "34a46686a",
+      "cause": "Transition::Load retains one AutoActor for each unnamed wrapper; load Simply Love's toasty and next-course actors and the inherited blank actors. Background retains its four border Quads and three duplicate-named BrightnessOverlay Quads. Background Layer actors are created without a parent and are not ActorFrame children.",
+      "sources": [
+        "itgmania/src/Transition.cpp",
+        "itgmania/src/Background.cpp",
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay toasty.lua",
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay next course song/default.lua",
+        "itgmania/Themes/_fallback/BGAnimations/_blank.lua"
+      ],
+      "source_sha256": {
+        "itgmania/src/Transition.cpp": "b8262c86c0656fa5c9c31ecbc95db81c0232d60cbb55add41d297a4e3d5e41f9",
+        "itgmania/src/Background.cpp": "6830a9fbc28899b6eea80a5f8b38e6bb8eeed7a09fcdbb2f13596d0099409947",
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+        "itgmania/Themes/_fallback/BGAnimations/_blank.lua": "46f63c1a18015d9f93642674f81233b2c4c3049b14e72a11c55ec904214b0a84"
+      }
+    },
+    {
+      "commit": "8817e591d3e27c61e8e01cc7d85cc4362cbda7eb",
+      "repository": "../itgmania-harness",
+      "cause": "Retain observed declaration operands when ActorDef concatenation overwrites a leaf song actor source with a theme closure. Recapture Hallways headlessly; the old native trace omitted its real callback context.",
+      "validation": "14 song_lua_runtime tests passed; complete native headless capture exited successfully",
+      "source": "probe_theme/SongLuaTrace.lua"
+    },
+    {
+      "commit": "d3b0cab34",
+      "cause": "Preserve the immediate theme Lua caller for Sprite.LoadFromCurrentSongBackground internal song queries, as implemented by the local native fallback helper.",
+      "sources": [
+        "itgmania/Themes/_fallback/Scripts/02 Sprite.lua"
+      ],
+      "source_sha256": {
+        "itgmania/Themes/_fallback/Scripts/02 Sprite.lua": "e7de67ee7ff1b289dba7d1fb7d480eb5aa1fe6ec4da85dc7022d6973d10fe823"
+      }
+    },
+    {
+      "commit": "145905d06",
+      "cause": "ScreenGameplay::Update adds the inherited BeginFailedDelay of one song-second when all enabled stage-statistics players already failed, before posting NotesEnded. Preserve that bound before recording failed exit history.",
+      "sources": [
+        "itgmania/src/ScreenGameplay.cpp:2082",
+        "itgmania/Themes/_fallback/metrics.ini:3555"
+      ]
+    },
+    {
+      "commit": "63593b005063af7ed4474c43e43113835ef62a0e",
+      "cause": "LoadActor resolves a relative path beside the immediate Lua caller, including helper closures invoked by an actor command or update callback. This fixes Megalovania's retained savefile lookup without changing captured song data.",
+      "sources": [
+        "itgmania/Themes/_fallback/Scripts/02 ActorDef.lua"
+      ],
+      "source_sha256": {
+        "itgmania/Themes/_fallback/Scripts/02 ActorDef.lua": "e146db352c0328d94e5225b4a7705abb4cc7253b81cf217c2bea3f6f7f7cd093"
+      },
+      "regression": "live_loadactor_uses_helper_source_during_actor_callbacks",
+      "affected_pending_chart": "Megalovania SM5 [TaroNuke]/megalovania.ssc"
+    }
+  ],
+  "input_repairs": [
+    {
+      "position": 220,
+      "source_simfile": "Hallways/hallways.ssc",
+      "simfile_sha256": "2f1099184b916460d6d31762b49cac0098a2e26e4a0f57e00a3a2bd8cdafb6bf",
+      "capture_exit": 0,
+      "native_engine_sha256": "fdff8b1963d2244e105e031ac13570e8bf221632a2429cd3b37fe6d301261a96",
+      "harness_binary_sha256": "eb21c38a5d4a614902d5d77c35d6b2d61925c707cc51a997b33a0af30293d606",
+      "capture_attempt": 1,
+      "harness_fix_commit": "8817e591d3e27c61e8e01cc7d85cc4362cbda7eb",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-53212-1792281692523157800-0",
+      "candidate_sha256": "830ff7f1d31f52e06dae3fcdee2d2439b42898c3e2e0ee85edabdb594d50e5e7",
+      "trace_sha256": "20e287b14638f5aca7fb88c2c92d3951deb370d21509c6f7a31b99a70438695a",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-53212-1792281692523157800-0\\Themes\\itgmania-harness",
+      "reason": "Actual Hallways failure: earlier native On callback lacks declaration command context; verify with current headless observer"
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "retained_capture_run": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-53812-1792195377648869100-0",
+      "observer_source_path": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-53812-1792195377648869100-0\\Themes\\itgmania-harness\\Scripts\\03 SongLuaTrace.lua",
+      "observer_source_sha256": "3b9797a139e33223d51e54700ac1289a7367befabdd95a05130496de9772900a",
+      "native_capture_executable": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-53812-1792195377648869100-0\\Program\\ITGmania-harness-trace.exe",
+      "capture_binary_sha256": "dc34489cb2e945779bce3b1c819bec30ed52c8e7e68b2963046d8082997a6541",
+      "dynamic_commands": true,
+      "evidence": "The retained injected observer unconditionally wraps authored Actor.addcommand callbacks with command_wrapper; the native executable and source are fingerprinted from that same retained capture run. No expected query values were used to choose the observation profile.",
+      "original_candidate_sha256": "27027e25369895ce4ba7b6043a1f6b643939efb4a619466ef03936e2ff72ff5b",
+      "candidate_sha256": "d1bcfd1c0230ab21cca8cac2fd9fe3a18c63badcd36aa2a4ec98229da75380d0",
+      "retained_candidate": "/home/parity/jobs/sixth-ten-fixtures-20261018/metro-observer-repair/private-candidate.tar.zst",
+      "changed_members": [
+        "manifest.json"
+      ],
+      "unchanged_member_hashes": {
+        "song/Metronogik.ogg": "d6f96eaa44b33bfd7fb088e0ab10a43bcddc6f146d5ffc00b9599c7765dcbee0",
+        "song/Song.ssc": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+        "song/bn-4x.mp4": "82a6bed0393a75f5472c8d89c3c9536ab67b3c7f627a34b40f05ed5de39e9a9a",
+        "song/code/draw.lua": "eb9fccebe6c428c39b664c79d5546eecaa761596bf8679001ace38f95c96cde7",
+        "song/code/update.lua": "e728a73bb4585da08bbe43ebf86dc5981d3d5b87b766d62a4cd31b0ba0ae67d8",
+        "song/core/constants.lua": "706a66a00f878f25544db8578098188111940e9bbc09f58f5f2f95f4d18ebae8",
+        "song/core/import.lua": "cd9530cf9f29e6a1b6d80ff25edaf4f4a2d02635f3160818d7f0af62362e8c5c",
+        "song/core/jazz.jpg": "b0f9d9ad7f979f17254655a5c13ac49c0a81584ccc55ae02dd411c21a74233c7",
+        "song/core/main.lua": "fc1d3da9e4f4686c37c084820706b67f239858bc95c1522ba5abd6d159d58c4d",
+        "song/core/modparser.lua": "032ff3742b37a584de39e3ffc9d85d0445929d7f5f14d43fbae0f9caf64b7d96",
+        "song/core/players.lua": "2164c6d45a97251b8ba4dc6bdfff7dfd17c0892626304ea329678c048c0a4054",
+        "song/default.lua": "cd0b8ec3ca0ada26898326693c68dd3644492d319db8fe8dee4fd495eb83824a",
+        "song/modules/conversions.lua": "d3a29e97fc74c58a19cc589ad4c84640e57dec9908285d14915f530dca5e1317",
+        "song/modules/draw.lua": "9c1dfb1c86c5b759b063f49d560b462438ab5bf77932bc7f906c35811deac557",
+        "song/modules/eases.lua": "4b02a074520e2192a82e1944b6986a1b6718ef971bc2f6b02f9b18624ca44b45",
+        "song/modules/fakemods.lua": "3d30a573d1fe4e1d5236ad0482ec8728a1cfb3bfe60cd5be06add9487d03e22b",
+        "song/modules/helpers.lua": "eb846f3c7f451dd129c06548a838b3051e70cd00ab0b0f31308333b58a5bb422",
+        "song/modules/scanactors.lua": "6cac067c1e17dfeeffa9da2b65b59daa4f3e3780ec52c0c6599e2306664964bf",
+        "song/nice shot.png": "07a464b775fd229a0afdb438f38ddb7d8059d70f6442785ee4c02e91d12b8814",
+        "trace/semantic.json": "543ce247bdca4621dd39ddf9b70e3dd9201bfd9e64e2b0003941464da8414b68"
+      },
+      "reason": "Restore the omitted capture observation profile, verified from the retained native executable and injected observer source. Every trace, simfile, Lua, texture and other member remains byte-identical."
+    }
+  ],
+  "additional_checks": [
+    {
+      "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/commands-layer-parent-test.log",
+      "passed": 1,
+      "failed": 0,
+      "sha256": "922e601f1349e1d5b9bd196144c1594be3dde69d231e500f7d70675a65d5cb5d"
+    },
+    {
+      "scope": "negative regression before the path fix",
+      "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-regression-red.log",
+      "sha256": "3e224d5b80384d109828d670fa655eab85b7b9e2f1348e6d242391c4f1713ef1",
+      "expected_failure": true,
+      "failure": "Old implementation loads the actor-directory shadow file from a helper callback"
+    },
+    {
+      "scope": "native replay suite on the fixed implementation",
+      "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-native-tests.log",
+      "sha256": "5d066c83f735c5bffe8ef523229fea8a7a17ec89b4abcddcfe9fb094356f6663",
+      "passed": 65,
+      "failed": 0
+    },
+    {
+      "scope": "corrected callback regression and existing loader tests",
+      "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-loader-v2-tests.log",
+      "sha256": "5c27ebe3c66a47ea785ba8a6c2580e55442563402c6130d61b512f23f40cc439",
+      "passed": 11,
+      "failed": 0
+    }
+  ],
+  "verification": {
+    "sweep_complete": false,
+    "accepted_fixture_records": 9,
+    "native_tests_passed": 65,
+    "loader_tests_passed": 11,
+    "targeted_checks": [
+      {
+        "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-loader-v2-tests.log",
+        "sha256": "5c27ebe3c66a47ea785ba8a6c2580e55442563402c6130d61b512f23f40cc439",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-native-tests.log",
+        "sha256": "5d066c83f735c5bffe8ef523229fea8a7a17ec89b4abcddcfe9fb094356f6663",
+        "passed": 65,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Same loader implementation; subsequent source change corrects only the actor type in the cfg(test) loader regression"
+      },
+      {
+        "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/background-metadata-cache-tests.log",
+        "sha256": "e45377285cd80258ad1c3e3626a614c7eba61b1584b924ff171549cb0d171ba9",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "current_local_source_hashes_verified": 43,
+    "oversized_fixtures_gitignored": 14,
+    "no_tracked_or_unignored_files_over_100mb": true
+  }
+}
