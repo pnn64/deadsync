@@ -23175,13 +23175,797 @@
         ]
       },
       "archive_git_ignored": true
+    },
+    {
+      "position": 419,
+      "capture_input_proof": {
+        "position": 419,
+        "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+        "simfile_sha256": "7da60c3cba1434e6c4eb48937abb9dcb0266a9a2686196274252fa555c3af30d",
+        "capture_exit": 0,
+        "capture_seconds": 156.55206340001314,
+        "native_engine_sha256": "5a2388f1a3f6f372498e22d2da5b7dcecf3eefdc2c907fb12932813607a614cd",
+        "harness_binary_sha256": "646f8c60f995b02890d214c83218e531ebf4d0f10752a91119ce3fa560368692",
+        "harness_fix_commit": "9b175d1131f2a389145376e64d14dded0bb2382b",
+        "provenance_snapshotted_before_execution": true,
+        "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+        "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-31792-1792310878145878100-0",
+        "command_observer": {
+          "dynamic_commands": true,
+          "capture_binary_sha256": "646f8c60f995b02890d214c83218e531ebf4d0f10752a91119ce3fa560368692"
+        },
+        "captured_observer_script_sha256": "fe5f349d1430d4fe18c5d17d5e7e55c5f6299636f67b8c176c29b64dee140d8a",
+        "candidate_sha256": "5b4bfcc6c06683df8aad1e27e3d6484b921ce783fdd079d70d03be0370a29417",
+        "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\local-capture-419\\candidates\\5b4bfcc6c06683df8aad1e27e3d6484b921ce783fdd079d70d03be0370a29417.tar",
+        "trace_sha256": "d12d3b694b6be82a1ffc2169a59fcbc2a70e252360488a98e51e7358175027b1",
+        "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-31792-1792310878145878100-0\\Themes\\itgmania-harness"
+      },
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "simfile_sha256": "7da60c3cba1434e6c4eb48937abb9dcb0266a9a2686196274252fa555c3af30d",
+      "status": "passed",
+      "repair_attempts": 2,
+      "candidate_sha256": "5b4bfcc6c06683df8aad1e27e3d6484b921ce783fdd079d70d03be0370a29417",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\local-capture-419\\candidates\\5b4bfcc6c06683df8aad1e27e3d6484b921ce783fdd079d70d03be0370a29417.tar",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "fix_commit": "5573b1cebe039a4b1367958d34fadfebaa8fa837",
+      "binary_sha256": "658f4224a2c9c3c9000f4122b52177019f1da52603862c2ebab692edd934f411",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\full-song-lua-combo-milestone.exe",
+        "binary_sha256": "658f4224a2c9c3c9000f4122b52177019f1da52603862c2ebab692edd934f411",
+        "source_root": "C:\\GitHub\\deadsync",
+        "source_base_commit": "502f82ca1",
+        "fix_commit": "5573b1cebe039a4b1367958d34fadfebaa8fa837",
+        "modified_sources": {
+          "crates/deadsync-song-lua/tests/playback/cases.rs": "a9ff287b313dc49046ac7e150d7a0f7346e160319f09f3a6147d996be2b5026a",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone minisplode (doubleres).png": "1b8860bd0d925ba6ff017e33974b47adc6c7fef3dceba39fdfb7287ebfbf61e4",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 1000milestone swoosh.png": "38b2f09eaea72042ea95025d418d68b8313b53ccee4f35e22a6e3bcfbb5a60c5",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone splode (doubleres).png": "3e5009c7de7b1ed70e028567e3207d4b52ac0c4de2b21a89e4f4dca28e6dc3a1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone splode.png": "5636e16b08b63d0d6f3244160643b1baefbdf834b7e04045e7a92e01fa1f32db",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "54315cd0fda6d980a47450cf57f10d76cba10869ea29b7d2651f6370ae2b337d",
+          "crates/deadsync-song-lua/src/playback.rs": "75440b684d8b18b6194f6cc16bfe6fb269577188c419a9f2fc899f5adaaf6f46",
+          "crates/deadsync-chart/src/song.rs": "9c5a57b936f6ad5036b871074c75e2da48901776cb626a3904d06d0e5ce728d8",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+          "crates/deadsync-simfile/src/cache.rs": "65082b7647813d2f6950d6d4a51a000203af4d050a239209b449d77a02791974",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone splode (doubleres).png": "52e92ae2b4c8e3a4c90785347be615f5bba5587f21d88a33cbd28b233b5a8655",
+          "crates/deadsync-song-lua/src/lua_util.rs": "32938df507f8642b2c4a4f6c4547372b3a85e2552797af438d4e765889c08148",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4f26b9dff5173a0bee56d40a60b33bda5f53b4afe81ba0de6af885d774a3201f",
+          "crates/deadsync-song-lua/src/tables.rs": "89703e1543e6c12b295e5b086cbb0ac83bf793fd04d4d59fd0a5f584210defad",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 1000milestone swoosh.png": "b419d6445f02a2ca20ecf77512c6bc1e1d4b3916c26189da373bc063be860e4b",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 1000milestone swoosh.png": "8a11dd2f7a35f8e53b641b8d3bffc46acdde1a24c53622fd9e0ec257edb8ad21",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "fb75e9be5b384bd661601ac47c5a6dec8a2931ab0d63c75eaceaa49d062e46ea",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone splode (doubleres).png": "e9843196ec31ccf17d8c0d86a2d85e68d7eee6b230da31fa0b259424287f0b8d",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 1000milestone swoosh.png": "cee9a1257156a12b9909990cd7a413a2fd604aa955f91add206a6c9106ea099c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadlib-present/src/compose.rs": "fac84a48b3aafcb33cc2596ea4c629574452e2abee1c06ebc07913697c1a7973",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 1000milestone/default.lua": "787de29687136873586615494199355aa0cea638f13641c8e14b8c2d118d9684",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone splode (doubleres).png": "763c8817cb2cd38b13b5fa7916960b7b72a01812c05f301acb09b65ca90eece8",
+          "crates/deadsync-song-lua/src/host.rs": "0ad16bad97d1fee40a525d00bfd0b42c60ef353da3b222cc1ff9b25e45dd2dda",
+          "crates/deadsync-song-lua/src/live.rs": "7d4dad438de39821c015200de1d887ed7c595ed2dff5958933abc86f2f224d32",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone minisplode (doubleres).png": "f6df0b064dff88f53559c19de04892baaec15869efb9ff83da72acc220e9f7e2",
+          "crates/deadsync-simfile/src/cache_perf.rs": "11d632572c70465470dd8e788bbfcaa729a3735d70a6b7ce6fd2617f69fd7b3a",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone splode (doubleres).png": "d769e6c86c8b5b8a847872d8d0f0c6d563dc8823b79432b88940c099f45579dd",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "152761f0ccd6f828e41ad080a07424dc336c5ac1215cf1538cd3169cbbba1893",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/src/playback/actor_conformance.rs": "51d8254918f9451166409382f1da3d071e6b7fbe2423962200d9cad5c3c8090e",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 100milestone/explosion.png": "8394f7f8b32f0d6ed45e00f34d1f2ab7fd540282c3d69156d3c61a1b8b7192a3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone minisplode (doubleres).png": "4e7ae782dc049aa816047f285a7a84927ee3b059a9ea991c8e15115f14bba0b6",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone minisplode (doubleres).png": "39ffb2d33946c8b2affb9c23af502e880afbf6198638a867d33dfa32a791273c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone minisplode (doubleres).png": "2d0fdb6a0147643cdc9a697074c8f73db51766f66633b6a74b9f57e06c19218e",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 100milestone/default.lua": "1482fdc555ff2f9f0ea08989c55ac35540dc1882e0792315ebf19241c5bcb2ea",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "c96925f034df9097e03929f0194bc889966eb47fe62e483471dc9ddda691c2fc",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone splode (doubleres).png": "0b6dfb4ad440ed7c80cb70436bb2ba6458747afbbc3b1306e112c557d1c12177",
+          "crates/deadsync-song-lua/src/song_tables.rs": "dabb3bc1f701966274abf9286c806c315d6ae997db7c91d0e737072ef99deade",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "crates/deadsync-shell/src/app/mod.rs": "bd446d73081885a0e35ddc81f0eb7171626ad05b4e56b54c5112da4e94ceced1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 1000milestone swoosh.png": "d8df8fc80d85fb3821dc0d65bb2a7a6b2a1e36feb7daa1dc1c8eb12b80d69867",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone minisplode (doubleres).png": "2d0fdb6a0147643cdc9a697074c8f73db51766f66633b6a74b9f57e06c19218e",
+          "crates/deadsync-song-lua/src/lib.rs": "553be1052a4806b60b6ea111c1d74c9ba964d657fd6ad82364463ee8069493a2",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone splode (doubleres).png": "d769e6c86c8b5b8a847872d8d0f0c6d563dc8823b79432b88940c099f45579dd",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 1000milestone swoosh.png": "2ff268029347dda051e0f8ea725c74835fff517b390719b30b276f211a221801",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone minisplode (doubleres).png": "d88c2be6080e23a48341e51eb4a4538d4cf65812caf96c837d45da724b33e195",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "b0536cb5aa3f9b6506862fc7350f4511b3787250419c53cf44bdddd24d090e95",
+          "crates/deadsync-song-lua/src/compile.rs": "fd44c2d223485594526d0f454eb6b27ca741b54a867f3d680ab4efffce68e86a",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "3ad394a21e5a4175b81747a71595521ad356a7e27e261eaf705f44f29f3a7cb3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 1000milestone swoosh.png": "03e91e68444017f0dcc16da04d7d424e390a1d0bcf81535aa126c0e7d84bc6ee",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-simfile/src/changes.rs": "5c726755073bc2414b26551f16b5621db2e854f5fbc5ba2292dd45f0856eab46",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 1000milestone swoosh.png": "cee9a1257156a12b9909990cd7a413a2fd604aa955f91add206a6c9106ea099c",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone minisplode (doubleres).png": "b93b85beec207e5507cb723bc2273beb05fdbca0f5486ff963d2473327491a04",
+          "crates/deadsync-simfile/src/song.rs": "d21411f9fbf9b2fb2a4930369518332307a08097e07bb87ff03fdee560efbd36",
+          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "e7c80d6bcc221b883ecf32f1465abbe75e15cf17498a1d77de314692880c3652",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c"
+        },
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--no-run"
+        ],
+        "seconds": 407.626883000019,
+        "targeted_checks": [
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\combo-milestone-green.log",
+            "sha256": "1cdc177a6d84d82f92b3ddc8fdf95eef06e083e6bea10d6461d98ea050fff7f4",
+            "passed": 6,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "Native Player actor tree regressions, including real Combo milestone children, initial state, and command/tween behavior; library opt-level=0."
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\combo-milestone-native-tests.log",
+            "sha256": "77286f76c02246480cd00e5b8bb1ac954f342ff525feb7244e7003436bbbe988",
+            "passed": 67,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "Complete native gameplay regression suite, built with full replay CLI at opt-level=3."
+          }
+        ],
+        "build_log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\combo-milestone-build.log",
+        "build_log_sha256": "6d70e560fcb21c2359e27e7deb7c159ad4b36a890fd0ae3542a1f041fa36ad69",
+        "execution_platform": "Windows headless CLI",
+        "known_baseline_failure": {
+          "test": "compile_song_lua_supports_named_player_tap_note_shim",
+          "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+          "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+          "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+          "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+          "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+        },
+        "negative_regression": {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\combo-milestone-red.log",
+          "sha256": "f1e4597725c1c769b9d3a4f41697acc8c09079bf015650218b7827681c4bc5cf",
+          "outcome": "Native Combo has three children; the owned implementation exposed only the Number child."
+        },
+        "inherited_validation": "build-receipt-aft-sampler.json; presentation unit suite remains unchanged"
+      },
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\chart-419-attempt-2",
+      "execution_platform": "Windows headless CLI",
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 163581,
+          "deadsync": 162752
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0039",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                1
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 409,
+            "source": "song:/code/update.lua",
+            "results": [
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0040",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                1
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 414,
+            "source": "song:/code/update.lua",
+            "results": [
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0041",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                1
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 419,
+            "source": "song:/code/update.lua",
+            "results": [
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0042",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                1
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 424,
+            "source": "song:/code/update.lua",
+            "results": [
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0150",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                2
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 426,
+            "source": "song:/code/update.lua",
+            "results": [
+              2
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0043",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                1
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 434,
+            "source": "song:/code/update.lua",
+            "results": [
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0044",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                1
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 439,
+            "source": "song:/code/update.lua",
+            "results": [
+              1
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/code/update.lua",
+            "line": 26,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [
+              "redstreak"
+            ],
+            "results": [
+              {
+                "actor": 6,
+                "name": "redstreak",
+                "path": "ScreenGameplay/SongForeground/.//redstreak"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0154",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                5
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 441,
+            "source": "song:/code/update.lua",
+            "results": [
+              5
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/code/update.lua",
+            "line": 26,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [
+              "life"
+            ],
+            "results": [
+              {
+                "actor": 7,
+                "name": "life",
+                "path": "ScreenGameplay/SongForeground/.//life"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0159",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                3
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 455,
+            "source": "song:/code/update.lua",
+            "results": [
+              3
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/code/update.lua",
+            "line": 26,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [
+              "depleted"
+            ],
+            "results": [
+              {
+                "actor": 8,
+                "name": "depleted",
+                "path": "ScreenGameplay/SongForeground/.//depleted"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [
+              "redstreak"
+            ],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 26,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 8999999488.0,
+              "results": [
+                {
+                  "actor": "def-0002",
+                  "name": "redstreak",
+                  "path": "ScreenGameplay/SongForeground/.//redstreak"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 26,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 466,
+            "source": "song:/code/update.lua",
+            "results": [
+              {
+                "actor": 6,
+                "name": "redstreak",
+                "path": "ScreenGameplay/SongForeground/.//redstreak"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/code/update.lua",
+            "line": 26,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [
+              "bluestreak"
+            ],
+            "results": [
+              {
+                "actor": 9,
+                "name": "bluestreak",
+                "path": "ScreenGameplay/SongForeground/.//bluestreak"
+              }
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0008",
+            "args": [
+              "life"
+            ],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 26,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 8999999488.0,
+              "results": [
+                {
+                  "actor": "def-0003",
+                  "name": "life",
+                  "path": "ScreenGameplay/SongForeground/.//life"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 26,
+            "operation": "ActorFrame.GetChild",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 468,
+            "source": "song:/code/update.lua",
+            "results": [
+              {
+                "actor": 7,
+                "name": "life",
+                "path": "ScreenGameplay/SongForeground/.//life"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetChild",
+            "source": "song:/code/update.lua",
+            "line": 26,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [
+              "round"
+            ],
+            "results": [
+              {
+                "actor": 10,
+                "name": "round",
+                "path": "ScreenGameplay/SongForeground/.//round"
+              }
+            ]
+          }
+        }
+      ],
+      "replay_exit": 0,
+      "replay_seconds": 35.64830080000684,
+      "native_frames": 5134,
+      "replayed_frames": 5134,
+      "compared_stage_fields": 1661,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "draw_mismatch_count": 0,
+      "last_draw_mismatch": null,
+      "report_sha256": "1e128dd749f3b26cd66f582b6ccb3a595f2c1f7eb6b81cace1ce4933ff364c50",
+      "packing_tool_sha256": "5aaf24044b820ff5393da56db321e5df973b3d642f85e69820e1c1af9569a708",
+      "archive": "c3f8021320b744551e77bb3249407154f4d6144f0e9cff8563934962c6a0a964.tar.zst",
+      "archive_sha256": "c3f8021320b744551e77bb3249407154f4d6144f0e9cff8563934962c6a0a964",
+      "compressed_bytes": 113513839,
+      "harness_version": "0.1.82",
+      "title": "STEVE VERY HARD",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "STEVE VERY HARD",
+        "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+        "harness_version": "0.1.0",
+        "archive": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0.tar.zst",
+        "sha256": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0",
+        "compressed_bytes": 139331,
+        "uncompressed_sha256": "32c8387dd188d80dc0f9834ad8d500dc8c95f44c4674fd0a44e3c0402a22c93e",
+        "compression_level": 22,
+        "aliases": [
+          "ec2069bab6a49786ed62fbbd8f7c02606403842fe7f70d809e02c68322e4e564.tar.zst"
+        ]
+      },
+      "archive_git_ignored": true
     }
   ],
   "counts": {
-    "new_passing_fixtures": 6,
-    "passed_fixtures": 466,
-    "pending_charts": 34,
+    "new_passing_fixtures": 7,
+    "passed_fixtures": 467,
+    "pending_charts": 33,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-18T09:22:46Z"
+  "updated_utc": "2026-10-18T09:27:45Z"
 }

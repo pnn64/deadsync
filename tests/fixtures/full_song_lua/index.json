@@ -4703,15 +4703,13 @@
     {
       "title": "STEVE VERY HARD",
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
-      "harness_version": "0.1.0",
-      "archive": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0.tar.zst",
-      "sha256": "c76f3e6bdd5558006e65dd8f61a04d08932a1a6f15fda00f792756a675bce0e0",
-      "compressed_bytes": 139331,
-      "uncompressed_sha256": "32c8387dd188d80dc0f9834ad8d500dc8c95f44c4674fd0a44e3c0402a22c93e",
-      "compression_level": 22,
-      "aliases": [
-        "ec2069bab6a49786ed62fbbd8f7c02606403842fe7f70d809e02c68322e4e564.tar.zst"
-      ]
+      "harness_version": "0.1.82",
+      "archive": "c3f8021320b744551e77bb3249407154f4d6144f0e9cff8563934962c6a0a964.tar.zst",
+      "compressed_bytes": 113513839,
+      "sha256": "c3f8021320b744551e77bb3249407154f4d6144f0e9cff8563934962c6a0a964",
+      "uncompressed_sha256": "5b4bfcc6c06683df8aad1e27e3d6484b921ce783fdd079d70d03be0370a29417",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "STEVE VERY HARD",
