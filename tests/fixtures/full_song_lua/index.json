@@ -3426,17 +3426,15 @@
       "aliases": []
     },
     {
-      "title": "Hustle Beach",
+      "title": "Mamono",
       "source_simfile": "Mamono/sm.sm",
-      "harness_version": "0.1.0",
-      "archive": "df4accd2ff5134859d62200eb950be7bfb59619d0774c645658e11a632778fe3.tar.zst",
-      "sha256": "df4accd2ff5134859d62200eb950be7bfb59619d0774c645658e11a632778fe3",
-      "compressed_bytes": 150115,
-      "uncompressed_sha256": "fe54906b313b660988a234d40c0508c7dedf96a85a7544999cc865eccd8b0055",
-      "compression_level": 22,
-      "aliases": [
-        "3432b900fe1c380b3413e979d281ec419e19645349517e7cf3d19c16bf124992.tar.zst"
-      ]
+      "harness_version": "0.1.81",
+      "archive": "526acd37e2a229898439d061c01044981cba6909e9d9919dbddb42ed81a0cdf9.tar.zst",
+      "compressed_bytes": 111126094,
+      "sha256": "526acd37e2a229898439d061c01044981cba6909e9d9919dbddb42ed81a0cdf9",
+      "uncompressed_sha256": "313ebf81bbf3e91614b782e6579d407afcc84d4388a1d8a4c98ade147d843992",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "\u30de\u30fc\u30b7\u30e3\u30eb\u30fb\u30de\u30ad\u30b7\u30de\u30a4\u30b6\u30fc",

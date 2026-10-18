@@ -361,6 +361,81 @@
         "missing captured subscriber identity for ScreenGameplay/3/1",
         "missing captured subscriber identity for ScreenGameplay/4"
       ]
+    },
+    "Megalovania SM5 - [TaroNuke]/megalovania.sm": {
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.SetTextureFiltering, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bob, Actor.bounceend, Actor.cropbottom, Actor.effectclock, Actor.effectoffset, Actor.finishtweening, Actor.playcommand, Actor.rotationy, Actor.spring, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.SetDrawByZPosition, GameState.GetCurMusicSeconds, PlayerStageStats.FailPlayer, PlayerState.GetPlayerOptionsArray, Screen.AddInputCallback, ScreenGameplay.PauseGame, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4"
+      ]
+    },
+    "Hallways/hallways.ssc": {
+      "source_simfile": "Hallways/hallways.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.glow, Actor.xy, GameState.GetHumanPlayers, Player.SetLife, PlayerOptions.FailSetting, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetFirstSecond, Song.GetLastSecond",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/5",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4/1",
+        "missing captured subscriber identity for ScreenGameplay/2/8/3",
+        "missing captured subscriber identity for ScreenGameplay/2/8/4",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4",
+        "owned gameplay overlay observation phase is unavailable"
+      ]
+    },
+    "Mamono/sm.sm": {
+      "source_simfile": "Mamono/sm.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.setsize, Actor.xy, BitmapText.settext, GameState.IsEventMode, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4"
+      ]
     }
   },
   "additional_known_missing_coverage": [
