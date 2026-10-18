@@ -2169,6 +2169,40 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn gameplay_immediate_draw_allows_unset_actor_proxy() {
+        let mut state = owned_judgment_control("immediate-unset-proxy", "1000\n0000\n0000\n0001\n", r#"
+return Def.ActorFrame {
+    OnCommand=function(self) self:sleep(9999) end,
+    Def.ActorFrameTexture {
+        InitCommand=function(self)
+            self:SetTextureName('UnsetProxyTarget'):SetWidth(SCREEN_WIDTH):SetHeight(SCREEN_HEIGHT)
+                :EnableAlphaBuffer(true):Create()
+        end,
+        OnCommand=function(self) self:Draw() end,
+        Def.Quad {InitCommand=function(self) self:zoomto(7,11):diffuse(.25,.5,.75,1) end},
+        Def.ActorProxy {Name='Unassigned'},
+    },
+}
+"#, 0.0);
+        gameplay::update(&mut state, 0.002, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: -250_000_000,
+                has_music_mapping: true, valid_at_host_nanos: 1_000_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 1_000_000_000, &mut Vec::new());
+        assert_eq!(state.song_lua_draw_frames().len(), 1);
+        assert_eq!(state.song_lua_draw_frames()[0].ops.len(), 3, "native nil-target proxy adds no submission");
+        let scene = state.song_lua.as_ref().unwrap();
+        let screen = [scene.context().screen_width, scene.context().screen_height];
+        let mut checks = super::interactive::DrawChecks::default();
+        let mut mismatches = Vec::new();
+        checks.compare(&state, &[], screen, [0.0,0.0], std::path::Path::new("unset-proxy.lua"), &mut mismatches)
+            .expect("unset proxy must not abort preparation of another actor's frozen draw");
+        assert_eq!(checks.uncompared_immediate_draws, 1, "the Quad's recorded geometry remains available");
+        assert_eq!(checks.failures, 0);
+        assert!(mismatches.is_empty());
+    }
+
+    #[test]
     fn gameplay_avoided_mines_dispatch_each_owned_judgment_next_update() {
         let mut state = owned_judgment_control("mine-message", "0000\nM0MM\n0000\n0000\n,\n1000\n0000\n0000\n0000\n", r#"
 local count = 0

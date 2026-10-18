@@ -251,7 +251,11 @@ impl DrawChecks {
             let mut overlay = layer(state, group)[index].clone();
             overlay.parent_index = overlay.parent_index.and_then(|parent| slots.get(&(group, parent)).copied());
             if let SongLuaOverlayKind::ActorProxy { target: deadsync_song_lua::SongLuaProxyTarget::Actor { overlay_index } } = &mut overlay.kind {
-                *overlay_index = *slots.get(&(group, *overlay_index)).ok_or("draw proxy has no prepared target")?;
+                // ActorProxy::EarlyAbortDraw skips an unset native target.
+                // Keep the owned sentinel so the composer skips it too.
+                if *overlay_index != usize::MAX {
+                    *overlay_index = *slots.get(&(group, *overlay_index)).ok_or("draw proxy has no prepared target")?;
+                }
             }
             overlays.push(overlay);
         }
