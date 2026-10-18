@@ -2643,15 +2643,13 @@
     {
       "title": "Hallways",
       "source_simfile": "Hallways/hallways.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5.tar.zst",
-      "sha256": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5",
-      "compressed_bytes": 92784,
-      "uncompressed_sha256": "40de13390dbbdc44b7a6f07ec362ebc909dffc890661aea35998f6b91994f285",
-      "compression_level": 22,
-      "aliases": [
-        "cb865534f1e9428c31993c540e6371624b4ca944054037d162cf59923a0d7431.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "d29c96b1c042099c079a9f492c15a534a22f1239286da0bb16ebaf3ccdc5cca3.tar.zst",
+      "compressed_bytes": 108950054,
+      "sha256": "d29c96b1c042099c079a9f492c15a534a22f1239286da0bb16ebaf3ccdc5cca3",
+      "uncompressed_sha256": "54930a40507dc27022f381129d6329b8bbc8d52ad5e16b917cdf45c29b5811cc",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "\u5e78\u305b\u306b\u306a\u308c\u308b\u96a0\u3057\u30b3\u30de\u30f3\u30c9\u304c\u3042\u308b\u3089\u3057\u3044",
