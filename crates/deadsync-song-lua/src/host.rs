@@ -680,7 +680,17 @@ pub fn install_basic_globals(
     )?;
     globals.set(
         "GetScreenAspectRatio",
-        lua.create_function(move |_, _args: MultiValue| Ok(screen_width / screen_height.max(1.0)))?,
+        lua.create_function({
+            let display_aspect_ratio = context.display_aspect_ratio;
+            move |lua, _args: MultiValue| {
+                // ScreenDimensions.cpp returns the physical display preference,
+                // independent of the rounded logical screen dimensions.
+                let prefs: Table = lua.globals().get("PREFSMAN")?;
+                let values: Table = prefs.raw_get("__songlua_preference_values")?;
+                Ok(values.raw_get::<Option<f32>>("DisplayAspectRatio")?
+                    .unwrap_or(display_aspect_ratio))
+            }
+        })?,
     )?;
     globals.set(
         "WideScale",

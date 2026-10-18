@@ -15780,9 +15780,10 @@ pub fn create_top_screen_table(
         .collect::<mlua::Result<Vec<_>>>()?;
     // ScreenWithMenuElements adopts Header/Footer before gameplay creates its
     // player displays. Stable draw sorting preserves this construction order
-    // among the default-order actors (ActorFrame.cpp).
+    // among the default-order actors (ActorFrame.cpp). ScreenGameplay first
+    // adopts every Player, then adopts their OniGameOver actors in a second loop.
     let construction_names = ["Underlay", "Overlay", "Header", "Footer", "In", "Out", "Cancel",
-        "SongBackground", "SongForeground", "Toasty", "PlayerP1", "OniGameOverP1", "PlayerP2", "OniGameOverP2",
+        "SongBackground", "SongForeground", "Toasty", "PlayerP1", "PlayerP2", "OniGameOverP1", "OniGameOverP2",
         "NextSong", "LifeP1", "LifeP2", "ScoreP1", "ScoreP2", "StepsDescriptionP1", "PlayerOptionsP1",
         "StepsDisplayP1", "StepsDescriptionP2", "PlayerOptionsP2", "StepsDisplayP2", "SongOptions",
         "ActiveAttackListP1", "ActiveAttackListP2", "LyricDisplay", "Ready", "Go", "Failed", "Debug"];

@@ -12791,6 +12791,29 @@ return Def.ActorFrame{{}}
     }
 
     #[test]
+    fn screen_aspect_uses_preference_with_rounded_logical_dimensions() {
+        let song_dir = test_dir("rounded-screen-aspect");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+assert(SCREEN_WIDTH == 854 and _screen.w == 854)
+assert(GetScreenAspectRatio() == PREFSMAN:GetPreference('DisplayAspectRatio'),
+    'physical display preference is independent of rounded logical dimensions')
+assert(math.abs(_screen.w * 0.529 / GetScreenAspectRatio() - 254.1183731066706) < 1e-10)
+PREFSMAN:SetPreference('DisplayWidth', 1280)
+PREFSMAN:SetPreference('DisplayHeight', 720)
+PREFSMAN:SetPreference('DisplayAspectRatio', 4 / 3)
+assert(math.abs(GetScreenAspectRatio() - 4 / 3) < 1e-6)
+assert(SCREEN_WIDTH == 854, 'changing a preference does not reload screen dimensions')
+return Def.ActorFrame{}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Rounded Screen Aspect");
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        context.display_aspect_ratio = 16.0 / 9.0;
+        test_compile_song_lua(&entry, &context).expect("native display aspect contract");
+    }
+
+    #[test]
     fn compile_song_lua_exposes_display_specs_shape() {
         let song_dir = test_dir("display-specs-shape");
         let entry = song_dir.join("default.lua");
@@ -24693,7 +24716,7 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "1.779:200.0:3:2:05|01:05|1:05.50|01:05.50|01:01:01|1st|2nd|3rd|11th|113th"
+            "1.778:200.0:3:2:05|01:05|1:05.50|01:05.50|01:01:01|1st|2nd|3rd|11th|113th"
         );
     }
 

@@ -2237,6 +2237,32 @@ end }
     }
 
     #[test]
+    fn live_versus_children_retain_native_player_construction_groups() {
+        let mut compiled = compile_with_context("versus-screen-child-order", r#"
+return Def.Actor {
+ OnCommand=function(self)
+  local selected = {PlayerP1=true, PlayerP2=true, OniGameOverP1=true, OniGameOverP2=true}
+  local names = {}
+  SCREENMAN:GetTopScreen():RunCommandsOnChildren(function(child)
+   local name=child:GetName()
+   if selected[name] then names[#names+1]=name end
+  end)
+  assert(table.concat(names, ',') == 'PlayerP1,PlayerP2,OniGameOverP1,OniGameOverP2',
+   'native Versus child traversal: '..table.concat(names, ','))
+ end
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.players[0].enabled = true;
+            context.players[1].enabled = true;
+        });
+        let mut scene = compiled.live_scene.take().expect("owned Versus screen");
+        let output = scene.advance(SongLuaLiveFrame::default()).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+    }
+
+    #[test]
     fn live_gameplay_children_retain_native_owned_inventory() {
         let mut compiled = compile_with_context("native-screen-children", r#"
 return Def.Actor {
