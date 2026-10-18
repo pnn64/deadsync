@@ -3615,17 +3615,15 @@
       "local_only": true
     },
     {
-      "title": "MEGALOVANIA",
+      "title": "Megalovania SM5 [TaroNuke]",
       "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
-      "harness_version": "0.1.0",
-      "archive": "26582b759a98952cda73fe4c3d8542c182eaae3d47be8fdfdf051ddf6f179100.tar.zst",
-      "sha256": "26582b759a98952cda73fe4c3d8542c182eaae3d47be8fdfdf051ddf6f179100",
-      "compressed_bytes": 62819,
-      "uncompressed_sha256": "13f44c32f779e94128795333b518cdb0aa3e16d621e3541467265714bc4a3536",
-      "compression_level": 22,
-      "aliases": [
-        "803bf3e53d9437572c021c440dc6caf16dc59a3c5718d5708139f9c57cac1696.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "259893ffac177a629fef8cb0c89cf8109ee4cce4cb81d5e355959269278f10e8.tar.zst",
+      "compressed_bytes": 112161353,
+      "sha256": "259893ffac177a629fef8cb0c89cf8109ee4cce4cb81d5e355959269278f10e8",
+      "uncompressed_sha256": "955e9c948ec46a18172dbab9cfac8061d38c12dda68bd5f0555aab21378a419f",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Midnight Madness",
