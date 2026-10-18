@@ -699,6 +699,15 @@ pub(crate) fn delete_pack(
                 continue;
             }
         };
+        // Checked per song, not only for the pack folder at the end: by then
+        // the songs of a bundled pack would already be gone.
+        if in_bundled_root(&song_dir, bundled_roots) {
+            kept.push(format!(
+                "{} (part of the installed program)",
+                song_dir.display()
+            ));
+            continue;
+        }
         if let Err(error) = std::fs::remove_dir_all(&song_dir) {
             kept.push(format!("{} ({error})", song_dir.display()));
             continue;
@@ -1209,15 +1218,11 @@ fn validated_pack_dir(
     // App-bundled content. It sits inside a scan root and is writable, but it
     // belongs to the install rather than to the player's library, and "delete
     // my pack" never means "modify the installed program".
-    for bundled in bundled_roots {
-        if let Ok(bundled) = std::fs::canonicalize(bundled)
-            && pack_dir.starts_with(&bundled)
-        {
-            return Err(format!(
-                "pack is part of the installed program: {}",
-                pack_dir.display()
-            ));
-        }
+    if in_bundled_root(&pack_dir, bundled_roots) {
+        return Err(format!(
+            "pack is part of the installed program: {}",
+            pack_dir.display()
+        ));
     }
 
     let mut roots: Vec<PathBuf> = Vec::with_capacity(song_scan_roots.len());
@@ -1262,6 +1267,14 @@ fn validated_pack_dir(
         "pack directory is not directly inside a song folder: {}",
         pack_dir.display()
     ))
+}
+
+/// Whether an already-resolved directory lies in one of the program's own
+/// song folders.
+fn in_bundled_root(dir: &Path, bundled_roots: &[PathBuf]) -> bool {
+    bundled_roots
+        .iter()
+        .any(|bundled| std::fs::canonicalize(bundled).is_ok_and(|bundled| dir.starts_with(bundled)))
 }
 
 fn validated_song_dir(simfile_path: &Path, song_scan_roots: &[PathBuf]) -> Result<PathBuf, String> {
@@ -1444,6 +1457,23 @@ mod tests {
         terminal
             .join()
             .expect("terminal progress sender should exit");
+    }
+
+    #[test]
+    fn a_song_in_the_programs_own_folder_counts_as_bundled() {
+        let root = test_dir("bundled-root");
+        let bundled = root.join("bundled");
+        let song = bundled.join("Pack").join("Song");
+        let player = root.join("player").join("Pack").join("Song");
+        std::fs::create_dir_all(&song).expect("bundled song dir");
+        std::fs::create_dir_all(&player).expect("player song dir");
+        let song = std::fs::canonicalize(&song).expect("resolve bundled song");
+        let player = std::fs::canonicalize(&player).expect("resolve player song");
+
+        assert!(in_bundled_root(&song, std::slice::from_ref(&bundled)));
+        assert!(!in_bundled_root(&player, std::slice::from_ref(&bundled)));
+        assert!(!in_bundled_root(&song, &[]));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
