@@ -2867,18 +2867,15 @@
       ]
     },
     {
-      "title": "\u30a4\u30ac\u30af",
+      "title": "Igaku",
       "source_simfile": "Igaku/Igaku.ssc",
-      "harness_version": "0.1.31",
-      "archive": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a.tar.zst",
-      "sha256": "52757628e22d07a593469eeba07fbf27bcbfbc79420a64d99b2eaae819489e8a",
-      "compressed_bytes": 8565498,
-      "uncompressed_sha256": "8b90c6507e512266d76572b0883b8ecbb3ab72f58c8bedc2a1c9416525e2b047",
-      "compression_level": 12,
-      "aliases": [
-        "2f37a43d4d7ca3a2751c411213d7ab4ddba617d3d22ce7806e54a1f9d00c0a3f.tar.zst",
-        "65f2bd41bf2925294b4acfdfae83f060ce0de3a067fcd4a3b508a747c4cad614.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "79c9d90cdb8d850537bb02338e187b4becdc954959e4355f74f2b0f3744dcee2.tar.zst",
+      "compressed_bytes": 123738584,
+      "sha256": "79c9d90cdb8d850537bb02338e187b4becdc954959e4355f74f2b0f3744dcee2",
+      "uncompressed_sha256": "ae9f48179f77a2983e1c5ac2bbf899a42d73906fb2339f774854b1b1fce855b9",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "iLLness LiLin",
