@@ -598,10 +598,10 @@ where
 
     let timing_prep_started = Instant::now();
     let audio_end_time_ns = song_audio_end_time_ns(&song);
-    // Song.cpp converts eligible note beats with the pack's group offset,
-    // then compares that result with the absolute LASTSECONDHINT.
+    // Song.cpp resolves catalog note times with both group and cabinet
+    // offsets, then compares them with the absolute LASTSECONDHINT.
     let song_last_second = song.precise_note_last_second_seconds
-        .map_or(0.0, |seconds| seconds - pack_sync_offset_seconds)
+        .map_or(0.0, |seconds| (seconds - pack_sync_offset_seconds) - config.global_offset_seconds)
         .max(song.last_second_hint)
         .max(0.0);
     let song_last_second_ns = song_time_ns_from_seconds(song_last_second);

@@ -2439,6 +2439,53 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn catalog_note_end_keeps_the_cabinet_offset_at_initial_load() {
+        let mut song = regression_song();
+        song.last_second_hint = 0.0;
+        song.precise_note_last_second_seconds = Some(75.25);
+        song.precise_last_second_seconds = 75.25;
+        song.total_length_seconds = 75;
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(regression_payload_with_segments(
+            TimingSegments::default(),
+            96,
+        ));
+        let mut state = init_gameplay_runtime(
+            Arc::new(song),
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::default(),
+            GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: -0.008, machine_pack_ini_offsets: true,
+                machine_default_sync_pref: SyncPref::Itg, ..Default::default() },
+            SyncPref::Itg,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        );
+        let native_last = (75.25_f32 - (-0.009)) - (-0.008);
+        assert_eq!(state.clock.end_timing.song_last_second_ns(), song_time_ns_from_seconds(native_last),
+            "native catalog note timing includes the cabinet offset before the late-step window");
+        state.clock.song_position.current_music_time_ns = state.music_end_time_ns() - 1;
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+    }
+
+    #[test]
     fn last_second_hint_survives_timing_changes() {
         let mut song = regression_song();
         song.last_second_hint = 75.25;
@@ -2505,7 +2552,9 @@ mod runtime_regression_tests {
             .windows_ns[2];
         let baseline_notes_end = state.notes_end_time_ns();
         let baseline_music_end = state.music_end_time_ns();
-        let song_last_second_ns = song_time_ns_from_seconds(state.source.song.precise_last_second());
+        // Rate changes retain the resolved catalog bound, including its
+        // initial cabinet offset; only the late-resolution window scales.
+        let song_last_second_ns = state.clock.end_timing.song_last_second_ns();
         assert_eq!(
             baseline_music_end,
             song_last_second_ns + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.0),
