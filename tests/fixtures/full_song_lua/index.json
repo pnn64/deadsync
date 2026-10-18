@@ -2590,17 +2590,15 @@
       "aliases": []
     },
     {
-      "title": "Godspeed",
+      "title": "Godspeed [TaroNuke]",
       "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
-      "harness_version": "0.1.0",
-      "archive": "d8967f658b584814be6dd33ef998afb58c2893ef48f5ba5d10d3b720a604771b.tar.zst",
-      "sha256": "d8967f658b584814be6dd33ef998afb58c2893ef48f5ba5d10d3b720a604771b",
-      "compressed_bytes": 1315726,
-      "uncompressed_sha256": "5c6f680ed7b82f1da107bb8b7bab26c437199dac6e233d5bb744103c44e9982a",
-      "compression_level": 22,
-      "aliases": [
-        "49f2d6eb3e562c8b7e0888a00514aa7c06260564a0f18f78f21c5ff77be528e5.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "e0e5941b20b3b84030bfc70c16f8480f1ea510545b519c2a618e3b0d0157ca90.tar.zst",
+      "compressed_bytes": 119854140,
+      "sha256": "e0e5941b20b3b84030bfc70c16f8480f1ea510545b519c2a618e3b0d0157ca90",
+      "uncompressed_sha256": "ed47d6932f274728919d972b0fe4ed385495ea91416a4371be26f543e3a93f9c",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "\u884c\u3064\u3066\u3057\u307e\u3064\u305f",
