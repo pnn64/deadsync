@@ -49,6 +49,63 @@
         }
       ],
       "remaining_chart_result": "Metronogik remains pending after two full replays: 26,077 command/query mismatches; zero callback or draw errors. The HUD input repair is a partial fix."
+    },
+    {
+      "fix_commit": "87486aa507b270be816ce8e7dcc06d1ed15a59c9",
+      "cause": "Mawaru9 starts a Lua background on the same frame as an autoplay judgment. Core judgment callbacks ran before the owned scene prepared that frame, so the background On callbacks came after the judgment; native ScreenGameplay updates the background before Player actors.",
+      "fix": "Prepare the owned GameState clocks, options and background activation once after audio sampling and before Player logic. Complete actor update follows judgments. Production live Lua remains disabled; the owner integration is test-support only.",
+      "checks": [
+        {
+          "scope": "72 native gameplay tests and full background/judgment order control",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\native-background-before-players-native-tests.log",
+          "sha256": "801e4e484d8f6ed360e1191bbe5ff1920adcf3cca8f1832f964ed57577453cbc",
+          "passed": 72,
+          "failed": 0
+        }
+      ],
+      "native_controls": [
+        {
+          "name": "background-judgment-order-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 543,
+          "replayed_frames": 543,
+          "candidate_sha256": "9f260aa89822781f13a15cbc79bcba866ff86f5111b4fa257602f8cf9ac2b882",
+          "report_sha256": "e8e33355021ae9f5fcffe7fbbdd57999be0ef19b81655f9a3ca6f571f45d9eea"
+        }
+      ],
+      "primary_sources": [
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/ScreenGameplay.cpp",
+          "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/Background.cpp",
+          "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/ActorFrame.cpp",
+          "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/Player.cpp",
+          "sha256": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/GameState.cpp",
+          "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77"
+        }
+      ],
+      "negative_control": {
+        "name": "background-judgment-order-control",
+        "binary_sha256": "0da4de25a362faaf69ba2b08f56f21b06bef0a5bab5f8af409842ca09e54365c",
+        "report_sha256": "dc585332ecb482523d5fd73dd06f3ddec3f26f15fc13b71e9258b5071def9890",
+        "native_frames": 543,
+        "replayed_frames": 543,
+        "mismatch_count": 6,
+        "callback_errors": []
+      },
+      "remaining_chart_result": "Mawaru9 full attempt1 has111 command/query ordering mismatches at191.87564086914062 seconds; its second full replay is queued with this repair and the same retained native capture."
     }
   ],
   "input_repairs": [
@@ -270,5 +327,94 @@
       "remaining_chart_result": "Both complete James captures still timed out at 900 seconds. Sampled native memory remained bounded at approximately120 MB, while only approximately45 song seconds were observed. The recorder repair resolves memory growth but does not make these fixtures pass."
     }
   ],
-  "sweep_status": "in progress"
+  "harness_analysis_repairs": [
+    {
+      "harness_fix_commit": "2e24777ea7b6d32cb385b3ffeba54af2733e131a",
+      "actual_failure": "ArrowQuest completed native capture, but the v89 post-capture analysis grew beyond40 GB private memory and left less than1 GB physical memory available. The analysis was stopped; both complete native results were retained.",
+      "fix": "Derive typed events one at a time while preserving the original event tape, first actor-event load boundaries, draw-order changes and final sequence. Release source bytes before derivation, move archive trace buffers instead of copying, and drop parsed traces before archive writes.",
+      "build_proof": {
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\itgmania-harness-capture-v0.1.92-low-memory-analysis.exe",
+        "binary_sha256": "8592b7659cb403b9cd867b53d9ed9ee20e751f7792b375c5392eb6a109f0eb96",
+        "modified_sources": {
+          "Cargo.toml": "4c60ead843d226535cd0691a44614bd6666a54f82731b445364a9119d8329fc5",
+          "Cargo.lock": "886e06f344f93ed119fcece52fc8aa607b855e46b62d39ffb3ff87c4b8c9ef84",
+          "src/main.rs": "175e95bf72b7e82b4ecd1fb7817efbb4f3f296382657a4f0589661dc21eb75ea",
+          "src/song_lua_runtime.rs": "85250ed8d96a17f90ccb504a2e2294347d23a9bef8c9ff0634f29eb4998d3a04",
+          "src/song_lua_semantics.rs": "ef460a9c1c60a587f2c9959e81cc9a436839d343954b8ddb66e05614c42b24af",
+          "src/song_lua_archive.rs": "855e2eccaf0395d0d8538c87ef33db5b257b21508e0363399599dad3d524e8b8",
+          "probe_theme/SongLuaTrace.lua": "afe63f3fbceb38bd93df46c549fe3e356636f6710963906618cf4f6143a49e7d",
+          "README.md": "c396046077704a92cd72df7c7d58c0c2b3a5bc3094e482f0cbb4ec866099b6f9"
+        },
+        "tests_sha256": "c5d38f1312d2bfc990c6a939d9f21e0112b696a3bb19b34881f384502dca1e07",
+        "checks": [
+          {
+            "scope": "Complete retained nested-spool-control reanalysis; byte-for-byte identical output",
+            "input_sha256": "861284c6f481a01750d613edca12f204c3cc86d19387e333d8f0985fd3d8f7ac",
+            "output_sha256": "861284c6f481a01750d613edca12f204c3cc86d19387e333d8f0985fd3d8f7ac",
+            "new_native_capture": false
+          },
+          {
+            "scope": "Complete retained dense-timer-spool-control reanalysis; byte-for-byte identical output",
+            "input_sha256": "9a8364d343c3c714cc477f4c8669ca3091ad14402f490a08d92f2990db0ce7e3",
+            "output_sha256": "9a8364d343c3c714cc477f4c8669ca3091ad14402f490a08d92f2990db0ce7e3",
+            "new_native_capture": false
+          }
+        ],
+        "tests": {
+          "passed": 207,
+          "failed": 0,
+          "ignored": 2,
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\harness-low-memory-analysis-tests.log",
+          "sha256": "c5d38f1312d2bfc990c6a939d9f21e0112b696a3bb19b34881f384502dca1e07"
+        },
+        "harness_fix_commit": "2e24777ea7b6d32cb385b3ffeba54af2733e131a"
+      },
+      "capture_reused": true
+    },
+    {
+      "harness_fix_commit": "0f4bb7cb738c53c7bcb99b2b32a6eade638a475d",
+      "cause": "A long retained trace needs both its parsed metadata and archive payload; loading/copying the full payload alongside the parsed tree exceeds available RAM.",
+      "fix": "Read metadata through a buffered JSON reader, release the parsed tree, then stream the exact trace file into a deterministic tar member. All native observations and existing validation remain intact.",
+      "build_proof": {
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\itgmania-harness-capture-v0.1.93-streamed-archive.exe",
+        "binary_sha256": "91238065b1a6953e3479b269035d7355f505cd70238409d114fa98838601e16f",
+        "modified_sources": {
+          "Cargo.toml": "5848ff889a91c8fc81ffeae8c4c6e3149d9e44a029645641ca00313558978523",
+          "Cargo.lock": "b45b4c0b2f13ea27a9c3d92f8dbcef319777968eb33ec29285d20e2eac509d00",
+          "src/main.rs": "175e95bf72b7e82b4ecd1fb7817efbb4f3f296382657a4f0589661dc21eb75ea",
+          "src/song_lua_runtime.rs": "85250ed8d96a17f90ccb504a2e2294347d23a9bef8c9ff0634f29eb4998d3a04",
+          "src/song_lua_semantics.rs": "ef460a9c1c60a587f2c9959e81cc9a436839d343954b8ddb66e05614c42b24af",
+          "src/song_lua_archive.rs": "d338cf4937c98194fcf5ea8d6c2590d7c63959a299b97dd796c52fc5dbe02c78",
+          "probe_theme/SongLuaTrace.lua": "afe63f3fbceb38bd93df46c549fe3e356636f6710963906618cf4f6143a49e7d",
+          "README.md": "683449dee35e5244c170ffb47277ed78f30760370b678384e13adbc93de49ca8"
+        },
+        "tests_sha256": "c91c186a4f330c2ee4ec57d8c7f59f6fb29469d3f8ecc6c4aa1a76a09d4fe252",
+        "checks": [
+          {
+            "name": "nested-spool-control",
+            "original_archive_sha256": "1e01d7c4ec52d64909a5c2c7d236aa46ccd77d6f34102caf8efb163fb6ddead3",
+            "streamed_archive_sha256": "1e01d7c4ec52d64909a5c2c7d236aa46ccd77d6f34102caf8efb163fb6ddead3",
+            "exact_uncompressed_tar_bytes_match": true,
+            "new_native_capture": false
+          },
+          {
+            "name": "dense-timer-spool-control",
+            "original_archive_sha256": "9412281a7ec2faffeaa1cc369cd48289192cf32b6dceedd7a35a729ce7722708",
+            "streamed_archive_sha256": "9412281a7ec2faffeaa1cc369cd48289192cf32b6dceedd7a35a729ce7722708",
+            "exact_uncompressed_tar_bytes_match": true,
+            "new_native_capture": false
+          }
+        ],
+        "tests": {
+          "passed": 207,
+          "failed": 0,
+          "ignored": 2,
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\harness-streamed-archive-tests.log",
+          "sha256": "c91c186a4f330c2ee4ec57d8c7f59f6fb29469d3f8ecc6c4aa1a76a09d4fe252"
+        },
+        "harness_fix_commit": "0f4bb7cb738c53c7bcb99b2b32a6eade638a475d"
+      }
+    }
+  ],
+  "sweep_status": "in progress; remaining complete comparisons queued sequentially"
 }
