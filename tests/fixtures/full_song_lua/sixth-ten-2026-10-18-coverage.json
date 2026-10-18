@@ -399,6 +399,11 @@
         "missing captured subscriber identity for ScreenGameplay/4"
       ],
       "evidence_scope": "Coverage retained from complete attempt 1. Attempt 2 stopped in the draw comparator before producing a full report."
+    },
+    "Megalovania SM5 - [TaroNuke]/megalovania.sm": {
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "pending_coverage": [],
+      "evidence_scope": "Neither replay produced a complete comparison report. Missing coverage could not be enumerated from this capture."
     }
   }
 }

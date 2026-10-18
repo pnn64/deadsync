@@ -211,7 +211,8 @@
       "regression": "tap_note_results_do_not_consume_auxiliary_references_per_note",
       "affected_pending_chart": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
       "proof": "10,000 retained judgment objects with garbage collection stopped: original getter ownership fails with StackError; registry ownership passes while preserving result identity, offsets and scores.",
-      "known_baseline_test_failure": "compile_song_lua_supports_named_player_tap_note_shim retains the same top:GetChildren()[empty-name] assertion failure on pre-fix committed code and fixed code; expected values unchanged."
+      "known_baseline_test_failure": "compile_song_lua_supports_named_player_tap_note_shim retains the same top:GetChildren()[empty-name] assertion failure on pre-fix committed code and fixed code; expected values unchanged.",
+      "full_chart_status": "Megalovania SM remains pending after two attempts. Final replay stopped at 83158/138405 with mlua auxiliary-stack exhaustion and a DensityGraph.lua:56 queuecommand StackError. No third repair or replay this sweep."
     }
   ],
   "input_repairs": [
@@ -318,7 +319,7 @@
   ],
   "verification": {
     "complete": false,
-    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM full replay is in progress.",
+    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM is pending after two incomplete attempts. Continuing with Igaku SSC headlessly.",
     "current_source_hashes_verified": 48,
     "native_tests_passed": 66,
     "targeted_checks": [
@@ -365,7 +366,7 @@
     ],
     "binary_sha256": "6a64b65a7dff97d7a8c04595573684c52f78b8610cf3dd9edc6ddaff33d9d7fd",
     "runtime_lua_feature_enabled": false,
-    "utc": "2026-10-18T03:17:08Z",
+    "utc": "2026-10-18T03:34:30Z",
     "known_baseline_failure": {
       "test": "compile_song_lua_supports_named_player_tap_note_shim",
       "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
