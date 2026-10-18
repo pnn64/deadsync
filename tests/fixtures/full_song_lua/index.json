@@ -5223,17 +5223,15 @@
       "aliases": []
     },
     {
-      "title": "Wndrwll",
+      "title": "wndrwll",
       "source_simfile": "wndrwll/wndrwll.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2.tar.zst",
-      "sha256": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2",
-      "compressed_bytes": 104561,
-      "uncompressed_sha256": "d56b9e9eb9556acc407ce230b5de476deb9d98a5722605790dfeae30ad997de0",
-      "compression_level": 22,
-      "aliases": [
-        "7f9d5505bfc800cdf1509c5b11a9b6363c4cbb50ea4a1e143ce15183c260df02.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "d67f19d33c48cef6f4d3e93da0311238b60962c7e05b4202cad0c0a5a3132584.tar.zst",
+      "compressed_bytes": 111053992,
+      "sha256": "d67f19d33c48cef6f4d3e93da0311238b60962c7e05b4202cad0c0a5a3132584",
+      "uncompressed_sha256": "8096066726cdd113f349e916ab9c9c4283b3aa44255e2d0a470957453d5f672d",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "[10] Wobbpotato",

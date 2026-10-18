@@ -113,6 +113,63 @@
         "missing captured subscriber identity for ScreenGameplay/26/1/9",
         "missing captured subscriber identity for ScreenGameplay/3/1"
       ]
+    },
+    "Velvet LEFTS 1/chart.ssc": {
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetY, Actor.SetHeight, Actor.SetWidth, Actor.addcommand, Actor.basezoomx, Actor.basezoomy, Actor.effectclock, Actor.fadebottom, Actor.fadeleft, Actor.faderight, Actor.fadetop, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.skewy, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, GameState.GetSongPosition, PlayerOptions.FromString, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData, Sprite.SetTexture, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/2/10/1",
+        "missing captured subscriber identity for ScreenGameplay/2/14/1",
+        "missing captured subscriber identity for ScreenGameplay/25",
+        "missing captured subscriber identity for ScreenGameplay/26/1/1",
+        "missing captured subscriber identity for ScreenGameplay/26/1/10",
+        "missing captured subscriber identity for ScreenGameplay/26/1/12",
+        "missing captured subscriber identity for ScreenGameplay/26/1/2",
+        "missing captured subscriber identity for ScreenGameplay/26/1/4",
+        "missing captured subscriber identity for ScreenGameplay/26/1/5",
+        "missing captured subscriber identity for ScreenGameplay/26/1/7",
+        "missing captured subscriber identity for ScreenGameplay/26/1/9",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    },
+    "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc": {
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, ActorSound.play, GameState.GetSongBPS, Screen.GetScreenType",
+        "native drawable state/resources: Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/2/10/1",
+        "missing captured subscriber identity for ScreenGameplay/2/14/1",
+        "missing captured subscriber identity for ScreenGameplay/25",
+        "missing captured subscriber identity for ScreenGameplay/26/1/1",
+        "missing captured subscriber identity for ScreenGameplay/26/1/10",
+        "missing captured subscriber identity for ScreenGameplay/26/1/12",
+        "missing captured subscriber identity for ScreenGameplay/26/1/2",
+        "missing captured subscriber identity for ScreenGameplay/26/1/4",
+        "missing captured subscriber identity for ScreenGameplay/26/1/5",
+        "missing captured subscriber identity for ScreenGameplay/26/1/7",
+        "missing captured subscriber identity for ScreenGameplay/26/1/9",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    },
+    "wndrwll/wndrwll.ssc": {
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.addy, Actor.effectclock, Actor.skewx, Actor.smooth, Actor.stoptweening, Actor.wag",
+        "native drawable state/resources: ActorProxy, Quad",
+        "missing captured subscriber identity for ScreenGameplay/2/10/1",
+        "missing captured subscriber identity for ScreenGameplay/2/14/1",
+        "missing captured subscriber identity for ScreenGameplay/25",
+        "missing captured subscriber identity for ScreenGameplay/26/1/1",
+        "missing captured subscriber identity for ScreenGameplay/26/1/10",
+        "missing captured subscriber identity for ScreenGameplay/26/1/12",
+        "missing captured subscriber identity for ScreenGameplay/26/1/2",
+        "missing captured subscriber identity for ScreenGameplay/26/1/4",
+        "missing captured subscriber identity for ScreenGameplay/26/1/5",
+        "missing captured subscriber identity for ScreenGameplay/26/1/7",
+        "missing captured subscriber identity for ScreenGameplay/26/1/9",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
     }
   },
   "private_controls": {
