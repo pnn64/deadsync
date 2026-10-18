@@ -5422,6 +5422,17 @@
       "uncompressed_sha256": "f537b455407d794e2f35913af9420314dabae2d6b8501da4be35e5dead7343b3",
       "aliases": [],
       "local_only": true
+    },
+    {
+      "title": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]",
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "harness_version": "0.1.89",
+      "archive": "64727f8e25081f8a66aea85242c43958278e43bbca2e89b72a3c4577c1a4ad1d.tar.zst",
+      "compressed_bytes": 250817807,
+      "sha256": "64727f8e25081f8a66aea85242c43958278e43bbca2e89b72a3c4577c1a4ad1d",
+      "uncompressed_sha256": "e57872b1454c2967d5e9e64e93262c5d3ec18fa9efac5bfaae9ee97898608f18",
+      "aliases": [],
+      "local_only": true
     }
   ],
   "compression_level": 22
