@@ -2736,15 +2736,13 @@
     {
       "title": "HOPE",
       "source_simfile": "HOPE/HOPE.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d.tar.zst",
-      "sha256": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d",
-      "compressed_bytes": 4504552,
-      "uncompressed_sha256": "4a11cc0b00ba7a627396e5c216c4dc70f98095f12c714dbc88468594abad78f7",
-      "compression_level": 22,
-      "aliases": [
-        "c86255946f11b2d0bd64caf6edb7744d84ee797b8f249bf0ce0431d552044741.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "38abdc5f2f5b6e0b27ee4fecdb38c9193d08c5596e7333fe51fc8ff16bf932d2.tar.zst",
+      "compressed_bytes": 120122060,
+      "sha256": "38abdc5f2f5b6e0b27ee4fecdb38c9193d08c5596e7333fe51fc8ff16bf932d2",
+      "uncompressed_sha256": "1468a3058c167da153ae3bb0a3ec4295a6f49a885361cb62f657210932df0f56",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "I",
