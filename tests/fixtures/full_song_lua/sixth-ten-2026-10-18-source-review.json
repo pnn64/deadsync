@@ -213,6 +213,23 @@
       "proof": "10,000 retained judgment objects with garbage collection stopped: original getter ownership fails with StackError; registry ownership passes while preserving result identity, offsets and scores.",
       "known_baseline_test_failure": "compile_song_lua_supports_named_player_tap_note_shim retains the same top:GetChildren()[empty-name] assertion failure on pre-fix committed code and fixed code; expected values unchanged.",
       "full_chart_status": "Megalovania SM remains pending after two attempts. Final replay stopped at 83158/138405 with mlua auxiliary-stack exhaustion and a DensityGraph.lua:56 queuecommand StackError. No third repair or replay this sweep."
+    },
+    {
+      "commit": "cd5830b4b132661970293e1cf018d9bd28b379a5",
+      "affected_pending_chart": "Igaku/Igaku.ssc",
+      "cause": "Native ModsGroup replaces screen delta with an independent RageTimer delta per options group; native Player updates NoteField Mini zoom after ActorFrame::Update.",
+      "native_sources": [
+        "../itgmania/src/ModsGroup.h:53",
+        "../itgmania/src/PlayerOptions.cpp:184",
+        "../itgmania/src/Player.cpp:1037",
+        "../itgmania/src/LuaBinding.h:195"
+      ],
+      "regressions": [
+        "live_native_option_clocks_are_independent_and_consumed_once",
+        "live_native_mini_zoom_updates_before_song_callbacks_and_preserves_oitg_z"
+      ],
+      "input_policy": "Read observed timer inputs only; no native option values, actor poses, tolerances, or acceptance expectations substituted. Legacy captures retain prior frame-delta fallback.",
+      "full_chart_status": "Second and final Igaku SSC full replay will use a fresh native capture because the retained archive lacks independent option timer inputs."
     }
   ],
   "input_repairs": [
@@ -286,6 +303,73 @@
       "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\local-capture-312\\candidates\\22e2a356b1f5500f93b275ca4b09aea6dcf5d05795c86901e0ce3f76759b29f8.tar",
       "trace_sha256": "15ac60e642d4df1e15e630478a48a0788f3ac872e1b670a84725b9b3530de868",
       "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12784-1792288810645958000-0\\Themes\\itgmania-harness"
+    },
+    {
+      "position": 240,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "simfile_sha256": "5fa5cb72a841765d6e53ba7fd60e1c753653c64d1748543f4e4bc67f72a3a0d2",
+      "capture_exit": 0,
+      "capture_seconds": 245.12534400000004,
+      "native_engine_sha256": "fdff8b1963d2244e105e031ac13570e8bf221632a2429cd3b37fe6d301261a96",
+      "harness_binary_sha256": "eb21c38a5d4a614902d5d77c35d6b2d61925c707cc51a997b33a0af30293d606",
+      "harness_fix_commit": "8817e591d3e27c61e8e01cc7d85cc4362cbda7eb",
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-35236-1792294336007737300-0",
+      "candidate_sha256": "90745fb41718c0b4331df8dba30efb1a6d1dc0876b0114b48c04d8548225c054",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\local-capture-240\\candidates\\90745fb41718c0b4331df8dba30efb1a6d1dc0876b0114b48c04d8548225c054.tar",
+      "trace_sha256": "c4f17d18ddd9825f9aa9044e4df7aa36bc4ed2428cc50420a4de02676f553b90",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-35236-1792294336007737300-0\\Themes\\itgmania-harness"
+    },
+    {
+      "position": 240,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "simfile_sha256": "5fa5cb72a841765d6e53ba7fd60e1c753653c64d1748543f4e4bc67f72a3a0d2",
+      "capture_exit": 0,
+      "capture_seconds": 235.5901443999901,
+      "native_engine_sha256": "5a2388f1a3f6f372498e22d2da5b7dcecf3eefdc2c907fb12932813607a614cd",
+      "harness_binary_sha256": "5aaf24044b820ff5393da56db321e5df973b3d642f85e69820e1c1af9569a708",
+      "harness_fix_commit": "74ca23c1c609b153b1964f1a39e2f07581c68117",
+      "reason": "Actual Igaku replay showed arrow position drift because ModsGroup uses independent RageTimer deltas, absent from the retained capture. Capture the missing clock inputs with the native Approach observer; retain the original archive unchanged.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-52532-1792295530691012100-0",
+      "candidate_sha256": "2b9356ea33582d5145fd03d091385e0c0f3f6e0a8f8c3571d7ae96d65a2d651b",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\local-capture-240-timers\\candidates\\2b9356ea33582d5145fd03d091385e0c0f3f6e0a8f8c3571d7ae96d65a2d651b.tar",
+      "trace_sha256": "5178ca316631ab742f5e3f95135a0388b6cd0d47f37ae1ca734978a3f84ae2b6",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-52532-1792295530691012100-0\\Themes\\itgmania-harness",
+      "clock_observer_check": {
+        "native_frames": 16035,
+        "clock_inputs_complete": true,
+        "screen_and_option_deltas_differ": true,
+        "first": {
+          "beat": -5.714768886566162,
+          "delta": 0,
+          "option_deltas": {
+            "players": [
+              0.31126201152801514,
+              1.0631179809570312
+            ],
+            "song": 1.0631309747695923
+          },
+          "scene": 1,
+          "seconds": -1.9999773502349854,
+          "sequence": 1,
+          "wall_seconds": 2.832123
+        },
+        "last": {
+          "beat": 341.6241760253906,
+          "delta": 0.048232000321149826,
+          "option_deltas": {
+            "players": [
+              0.048264000564813614,
+              0.04826600104570389
+            ],
+            "song": 0.04826200008392334
+          },
+          "scene": 1,
+          "seconds": 120.59024810791016,
+          "sequence": 16035,
+          "wall_seconds": 125.791646
+        }
+      }
     }
   ],
   "additional_checks": [
@@ -319,54 +403,37 @@
   ],
   "verification": {
     "complete": false,
-    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM is pending after two incomplete attempts. Continuing with Igaku SSC headlessly.",
-    "current_source_hashes_verified": 48,
+    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM is pending after two incomplete attempts. Igaku SSC receives its second and final headless replay after capturing missing independent option timer inputs.",
+    "current_source_hashes_verified": 49,
     "native_tests_passed": 66,
     "targeted_checks": [
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-native-tests.log",
-        "sha256": "11d58eed0c43e5b75232f1706781f9f208355b4e5bf09609796e56c704fa0a7a",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\option-clocks-native-tests.log",
+        "sha256": "7d1195f2d4eca353d37f7511afae71df0c184033ed8bd5911846e229043c7f41",
         "passed": 66,
         "failed": 0,
         "ignored": 0,
-        "scope": "Final source graph built together with full replay CLI"
+        "scope": "Final source graph built together with full replay CLI, opt-level=3"
       },
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-stress-final.log",
-        "sha256": "2c9921499dd86e3ea2ed19ed2c95f1e8ee3bbb124f578a95c9df3d82012f0c9f",
-        "passed": 1,
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\option-clocks-unit-final.log",
+        "sha256": "2d8e1ebcbca82bffc3f19668955a01db475928347daf66079db23caaa787be6a",
+        "passed": 7,
         "failed": 0,
         "ignored": 0,
-        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+        "scope": "Includes independent option clocks and native Mini/OITG zoom phase regressions; unit package opt-level=0"
       },
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-table-tests.log",
-        "sha256": "519fe9be95f8178809c2bc814d93ad045f5fa1a4c65c40b76a67b7effbdcc8c3",
-        "passed": 31,
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\option-clocks-table-tests.log",
+        "sha256": "303c2f2891ec4767ea121d131e3585735f187f9d77b32ea25b08b61cf48a6a69",
+        "passed": 13,
         "failed": 0,
-        "ignored": 0,
-        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
-      },
-      {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-snapshot-tests.log",
-        "sha256": "30405096d6fd910f7a5f4819041135585f02c65ba3ca586bdbb79b8ed59130b8",
-        "passed": 5,
-        "failed": 0,
-        "ignored": 0,
-        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
-      },
-      {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-judgment-tests.log",
-        "sha256": "70f0aab7795e3c5d72db143aefce2bc39599adc5df82211bf4cf02ba648f105e",
-        "passed": 1,
-        "failed": 0,
-        "ignored": 0,
-        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+        "ignored": 0
       }
     ],
-    "binary_sha256": "6a64b65a7dff97d7a8c04595573684c52f78b8610cf3dd9edc6ddaff33d9d7fd",
+    "binary_sha256": "796130f039e5d77ef753339e906e1280a2ca5e382a7983027b1c5c128d16ddb4",
     "runtime_lua_feature_enabled": false,
-    "utc": "2026-10-18T03:34:30Z",
+    "utc": "2026-10-18T04:01:27Z",
     "known_baseline_failure": {
       "test": "compile_song_lua_supports_named_player_tap_note_shim",
       "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
