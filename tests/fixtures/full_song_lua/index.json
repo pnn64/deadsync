@@ -2174,17 +2174,15 @@
       "aliases": []
     },
     {
-      "title": "You Reposted in the Wrong Dimmadome",
+      "title": "Dimmadome",
       "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
-      "harness_version": "0.1.0",
-      "archive": "78564c9fc07f54a159cd15ca60bbe4bff2f0ced3c2971e3ec41dc4dfbfd6665a.tar.zst",
-      "sha256": "78564c9fc07f54a159cd15ca60bbe4bff2f0ced3c2971e3ec41dc4dfbfd6665a",
-      "compressed_bytes": 589105,
-      "uncompressed_sha256": "24f45fc6d22f7cde5c84395544a1b5b54fcc226daaf6ac7ac51e6faf65bfcd51",
-      "compression_level": 22,
-      "aliases": [
-        "b12bbb1c22ec2c4642bb80343ead9a1e61c45ea70af1a3e06705e84099a4d7eb.tar.zst"
-      ]
+      "harness_version": "0.1.84",
+      "archive": "2c30e61d831c0a0ddbfdfc8684a15b2f0114b69d927b090314316fd5df0ee38b.tar.zst",
+      "compressed_bytes": 110394264,
+      "sha256": "2c30e61d831c0a0ddbfdfc8684a15b2f0114b69d927b090314316fd5df0ee38b",
+      "uncompressed_sha256": "d92ff757c9704e38452586bb3e9164a9c5209e7ccf5437424fb2fff9c4ecf25d",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Distraction",
