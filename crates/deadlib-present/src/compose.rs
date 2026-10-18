@@ -8199,7 +8199,16 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                     depth_test: false,
                     clear_depth: false,
                     clear_depth_after: false,
-                    sampler: None,
+                    // Mesh draws otherwise select repeat addressing. A target
+                    // sprite must retain the target's clamp/nearest sampling.
+                    sampler: renderer::is_render_target_texture(texture_handle).then_some(renderer::MeshSampler {
+                        filter: if renderer::render_target_uses_nearest(texture_handle) {
+                            renderer::SamplerFilter::Nearest
+                        } else {
+                            renderer::SamplerFilter::Linear
+                        },
+                        wrap: renderer::SamplerWrap::Clamp,
+                    }),
                 },
             );
             finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
@@ -10070,6 +10079,28 @@ mod tests {
             shadow_len: [0.0, 0.0],
             shadow_color: [0.0; 4],
             effect: EffectState::default(),
+        }
+    }
+
+    #[test]
+    fn skewed_render_target_sprite_preserves_clamp_and_filter() {
+        for nearest in [false, true] {
+            let handle = deadlib_render_core::render_target_sample_handle(render_target_texture_handle(17), nearest);
+            let mut actor = test_sprite(SpriteSource::RenderTarget {handle, size: [64.0, 32.0]});
+            let Actor::Sprite {skew, ..} = &mut actor else {unreachable!()};
+            *skew = [0.375, -0.25];
+            let frame = super::build_passes(
+                std::iter::once(super::ActorSegment::new(&[actor])), &[], [0.0; 4],
+                &Metrics {left: -64.0, right: 64.0, top: 32.0, bottom: -32.0},
+                &font::FontMap::default(), 0.0, &mut TextLayoutCache::default(),
+                &mut ComposeScratch::default(), &super::NULL_TEXTURE_CONTEXT, None);
+            let DrawOp::TexturedMesh(run) = frame.ops[0] else {panic!("skewed sprite must use mesh geometry")};
+            let sampler = deadlib_render_core::texture_sampler_desc(
+                deadlib_render_core::SamplerDesc::default(), run.texture_handle, true, run.sampler);
+            assert_eq!(sampler.wrap, deadlib_render_core::SamplerWrap::Clamp,
+                "a sprite becoming mesh geometry must keep render-target clamp addressing");
+            assert_eq!(sampler.filter, if nearest {deadlib_render_core::SamplerFilter::Nearest}
+                else {deadlib_render_core::SamplerFilter::Linear});
         }
     }
 
