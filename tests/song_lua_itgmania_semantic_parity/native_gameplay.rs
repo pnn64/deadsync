@@ -1215,6 +1215,26 @@ end }
     }
 
     #[test]
+    fn native_all_failed_delays_notes_ended_by_the_theme_song_second() {
+        for failed in [false, true] {
+            let mut state = owned_judgment_control(if failed { "failed-notes-ended-delay" } else { "healthy-notes-ended" },
+                "1000\n0000\n0000\n1000\n", "return Def.ActorFrame {}", 0.0);
+            state.gameplay.players_runtime.players[0].stage_failed = failed;
+            let end = state.gameplay.music_end_time_ns();
+            state.gameplay.clock.song_position.current_music_time_ns = end;
+            if failed {
+                assert!(state.gameplay.finish_gameplay_if_ready(false).is_none());
+                assert!(!state.gameplay.mods.attacks.cleared_for_outro);
+                state.gameplay.clock.song_position.current_music_time_ns = end + 999_999_999;
+                assert!(state.gameplay.finish_gameplay_if_ready(false).is_none());
+                state.gameplay.clock.song_position.current_music_time_ns = end + 1_000_000_000;
+            }
+            assert!(state.gameplay.finish_gameplay_if_ready(false).is_some());
+            assert!(state.gameplay.mods.attacks.cleared_for_outro);
+        }
+    }
+
+    #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
         use std::{fs, sync::Arc};

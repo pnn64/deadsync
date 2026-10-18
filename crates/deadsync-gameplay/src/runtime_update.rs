@@ -143,7 +143,14 @@ where
         // Match ITG's end-of-song ordering: resolve the frame's late taps, hold
         // ends, and misses before leaving gameplay, otherwise the last frame can
         // cut to evaluation before final judgments land.
-        if self.clock.song_position.current_music_time_ns >= self.music_end_time_ns() {
+        // ScreenGameplay delays NotesEnded by BeginFailedDelay when every
+        // enabled PlayerStageStats has already failed. Simply Love inherits
+        // _fallback's one song-second delay; it precedes LeaveGameplay/Off.
+        let player_count = self.setup.num_players.min(MAX_PLAYERS);
+        let all_failed = player_count > 0 && self.players_runtime.players[..player_count].iter()
+            .all(|player| player.stage_failed || player.fail_time.is_some());
+        let end = self.music_end_time_ns().saturating_add(if all_failed { 1_000_000_000 } else { 0 });
+        if self.clock.song_position.current_music_time_ns >= end {
             if !self.settle_completion_rows() && trace_enabled {
                 log::trace!("Music end time reached with pending score rows; completing gameplay.");
             }
