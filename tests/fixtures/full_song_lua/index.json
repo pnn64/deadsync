@@ -3068,17 +3068,14 @@
       "aliases": []
     },
     {
-      "title": "Jumper",
+      "title": "Jumper A Daily Rhythm Game",
       "source_simfile": "Jumper/Jumper.sm",
-      "harness_version": "0.1.0",
-      "archive": "dc08f968f85c9013c9b7f04831519cc15300a89a7c4296469234deaf136737fb.tar.zst",
-      "sha256": "dc08f968f85c9013c9b7f04831519cc15300a89a7c4296469234deaf136737fb",
-      "compressed_bytes": 61555,
-      "uncompressed_sha256": "4f1b60c443730bd6a9a1ca6945320a02684beaacbfb4b8dde4c5f08fa5f7bbec",
-      "compression_level": 22,
-      "aliases": [
-        "67cb37ff55d225ce6d041a6860c30d144ee198b23fd025147a4e72feb60eb5fc.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "f987c61f160c5670eec7a6d4ae46dfc4772f717efb8957bef9942d9f1be2c483.tar.zst",
+      "compressed_bytes": 7505676,
+      "sha256": "f987c61f160c5670eec7a6d4ae46dfc4772f717efb8957bef9942d9f1be2c483",
+      "uncompressed_sha256": "3f92140d14f02b0067ec7e813bf304583014029aee18bc3e2d1ce857cb2502a3",
+      "aliases": []
     },
     {
       "title": "Jumper",
