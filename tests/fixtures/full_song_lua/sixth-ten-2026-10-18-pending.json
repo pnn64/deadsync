@@ -57,7 +57,31 @@
       "native_source_review": null,
       "native_frames": null,
       "replayed_frames": null,
-      "evidence": "sweep-2026-10-17-state.json"
+      "evidence": "sweep-2026-10-17-state.json",
+      "retained_render_evidence": {
+        "report": "target/song-lua-sweep-20261016/seventh/report.json",
+        "fixture": "target/song-lua-sweep-20261016/seventh/candidates/305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0.tar",
+        "native_frames": 4404,
+        "replayed_frames": 4404,
+        "draw_samples_compared": 905092,
+        "draw_mismatches": 794501,
+        "errors": [],
+        "diagnostic_only": true,
+        "capture_completed_gameplay": true,
+        "scope": "Prior retained diagnostic replay, not a new repair attempt in this sweep; no accepted pass claimed."
+      },
+      "source_review": {
+        "native_song_source": "C:\\GitHub\\rework\\lua-songs\\7th Gear\\lua\\default.lua",
+        "native_song_lua_sha256": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+        "native_sequence": "AFT OnCommand calls self:Draw() before Quad/Sprite child OnCommands resize them (lua/default.lua:1017,1021,1022)",
+        "owned_source": {
+          "crates/deadsync-song-lua/src/draw_capture.rs": "21d8c75d7079ec9ab3002998c3ad31b445d67b169cca78fc8e365081955288b0",
+          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "b21ddf78e4d1fdb200faf7191fb6b2efc38bd516f0b85f92c0d8954264689441"
+        },
+        "owned_cause": "draw_capture::draw discards explicit calls when Capture.context is absent; interactive DrawChecks compares the final overlay pose instead of ordered immediate submissions",
+        "required_repair": "Retain immutable immediate Draw submissions in compiled playback and compare those actual submissions; source repair remains pending",
+        "additional_findings": "First failing OnCommand calls ActorFrameTexture:Draw before child OnCommands resize/recolor them. draw_capture::draw drops calls when no current draw context exists; the drawable comparator renders final composed overlay states instead of ordered frozen submissions. The retained report shows this is broader than two initial vertices: 794,501 draw mismatches need proper draw-stream and AFT-context parity."
+      }
     },
     {
       "position": 489,
