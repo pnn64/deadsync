@@ -4045,17 +4045,15 @@
       "aliases": []
     },
     {
-      "title": "Pizza Boy",
+      "title": "PizzaBoy",
       "source_simfile": "PizzaBoy/PizzaBoy.ssc",
-      "harness_version": "0.1.0",
-      "archive": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4.tar.zst",
-      "sha256": "44938af597b6bdbfe37bc629cc1117143e6025d6e6313e885196ab5d5c241ff4",
-      "compressed_bytes": 731376,
-      "uncompressed_sha256": "87197ff625b6675ce01e4f515022695ba3e882fdbd61aac3779b0e3b3c57c303",
-      "compression_level": 22,
-      "aliases": [
-        "51a67bc2e852b0ac9fea4d227c51c9841e379d3fb91269db193c72d518acae11.tar.zst"
-      ]
+      "harness_version": "0.1.84",
+      "archive": "9f247004d12e6d22a97f264829bec1fcb7d45dcb7904f001374157d524c9ee39.tar.zst",
+      "compressed_bytes": 110108848,
+      "sha256": "9f247004d12e6d22a97f264829bec1fcb7d45dcb7904f001374157d524c9ee39",
+      "uncompressed_sha256": "cb348612b6efe836a3baef1378ace4b1a3714f8de2e7e3a3f3218f5bde66b961",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Planet Calling",

@@ -303,6 +303,70 @@
         "missing captured subscriber identity for ScreenGameplay/4",
         "owned gameplay overlay observation phase is unavailable"
       ]
+    },
+    "Metronogik/Song.ssc": {
+      "source_simfile": "Metronogik/Song.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorMultiVertex.GetTexture, BitmapText.GetText, BitmapText.settext, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.DrawSize, PlayerOptions.FromString, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Stealth, PlayerOptions.XMod, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4"
+      ]
+    },
+    "PizzaBoy/PizzaBoy.ssc": {
+      "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetWidth, Actor.GetZoomY, Actor.SetSize, Actor.accelerate, Actor.xy, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, ActorSound.get, ActorSound.play, BitmapText.settext, GameState.GetCurMusicSeconds, GameState.GetHumanPlayers, PlayerOptions.Alternate, PlayerOptions.Cross, PlayerOptions.Mini, PlayerOptions.Split, PlayerOptions.Tornado, Screen.AddInputCallback",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/3/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/3/3",
+        "missing captured subscriber identity for ScreenGameplay/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/5/4",
+        "missing captured subscriber identity for ScreenGameplay/2/7/1",
+        "missing captured subscriber identity for ScreenGameplay/2/7/2",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/2/9/2",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4"
+      ]
     }
-  }
+  },
+  "additional_known_missing_coverage": [
+    {
+      "scope": "RageSound reader parameter playback",
+      "detail": "The native pitch setter now preserves sound identity and its f32 parameter. Full replay does not compare audible reader pitch/volume output; scheduled SongLuaSoundEvent retains path and timing only. This is recorded separately and does not change archive acceptance."
+    }
+  ]
 }
