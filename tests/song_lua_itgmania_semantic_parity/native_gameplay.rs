@@ -1195,6 +1195,26 @@ end }
     }
 
     #[test]
+    fn native_current_background_helper_keeps_its_theme_query_caller() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        super::start_call_log(2_000_000).unwrap();
+        let dir = std::env::temp_dir().join(format!("deadsync-background-helper-caller-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("helper.lua");
+        std::fs::write(&entry, "return Def.Sprite { InitCommand=function(self) assert(self:LoadFromCurrentSongBackground() == self) end }").unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "native background helper caller");
+        context.live = true;
+        compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
+            |_| None, |_,_| None).unwrap();
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let queries = events.iter().filter(|event| event["operation"] == "GameState.GetCurrentSong").collect::<Vec<_>>();
+        assert_eq!(queries.len(), 1);
+        assert_eq!(queries[0]["source"], "@theme:/Scripts/02 Sprite.lua");
+        assert_eq!(queries[0]["phase"], "callback");
+    }
+
+    #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
         use std::{fs, sync::Arc};

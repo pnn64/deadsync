@@ -7261,17 +7261,21 @@ pub fn install_actor_texture_load_methods(lua: &Lua, actor: &Table) -> mlua::Res
     }
     actor.set(
         "LoadFromCurrentSongBackground",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, _args: MultiValue| {
-                let gamestate = lua.globals().get::<Table>("GAMESTATE")?;
-                let song = gamestate
-                    .get::<Function>("GetCurrentSong")?
-                    .call::<Value>(gamestate)?;
-                set_actor_texture_from_path_methods(&actor, Some(&song), &["GetBackgroundPath"])?;
-                Ok(actor.clone())
-            }
-        })?,
+        // This is a theme Lua helper, not a Sprite C binding. Preserve its
+        // real caller provenance for the queries it performs internally.
+        lua.load(r#"
+return function(self)
+    local song = GAMESTATE:GetCurrentSong()
+    if not song then
+        local trail = GAMESTATE:GetCurrentTrail(GAMESTATE:GetMasterPlayerNumber())
+        local entries = trail:GetTrailEntries()
+        if #entries > 0 then song = entries[1]:GetSong() end
+    end
+    if not song then return self end
+    self:LoadFromSongBackground(song)
+    return self
+end
+"#).set_name("@theme:/Scripts/02 Sprite.lua").eval::<Function>()?,
     )?;
     actor.set("LoadFromSong", lua.create_function({
         let actor = actor.clone();
