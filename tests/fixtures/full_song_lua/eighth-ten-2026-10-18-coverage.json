@@ -283,6 +283,13 @@
         "missing captured subscriber identity for ScreenGameplay/3/1",
         "missing captured subscriber identity for ScreenGameplay/4"
       ]
+    },
+    "mr sandman/mr sandman.sm": {
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "pending_coverage": [
+        "Full 7301-frame replay comparison remains incomplete; second attempt stopped after at least 4138 frames. No fixture accepted."
+      ],
+      "original_runtime_failure_repaired": "Lua5.1 auxiliary reference thread could not retain20736 actors; handle capacity patch passed its targeted regressions."
     }
   },
   "private_controls": {
