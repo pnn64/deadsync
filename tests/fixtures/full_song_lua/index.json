@@ -4228,15 +4228,13 @@
     {
       "title": "REASON for RED",
       "source_simfile": "REASON for RED/reasonforgay.sm",
-      "harness_version": "0.1.0",
-      "archive": "2e5beaaef46c98cc1c826d52ee49753505753a823a630586c6168509a7d50d81.tar.zst",
-      "sha256": "2e5beaaef46c98cc1c826d52ee49753505753a823a630586c6168509a7d50d81",
-      "compressed_bytes": 486970,
-      "uncompressed_sha256": "42d135cd8e810da04ad2cc1c20b2ad6000b4f1aa0c0808625db5cd5259b39187",
-      "compression_level": 22,
-      "aliases": [
-        "a4e54677b3c3f12ee3260c6cde31bd7e8a064e5818ef3f163fce90c350169bb1.tar.zst"
-      ]
+      "harness_version": "0.1.84",
+      "archive": "67ed0b19f9d9e4123baf7bf84d5b4cbd46958ed17acbcfaa6e555581a5e2dbc6.tar.zst",
+      "compressed_bytes": 111180160,
+      "sha256": "67ed0b19f9d9e4123baf7bf84d5b4cbd46958ed17acbcfaa6e555581a5e2dbc6",
+      "uncompressed_sha256": "91195cb28d8862244c221e6f480b12f8e7bebd9d1878485e84ba2b1c906ce207",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "REASON for RED",
