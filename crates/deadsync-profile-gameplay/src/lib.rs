@@ -443,6 +443,17 @@ fn song_lua_compile_player_screen_x(
         + offset_sign * (profile.note_field_offset_x as f32).clamp(0.0, 50.0)
 }
 
+/// Resolve native catalog note times using the preferences at catalog loading.
+/// Later game-mode preference changes do not alter Song's stored bounds.
+#[must_use]
+pub fn song_lua_catalog_note_bounds(song: &deadsync_chart::SongData, offset: f32, rate: f32) -> [f32; 2] {
+    let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
+    let first = song.precise_first_second() - rate * offset;
+    let last = song.precise_note_last_second_seconds
+        .map(|seconds| seconds - rate * offset).unwrap_or(-1.0).max(specified_last);
+    [if first < last { first } else { 0.0 }, last]
+}
+
 #[must_use]
 pub fn song_lua_compile_context(
     song: &deadsync_chart::SongData,
@@ -489,15 +500,7 @@ pub fn song_lua_compile_context(
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     // The scan applies native chart eligibility and includes hold tails.
     // Neither audio EOF nor its rounded display length defines these bounds.
-    let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
-    // Native catalog loading resolves the offset into note times at 1x,
-    // then takes the max with the absolute hint. Song getters retain it.
-    context.song_note_bounds = Some([
-        song.precise_first_second() - machine_global_offset_seconds,
-        song.precise_note_last_second_seconds
-            .map(|seconds| seconds - machine_global_offset_seconds)
-            .unwrap_or(-1.0).max(specified_last),
-    ]);
+    context.song_note_bounds = Some(song_lua_catalog_note_bounds(song, machine_global_offset_seconds, 1.0));
     context.style_name = match play_style {
         deadsync_gameplay::GameplayInputPlayStyle::Single => "single",
         deadsync_gameplay::GameplayInputPlayStyle::Versus => "versus",

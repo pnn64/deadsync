@@ -7635,6 +7635,26 @@ return Def.ActorFrame { primary, other,
         assert!(scene.states().iter().any(|state| state.aux == 23.0));
     }
 
+    #[cfg(feature = "test-support")]
+    #[test]
+    fn live_native_raw_clocks_apply_to_constructors_and_same_frame_reads() {
+        let mut compiled = compile_with_context("raw-host-clock", "local started=GetTimeSinceStart()\nreturn Def.Quad{OnCommand=function(self)\n self:x(GetTimeSinceStart()-started):y(Minute()*60+Second())\nend}", |context| {
+            context.host_clock_inputs = [
+                ("GetTimeSinceStart", 1, 200.25),
+                ("GetTimeSinceStart", 3, 200.75),
+                ("Minute", 3, 17.0),
+                ("Second", 3, 33.0),
+            ].into_iter().map(|(clock,line,value)| crate::SongLuaHostClockInput {
+                clock: clock.into(), source: "song:/default.lua".into(), line, value,
+            }).collect();
+        });
+        let mut scene=compiled.live_scene.take().unwrap();
+        let output=scene.advance(SongLuaLiveFrame::default()).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(scene.states().iter().any(|state| state.x==0.5 && state.y==1053.0),
+            "constructor uptime and each raw clock read must be independent of the frame snapshot");
+    }
+
     #[test]
     fn live_native_broadcast_snapshot_preserves_explicit_nil_argument() {
         let mut compiled = compile("native-broadcast-arity", r#"

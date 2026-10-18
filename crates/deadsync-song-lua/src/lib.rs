@@ -25,6 +25,8 @@ pub use draw_capture::{
 mod eases;
 mod files;
 mod host;
+#[cfg(feature = "test-support")]
+mod clock_inputs;
 mod input;
 pub use input::{SongLuaInputEvent, SongLuaInputType};
 mod json;
@@ -1459,6 +1461,16 @@ impl From<&deadsync_chart::ChartData> for SongLuaStep {
     }
 }
 
+/// A raw process/calendar clock read observed outside chart state.
+#[cfg(feature = "test-support")]
+#[derive(Debug, Clone)]
+pub struct SongLuaHostClockInput {
+    pub clock: String,
+    pub source: String,
+    pub line: i32,
+    pub value: f64,
+}
+
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
     /// Retain the initialized scene for actual gameplay instead of probing
@@ -1516,6 +1528,9 @@ pub struct SongLuaCompileContext {
     /// Include the capture tool's visible Overlay probe when replaying its input.
     #[cfg(feature = "test-support")]
     pub capture_overlay_probe: bool,
+    /// External clock reads for diagnostic replay, never actor/query results.
+    #[cfg(feature = "test-support")]
+    pub host_clock_inputs: Vec<SongLuaHostClockInput>,
     pub music_length_seconds: f32,
     /// Whole-song note bounds resolved at catalog load, independently of
     /// audio duration. Note times include the load offset; hints stay absolute.
@@ -1581,6 +1596,8 @@ impl SongLuaCompileContext {
             trace_dynamic_commands: false,
             #[cfg(feature = "test-support")]
             capture_overlay_probe: false,
+            #[cfg(feature = "test-support")]
+            host_clock_inputs: Vec::new(),
             music_length_seconds: 0.0,
             song_note_bounds: None,
             style_name: "single".to_string(),

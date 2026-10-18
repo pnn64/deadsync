@@ -151,6 +151,8 @@ pub fn install_compile_host(
     install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
     install_default_stdlib_compat(lua, context.song_dir.as_path())?;
+    #[cfg(feature = "test-support")]
+    crate::clock_inputs::install(lua, context);
     let math: Table = lua.globals().get("math")?;
     math.get::<Function>("randomseed")?
         .call::<()>(context.random_seed as i32)?;
@@ -782,6 +784,10 @@ pub fn install_basic_globals(
     globals.set(
         "GetTimeSinceStart",
         lua.create_function(|lua, _args: MultiValue| {
+            #[cfg(feature = "test-support")]
+            if let Some(value) = crate::clock_inputs::next(lua, "GetTimeSinceStart") {
+                return Ok(Value::Number(value));
+            }
             if crate::live::active(lua) {
                 let runtime = lua.globals().get::<Table>(SONG_LUA_RUNTIME_KEY)?;
                 // RageTimer exposes a double process clock, independent of
@@ -907,6 +913,8 @@ pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result
         "Second",
         lua.create_function(move |_, _args: MultiValue| Ok(second))?,
     )?;
+    #[cfg(feature = "test-support")]
+    crate::clock_inputs::install_calendar(lua)?;
     Ok(())
 }
 

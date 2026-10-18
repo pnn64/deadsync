@@ -18,6 +18,22 @@ use std::{
 #[path = "interactive.rs"]
 mod interactive;
 
+fn native_host_clock_inputs(trace: &Value) -> Result<Vec<deadsync_song_lua::SongLuaHostClockInput>, String> {
+    let Some(inputs) = trace.get("host_clock_inputs") else { return Ok(Vec::new()); };
+    inputs.as_array().ok_or("native host clock inputs must be an array")?.iter().map(|input| {
+        let clock = input["clock"].as_str().ok_or("host clock domain is missing")?;
+        if !matches!(clock, "GetTimeSinceStart" | "Year" | "MonthOfYear" | "DayOfMonth" | "DayOfYear" | "Hour" | "Minute" | "Second") {
+            return Err(format!("unsupported external host clock {clock}"));
+        }
+        let value = number(input, "value")?;
+        if !value.is_finite() { return Err("host clock value must be finite".into()); }
+        Ok(deadsync_song_lua::SongLuaHostClockInput {
+            clock: clock.to_owned(), source: input["source"].as_str().ok_or("host clock source is missing")?.to_owned(),
+            line: input["line"].as_i64().and_then(|line| i32::try_from(line).ok()).ok_or("host clock line is invalid")?, value,
+        })
+    }).collect()
+}
+
 const CALL_OPERATIONS: &[&str] = &[
     "command.begin",
     "command.end",
@@ -521,6 +537,21 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn external_clock_input_bridge_keeps_call_sites_and_legacy_capture_support() {
+        use serde_json::json;
+        assert!(super::native_host_clock_inputs(&json!({})).unwrap().is_empty());
+        let inputs = super::native_host_clock_inputs(&json!({"host_clock_inputs":[
+            {"clock":"GetTimeSinceStart","source":"song:/fg.lua","line":1,"value":200.25},
+            {"clock":"Minute","source":"song:/fg.lua","line":3,"value":17}
+        ]})).unwrap();
+        assert_eq!(inputs.len(), 2);
+        assert_eq!((&*inputs[0].source, inputs[0].line, inputs[0].value), ("song:/fg.lua", 1, 200.25));
+        assert!(super::native_host_clock_inputs(&json!({"host_clock_inputs":[
+            {"clock":"Actor.GetX","source":"song:/fg.lua","line":1,"value":200.25}
+        ]})).is_err(), "derived actor observations must never enter the clock bridge");
+    }
+
     #[test]
     fn background_cache_reuses_owners_and_replays_focus_schedule() {
         paths::init();
@@ -4186,6 +4217,11 @@ pub(crate) fn replay_with_command_observer(
     // The recorded renderer is machine input. Keep its exact preference list:
     // charts can select an entirely different actor tree when AFTs are disabled.
     context.video_renderers = trace["display"]["video_renderers"].as_str().unwrap_or("null").to_owned();
+    context.host_clock_inputs = native_host_clock_inputs(trace)?;
+    if let Some(catalog) = trace["input"].get("catalog_preferences") {
+        context.song_note_bounds = Some(deadsync_profile_gameplay::song_lua_catalog_note_bounds(
+            &song, number(catalog, "global_offset_seconds")? as f32, number(catalog, "music_rate")? as f32));
+    }
     for (player, windows) in context.players.iter_mut().zip(native_theme_timing_windows(trace)?) {
         player.timing_windows = windows;
     }
