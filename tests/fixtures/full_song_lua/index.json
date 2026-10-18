@@ -3078,17 +3078,14 @@
       "aliases": []
     },
     {
-      "title": "Jumper",
+      "title": "Jumper From Cringle Odyssey",
       "source_simfile": "Jumper/Jumper.ssc",
-      "harness_version": "0.1.0",
-      "archive": "89457c8c96f08765c804afa5e95cb9f8480c152aee272891bc43a9298859ef8c.tar.zst",
-      "sha256": "89457c8c96f08765c804afa5e95cb9f8480c152aee272891bc43a9298859ef8c",
-      "compressed_bytes": 61503,
-      "uncompressed_sha256": "f9a880ef9e9c98a549858151001dcf2a9f57e69f6bae57c36ccf68b9d1139cb6",
-      "compression_level": 22,
-      "aliases": [
-        "5aa752b84749c0ff8fd891026653a5cce0fe35cfa19f1623b60ddb413ca5609d.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "fa5d1c213051d1a69c4a2307223b12629218a2f5ac3195899af5a7b2ea826abe.tar.zst",
+      "compressed_bytes": 7642152,
+      "sha256": "fa5d1c213051d1a69c4a2307223b12629218a2f5ac3195899af5a7b2ea826abe",
+      "uncompressed_sha256": "4e7269016c13b64a4b189bfd04b1ad834a0a6178156f22c00940a496e38e7742",
+      "aliases": []
     },
     {
       "title": "Episode 07 Just A Friend To You",

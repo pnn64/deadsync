@@ -22353,13 +22353,266 @@
           "67cb37ff55d225ce6d041a6860c30d144ee198b23fd025147a4e72feb60eb5fc.tar.zst"
         ]
       }
+    },
+    {
+      "position": 260,
+      "source_simfile": "Jumper/Jumper.ssc",
+      "completed_full_repairs": 1,
+      "evidence": "sweep-2026-10-12-results.json",
+      "simfile_sha256": "05bf02518b778fb8fb8248e866be1d8e09b077de86e7120902a5ea9b0d8ace91",
+      "status": "passed",
+      "previous_concrete_failure": {
+        "failure_text": null,
+        "callback_errors": [],
+        "mismatch_count": 374,
+        "first_concrete_mismatches": [
+          {
+            "phase": "progress",
+            "seconds": 180.0000457763672,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 181.00018310546875,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 182.00047302246094,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 183.00064086914062,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 184.00059509277344,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 185.0012664794922,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 186.00045776367188,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 187.00010681152344,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 188.00172424316406,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 189.0013885498047,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 190.00210571289062,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          },
+          {
+            "phase": "progress",
+            "seconds": 191.00050354003906,
+            "field": "failed",
+            "native": true,
+            "deadsync": false
+          }
+        ],
+        "capture_exit": null,
+        "replay_exit": 2,
+        "concrete_terminal_outcome": null
+      },
+      "candidate_sha256": "4e7269016c13b64a4b189bfd04b1ad834a0a6178156f22c00940a496e38e7742",
+      "retained_candidate": "/home/parity/jobs/chart-sweep-20261012-v2/chart-260/private-candidate.tar.zst",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "repair_attempts": 2,
+      "replay_exit": 0,
+      "replay_seconds": 741.6670783720328,
+      "native_frames": 169429,
+      "replayed_frames": 169429,
+      "compared_stage_fields": 2332,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "report_sha256": "cdd83bb98b20fa3a786611ba9369b7543549b05d69a4f57eb1ca55e7ec1bd94f",
+      "archive": "fa5d1c213051d1a69c4a2307223b12629218a2f5ac3195899af5a7b2ea826abe.tar.zst",
+      "archive_sha256": "fa5d1c213051d1a69c4a2307223b12629218a2f5ac3195899af5a7b2ea826abe",
+      "compressed_bytes": 7642152,
+      "harness_version": "0.1.80",
+      "title": "Jumper From Cringle Odyssey",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_chart": "/home/parity/jobs/sixth-ten-fixtures-20261018/chart-260-attempt-2/chart-260",
+      "fix_commit": "d2098837139fa7d0bec266cdfbd8d2dfe6136ff2",
+      "binary_sha256": "54aee7cda6cc0085154a6a3cb27ee37dfcb0fe925843717f6481129db3fb3a3f",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "/home/parity/jobs/sixth-ten-fixtures-20261018/full-song-lua-failed-delay",
+        "binary_sha256": "54aee7cda6cc0085154a6a3cb27ee37dfcb0fe925843717f6481129db3fb3a3f",
+        "source_root": "/home/parity/workspace/sweep-20261016-current/deadsync",
+        "source_base_commit": "b861ba269",
+        "modified_sources": {
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/src/compile.rs": "21ee84fe9ffbbaa276aeeecdf3ad02160a84d1abed9b1c631aa82b18ab331cad",
+          "crates/deadsync-song-lua/src/host.rs": "f4358b344657a111c8ac1c364d13bee0964bdd85b176a37311fccd1a011e9a0a",
+          "crates/deadsync-song-lua/src/lib.rs": "553be1052a4806b60b6ea111c1d74c9ba964d657fd6ad82364463ee8069493a2",
+          "crates/deadsync-song-lua/src/live.rs": "863d43c84930c58cf9a7ee36719409456e71295ef62ea8de749fb50a7f149629",
+          "crates/deadsync-song-lua/src/lua_util.rs": "d97e489eb983c3de194bc1175a5bf73d262fbe16019181c8a640656555330724",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "c96925f034df9097e03929f0194bc889966eb47fe62e483471dc9ddda691c2fc",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "ffa932478d34fd9740694e3080ea75c703e02f77adbbcae2e40555b4e9d6de90",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-simfile/src/song.rs": "d21411f9fbf9b2fb2a4930369518332307a08097e07bb87ff03fdee560efbd36",
+          "crates/deadsync-simfile/src/cache.rs": "65082b7647813d2f6950d6d4a51a000203af4d050a239209b449d77a02791974",
+          "crates/deadsync-simfile/src/changes.rs": "5c726755073bc2414b26551f16b5621db2e854f5fbc5ba2292dd45f0856eab46",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "b0536cb5aa3f9b6506862fc7350f4511b3787250419c53cf44bdddd24d090e95",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "420e95b3ac68c08934d22aa546b90e10b977e91ac34d156ad314b63f272a6288",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "3ad394a21e5a4175b81747a71595521ad356a7e27e261eaf705f44f29f3a7cb3",
+          "crates/deadsync-shell/src/app/mod.rs": "bd446d73081885a0e35ddc81f0eb7171626ad05b4e56b54c5112da4e94ceced1",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535",
+          "crates/deadsync-chart/src/song.rs": "9c5a57b936f6ad5036b871074c75e2da48901776cb626a3904d06d0e5ce728d8",
+          "crates/deadsync-simfile/src/cache_perf.rs": "11d632572c70465470dd8e788bbfcaa729a3735d70a6b7ce6fd2617f69fd7b3a",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "10625731561947c2533a248c55aa4f25b21f6b938da31bddf3d26f04933b9652",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "fb75e9be5b384bd661601ac47c5a6dec8a2931ab0d63c75eaceaa49d062e46ea",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b"
+        },
+        "command": [
+          "/home/parity/.cargo/bin/cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "24",
+          "--target-dir",
+          "/home/parity/build/deadsync-sweep-release",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--no-run"
+        ],
+        "seconds": 53.46335865400033,
+        "targeted_checks": [
+          {
+            "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/failed-delay-native-tests.log",
+            "sha256": "d1e823855b37a3bc8bff8878ff5c47eb362431866cf337f200e16e06187bec45",
+            "passed": 65,
+            "failed": 0,
+            "ignored": 0
+          },
+          {
+            "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/background-metadata-cache-tests.log",
+            "sha256": "e45377285cd80258ad1c3e3626a614c7eba61b1584b924ff171549cb0d171ba9",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0
+          }
+        ],
+        "prior_focused_check": {
+          "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/commands-source-broadcast-tests.log",
+          "sha256": "e29e6ecb6233e9213ff7d08c6d66b42b38112d8bd04ed3c8fb7150a5eaa6169e",
+          "passed": 3,
+          "failed": 0,
+          "scope": "Jumper command and source broadcast implementation, before native transition/background tree additions"
+        },
+        "fix_commit": "d2098837139fa7d0bec266cdfbd8d2dfe6136ff2"
+      },
+      "prior_sweep_failure": [
+        {
+          "phase": "screen-end",
+          "seconds": 206.42578125,
+          "player_index": 0,
+          "field": "life_latest",
+          "native": 0,
+          "deadsync": 0.5
+        },
+        {
+          "phase": "gameplay-exit",
+          "seconds": 206.42578125,
+          "player_index": 0,
+          "field": "life_latest",
+          "native": 0,
+          "deadsync": 0.5
+        }
+      ],
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Jumper",
+        "source_simfile": "Jumper/Jumper.ssc",
+        "harness_version": "0.1.0",
+        "archive": "89457c8c96f08765c804afa5e95cb9f8480c152aee272891bc43a9298859ef8c.tar.zst",
+        "sha256": "89457c8c96f08765c804afa5e95cb9f8480c152aee272891bc43a9298859ef8c",
+        "compressed_bytes": 61503,
+        "uncompressed_sha256": "f9a880ef9e9c98a549858151001dcf2a9f57e69f6bae57c36ccf68b9d1139cb6",
+        "compression_level": 22,
+        "aliases": [
+          "5aa752b84749c0ff8fd891026653a5cce0fe35cfa19f1623b60ddb413ca5609d.tar.zst"
+        ]
+      }
     }
   ],
   "counts": {
-    "new_passing_fixtures": 8,
-    "passed_fixtures": 458,
-    "pending_charts": 42,
+    "new_passing_fixtures": 9,
+    "passed_fixtures": 459,
+    "pending_charts": 41,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-18T00:26:56Z"
+  "updated_utc": "2026-10-18T00:27:17Z"
 }
