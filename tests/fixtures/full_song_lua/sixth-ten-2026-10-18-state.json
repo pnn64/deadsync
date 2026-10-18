@@ -31129,7 +31129,7 @@
         "commit": "ebed171e346f8f20425cbd7125639b847d221793",
         "utc": "2026-10-18T04:50:06Z"
       },
-      "concrete_failure": "Local final attempt was stopped after ten other full fixtures had been accepted, packed, verified, saved and committed. Last progress was11802/71830frames; no complete comparison report or current parity outcome exists. The previous remote attempt remains unconfirmed. Latest known historical full failure was an extra EventMode preference query(14227native/14228owned), causing13449mismatches across72178frames; that is not claimed as the current result.",
+      "concrete_failure": "The extra local replay was stopped after ten other full fixtures had been accepted, packed, verified, saved and committed. Last reported progress was 11,802/71,830 frames; there is no complete comparison report or current parity outcome. The previous remote attempt remains unconfirmed. The latest historical full failure was an extra EventMode preference query (14,227 native versus 14,228 owned), causing 13,449 mismatches across 72,178 frames. That is not claimed as the current result.",
       "current_sweep_prior_attempt": {
         "execution_platform": "Linux remote host; connection lost",
         "incomplete_replay": true,

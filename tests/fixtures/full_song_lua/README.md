@@ -1,6 +1,14 @@
 # Full song Lua fixtures
 
-The [latest three-fixture pass](fifth-three-2026-10-17-summary.json) brings the
+The [latest fixture pass](sixth-ten-2026-10-18-summary.json) adds **10 accepted
+fixtures**, bringing the total to **460 accepted fixtures, 40 pending charts,
+and one ignored chart** (Mawaru9). Each new fixture passed its complete
+uncompressed native replay before official packing, decompressed hash
+verification, and immediate commit. [Concrete pending failures](sixth-ten-2026-10-18-pending.json)
+and [missing coverage](sixth-ten-2026-10-18-coverage.json) remain separate.
+All files over 100,000,000 bytes remain gitignored.
+
+The [preceding three-fixture pass](fifth-three-2026-10-17-summary.json) brought the
 total to **450 accepted fixtures, 50 pending charts, and one ignored chart**
 (Mawaru9). Dreams Bloom After School SSC, Think About You SSC, and Cyberpunk
 2077 SSC pass their complete native replays. Reloads retain the constructed

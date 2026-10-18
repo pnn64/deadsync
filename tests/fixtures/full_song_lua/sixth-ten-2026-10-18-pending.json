@@ -1,7 +1,6 @@
 {
-  "count": 41,
-  "complete_sweep": false,
-  "scope": "Connection-outage checkpoint: latest concrete completed failures; current unconfirmed attempts are explicitly identified. Missing coverage remains separate.",
+  "count": 40,
+  "scope": "Latest concrete failures; accepted simfiles removed without new coverage gates",
   "charts": [
     {
       "position": 484,
@@ -36,10 +35,19 @@
     {
       "position": 27,
       "source_simfile": "7th Gear/7th Gear.ssc",
-      "repair_attempts": 0,
+      "repair_attempts": 2,
       "mismatch_count": null,
-      "concrete_failure": null,
-      "concrete_failures": [
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
+      "concrete_failure": "Second and final attempt aborted in the draw comparator: draw proxy has no prepared target. Last progress was 79/4404 frames; no complete parity report or accepted fixture was produced.",
+      "concrete_failures": null,
+      "callback_errors": null,
+      "preparation_or_execution_error": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.1s] : 0 checks completed, 0 failed\n[16.1s] : 0 checks completed, 0 failed\n[17.8s] replaying every native gameplay frame\n[18.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[20.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[22.1s] replaying every native gameplay frame: frame 70/4404 (1.6%)\n\nthread 'main' (47592) panicked at tests\\song_lua_itgmania_semantic_parity\\whole_song_archives.rs:1539:35:\nnative gameplay replay failed: draw proxy has no prepared target\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[24.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[26.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[28.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[30.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n",
+      "failure_text": null,
+      "native_source_review": null,
+      "native_frames": 4404,
+      "replayed_frames": null,
+      "prior_sweep_failure": [
         {
           "field": "submitted_clip_uv_color_or_topology",
           "frame": 80,
@@ -51,37 +59,22 @@
           "beat": 0.023829178884625435
         }
       ],
-      "callback_errors": null,
-      "preparation_or_execution_error": null,
-      "failure_text": "Native drawable geometry differs at frame80: immediate AFT parent OnCommand draws Quad/Sprite at their initial size before child OnCommands. Owned capture drops that draw and the comparator uses the final fullscreen pose.",
-      "native_source_review": null,
-      "native_frames": null,
-      "replayed_frames": null,
-      "evidence": "sweep-2026-10-17-state.json",
-      "retained_render_evidence": {
-        "report": "target/song-lua-sweep-20261016/seventh/report.json",
-        "fixture": "target/song-lua-sweep-20261016/seventh/candidates/305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0.tar",
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": true,
+      "last_reported_frame": 79,
+      "current_sweep_prior_attempt": {
         "native_frames": 4404,
         "replayed_frames": 4404,
-        "draw_samples_compared": 905092,
-        "draw_mismatches": 794501,
-        "errors": [],
-        "diagnostic_only": true,
-        "capture_completed_gameplay": true,
-        "scope": "Prior retained diagnostic replay, not a new repair attempt in this sweep; no accepted pass claimed."
+        "draw_mismatch_count": 794501,
+        "callback_errors": [],
+        "report_sha256": "f89ce540fe2f85582aabbdadbc4c170f4fed1ec2231a92d90f3b71de2e0f9637"
       },
-      "source_review": {
-        "native_song_source": "C:\\GitHub\\rework\\lua-songs\\7th Gear\\lua\\default.lua",
-        "native_song_lua_sha256": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
-        "native_sequence": "AFT OnCommand calls self:Draw() before Quad/Sprite child OnCommands resize them (lua/default.lua:1017,1021,1022)",
-        "owned_source": {
-          "crates/deadsync-song-lua/src/draw_capture.rs": "21d8c75d7079ec9ab3002998c3ad31b445d67b169cca78fc8e365081955288b0",
-          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "b21ddf78e4d1fdb200faf7191fb6b2efc38bd516f0b85f92c0d8954264689441"
-        },
-        "owned_cause": "draw_capture::draw discards explicit calls when Capture.context is absent; interactive DrawChecks compares the final overlay pose instead of ordered immediate submissions",
-        "required_repair": "Retain immutable immediate Draw submissions in compiled playback and compare those actual submissions; source repair remains pending",
-        "additional_findings": "First failing OnCommand calls ActorFrameTexture:Draw before child OnCommands resize/recolor them. draw_capture::draw drops calls when no current draw context exists; the drawable comparator renders final composed overlay states instead of ordered frozen submissions. The retained report shows this is broader than two initial vertices: 794,501 draw mismatches need proper draw-stream and AFT-context parity."
-      }
+      "repair_limit_reached": true,
+      "binary_sha256": "2ed0366aae619ab23a80e91e17bb014ba48f837ee4e9e07db1bf8a3dfc3d9c5c",
+      "fix_commit": "f4aaa060e845bff1d5ff242db42afc5630a7fa6a",
+      "report_sha256": null,
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\chart-27-attempt-2",
+      "evidence": "sixth-ten-2026-10-18-state.json"
     },
     {
       "position": 489,
@@ -1356,6 +1349,8 @@
       "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
       "repair_attempts": 1,
       "mismatch_count": 110,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -1994,9 +1989,156 @@
       "callback_errors": [],
       "preparation_or_execution_error": null,
       "failure_text": null,
-      "native_source_review": null,
+      "native_source_review": {
+        "native_sources": [
+          "itgmania/src/Player.cpp:1181",
+          "itgmania/src/Player.cpp:1242",
+          "itgmania/src/Player.cpp:1539"
+        ],
+        "owned_sources": [
+          "crates/deadsync-gameplay/src/runtime_update.rs:254",
+          "crates/deadsync-gameplay/src/holds.rs:1132"
+        ],
+        "observed_failure": "110 tween_time_left mismatches across five captured frames; effect arguments match. At beat 132.28653 the native HoldJudgment queue has 0.8 seconds and the owned queue is empty.",
+        "source_findings": [
+          "Native roll life decays using frame delta; owned active-hold integration uses the music timestamp interval. The captured roll at beat 132 receives a 1.30447-second frame delta while music advances only about 0.0987 seconds.",
+          "Native hold checking precedes CrossedRows; owned autoplay precedes hold updates. A short hold crossing its head and tail during one frame can therefore resolve on different frames."
+        ],
+        "status": "Source differences consistent with the actual failed frames; no Godspeed repair implemented or second full replay used in this sweep."
+      },
       "native_frames": 36822,
       "replayed_frames": 36822,
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0054",
+            "args": [
+              213.5
+            ],
+            "beat": 132.28652954101562,
+            "caller": {
+              "line": 975,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0039",
+            "detail": {
+              "native_tween_children": {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [],
+                            "commands": [],
+                            "name": "HoldJudgment",
+                            "time_left": 0.800000011920929
+                          }
+                        ],
+                        "commands": [],
+                        "name": "",
+                        "time_left": 0.800000011920929
+                      }
+                    ]
+                  }
+                ],
+                "commands": [],
+                "name": "PlayerP1",
+                "time_left": 0.800000011920929
+              },
+              "native_tween_time_left": 0.800000011920929
+            },
+            "kind": "call",
+            "line": 975,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 48.927188873291016,
+            "seq": 361266,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0.800000011920929
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 975,
+            "phase": "callback",
+            "beat": 132.28652954101562,
+            "seconds": 48.927188873291016,
+            "args": [
+              213.5
+            ],
+            "results": [
+              {
+                "actor": "0x5e1eb1045160",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0054",
+            "args": [
+              0
+            ],
+            "beat": 132.28652954101562,
+            "caller": {
+              "line": 975,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0039",
+            "detail": {
+              "native_tween_time_left": 0.800000011920929
+            },
+            "kind": "call",
+            "line": 975,
+            "operation": "Actor.rotationz",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 48.927188873291016,
+            "seq": 361268,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0.800000011920929
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.rotationz",
+            "source": "song:/lua/default.lua",
+            "line": 975,
+            "phase": "callback",
+            "beat": 132.28652954101562,
+            "seconds": 48.927188873291016,
+            "args": [
+              0
+            ],
+            "results": [
+              {
+                "actor": "0x5e1eb1045160",
+                "name": "PlayerP1",
+                "path": "ScreenGameplay/PlayerP1"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "c2c0b005937e9cbdaa6404339bf91390434f52aac02f09057aeebbad815d2695",
       "fix_commit": "d3b0cab34a8bd3bf0e66241b69304dbe471a4bf6",
       "report_sha256": "c3c00d2815d8c834fae24e54c58687bb4c41783abfd2d7ff570e078224e3a62e",
@@ -2008,6 +2150,8 @@
       "source_simfile": "HOPE/HOPE.ssc",
       "repair_attempts": 2,
       "mismatch_count": 640,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -2690,6 +2834,64 @@
       "native_source_review": null,
       "native_frames": 20574,
       "replayed_frames": 20574,
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 410155,
+          "deadsync": 399665
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0042",
+            "args": [],
+            "beat": -15.99990177154541,
+            "caller": {
+              "line": 36,
+              "source": "song:/sm5/modules/grabactors.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                2
+              ]
+            },
+            "kind": "query",
+            "line": 36,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -4.08297061920166,
+            "seq": 1232,
+            "source": "song:/sm5/modules/grabactors.lua",
+            "results": [
+              2
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/sm5/modules/grabactors.lua",
+            "line": 36,
+            "phase": "callback",
+            "beat": -15.99990177154541,
+            "seconds": -4.08297061920166,
+            "args": [],
+            "results": [
+              1
+            ]
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "a006b18a39bac04fbc20dc8db13dd84a2fb624d56e726763717e47ebfeafb9b0",
       "fix_commit": "34a46686a6f7a55cab2c0fa63ad5dfb5b6749331",
       "report_sha256": "670b9d7887295b5b0e5efe44efb882e67fed598d354aaed161dc873cd6ca8882",
@@ -2701,6 +2903,8 @@
       "source_simfile": "Hallways/hallways.ssc",
       "repair_attempts": 2,
       "mismatch_count": 38,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -3369,6 +3573,65 @@
       "native_source_review": null,
       "native_frames": 33096,
       "replayed_frames": 33096,
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 375,
+          "deadsync": 377
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 10.000251770019531,
+            "caller": {
+              "line": 7,
+              "source": "song:/background.lua",
+              "tail_call": false
+            },
+            "detail": {
+              "results": [
+                {
+                  "actor": "external-0016",
+                  "name": "ScreenGameplay",
+                  "path": "ScreenGameplay"
+                }
+              ]
+            },
+            "kind": "query",
+            "line": 7,
+            "operation": "ScreenManager.GetTopScreen",
+            "phase": "construction",
+            "scene": 1,
+            "seconds": 7.51718807220459,
+            "seq": 30,
+            "source": "song:/background.lua",
+            "results": [
+              {
+                "actor": 1,
+                "name": "ScreenGameplay",
+                "path": "ScreenGameplay"
+              }
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "OnCommand",
+            "source": "song:/background.lua",
+            "line": 7,
+            "beat": 10.000251770019531,
+            "seconds": 7.51718807220459,
+            "args": null
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "a006b18a39bac04fbc20dc8db13dd84a2fb624d56e726763717e47ebfeafb9b0",
       "fix_commit": "6e9ec7b84ce0dc03e19ead0fc4bb02af8c734637",
       "report_sha256": "91d62929f00ee784899876869bd105717f6aff242c77ce37cd4dc0f9bf7942e0",
@@ -3463,6 +3726,8 @@
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
       "repair_attempts": 1,
       "mismatch_count": 5080,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -3763,6 +4028,44 @@
       "native_source_review": null,
       "native_frames": 209028,
       "replayed_frames": 209028,
+      "prior_sweep_failure": [
+        {
+          "field": "source_broadcast_count",
+          "native": 5375,
+          "deadsync": 10834
+        },
+        {
+          "field": "source_broadcast",
+          "native": {
+            "seconds": 0.1130385473370552,
+            "beat": 0.1952783763408661,
+            "name": "SystemMessage",
+            "args": [
+              "SystemMessage",
+              {
+                "Message": "2 minutes until crunch time."
+              }
+            ]
+          },
+          "deadsync": {
+            "seconds": 0.1130385473370552,
+            "beat": 0.1952783763408661,
+            "name": "SystemMessage",
+            "args": [
+              "SystemMessage",
+              {
+                "Message": "3 minutes until crunch time."
+              }
+            ],
+            "params_error": null
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "54aee7cda6cc0085154a6a3cb27ee37dfcb0fe925843717f6481129db3fb3a3f",
       "fix_commit": "23e3d658146457b1dbbca383a3aa200c27692094",
       "report_sha256": "6495953194a7400ec61666a5a4854e6c901b5e9042802819ef5808c222c96862",
@@ -3788,9 +4091,585 @@
       "position": 239,
       "source_simfile": "Igaku/Igaku.sm",
       "repair_attempts": 1,
-      "mismatch_count": 563,
+      "mismatch_count": 926,
+      "draw_mismatch_count": 0,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
+        {
+          "field": "command_query_count",
+          "native": 610201,
+          "deadsync": 610163
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              95.91817474365234
+            ],
+            "beat": 220.0421142578125,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.6789321899414,
+            "seq": 1343196,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.0421142578125,
+            "seconds": 77.6789321899414,
+            "args": [
+              95.91764068603516
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              95.82736206054688
+            ],
+            "beat": 220.05902099609375,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.68489837646484,
+            "seq": 1343342,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.05902099609375,
+            "seconds": 77.68489837646484,
+            "args": [
+              95.82620239257812
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              308.25408935546875
+            ],
+            "beat": 220.05902099609375,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.68489837646484,
+            "seq": 1343343,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.05902099609375,
+            "seconds": 77.68489837646484,
+            "args": [
+              308.25140380859375
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              95.75225830078125
+            ],
+            "beat": 220.0774688720703,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.69140625,
+            "seq": 1343488,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.0774688720703,
+            "seconds": 77.69140625,
+            "args": [
+              95.75078582763672
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              306.6897888183594
+            ],
+            "beat": 220.0774688720703,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.69140625,
+            "seq": 1343489,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.0774688720703,
+            "seconds": 77.69140625,
+            "args": [
+              306.6855773925781
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              95.67021179199219
+            ],
+            "beat": 220.09410095214844,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.69728088378906,
+            "seq": 1343634,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.09410095214844,
+            "seconds": 77.69728088378906,
+            "args": [
+              95.66673278808594
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              305.20855712890625
+            ],
+            "beat": 220.09410095214844,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.69728088378906,
+            "seq": 1343635,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.09410095214844,
+            "seconds": 77.69728088378906,
+            "args": [
+              305.20355224609375
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              95.58435821533203
+            ],
+            "beat": 220.1204376220703,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.70657348632812,
+            "seq": 1343780,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.1204376220703,
+            "seconds": 77.70657348632812,
+            "args": [
+              95.58209228515625
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              303.1531677246094
+            ],
+            "beat": 220.1204376220703,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.70657348632812,
+            "seq": 1343781,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.1204376220703,
+            "seconds": 77.70657348632812,
+            "args": [
+              303.1427307128906
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              95.45872497558594
+            ],
+            "beat": 220.13880920410156,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.x",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.71305847167969,
+            "seq": 1343926,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.x",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.13880920410156,
+            "seconds": 77.71305847167969,
+            "args": [
+              95.4559097290039
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0035",
+            "args": [
+              301.3865051269531
+            ],
+            "beat": 220.13880920410156,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 2152,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0049",
+            "detail": {
+              "native_tween_time_left": 0
+            },
+            "kind": "call",
+            "line": 2152,
+            "operation": "Actor.y",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 77.71305847167969,
+            "seq": 1343927,
+            "source": "song:/lua/default.lua",
+            "tween_time_left": 0
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.y",
+            "source": "song:/lua/default.lua",
+            "line": 2152,
+            "phase": "callback",
+            "beat": 220.13880920410156,
+            "seconds": 77.71305847167969,
+            "args": [
+              301.3783264160156
+            ],
+            "results": [
+              {
+                "actor": "0x147a6dff190",
+                "name": "MultitapP1_12",
+                "path": "ScreenGameplay/SongForeground/lua/MultitapFrameP1/MultitapP1_12"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        }
+      ],
+      "callback_errors": [],
+      "preparation_or_execution_error": null,
+      "failure_text": null,
+      "native_source_review": null,
+      "native_frames": 18348,
+      "replayed_frames": 18348,
+      "prior_sweep_failure": [
         {
           "field": "command_query_count",
           "native": 326593,
@@ -4358,21 +5237,33 @@
           }
         }
       ],
-      "callback_errors": [],
-      "preparation_or_execution_error": null,
-      "failure_text": null,
-      "native_source_review": null,
-      "native_frames": 10193,
-      "replayed_frames": 10193,
-      "evidence": "fifth-three-2026-10-17-state.json"
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
+      "binary_sha256": "796130f039e5d77ef753339e906e1280a2ca5e382a7983027b1c5c128d16ddb4",
+      "fix_commit": "cd5830b4b132661970293e1cf018d9bd28b379a5",
+      "report_sha256": "0d0945861719c95a401393ea940b4874411c612c3bf40fc88d4d382197b63297",
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\chart-239-attempt-1",
+      "evidence": "sixth-ten-2026-10-18-state.json"
     },
     {
       "position": 240,
       "source_simfile": "Igaku/Igaku.ssc",
-      "repair_attempts": 1,
-      "mismatch_count": 1003,
-      "concrete_failure": null,
-      "concrete_failures": [
+      "repair_attempts": 2,
+      "mismatch_count": null,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
+      "concrete_failure": "Second and final attempt stopped before frame replay: native trace harness_version is 0.1.81 but the reused semantic-manifest template produced archive harness_version 0.1.80. The existing trace/archive consistency assertion failed. The capture workflow now derives this metadata from the actual trace. No third Igaku SSC repair or replay this sweep.",
+      "concrete_failures": null,
+      "callback_errors": null,
+      "preparation_or_execution_error": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.1s] : 0 checks completed, 0 failed\n[12.1s] : 0 checks completed, 0 failed\n[14.1s] : 0 checks completed, 0 failed\n[16.1s] : 0 checks completed, 0 failed\n\nthread 'main' (52408) panicked at tests\\song_lua_itgmania_semantic_parity\\whole_song_archives.rs:1514:5:\nassertion `left == right` failed\n  left: String(\"0.1.81\")\n right: \"0.1.80\"\nstack backtrace:\nnote: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.\n[18.1s] : 0 checks completed, 0 failed\n[20.1s] : 0 checks completed, 0 failed\n[22.1s] : 0 checks completed, 0 failed\n[24.1s] : 0 checks completed, 0 failed\n",
+      "failure_text": null,
+      "native_source_review": null,
+      "native_frames": 16035,
+      "replayed_frames": 0,
+      "prior_sweep_failure": [
         {
           "field": "command_query_count",
           "native": 286606,
@@ -4940,13 +5831,24 @@
           }
         }
       ],
-      "callback_errors": [],
-      "preparation_or_execution_error": null,
-      "failure_text": null,
-      "native_source_review": null,
-      "native_frames": 8615,
-      "replayed_frames": 8615,
-      "evidence": "fifth-three-2026-10-17-state.json"
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": true,
+      "last_reported_frame": 0,
+      "current_sweep_prior_attempt": {
+        "native_frames": 18315,
+        "replayed_frames": 18315,
+        "mismatch_count": 1179,
+        "draw_mismatch_count": 0,
+        "callback_errors": [],
+        "report_sha256": "8c29eb8d75a4584369057ef56adc2f7aaf33eb267c65c050faf465defd21dbb5",
+        "concrete_failure": "Command query count differs (602146 native versus602108 owned); arrow X/Y positions, Mini field zoom, and ending modifier results differ."
+      },
+      "repair_limit_reached": true,
+      "binary_sha256": "796130f039e5d77ef753339e906e1280a2ca5e382a7983027b1c5c128d16ddb4",
+      "fix_commit": "cd5830b4b132661970293e1cf018d9bd28b379a5",
+      "report_sha256": null,
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\chart-240-attempt-2",
+      "evidence": "sixth-ten-2026-10-18-state.json"
     },
     {
       "position": 248,
@@ -4981,6 +5883,8 @@
       "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
       "repair_attempts": 2,
       "mismatch_count": 386479,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -5542,6 +6446,64 @@
       "native_source_review": null,
       "native_frames": 17472,
       "replayed_frames": 17472,
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 402665,
+          "deadsync": 376989
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0032",
+            "args": [],
+            "beat": -2.1418426036834717,
+            "caller": {
+              "line": 446,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                2
+              ]
+            },
+            "kind": "query",
+            "line": 446,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 1009,
+            "source": "song:/code/update.lua",
+            "results": [
+              2
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 446,
+            "phase": "callback",
+            "beat": -2.1418426036834717,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              1
+            ]
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "45eb5ffe7dfc2f536c98940fa24f4789a629859e21d56c5a852f4e7fc2359256",
       "fix_commit": "97be9c807b5ae6f3983a07446ead6c8adba26c1a",
       "report_sha256": "c9de0ad134a6aba296971b2e7db9f21d602a68312df62c6f0e5b9ebcdee80acd",
@@ -5593,10 +6555,19 @@
     {
       "position": 294,
       "source_simfile": "Mamono/sm.sm",
-      "repair_attempts": 1,
-      "mismatch_count": 13449,
-      "concrete_failure": null,
-      "concrete_failures": [
+      "repair_attempts": 2,
+      "mismatch_count": null,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
+      "concrete_failure": "The extra local replay was stopped after ten other full fixtures had been accepted, packed, verified, saved and committed. Last reported progress was 11,802/71,830 frames; there is no complete comparison report or current parity outcome. The previous remote attempt remains unconfirmed. The latest historical full failure was an extra EventMode preference query (14,227 native versus 14,228 owned), causing 13,449 mismatches across 72,178 frames. That is not claimed as the current result.",
+      "concrete_failures": null,
+      "callback_errors": null,
+      "preparation_or_execution_error": "[1372.3s] replaying every native gameplay frame: frame 10587/71830 (14.7%)\n[1374.3s] replaying every native gameplay frame: frame 10600/71830 (14.8%)\n[1376.3s] replaying every native gameplay frame: frame 10612/71830 (14.8%)\n[1378.3s] replaying every native gameplay frame: frame 10625/71830 (14.8%)\n[1380.3s] replaying every native gameplay frame: frame 10638/71830 (14.8%)\n[1382.3s] replaying every native gameplay frame: frame 10653/71830 (14.8%)\n[1384.3s] replaying every native gameplay frame: frame 10667/71830 (14.9%)\n[1386.3s] replaying every native gameplay frame: frame 10682/71830 (14.9%)\n[1388.3s] replaying every native gameplay frame: frame 10697/71830 (14.9%)\n[1390.4s] replaying every native gameplay frame: frame 10711/71830 (14.9%)\n[1392.4s] replaying every native gameplay frame: frame 10725/71830 (14.9%)\n[1394.4s] replaying every native gameplay frame: frame 10740/71830 (15.0%)\n[1396.4s] replaying every native gameplay frame: frame 10754/71830 (15.0%)\n[1398.4s] replaying every native gameplay frame: frame 10769/71830 (15.0%)\n[1400.4s] replaying every native gameplay frame: frame 10783/71830 (15.0%)\n[1402.4s] replaying every native gameplay frame: frame 10796/71830 (15.0%)\n[1404.4s] replaying every native gameplay frame: frame 10811/71830 (15.1%)\n[1406.4s] replaying every native gameplay frame: frame 10826/71830 (15.1%)\n[1408.4s] replaying every native gameplay frame: frame 10841/71830 (15.1%)\n[1410.4s] replaying every native gameplay frame: frame 10857/71830 (15.1%)\n[1412.5s] replaying every native gameplay frame: frame 10872/71830 (15.1%)\n[1414.5s] replaying every native gameplay frame: frame 10887/71830 (15.2%)\n[1416.5s] replaying every native gameplay frame: frame 10901/71830 (15.2%)\n[1418.5s] replaying every native gameplay frame: frame 10914/71830 (15.2%)\n[1420.5s] replaying every native gameplay frame: frame 10927/71830 (15.2%)\n[1422.5s] replaying every native gameplay frame: frame 10940/71830 (15.2%)\n[1424.5s] replaying every native gameplay frame: frame 10956/71830 (15.3%)\n[1426.5s] replaying every native gameplay frame: frame 10971/71830 (15.3%)\n[1428.5s] replaying every native gameplay frame: frame 10986/71830 (15.3%)\n[1430.5s] replaying every native gameplay frame: frame 11002/71830 (15.3%)\n[1432.5s] replaying every native gameplay frame: frame 11017/71830 (15.3%)\n[1434.6s] replaying every native gameplay frame: frame 11033/71830 (15.4%)\n[1436.6s] replaying every native gameplay frame: frame 11049/71830 (15.4%)\n[1438.6s] replaying every native gameplay frame: frame 11065/71830 (15.4%)\n[1440.6s] replaying every native gameplay frame: frame 11081/71830 (15.4%)\n[1442.6s] replaying every native gameplay frame: frame 11097/71830 (15.4%)\n[1444.6s] replaying every native gameplay frame: frame 11114/71830 (15.5%)\n[1446.6s] replaying every native gameplay frame: frame 11131/71830 (15.5%)\n[1448.6s] replaying every native gameplay frame: frame 11147/71830 (15.5%)\n[1450.6s] replaying every native gameplay frame: frame 11162/71830 (15.5%)\n[1452.7s] replaying every native gameplay frame: frame 11177/71830 (15.6%)\n[1454.7s] replaying every native gameplay frame: frame 11192/71830 (15.6%)\n[1456.7s] replaying every native gameplay frame: frame 11206/71830 (15.6%)\n[1458.7s] replaying every native gameplay frame: frame 11220/71830 (15.6%)\n[1460.7s] replaying every native gameplay frame: frame 11233/71830 (15.6%)\n[1462.7s] replaying every native gameplay frame: frame 11246/71830 (15.7%)\n[1464.7s] replaying every native gameplay frame: frame 11261/71830 (15.7%)\n[1466.7s] replaying every native gameplay frame: frame 11276/71830 (15.7%)\n[1468.7s] replaying every native gameplay frame: frame 11292/71830 (15.7%)\n[1470.7s] replaying every native gameplay frame: frame 11307/71830 (15.7%)\n[1472.7s] replaying every native gameplay frame: frame 11322/71830 (15.8%)\n[1474.8s] replaying every native gameplay frame: frame 11338/71830 (15.8%)\n[1476.8s] replaying every native gameplay frame: frame 11355/71830 (15.8%)\n[1478.8s] replaying every native gameplay frame: frame 11372/71830 (15.8%)\n[1480.8s] replaying every native gameplay frame: frame 11389/71830 (15.9%)\n[1482.8s] replaying every native gameplay frame: frame 11405/71830 (15.9%)\n[1484.8s] replaying every native gameplay frame: frame 11421/71830 (15.9%)\n[1486.8s] replaying every native gameplay frame: frame 11437/71830 (15.9%)\n[1488.8s] replaying every native gameplay frame: frame 11454/71830 (15.9%)\n[1490.8s] replaying every native gameplay frame: frame 11471/71830 (16.0%)\n[1492.8s] replaying every native gameplay frame: frame 11487/71830 (16.0%)\n[1494.8s] replaying every native gameplay frame: frame 11503/71830 (16.0%)\n[1496.9s] replaying every native gameplay frame: frame 11517/71830 (16.0%)\n[1498.9s] replaying every native gameplay frame: frame 11530/71830 (16.1%)\n[1500.9s] replaying every native gameplay frame: frame 11545/71830 (16.1%)\n[1502.9s] replaying every native gameplay frame: frame 11561/71830 (16.1%)\n[1504.9s] replaying every native gameplay frame: frame 11578/71830 (16.1%)\n[1506.9s] replaying every native gameplay frame: frame 11595/71830 (16.1%)\n[1508.9s] replaying every native gameplay frame: frame 11613/71830 (16.2%)\n[1510.9s] replaying every native gameplay frame: frame 11630/71830 (16.2%)\n[1512.9s] replaying every native gameplay frame: frame 11647/71830 (16.2%)\n[1514.9s] replaying every native gameplay frame: frame 11664/71830 (16.2%)\n[1517.0s] replaying every native gameplay frame: frame 11681/71830 (16.3%)\n[1519.0s] replaying every native gameplay frame: frame 11699/71830 (16.3%)\n[1521.0s] replaying every native gameplay frame: frame 11716/71830 (16.3%)\n[1523.0s] replaying every native gameplay frame: frame 11734/71830 (16.3%)\n[1525.0s] replaying every native gameplay frame: frame 11750/71830 (16.4%)\n[1527.0s] replaying every native gameplay frame: frame 11767/71830 (16.4%)\n[1529.0s] replaying every native gameplay frame: frame 11785/71830 (16.4%)\n[1531.0s] replaying every native gameplay frame: frame 11802/71830 (16.4%)\n",
+      "failure_text": null,
+      "native_source_review": null,
+      "native_frames": 71830,
+      "replayed_frames": null,
+      "prior_sweep_failure": [
         {
           "field": "command_query_count",
           "native": 14227,
@@ -6056,34 +7027,66 @@
           }
         }
       ],
-      "callback_errors": [],
-      "preparation_or_execution_error": null,
-      "failure_text": null,
-      "native_source_review": null,
-      "native_frames": 72178,
-      "replayed_frames": 72178,
-      "evidence": "sweep-2026-10-17-state.json",
-      "current_sweep_replay": {
-        "attempt": 1,
-        "status": "Started; complete result unconfirmed because replay host is unreachable",
-        "accepted": false,
-        "prior_failure_scope": "The concrete failure above is from the last completed replay, not the unconfirmed current attempt."
+      "prior_sweep_failure_scope": "Historical baseline full report; current local replay was incomplete and the current remote result is unknown",
+      "incomplete_replay": true,
+      "last_reported_frame": 11802,
+      "current_sweep_prior_attempt": {
+        "execution_platform": "Linux remote host; connection lost",
+        "incomplete_replay": true,
+        "current_remote_run": {
+          "host": "192.168.1.33",
+          "status": "unknown: host unreachable",
+          "completion_unconfirmed": true,
+          "local_controller_exited": true
+        },
+        "concrete_failure": "Current remote attempt has no confirmed outcome after SSH disconnection. Latest known full prior-sweep failure was a command query mismatch:14227 native versus14228 owned, beginning with an extra EventMode preference query; prior full replay72178frames13449 mismatches."
+      },
+      "repair_limit_reached": true,
+      "binary_sha256": "796130f039e5d77ef753339e906e1280a2ca5e382a7983027b1c5c128d16ddb4",
+      "fix_commit": "cd5830b4b132661970293e1cf018d9bd28b379a5",
+      "report_sha256": null,
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\chart-294-attempt-2",
+      "evidence": "sixth-ten-2026-10-18-state.json",
+      "current_remote_run": {
+        "host": "192.168.1.33",
+        "status": "unknown: host unreachable",
+        "completion_unconfirmed": true,
+        "historical_failure_retained": true,
+        "no_remote_replay_restarted": true,
+        "local_fallback_attempt": 2
       }
     },
     {
       "position": 312,
       "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
-      "repair_attempts": 1,
+      "repair_attempts": 2,
       "mismatch_count": null,
-      "concrete_failure": null,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
+      "concrete_failure": "Second and final attempt stopped near 83158/138405 frames: mlua could not create a Lua reference because its auxiliary stack used 7996 slots. DensityGraph.lua:56 also reported an Actor.queuecommand callback StackError. No complete comparison report or accepted fixture was produced.",
       "concrete_failures": null,
       "callback_errors": null,
-      "preparation_or_execution_error": null,
-      "failure_text": "3%)\n[148.0s] replaying every native gameplay frame: frame 23305/84295 (27.6%)\n[150.0s] replaying every native gameplay frame: frame 23644/84295 (28.0%)\n[152.0s] replaying every native gameplay frame: frame 23980/84295 (28.4%)\n[154.0s] replaying every native gameplay frame: frame 24312/84295 (28.8%)\n[156.0s] replaying every native gameplay frame: frame 24657/84295 (29.3%)\n[158.0s] replaying every native gameplay frame: frame 25017/84295 (29.7%)\n[160.0s] replaying every native gameplay frame: frame 25376/84295 (30.1%)\n[162.0s] replaying every native gameplay frame: frame 25721/84295 (30.5%)\n[164.0s] replaying every native gameplay frame: frame 26076/84295 (30.9%)\n[166.0s] replaying every native gameplay frame: frame 26412/84295 (31.3%)\n[168.0s] replaying every native gameplay frame: frame 26739/84295 (31.7%)\n[170.0s] replaying every native gameplay frame: frame 27115/84295 (32.2%)\n[172.0s] replaying every native gameplay frame: frame 27460/84295 (32.6%)\n[174.0s] replaying every native gameplay frame: frame 27801/84295 (33.0%)\n[176.0s] replaying every native gameplay frame: frame 28143/84295 (33.4%)\n[178.0s] replaying every native gameplay frame: frame 28495/84295 (33.8%)\n[180.0s] replaying every native gameplay frame: frame 28857/84295 (34.2%)\n[182.0s] replaying every native gameplay frame: frame 29199/84295 (34.6%)\n[184.0s] replaying every native gameplay frame: frame 29516/84295 (35.0%)\n[186.0s] replaying every native gameplay frame: frame 29836/84295 (35.4%)\n[188.0s] replaying every native gameplay frame: frame 30202/84295 (35.8%)\n[190.0s] replaying every native gameplay frame: frame 30541/84295 (36.2%)\n[192.0s] replaying every native gameplay frame: frame 30857/84295 (36.6%)\n[194.0s] replaying every native gameplay frame: frame 31184/84295 (37.0%)\n[196.0s] replaying every native gameplay frame: frame 31519/84295 (37.4%)\n[198.0s] replaying every native gameplay frame: frame 31863/84295 (37.8%)\n[200.0s] replaying every native gameplay frame: frame 32198/84295 (38.2%)\n[202.0s] replaying every native gameplay frame: frame 32531/84295 (38.6%)\n[204.0s] replaying every native gameplay frame: frame 32863/84295 (39.0%)\n[206.0s] replaying every native gameplay frame: frame 33186/84295 (39.4%)\n[208.0s] replaying every native gameplay frame: frame 33532/84295 (39.8%)\n[210.0s] replaying every native gameplay frame: frame 33845/84295 (40.2%)\n[212.0s] replaying every native gameplay frame: frame 34160/84295 (40.5%)\n[214.0s] replaying every native gameplay frame: frame 34493/84295 (40.9%)\n[216.0s] replaying every native gameplay frame: frame 34831/84295 (41.3%)\n[218.0s] replaying every native gameplay frame: frame 35176/84295 (41.7%)\n[220.0s] replaying every native gameplay frame: frame 35501/84295 (42.1%)\n[222.0s] replaying every native gameplay frame: frame 35818/84295 (42.5%)\n[224.0s] replaying every native gameplay frame: frame 36146/84295 (42.9%)\n[226.0s] replaying every native gameplay frame: frame 36476/84295 (43.3%)\n[228.0s] replaying every native gameplay frame: frame 36824/84295 (43.7%)\n[230.0s] replaying every native gameplay frame: frame 37165/84295 (44.1%)\n[232.0s] replaying every native gameplay frame: frame 37483/84295 (44.5%)\n[234.0s] replaying every native gameplay frame: frame 37815/84295 (44.9%)\n[236.0s] replaying every native gameplay frame: frame 38148/84295 (45.3%)\n[238.0s] replaying every native gameplay frame: frame 38488/84295 (45.7%)\n[240.0s] replaying every native gameplay frame: frame 38834/84295 (46.1%)\n[242.0s] replaying every native gameplay frame: frame 39151/84295 (46.4%)\n[244.0s] replaying every native gameplay frame: frame 39480/84295 (46.8%)\n[246.0s] replaying every native gameplay frame: frame 39815/84295 (47.2%)\n[248.0s] replaying every native gameplay frame: frame 40164/84295 (47.6%)\n[250.0s] replaying every native gameplay frame: frame 40489/84295 (48.0%)\n[252.0s] replaying every native gameplay frame: frame 40784/84295 (48.4%)\n[254.0s] replaying every native gameplay frame: frame 41078/84295 (48.7%)\n[256.0s] replaying every native gameplay frame: frame 41412/84295 (49.1%)\n[258.0s] replaying every native gameplay frame: frame 41736/84295 (49.5%)\n[260.0s] replaying every native gameplay frame: frame 42046/84295 (49.9%)\n[262.0s] replaying every native gameplay frame: frame 42299/84295 (50.2%)\n[264.0s] replaying every native gameplay frame: frame 42567/84295 (50.5%)\n[266.0s] replaying every native gameplay frame: frame 42857/84295 (50.8%)\n[268.0s] replaying every native gameplay frame: frame 43155/84295 (51.2%)\n[270.0s] replaying every native gameplay frame: frame 43444/84295 (51.5%)\n[272.0s] replaying every native gameplay frame: frame 43707/84295 (51.9%)\n[274.0s] replaying every native gameplay frame: frame 43975/84295 (52.2%)\n[276.0s] replaying every native gameplay frame: frame 44280/84295 (52.5%)\n[278.0s] replaying every native gameplay frame: frame 44544/84295 (52.8%)\n[280.0s] replaying every native gameplay frame: frame 44802/84295 (53.1%)\n[282.0s] replaying every native gameplay frame: frame 45089/84295 (53.5%)\n[284.0s] replaying every native gameplay frame: frame 45400/84295 (53.9%)\n[286.0s] replaying every native gameplay frame: frame 45678/84295 (54.2%)\n[288.0s] replaying every native gameplay frame: frame 45975/84295 (54.5%)\n[290.0s] replaying every native gameplay frame: frame 46299/84295 (54.9%)\n[292.0s] replaying every native gameplay frame: frame 46591/84295 (55.3%)\n[294.0s] replaying every native gameplay frame: frame 46885/84295 (55.6%)\n[296.0s] replaying every native gameplay frame: frame 47188/84295 (56.0%)\n\nthread 'main' (1892773) panicked at /home/parity/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mlua-0.12.2/src/state/extra.rs:290:13:\ncannot create a Lua reference, out of auxiliary stack space (used 7996 slots)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[298.0s] replaying every native gameplay frame: frame 47189/84295 (56.0%)\n[300.0s] replaying every native gameplay frame: frame 47189/84295 (56.0%)\n",
+      "preparation_or_execution_error": "50.5%)\n[715.2s] replaying every native gameplay frame: frame 70156/138405 (50.7%)\n[717.2s] replaying every native gameplay frame: frame 70357/138405 (50.8%)\n[719.2s] replaying every native gameplay frame: frame 70556/138405 (51.0%)\n[721.2s] replaying every native gameplay frame: frame 70752/138405 (51.1%)\n[723.2s] replaying every native gameplay frame: frame 70956/138405 (51.3%)\n[725.2s] replaying every native gameplay frame: frame 71153/138405 (51.4%)\n[727.2s] replaying every native gameplay frame: frame 71354/138405 (51.6%)\n[729.2s] replaying every native gameplay frame: frame 71550/138405 (51.7%)\n[731.2s] replaying every native gameplay frame: frame 71764/138405 (51.9%)\n[733.2s] replaying every native gameplay frame: frame 71962/138405 (52.0%)\n[735.3s] replaying every native gameplay frame: frame 72155/138405 (52.1%)\n[737.3s] replaying every native gameplay frame: frame 72352/138405 (52.3%)\n[739.3s] replaying every native gameplay frame: frame 72538/138405 (52.4%)\n[741.3s] replaying every native gameplay frame: frame 72749/138405 (52.6%)\n[743.3s] replaying every native gameplay frame: frame 72939/138405 (52.7%)\n[745.3s] replaying every native gameplay frame: frame 73131/138405 (52.8%)\n[747.3s] replaying every native gameplay frame: frame 73325/138405 (53.0%)\n[749.3s] replaying every native gameplay frame: frame 73523/138405 (53.1%)\n[751.3s] replaying every native gameplay frame: frame 73724/138405 (53.3%)\n[753.3s] replaying every native gameplay frame: frame 73919/138405 (53.4%)\n[755.3s] replaying every native gameplay frame: frame 74124/138405 (53.6%)\n[757.3s] replaying every native gameplay frame: frame 74316/138405 (53.7%)\n[759.4s] replaying every native gameplay frame: frame 74515/138405 (53.8%)\n[761.4s] replaying every native gameplay frame: frame 74724/138405 (54.0%)\n[763.4s] replaying every native gameplay frame: frame 74935/138405 (54.1%)\n[765.4s] replaying every native gameplay frame: frame 75152/138405 (54.3%)\n[767.4s] replaying every native gameplay frame: frame 75351/138405 (54.4%)\n[769.4s] replaying every native gameplay frame: frame 75548/138405 (54.6%)\n[771.4s] replaying every native gameplay frame: frame 75750/138405 (54.7%)\n[773.4s] replaying every native gameplay frame: frame 75943/138405 (54.9%)\n[775.4s] replaying every native gameplay frame: frame 76154/138405 (55.0%)\n[777.4s] replaying every native gameplay frame: frame 76353/138405 (55.2%)\n[779.4s] replaying every native gameplay frame: frame 76559/138405 (55.3%)\n[781.5s] replaying every native gameplay frame: frame 76765/138405 (55.5%)\n[783.5s] replaying every native gameplay frame: frame 76950/138405 (55.6%)\n[785.5s] replaying every native gameplay frame: frame 77164/138405 (55.8%)\n[787.5s] replaying every native gameplay frame: frame 77370/138405 (55.9%)\n[789.5s] replaying every native gameplay frame: frame 77560/138405 (56.0%)\n[791.5s] replaying every native gameplay frame: frame 77763/138405 (56.2%)\n[793.5s] replaying every native gameplay frame: frame 77955/138405 (56.3%)\n[795.5s] replaying every native gameplay frame: frame 78149/138405 (56.5%)\n[797.5s] replaying every native gameplay frame: frame 78360/138405 (56.6%)\n[799.5s] replaying every native gameplay frame: frame 78567/138405 (56.8%)\n[801.5s] replaying every native gameplay frame: frame 78764/138405 (56.9%)\n[803.5s] replaying every native gameplay frame: frame 78965/138405 (57.1%)\n[805.6s] replaying every native gameplay frame: frame 79145/138405 (57.2%)\n[807.6s] replaying every native gameplay frame: frame 79357/138405 (57.3%)\n[809.6s] replaying every native gameplay frame: frame 79572/138405 (57.5%)\n[811.6s] replaying every native gameplay frame: frame 79777/138405 (57.6%)\n[813.6s] replaying every native gameplay frame: frame 79981/138405 (57.8%)\n[815.6s] replaying every native gameplay frame: frame 80170/138405 (57.9%)\n[817.6s] replaying every native gameplay frame: frame 80364/138405 (58.1%)\n[819.6s] replaying every native gameplay frame: frame 80571/138405 (58.2%)\n[821.6s] replaying every native gameplay frame: frame 80782/138405 (58.4%)\n[823.6s] replaying every native gameplay frame: frame 80986/138405 (58.5%)\n[825.6s] replaying every native gameplay frame: frame 81182/138405 (58.7%)\n[827.6s] replaying every native gameplay frame: frame 81386/138405 (58.8%)\n[829.6s] replaying every native gameplay frame: frame 81596/138405 (59.0%)\n[831.7s] replaying every native gameplay frame: frame 81813/138405 (59.1%)\n[833.7s] replaying every native gameplay frame: frame 82009/138405 (59.3%)\n[835.7s] replaying every native gameplay frame: frame 82206/138405 (59.4%)\n[837.7s] replaying every native gameplay frame: frame 82413/138405 (59.5%)\ndeadsync_song_lua::lua_util: Native theme callback: UpdateCommand failed for ActorFrame: out of Lua stack, too many arguments to a Lua function or too many return values from a callback\nstack traceback:\n\t[C]: in ?\n\t[C]: in ?\n\t[C]: in ?\n\t>[C]: in function 'Actor.queuecommand'\n\t...y underlay/PerPlayer/StepStatistics/DensityGraph.lua:56: in function <...y underlay/PerPlayer/StepStatistics/DensityGraph.lua:54>\n\n[839.7s] replaying every native gameplay frame: frame 82611/138405 (59.7%)\n[841.7s] replaying every native gameplay frame: frame 82825/138405 (59.8%)\n[843.7s] replaying every native gameplay frame: frame 83035/138405 (60.0%)\n\nthread 'main' (53644) panicked at C:\\Users\\PerfectTaste\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\mlua-0.12.2\\src\\state\\extra.rs:290:13:\ncannot create a Lua reference, out of auxiliary stack space (used 7996 slots)\nstack backtrace:\nnote: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.\n[845.7s] replaying every native gameplay frame: frame 83158/138405 (60.1%)\n[847.7s] replaying every native gameplay frame: frame 83158/138405 (60.1%)\n[849.8s] replaying every native gameplay frame: frame 83158/138405 (60.1%)\n[851.8s] replaying every native gameplay frame: frame 83158/138405 (60.1%)\n[853.8s] replaying every native gameplay frame: frame 83158/138405 (60.1%)\n",
+      "failure_text": null,
       "native_source_review": null,
-      "native_frames": null,
+      "native_frames": 138405,
       "replayed_frames": null,
-      "evidence": "sweep-2026-10-17-state.json"
+      "prior_sweep_failure": [],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": true,
+      "last_reported_frame": 83158,
+      "current_sweep_prior_attempt": {
+        "native_frames": 138405,
+        "last_reported_frame": 76075,
+        "incomplete_replay": true,
+        "concrete_failure": "First current sweep attempt stopped near 76075/138405 frames: mlua could not create a Lua reference because its auxiliary stack used 7996 slots. No complete comparison report or accepted fixture was produced."
+      },
+      "repair_limit_reached": true,
+      "binary_sha256": "6a64b65a7dff97d7a8c04595573684c52f78b8610cf3dd9edc6ddaff33d9d7fd",
+      "fix_commit": "f5b056dad279213376545dd34a3e359a27f00af2",
+      "report_sha256": null,
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\chart-312-attempt-2",
+      "evidence": "sixth-ten-2026-10-18-state.json"
     },
     {
       "position": 313,
@@ -6261,11 +7264,13 @@
       "native_frames": 67890,
       "replayed_frames": 67890,
       "evidence": "sweep-2026-10-17-state.json",
-      "current_sweep_replay": {
-        "attempt": 1,
-        "status": "Started; complete result unconfirmed because replay host is unreachable",
-        "accepted": false,
-        "prior_failure_scope": "The concrete failure above is from the last completed replay, not the unconfirmed current attempt."
+      "current_remote_run": {
+        "host": "192.168.1.33",
+        "status": "unknown: host unreachable",
+        "completion_unconfirmed": true,
+        "historical_failure_retained": true,
+        "no_remote_replay_restarted": true,
+        "local_fallback_attempt": null
       }
     },
     {
@@ -6273,6 +7278,8 @@
       "source_simfile": "Metronogik/Song.ssc",
       "repair_attempts": 2,
       "mismatch_count": 125450,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -6877,6 +7884,52 @@
       "native_source_review": null,
       "native_frames": 49114,
       "replayed_frames": 49114,
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 666652,
+          "deadsync": 664476
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0002",
+            "args": [],
+            "beat": -5.745951175689697,
+            "command": "ScreenReadyCommand",
+            "definition_id": "def-0002",
+            "detail": {
+              "name": "ScreenReadyCommand"
+            },
+            "kind": "command",
+            "line": 31,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 18,
+            "source": "song:/core/main.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.GetName",
+            "source": "song:/core/players.lua",
+            "line": 90,
+            "phase": "callback",
+            "beat": -5.745951175689697,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              "ScreenGameplay"
+            ]
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "54aee7cda6cc0085154a6a3cb27ee37dfcb0fe925843717f6481129db3fb3a3f",
       "fix_commit": "d2098837139fa7d0bec266cdfbd8d2dfe6136ff2",
       "report_sha256": "0bf3afe8b0a6bdeeb0e0a22d2d352ca1ce68dfb91ef51297e48a9fea131d9b7d",
@@ -8469,532 +9522,6 @@
       "evidence": "sweep-2026-10-17-state.json"
     },
     {
-      "position": 363,
-      "source_simfile": "Quarantine/Quarantine.ssc",
-      "repair_attempts": 1,
-      "mismatch_count": 10,
-      "concrete_failure": null,
-      "concrete_failures": [
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -97.45635986328125
-            ],
-            "beat": 289.2825012207031,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 105.22977447509766,
-            "seq": 839486,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 289.2825012207031,
-            "seconds": 105.22977447509766,
-            "args": [
-              -97.45569610595703
-            ],
-            "results": [
-              {
-                "actor": "0x63592a7571d0",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0089",
-            "args": [
-              -29.608295440673828
-            ],
-            "beat": 289.2825012207031,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 105.22977447509766,
-            "seq": 839510,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 289.2825012207031,
-            "seconds": 105.22977447509766,
-            "args": [
-              -29.609373092651367
-            ],
-            "results": [
-              {
-                "actor": "0x63592a7a1210",
-                "name": "MultitapP1_2",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_2"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -96.2048110961914
-            ],
-            "beat": 289.33123779296875,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 105.24749755859375,
-            "seq": 839656,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 289.33123779296875,
-            "seconds": 105.24749755859375,
-            "args": [
-              -96.20465850830078
-            ],
-            "results": [
-              {
-                "actor": "0x63592a7571d0",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0089",
-            "args": [
-              -31.47138214111328
-            ],
-            "beat": 289.33123779296875,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 105.24749755859375,
-            "seq": 839680,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 289.33123779296875,
-            "seconds": 105.24749755859375,
-            "args": [
-              -31.471765518188477
-            ],
-            "results": [
-              {
-                "actor": "0x63592a7a1210",
-                "name": "MultitapP1_2",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_2"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0086",
-            "args": [
-              -96.04666137695312
-            ],
-            "beat": 289.34222412109375,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 105.25149536132812,
-            "seq": 840166,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 289.34222412109375,
-            "seconds": 105.25149536132812,
-            "args": [
-              -96.04662322998047
-            ],
-            "results": [
-              {
-                "actor": "0x63592a7571d0",
-                "name": "MultitapP1_1",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_1"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0089",
-            "args": [
-              -31.862953186035156
-            ],
-            "beat": 289.34222412109375,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 105.25149536132812,
-            "seq": 840190,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 289.34222412109375,
-            "seconds": 105.25149536132812,
-            "args": [
-              -31.863075256347656
-            ],
-            "results": [
-              {
-                "actor": "0x63592a7a1210",
-                "name": "MultitapP1_2",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_2"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0122",
-            "args": [
-              -98.29939270019531
-            ],
-            "beat": 482.12982177734375,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 172.5738525390625,
-            "seq": 1415381,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 482.12982177734375,
-            "seconds": 172.5738525390625,
-            "args": [
-              -98.29978942871094
-            ],
-            "results": [
-              {
-                "actor": "0x63592aac7710",
-                "name": "MultitapP1_13",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0122",
-            "args": [
-              -98.04277801513672
-            ],
-            "beat": 482.2197265625,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 172.6046905517578,
-            "seq": 1415549,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 482.2197265625,
-            "seconds": 172.6046905517578,
-            "args": [
-              -98.04359436035156
-            ],
-            "results": [
-              {
-                "actor": "0x63592aac7710",
-                "name": "MultitapP1_13",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0122",
-            "args": [
-              -97.07447814941406
-            ],
-            "beat": 482.2783508300781,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 172.62478637695312,
-            "seq": 1415717,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 482.2783508300781,
-            "seconds": 172.62478637695312,
-            "args": [
-              -97.074462890625
-            ],
-            "results": [
-              {
-                "actor": "0x63592aac7710",
-                "name": "MultitapP1_13",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        },
-        {
-          "field": "command_query_event",
-          "native": {
-            "actor": "def-0122",
-            "args": [
-              -96.27088165283203
-            ],
-            "beat": 482.3365478515625,
-            "callback": "SetUpdateFunction",
-            "caller": {
-              "line": 998,
-              "source": "song:/multitap/default.lua",
-              "tail_call": false
-            },
-            "command": "InitCommand",
-            "definition_id": "def-0132",
-            "detail": {
-              "native_tween_time_left": 0
-            },
-            "kind": "call",
-            "line": 998,
-            "operation": "Actor.x",
-            "phase": "callback",
-            "scene": 1,
-            "seconds": 172.64474487304688,
-            "seq": 1415876,
-            "source": "song:/multitap/default.lua",
-            "tween_time_left": 0
-          },
-          "deadsync": {
-            "scene": 1,
-            "kind": "call",
-            "operation": "Actor.x",
-            "source": "song:/multitap/default.lua",
-            "line": 998,
-            "phase": "callback",
-            "beat": 482.3365478515625,
-            "seconds": 172.64474487304688,
-            "args": [
-              -96.27098846435547
-            ],
-            "results": [
-              {
-                "actor": "0x63592aac7710",
-                "name": "MultitapP1_13",
-                "path": "ScreenGameplay/SongForeground/multitap/MultitapFrameP1/MultitapP1_13"
-              }
-            ],
-            "tween_time_left": 0.0
-          }
-        }
-      ],
-      "callback_errors": [],
-      "preparation_or_execution_error": null,
-      "failure_text": null,
-      "native_source_review": null,
-      "native_frames": 13575,
-      "replayed_frames": 13575,
-      "evidence": "fifth-three-2026-10-17-state.json"
-    },
-    {
       "position": 371,
       "source_simfile": "REASON for RED/reasonforgay.sm",
       "repair_attempts": 1,
@@ -9624,6 +10151,8 @@
       "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
       "repair_attempts": 2,
       "mismatch_count": 162696,
+      "draw_mismatch_count": null,
+      "last_draw_mismatch": null,
       "concrete_failure": null,
       "concrete_failures": [
         {
@@ -10194,6 +10723,64 @@
       "native_source_review": null,
       "native_frames": 68814,
       "replayed_frames": 68814,
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 163581,
+          "deadsync": 161925
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "external-0034",
+            "args": [],
+            "beat": -2.376021146774292,
+            "caller": {
+              "line": 43,
+              "source": "song:/code/update.lua",
+              "tail_call": false
+            },
+            "command": "OnCommand",
+            "definition_id": "def-0008",
+            "detail": {
+              "native_tween_time_left": 0,
+              "results": [
+                2
+              ]
+            },
+            "kind": "query",
+            "line": 43,
+            "operation": "ActorFrame.GetNumChildren",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": -1.9999773502349854,
+            "seq": 365,
+            "source": "song:/code/update.lua",
+            "results": [
+              2
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "ActorFrame.GetNumChildren",
+            "source": "song:/code/update.lua",
+            "line": 43,
+            "phase": "callback",
+            "beat": -2.376021146774292,
+            "seconds": -1.9999773502349854,
+            "args": [],
+            "results": [
+              1
+            ]
+          }
+        }
+      ],
+      "prior_sweep_failure_scope": null,
+      "incomplete_replay": null,
+      "last_reported_frame": null,
+      "current_sweep_prior_attempt": null,
+      "repair_limit_reached": null,
       "binary_sha256": "45eb5ffe7dfc2f536c98940fa24f4789a629859e21d56c5a852f4e7fc2359256",
       "fix_commit": "3bfe0894ab7e0dd5145ad3efb9dffbd727656d86",
       "report_sha256": "0bbefa6b396aa6bff2346b1cf6dfbc69d1026c0f959149fd3bd5e43815d0ca3d",

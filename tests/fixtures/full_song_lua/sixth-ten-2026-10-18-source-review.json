@@ -229,7 +229,7 @@
         "live_native_mini_zoom_updates_before_song_callbacks_and_preserves_oitg_z"
       ],
       "input_policy": "Read observed timer inputs only; no native option values, actor poses, tolerances, or acceptance expectations substituted. Legacy captures retain prior frame-delta fallback.",
-      "full_chart_status": "Igaku SSC remains pending after two attempts. Final attempt stopped before frame replay because the reused archive metadata template was0.1.80 while the native trace was0.1.81. Existing consistency check preserved. Caller metadata derivation corrected for subsequent charts. Native timer and Mini regressions pass; full chart outcome unproven. No third SSC replay this sweep.",
+      "full_chart_status": "Quarantine SSC was accepted after 32,618 full frames with zero mismatches and zero callback errors using observed option clocks. Igaku SSC remains pending after its final metadata preparation failure; Igaku SM remains pending after one full replay with 926 mismatches. Mini and independent-clock unit regressions pass; no broader parity claim is made beyond existing acceptance.",
       "additional_full_chart_evidence": {
         "source_simfile": "Igaku/Igaku.sm",
         "native_frames": 18348,
@@ -238,7 +238,16 @@
         "draw_mismatch_count": 0,
         "callback_errors": [],
         "report_sha256": "0d0945861719c95a401393ea940b4874411c612c3bf40fc88d4d382197b63297",
-        "remaining_failures": "368Actor.x,367Actor.y,178Actor.zoomx atoutro,12modifierprevious-result differences,1querycount mismatch(610201native/610163owned). EarlyBeat drift near92 no longer appears; Mini zoom mismatches begin only atoutro337.0359. No further Igaku SM repair has been applied."
+        "remaining_failures": "368 Actor.x, 367 Actor.y, 178 Actor.zoomx during the outro, 12 modifier previous-result differences, and one query-count mismatch (610,201 native versus 610,163 owned). Early Beat drift near beat 92 no longer appears; Mini zoom mismatches begin only at the outro near beat 337.0359. No further Igaku SM repair has been applied."
+      },
+      "accepted_followup_fixture": {
+        "source_simfile": "Quarantine/Quarantine.ssc",
+        "native_frames": 32618,
+        "replayed_frames": 32618,
+        "mismatch_count": 0,
+        "callback_errors": [],
+        "archive": "ee6893bd58985414238e4631a45fdc42871c1f8db73465636fdb2f1c4cd90fae.tar.zst",
+        "report_sha256": "ef81d07285eb5325f09497aca8a9712232f80ff57453a0dffd3f8e5789f664be"
       }
     }
   ],
@@ -397,6 +406,41 @@
       "trace_sha256": "143e1a742d24ad0bddb8bb0a490c486df68d9fdd1f7750353f2357a8cb2df8ba",
       "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-16816-1792296167778585400-0\\Themes\\itgmania-harness",
       "archive_version_from_actual_trace": "0.1.81"
+    },
+    {
+      "position": 294,
+      "source_simfile": "Mamono/sm.sm",
+      "simfile_sha256": "dc3e958992a6e5d75f2e28c7e4faccc8e8629a2af158abc72df610b7de893f0e",
+      "capture_exit": 0,
+      "capture_seconds": 215.95802729998832,
+      "native_engine_sha256": "5a2388f1a3f6f372498e22d2da5b7dcecf3eefdc2c907fb12932813607a614cd",
+      "harness_binary_sha256": "5aaf24044b820ff5393da56db321e5df973b3d642f85e69820e1c1af9569a708",
+      "harness_fix_commit": "74ca23c1c609b153b1964f1a39e2f07581c68117",
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-44108-1792297246277719500-0",
+      "candidate_sha256": "313ebf81bbf3e91614b782e6579d407afcc84d4388a1d8a4c98ade147d843992",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\local-capture-294\\candidates\\313ebf81bbf3e91614b782e6579d407afcc84d4388a1d8a4c98ade147d843992.tar",
+      "trace_sha256": "5b5c105bf54b7f9020670803db022823486324d88e7c8f13e14141bcac54820c",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-44108-1792297246277719500-0\\Themes\\itgmania-harness",
+      "archive_version_from_actual_trace": "0.1.81",
+      "bounded_attempt": "Second current-sweep attempt; the first remote result remains unconfirmed after SSH disconnection. Local controller exited; remote process status unknown."
+    },
+    {
+      "position": 363,
+      "source_simfile": "Quarantine/Quarantine.ssc",
+      "simfile_sha256": "5c9539eaa66e70d13eee0f446f5a0f09e4095438ed0ed5d8110ec89a9cd53a51",
+      "capture_exit": 0,
+      "capture_seconds": 523.5050085000112,
+      "native_engine_sha256": "5a2388f1a3f6f372498e22d2da5b7dcecf3eefdc2c907fb12932813607a614cd",
+      "harness_binary_sha256": "5aaf24044b820ff5393da56db321e5df973b3d642f85e69820e1c1af9569a708",
+      "harness_fix_commit": "74ca23c1c609b153b1964f1a39e2f07581c68117",
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-51324-1792297559978548400-0",
+      "candidate_sha256": "5c72fb18bffd12d2ee4d975a61f4cb4f1269d64e1e860e395f75e3ae4d1d75f1",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\local-capture-363\\candidates\\5c72fb18bffd12d2ee4d975a61f4cb4f1269d64e1e860e395f75e3ae4d1d75f1.tar",
+      "trace_sha256": "399b37191ec31b1fdd670182092747bfae740b7e074c53a00399e4851e0a5a00",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-51324-1792297559978548400-0\\Themes\\itgmania-harness",
+      "archive_version_from_actual_trace": "0.1.81"
     }
   ],
   "additional_checks": [
@@ -428,11 +472,34 @@
       "failed": 0
     }
   ],
+  "stopped_extra_replays": [
+    {
+      "position": 294,
+      "source_simfile": "Mamono/sm.sm",
+      "pid": 11756,
+      "command_verified": true,
+      "image_verified": true,
+      "last_reported_frame": 11802,
+      "native_frames": 71830,
+      "incomplete_replay": true,
+      "archive_accepted": false,
+      "reason": "Stopped the extra incomplete local replay after ten other complete fixtures were accepted, packed, decoded-hash verified, saved and committed. No full pass or concrete new parity failure is claimed for Mamono. Its disconnected remote attempt remains unknown.",
+      "counts": {
+        "new_passing_fixtures": 10,
+        "passed_fixtures": 460,
+        "pending_charts": 40,
+        "ignored_charts": 1
+      },
+      "commit": "ebed171e346f8f20425cbd7125639b847d221793",
+      "utc": "2026-10-18T04:50:06Z"
+    }
+  ],
   "verification": {
-    "complete": false,
-    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM and Igaku SSC remain pending after two attempts each. Igaku SM remains pending after one complete replay with926mismatches. Mamono is being captured locally for its bounded final attempt after the remote controller disconnected.",
+    "accepted_full_replays": 10,
+    "local_archive_compressed_and_decoded_hashes_reverified": 10,
+    "local_full_reports_reverified": 1,
+    "remote_report_status": "Previous accepted full reports were checked by their publishers before packing; their retained report hashes remain in the state ledger. The replay host is unreachable, so those remote reports were not re-read at finalization.",
     "current_source_hashes_verified": 49,
-    "native_tests_passed": 66,
     "targeted_checks": [
       {
         "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\option-clocks-native-tests.log",
@@ -458,9 +525,9 @@
         "ignored": 0
       }
     ],
-    "binary_sha256": "796130f039e5d77ef753339e906e1280a2ca5e382a7983027b1c5c128d16ddb4",
-    "runtime_lua_feature_enabled": false,
-    "utc": "2026-10-18T04:23:24Z",
+    "oversized_fixtures_gitignored": 15,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "utc": "2026-10-18T04:51:38Z",
     "known_baseline_failure": {
       "test": "compile_song_lua_supports_named_player_tap_note_shim",
       "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
