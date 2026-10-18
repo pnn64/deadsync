@@ -4149,15 +4149,13 @@
     {
       "title": "Quarantine",
       "source_simfile": "Quarantine/Quarantine.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b85e490024c5f44f05ddb83760623ec5b912f18535dc0445f022b248c9555d14.tar.zst",
-      "sha256": "b85e490024c5f44f05ddb83760623ec5b912f18535dc0445f022b248c9555d14",
-      "compressed_bytes": 1170640,
-      "uncompressed_sha256": "7353acbd8a3fcfe4146cd01497531fa636c2ce39dff6da4ab1e7374f8a34229c",
-      "compression_level": 22,
-      "aliases": [
-        "7c74b2ddc3c8d21aaf296bf0dc79ae193143fcb6f3f320465c0fa0cf24909335.tar.zst"
-      ]
+      "harness_version": "0.1.81",
+      "archive": "ee6893bd58985414238e4631a45fdc42871c1f8db73465636fdb2f1c4cd90fae.tar.zst",
+      "compressed_bytes": 156915114,
+      "sha256": "ee6893bd58985414238e4631a45fdc42871c1f8db73465636fdb2f1c4cd90fae",
+      "uncompressed_sha256": "5c72fb18bffd12d2ee4d975a61f4cb4f1269d64e1e860e395f75e3ae4d1d75f1",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Rainbow Road",
