@@ -194,6 +194,24 @@
       "affected_pending_chart": "7th Gear/7th Gear.ssc",
       "acceptance": "Existing native sample values, tolerances, and acceptance checks unchanged; unmatched owned submissions are separate coverage.",
       "full_chart_status": "7th Gear remains pending after two attempts: the final replay stopped on an unresolved owned proxy target in the draw comparator. No third repair or replay this sweep."
+    },
+    {
+      "commit": "f5b056dad279213376545dd34a3e359a27f00af2",
+      "cause": "Keep fixed getter strings and retained tap-note results in the Lua registry rather than retaining one mlua auxiliary-stack reference per value. ITGmania retains Lua references in the registry and exposes judgment results through TapNote bindings. The original adapter exhausted its 8000-slot auxiliary stack during the complete Megalovania SM replay; the native stack limit and all acceptance checks remain unchanged.",
+      "sources": [
+        "itgmania/src/LuaReference.cpp",
+        "itgmania/src/NoteTypes.cpp",
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua"
+      ],
+      "source_sha256": {
+        "itgmania/src/LuaReference.cpp": "345fbb1763c14bf26c12c042b2c0533c2006059bd746bfedf0bffc0cf98c1572",
+        "itgmania/src/NoteTypes.cpp": "95ac0bbc95caf1f08d6f2753f40d05f21c287d0fc57589dfd3792745aa629ed3",
+        "Simply-Love-SM5/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0"
+      },
+      "regression": "tap_note_results_do_not_consume_auxiliary_references_per_note",
+      "affected_pending_chart": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "proof": "10,000 retained judgment objects with garbage collection stopped: original getter ownership fails with StackError; registry ownership passes while preserving result identity, offsets and scores.",
+      "known_baseline_test_failure": "compile_song_lua_supports_named_player_tap_note_shim retains the same top:GetChildren()[empty-name] assertion failure on pre-fix committed code and fixed code; expected values unchanged."
     }
   ],
   "input_repairs": [
@@ -301,52 +319,65 @@
   "verification": {
     "complete": false,
     "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM full replay is in progress.",
-    "current_source_hashes_verified": 47,
+    "current_source_hashes_verified": 48,
     "native_tests_passed": 66,
     "targeted_checks": [
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-native-tests-final-v5.log",
-        "sha256": "0d96e6b47691ffeeae2edb39d536692aee0c8865c48d3cb7c02595a9a7b735de",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-native-tests.log",
+        "sha256": "11d58eed0c43e5b75232f1706781f9f208355b4e5bf09609796e56c704fa0a7a",
         "passed": 66,
         "failed": 0,
         "ignored": 0,
-        "scope": "Final source graph, built together with the sealed full replay CLI"
+        "scope": "Final source graph built together with full replay CLI"
       },
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-custom-tests.log",
-        "sha256": "7493d0b7484dc9152d82a8f8b56bd2e84345263ea0622cacde5216c719652f84",
-        "passed": 3,
-        "failed": 0,
-        "ignored": 0,
-        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
-      },
-      {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-live-draw-tests.log",
-        "sha256": "09d6bd411223de0580c74b61fd4d05aff703064fc37e3e7bd0bbc5bbb239af8b",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-stress-final.log",
+        "sha256": "2c9921499dd86e3ea2ed19ed2c95f1e8ee3bbb124f578a95c9df3d82012f0c9f",
         "passed": 1,
         "failed": 0,
         "ignored": 0,
         "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
       },
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-loader-tests.log",
-        "sha256": "d1f790f79c7dd5a3330b1813ed31627e8a8c34e58b3182e48e3ba2fa968892ac",
-        "passed": 11,
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-table-tests.log",
+        "sha256": "519fe9be95f8178809c2bc814d93ad045f5fa1a4c65c40b76a67b7effbdcc8c3",
+        "passed": 31,
         "failed": 0,
         "ignored": 0,
         "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
       },
       {
-        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-manual-playback-tests.log",
-        "sha256": "e0a6acb6a3f79a7305e4f0ec7e8ec9b465769a600ddd9867310b7a25f2ba5c1d",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-snapshot-tests.log",
+        "sha256": "30405096d6fd910f7a5f4819041135585f02c65ba3ca586bdbb79b8ed59130b8",
+        "passed": 5,
+        "failed": 0,
+        "ignored": 0,
+        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+      },
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-judgment-tests.log",
+        "sha256": "70f0aab7795e3c5d72db143aefce2bc39599adc5df82211bf4cf02ba648f105e",
         "passed": 1,
         "failed": 0,
         "ignored": 0,
         "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
       }
     ],
-    "binary_sha256": "2ed0366aae619ab23a80e91e17bb014ba48f837ee4e9e07db1bf8a3dfc3d9c5c",
+    "binary_sha256": "6a64b65a7dff97d7a8c04595573684c52f78b8610cf3dd9edc6ddaff33d9d7fd",
     "runtime_lua_feature_enabled": false,
-    "utc": "2026-10-18T02:45:05Z"
+    "utc": "2026-10-18T03:17:08Z",
+    "known_baseline_failure": {
+      "test": "compile_song_lua_supports_named_player_tap_note_shim",
+      "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+      "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+      "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+      "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+      "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+    },
+    "negative_regression": {
+      "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-red.log",
+      "sha256": "f09759b4c37179df68c7c2fb2f659a4e292694b16c3742643e70e5f442517a2a",
+      "outcome": "Original getter ownership fails with StackError while retaining 10000 judgment objects"
+    }
   }
 }
