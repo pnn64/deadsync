@@ -2790,17 +2790,15 @@
       "aliases": []
     },
     {
-      "title": "I Really Like You",
+      "title": "I Really Like You [dbk2]",
       "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
-      "harness_version": "0.1.0",
-      "archive": "b35cdcda0ed56bc51c358952145af08210f2263187beb2b8591f3721e63924c1.tar.zst",
-      "sha256": "b35cdcda0ed56bc51c358952145af08210f2263187beb2b8591f3721e63924c1",
-      "compressed_bytes": 54402,
-      "uncompressed_sha256": "19986a11028ea689b5c5273cc1f410bd7013bc76e13166020dcf0f3344ed2fc1",
-      "compression_level": 22,
-      "aliases": [
-        "ef66982c5552d703c36179700987a6763828b2e17f7651e753f73d22383b2878.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "cb175339c45d775f16a6595ae2443b54405e7441e9ff331163d782d84032adfb.tar.zst",
+      "compressed_bytes": 110668178,
+      "sha256": "cb175339c45d775f16a6595ae2443b54405e7441e9ff331163d782d84032adfb",
+      "uncompressed_sha256": "b2357083568334bbedb064a12c783573d5fdd5c4d929e90efbc66235d6bc8378",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "TETRIS",
