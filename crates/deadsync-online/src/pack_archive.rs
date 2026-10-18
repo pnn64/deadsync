@@ -20,7 +20,11 @@
 //! * [`fetch_entry_to_file`] -- one big entry, such as the audio, inflated to
 //!   disk as it arrives rather than held in memory.
 //! * [`fetch_folder`] -- a whole song folder, staged for install under the
-//!   same safety rules as the pack installer.
+//!   same safety rules as the pack installer. [`fetch_folder_skipping`]
+//!   leaves some of it out, and brings a small entry from elsewhere in the
+//!   pack -- its `Pack.ini` -- along in the same request.
+//! * [`index_to_bytes`] + [`index_from_bytes`] -- an index kept on disk and
+//!   read back without a request, so a pack is not paid for twice.
 //!
 //! **Etiquette.** Every request to the download URL counts as a download of
 //! the pack on stepmaniaonline.net -- `HEAD` included. So this never sends
@@ -110,6 +114,14 @@ const COPY_CHUNK_BYTES: usize = 64 * 1024;
 const MAX_RESERVE_BYTES: usize = 8 * 1024 * 1024;
 const CANCELLED: &str = "cancelled";
 const AUDIO_EXTENSIONS: [&str; 6] = ["ogg", "mp3", "wav", "flac", "opus", "oga"];
+/// The most an entry read alongside a song folder may weigh, either way. A
+/// `Pack.ini` is a few hundred bytes; this is the relay's bound on one.
+const MAX_ALSO_BYTES: u64 = 64 * 1024;
+/// What a kept index starts with, and the layout it is written in. A new
+/// layout is a new version: an old file then reads as an error and the index
+/// is fetched again.
+const INDEX_MAGIC: &[u8; 8] = b"DSPKIDX\x1A";
+const INDEX_VERSION: u32 = 1;
 
 const EOCD_SIGNATURE: u32 = 0x0605_4b50;
 const EOCD64_LOCATOR_SIGNATURE: u32 = 0x0706_4b50;
@@ -207,7 +219,7 @@ fn smo_error(error: smo::StepManiaOnlineError) -> ArchiveError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ZipEntry {
     /// The path inside the archive, exactly as the `zip` crate decodes it.
     pub name: String,
@@ -218,9 +230,28 @@ pub(crate) struct ZipEntry {
     /// Where this entry's bytes end in the file: the next entry's local
     /// header, or the start of the central directory after the last one.
     pub end: u64,
+    /// The day the record's DOS date says the file was last modified, as
+    /// `YYYYMMDD`; 0 when it has none. The DOS date alone, as the relay read
+    /// it: Rip Packs dates packs and songs by it.
+    pub day: u32,
+    /// The record's CRC-32 of the file's contents. With the size, it tells
+    /// the same file apart in two packs: a rip takes one song per audio file.
+    pub crc: u32,
+    /// The path as the itgcontent.net relay spells it, when that is not
+    /// `name`: the central directory's name bytes read as UTF-8, bad bytes
+    /// replaced, whatever the UTF-8 flag or a Unicode path field says. `None`
+    /// when the two agree, as they do for every ASCII name. Read it through
+    /// [`Self::site_name`].
+    pub site_name: Option<Box<str>>,
 }
 
 impl ZipEntry {
+    /// The path as the itgcontent.net relay spells it: what Rip Packs tells
+    /// the site a song's folder and simfiles are called.
+    pub(crate) fn site_name(&self) -> &str {
+        self.site_name.as_deref().unwrap_or(&self.name)
+    }
+
     /// The bytes `[start, end)` to fetch for this entry: its local header, its
     /// data, and any data descriptor.
     ///
@@ -240,7 +271,7 @@ impl ZipEntry {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SongFolder {
     /// The folder's own name: the second component of its entries' paths,
     /// `Pack/<name>/...`.
@@ -438,6 +469,214 @@ pub(crate) fn fetch_folder(
         max_bytes,
         &mut on_progress,
     )
+}
+
+/// Whether this entry is a backup a resync leaves beside each chart. Never
+/// part of a song worth installing.
+pub(crate) fn is_resync_backup(name: &str) -> bool {
+    extension(name).eq_ignore_ascii_case("oldsync")
+}
+
+/// What [`fetch_folder_skipping`] would download for this folder, in bytes:
+/// its spans, merged as they would be fetched, less the tail already held.
+/// The same planner decides both, so this is the download to the byte -- an
+/// `also` entry riding along aside. A folder the download would refuse is the
+/// same error here.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn folder_fetch_bytes(
+    index: &PackIndex,
+    folder: usize,
+    skip: &dyn Fn(&str) -> bool,
+) -> Result<u64, ArchiveError> {
+    plan_folder(index, folder, u64::MAX, skip).map(|plan| span_total(&plan.fetch))
+}
+
+/// The pack's own `Pack.ini`: the shallowest entry of that name (any case)
+/// anywhere in the archive.
+///
+/// The first of equals wins, as in the relay. Paths split at either slash, as
+/// song folders do.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn pack_ini_entry(index: &PackIndex) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
+    for (ix, entry) in index.entries.iter().enumerate() {
+        if entry.is_dir() {
+            continue;
+        }
+        let mut parts = entry
+            .name
+            .split(['/', '\\'])
+            .filter(|part| !part.is_empty());
+        if !parts
+            .next_back()
+            .is_some_and(|file| file.eq_ignore_ascii_case("Pack.ini"))
+        {
+            continue;
+        }
+        let depth = parts.count();
+        if best.is_none_or(|(have, _)| depth < have) {
+            best = Some((depth, ix));
+        }
+    }
+    best.map(|(_, ix)| ix)
+}
+
+/// [`fetch_folder`], leaving out every entry `skip` names -- `.oldsync`
+/// backups, for one -- and reading `also` (a small entry outside the folder,
+/// such as the pack's `Pack.ini`) inflated into memory in the same request,
+/// so it costs no download of its own. Returns the folder's written name and
+/// `also`'s bytes; a failure to read `also` alone is `None`, not an error.
+///
+/// `skip` is asked about each entry's whole path in the archive. A skipped
+/// entry is not asked for, though it may still arrive inside a merged range
+/// as any neighbour would, and is never written. Every rule of
+/// [`fetch_folder`] holds for the rest.
+///
+/// `also` rides along only for free: at most 64 KB either way, and either in
+/// the index's tail or joined to a request the folder makes anyway. When it
+/// cannot -- the tail holds the whole folder, so there is no request to join
+/// -- it is `None` without a request. Its bytes count toward `max_bytes` and
+/// the progress total, which is always what actually comes over the wire.
+#[cfg_attr(test, allow(dead_code))]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn fetch_folder_skipping(
+    agent: &network::HttpAgent,
+    index: &PackIndex,
+    folder: usize,
+    temp: &Path,
+    staging: &Path,
+    max_bytes: u64,
+    skip: &dyn Fn(&str) -> bool,
+    also: Option<usize>,
+    mut on_progress: impl FnMut(u64, u64) -> bool,
+) -> Result<(String, Option<Vec<u8>>), ArchiveError> {
+    fetch_folder_skipping_with(
+        &mut Http::new(agent, index.pack_id),
+        index,
+        folder,
+        temp,
+        staging,
+        max_bytes,
+        skip,
+        also,
+        &mut on_progress,
+    )
+}
+
+/// The index as bytes to keep on disk: everything [`index_from_bytes`] needs
+/// to rebuild it without a request.
+///
+/// That is the fetched tail and what the server said about the file; the
+/// entries and folders are rebuilt from the tail, which holds the whole
+/// central directory, by the same code that built them the first time. All
+/// numbers little-endian:
+///
+/// ```text
+/// magic "DSPKIDX\x1A" | version u32 | pack id u64 | total u64 | tail start u64
+/// | etag: 0, or 1 then length u64 and UTF-8 | tail length u64 and bytes
+/// | FNV-1a 64 of everything before it
+/// ```
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn index_to_bytes(index: &PackIndex) -> Vec<u8> {
+    let etag = index.etag.as_deref().map(str::as_bytes);
+    let mut out = Vec::with_capacity(64 + etag.map_or(0, <[u8]>::len) + index.tail.len());
+    out.extend_from_slice(INDEX_MAGIC);
+    out.extend_from_slice(&INDEX_VERSION.to_le_bytes());
+    out.extend_from_slice(&index.pack_id.to_le_bytes());
+    out.extend_from_slice(&index.total.to_le_bytes());
+    out.extend_from_slice(&index.tail_start.to_le_bytes());
+    match etag {
+        Some(tag) => {
+            out.push(1);
+            out.extend_from_slice(&(tag.len() as u64).to_le_bytes());
+            out.extend_from_slice(tag);
+        }
+        None => out.push(0),
+    }
+    out.extend_from_slice(&(index.tail.len() as u64).to_le_bytes());
+    out.extend_from_slice(&index.tail);
+    let sum = checksum(&out);
+    out.extend_from_slice(&sum.to_le_bytes());
+    out
+}
+
+/// An index kept by [`index_to_bytes`]. Anything that does not read back
+/// exactly is an error, never a guess: the caller fetches it again.
+///
+/// The tail goes through the same checks as a fresh one. It must hold the
+/// whole central directory: nothing here sends a request, so a kept tail
+/// that would need one is an error too.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn index_from_bytes(bytes: &[u8]) -> Result<PackIndex, ArchiveError> {
+    let damaged = || malformed("the kept index is damaged");
+    let (body, sum) = bytes.split_at(bytes.len().saturating_sub(8));
+    let mut fields = Fields { rest: body };
+    if fields.take(INDEX_MAGIC.len()).ok() != Some(INDEX_MAGIC.as_slice()) {
+        return Err(malformed("not a kept index"));
+    }
+    if read_u32(fields.take(4)?, 0) != Some(INDEX_VERSION) {
+        return Err(malformed("the kept index is from another version"));
+    }
+    if read_u64(sum, 0) != Some(checksum(body)) {
+        return Err(damaged());
+    }
+    let pack_id = fields.number()?;
+    let total = fields.number()?;
+    let tail_start = fields.number()?;
+    let etag = match fields.take(1)? {
+        [0] => None,
+        [1] => {
+            let len = fields.length()?;
+            let tag = std::str::from_utf8(fields.take(len)?).map_err(|_| damaged())?;
+            Some(tag.to_owned())
+        }
+        _ => return Err(damaged()),
+    };
+    let len = fields.length()?;
+    let tail = fields.take(len)?.to_vec();
+    if !fields.rest.is_empty() {
+        return Err(damaged());
+    }
+    build_index(pack_id, total, etag, tail_start, tail, |_, _| {
+        Err(malformed(
+            "the kept index does not hold the whole central directory",
+        ))
+    })
+}
+
+/// FNV-1a, 64-bit: enough to tell a kept index from a damaged one.
+fn checksum(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xCBF2_9CE4_8422_2325, |hash, &byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01B3)
+    })
+}
+
+/// A kept index, read field by field. Every read is held to what is left.
+struct Fields<'a> {
+    rest: &'a [u8],
+}
+
+impl<'a> Fields<'a> {
+    fn take(&mut self, len: usize) -> Result<&'a [u8], ArchiveError> {
+        let (field, rest) = self
+            .rest
+            .split_at_checked(len)
+            .ok_or_else(|| malformed("the kept index is cut short"))?;
+        self.rest = rest;
+        Ok(field)
+    }
+
+    fn number(&mut self) -> Result<u64, ArchiveError> {
+        read_u64(self.take(8)?, 0).ok_or_else(|| malformed("the kept index is cut short"))
+    }
+
+    /// A length, which must fit in what is left.
+    fn length(&mut self) -> Result<usize, ArchiveError> {
+        usize::try_from(self.number()?)
+            .ok()
+            .filter(|&len| len <= self.rest.len())
+            .ok_or_else(|| malformed("the kept index is cut short"))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1266,9 +1505,30 @@ struct RawEntry {
     /// What the `zip` crate keys the entry by: the raw name, or the Info-ZIP
     /// Unicode path that replaces it.
     key: Vec<u8>,
+    /// The raw name alone, whatever replaces it: how the relay names the
+    /// entry.
+    raw_name: Vec<u8>,
     compressed: u64,
     uncompressed: u64,
     local_header: u64,
+    /// The record's DOS date as `YYYYMMDD`, or 0.
+    day: u32,
+    crc: u32,
+}
+
+/// A DOS date as `YYYYMMDD`, read the way the relay reads it: years since
+/// 1980 in the top seven bits, then the month, then the day, taken as they
+/// are. 0 is no date. A month or day no calendar has is kept as written and
+/// left for `dates::day_number` to run over, as the relay's `Date.UTC` does,
+/// so a pack's dates come out the same on both.
+fn dos_day(dos: u16) -> u32 {
+    if dos == 0 {
+        return 0;
+    }
+    let year = 1980 + u32::from(dos >> 9);
+    let month = u32::from((dos >> 5) & 15);
+    let day = u32::from(dos & 31);
+    year * 10_000 + month * 100 + day
 }
 
 /// `count` records from the start of `bytes`, as the crate reads them: by
@@ -1294,11 +1554,15 @@ fn parse_directory(bytes: &[u8], count: u64) -> Result<Vec<RawEntry>, ArchiveErr
         if next > bytes.len() {
             return Err(cut_short());
         }
+        let raw_name = bytes[name_at..extra_at].to_vec();
         let mut entry = RawEntry {
-            key: bytes[name_at..extra_at].to_vec(),
+            key: raw_name.clone(),
+            raw_name,
             compressed: u64::from(field32(20)),
             uncompressed: u64::from(field32(24)),
             local_header: u64::from(field32(42)),
+            day: dos_day(field16(14)),
+            crc: field32(16),
         };
         read_extra_fields(&bytes[extra_at..comment_at], &mut entry)?;
         entries.push(entry);
@@ -1419,12 +1683,19 @@ fn settle_entries(
         {
             return Err(malformed(format!("'{name}' overlaps the entry after it")));
         }
+        // The relay reads every name as UTF-8 (`toString("utf8")`); the
+        // crate reads one without the UTF-8 flag as CP437.
+        let site = String::from_utf8_lossy(&record.raw_name);
+        let site_name = (site != name.as_str()).then(|| Box::from(site.as_ref()));
         entries.push(ZipEntry {
             name,
             compressed: record.compressed,
             uncompressed: record.uncompressed,
             local_header: record.local_header,
             end,
+            day: record.day,
+            crc: record.crc,
+            site_name,
         });
     }
     Ok(entries)
@@ -1941,10 +2212,16 @@ pub(crate) fn written_folder_name(name: &str) -> Result<String, ArchiveError> {
     Ok(trimmed.to_owned())
 }
 
+/// The folder's plan, leaving out every entry whose archive path `skip`
+/// names: it is neither written nor asked for, and is checked no more than
+/// another folder's entries are, since nothing of it reaches the disk. It may
+/// still come over the wire inside a merged range, as a neighbour's banner
+/// would.
 fn plan_folder(
     index: &PackIndex,
     folder: usize,
     max_bytes: u64,
+    skip: &dyn Fn(&str) -> bool,
 ) -> Result<FolderPlan, ArchiveError> {
     let song = index
         .folders
@@ -1958,6 +2235,9 @@ fn plan_folder(
     let mut has_simfile = false;
     for &ix in &song.entries {
         let entry = entry_at(index, ix)?;
+        if skip(&entry.name) {
+            continue;
+        }
         if entry.name.len() > smo::MAX_ARCHIVE_PATH_BYTES {
             return Err(ArchiveError::Unsafe(format!(
                 "'{}' has too long a path",
@@ -2039,7 +2319,34 @@ fn fetch_folder_with(
     max_bytes: u64,
     on_progress: &mut dyn FnMut(u64, u64) -> bool,
 ) -> Result<String, ArchiveError> {
-    let plan = plan_folder(index, folder, max_bytes)?;
+    fetch_folder_skipping_with(
+        transport,
+        index,
+        folder,
+        temp,
+        staging,
+        max_bytes,
+        &|_| false,
+        None,
+        on_progress,
+    )
+    .map(|(written, _)| written)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn fetch_folder_skipping_with(
+    transport: &mut dyn Transport,
+    index: &PackIndex,
+    folder: usize,
+    temp: &Path,
+    staging: &Path,
+    max_bytes: u64,
+    skip: &dyn Fn(&str) -> bool,
+    also: Option<usize>,
+    on_progress: &mut dyn FnMut(u64, u64) -> bool,
+) -> Result<(String, Option<Vec<u8>>), ArchiveError> {
+    let mut plan = plan_folder(index, folder, max_bytes, skip)?;
+    let also = also.filter(|&entry| ride_along(index, &mut plan, entry, max_bytes));
     remove_stale_file(temp)?;
     let file = OpenOptions::new()
         .read(true)
@@ -2054,6 +2361,7 @@ fn fetch_folder_with(
         &file,
         staging,
         max_bytes,
+        also,
         on_progress,
     );
     drop(file);
@@ -2063,7 +2371,48 @@ fn fetch_folder_with(
             temp.display()
         );
     }
-    result.map(|()| plan.written)
+    result.map(|also| (plan.written, also))
+}
+
+/// Whether entry `also` can come along with the folder, adding its bytes to
+/// the plan if so. It comes only if it costs no request: it must be small,
+/// and either in the tail already or able to join a request the folder makes
+/// anyway. A folder the tail holds whole makes none, and `also` is not worth
+/// a counted download of its own. Nor may it push the folder past
+/// `max_bytes`.
+fn ride_along(index: &PackIndex, plan: &mut FolderPlan, also: usize, max_bytes: u64) -> bool {
+    let Some(entry) = index.entries.get(also) else {
+        return false;
+    };
+    if entry.is_dir() || entry.uncompressed > MAX_ALSO_BYTES || entry.compressed > MAX_ALSO_BYTES {
+        return false;
+    }
+    let (fetch, _) = split_at_tail(&[entry.span()], index.tail_start);
+    if fetch.is_empty() {
+        return true;
+    }
+    if plan.fetch.is_empty() {
+        return false;
+    }
+    let mut joined = plan.fetch.clone();
+    joined.extend(fetch);
+    let joined = merge_ranges(joined, MERGE_GAP_BYTES);
+    if span_total(&joined) > max_bytes || request_count(&joined) > request_count(&plan.fetch) {
+        return false;
+    }
+    plan.fetch = joined;
+    true
+}
+
+/// How many requests [`request_ranges`] sends for these ranges.
+fn request_count(ranges: &[(u64, u64)]) -> usize {
+    let mut rest = ranges;
+    let mut count = 0;
+    while !rest.is_empty() {
+        rest = &rest[ranges_in_one_request(rest)..];
+        count += 1;
+    }
+    count
 }
 
 /// A temporary file left by a run that crashed is the caller's own, and goes.
@@ -2083,6 +2432,10 @@ fn remove_stale_file(path: &Path) -> Result<(), ArchiveError> {
     }
 }
 
+/// The plan's bytes into `file`, the folder out of them into `staging`, and
+/// then `also`, inflated into memory: `None` if it will not read, which
+/// leaves the folder as good as it was.
+#[allow(clippy::too_many_arguments)]
 fn download_and_extract(
     transport: &mut dyn Transport,
     index: &PackIndex,
@@ -2090,8 +2443,9 @@ fn download_and_extract(
     file: &File,
     staging: &Path,
     max_bytes: u64,
+    also: Option<usize>,
     on_progress: &mut dyn FnMut(u64, u64) -> bool,
-) -> Result<(), ArchiveError> {
+) -> Result<Option<Vec<u8>>, ArchiveError> {
     let total = span_total(&plan.fetch);
     if !on_progress(0, total) {
         return Err(cancelled());
@@ -2126,7 +2480,20 @@ fn download_and_extract(
             held: Held::File { file, at },
         }));
     let mut archive = open_archive(index, reader)?;
-    extract_folder(&mut archive, index, plan, staging)
+    extract_folder(&mut archive, index, plan, staging)?;
+    Ok(also.and_then(
+        |entry| match read_open_entry(&mut archive, index, entry, MAX_ALSO_BYTES) {
+            Ok(bytes) => Some(bytes),
+            Err(error) => {
+                let name = index
+                    .entries
+                    .get(entry)
+                    .map_or("", |meta| meta.name.as_str());
+                log::warn!("Could not read '{name}' alongside a song: {error}");
+                None
+            }
+        },
+    ))
 }
 
 fn extract_folder(
@@ -3098,8 +3465,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_central_directory_longer_than_the_tail_costs_one_more_request() {
+    /// Forty folders of thirty files with long names: a central directory
+    /// longer than the smallest first request.
+    fn long_directory_pack() -> Vec<u8> {
         let names: Vec<String> = (0..1_200)
             .map(|ix| {
                 format!(
@@ -3112,7 +3480,12 @@ mod tests {
             .iter()
             .map(|name| Item::Stored(name, b"#TITLE:x;"))
             .collect();
-        let bytes = build_zip(&items);
+        build_zip(&items)
+    }
+
+    #[test]
+    fn a_central_directory_longer_than_the_tail_costs_one_more_request() {
+        let bytes = long_directory_pack();
         let mut server = FakeServer::new(bytes.clone());
         let index = fetch_index_with(&mut server, 2, 1).expect("index");
 
@@ -3201,6 +3574,33 @@ mod tests {
         assert_eq!(read_entry(&index, &[], 0, MAX).expect("simfile"), b"second");
         assert_eq!(read_entry(&index, &[], 1, MAX).expect("audio"), b"ogg");
         assert_eq!(index.folders[0].entries, vec![0, 1]);
+    }
+
+    #[test]
+    fn the_site_name_is_the_raw_name_read_as_utf8() {
+        // No UTF-8 flag: the crate reads the bytes as CP437, the relay as
+        // UTF-8.
+        let bytes = hand_zip(
+            &[
+                ("Pack/Se\u{f1}orita/song.ssc", b"#TITLE:Senorita;"),
+                ("Pack/Plain/song.sm", b"#TITLE:Plain;"),
+            ],
+            false,
+        );
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 5, 1).expect("index");
+        let entry = &index.entries[0];
+        assert_eq!(entry.name, "Pack/Se\u{251c}\u{2592}orita/song.ssc");
+        assert_eq!(entry.site_name(), "Pack/Se\u{f1}orita/song.ssc");
+        assert_eq!(index.folders[0].name, "Se\u{251c}\u{2592}orita");
+        // An ASCII name reads the same either way, and costs nothing.
+        assert_eq!(index.entries[1].site_name, None);
+        assert_eq!(index.entries[1].site_name(), "Pack/Plain/song.sm");
+
+        // With the flag both read UTF-8.
+        let bytes = build_zip(&[Item::Stored("Pack/Se\u{f1}orita/song.ssc", b"#TITLE:x;")]);
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 6, 1).expect("index");
+        assert_eq!(index.entries[0].name, "Pack/Se\u{f1}orita/song.ssc");
+        assert_eq!(index.entries[0].site_name, None);
     }
 
     fn flat_index(bytes: &[u8], held: usize) -> PackIndex {
@@ -3985,6 +4385,452 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
             pack_url(649),
             "https://stepmaniaonline.net/download/pack/649/"
         );
+    }
+
+    /// A day as `YYYYMMDD`, the way the index keeps it.
+    fn ymd(year: u32, month: u32, day: u32) -> u32 {
+        year * 10_000 + month * 100 + day
+    }
+
+    /// A DOS date, as a zip record carries it.
+    fn dos(year: u16, month: u16, day: u16) -> u16 {
+        ((year - 1980) << 9) | (month << 5) | day
+    }
+
+    /// Stored entries, each dated `YYYYMMDD`; a path ending in `/` is a
+    /// directory.
+    fn dated_zip(items: &[(&str, &[u8], u32)]) -> Vec<u8> {
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        for &(name, bytes, day) in items {
+            let date = zip::DateTime::from_date_and_time(
+                u16::try_from(day / 10_000).expect("year"),
+                u8::try_from(day / 100 % 100).expect("month"),
+                u8::try_from(day % 100).expect("day"),
+                13,
+                37,
+                42,
+            )
+            .expect("a date the format holds");
+            let options = SimpleFileOptions::default()
+                .compression_method(CompressionMethod::Stored)
+                .last_modified_time(date);
+            if name.ends_with('/') {
+                zip.add_directory(name, options).expect("add directory");
+            } else {
+                zip.start_file(name, options).expect("start entry");
+                zip.write_all(bytes).expect("write entry");
+            }
+        }
+        zip.finish().expect("finish zip").into_inner()
+    }
+
+    /// Each central-directory record's DOS date rewritten, in order: dates
+    /// no writer will make, such as none at all or a thirteenth month.
+    fn redate(bytes: &mut [u8], dates: &[u16]) {
+        let eocd = bytes.len() - EOCD_LEN;
+        assert_eq!(read_u32(bytes, eocd), Some(EOCD_SIGNATURE));
+        let mut at = read_u32(bytes, eocd + 16).expect("directory start") as usize;
+        for &date in dates {
+            assert_eq!(read_u32(bytes, at), Some(CENTRAL_HEADER_SIGNATURE));
+            bytes[at + 14..at + 16].copy_from_slice(&date.to_le_bytes());
+            let field = |offset: usize| usize::from(read_u16(bytes, at + offset).expect("length"));
+            at += CENTRAL_HEADER_LEN + field(28) + field(30) + field(32);
+        }
+    }
+
+    /// An index of these entries alone -- `(path, size, day)` -- with folders
+    /// grouped as a real index's are, and nothing behind them to read.
+    fn entries_only(files: &[(&str, u64, u32)]) -> PackIndex {
+        let entries: Vec<ZipEntry> = files
+            .iter()
+            .map(|&(name, size, day)| ZipEntry {
+                name: name.to_owned(),
+                compressed: size,
+                uncompressed: size,
+                local_header: 0,
+                end: 0,
+                day,
+                crc: 0,
+                site_name: None,
+            })
+            .collect();
+        let folders = group_folders(&entries);
+        PackIndex {
+            pack_id: 1,
+            total: 0,
+            etag: None,
+            entries,
+            folders,
+            tail_start: 0,
+            tail: Arc::from(Vec::new()),
+        }
+    }
+
+    #[test]
+    fn dos_dates_are_read_from_the_directory_and_carried() {
+        let mut bytes = dated_zip(&[
+            ("Pack/Song/", b"", ymd(2009, 7, 14)),
+            ("Pack/Song/song.sm", SM_TEXT, ymd(2009, 7, 14)),
+            ("Pack/Song/song.ogg", &noise(2_000, 14), ymd(2008, 2, 29)),
+            ("Pack/Song/song.sm.oldsync", b"old", ymd(2107, 12, 31)),
+        ]);
+        let index = fetch_index_with(&mut FakeServer::new(bytes.clone()), 1, 1).expect("index");
+        let days: Vec<u32> = index.entries.iter().map(|entry| entry.day).collect();
+        assert_eq!(
+            days,
+            vec![
+                ymd(2009, 7, 14),
+                ymd(2009, 7, 14),
+                ymd(2008, 2, 29),
+                ymd(2107, 12, 31)
+            ]
+        );
+
+        // Only a 0 is no day. Every other date is kept as written, a month or
+        // day no calendar has included, as the relay keeps it.
+        redate(
+            &mut bytes,
+            &[0, dos(2010, 13, 1), dos(2010, 2, 0), dos(2010, 2, 31)],
+        );
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 1, 1).expect("redated index");
+        let days: Vec<u32> = index.entries.iter().map(|entry| entry.day).collect();
+        assert_eq!(days, vec![0, 20101301, 20100200, ymd(2010, 2, 31)]);
+        assert_eq!(dos_day(dos(2010, 0, 5)), 20100005);
+        assert_eq!(dos_day(dos(1980, 1, 1)), ymd(1980, 1, 1));
+
+        // A repeated name's last record has the last word on its date too.
+        let mut bytes = hand_zip(
+            &[
+                ("Pack/Song/song.sm", b"first"),
+                ("Pack/Song/song.sm", b"second"),
+                ("Pack/Song/song.ogg", b"ogg"),
+            ],
+            false,
+        );
+        redate(
+            &mut bytes,
+            &[dos(2001, 1, 1), dos(2002, 2, 2), dos(2003, 3, 3)],
+        );
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 4, 1).expect("index");
+        let days: Vec<u32> = index.entries.iter().map(|entry| entry.day).collect();
+        assert_eq!(days, vec![ymd(2002, 2, 2), ymd(2003, 3, 3)]);
+    }
+
+    #[test]
+    fn the_pack_ini_is_the_shallowest_of_that_name() {
+        let index = entries_only(&[
+            ("Pack/Song/Pack.ini", 10, 0),
+            ("Pack/Pack.ini/", 0, 0),
+            ("Pack/PACK.INI", 10, 0),
+            ("Other\\pack.ini", 10, 0),
+            ("Pack/Song/song.sm", 10, 0),
+        ]);
+        assert_eq!(pack_ini_entry(&index), Some(2));
+        let index = entries_only(&[("Pack/Song/Pack.ini", 10, 0), ("pack.ini", 10, 0)]);
+        assert_eq!(pack_ini_entry(&index), Some(1));
+        let index = entries_only(&[
+            ("Pack/Song/Pack.ini.bak", 10, 0),
+            ("Pack/MyPack.ini", 10, 0),
+        ]);
+        assert_eq!(pack_ini_entry(&index), None);
+    }
+
+    const PACK_INI: &[u8] = b"[Group]\nVersion=1\nSyncOffset=ITG\n";
+
+    /// A pack whose song keeps resync backups -- a big one between its chart
+    /// and its audio, a small one after -- with its `Pack.ini` far in front,
+    /// and enough after the song that none of it is in the tail.
+    fn resync_pack() -> Vec<u8> {
+        build_zip(&[
+            Item::Stored("Pack/Pack.ini", PACK_INI),
+            Item::Stored("Pack/Filler/filler.bin", &noise(150_000, 15)),
+            Item::Deflated("Pack/Song/song.ssc", SM_TEXT),
+            Item::Stored("Pack/Song/song.ssc.oldsync", &noise(100_000, 16)),
+            Item::Stored("Pack/Song/song.ogg", &noise(30_000, 17)),
+            Item::Deflated("Pack/Song/song.sm.OLDSYNC", b"#TITLE:Old;"),
+            Item::Stored("Pack/Filler/last.bin", &noise(100_000, 18)),
+            Item::Stored("Pack/Tail/tail.sm", b"#TITLE:Tail;"),
+        ])
+    }
+
+    fn entry_named(index: &PackIndex, name: &str) -> usize {
+        index
+            .entries
+            .iter()
+            .position(|entry| entry.name == name)
+            .expect("entry")
+    }
+
+    fn folder_named(index: &PackIndex, name: &str) -> usize {
+        index
+            .folders
+            .iter()
+            .position(|folder| folder.name == name)
+            .expect("folder")
+    }
+
+    fn staged_names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .expect("staged folder")
+            .map(|entry| {
+                entry
+                    .expect("staged entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn resync_backups_are_neither_fetched_nor_staged() {
+        let mut server = FakeServer::new(resync_pack());
+        let index = fetch_index_with(&mut server, 6, 3).expect("index");
+        let song = folder_named(&index, "Song");
+        let span = |name: &str| index.entries[entry_named(&index, name)].span();
+        let chart = span("Pack/Song/song.ssc");
+        let audio = span("Pack/Song/song.ogg");
+        let last_backup = span("Pack/Song/song.sm.OLDSYNC");
+        assert!(last_backup.1 <= index.tail_start);
+
+        // All of it: one run, from the chart to the last backup.
+        assert_eq!(
+            folder_fetch_bytes(&index, song, &|_| false).expect("whole"),
+            last_backup.1 - chart.0
+        );
+        // Backups left out: the chart and the audio alone, too far apart to
+        // merge across the big backup between them.
+        let skipped = folder_fetch_bytes(&index, song, &is_resync_backup).expect("skipped");
+        assert_eq!(skipped, (chart.1 - chart.0) + (audio.1 - audio.0));
+
+        server.requests.clear();
+        let dir = temp_dir("resync");
+        let staging = dir.join("staging");
+        let mut progress = Vec::new();
+        let mut watch = |done: u64, total: u64| {
+            progress.push((done, total));
+            true
+        };
+        let (written, also) = fetch_folder_skipping_with(
+            &mut server,
+            &index,
+            song,
+            &dir.join("song.part"),
+            &staging,
+            MAX,
+            &is_resync_backup,
+            None,
+            &mut watch,
+        )
+        .expect("song");
+        assert_eq!((written.as_str(), also), ("Song", None));
+        assert_eq!(
+            server.requests,
+            vec![(
+                format!(
+                    "bytes={}-{},{}-{}",
+                    chart.0,
+                    chart.1 - 1,
+                    audio.0,
+                    audio.1 - 1
+                ),
+                Some(ETAG.to_owned())
+            )]
+        );
+        assert_eq!(progress.first(), Some(&(0, skipped)));
+        assert_eq!(progress.last(), Some(&(skipped, skipped)));
+        assert_eq!(
+            staged_names(&staging.join("Song")),
+            vec!["song.ogg", "song.ssc"]
+        );
+        assert_eq!(
+            fs::read(staging.join("Song/song.ogg")).expect("audio"),
+            noise(30_000, 17)
+        );
+        assert_eq!(
+            fs::read(staging.join("Song/song.ssc")).expect("chart"),
+            SM_TEXT
+        );
+        assert!(!dir.join("song.part").exists());
+        fs::remove_dir_all(dir).expect("clean fixture root");
+    }
+
+    #[test]
+    fn an_entry_outside_the_folder_rides_along_in_the_same_request() {
+        let bytes = resync_pack();
+        let mut server = FakeServer::new(bytes.clone());
+        let index = fetch_index_with(&mut server, 6, 3).expect("index");
+        let song = folder_named(&index, "Song");
+        let ini = pack_ini_entry(&index).expect("Pack.ini");
+        assert_eq!(index.entries[ini].name, "Pack/Pack.ini");
+        let ini_span = index.entries[ini].span();
+        let skipped = folder_fetch_bytes(&index, song, &is_resync_backup).expect("skipped");
+        let dir = temp_dir("also");
+        let temp = dir.join("song.part");
+        let stage = |server: &mut FakeServer, folder: usize, staging: &str, also| {
+            server.requests.clear();
+            let mut progress = Vec::new();
+            let mut watch = |done: u64, total: u64| {
+                progress.push((done, total));
+                true
+            };
+            let result = fetch_folder_skipping_with(
+                server,
+                &index,
+                folder,
+                &temp,
+                &dir.join(staging),
+                MAX,
+                &is_resync_backup,
+                also,
+                &mut watch,
+            )
+            .expect("folder");
+            assert!(!temp.exists());
+            (result, progress.last().copied())
+        };
+
+        // Its range joins the folder's two: one request, three ranges, and
+        // the progress counts every byte of it.
+        let ((written, also), last) = stage(&mut server, song, "one", Some(ini));
+        assert_eq!(written, "Song");
+        assert_eq!(also.as_deref(), Some(PACK_INI));
+        assert_eq!(server.requests.len(), 1);
+        let range = &server.requests[0].0;
+        assert_eq!(range.matches(',').count(), 2);
+        assert!(range.starts_with(&format!("bytes={}-{},", ini_span.0, ini_span.1 - 1)));
+        let total = skipped + (ini_span.1 - ini_span.0);
+        assert_eq!(last, Some((total, total)));
+        // Read, not written anywhere.
+        assert_eq!(staged_names(&dir.join("one")), vec!["Song"]);
+
+        // In the tail it is free: the request is the folder's alone.
+        let tail_chart = entry_named(&index, "Pack/Tail/tail.sm");
+        let ((_, also), last) = stage(&mut server, song, "two", Some(tail_chart));
+        assert_eq!(also.as_deref(), Some(b"#TITLE:Tail;".as_slice()));
+        assert_eq!(server.requests.len(), 1);
+        assert_eq!(server.requests[0].0.matches(',').count(), 1);
+        assert_eq!(last, Some((skipped, skipped)));
+
+        // Too big to ride along, or no entry at all: nothing more is asked
+        // for, and the folder comes anyway.
+        let big = entry_named(&index, "Pack/Filler/filler.bin");
+        for (also, staging) in [(big, "big"), (index.entries.len(), "missing")] {
+            let ((written, also), last) = stage(&mut server, song, staging, Some(also));
+            assert_eq!((written.as_str(), also), ("Song", None));
+            assert_eq!(server.requests.len(), 1);
+            assert_eq!(server.requests[0].0.matches(',').count(), 1);
+            assert_eq!(last, Some((skipped, skipped)));
+        }
+
+        // A folder the tail holds whole makes no request, and a Pack.ini is
+        // not worth a counted download of its own.
+        let tail = folder_named(&index, "Tail");
+        let ((written, also), _) = stage(&mut server, tail, "tail", Some(ini));
+        assert_eq!((written.as_str(), also), ("Tail", None));
+        assert!(server.requests.is_empty());
+
+        // A Pack.ini that will not read loses only itself.
+        let mut damaged = bytes;
+        let at = damaged
+            .windows(PACK_INI.len())
+            .position(|window| window == PACK_INI)
+            .expect("the Pack.ini's stored bytes");
+        damaged[at + 3] ^= 0xFF;
+        let mut damaged = FakeServer::new(damaged);
+        let ((written, also), _) = stage(&mut damaged, song, "damaged", Some(ini));
+        assert_eq!((written.as_str(), also), ("Song", None));
+        assert_eq!(damaged.requests.len(), 1);
+        assert!(dir.join("damaged/Song/song.ogg").is_file());
+
+        fs::remove_dir_all(dir).expect("clean fixture root");
+    }
+
+    fn assert_same_index(back: &PackIndex, index: &PackIndex) {
+        assert_eq!(back.pack_id, index.pack_id);
+        assert_eq!(back.total, index.total);
+        assert_eq!(back.etag, index.etag);
+        assert_eq!(back.tail_start, index.tail_start);
+        assert_eq!(back.tail, index.tail);
+        assert_eq!(back.entries, index.entries);
+        assert_eq!(back.folders, index.folders);
+    }
+
+    #[test]
+    fn a_kept_index_reads_back_as_the_same_index() {
+        let (bytes, _) = song_pack();
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 4, 4).expect("index");
+        let kept = index_to_bytes(&index);
+        assert_same_index(&index_from_bytes(&kept).expect("read back"), &index);
+
+        // Dated, and with no validator.
+        let dated = dated_zip(&[
+            ("Pack/Song/song.sm", SM_TEXT, ymd(2016, 3, 4)),
+            ("Pack/Song/song.ogg", b"ogg", ymd(2014, 11, 12)),
+        ]);
+        let mut server = FakeServer::new(dated);
+        server.etag = None;
+        let index = fetch_index_with(&mut server, 8, 1).expect("dated index");
+        assert_eq!(index.etag, None);
+        let back = index_from_bytes(&index_to_bytes(&index)).expect("dated read back");
+        assert_same_index(&back, &index);
+        assert_eq!(back.entries[1].day, ymd(2014, 11, 12), "dates survive");
+
+        // A directory the first request missed was fetched by a second; the
+        // kept tail holds it, so reading it back needs neither.
+        let mut server = FakeServer::new(long_directory_pack());
+        let index = fetch_index_with(&mut server, 2, 1).expect("long index");
+        assert_eq!(server.requests.len(), 2);
+        let back = index_from_bytes(&index_to_bytes(&index)).expect("long read back");
+        assert_same_index(&back, &index);
+    }
+
+    #[test]
+    fn a_kept_index_that_does_not_read_back_exactly_is_refused() {
+        let (bytes, _) = song_pack();
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 4, 4).expect("index");
+        let kept = index_to_bytes(&index);
+        let refused =
+            |bytes: &[u8]| matches!(index_from_bytes(bytes), Err(ArchiveError::Malformed(_)));
+
+        // Any byte changed: the magic, the version, every field, the tail
+        // and the checksum itself.
+        for at in [0, 8, 12, 20, 28, 36, 40, kept.len() / 2, kept.len() - 1] {
+            let mut damaged = kept.clone();
+            damaged[at] ^= 0x01;
+            assert!(refused(&damaged), "byte {at}");
+        }
+        // Cut short anywhere, or running on.
+        for len in [0, 7, 12, 44, kept.len() / 2, kept.len() - 1] {
+            assert!(refused(&kept[..len]), "{len} bytes");
+        }
+        let mut longer = kept.clone();
+        longer.push(0);
+        assert!(refused(&longer));
+
+        // Well formed, but not a pack: a tail with no directory in it, or one
+        // that does not reach the file's end.
+        let not_a_zip = flat_index(&noise(1_000, 19), 1_000);
+        assert!(refused(&index_to_bytes(&not_a_zip)));
+        let longer_file = PackIndex {
+            total: index.total + 1,
+            entries: Vec::new(),
+            folders: Vec::new(),
+            ..index
+        };
+        assert!(refused(&index_to_bytes(&longer_file)));
+
+        // A tail without the whole directory would need a request: refused,
+        // never sent.
+        let partial = flat_index(&long_directory_pack(), 64 * 1024);
+        match index_from_bytes(&index_to_bytes(&partial)) {
+            Err(ArchiveError::Malformed(message)) => {
+                assert!(message.contains("whole central directory"), "{message}");
+            }
+            other => panic!("expected a refusal, got {other:?}"),
+        }
     }
 }
 

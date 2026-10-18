@@ -117,6 +117,14 @@ impl AppDirs {
         self.cache_dir.join("beginner-packs.json")
     }
 
+
+    /// How many booster packs this machine has kept, which numbers the next.
+    /// Save data rather than cache: clearing it would reuse pack numbers.
+    #[must_use]
+    pub fn rip_history_file(&self) -> PathBuf {
+        self.data_dir.join("save").join("content-boosters.txt")
+    }
+
     #[must_use]
     pub fn downloads_dir(&self) -> PathBuf {
         self.cache_dir.join("downloads")

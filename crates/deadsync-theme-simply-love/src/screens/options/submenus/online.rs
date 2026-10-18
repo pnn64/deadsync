@@ -136,6 +136,15 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ROWS: &[SubRow] = &
         choices: &[],
         inline: false,
     },
+    SubRow {
+        id: SubRowId::ShareRips,
+        label: lookup_key("OptionsOnlineScoring", "ShareRips"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
@@ -279,6 +288,14 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsOnlineScoringHelp",
             "ScoreImportHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::OsShareRips,
+        name: lookup_key("OptionsOnlineScoring", "ShareRips"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsOnlineScoringHelp",
+            "ShareRipsHelp",
         ))],
     },
     Item {

@@ -2155,6 +2155,46 @@ impl App {
             deadsync_online::banners::request(pack_id, url.as_str());
         }
 
+        // The rips, keeps and resets asked for since the last frame, handed
+        // over before the snapshot is read so the stage shows them this
+        // frame. A refusal comes back as the tab's toast.
+        for request in
+            content_browser::take_rip_requests(&mut self.state.screens.content_browser_state)
+        {
+            let result = match request {
+                content_browser::RipRequest::Rip { options, exclude } => {
+                    deadsync_online::rip_packs::runtime_rip(options, &exclude, &self.dirs.cache_dir)
+                }
+                content_browser::RipRequest::Keep => deadsync_online::rip_packs::runtime_keep(
+                    &self.dirs.songs_dir(),
+                    &self.dirs.cache_dir,
+                    &self.dirs.rip_history_file(),
+                ),
+                content_browser::RipRequest::Reset => deadsync_online::rip_packs::runtime_reset(),
+                content_browser::RipRequest::RetryAuthors => {
+                    deadsync_online::rip_packs::runtime_retry_authors(&self.dirs.cache_dir);
+                    Ok(())
+                }
+            };
+            if let Err(reason) = result {
+                content_browser::rip_refused(&mut self.state.screens.content_browser_state, reason);
+            }
+        }
+        let rip = deadsync_online::rip_packs::runtime_snapshot();
+        let rip_authors = deadsync_online::rip_packs::runtime_authors();
+        // The author list and the count of kept boosters, only while the tab
+        // is open. Same Idle gate as the catalogue's: the list starts once,
+        // and one that failed waits to be asked again rather than being
+        // retried every frame.
+        if content_browser::rip_showing(&self.state.screens.content_browser_state) {
+            if rip_authors.phase == deadsync_online::rip_packs::AuthorsPhase::Idle {
+                deadsync_online::rip_packs::runtime_ensure_authors(&self.dirs.cache_dir);
+            }
+            if rip.kept_count.is_none() {
+                deadsync_online::rip_packs::runtime_load_history(&self.dirs.rip_history_file());
+            }
+        }
+
         content_browser::sync_stepmaniaonline(
             &mut self.state.screens.content_browser_state,
             content_browser::Services {
@@ -2168,6 +2208,8 @@ impl App {
                 describe,
                 song_preview: deadsync_online::smo_songs::runtime_preview_snapshot(),
                 song_installs: deadsync_online::smo_songs::runtime_song_installs(),
+                rip,
+                rip_authors,
                 banner_failed: deadsync_online::banners::failed_ids(),
                 pack_ini_offsets_on: self.frame_config.machine_pack_ini_offsets,
                 pack_sync_confidence: self.frame_config.null_or_die_confidence_percent,
@@ -4384,6 +4426,9 @@ impl App {
                 config.lights_com_port.as_str(),
                 config.pac_drive_light_ordering,
             );
+            // Rip Packs reports rips to itgcontent.net only while Share Rips
+            // is on; a change made on any screen reaches it this frame.
+            deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
             self.frame_config = config;
             self.frame_config_generation = generation;
             self.frame_policy = FramePolicy::from_config(&config);
@@ -5173,6 +5218,9 @@ impl App {
         let select_music_policy = select_music_views::SelectMusicFramePolicy::from_config(&config);
         let select_course_policy = SelectCourseFramePolicy::from_config(&config);
         let evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
+        // Share Rips as the machine starts with it; every later change comes
+        // with the config snapshot in the frame loop.
+        deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);
         let ui_sfx =
             audio_requests::UiSfx::prepare(&mut audio, deadsync_theme_simply_love::SFX_PATHS);
         let audio_options = audio_requests::options_view(&audio);
@@ -9106,9 +9154,12 @@ impl App {
 
     fn prepare_screen_state(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         // A preview's audio stops with the screen; its download stops here,
-        // and so does a pack sync measure that is still running.
+        // and so does a pack sync measure that is still running. So does a
+        // rip still looking for songs -- every counted request it would go on
+        // to make is for a stage nobody is watching. A kept rip carries on.
         if prev == CurrentScreen::ContentBrowser && target != CurrentScreen::ContentBrowser {
             deadsync_online::smo_songs::runtime_preview_stop();
+            deadsync_online::rip_packs::runtime_stop_search();
             self.sync_analysis
                 .cancel(SimplyLoveSyncOwner::ContentBrowserPack);
         }

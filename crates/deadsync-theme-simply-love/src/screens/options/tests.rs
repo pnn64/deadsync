@@ -1565,6 +1565,47 @@ fn arrowcloud_enable_persists_before_reinitializing_services() {
     assert!(!state.online_reinit_pending);
 }
 
+#[test]
+fn share_rips_starts_from_config_and_persists_through_shell() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::OnlineScoring);
+    let row = select_visible_row(&mut state, SubmenuKind::OnlineScoring, SubRowId::ShareRips);
+    assert_eq!(
+        ONLINE_SCORING_OPTIONS_ROWS.len() + 1,
+        ONLINE_SCORING_OPTIONS_ITEMS.len()
+    );
+    assert_eq!(ONLINE_SCORING_OPTIONS_ITEMS[row].id, ItemId::OsShareRips);
+    assert_eq!(
+        state.sub[SubmenuKind::OnlineScoring].choice_indices[row],
+        1,
+        "rips are shared unless turned off"
+    );
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("Share Rips should emit shell work");
+    let mut effects = Vec::new();
+    append_pending_effects(&mut state, effect, &mut effects);
+
+    assert_eq!(state.sub[SubmenuKind::OnlineScoring].cursor_indices[row], 0);
+    assert_eq!(effects.len(), 2, "no service restart for a sharing switch");
+    assert!(is_change_value_sfx(&effects[0]));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::ShareRips(false)
+            )
+        ))
+    ));
+
+    let state = init_with_config(config::app_config::Config {
+        share_rips: false,
+        ..config::app_config::Config::default()
+    });
+    assert_eq!(state.sub[SubmenuKind::OnlineScoring].choice_indices[row], 0);
+}
+
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
     let now = Instant::now();
     InputEvent {

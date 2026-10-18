@@ -17,6 +17,8 @@ mod input;
 mod layout;
 mod preview;
 mod render;
+mod rip;
+mod rip_render;
 mod spinner;
 mod state;
 mod sync_dialog;
@@ -25,12 +27,13 @@ pub use chart_window::{PreviewSkinModels, preview_skin_models, preview_skin_text
 pub use input::{handle_input, handle_raw_key_event};
 pub use preview::SongRequest;
 pub use render::{get_actors, in_transition, out_transition, push_actors};
+pub use rip::{RipRequest, rip_refused, take_rip_requests};
 pub use state::{
     InstalledPack, Services, State, beginner_candidates, beginner_showing, finish_pack_deletion,
-    init, on_enter, preview_active, set_music_time, set_preview_skin, song_request_refused,
-    sync_reload_events, sync_stepmaniaonline, take_audio_requests, take_pending_reload_dirs,
-    take_song_requests, update, wanted_banners, wanted_descriptions, wanted_pack_page,
-    wanted_search, wanted_view, wants_beginner_walk, wants_more_pages,
+    init, on_enter, preview_active, rip_showing, set_music_time, set_preview_skin,
+    song_request_refused, sync_reload_events, sync_stepmaniaonline, take_audio_requests,
+    take_pending_reload_dirs, take_song_requests, update, wanted_banners, wanted_descriptions,
+    wanted_pack_page, wanted_search, wanted_view, wants_beginner_walk, wants_more_pages,
 };
 pub use sync_dialog::{
     PackShift, apply_sync_analysis_events, begin_pack_measure, finish_pack_sync,

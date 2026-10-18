@@ -461,6 +461,7 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         arrowcloud_qr_login_when: cfg.arrowcloud_qr_login_when,
         groovestats_qr_login_when: cfg.groovestats_qr_login_when,
         separate_unlocks_by_player: cfg.separate_unlocks_by_player,
+        share_rips: cfg.share_rips,
         mine_hit_sound: cfg.mine_hit_sound,
         show_stats_mode: cfg.show_stats_mode,
         frame_stats_overlay_anchor: cfg.frame_stats_overlay_anchor,

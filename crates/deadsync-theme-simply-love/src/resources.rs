@@ -268,24 +268,34 @@ pub const GRADE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("grades/goldstar (stretch).png"),
 ];
 
-/// The Content Browser's tab icons and its two placeholder graphics.
+/// The Content Browser's tab icons and its placeholder graphics.
 ///
 /// One per tab, in the tab strip's own order, plus the download arrow the
 /// detail page's button carries, the site's stand-in for a song with no
 /// jacket, and the page dot under the featured grid. All 96x96 and drawn far
 /// smaller -- together they are under ten kilobytes.
+///
+/// Then what the Rip Packs stage is drawn with: a soft round glow for the
+/// pack's halo, the tear's flash and the gold card's light; a disc for the
+/// meter's badge; and DeadSync's own arrow where the original puts its
+/// game's logo -- on the pack, the button and every card's back.
 pub const CONTENT_BROWSER_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("content_browser/search.png"),
     texture_asset("content_browser/pad.png"),
     texture_asset("content_browser/keyboard.png"),
+    texture_asset("content_browser/beginner.png"),
     texture_asset("content_browser/doubles.png"),
     texture_asset("content_browser/stamina.png"),
     texture_asset("content_browser/tech.png"),
     texture_asset("content_browser/year.png"),
+    texture_asset("content_browser/rip.png"),
     texture_asset("content_browser/installed.png"),
     texture_asset("content_browser/download.png"),
     texture_asset("content_browser/nobanner.png"),
     texture_asset("content_browser/dot.png"),
+    texture_asset("content_browser/glow.png"),
+    texture_asset("content_browser/disc.png"),
+    texture_asset("content_browser/deadsync_logo.png"),
 ];
 
 pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
@@ -612,8 +622,14 @@ pub const SFX_PATHS: &[&str] = &[
     ECS15_EVAL_FAILED_SFX,
     ECS15_EVAL_PASSED_SFX,
     "assets/sounds/start.ogg",
+    CONTENT_BROWSER_TEAR_SFX,
     "assets/sounds/unjoin.ogg",
 ];
+
+/// The booster pack tearing open on the Rip Packs stage. The original's own
+/// recording, kept as the WAV it ships as: the effect decoder reads WAV, and
+/// it is under a second long.
+pub const CONTENT_BROWSER_TEAR_SFX: &str = "assets/sounds/tear.wav";
 
 pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
 pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";

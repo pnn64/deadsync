@@ -2480,6 +2480,7 @@ fn simply_love_online_options_persist_through_shell() {
         "config::runtime_update::update_enable_arrowcloud",
         "config::runtime_update::update_submit_arrowcloud_fails",
         "config::runtime_update::update_arrowcloud_qr_login_when",
+        "config::runtime_update::update_share_rips",
     ] {
         assert!(
             !options_source.contains(direct_update),
@@ -2519,6 +2520,45 @@ fn simply_love_online_options_persist_through_shell() {
             && executor.contains("config::runtime_update::update_enable_groovestats(enabled)")
             && executor.contains("config::runtime_update::update_enable_arrowcloud(enabled)"),
         "online option values must cross neutral requests and be mapped by shell"
+    );
+}
+
+#[test]
+fn share_rips_reaches_rip_packs_whenever_the_machine_config_changes() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let hand_over = "deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);";
+    // The frame loop's config snapshot, from the check to its adoption: the
+    // one place every screen's config change passes through.
+    let snapshot = shell
+        .find("config::runtime::snapshot_if_changed(self.frame_config_generation)")
+        .expect("the frame loop should take changed config snapshots");
+    let adopted = snapshot
+        + shell[snapshot..]
+            .find("self.frame_config_generation = generation;")
+            .expect("the frame loop should adopt the snapshot's generation");
+    assert!(
+        shell[snapshot..adopted].contains(hand_over),
+        "the Share Rips option must reach Rip Packs with every config change, on any screen"
+    );
+    // And once at startup, before the first snapshot changes anything: in
+    // the constructor that takes the starting config.
+    let new = shell
+        .find(" config_generation: u64,")
+        .expect("the app should be built from a config generation");
+    let built = new
+        + shell[new..]
+            .find("frame_config: config,")
+            .expect("the app should start from that config");
+    assert!(
+        shell[new..built].contains(hand_over),
+        "the Share Rips option must reach Rip Packs at startup"
+    );
+    assert_eq!(
+        shell.matches("runtime_set_sharing(").count(),
+        2,
+        "Share Rips is handed over at startup and on config changes only"
     );
 }
 

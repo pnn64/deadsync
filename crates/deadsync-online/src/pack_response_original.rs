@@ -100,6 +100,7 @@ pub(super) fn parse_songs(html: &str) -> Vec<SongRow> {
             styles: attribute(cells[6].as_str(), "data-sort")
                 .map(style_tokens)
                 .unwrap_or_default(),
+            song_id: song_id_of(cells[1].as_str()),
         };
         if song.title.is_empty() {
             continue;

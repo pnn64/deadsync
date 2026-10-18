@@ -1172,6 +1172,12 @@ pub(super) fn apply_submenu_choice_delta(
             queue_online_reinitialize(state);
         }
         action = Some(effect);
+    } else if matches!(kind, SubmenuKind::OnlineScoring) {
+        if rows[row_index].id == SubRowId::ShareRips {
+            action = Some(online_config_effect(
+                crate::SimplyLoveOnlineConfigRequest::ShareRips(yes_no_from_choice(new_index)),
+            ));
+        }
     } else if matches!(kind, SubmenuKind::ScoreImport) {
         let row = &rows[row_index];
         if row.id == SubRowId::ScoreImportEndpoint {

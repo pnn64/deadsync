@@ -1633,6 +1633,12 @@ pub fn init(view: OptionsInitView) -> State {
         SubRowId::GrooveStatsQrLogin,
         groovestats_qr_login_when_choice_index(cfg.groovestats_qr_login_when),
     );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::OnlineScoring].choice_indices,
+        ONLINE_SCORING_OPTIONS_ROWS,
+        SubRowId::ShareRips,
+        yes_no_choice_index(cfg.share_rips),
+    );
     refresh_score_import_options(&mut state);
     refresh_null_or_die_options(&mut state);
     set_choice_by_id(

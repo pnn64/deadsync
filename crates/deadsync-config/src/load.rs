@@ -258,6 +258,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.arrowcloud_qr_login_when = loaded.arrowcloud_qr_login_when;
     cfg.groovestats_qr_login_when = loaded.groovestats_qr_login_when;
     cfg.separate_unlocks_by_player = loaded.separate_unlocks_by_player;
+    cfg.share_rips = loaded.share_rips;
     cfg.mine_hit_sound = loaded.mine_hit_sound;
     cfg.show_stats_mode = loaded.show_stats_mode;
     cfg.frame_stats_overlay_anchor = loaded.frame_stats_overlay_anchor;
