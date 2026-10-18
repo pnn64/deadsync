@@ -1016,6 +1016,7 @@ pub struct SongLuaLiveScene {
     pub(crate) primary_index: usize,
     last_beat: f64,
     last_music_seconds: f32,
+    prepared_frame_beat: Option<f64>,
     backgrounds: Vec<LiveBackground>,
     background_layers: [LiveBackgroundLayer; 2],
     background_order: Vec<usize>,
@@ -1164,7 +1165,7 @@ impl SongLuaLiveScene {
         let background_order = (0..backgrounds.len()).collect();
         Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
             targets: Vec::new(), visual_targets: Default::default(), context, entry_paths, primary_index, last_beat,
-            last_music_seconds: -9999.0, backgrounds, background_layers, background_order, foregrounds, startup_output,
+            last_music_seconds: -9999.0, prepared_frame_beat: None, backgrounds, background_layers, background_order, foregrounds, startup_output,
             outro_started: false, outro_options_reset: false, outro_off_pending: false, outro_failed: false,
             ended: false, updated: false,
             chart_attacks: std::array::from_fn(|_| LiveChartAttacks::default()) })
@@ -1185,74 +1186,16 @@ impl SongLuaLiveScene {
         if let Some(mut observer) = self.lua.app_data_mut::<OverlayStageObserver>() {
             observer.observation = None;
         }
-        // GameState.cpp::UpdateSongPosition maintains global Song timing apart
-        // from each Player's selected Steps timing. The domain frame carries
-        // the player's beat; Lua's GAMESTATE and music effects use the song.
-        let music_rate = crate::song_tables::current_music_rate(&self.lua)?;
-        let position = self.context.song_timing.as_ref()
-            .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
-        let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
-        self.feed_stats(&frame)?;
-        let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
-        let uptime = frame.uptime_seconds.unwrap_or(
-            runtime.get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(0.0)
-                + frame.delta_seconds);
-        runtime.set("__songlua_uptime_seconds", uptime)?;
-        crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
-        if let Some(position) = position {
-            let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
-            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;
-            runtime.set("__songlua_freeze", position.is_in_freeze)?;
-            runtime.set("__songlua_delay", position.is_in_delay)?;
-        } else {
-            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;
-        }
-        // GameState::UpdateSongPosition updates each enabled PlayerState
-        // using its selected Steps timing at the same music timestamp.
-        let positions: Table = runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
-        let mut attack_positions = [0.0_f32; LUA_PLAYERS];
-        for player in 0..LUA_PLAYERS {
-            if !self.context.players[player].enabled { continue; }
-            let owned: Table = positions.raw_get(player + 1)?;
-            // GameState updates attack activation before ScreenGameplay samples
-            // this frame's audio position; PlayerState still has the prior one.
-            attack_positions[player] = owned.raw_get(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
-            let position = self.context.player_timing[player].as_ref()
-                .or(self.context.song_timing.as_ref())
-                .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
-            owned.raw_set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, frame.music_seconds as f32)?;
-            owned.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY,
-                position.as_ref().map_or(frame.beat as f32, |position| position.beat))?;
-            owned.raw_set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.as_ref()
-                .map_or(runtime.raw_get::<f32>(crate::SONG_LUA_RUNTIME_BPS_KEY)?,
-                    |position| position.bpm / 60.0))?;
-            owned.raw_set("__songlua_freeze", position.as_ref().is_some_and(|position| position.is_in_freeze))?;
-            owned.raw_set("__songlua_delay", position.as_ref().is_some_and(|position| position.is_in_delay))?;
-        }
-        crate::set_compile_song_runtime_delta_values(&self.lua,
-            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
-        self.last_beat = beat;
-        crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
-        self.lua.set_app_data(LivePlayers(frame.players));
-        if !self.outro_started && let Some(windows) = &frame.chart_attacks {
-            let master = self.context.players.iter().position(|player| player.enabled);
-            for (player, attacks) in self.chart_attacks.iter_mut().enumerate() {
-                attacks.update(&self.lua, player, master == Some(player),
-                    &windows[player], attack_positions[player])?;
-            }
-        }
-        let option_deltas: Option<[f32; LUA_PLAYERS + 1]> = None;
-        #[cfg(feature = "test-support")]
-        let option_deltas = self.lua.remove_app_data::<OptionClockDeltas>()
-            .map(|inputs| inputs.0).or(option_deltas);
-        if let Some(deltas) = option_deltas {
-            crate::song_tables::advance_option_levels_with_clock_deltas(
-                &self.lua, frame.screen_seconds, deltas)?;
-        } else {
-            crate::song_tables::advance_option_levels_with_frame_delta(
-                &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
-        }
-        self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
+        let beat = if let Some(beat) = self.prepared_frame_beat.take() {
+            self.feed_stats(&frame)?;
+            // Player callbacks refresh their own snapshots and can leave a
+            // zero-delta capture frame. Resume the screen's sampled clock and
+            // the final Player feedback before traversing the actor tree.
+            crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
+            crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
+            self.lua.set_app_data(LivePlayers(frame.players));
+            beat
+        } else { self.prepare_frame(&frame)? };
         let lua = self.lua.clone();
         let root = self.root.clone();
         crate::lua_util::run_actor_compile_update_functions_with_entry(
@@ -1320,6 +1263,86 @@ impl SongLuaLiveScene {
         crate::host::update_native_arrow_effects(&self.lua)?;
         self.updated = true;
         take_output(&self.lua)
+    }
+
+    /// Prepare GameState and background actors before Player judgment callbacks.
+    pub fn prepare_gameplay_frame(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<()> {
+        if self.prepared_frame_beat.is_none() {
+            self.prepared_frame_beat = Some(self.prepare_frame(&frame)?);
+        }
+        Ok(())
+    }
+
+    fn prepare_frame(&mut self, frame: &SongLuaLiveFrame) -> mlua::Result<f64> {
+        // GameState.cpp::UpdateSongPosition maintains global Song timing apart
+        // from each Player's selected Steps timing. The domain frame carries
+        // the player's beat; Lua's GAMESTATE and music effects use the song.
+        let music_rate = crate::song_tables::current_music_rate(&self.lua)?;
+        let position = self.context.song_timing.as_ref()
+            .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
+        let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
+        self.feed_stats(frame)?;
+        let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+        let uptime = frame.uptime_seconds.unwrap_or(
+            runtime.get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(0.0)
+                + frame.delta_seconds);
+        runtime.set("__songlua_uptime_seconds", uptime)?;
+        crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
+        if let Some(position) = position {
+            let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;
+            runtime.set("__songlua_freeze", position.is_in_freeze)?;
+            runtime.set("__songlua_delay", position.is_in_delay)?;
+        } else {
+            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;
+        }
+        // GameState::UpdateSongPosition updates each enabled PlayerState
+        // using its selected Steps timing at the same music timestamp.
+        let positions: Table = runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+        let mut attack_positions = [0.0_f32; LUA_PLAYERS];
+        for player in 0..LUA_PLAYERS {
+            if !self.context.players[player].enabled { continue; }
+            let owned: Table = positions.raw_get(player + 1)?;
+            // GameState updates attack activation before ScreenGameplay samples
+            // this frame's audio position; PlayerState still has the prior one.
+            attack_positions[player] = owned.raw_get(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
+            let position = self.context.player_timing[player].as_ref()
+                .or(self.context.song_timing.as_ref())
+                .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
+            owned.raw_set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, frame.music_seconds as f32)?;
+            owned.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY,
+                position.as_ref().map_or(frame.beat as f32, |position| position.beat))?;
+            owned.raw_set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.as_ref()
+                .map_or(runtime.raw_get::<f32>(crate::SONG_LUA_RUNTIME_BPS_KEY)?,
+                    |position| position.bpm / 60.0))?;
+            owned.raw_set("__songlua_freeze", position.as_ref().is_some_and(|position| position.is_in_freeze))?;
+            owned.raw_set("__songlua_delay", position.as_ref().is_some_and(|position| position.is_in_delay))?;
+        }
+        crate::set_compile_song_runtime_delta_values(&self.lua,
+            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
+        self.last_beat = beat;
+        crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
+        self.lua.set_app_data(LivePlayers(frame.players));
+        if !self.outro_started && let Some(windows) = &frame.chart_attacks {
+            let master = self.context.players.iter().position(|player| player.enabled);
+            for (player, attacks) in self.chart_attacks.iter_mut().enumerate() {
+                attacks.update(&self.lua, player, master == Some(player),
+                    &windows[player], attack_positions[player])?;
+            }
+        }
+        let option_deltas: Option<[f32; LUA_PLAYERS + 1]> = None;
+        #[cfg(feature = "test-support")]
+        let option_deltas = self.lua.remove_app_data::<OptionClockDeltas>()
+            .map(|inputs| inputs.0).or(option_deltas);
+        if let Some(deltas) = option_deltas {
+            crate::song_tables::advance_option_levels_with_clock_deltas(
+                &self.lua, frame.screen_seconds, deltas)?;
+        } else {
+            crate::song_tables::advance_option_levels_with_frame_delta(
+                &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
+        }
+        self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
+        Ok(beat)
     }
 
     /// False until an authored draw callback has been installed. Removing one

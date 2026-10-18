@@ -2758,6 +2758,21 @@ pub fn update_with_input(
         && let Err(error) = scene.prepare_gameplay_player_options(&mut state.gameplay) {
         state.song_lua_output.errors.push(error.to_string());
     }
+    let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
+    let uptime_seconds = (host_nanos != 0).then_some(host_nanos as f64 / 1_000_000_000.0);
+    #[cfg(feature = "test-support")]
+    let action = if let Some(scene) = &mut state.song_lua {
+        let errors = &mut state.song_lua_output.errors;
+        deadsync_gameplay::update_core_with_pre_player(&mut state.gameplay, delta_time, audio_snapshot,
+            fallback_host_nanos, |game| {
+                let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(game, delta_time);
+                frame.uptime_seconds = uptime_seconds;
+                if let Err(error) = scene.prepare_gameplay_frame(frame) { errors.push(error.to_string()); }
+                scene.apply_pending_player_writes(game);
+                if let Err(error) = scene.prepare_gameplay_player_options(game) { errors.push(error.to_string()); }
+            })
+    } else { update_core(state, delta_time, audio_snapshot, fallback_host_nanos) };
+    #[cfg(not(feature = "test-support"))]
     let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
     if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
@@ -2768,8 +2783,7 @@ pub fn update_with_input(
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
         fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
     }
-    let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
-    let uptime_seconds = (host_nanos != 0).then_some(host_nanos as f64 / 1_000_000_000.0);
+
     if let Err(error) = state.advance_song_lua(delta_time, uptime_seconds, effects) {
         state.song_lua_output.errors.push(error);
     }

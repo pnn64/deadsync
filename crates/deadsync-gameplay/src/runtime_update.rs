@@ -191,6 +191,15 @@ where
         assist_sfx_path: &'static str,
         fallback_host_nanos: impl FnOnce() -> u64,
     ) -> GameplayAction {
+        self.update_gameplay_frame_with_pre_player(delta_time, audio_snapshot, assist_sfx_path, fallback_host_nanos, |_| {})
+    }
+
+    /// Run screen-owned preparation after sampling audio, before Player logic.
+    pub fn update_gameplay_frame_with_pre_player(
+        &mut self, delta_time: f32, audio_snapshot: GameplayAudioSnapshot,
+        assist_sfx_path: &'static str, fallback_host_nanos: impl FnOnce() -> u64,
+        before_players: impl FnOnce(&mut Self),
+    ) -> GameplayAction {
         if let Some(action) = self.update_exit_transition(delta_time) {
             return action;
         }
@@ -224,6 +233,8 @@ where
             );
             return GameplayAction::None;
         }
+
+        before_players(self);
 
         let pre_notes_started = if trace_enabled {
             Some(Instant::now())
