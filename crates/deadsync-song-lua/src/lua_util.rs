@@ -3337,7 +3337,10 @@ pub(crate) fn capture_source_broadcast(lua: &Lua, message: &str, params: Option<
     let beat = runtime_broadcast_beat(lua);
     let music_seconds = compile_song_runtime_values(lua).map_or(0.0, |(_, seconds)| f64::from(seconds));
     let params = match params {
-        None | Some(Value::Nil) => Ok(None),
+        None => Ok(None),
+        // The native probe records an explicit nil argument, separately from
+        // an omitted argument. Delivery still receives the original Lua value.
+        Some(Value::Nil) => Ok(Some(serde_json::json!({"type":"nil"}))),
         Some(value) => source_broadcast_value(value.clone(), 0, &mut Vec::new()).map(Some),
     };
     if let Some(mut events) = lua.app_data_mut::<LiveSourceBroadcasts>() {
@@ -6316,6 +6319,18 @@ fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     }
     let sound = lua.create_table()?;
     sound.raw_set("__songlua_volume", 1.0_f32)?;
+    sound.raw_set("__songlua_pitch", 1.0_f32)?;
+    sound.set("pitch", lua.create_function({
+        let sound = sound.clone();
+        move |_, args: MultiValue| {
+            // LunaRageSound::pitch copies the native params, writes FArg(1),
+            // and returns the same sound. Keep the other parameters intact.
+            let pitch = method_arg(&args, 0).cloned().and_then(read_f32)
+                .ok_or_else(|| mlua::Error::runtime("Expected pitch number"))?;
+            sound.raw_set("__songlua_pitch", pitch)?;
+            Ok(sound.clone())
+        }
+    })?)?;
     sound.set(
         "volume",
         lua.create_function({

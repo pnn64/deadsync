@@ -7581,6 +7581,53 @@ assert(GAMESTATE:GetPlayerState(PLAYER_2):GetCurrentPlayerOptions():Drunk()==0.3
     }
 
     #[test]
+    fn live_native_sound_pitch_preserves_identity_and_parameters() {
+        let mut compiled = compile("native-sound-pitch", r#"
+local primary = Def.Sound { InitCommand = function(self)
+    PRIMARY = self:get()
+    assert(PRIMARY:pitch('1.25'):volume(0.5) == PRIMARY)
+    assert(not pcall(PRIMARY.pitch, PRIMARY))
+end }
+local other = Def.Sound { InitCommand = function(self) OTHER = self:get() end }
+return Def.ActorFrame { primary, other,
+    OnCommand = function(self) self:SetUpdateFunction(function(self, delta)
+        if delta > 0 then PRIMARY:pitch(-0.5); self:aux(23) end
+    end) end,
+}
+"#);
+        let mut scene = compiled.live_scene.take().expect("sound scene");
+        let primary = scene.lua.globals().get::<Table>("PRIMARY").unwrap();
+        let other = scene.lua.globals().get::<Table>("OTHER").unwrap();
+        assert_eq!(primary.raw_get::<f32>("__songlua_pitch").unwrap(), 1.25);
+        assert_eq!(primary.raw_get::<f32>("__songlua_volume").unwrap(), 0.5);
+        assert_eq!(other.raw_get::<f32>("__songlua_pitch").unwrap(), 1.0);
+        let output = scene.advance(SongLuaLiveFrame { screen_seconds: 0.1,
+            delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(primary.raw_get::<f32>("__songlua_pitch").unwrap(), -0.5);
+        assert_eq!(other.raw_get::<f32>("__songlua_pitch").unwrap(), 1.0);
+        assert!(scene.states().iter().any(|state| state.aux == 23.0));
+    }
+
+    #[test]
+    fn live_native_broadcast_snapshot_preserves_explicit_nil_argument() {
+        let mut compiled = compile("native-broadcast-arity", r#"
+return Def.Actor { OnCommand = function()
+    MESSAGEMAN:Broadcast('NoArgument')
+    MESSAGEMAN:Broadcast('ExplicitNil', nil)
+    MESSAGEMAN:Broadcast('TableArgument', {value=7})
+end }
+"#);
+        let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+        let events = output.source_broadcasts;
+        assert_eq!(events.iter().map(|event| event.name.as_str()).collect::<Vec<_>>(),
+            ["NoArgument", "ExplicitNil", "TableArgument"]);
+        assert_eq!(events[0].params.as_ref().unwrap(), &None);
+        assert_eq!(events[1].params.as_ref().unwrap(), &Some(serde_json::json!({"type":"nil"})));
+        assert_eq!(events[2].params.as_ref().unwrap(), &Some(serde_json::json!({"value":7})));
+    }
+
+    #[test]
     fn live_sound_volume_keeps_the_sound_identity_and_owner() {
         let mut compiled = compile("sound-volume", r#"
 local primary = Def.Sound { InitCommand = function(self)
