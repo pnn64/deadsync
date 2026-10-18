@@ -1340,6 +1340,9 @@ fn install_song(job: &SongJob) -> Result<PathBuf, String> {
                 true
             },
         )?;
+        // The banner the song borrows from its pack, where its simfile takes
+        // one from there: in a folder of its own it would show none.
+        pack_archive::fetch_borrowed_banner(agent, &cache.index, folder, &staging.join(&name));
         Ok(name)
     })
     .map_err(Failure::into_message)
