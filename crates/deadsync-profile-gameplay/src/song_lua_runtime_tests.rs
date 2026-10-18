@@ -15,6 +15,35 @@ use std::sync::Arc;
 
 type TestCompiledSongLua = CompiledSongLua<SongLuaOverlayActor<()>>;
 
+#[test]
+fn catalog_note_bounds_include_pack_sync_before_global_offset() {
+    let dir = std::env::temp_dir().join(format!("deadsync-catalog-sync-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let _ = deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
+        song_cache: dir.join("cache"), extra_songs: vec![], extra_courses: vec![],
+        autogen_courses: dir.join("autogen"), song_movies: vec![], random_movies: vec![], bg_animations: vec![],
+    });
+    let path = dir.join("control.sm");
+    std::fs::write(&path, "#TITLE:Catalog sync;#BPMS:0=80;#LASTSECONDHINT:103.502998;#NOTES:dance-single::Challenge:1:0,0,0,0,0:\n1000\n0000\n0000\n0001\n;").unwrap();
+    let mut song = deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.0).unwrap();
+    song.first_second = 9.0;
+    song.last_second_hint = 103.502998;
+    song.precise_note_last_second_seconds = Some(94.5);
+    let chart = Arc::new(song.charts[0].clone());
+    let charts = [chart.clone(), chart];
+    let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &[]);
+    let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+    let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+    let config = deadsync_gameplay::GameplayConfig { global_offset_seconds: -0.008,
+        machine_pack_ini_offsets: true, machine_default_sync_pref: deadsync_chart::SyncPref::Itg,
+        ..Default::default() };
+    let context = super::song_lua_play_context(&song, &charts, [&timing, &timing], &profiles,
+        &scroll, 1.0, deadsync_gameplay::GameplayViewport::design(), (854, 480), 16.0/9.0,
+        1.0, &deadsync_gameplay::GameplaySession::default(), &config, "null");
+    assert_eq!(context.song_note_bounds, Some([9.017, 103.502998]),
+        "native catalog timing applies the ITG pack offset before resolving the cabinet offset; hints stay absolute");
+}
+
 fn deadsync_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }

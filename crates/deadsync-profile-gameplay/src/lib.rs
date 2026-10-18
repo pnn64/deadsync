@@ -446,11 +446,11 @@ fn song_lua_compile_player_screen_x(
 /// Resolve native catalog note times using the preferences at catalog loading.
 /// Later game-mode preference changes do not alter Song's stored bounds.
 #[must_use]
-pub fn song_lua_catalog_note_bounds(song: &deadsync_chart::SongData, offset: f32, rate: f32) -> [f32; 2] {
+pub fn song_lua_catalog_note_bounds(song: &deadsync_chart::SongData, offset: f32, rate: f32, sync_offset: f32) -> [f32; 2] {
     let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
-    let first = song.precise_first_second() - rate * offset;
+    let first = (song.precise_first_second() - sync_offset) - rate * offset;
     let last = song.precise_note_last_second_seconds
-        .map(|seconds| seconds - rate * offset).unwrap_or(-1.0).max(specified_last);
+        .map(|seconds| (seconds - sync_offset) - rate * offset).unwrap_or(-1.0).max(specified_last);
     [if first < last { first } else { 0.0 }, last]
 }
 
@@ -500,7 +500,7 @@ pub fn song_lua_compile_context(
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     // The scan applies native chart eligibility and includes hold tails.
     // Neither audio EOF nor its rounded display length defines these bounds.
-    context.song_note_bounds = Some(song_lua_catalog_note_bounds(song, machine_global_offset_seconds, 1.0));
+    context.song_note_bounds = Some(song_lua_catalog_note_bounds(song, machine_global_offset_seconds, 1.0, 0.0));
     context.style_name = match play_style {
         deadsync_gameplay::GameplayInputPlayStyle::Single => "single",
         deadsync_gameplay::GameplayInputPlayStyle::Versus => "versus",
@@ -616,6 +616,7 @@ pub fn song_lua_play_context(
         deadsync_chart::song::sync_pref_offset(gameplay_pack_data(song, None, None).sync_pref,
             config.machine_default_sync_pref)
     } else { 0.0 };
+    context.song_note_bounds = Some(song_lua_catalog_note_bounds(song, config.global_offset_seconds, 1.0, sync_offset));
     if let Some(timing) = &mut context.song_timing {
         timing.shift_group_offset_seconds(sync_offset);
         timing.set_global_offset_seconds(config.global_offset_seconds);
