@@ -25865,7 +25865,19 @@
       ],
       "replay_exit": 1,
       "replay_seconds": 65.9560780999891,
-      "preparation_or_execution_error": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.1s] : 0 checks completed, 0 failed\n[16.1s] : 0 checks completed, 0 failed\n[17.8s] replaying every native gameplay frame\n[18.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[20.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[22.1s] replaying every native gameplay frame: frame 70/4404 (1.6%)\n\nthread 'main' (47592) panicked at tests\\song_lua_itgmania_semantic_parity\\whole_song_archives.rs:1539:35:\nnative gameplay replay failed: draw proxy has no prepared target\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[24.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[26.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[28.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[30.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n"
+      "preparation_or_execution_error": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.1s] : 0 checks completed, 0 failed\n[16.1s] : 0 checks completed, 0 failed\n[17.8s] replaying every native gameplay frame\n[18.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[20.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[22.1s] replaying every native gameplay frame: frame 70/4404 (1.6%)\n\nthread 'main' (47592) panicked at tests\\song_lua_itgmania_semantic_parity\\whole_song_archives.rs:1539:35:\nnative gameplay replay failed: draw proxy has no prepared target\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[24.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[26.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[28.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[30.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n",
+      "incomplete_replay": true,
+      "native_frames": 4404,
+      "last_reported_frame": 79,
+      "concrete_failure": "Second and final attempt aborted in the draw comparator: draw proxy has no prepared target. Last progress was 79/4404 frames; no complete parity report or accepted fixture was produced.",
+      "current_sweep_prior_attempt": {
+        "native_frames": 4404,
+        "replayed_frames": 4404,
+        "draw_mismatch_count": 794501,
+        "callback_errors": [],
+        "report_sha256": "f89ce540fe2f85582aabbdadbc4c170f4fed1ec2231a92d90f3b71de2e0f9637"
+      },
+      "repair_limit_reached": true
     }
   ],
   "counts": {
