@@ -5068,17 +5068,15 @@
       "aliases": []
     },
     {
-      "title": "Turii -Panta Rhei-",
+      "title": "Velvet LEFTS 1",
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30.tar.zst",
-      "sha256": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30",
-      "compressed_bytes": 1723280,
-      "uncompressed_sha256": "85d98b85f782c4b1b983bb1ec76246b7d65e5a11cf7762df73afad1dff16a455",
-      "compression_level": 22,
-      "aliases": [
-        "6d1ce52489bcea0420cabe11bc1bd308fc6e909fd65148fc98461c0035a2ab34.tar.zst"
-      ]
+      "harness_version": "0.1.90",
+      "archive": "ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049.tar.zst",
+      "compressed_bytes": 112561539,
+      "sha256": "ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049",
+      "uncompressed_sha256": "6f4d4553fcb0dc721397b8641065e1f63b69e9ab987c5b0695949a9cb9f208fb",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Void Virus",

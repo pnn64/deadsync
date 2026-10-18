@@ -267,5 +267,12 @@
       ],
       "evidence": "target/song-lua-ninth-ten-20261018/versus-child-control/report.json"
     }
+  },
+  "capture_profile_limitations": {
+    "Velvet LEFTS 1/chart.ssc": {
+      "declared_initial_lua_gc_mode": "stopped",
+      "default_automatic_collector_coverage": "Still pending: the original full automatic-collector replay has 9286 command/query mismatches; first diffuse order differs at 12.21532917022705 seconds. Static CRT alone retains that early mismatch in a diagnostic replay.",
+      "scope": "A passing stopped-collector fixture establishes only its declared input profile. Source, acceptance comparator and all observed native frames/events remain unchanged. Explicit authored collection/restart remains available."
+    }
   }
 }
