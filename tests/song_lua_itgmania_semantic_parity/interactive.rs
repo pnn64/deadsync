@@ -295,21 +295,26 @@ impl DrawChecks {
         trace: &Value,
         scene: u64,
     ) -> Result<(), String> {
-        let owned = state.song_lua.as_ref().ok_or("missing live scene")?;
+        let owned = state.song_lua.as_ref();
         let (order, _) = native_creation_order_with_coverage_for_entries(
             trace,
             scene,
-            owned.context().background_layer_count,
+            owned.map_or(0, |scene| scene.context().background_layer_count),
         )?;
         let paths: BTreeMap<_, _> = order
             .into_iter()
             .map(|(path, pointer)| (pointer, path))
             .collect();
-        let targets: BTreeMap<_, _> = owned
-            .visual_bindings()
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .collect();
+        let bindings = if let Some(owned) = owned {
+            owned.visual_bindings().map_err(|e| e.to_string())?
+        } else {
+            state
+                .compiled_song_scene
+                .as_ref()
+                .ok_or("missing compiled scene")?
+                .visual_bindings()
+        };
+        let targets: BTreeMap<_, _> = bindings.into_iter().collect();
         self.bindings.clear();
         self.composers.clear();
         for creation in trace["actor_creation_inputs"]

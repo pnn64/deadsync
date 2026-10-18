@@ -796,14 +796,14 @@ end
 // ITGmania's _fallback/Scripts/00 init.lua replaces Lua's generator with
 // RageUtil/RandomNumbers.cpp. Keep its MT19937 state local to this song VM;
 // compilation and cached playback must not consume another song's stream.
-#[derive(Clone)]
-struct SongLuaRandom {
+#[derive(Debug, Clone)]
+pub(crate) struct SongLuaRandom {
     words: [u32; 624],
     index: usize,
 }
 
 impl SongLuaRandom {
-    fn seeded(seed: u32) -> Self {
+    pub(crate) fn seeded(seed: u32) -> Self {
         let mut words = [0; 624];
         words[0] = seed;
         for index in 1..words.len() {
@@ -834,7 +834,7 @@ impl SongLuaRandom {
         value ^ (value >> 18)
     }
 
-    fn real(&mut self) -> f64 {
+    pub(crate) fn real(&mut self) -> f64 {
         let low = self.next();
         let high = self.next();
         // Match std::uniform_real_distribution<double> in the platform's
@@ -899,6 +899,16 @@ fn random_int_arg(lua: &Lua, args: &MultiValue, index: usize) -> mlua::Result<i3
 }
 
 struct SongLuaRandomState(SongLuaRandom);
+
+impl Default for SongLuaRandom {
+    fn default() -> Self { Self::seeded(1) }
+}
+pub(crate) fn compiled_random(lua: &Lua) -> SongLuaRandom {
+    lua.app_data_ref::<SongLuaRandomState>().map(|state|state.0.clone()).unwrap_or_default()
+}
+pub(crate) fn restore_compiled_random(lua: &Lua, random: &SongLuaRandom) {
+    if let Some(mut state)=lua.app_data_mut::<SongLuaRandomState>() {state.0=random.clone();}
+}
 
 pub(crate) struct RandomSnapshot {
     lua: Lua,

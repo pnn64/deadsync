@@ -26,6 +26,27 @@ pub struct PreparedGameplaySongLua<S> {
 }
 
 impl<S> PreparedGameplaySongLua<S> {
+    /// Transfer a native Rust scene and bind its load-time actor indices to the
+    /// final compiled layers. This transfer contains no Lua VM or Lua handles.
+    pub fn take_compiled_scene(&mut self) -> Result<Option<crate::CompiledSongScene>, String> {
+        use crate::SongLuaLiveTarget as T;
+        let mut scene = None;
+        let mut targets = Vec::new();
+        if let Some(primary) = &mut self.primary {
+            scene = primary.compiled.compiled_scene.take();
+            targets.extend(primary.compiled.live_indices.iter().enumerate().map(|(local,&global)|(global,T::Root(local))));
+        }
+        for (layer,data) in self.background_layers.iter_mut().enumerate() {
+            if let Some(program)=data.compiled.compiled_scene.take() {if scene.is_some(){return Err("multiple native scenes".into());}scene=Some(program);}
+            targets.extend(data.compiled.live_indices.iter().enumerate().map(|(local,&global)|(global,T::Background(layer,local))));
+        }
+        for (layer,data) in self.foreground_layers.iter_mut().enumerate() {
+            if let Some(program)=data.compiled.compiled_scene.take() {if scene.is_some(){return Err("multiple native scenes".into());}scene=Some(program);}
+            targets.extend(data.compiled.live_indices.iter().enumerate().map(|(local,&global)|(global,T::Foreground(layer,local))));
+        }
+        if let Some(program)=&mut scene {program.bind_targets(targets);}
+        Ok(scene)
+    }
     /// Inspect compiled data without preparation timings or transferring a VM.
     #[cfg(any(feature = "test-support", feature = "performance"))]
     pub fn compiled_layers(&self) -> impl Iterator<Item = &CompiledSongLua<S>> {

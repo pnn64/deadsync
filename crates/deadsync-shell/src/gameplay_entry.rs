@@ -340,10 +340,33 @@ pub fn prepare_song_lua(
     video_renderer: &str,
     random_seed: u32,
 ) -> PreparedGameplaySongLua {
+    prepare_song_lua_with_restart(song,charts,timing,player_profiles,scroll_speed,music_rate,
+        viewport,display_size,display_aspect_ratio,autoplay,session,config,video_renderer,random_seed,None)
+}
+
+/// A compiled screen replacement carries plain state into a fresh load-worker
+/// compilation. No Lua state is retained by the outgoing gameplay screen.
+pub fn prepare_song_lua_with_restart(
+    song: &SongData,
+    charts: &[Arc<ChartData>; MAX_PLAYERS],
+    timing: [&deadsync_rules::timing::TimingData; MAX_PLAYERS],
+    player_profiles: &[deadsync_profile::Profile; MAX_PLAYERS],
+    scroll_speed: &[deadsync_rules::scroll::ScrollSpeedSetting; MAX_PLAYERS],
+    music_rate: f32,
+    viewport: deadsync_gameplay::GameplayViewport,
+    display_size: (u32, u32),
+    display_aspect_ratio: f32,
+    autoplay: f32,
+    session: &deadsync_gameplay::GameplaySession,
+    config: &deadsync_gameplay::GameplayConfig,
+    video_renderer: &str,
+    random_seed: u32,
+    restart: Option<deadsync_song_lua::CompiledSceneRestart>,
+) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
-    let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
+    let mut context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
         music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
         config, video_renderer, random_seed, false) {
         Ok(context) => context,
@@ -352,6 +375,7 @@ pub fn prepare_song_lua(
             return PreparedGameplaySongLua::default();
         }
     };
+    if let Some(restart)=restart {context.resume_compiled_scene(restart);}
     deadsync_song_lua::playback::prepare_song_lua(
         song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,

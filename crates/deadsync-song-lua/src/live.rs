@@ -943,7 +943,7 @@ pub(crate) fn capture_source_request(lua: &Lua, request: SongLuaLiveRequest) -> 
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum SongLuaLiveTarget {
     Root(usize),
     Background(usize, usize),
@@ -962,6 +962,8 @@ pub struct SongLuaLiveBroadcast {
 
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
+    /// Screen-owned audio from a compiled program; no Lua execution is involved.
+    pub compiled_music: Option<crate::CompiledMusicAction>,
     pub request: Option<SongLuaLiveRequest>,
     /// Authored calls retain their multiplicity while the screen manager
     /// consumes only the final queued screen target.
@@ -982,6 +984,7 @@ pub struct SongLuaLiveOutput {
 
 impl SongLuaLiveOutput {
     pub fn append(&mut self, mut next: Self) {
+        if next.compiled_music.is_some() {self.compiled_music=next.compiled_music.take();}
         if next.request.is_some() { self.request = next.request; }
         self.source_requests.append(&mut next.source_requests);
         self.broadcasts.append(&mut next.broadcasts);
@@ -1914,7 +1917,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     }
     let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
     let draw_frames = crate::draw_capture::take_live(lua).map_err(mlua::Error::external)?;
-    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes, draw_frames })
+    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes, draw_frames, ..Default::default() })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {

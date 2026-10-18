@@ -758,6 +758,7 @@ pub struct State {
     /// One initialized song VM owned by the screen, transferred from the load
     /// worker. Its fixed pose bindings and render plan live until screen exit.
     pub song_lua: Option<deadsync_song_lua::SongLuaLiveScene>,
+    pub compiled_song_scene: Option<deadsync_song_lua::CompiledSongScene>,
     song_lua_last_input: Option<InputEvent>,
     song_lua_pending_inputs: Vec<(InputEvent, Option<deadsync_input::PhysicalInput>)>,
     song_lua_held_inputs: SongLuaHeldInputs,
@@ -970,7 +971,7 @@ impl State {
         scene.install_step_callback(&mut self.gameplay);
         scene.install_hold_judgment_callback(&mut self.gameplay);
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
-        if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
+        if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
         scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
         self.song_lua = Some(scene);
@@ -1011,6 +1012,28 @@ impl State {
     }
 
     fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
+        if let Some(scene) = &mut self.compiled_song_scene {
+            // Foreground actors follow the raw song clock. The smoothed
+            // display clock is for HUD/scroll presentation, not simulation.
+            let music=(self.gameplay.clock.song_position.current_music_time_ns as f64 / 1_000_000_000.0) as f32;
+            let output = scene.advance(f64::from(self.gameplay.clock.song_position.current_beat), music);
+            scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
+            let transition = matches!(&output.request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message=="SM_DoNextScreen");
+            let reload = matches!(&output.request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen=="ScreenGameplay");
+            self.song_lua_output.append(output);
+            if reload {
+                effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));
+                self.song_lua_draw_reload_pending=false;
+            }
+            if transition && self.song_lua_out.is_none() {
+                self.gameplay.progress.stage.song_completed_naturally=true;
+                self.song_lua_out=Some(SongLuaOut{phase:0,left:TRANSITION_OUT_DELAY});
+            } else if self.song_lua_out.as_mut().is_some_and(|out|out.advance(delta)) {
+                self.song_lua_ended=true;
+                effects.push(ThemeEffect::NavigateNoFade(Screen::Evaluation));
+            }
+            return Ok(());
+        }
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
         scene.apply_pending_player_writes(&mut self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
@@ -1280,6 +1303,7 @@ impl State {
         let state = Self {
             gameplay,
             song_lua: None,
+            compiled_song_scene: None,
             song_lua_last_input: None,
             song_lua_pending_inputs: Vec::new(),
             song_lua_held_inputs: SongLuaHeldInputs::default(),
@@ -1751,6 +1775,7 @@ pub fn init(
         log::warn!("Cannot attach song Lua for '{}': {error}", song.title);
         None
     });
+    let compiled_scene = song_lua_data.take_compiled_scene().expect("validated compiled scene bindings");
     let noteskin_assets = gameplay_noteskin_assets(
         cols_per_player,
         num_players,
@@ -1826,6 +1851,11 @@ pub fn init(
         judgment_palettes,
     );
     state.hide_song_intro = startup.hide_in;
+    if let Some(scene) = compiled_scene {
+        scene.write_visuals(&mut state.gameplay.mods.song_lua_visuals).expect("compiled scene visuals");
+        if let Some(scratch)=&mut state.song_scratch {scratch.enable_dynamic_scene();}
+        state.compiled_song_scene=Some(scene);
+    }
     if let Some(scene) = live_scene {
         if let Err(error) = state.attach_song_lua(scene) {
             log::warn!("Cannot attach prepared song Lua: {error}");
@@ -3064,7 +3094,7 @@ impl State {
         &mut self,
         events: impl IntoIterator<Item = (InputEvent, Option<deadsync_input::PhysicalInput>)>,
     ) {
-        if self.song_lua.is_some() && !self.song_lua_ended {
+        if (self.song_lua.is_some() || self.compiled_song_scene.is_some()) && !self.song_lua_ended {
             self.song_lua_pending_inputs.extend(events);
         }
     }
@@ -3085,7 +3115,7 @@ impl State {
 }
 
 fn dispatch_song_lua_input(state: &mut State, event: &InputEvent, physical: Option<deadsync_input::PhysicalInput>) {
-    if state.song_lua.is_none() || state.song_lua_ended { return; }
+    if (state.song_lua.is_none() && state.compiled_song_scene.is_none()) || state.song_lua_ended { return; }
     use deadsync_song_lua::SongLuaInputType;
     // Release aliases exist to clear menu repeat state. They are not another
     // physical input and must not call authored callbacks a second time.
@@ -3152,6 +3182,17 @@ fn dispatch_song_lua_callback(state: &mut State, event: &InputEvent, physical: O
 /// input owners. Callback return values do not suppress normal gameplay input.
 pub fn handle_song_lua_input(state: &mut State, input: &deadsync_song_lua::SongLuaInputEvent<'_>) {
     if state.song_lua_ended { return; }
+    if let Some(scene) = &mut state.compiled_song_scene {
+        scene.input(input);
+        if let Err(error)=scene.write_visuals(&mut state.gameplay.mods.song_lua_visuals) {
+            state.song_lua_output.errors.push(error);
+        }
+        if scene.restart_pending() {
+            state.song_lua_draw_reload_pending=true;
+            state.song_lua_output.request=Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen("ScreenGameplay".into()));
+        }
+        return;
+    }
     let Some(scene) = &mut state.song_lua else { return; };
     match scene.input(&input) {
         Ok((_, output)) => {

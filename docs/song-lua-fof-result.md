@@ -1,5 +1,16 @@
 # Fof Guys full replay result
 
+## Current production status (2026-10-19)
+
+The normal compiled path now runs the Fof Guys minigame with Rust-owned
+physics, input and dynamic geometry. Lua runs only during loading and is
+released before gameplay. The focused native Single and Versus captures pass
+through normal preparation with no retained VM. The historical replay below
+covers fewer behaviors and remains separate from those new checks.
+
+Full-song completion and framebuffer pixel parity remain unverified. See
+[the compiled-path repair and evidence](song-lua-fof-production-audit.md).
+
 `fof_guys/fof.ssc` **passed** the existing full replay on 2026-10-16:
 7,378/7,378 native frames, 129 stage samples, 1,419 stage fields, zero
 mismatches, zero callback errors, and exit code 0. Acceptance is the full

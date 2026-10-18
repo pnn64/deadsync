@@ -17,6 +17,8 @@ mod cmd;
 mod compat;
 mod compile;
 mod compile_timing;
+mod compiled_scene;
+pub use compiled_scene::{CompiledSongScene, CompiledSceneRestart, CompiledMusicAction};
 mod crypto;
 mod draw_capture;
 pub use draw_capture::{
@@ -1481,6 +1483,8 @@ pub struct SongLuaHostClockInput {
 
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
+    /// Plain state carried into a load-worker compilation after an interactive screen reload.
+    pub compiled_scene_restart: Option<CompiledSceneRestart>,
     /// Retain the initialized scene for actual gameplay instead of probing
     /// future callbacks on the load worker.
     pub live: bool,
@@ -1587,6 +1591,7 @@ impl SongLuaCompileContext {
             background_upper_left_colors: Vec::new(),
             foreground_names: Vec::new(),
             live: false,
+            compiled_scene_restart: None,
             defer_initial_live_update: false,
             screen_loading: false,
             song_dir,
@@ -1997,6 +2002,7 @@ pub struct SongLuaStateCall {
 
 #[derive(Debug)]
 pub struct CompiledSongLua<OverlayActor> {
+    pub compiled_scene: Option<CompiledSongScene>,
     pub live_scene: Option<SongLuaLiveScene>,
     /// Retained scene positions corresponding to this layer's overlays.
     pub live_indices: Vec<usize>,
@@ -2054,6 +2060,7 @@ impl<OverlayActor> CompiledSongLua<OverlayActor> {
 impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
     fn default() -> Self {
         Self {
+            compiled_scene: None,
             live_scene: None,
             live_indices: Vec::new(),
             loaded_steps: None,

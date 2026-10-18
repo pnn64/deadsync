@@ -13076,10 +13076,10 @@ pub struct FrameScratch {
 }
 
 impl FrameScratch {
-    /// Screen-entry-only warmup for a retained Lua scene. Every prepared actor
+    /// Screen-entry-only warmup for a native program or diagnostic live scene. Every prepared actor
     /// may mutate, including ancestors, draw order and camera scope. The exact
     /// lists are allocated once and reused; frames do not rebuild this plan.
-    pub fn enable_live_scene(&mut self) {
+    pub fn enable_dynamic_scene(&mut self) {
         // A foreground can bind or retarget a proxy after screen preparation.
         // Reserve the largest direct source (whole Player: three runs) for
         // every root proxy before any of those live callbacks execute.

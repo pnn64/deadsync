@@ -4096,6 +4096,9 @@ fn compare_stage_sample(
     for p in 0..state.gameplay.num_players() {
     let player = &state.players_runtime.players[p];
     let score = state.stage_itg_score_inputs(p).ok_or("missing active player score inputs")?;
+    let chart_index = if let Some(compiled) = &state.compiled_song_scene {
+        compiled.selected_chart_indices()[p].ok_or("compiled GAMESTATE has no selected chart")?
+    } else {
     let selected = if let Some(observation) = overlay_observation {
         observation.player_step_indices[p]
     } else {
@@ -4106,6 +4109,8 @@ fn compare_stage_sample(
     let chart_index = if context.song_step_chart_indices.is_empty() { Some(selected) }
         else { context.song_step_chart_indices.get(selected).copied().flatten() }
         .ok_or("GAMESTATE selected an unplayable chart")?;
+    chart_index
+    };
     let metadata = song.charts.get(chart_index).ok_or("GAMESTATE selected an absent chart")?;
     let actual = if let Some(observation) = overlay_observation {
         let observed = &observation.players[p];
@@ -4186,6 +4191,40 @@ pub(crate) fn replay_with_command_observer(
     simfile: &Path,
     last_seen_video_driver: Option<&str>,
     dynamic_commands: bool,
+    scope: Scope,
+    progress: impl FnMut(usize, usize),
+) -> Result<Value, String> {
+    replay_mode(
+        trace,
+        trace_path,
+        simfile,
+        last_seen_video_driver,
+        dynamic_commands,
+        false,
+        scope,
+        progress,
+    )
+}
+
+pub(crate) fn replay_compiled(
+    trace: &Value,
+    trace_path: &Path,
+    simfile: &Path,
+    scope: Scope,
+    progress: impl FnMut(usize, usize),
+) -> Result<Value, String> {
+    replay_mode(
+        trace, trace_path, simfile, None, false, true, scope, progress,
+    )
+}
+
+fn replay_mode(
+    trace: &Value,
+    trace_path: &Path,
+    simfile: &Path,
+    last_seen_video_driver: Option<&str>,
+    dynamic_commands: bool,
+    compiled_path: bool,
     scope: Scope,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Value, String> {
@@ -4326,7 +4365,7 @@ pub(crate) fn replay_with_command_observer(
         &config,
         trace["display"]["video_renderers"].as_str().unwrap_or("null"),
         native_random_seed(trace)?,
-        true,
+        !compiled_path,
     )?;
     // The recorded renderer is machine input. Keep its exact preference list:
     // charts can select an entirely different actor tree when AFTs are disabled.
@@ -4361,11 +4400,32 @@ pub(crate) fn replay_with_command_observer(
     // Native ScreenGameplay updates song position before its first Update(0).
     // Defer preparation's placeholder update and run every recorded frame,
     // including zero-delta inputs, through the actual gameplay entry point.
-    assert!(context.defer_initial_live_update, "production preparation must wait for the screen clock");
-    let prepared = deadsync_song_lua::playback::prepare_song_lua(
-        &song, &context, deadsync_assets::song_lua::compile_song_lua,
-        deadsync_assets::song_lua::compile_song_lua_layers,
-    );
+    assert_eq!(context.defer_initial_live_update, !compiled_path);
+    let prepared = if compiled_path {
+        deadsync_shell::gameplay_entry::prepare_song_lua(
+            &song,
+            &charts,
+            std::array::from_fn(|p| &payloads[p].timing),
+            &profiles,
+            &scroll,
+            1.0,
+            viewport,
+            (context.display_width as u32, context.display_height as u32),
+            context.display_aspect_ratio,
+            f32::from(autoplay),
+            &session,
+            &config,
+            &context.video_renderers,
+            context.random_seed,
+        )
+    } else {
+        deadsync_song_lua::playback::prepare_song_lua(
+            &song,
+            &context,
+            deadsync_assets::song_lua::compile_song_lua,
+            deadsync_assets::song_lua::compile_song_lua_layers,
+        )
+    };
     let observe_overlay = trace["update_frame_phase"].as_str() == Some("gameplay-overlay-probe");
     let init_scene = |prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
         deadsync_assets::noteskin::SpriteSlot,
@@ -4410,14 +4470,24 @@ pub(crate) fn replay_with_command_observer(
             prepared,
             Default::default(),
         ));
-        if state.song_lua.is_none() {
+        if compiled_path {
+            assert!(
+                state.song_lua.is_none(),
+                "compiled replay retained a Lua VM"
+            );
+            if state.compiled_song_scene.is_none() {
+                return Err(
+                    "production preparation did not produce a compiled interactive program".into(),
+                );
+            }
+        } else if state.song_lua.is_none() {
             return Err("preparation did not retain a Lua scene".into());
         }
         // This is a recorded controller input, not an expected score. Native
         // Player::HandleTapRowScore/HandleHoldScore skip release autoplay
         // scoring; run the production autoplay path with the same input.
         state.set_live_autoplay_enabled(autoplay);
-        if observe_overlay {
+        if observe_overlay && !compiled_path {
             state.song_lua.as_ref().expect("validated Lua scene")
                 .enable_overlay_stage_observer().map_err(|error| error.to_string())?;
         }
@@ -4434,11 +4504,15 @@ pub(crate) fn replay_with_command_observer(
     }
 
     let startup = state.take_song_lua_output();
-    let startup_scenes = startup
-        .broadcasts
-        .iter()
-        .filter(|(_, name, _)| name == "ScreenChanged")
-        .count();
+    let startup_scenes = if compiled_path {
+        1
+    } else {
+        startup
+            .broadcasts
+            .iter()
+            .filter(|(_, name, _)| name == "ScreenChanged")
+            .count()
+    };
     let mut mismatches = Vec::new();
     let mut scene_count = startup_scenes as u64;
     let mut pending_reload = false;
@@ -4469,19 +4543,48 @@ pub(crate) fn replay_with_command_observer(
             return Err("native frame sequence is incomplete".into());
         }
         if pending_reload {
-            let mut scene = state
-                .song_lua
-                .take()
-                .ok_or("reload has no retained Lua scene")?;
-            let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
-                trace, scene_count + 1, scene.context().background_layer_count)?;
-            runtime_coverage.extend(factory_coverage);
-            scene.set_message_actor_order(creation_order);
-            let prepared = deadsync_song_lua::playback::reload_song_lua(
-                &song,
-                scene,
-                deadsync_assets::song_lua::reload_song_lua,
-            )?;
+            let prepared = if compiled_path {
+                let restart = state
+                    .compiled_song_scene
+                    .as_mut()
+                    .and_then(|s| s.take_restart())
+                    .ok_or("compiled reload has no restart state")?;
+                deadsync_shell::gameplay_entry::prepare_song_lua_with_restart(
+                    &song,
+                    &charts,
+                    std::array::from_fn(|p| &payloads[p].timing),
+                    &profiles,
+                    &scroll,
+                    1.0,
+                    viewport,
+                    (context.display_width as u32, context.display_height as u32),
+                    context.display_aspect_ratio,
+                    f32::from(autoplay),
+                    &session,
+                    &config,
+                    &context.video_renderers,
+                    context.random_seed,
+                    Some(restart),
+                )
+            } else {
+                let mut scene = state
+                    .song_lua
+                    .take()
+                    .ok_or("reload has no retained Lua scene")?;
+                let (creation_order, factory_coverage) =
+                    native_creation_order_with_coverage_for_entries(
+                        trace,
+                        scene_count + 1,
+                        scene.context().background_layer_count,
+                    )?;
+                runtime_coverage.extend(factory_coverage);
+                scene.set_message_actor_order(creation_order);
+                deadsync_song_lua::playback::reload_song_lua(
+                    &song,
+                    scene,
+                    deadsync_assets::song_lua::reload_song_lua,
+                )?
+            };
             state = init_scene(prepared)?;
             let startup = state.take_song_lua_output();
             errors.extend(startup.errors);
@@ -4685,6 +4788,36 @@ pub(crate) fn replay_with_command_observer(
                 scene_count, &mut mismatches, &mut observations)?;
         }
     }
+    if compiled_path {
+        let interactive = draw_checks.report(input_cursor);
+        let expected_samples = samples
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s["phase"].as_str(),
+                    Some("screen-active" | "progress" | "screen-end" | "gameplay-exit")
+                )
+            })
+            .count();
+        let passed = scope == Scope::Full
+            && used_frames == frames.len()
+            && scene_count == last_scene
+            && checked_samples == expected_samples
+            && input_cursor == input_events.len()
+            && draw_cursor == draw_samples.len()
+            && !draw_samples.is_empty()
+            && mismatches.is_empty()
+            && errors.is_empty();
+        return Ok(
+            json!({"execution_path":"compiled-rust","production_preparation_exercised":true,
+            "retained_lua_vm":false,"compiled_gameplay_checks_passed":passed,
+            "production_parity_proven":false,"whole_song_parity_proven":false,"pixel_parity_proven":false,
+            "archive_accepted":false,"native_frames":frames.len(),"replayed_frames":used_frames,
+            "replayed_scenes":scene_count,"checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
+            "interactive":interactive,"mismatches":mismatches,"errors":errors,
+            "pending_coverage":["full-song completion","sampled framebuffer pixels","compiled command/query instrumentation"]}),
+        );
+    }
     if scope != Scope::Full {
         let calls = compare_calls(
             &trace,
@@ -4698,6 +4831,7 @@ pub(crate) fn replay_with_command_observer(
         coverage["pending"].as_array_mut().unwrap()
             .extend(runtime_coverage.iter().map(|gap| json!(gap)));
         let mut report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
+            "execution_path":"diagnostic-live-lua","production_preparation_exercised":false,"production_parity_proven":false,
             "scope":match scope { Scope::Entry => "entry", Scope::FirstQuery => "first-point-query",
                 Scope::ThroughSecond(_) => "through-second", Scope::Full => "full" },
             "through_second":match scope { Scope::ThroughSecond(at) => Some(at), _ => None },
@@ -4792,6 +4926,7 @@ pub(crate) fn replay_with_command_observer(
     coverage["pending"].as_array_mut().unwrap()
         .extend(runtime_coverage.iter().map(|gap| json!(gap)));
     let mut report = json!({"diagnostic_only":false,"whole_song_parity_proven":false,"archive_accepted":false,
+        "execution_path":"diagnostic-live-lua","production_preparation_exercised":false,"production_parity_proven":false,
         "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,

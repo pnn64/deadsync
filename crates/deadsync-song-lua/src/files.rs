@@ -96,7 +96,7 @@ pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resu
 // ActorUtil::ResolvePath calls CollapsePath before filesystem lookup. Keep
 // that lexical spelling for Lua chunk names; canonicalize would also resolve
 // filesystem links, which native actor loading does not do.
-fn collapse_actor_path(path: &Path) -> PathBuf {
+pub(crate) fn collapse_actor_path(path: &Path) -> PathBuf {
     let text = file_path_string(path);
     let mut output = PathBuf::new();
     for component in Path::new(&text).components() {

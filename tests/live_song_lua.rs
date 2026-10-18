@@ -1,4 +1,5 @@
-//! Replay native gameplay observations through the production Lua screen.
+//! Replay native observations through gameplay. `--compiled` exercises normal
+//! preparation and requires Rust-owned execution without a retained Lua VM.
 #[path = "song_lua_itgmania_semantic_parity/native_gameplay.rs"]
 mod native_gameplay;
 #[path = "support/paths.rs"]
@@ -7,7 +8,26 @@ mod paths;
 use std::{path::Path, process::ExitCode};
 
 fn main() -> ExitCode {
+    // Match a worker's stack instead of Windows' smaller executable entry
+    // stack. This harness nests preparation, gameplay init and comparators.
+    std::thread::Builder::new()
+        .name("native-gameplay-replay".into())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(run)
+        .expect("spawn replay worker")
+        .join()
+        .expect("replay worker panicked")
+}
+
+fn run() -> ExitCode {
     let mut args: Vec<_> = std::env::args_os().skip(1).collect();
+    let compiled_path = args
+        .iter()
+        .position(|arg| arg == "--compiled")
+        .is_some_and(|index| {
+            args.remove(index);
+            true
+        });
     let scope = if args.last().is_some_and(|arg| arg == "--first-query") {
         args.pop();
         native_gameplay::Scope::FirstQuery
@@ -27,24 +47,70 @@ fn main() -> ExitCode {
         eprintln!("expected native trace, simfile and report path");
         return ExitCode::FAILURE;
     }
-    let trace: serde_json::Value = match std::fs::read(&args[0]).map_err(|e| e.to_string())
-        .and_then(|bytes| if Path::new(&args[0]).extension().is_some_and(|e|e=="zst") {
-            zstd::stream::decode_all(bytes.as_slice()).map_err(|e|e.to_string())
-        } else { Ok(bytes) })
-        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string())) {
+    eprintln!(
+        "{}",
+        if compiled_path {
+            "Normal compiled gameplay replay; no runtime Lua VM"
+        } else {
+            "Diagnostic live Lua replay; normal compiled gameplay preparation is not exercised"
+        }
+    );
+    let trace: serde_json::Value = match std::fs::read(&args[0])
+        .map_err(|e| e.to_string())
+        .and_then(|bytes| {
+            if Path::new(&args[0]).extension().is_some_and(|e| e == "zst") {
+                zstd::stream::decode_all(bytes.as_slice()).map_err(|e| e.to_string())
+            } else {
+                Ok(bytes)
+            }
+        })
+        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()))
+    {
         Ok(trace) => trace,
-        Err(error) => { eprintln!("cannot read native capture: {error}"); return ExitCode::FAILURE; }
+        Err(error) => {
+            eprintln!("cannot read native capture: {error}");
+            return ExitCode::FAILURE;
+        }
     };
-    match native_gameplay::replay(&trace, Path::new(&args[0]), Path::new(&args[1]), None, scope, |used, total| {
-        if used % 256 == 0 || used == total { eprintln!("replay {used}/{total}"); }
-    }) {
+    let progress = |used, total| {
+        if used % 256 == 0 || used == total {
+            eprintln!("replay {used}/{total}");
+        }
+    };
+    let result = if compiled_path {
+        native_gameplay::replay_compiled(
+            &trace,
+            Path::new(&args[0]),
+            Path::new(&args[1]),
+            scope,
+            progress,
+        )
+    } else {
+        native_gameplay::replay(
+            &trace,
+            Path::new(&args[0]),
+            Path::new(&args[1]),
+            None,
+            scope,
+            progress,
+        )
+    };
+    match result {
         Ok(report) => {
             match serde_json::to_vec_pretty(&report)
                 .map_err(|error| error.to_string())
                 .and_then(|bytes| {
                     std::fs::write(&args[2], bytes).map_err(|error| error.to_string())
                 }) {
-                Ok(()) if report["interactive_checks_passed"] == true => ExitCode::SUCCESS,
+                Ok(())
+                    if report[if compiled_path {
+                        "compiled_gameplay_checks_passed"
+                    } else {
+                        "interactive_checks_passed"
+                    }] == true =>
+                {
+                    ExitCode::SUCCESS
+                }
                 Ok(()) => ExitCode::from(2), // Other diagnostic coverage does not certify an archive.
                 Err(error) => {
                     eprintln!("could not write report: {error}");

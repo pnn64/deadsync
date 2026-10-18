@@ -655,6 +655,13 @@ pub(crate) fn update(
         effects,
     );
     let output = state.take_song_lua_output();
+    if let Some(action)=output.compiled_music {
+        audio.stop_screen_sfx();
+        if let deadsync_song_lua::CompiledMusicAction::Start(path)=action {
+            if let Some(sound)=sounds.resolve_path(&path) {audio.play_screen_sfx(sound);}
+            else {log::warn!("Compiled scene music was not prewarmed: {}",path.display());}
+        }
+    }
     for error in output.errors { log::warn!("Song Lua: {error}"); }
     for event in output.sounds {
         if let Some(sound) = sounds.resolve_path(&event.path) {
