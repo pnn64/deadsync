@@ -1,6 +1,6 @@
 use crate::mix::ASSIST_TICK_BUS;
 use deadlib_audio::stream::{OutputFormat, load_and_resample_sfx};
-use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxSender};
+use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxPan, SfxSender};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -57,10 +57,28 @@ impl SfxCache {
 
     /// Enqueues prepared samples on `bus` without loading or looking up a path.
     pub fn play(&mut self, sound: &SfxId, bus: MixBus, target_stream_frame: u64) {
+        self.enqueue(sound, bus, target_stream_frame, None, SfxPan::Center);
+    }
+
+    /// Retriggers one logical sound instance, such as one player's mine sound.
+    pub fn restart(&mut self, sound: &SfxId, bus: MixBus, slot: u8, pan: SfxPan) {
+        self.enqueue(sound, bus, 0, Some(slot), pan);
+    }
+
+    fn enqueue(
+        &mut self,
+        sound: &SfxId,
+        bus: MixBus,
+        target_stream_frame: u64,
+        restart_slot: Option<u8>,
+        pan: SfxPan,
+    ) {
         let _ = self.sender.try_send(QueuedSfx {
             data: Arc::clone(&sound.0),
             bus,
             generation: self.controls.bus_generation(bus),
+            restart_slot,
+            pan,
             target_stream_frame,
         });
     }
@@ -119,8 +137,9 @@ mod tests {
         cache.play(&same, effect, 0);
         controls.stop_bus(screen);
         cache.play(&sound, screen, 960);
+        cache.restart(&sound, effect, 1, SfxPan::Left);
         let queued: Vec<_> = receiver.try_iter().collect();
-        assert_eq!(queued.len(), 3);
+        assert_eq!(queued.len(), 4);
         assert!(Arc::ptr_eq(&queued[0].data, &queued[1].data));
         assert!(Arc::ptr_eq(&queued[0].data, &queued[2].data));
         assert_eq!(queued[0].bus, screen);
@@ -131,6 +150,10 @@ mod tests {
         assert!(!controls.is_current(screen, queued[0].generation));
         assert!(controls.is_current(effect, queued[1].generation));
         assert!(controls.is_current(screen, queued[2].generation));
+        assert_eq!(queued[0].restart_slot, None);
+        assert_eq!(queued[1].restart_slot, None);
+        assert_eq!(queued[3].restart_slot, Some(1));
+        assert_eq!(queued[3].pan, SfxPan::Left);
         assert!(queued[0].data.len() > samples.len() * 3);
         assert!(queued[0].data.iter().any(|sample| *sample > 900));
         assert!(

@@ -2936,6 +2936,9 @@ impl App {
         mut gs: gameplay::State,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
+        // ITGmania destroys the previous Player sounds before a restart or
+        // the next course stage. Gameplay-to-gameplay skips screen exit.
+        self.audio.stop_mine_sfx();
         // Releases can arrive while the replacement Lua screen is prepared.
         gs.reconcile_song_lua_held_inputs(|event| self.input.is_down(event));
         gs.queue_song_lua_inputs(self.pending_gameplay_lua_inputs.drain(..));

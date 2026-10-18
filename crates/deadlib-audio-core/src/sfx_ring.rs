@@ -74,6 +74,8 @@ mod tests {
             data: Arc::from([frame as i16]),
             bus: MixBus::new(0),
             generation: frame + 1,
+            restart_slot: None,
+            pan: crate::SfxPan::Center,
             target_stream_frame: frame,
         }
     }

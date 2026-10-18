@@ -562,9 +562,9 @@ pub(crate) fn drain_core(
                 looping,
                 rate,
             } => audio.play_music(path, audio_cut(cut), looping, rate),
-            GameplayAudioCommand::PlayPreloadedSfx(path) => {
+            GameplayAudioCommand::PlayPreloadedMineSfx { path, player, two_players } => {
                 if let Some(sound) = sounds.resolve(path) {
-                    audio.play_sfx(sound);
+                    audio.play_mine_sfx(sound, player, two_players);
                 }
             }
             GameplayAudioCommand::PlayPreloadedAssistTick(path) => {

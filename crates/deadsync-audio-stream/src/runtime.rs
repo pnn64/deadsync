@@ -2,7 +2,7 @@
 use deadlib_audio::LinuxAudioBackend;
 use deadlib_audio::{InitConfig, prepare_output};
 use deadlib_audio_core::{
-    OutputDeviceInfo, OutputTimingSnapshot, StutterDiagAudioEvent, normalized_music_rate,
+    OutputDeviceInfo, OutputTimingSnapshot, SfxPan, StutterDiagAudioEvent, normalized_music_rate,
 };
 use deadsync_audio_replaygain as replaygain;
 use std::path::{Path, PathBuf};
@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
 use crate::mix::{
-    EFFECT_BUS, SCREEN_BUS, assist_tick_generation, init_controls, stop_assist_tick_bus,
-    stop_screen_bus,
+    EFFECT_BUS, MINE_BUS, SCREEN_BUS, assist_tick_generation, init_controls,
+    stop_assist_tick_bus, stop_mine_bus, stop_screen_bus,
 };
 use crate::music_map::clear_music_pos_map;
 use crate::sfx_cache::SfxCache;
@@ -153,6 +153,22 @@ impl AudioControl {
         if let Some(engine) = self.engine.as_mut() {
             engine.sfx_cache.play(sound, EFFECT_BUS, 0);
         }
+    }
+
+    /// Stop and replay the current mine sound for one player (ITGmania parity).
+    pub fn play_mine_sfx(&mut self, sound: &SfxId, player: u8, two_players: bool) {
+        if let Some(engine) = self.engine.as_mut() {
+            let pan = if two_players {
+                if player == 0 { SfxPan::Left } else { SfxPan::Right }
+            } else {
+                SfxPan::Center
+            };
+            engine.sfx_cache.restart(sound, MINE_BUS, player, pan);
+        }
+    }
+
+    pub fn stop_mine_sfx(&self) {
+        stop_mine_bus();
     }
 
     /// Enqueues a prepared effect that stops when the owning screen exits.
