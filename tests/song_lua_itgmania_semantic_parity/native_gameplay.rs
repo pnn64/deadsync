@@ -2024,14 +2024,39 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn gameplay_tween_overflow_finishes_native_queue_and_discards_commands() {
+        let mut state = owned_judgment_control("tween-overflow", "0000\n1000\n0000\n1000\n", r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        for i=1,51 do self:linear(0.5):x(i) end
+        assert(self:GetTweenTimeLeft() == 25.5 and self:GetX() == 0)
+        self:linear(0.5)
+        assert(self:GetTweenTimeLeft() == 0.5 and self:GetX() == 51)
+        self:x(52):finishtweening()
+        for i=1,50 do self:linear(0.5):x(i) end
+        self:queuecommand('Discarded')
+        self:queuecommand('Done')
+        assert(self:GetTweenTimeLeft() == 0 and self:GetX() == 50)
+    end,
+    DiscardedCommand=function() error('overflow must discard prior commands') end,
+    DoneCommand=function(self) self:sleep(9999) end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, 0, 1_000_000_000);
+        update_judgment_control(&mut state, 1_000_000, 1_001_000_000);
+    }
+
+    #[test]
     fn gameplay_immediate_failure_draws_until_native_blank_transition_finishes() {
         use deadsync_theme_simply_love::SimplyLoveEffect as Effect;
         use deadsync_theme_simply_love::screens::SimplyLoveScreen;
-        let mut state = owned_judgment_control("immediate-failure-draw", "0000\n1000\n0000\n1000\n", r#"
+        for authored_out in [false, true] {
+        let script = r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
 return Def.ActorFrame {
     OnCommand=function(self)
         self:sleep(9999)
+        -- authored out
         self:SetDrawFunction(function() MESSAGEMAN:Broadcast('FailureDraw') end)
         self:addcommand('JudgmentMessage', function(_, params)
             if params.TapNoteScore == 'TapNoteScore_W1' then
@@ -2043,7 +2068,10 @@ return Def.ActorFrame {
     OffCommand=function() MESSAGEMAN:Broadcast('FailureOff') end,
     EndCommand=function() MESSAGEMAN:Broadcast('FailureEnd') end,
 }
-"#, 0.0);
+"#.replace("-- authored out", if authored_out {
+            "SCREENMAN:GetTopScreen():StartTransitioningScreen('SM_DoNextScreen')"
+        } else { "" });
+        let mut state = owned_judgment_control("immediate-failure-draw", "0000\n1000\n0000\n1000\n", &script, 0.0);
         state.gameplay.setup.config.default_fail_type = deadsync_gameplay::GameplayFailType::Immediate;
         update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
         let time = state.gameplay.chart_runtime.note_time_cache_ns[0] + 1_000_000;
@@ -2068,6 +2096,7 @@ return Def.ActorFrame {
             } else {
                 assert!(matches!(effects.as_slice(), [Effect::NavigateNoFade(SimplyLoveScreen::Evaluation)]));
             }
+        }
         }
     }
 

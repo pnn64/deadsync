@@ -4004,6 +4004,7 @@ pub fn actor_command_queue(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
 fn enqueue_actor_command(lua: &Lua, actor: &Table, name: &str) -> mlua::Result<()> {
     prepare_capture_scope_actor(lua, actor)?;
     // Commands and messages append a zero-duration state after the active tween.
+    finish_overflowing_tween_queue(lua, actor)?;
     flush_actor_capture(actor)?;
     if queue_replay_command(lua, actor, name) {
         return Ok(());
@@ -6637,9 +6638,29 @@ pub fn make_actor_tween_method(
     })
 }
 
+// Actor::BeginTweening finishes an overflowing queue before adding its 52nd
+// state. Sleep adds two states; queued commands add one zero-duration state.
+fn finish_overflowing_tween_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let retained = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays|
+        replays.0.get(&(actor.to_pointer() as usize)).map(|replay| replay.queue.len()));
+    let count = if let Some(count) = retained { count }
+        else if let Some(frames) = lua.app_data_ref::<SongLuaCompileFrames>() {
+            frames.clocks.get(&(actor.to_pointer() as usize)).map_or(0, |clock| clock.steps.len())
+        } else {
+            actor.raw_get::<Option<Table>>("__songlua_command_queue_steps")?
+                .map_or(0, |steps| steps.raw_len())
+        };
+    if count > 50 {
+        log::warn!("Lua: tween overflow; finishing actor queue");
+        finish_actor_tree_tweening(lua, actor)?;
+    }
+    Ok(())
+}
+
 fn begin_actor_tween(lua: &Lua, actor: &Table, duration: f32, exact_duration: f64,
     easing: Option<&str>) -> mlua::Result<Table> {
     prepare_capture_scope_actor(lua, actor)?;
+    finish_overflowing_tween_queue(lua, actor)?;
     flush_actor_capture(actor)?;
     let mut cursor = actor.get::<Option<f32>>("__songlua_capture_cursor")?.unwrap_or(0.0);
     queue_spin_tween(lua, actor, exact_duration, easing)?;
@@ -6863,19 +6884,8 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
                     })
                     .unwrap_or(0.0)
                     .max(0.0);
-                let delay = record_queue_step(lua, &actor, Some(exact_duration))?;
-                queue_spin_tween(lua, &actor, exact_duration, Some("linear"))?;
-                queue_spin_tween(lua, &actor, 0.0, Some("linear"))?;
-                queue_replay_tween(lua, &actor, exact_duration, Some("linear"));
-                queue_replay_tween(lua, &actor, 0.0, Some("linear"));
-                record_queue_step(lua, &actor, Some(0.0))?;
-                let duration = exact_duration as f32;
-                let cursor = actor
-                    .get::<Option<f32>>("__songlua_capture_cursor")?
-                    .unwrap_or(0.0);
-                let cursor = delay.unwrap_or(cursor);
-                actor.set("__songlua_capture_cursor", cursor + duration)?;
-                actor.set("__songlua_capture_tween_time_left", cursor + duration)?;
+                begin_actor_tween(lua, &actor, exact_duration as f32, exact_duration, Some("linear"))?;
+                begin_actor_tween(lua, &actor, 0.0, 0.0, Some("linear"))?;
                 crate::live::trace_actor_call(lua, &actor, "Actor.sleep", trace_arg.as_ref());
                 Ok(actor.clone())
             }

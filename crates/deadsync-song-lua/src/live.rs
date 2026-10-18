@@ -1673,6 +1673,11 @@ impl SongLuaLiveScene {
         }));
     }
 
+    /// ScreenGameplay checks completion after ActorFrame updates and Lua writes.
+    pub fn note_gameplay_outro_after_actors(&mut self) {
+        self.outro_started = true;
+    }
+
     /// LeaveGameplay has dispatched Off; its out transition can now advance.
     pub fn outro_off_dispatched(&self) -> bool {
         self.outro_options_reset && !self.outro_off_pending

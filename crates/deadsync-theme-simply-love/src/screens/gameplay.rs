@@ -1015,8 +1015,14 @@ impl State {
         scene.apply_pending_player_writes(&mut self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
         frame.uptime_seconds = uptime_seconds;
+        let outro_before_actors = frame.gameplay_outro;
         let output = scene.update(frame).map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
+        // Native ScreenGameplay checks failure after updating its actor tree.
+        // Lua can drain life during this update, after the core's earlier check.
+        if !outro_before_actors && self.gameplay.finish_gameplay_if_ready(false).is_some() {
+            scene.note_gameplay_outro_after_actors();
+        }
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
             && self.song_lua_out.is_none()
@@ -1033,7 +1039,11 @@ impl State {
         // exactly once. The shell drains this buffer every frame.
         self.song_lua_output.append(output);
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
-        if self.song_lua_out.is_none() && scene.outro_off_dispatched() {
+        // ScreenGameplay owns a separate Failed transition. Its completion
+        // can pop the screen while an authored Out transition is still active.
+        let failed_out = scene.outro_off_dispatched() && scene.failed_outro()
+            && self.song_lua_out.as_ref().is_some_and(|out| out.phase != 2);
+        if scene.outro_off_dispatched() && (self.song_lua_out.is_none() || failed_out) {
             // ScreenGameplay handles LeaveGameplay after its actor Update.
             // The newly started Transition receives its first delta next frame.
             self.song_lua_out = Some(if scene.failed_outro() {
