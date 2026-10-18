@@ -1534,7 +1534,22 @@ pub fn install_file_loader_globals(
                 return create_dummy_actor(lua, "LoadActor").map(Value::Table);
             };
             let path = path.to_str()?;
-            load_actor_path(lua, &song_dir, &path, args, create_dummy_actor)
+            // ActorDef.lua::ResolveRelativePath uses the calling function's
+            // source, even when a command invokes a helper from another file.
+            // The actor's directory is only the fallback for a C caller.
+            let caller_dir = lua.inspect_stack(1, |frame| {
+                let source = frame.source();
+                let source = source.source.as_deref()?.trim_start_matches('@');
+                if source.starts_with('=') || source == "[C]" { return None; }
+                Path::new(source).parent().filter(|dir| !dir.as_os_str().is_empty())
+                    .map(Path::to_path_buf)
+            }).flatten();
+            match caller_dir {
+                Some(dir) => call_with_script_dir(lua, &dir, || {
+                    load_actor_path(lua, &song_dir, &path, args, create_dummy_actor)
+                }),
+                None => load_actor_path(lua, &song_dir, &path, args, create_dummy_actor),
+            }
         })?,
     )?;
     Ok(())

@@ -3813,6 +3813,42 @@ return Def.Actor { OnCommand = on }
     }
 
     #[test]
+    fn live_loadactor_uses_helper_source_during_actor_callbacks() {
+        let dir = std::env::temp_dir().join(format!("deadsync-live-helper-paths-{}", std::process::id()));
+        fs::create_dir_all(dir.join("parts")).unwrap();
+        fs::write(dir.join("value.lua"), "error('actor directory must not shadow the calling helper')").unwrap();
+        fs::write(dir.join("parts/value.lua"), "local a, b, c = ...; assert(b == nil); return a + c").unwrap();
+        fs::write(dir.join("parts/helper.lua"), r#"
+return function()
+    return LoadActor('value', 23, nil, 5)
+end
+"#).unwrap();
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local helper = LoadActor('parts/helper')
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:aux(helper())
+        self:SetUpdateFunction(function(self) self:aux(helper() + 1) end)
+    end,
+}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "callback relative actor");
+        context.live = true;
+        let mut compiled: Compiled = crate::compile_song_lua_with_default_host(&entry, &context,
+            SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
+            |_| None, |_, _| None).expect("load helper closure");
+        let mut scene = compiled.live_scene.take().expect("retained Lua scene");
+        let startup = scene.take_startup_output();
+        assert!(startup.errors.is_empty(), "{:?}", startup.errors);
+        let output = scene.advance(SongLuaLiveFrame { music_seconds: 0.01, beat: 0.01,
+            screen_seconds: 0.01, delta_seconds: 0.01, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(scene.states().iter().any(|state| state.aux == 29.0),
+            "On and update callbacks load relative to the invoked helper, preserving varargs");
+    }
+
+    #[test]
     fn live_loadactor_collapses_paths_before_loading_and_naming_chunks() {
         let dir = std::env::temp_dir().join(format!("deadsync-live-actor-paths-{}", std::process::id()));
         fs::create_dir_all(dir.join("parts")).expect("actor directory");
