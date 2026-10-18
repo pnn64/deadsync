@@ -1,0 +1,187 @@
+{
+  "complete": true,
+  "objective": "Ten additional accepted fixtures, starting with faster pending charts",
+  "baseline_passed": 460,
+  "baseline_pending": 40,
+  "counts": {
+    "new_passing_fixtures": 10,
+    "passed_fixtures": 470,
+    "pending_charts": 30,
+    "ignored_charts": 1
+  },
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "new_passing_fixtures": [
+    {
+      "position": 362,
+      "source_simfile": "Quarantine/Quarantine.sm",
+      "archive": "020dcc2a97b078b09945a7d8ff3e4bad9a00d20c15f854806a277e46c4afab00.tar.zst",
+      "archive_sha256": "020dcc2a97b078b09945a7d8ff3e4bad9a00d20c15f854806a277e46c4afab00",
+      "candidate_sha256": "6fb00754e929c55b94a8136da454685e4ddc9be152d0a8bfd43245c6c4be361d",
+      "native_frames": 29675,
+      "replayed_frames": 29675,
+      "repair_attempts": 1,
+      "compressed_bytes": 153617067,
+      "report_sha256": "51fe2f29310821ccdb3cf07fad9abf519526f5d9b7e479ac4fe8716070957969"
+    },
+    {
+      "position": 482,
+      "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
+      "archive": "598e00ef0a6b22ef8be1c3d873fbae2870d3d2d52aac6e357c0b1f70b3158b9b.tar.zst",
+      "archive_sha256": "598e00ef0a6b22ef8be1c3d873fbae2870d3d2d52aac6e357c0b1f70b3158b9b",
+      "candidate_sha256": "f6cabf8cd98f0bc4f9b29d98ae973ab7ce4d87cde28b65bbfca673df84df934e",
+      "native_frames": 7248,
+      "replayed_frames": 7248,
+      "repair_attempts": 1,
+      "compressed_bytes": 117442262,
+      "report_sha256": "3841fe3943f68da960b2a4f6e661d56a005c01f338d6fc42a4985ca1fbfd7a9e"
+    },
+    {
+      "position": 371,
+      "source_simfile": "REASON for RED/reasonforgay.sm",
+      "archive": "67ed0b19f9d9e4123baf7bf84d5b4cbd46958ed17acbcfaa6e555581a5e2dbc6.tar.zst",
+      "archive_sha256": "67ed0b19f9d9e4123baf7bf84d5b4cbd46958ed17acbcfaa6e555581a5e2dbc6",
+      "candidate_sha256": "91195cb28d8862244c221e6f480b12f8e7bebd9d1878485e84ba2b1c906ce207",
+      "native_frames": 7008,
+      "replayed_frames": 7008,
+      "repair_attempts": 1,
+      "compressed_bytes": 111180160,
+      "report_sha256": "8a136f169fb17b597a8902f8c658d3c0b9b23786e9e03d036c1f74e8dd7bb247"
+    },
+    {
+      "position": 264,
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
+      "archive": "728a2b5faf76610807bc77cf052111c70aa84f29b5a2e1cafd53da1fedb337ff.tar.zst",
+      "archive_sha256": "728a2b5faf76610807bc77cf052111c70aa84f29b5a2e1cafd53da1fedb337ff",
+      "candidate_sha256": "cb16c5be276f64e0e9676b757255daa519c70ab35ccecfad0589cdbc7373dbd2",
+      "native_frames": 11346,
+      "replayed_frames": 11346,
+      "repair_attempts": 2,
+      "compressed_bytes": 163241925,
+      "report_sha256": "0c323e9fd46d33c4832811a3e3334f2286e622162172282067836489cb8b11b0"
+    },
+    {
+      "position": 174,
+      "source_simfile": "Dimmadome/doug dimmadome owner of the dimmsdale dimmadome.sm",
+      "archive": "2c30e61d831c0a0ddbfdfc8684a15b2f0114b69d927b090314316fd5df0ee38b.tar.zst",
+      "archive_sha256": "2c30e61d831c0a0ddbfdfc8684a15b2f0114b69d927b090314316fd5df0ee38b",
+      "candidate_sha256": "d92ff757c9704e38452586bb3e9164a9c5209e7ccf5437424fb2fff9c4ecf25d",
+      "native_frames": 5583,
+      "replayed_frames": 5583,
+      "repair_attempts": 1,
+      "compressed_bytes": 110394264,
+      "report_sha256": "56e33125e3dbc55bb393617a310ed6d3bee93561bd94aee24fa32c3a5c40e961"
+    },
+    {
+      "position": 306,
+      "source_simfile": "mawaru7/mawaru7.sm",
+      "archive": "97e7ca47890de2ef68c3c67c4366c1db83d00d7a213eaa93e8c8fc0591d7850d.tar.zst",
+      "archive_sha256": "97e7ca47890de2ef68c3c67c4366c1db83d00d7a213eaa93e8c8fc0591d7850d",
+      "candidate_sha256": "38e8dfe9bd0f888fd13456308fe077bdd2766e96bf2e183260fca0cad0d860a1",
+      "native_frames": 16612,
+      "replayed_frames": 16612,
+      "repair_attempts": 1,
+      "compressed_bytes": 172048632,
+      "report_sha256": "3ce4be6ae1497dbb3209778a47dabecfe5697ee4e414c374616b05b6bff2c941"
+    },
+    {
+      "position": 419,
+      "source_simfile": "STEVE VERY HARD/STEVE VERY HARD.sm",
+      "archive": "c3f8021320b744551e77bb3249407154f4d6144f0e9cff8563934962c6a0a964.tar.zst",
+      "archive_sha256": "c3f8021320b744551e77bb3249407154f4d6144f0e9cff8563934962c6a0a964",
+      "candidate_sha256": "5b4bfcc6c06683df8aad1e27e3d6484b921ce783fdd079d70d03be0370a29417",
+      "native_frames": 5134,
+      "replayed_frames": 5134,
+      "repair_attempts": 2,
+      "compressed_bytes": 113513839,
+      "report_sha256": "1e128dd749f3b26cd66f582b6ccb3a595f2c1f7eb6b81cace1ce4933ff364c50"
+    },
+    {
+      "position": 354,
+      "source_simfile": "PizzaBoy/PizzaBoy.ssc",
+      "archive": "9f247004d12e6d22a97f264829bec1fcb7d45dcb7904f001374157d524c9ee39.tar.zst",
+      "archive_sha256": "9f247004d12e6d22a97f264829bec1fcb7d45dcb7904f001374157d524c9ee39",
+      "candidate_sha256": "cb348612b6efe836a3baef1378ace4b1a3714f8de2e7e3a3f3218f5bde66b961",
+      "native_frames": 5452,
+      "replayed_frames": 5452,
+      "repair_attempts": 1,
+      "compressed_bytes": 110108848,
+      "report_sha256": "b933816a25e724c997b20412fbeb545792773f846c09ad96e507e72f67effe61"
+    },
+    {
+      "position": 294,
+      "source_simfile": "Mamono/sm.sm",
+      "archive": "526acd37e2a229898439d061c01044981cba6909e9d9919dbddb42ed81a0cdf9.tar.zst",
+      "archive_sha256": "526acd37e2a229898439d061c01044981cba6909e9d9919dbddb42ed81a0cdf9",
+      "candidate_sha256": "313ebf81bbf3e91614b782e6579d407afcc84d4388a1d8a4c98ade147d843992",
+      "native_frames": 71830,
+      "replayed_frames": 71830,
+      "repair_attempts": 1,
+      "compressed_bytes": 111126094,
+      "report_sha256": "b38e636d9244d98d409ffa124674c98a41734d7706eaa769e012073533a3d786"
+    },
+    {
+      "position": 312,
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "archive": "1c886092d9f50df26205d2c2de6c0bfaaa2f39bba8c399230f5de6998c9acf6f.tar.zst",
+      "archive_sha256": "1c886092d9f50df26205d2c2de6c0bfaaa2f39bba8c399230f5de6998c9acf6f",
+      "candidate_sha256": "22e2a356b1f5500f93b275ca4b09aea6dcf5d05795c86901e0ce3f76759b29f8",
+      "native_frames": 138405,
+      "replayed_frames": 138405,
+      "repair_attempts": 2,
+      "compressed_bytes": 125526383,
+      "report_sha256": "521c7211e10b81470d5e227fad598d1851bdd1b8963dba465ae9ef1c1550662a"
+    }
+  ],
+  "details": "seventh-ten-2026-10-18-state.json",
+  "concrete_failures": "seventh-ten-2026-10-18-pending.json",
+  "missing_coverage": "seventh-ten-2026-10-18-coverage.json",
+  "source_review": "seventh-ten-2026-10-18-source-review.json",
+  "prior_status": "sixth-ten-2026-10-18-summary.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "accepted_complete_uncompressed_replays": 10,
+    "saved_archives_and_decoded_hashes_verified": 10,
+    "full_reports_verified": 10,
+    "current_source_hashes_verified": 87,
+    "oversized_fixtures_gitignored": 25,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "targeted_checks": [
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\capture-song-bounds-green.log",
+        "sha256": "555ad64e2420d1c31edd6677465ab3a7a2f6c290c334647aa3bf558df6463150",
+        "passed": 15,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "All PlayerOptions/Song table regressions; resolved capture-engine bounds stay frozen when the current music rate changes; library opt-level=0."
+      },
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\capture-song-bounds-native-tests.log",
+        "sha256": "4c51c18fd394768cd04a7088d5261ebb58f84350a3c30c70ace31f9b149002d6",
+        "passed": 67,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Complete native gameplay regression suite, built with full replay CLI at opt-level=3."
+      },
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\background-texture-green.log",
+        "sha256": "606b0c57b84b1912b7acd3268b64fb5f892648fc6188c4375e5062a337966cb8",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Delayed UpperLeft Sprite retains its real texture and native ActorFrame parent through activation."
+      }
+    ],
+    "known_baseline_failure": {
+      "test": "compile_song_lua_supports_named_player_tap_note_shim",
+      "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+      "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+      "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+      "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+      "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+    },
+    "utc": "2026-10-18T10:26:17Z"
+  },
+  "updated_utc": "2026-10-18T10:26:17Z"
+}

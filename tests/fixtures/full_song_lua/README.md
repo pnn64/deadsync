@@ -1,6 +1,8 @@
 # Full song Lua fixtures
 
-The [latest fixture pass](sixth-ten-2026-10-18-summary.json) adds **10 accepted
+The [latest fixture batch](seventh-ten-2026-10-18-summary.json) adds **10 accepted fixtures**, bringing the total to **470 passed, 30 pending, and one ignored chart** (Mawaru9). Every new fixture passed its complete uncompressed replay before official packing, decoded hash verification, and commit. [Concrete failures](seventh-ten-2026-10-18-pending.json) and [missing coverage](seventh-ten-2026-10-18-coverage.json) are recorded separately. Files over 100,000,000 bytes remain gitignored.
+
+The [preceding fixture pass](sixth-ten-2026-10-18-summary.json) added **10 accepted
 fixtures**, bringing the total to **460 accepted fixtures, 40 pending charts,
 and one ignored chart** (Mawaru9). Each new fixture passed its complete
 uncompressed native replay before official packing, decompressed hash
