@@ -7753,6 +7753,44 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_arrow_rotation_z_uses_native_player_beat_offsets_and_hold_policy() {
+        let mut compiled = compile_with_context("native-arrow-rotation-z", "return Def.ActorFrame {}", |context| {
+            context.defer_initial_live_update = true;
+            for player in &mut context.players { player.enabled = true; }
+        });
+        let scene = compiled.live_scene.take().unwrap();
+        let runtime = scene.lua.globals().raw_get::<Table>(crate::SONG_LUA_RUNTIME_KEY).unwrap();
+        runtime.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY, 99.0_f32).unwrap();
+        let positions = scene.lua.create_table().unwrap();
+        for (player, beat) in [std::f32::consts::PI, -std::f32::consts::PI].into_iter().enumerate() {
+            let position = scene.lua.create_table().unwrap();
+            position.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY, beat).unwrap();
+            positions.raw_set(player + 1, position).unwrap();
+        }
+        runtime.raw_set(crate::runtime::PLAYER_SONG_POSITIONS_KEY, positions).unwrap();
+        scene.lua.load(r#"
+local function near(actual, expected)
+    assert(math.abs(actual-expected)<0.0001, tostring(actual)..' vs '..tostring(expected))
+end
+local ps=GAMESTATE:GetPlayerState(PLAYER_1)
+local options=ps:GetCurrentPlayerOptions()
+options:Confusion(1)
+options:ConfusionOffset(math.pi/2)
+options:ConfusionOffset2(math.pi/4)
+options:Dizzy(1)
+-- At player beat pi: confusion -180, global offset +90, column offset +45.
+-- The tap's additional half-pi beat distance contributes +90 dizzy degrees.
+near(ArrowEffects.GetRotationZ(ps,math.pi*1.5,false,2),45)
+near(ArrowEffects.GetRotationZ(ps,math.pi*1.5,true,2),-45)
+options:DizzyHolds(true)
+near(ArrowEffects.GetRotationZ(ps,math.pi*1.5,true,2),45)
+local other=GAMESTATE:GetPlayerState(PLAYER_2)
+other:GetCurrentPlayerOptions():Confusion(1)
+near(ArrowEffects.GetRotationZ(other,0,false,1),180)
+"#).exec().expect("native confusion, column offset, dizzy hold policy and per-player visible beat");
+    }
+
+    #[test]
     fn live_arrow_x_matches_captured_native_source_and_cached_update_phase() {
         let reference: serde_json::Value = serde_json::from_str(include_str!(
             "../assets/itgmania/arrow-x-native-reference-v1.json")).unwrap();

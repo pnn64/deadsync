@@ -1291,10 +1291,7 @@ pub fn create_arrow_effects_table(
     )?;
     table.set(
         "GetRotationZ",
-        lua.create_function(|lua, args: MultiValue| {
-            let _ = arrow_effects_player_options(lua, &args)?;
-            Ok(0.0_f32)
-        })?,
+        lua.create_function(|lua, args: MultiValue| arrow_effects_rotation_z(lua, &args))?,
     )?;
     table.set("GetZoom", lua.create_function(move |lua, args: MultiValue|
         arrow_effects_zoom(lua, &args, current_style_name))?)?;
@@ -1784,6 +1781,51 @@ fn arrow_effects_alpha(
         return Ok((y - full_alpha_y) / (draw_distance - full_alpha_y) * -1.0 + 1.0);
     }
     Ok(if visible > 0.5 { 1.0 } else { 0.0 })
+}
+
+fn arrow_effects_rotation_z(lua: &Lua, args: &MultiValue) -> mlua::Result<f32> {
+    use std::f32::consts::PI;
+    let options = arrow_effects_player_options(lua, args)?;
+    let state = options.as_ref().map(|options|
+        options.raw_get::<Option<Table>>("__songlua_player_option_state")).transpose()?.flatten();
+    let value = |name: &str| -> mlua::Result<f32> {
+        Ok(state.as_ref().map(|state| state.raw_get::<Option<f32>>(name))
+            .transpose()?.flatten().unwrap_or(0.0))
+    };
+    let player = options.as_ref().and_then(|options| lua.app_data_ref::<crate::song_tables::SongLuaOptionLevels>()
+        .and_then(|levels| levels.players.iter().position(|levels| levels[3].to_pointer() == options.to_pointer())))
+        .unwrap_or(0);
+    let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
+    let positions = runtime.raw_get::<Option<Table>>(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+    let position = positions.as_ref().map(|positions| positions.raw_get::<Table>(player + 1)).transpose()?;
+    let beat = position.as_ref().unwrap_or(&runtime).raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
+    let column = args.get(3).cloned().and_then(read_f32).unwrap_or(1.0) as i32;
+    let mut rotation = 0.0_f32;
+    // ArrowEffects::ReceptorGetRotationZ uses radians for both offset levels.
+    let column_offset = value(&format!("confusionoffset{column}"))?;
+    if column_offset != 0.0 { rotation += column_offset * 180.0 / PI; }
+    let offset = value("confusionoffset")?;
+    if offset != 0.0 { rotation += offset * 180.0 / PI; }
+    let confusion = value("confusion")?;
+    if confusion != 0.0 {
+        let mut phase = beat * confusion;
+        phase %= 2.0 * PI;
+        phase *= -180.0 / PI;
+        rotation += phase;
+    }
+    let hold_head = !matches!(args.get(2), None | Some(Value::Nil | Value::Boolean(false)));
+    let dizzy_holds = state.as_ref().map(|state| state.raw_get::<Option<bool>>("dizzyholds"))
+        .transpose()?.flatten().unwrap_or(false);
+    let dizzy = value("dizzy")?;
+    if dizzy != 0.0 && (dizzy_holds || !hold_head) {
+        let note_beat = args.get(1).cloned().and_then(read_f32).unwrap_or(0.0);
+        let mut phase = note_beat - beat;
+        phase *= dizzy;
+        phase %= 2.0 * PI;
+        phase *= 180.0 / PI;
+        rotation += phase;
+    }
+    Ok(rotation)
 }
 
 pub(crate) const fn arrow_effects_rotation_x(column: i32) -> f32 {
