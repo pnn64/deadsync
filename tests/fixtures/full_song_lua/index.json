@@ -2345,17 +2345,15 @@
       "aliases": []
     },
     {
-      "title": "Episode 20",
+      "title": "Flowers [Cringle Desolation]",
       "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
-      "harness_version": "0.1.0",
-      "archive": "077fa277e7bb296728f6b1412cf131846aac6b7a081509029a234fc90e6b2645.tar.zst",
-      "sha256": "077fa277e7bb296728f6b1412cf131846aac6b7a081509029a234fc90e6b2645",
-      "compressed_bytes": 10835546,
-      "uncompressed_sha256": "7bec48ffabfbab2221a47a6679669bc782744a89aec84ecc05c160cd9a3cf578",
-      "compression_level": 22,
-      "aliases": [
-        "43c31140a827d5c6b53986c3f2e795705c3bae787ac9238cc5ce70cae8d46cfc.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "f6e718c465993ad5e64cdb071206e1aa727893aca5f9497a67ad9cb150e36f04.tar.zst",
+      "compressed_bytes": 152598343,
+      "sha256": "f6e718c465993ad5e64cdb071206e1aa727893aca5f9497a67ad9cb150e36f04",
+      "uncompressed_sha256": "0281b724aa4ae2677216c26a7869243c595bea3eb12717efbdb6fee0ab0c909b",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "flowers",
