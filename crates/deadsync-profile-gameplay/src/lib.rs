@@ -487,6 +487,13 @@ pub fn song_lua_compile_context(
         1.0
     };
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
+    // The scan applies native chart eligibility and includes hold tails.
+    // Neither audio EOF nor its rounded display length defines these bounds.
+    let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
+    context.song_note_bounds = Some([
+        song.precise_first_second(),
+        song.precise_note_last_second_seconds.unwrap_or(-1.0).max(specified_last),
+    ]);
     context.style_name = match play_style {
         deadsync_gameplay::GameplayInputPlayStyle::Single => "single",
         deadsync_gameplay::GameplayInputPlayStyle::Versus => "versus",

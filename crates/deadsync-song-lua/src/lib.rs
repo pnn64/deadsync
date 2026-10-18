@@ -1517,6 +1517,9 @@ pub struct SongLuaCompileContext {
     #[cfg(feature = "test-support")]
     pub capture_overlay_probe: bool,
     pub music_length_seconds: f32,
+    /// Whole-song note bounds before the machine offset, independently of
+    /// audio duration; populated from the native-compatible simfile scan.
+    pub song_note_bounds: Option<[f32; 2]>,
     pub style_name: String,
     /// Song charts in simfile load order; never synthesize missing difficulties.
     pub song_steps: Vec<SongLuaStep>,
@@ -1579,6 +1582,7 @@ impl SongLuaCompileContext {
             #[cfg(feature = "test-support")]
             capture_overlay_probe: false,
             music_length_seconds: 0.0,
+            song_note_bounds: None,
             style_name: "single".to_string(),
             song_steps: Vec::new(),
             song_step_chart_indices: Vec::new(),
