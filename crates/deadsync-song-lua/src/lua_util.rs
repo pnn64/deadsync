@@ -23012,6 +23012,13 @@ pub(crate) fn install_native_gameplay_decorations(
         native_step_statistics_command(lua, &actor, "BeginCommand")?;
         native_step_statistics_command(lua, &actor, "OnCommand")?;
     }
+    // Replacements have now run their real Init commands. BeginScreen's
+    // native stable sort sees Footer's90 rather than its placeholder's0.
+    let mut ordered = screen.sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>()?;
+    ordered.sort_by_key(|actor| actor.raw_get::<i32>("__songlua_state_draw_order").unwrap_or(0));
+    for (index, actor) in ordered.into_iter().enumerate() {
+        screen.raw_set(index + 1, actor)?;
+    }
     Ok(())
 }
 

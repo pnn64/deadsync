@@ -1951,6 +1951,33 @@ return Def.ActorFrame {{
     }
 
     #[test]
+    fn gameplay_attack_start_now_uses_prior_player_position() {
+        let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 24).collect::<Vec<_>>().join(",\n");
+        let mut state = owned_judgment_control_with_attacks("attack-start-now", &notes, r#"
+local wrote=false
+return Def.ActorFrame { OnCommand=function(self)
+ self:sleep(9999) -- keep the foreground alive across the attack boundary
+ self:SetUpdateFunction(function()
+  local ps=GAMESTATE:GetPlayerState(PLAYER_1)
+  if GAMESTATE:GetCurMusicSeconds() >= 0 and not wrote then
+   ps:SetPlayerOptions('ModsLevel_Song','1.5x')
+   wrote=true
+  elseif wrote then
+   assert(math.abs(ps:GetPlayerOptions('ModsLevel_Song'):XMod()-1.8) < 1e-6,
+    'start-now attack activates after the first positive-position Song write')
+   MESSAGEMAN:Broadcast('StartNowAttackRebuilt')
+  end
+ end)
+end }
+"#, 0.0, "TIME=-10000:LEN=10000:MODS=*1000 1.8x");
+        assert_eq!(state.gameplay.mods.attacks.option_windows[0][0].start_second, 0.0);
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        update_judgment_control(&mut state, 20_000_000, 1_020_000_000);
+        let output = update_judgment_control(&mut state, 40_000_000, 1_040_000_000);
+        assert!(output.source_broadcasts.iter().any(|event| event.name == "StartNowAttackRebuilt"));
+    }
+
+    #[test]
     fn gameplay_chart_attack_rebuilds_song_options() {
         let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 24).collect::<Vec<_>>().join(",\n");
         let mut state = owned_judgment_control_with_attacks("attack-option-levels", &notes, r#"
@@ -1967,7 +1994,7 @@ return Def.ActorFrame {
             local seconds = GAMESTATE:GetCurMusicSeconds()
             assert(p1:GetPlayerOptions('ModsLevel_Song') == song, 'option object is retained')
             assert(p2:GetPlayerOptions('ModsLevel_Song'):Drunk() == 0.5, 'disabled P2 has no attack')
-            if seconds > 2.81 then
+            if seconds > 3.5 then
                 assert(song:Drunk() == 0 and song:Tornado() == 0 and song:Tipsy() == 0,
                     'chart attack boundary rebuilds Song from Stage')
                 assert(song:Dark() == 0.25, 'Stage options survive the rebuild')
@@ -1986,7 +2013,10 @@ return Def.ActorFrame {
         update_judgment_control(&mut state, 2_000_000_000, 3_000_000_000);
         assert!(!state.gameplay.mods.attacks.cleared_for_outro,
             "control ended before attack: last={}", state.gameplay.source.song.precise_last_second());
-        for seconds in [3_i64, 4] {
+        let before = update_judgment_control(&mut state, 3_000_000_000, 4_000_000_000);
+        assert!(!before.source_broadcasts.iter().any(|event| event.name == "AttackOptionsRebuilt"),
+            "native GameState attack update still sees the prior two-second position");
+        for seconds in [4_i64, 5] {
             let output = update_judgment_control(&mut state, seconds * 1_000_000_000, (seconds as u64 + 1) * 1_000_000_000);
             assert!(output.source_broadcasts.iter().any(|event| event.name == "AttackOptionsRebuilt"),
                 "music={} output={output:?}", state.gameplay.clock.song_position.current_music_time_ns);

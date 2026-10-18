@@ -409,7 +409,16 @@ pub fn build_attack_windows_for_mode(
         GameplayAttackMode::Off => Vec::new(),
         GameplayAttackMode::On => chart_attacks
             .map(parse_chart_attack_windows)
-            .unwrap_or_default(),
+            .unwrap_or_default()
+            .into_iter()
+            .map(|mut attack| {
+                // Attack.h's ATTACK_STARTS_NOW is -10000 (the stale field
+                // comment says -1). LaunchAttack anchors it to the reset
+                // PlayerState music position before StartPlayingSong.
+                if attack.start_second == -10000.0 { attack.start_second = 0.0; }
+                attack
+            })
+            .collect(),
         GameplayAttackMode::Random => {
             build_random_attack_windows(song_length_seconds, player, base_seed)
         }

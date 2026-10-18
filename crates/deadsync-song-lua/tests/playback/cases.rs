@@ -1630,6 +1630,28 @@ fn empty_text_attributes() -> Arc<[TextAttribute]> {
 use deadlib_present::actors::{SizeSpec, TextAlign};
 
 #[test]
+fn aft_sprite_nonuniform_scale_keeps_native_scale_before_skew() {
+    let state = SongLuaOverlayState { x: 200.0, y: 150.0,
+        basezoom_x: 2.0, basezoom_y: 0.5, rot_z_deg: 30.0,
+        skew_x: 0.375, skew_y: -0.25, ..SongLuaOverlayState::default() };
+    let actors = build_song_lua_aft_sprite_actor(state, render_target_texture_handle(17),
+        [64.0,32.0], 0, screen_width(),screen_height(), 0.0,0.0,0.0,None).unwrap();
+    let Actor::Sprite { skew, rot_z_deg, .. } = actors[0] else { panic!("AFT sprite") };
+    let rotation=Matrix2::from_angle(rot_z_deg.to_radians());
+    let scale=Matrix2::from_diagonal(Vector2::new(2.0,0.5));
+    let native_skew=Matrix2::from_cols_array(&[1.0,0.0,-0.375,1.0])
+        * Matrix2::from_cols_array(&[1.0,0.25,0.0,1.0]);
+    let emitted_skew=Matrix2::from_cols_array(&[1.0,0.0,skew[0],1.0])
+        * Matrix2::from_cols_array(&[1.0,skew[1],0.0,1.0]);
+    for point in [Vector2::new(-32.0,-16.0),Vector2::new(32.0,-16.0),
+                  Vector2::new(32.0,16.0),Vector2::new(-32.0,16.0)] {
+        let expected=rotation*scale*native_skew*point;
+        let actual=rotation*emitted_skew*scale*point;
+        assert!((actual-expected).length()<0.0001,"{actual:?} != {expected:?}");
+    }
+}
+
+#[test]
 fn aft_sprite_reflects_song_lua_in_plane_transform_into_world_space() {
     let state = SongLuaOverlayState {
         x: 0.5 * screen_width(),

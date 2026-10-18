@@ -10017,7 +10017,15 @@ fn build_song_lua_aft_sprite_actor(
         // transform so the strip's authored position compensation cancels
         // its skew instead of doubling it.
         rot_z_deg: -effect_rot[2],
-        skew: [-state.skew_x, -state.skew_y],
+        // Sprite geometry already includes the actor's axis scales. Native
+        // BeginDraw scales before skew; the renderer skews that sized quad.
+        // Conjugate the shear by scale to preserve the native matrix.
+        skew: {
+            let sx = axis_scale[0] * effect_scale[0];
+            let sy = axis_scale[1] * effect_scale[1];
+            [if sy != 0.0 { -state.skew_x * sx / sy } else { 0.0 },
+             if sx != 0.0 { -state.skew_y * sy / sx } else { 0.0 }]
+        },
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: state.texcoord_velocity,

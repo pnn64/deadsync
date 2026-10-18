@@ -1210,9 +1210,13 @@ impl SongLuaLiveScene {
         // GameState::UpdateSongPosition updates each enabled PlayerState
         // using its selected Steps timing at the same music timestamp.
         let positions: Table = runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+        let mut attack_positions = [0.0_f32; LUA_PLAYERS];
         for player in 0..LUA_PLAYERS {
             if !self.context.players[player].enabled { continue; }
             let owned: Table = positions.raw_get(player + 1)?;
+            // GameState updates attack activation before ScreenGameplay samples
+            // this frame's audio position; PlayerState still has the prior one.
+            attack_positions[player] = owned.raw_get(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
             let position = self.context.player_timing[player].as_ref()
                 .or(self.context.song_timing.as_ref())
                 .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
@@ -1234,7 +1238,7 @@ impl SongLuaLiveScene {
             let master = self.context.players.iter().position(|player| player.enabled);
             for (player, attacks) in self.chart_attacks.iter_mut().enumerate() {
                 attacks.update(&self.lua, player, master == Some(player),
-                    &windows[player], frame.music_seconds as f32)?;
+                    &windows[player], attack_positions[player])?;
             }
         }
         let option_deltas: Option<[f32; LUA_PLAYERS + 1]> = None;
@@ -4084,6 +4088,11 @@ return Def.ActorFrame {
         let mut previous = 0.0;
         for (seconds, drunk) in [(0.0, 0.75), (2.0, 0.75), (2.25, 0.0),
             (2.5, 0.5), (2.75, 0.25), (3.0, 0.25), (4.0, 0.0)] {
+            // Native attack activation reads the preceding ScreenGameplay
+            // position. Prime that input while keeping all boundary assertions.
+            scene.advance(SongLuaLiveFrame { music_seconds: seconds,
+                screen_seconds: seconds, beat: seconds * 2.0,
+                ..Default::default() }).unwrap();
             let output = scene.advance(SongLuaLiveFrame {
                 music_seconds: seconds, screen_seconds: seconds, beat: seconds * 2.0,
                 delta_seconds: seconds - previous, chart_attacks: Some(schedule.clone()),
