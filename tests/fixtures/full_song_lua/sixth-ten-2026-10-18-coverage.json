@@ -476,6 +476,11 @@
         "missing captured subscriber identity for ScreenGameplay/3/1",
         "missing captured subscriber identity for ScreenGameplay/4"
       ]
+    },
+    "Mamono/sm.sm": {
+      "source_simfile": "Mamono/sm.sm",
+      "pending_coverage": [],
+      "evidence_scope": "Local attempt stopped incomplete at last-reported11802/71830frames; no full comparison report was produced, so missing coverage was not enumerated for this run. Historical coverage remains in the preceding ledger."
     }
   }
 }
