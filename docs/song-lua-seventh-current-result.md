@@ -5,6 +5,34 @@ playback. The preparation API no longer accepts a live-mode flag; normal entry,
 preload, and practice all use compiled data. Explicit live scenes remain a
 headless diagnostic backend.
 
+The saved Mini option now reaches Lua before song construction. Previously the
+renderer used the profile's 60% Mini while `PlayerOptions:Mini()` returned zero
+to the song. At M730, 7th Gear therefore built 10 reverse-path knots instead of
+15. Future notes clamped to the last knot at logical Y=37.79, near the score;
+native ITGmania places that endpoint above the screen at Y=-86.5484. The reversed
+receptor was also at Y=334.5 instead of Y=375.
+
+The original 31 direction/modifier checks still passed with that incorrect
+path. The focused `saved_mini_reaches_song_lua_constructor_and_reverse_path`
+regression now covers constructor reads, all four option levels, P1/P2 profile
+mapping, and compiled sample positions against the retained
+[native PlayerOptions and CubicSpline controls](../tests/fixtures/itgmania-song-lua-micro/profile-mini/README.md).
+The actual-chart checker also verifies that receptor positions agree with the
+selected Mini and accepts optional MMod/Mini arguments:
+
+```powershell
+cargo test --locked -p deadsync-profile-gameplay saved_mini_reaches_song_lua_constructor_and_reverse_path
+cargo run --locked -p deadsync-shell --example seventh_compiled -- 'C:\GitHub\rework\lua-songs\7th Gear\7th Gear.ssc' target/seventh-mini60.json 730 60
+```
+
+These checks cover the profile-dependent path; a passing semantic replay alone
+does not establish final gameplay pixel parity for other player options.
+The M730/60% Mini production check passes all 31 sampled reversal observations,
+retains no Lua VM, and confirms 15 knots, receptor Y=375, and endpoint
+Y=-86.54837 at beat 115. The native-backed profile regression and the focused
+notefield composition regression also pass. The normal debug application was
+rebuilt successfully; no full fixture corpus was replayed for this repair.
+
 The live prototype dropped note-column position and zoom splines when transferring
 its scene into gameplay. That explains the missing reversal behavior beginning
 at beat 111.5. The compiled path already retains those immutable spline tracks.

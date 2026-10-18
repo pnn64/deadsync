@@ -681,6 +681,8 @@ pub struct SongLuaPlayerContext {
     pub autoplay: f32,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    /// Saved Mini amount already applied before song Lua loads (60% is 0.6).
+    pub mini: f32,
     pub perspective: deadsync_gameplay::PerspectiveEffects,
     pub display_bpms: [f32; 2],
     pub noteskin_name: String,
@@ -720,6 +722,7 @@ impl Default for SongLuaPlayerContext {
             autoplay: 0.0,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            mini: 0.0,
             perspective: deadsync_gameplay::PerspectiveEffects::default(),
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),

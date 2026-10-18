@@ -1598,6 +1598,7 @@ dependencies = [
  "deadsync-simfile",
  "deadsync-song-lua",
  "log",
+ "serde_json",
 ]
 
 [[package]]

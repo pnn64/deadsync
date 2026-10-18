@@ -177,6 +177,68 @@ fn saved_perspective_reaches_lua_for_each_player_side() {
     }
 }
 
+#[test]
+fn saved_mini_reaches_song_lua_constructor_and_reverse_path() {
+    use deadsync_gameplay::{GameplayInputPlayerSide as Side, GameplaySession, GameplayViewport};
+    let root = deadsync_root().join("tests/fixtures/song_lua");
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &root.join("display-size.ssc"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 2.0,
+    ).expect("small context chart");
+    let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+    let timing = TimingData::default();
+    let profiles = [60, -40].map(|mini_percent| deadsync_profile::Profile {
+        mini_percent,
+        scroll_speed: deadsync_rules::scroll::ScrollSpeedSetting::MMod(730.0),
+        ..Default::default()
+    });
+    let speeds = profiles.each_ref().map(|profile| profile.scroll_speed);
+    let native: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-native.json"
+    )).expect("native CubicSpline reference");
+    for ((side, mini), native) in [(Side::P1, 0.6_f32), (Side::P2, -0.4)]
+        .into_iter().zip(native["splines"].as_array().expect("native paths")) {
+        let context = super::song_lua_play_context(
+            &song, &charts, [&timing; 2], &profiles, &speeds, 1.0,
+            GameplayViewport::design(), (854, 480), 16.0 / 9.0, 1.0,
+            &GameplaySession { player_side: side, ..Default::default() },
+            &Default::default(), "opengl",
+        );
+        let compiled = compile_song_lua_with_default_host(
+            &root.join("profile-mini.lua"), &context, SongLuaNoteskinResolver::default(),
+            test_read_model_slots, test_model_layer_from_slot, |_, _| None,
+        ).expect("compile saved Mini reverse path");
+        let observed = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some("InitialMini"))
+            .expect("constructor observation").initial_state.x;
+        assert!((observed - mini).abs() < 0.000001,
+            "{side:?}: song constructor saw Mini={observed}, profile requires {mini}");
+        let path = compiled.column_splines.iter().find(|track| track.player == 0 && track.column == 0)
+            .and_then(|track| track.frames.first()).and_then(|frame| frame.position.as_ref())
+            .expect("compiled reverse path");
+        assert_eq!(path.coefficients.len(), native["points"].as_array().unwrap().len(),
+            "path length must use the saved Mini");
+        for sample in native["samples"].as_array().expect("native samples") {
+            let (position, _) = path.view().sample(
+                sample["song_beat"].as_f64().unwrap() as f32,
+                sample["note_beat"].as_f64().unwrap() as f32,
+            );
+            for axis in 0..3 {
+                let expected = sample["position"][axis].as_f64().unwrap() as f32;
+                assert!((position[axis] - expected).abs() < 0.001,
+                    "{side:?}, note beat {}, axis {axis}: {} != native {expected}",
+                    sample["note_beat"], position[axis]);
+            }
+        }
+        let zoom = 1.0 - mini * 0.5;
+        let receptor_y = 240.0 + path.view().receptor(0.0)[1] * zoom;
+        assert!((receptor_y - 375.0).abs() < 0.001, "reversed receptor: {receptor_y}");
+        let endpoint_y = 240.0 + path.view().sample(0.0, 8.0).0[1] * zoom;
+        assert!(endpoint_y < -20.0, "future notes clamped onto the score area at y={endpoint_y}");
+    }
+}
+
 fn test_song_lua_double_context(root: &Path, title: &str) -> SongLuaCompileContext {
     let mut context = SongLuaCompileContext::new(root, title);
     context.style_name = "double".to_string();
