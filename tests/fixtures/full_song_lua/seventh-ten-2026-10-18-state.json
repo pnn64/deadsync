@@ -1114,6 +1114,1756 @@
         ]
       },
       "archive_git_ignored": true
+    },
+    {
+      "position": 27,
+      "capture_input_proof": {
+        "position": 27,
+        "source_simfile": "7th Gear/7th Gear.ssc",
+        "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+        "capture_exit": 0,
+        "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sweep-20261016\\seventh\\candidates\\305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0.tar",
+        "candidate_sha256": "305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0",
+        "native_capture_reused": true,
+        "harness_version": "0.1.80",
+        "reason": "Reuse complete retained native 4404-frame capture; all original song archive members match current input files. Prior actual failure is immediate-draw comparator nil-target proxy handling.",
+        "verified_source_members": [
+          "song/7th Gear.ogg",
+          "song/7th Gear.ssc",
+          "song/7th background.png",
+          "song/7th_banner.png",
+          "song/lua/default.lua",
+          "song/lua/easing.lua",
+          "song/lua/modhelpers.lua",
+          "song/lua/mods.lua"
+        ]
+      },
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+      "status": "pending",
+      "repair_attempts": 2,
+      "candidate_sha256": "305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sweep-20261016\\seventh\\candidates\\305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0.tar",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "fix_commit": "06a95599080459fdf33d9d42bb36a43ab57ae9e7",
+      "binary_sha256": "c80544d6fed7219b58abf71d1a6389ead624e8573a1dee55b3fdd837b82ee4f6",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\full-song-lua-aft-sampler.exe",
+        "binary_sha256": "c80544d6fed7219b58abf71d1a6389ead624e8573a1dee55b3fdd837b82ee4f6",
+        "source_root": "C:\\GitHub\\deadsync",
+        "source_base_commit": "0048caa40",
+        "fix_commit": "06a95599080459fdf33d9d42bb36a43ab57ae9e7",
+        "modified_sources": {
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/src/compile.rs": "fd44c2d223485594526d0f454eb6b27ca741b54a867f3d680ab4efffce68e86a",
+          "crates/deadsync-song-lua/src/host.rs": "f4358b344657a111c8ac1c364d13bee0964bdd85b176a37311fccd1a011e9a0a",
+          "crates/deadsync-song-lua/src/lib.rs": "553be1052a4806b60b6ea111c1d74c9ba964d657fd6ad82364463ee8069493a2",
+          "crates/deadsync-song-lua/src/live.rs": "5b040d8a924f16454e5f0f4b807892525225520dec16155d977444eebc5418c0",
+          "crates/deadsync-song-lua/src/lua_util.rs": "b54115305da86424631b11cb782d2fe73e6f2e452fa9bc12d66963ac08607fb1",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "c96925f034df9097e03929f0194bc889966eb47fe62e483471dc9ddda691c2fc",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "4f26b9dff5173a0bee56d40a60b33bda5f53b4afe81ba0de6af885d774a3201f",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-simfile/src/song.rs": "d21411f9fbf9b2fb2a4930369518332307a08097e07bb87ff03fdee560efbd36",
+          "crates/deadsync-simfile/src/cache.rs": "65082b7647813d2f6950d6d4a51a000203af4d050a239209b449d77a02791974",
+          "crates/deadsync-simfile/src/changes.rs": "5c726755073bc2414b26551f16b5621db2e854f5fbc5ba2292dd45f0856eab46",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "b0536cb5aa3f9b6506862fc7350f4511b3787250419c53cf44bdddd24d090e95",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "54315cd0fda6d980a47450cf57f10d76cba10869ea29b7d2651f6370ae2b337d",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "3ad394a21e5a4175b81747a71595521ad356a7e27e261eaf705f44f29f3a7cb3",
+          "crates/deadsync-shell/src/app/mod.rs": "bd446d73081885a0e35ddc81f0eb7171626ad05b4e56b54c5112da4e94ceced1",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535",
+          "crates/deadsync-chart/src/song.rs": "9c5a57b936f6ad5036b871074c75e2da48901776cb626a3904d06d0e5ce728d8",
+          "crates/deadsync-simfile/src/cache_perf.rs": "11d632572c70465470dd8e788bbfcaa729a3735d70a6b7ce6fd2617f69fd7b3a",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "152761f0ccd6f828e41ad080a07424dc336c5ac1215cf1538cd3169cbbba1893",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "fb75e9be5b384bd661601ac47c5a6dec8a2931ab0d63c75eaceaa49d062e46ea",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+          "crates/deadsync-song-lua/src/playback.rs": "75440b684d8b18b6194f6cc16bfe6fb269577188c419a9f2fc899f5adaaf6f46",
+          "crates/deadsync-song-lua/src/playback/actor_conformance.rs": "51d8254918f9451166409382f1da3d071e6b7fbe2423962200d9cad5c3c8090e",
+          "crates/deadsync-song-lua/tests/playback/cases.rs": "a9ff287b313dc49046ac7e150d7a0f7346e160319f09f3a6147d996be2b5026a",
+          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "e7c80d6bcc221b883ecf32f1465abbe75e15cf17498a1d77de314692880c3652",
+          "crates/deadsync-song-lua/src/tables.rs": "89703e1543e6c12b295e5b086cbb0ac83bf793fd04d4d59fd0a5f584210defad",
+          "crates/deadsync-song-lua/src/song_tables.rs": "0717b0b533bf5c99c02dde86296ba784c43710f65adceefce7b08eeec127cb2d",
+          "crates/deadlib-present/src/compose.rs": "fac84a48b3aafcb33cc2596ea4c629574452e2abee1c06ebc07913697c1a7973"
+        },
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--no-run"
+        ],
+        "seconds": 482.3772839999874,
+        "targeted_checks": [
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\aft-sampler-native-tests.log",
+            "sha256": "d46b775d0d00b00db8cca8d09a31b12cee32f0d61fd56c2eafea3d2167811f8e",
+            "passed": 67,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "Complete native_gameplay suite; full replay CLI built from same source graph."
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\aft-sampler-compose-tests.log",
+            "sha256": "de0b8888a785d790d9ae1e1a0f8231623405430004dec2e3ef0a116a939de632",
+            "passed": 183,
+            "failed": 0,
+            "ignored": 5,
+            "scope": "Complete deadlib-present unit suite, including clamp and nearest preservation for skewed render targets."
+          }
+        ],
+        "build_log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\aft-sampler-build.log",
+        "build_log_sha256": "08a087817118e5fa476d50d765c65aee48ef943456645e3d7e00092d33e44e68",
+        "execution_platform": "Windows headless CLI",
+        "known_baseline_failure": {
+          "test": "compile_song_lua_supports_named_player_tap_note_shim",
+          "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+          "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+          "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+          "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+          "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+        },
+        "negative_regression": {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\aft-sampler-red.log",
+          "sha256": "2d37e5042e9ab82cd01f36ce8bc4dad6dd40b1eead4ff10a213e8c45f726082a",
+          "outcome": "Real texture_sampler_desc resolution changed a skewed target sprite from native Clamp to Repeat before repair."
+        },
+        "inherited_validation": "build-receipt-proxy-fix.json; unchanged song-Lua library unit checks retained"
+      },
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\chart-27-attempt-2",
+      "execution_platform": "Windows headless CLI",
+      "prior_sweep_failure": null,
+      "replay_exit": 2,
+      "replay_seconds": 178.49854420000338,
+      "native_frames": 4404,
+      "replayed_frames": 4404,
+      "compared_stage_fields": 1518,
+      "archive_accepted": false,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 100,
+      "concrete_failures": [
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0018",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -1.0044903755187988,
+                0.9843356609344482,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -1.0044903755187988,
+                0.9843356609344482,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.9888654351234436,
+                0.9900484681129456,
+                0.0,
+                1.0,
+                0.0065155029296875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.9798844456672668,
+                -1.006667971611023,
+                0.0,
+                1.0,
+                0.0065155029296875,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -427,
+                -240,
+                0,
+                -1,
+                0.9859774708747864,
+                0,
+                1,
+                0,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -427,
+                240,
+                0,
+                -1,
+                -1.0140225887298584,
+                0,
+                1,
+                0,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -420.328125,
+                240,
+                0,
+                -0.984375,
+                -1.0083098411560059,
+                0,
+                1,
+                0.0065155029296875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -420.328125,
+                -240,
+                0,
+                -0.984375,
+                0.9916902780532837,
+                0,
+                1,
+                0.0065155029296875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0021",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.9897133708000183,
+                0.9896153807640076,
+                0.0,
+                1.0,
+                0.0065155029296875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.9897133708000183,
+                0.9896153807640076,
+                0.0,
+                1.0,
+                0.0065155029296875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.9740883708000183,
+                0.9956884980201721,
+                0.0,
+                1.0,
+                0.013031005859375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.9634113907814026,
+                -1.0001617670059204,
+                0.0,
+                1.0,
+                0.013031005859375,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -420.328125,
+                -240,
+                0,
+                -0.984375,
+                0.9916902184486389,
+                0,
+                1,
+                0.0065155029296875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -420.328125,
+                240,
+                0,
+                -0.984375,
+                -1.0083098411560059,
+                0,
+                1,
+                0.0065155029296875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -413.65625,
+                240,
+                0,
+                -0.96875,
+                -1.0022368431091309,
+                0,
+                1,
+                0.013031005859375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -413.65625,
+                -240,
+                0,
+                -0.96875,
+                0.9977633953094482,
+                0,
+                1,
+                0.013031005859375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0024",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.9723511338233948,
+                0.9965447783470154,
+                0.0,
+                1.0,
+                0.013031005859375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.9723511338233948,
+                0.9965447783470154,
+                0.0,
+                1.0,
+                0.013031005859375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.9567261338233948,
+                1.0018317699432373,
+                0.0,
+                1.0,
+                0.0195465087890625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.9495236277580261,
+                -0.9957309365272522,
+                0.0,
+                1.0,
+                0.0195465087890625,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -413.65625,
+                -240,
+                0,
+                -0.96875,
+                0.9977633953094482,
+                0,
+                1,
+                0.013031005859375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -413.65625,
+                240,
+                0,
+                -0.96875,
+                -1.0022366046905518,
+                0,
+                1,
+                0.013031005859375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -406.984375,
+                240,
+                0,
+                -0.953125,
+                -0.9969497919082642,
+                0,
+                1,
+                0.0195465087890625,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -406.984375,
+                -240,
+                0,
+                -0.953125,
+                1.003050446510315,
+                0,
+                1,
+                0.0195465087890625,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0072",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.7142894268035889,
+                1.0016769170761108,
+                0.0,
+                1.0,
+                0.117279052734375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.7142894268035889,
+                1.0016769170761108,
+                0.0,
+                1.0,
+                0.117279052734375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6986644268035889,
+                0.9959775805473328,
+                0.0,
+                1.0,
+                0.1237945556640625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.7075855731964111,
+                -1.0007685422897339,
+                0.0,
+                1.0,
+                0.1237945556640625,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -306.90625,
+                -240,
+                0,
+                -0.71875,
+                1.0033038854599,
+                0,
+                1,
+                0.117279052734375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -306.90625,
+                240,
+                0,
+                -0.71875,
+                -0.9966963529586792,
+                0,
+                1,
+                0.117279052734375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -300.234375,
+                240,
+                0,
+                -0.703125,
+                -1.0023956298828125,
+                0,
+                1,
+                0.1237945556640625,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -300.234375,
+                -240,
+                0,
+                -0.703125,
+                0.997604489326477,
+                0,
+                1,
+                0.1237945556640625,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0075",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.6969311833381653,
+                0.9950663447380066,
+                0.0,
+                1.0,
+                0.1237945556640625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.6969311833381653,
+                0.9950663447380066,
+                0.0,
+                1.0,
+                0.1237945556640625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6813061833381653,
+                0.9886631369590759,
+                0.0,
+                1.0,
+                0.13031005859375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6936938166618347,
+                -1.0062603950500488,
+                0.0,
+                1.0,
+                0.13031005859375,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -300.234375,
+                -240,
+                0,
+                -0.703125,
+                0.997604489326477,
+                0,
+                1,
+                0.1237945556640625,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -300.234375,
+                240,
+                0,
+                -0.703125,
+                -1.0023956298828125,
+                0,
+                1,
+                0.1237945556640625,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -293.5625,
+                240,
+                0,
+                -0.6875,
+                -1.0087988376617432,
+                0,
+                1,
+                0.13031005859375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -293.5625,
+                -240,
+                0,
+                -0.6875,
+                0.9912012815475464,
+                0,
+                1,
+                0.13031005859375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0078",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.6825517416000366,
+                0.9893291592597961,
+                0.0,
+                1.0,
+                0.13031005859375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.6825517416000366,
+                0.9893291592597961,
+                0.0,
+                1.0,
+                0.13031005859375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6669267416000366,
+                0.9834171533584595,
+                0.0,
+                1.0,
+                0.1368255615234375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6768233776092529,
+                -1.0128384828567505,
+                0.0,
+                1.0,
+                0.1368255615234375,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -293.5625,
+                -240,
+                0,
+                -0.6875,
+                0.9912012815475464,
+                0,
+                1,
+                0.13031005859375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -293.5625,
+                240,
+                0,
+                -0.6875,
+                -1.0087988376617432,
+                0,
+                1,
+                0.13031005859375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -286.890625,
+                240,
+                0,
+                -0.671875,
+                -1.0147109031677246,
+                0,
+                1,
+                0.1368255615234375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -286.890625,
+                -240,
+                0,
+                -0.671875,
+                0.9852892756462097,
+                0,
+                1,
+                0.1368255615234375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0090",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.627778172492981,
+                0.9803944826126099,
+                0.0,
+                1.0,
+                0.1563720703125,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.627778172492981,
+                0.9803944826126099,
+                0.0,
+                1.0,
+                0.1563720703125,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.612153172492981,
+                0.9852249026298523,
+                0.0,
+                1.0,
+                0.1628875732421875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6065965890884399,
+                -1.0130574703216553,
+                0.0,
+                1.0,
+                0.1628875732421875,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -266.875,
+                -240,
+                0,
+                -0.625,
+                0.9812533259391785,
+                0,
+                1,
+                0.1563720703125,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -266.875,
+                240,
+                0,
+                -0.625,
+                -1.0187468528747559,
+                0,
+                1,
+                0.1563720703125,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -260.203125,
+                240,
+                0,
+                -0.609375,
+                -1.0139164924621582,
+                0,
+                1,
+                0.1628875732421875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -260.203125,
+                -240,
+                0,
+                -0.609375,
+                0.9860837459564209,
+                0,
+                1,
+                0.1628875732421875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0093",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.6183048486709595,
+                0.9819077253341675,
+                0.0,
+                1.0,
+                0.1628875732421875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.6183048486709595,
+                0.9819077253341675,
+                0.0,
+                1.0,
+                0.1628875732421875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.6026798486709595,
+                0.9892146587371826,
+                0.0,
+                1.0,
+                0.169403076171875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5848201513290405,
+                -1.0024334192276,
+                0.0,
+                1.0,
+                0.169403076171875,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -260.203125,
+                -240,
+                0,
+                -0.609375,
+                0.9860837459564209,
+                0,
+                1,
+                0.1628875732421875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -260.203125,
+                240,
+                0,
+                -0.609375,
+                -1.0139164924621582,
+                0,
+                1,
+                0.1628875732421875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -253.53125,
+                240,
+                0,
+                -0.59375,
+                -1.0066094398498535,
+                0,
+                1,
+                0.169403076171875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -253.53125,
+                -240,
+                0,
+                -0.59375,
+                0.993390679359436,
+                0,
+                1,
+                0.169403076171875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0096",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.6077298521995544,
+                0.98567134141922,
+                0.0,
+                1.0,
+                0.169403076171875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.6077298521995544,
+                0.98567134141922,
+                0.0,
+                1.0,
+                0.169403076171875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5921048521995544,
+                0.9942992329597473,
+                0.0,
+                1.0,
+                0.1759185791015625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5641451478004456,
+                -0.9902622103691101,
+                0.0,
+                1.0,
+                0.1759185791015625,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -253.53125,
+                -240,
+                0,
+                -0.59375,
+                0.9933906197547913,
+                0,
+                1,
+                0.169403076171875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -253.53125,
+                240,
+                0,
+                -0.59375,
+                -1.0066094398498535,
+                0,
+                1,
+                0.169403076171875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -246.859375,
+                240,
+                0,
+                -0.578125,
+                -0.9979816675186157,
+                0,
+                1,
+                0.1759185791015625,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -246.859375,
+                -240,
+                0,
+                -0.578125,
+                1.0020184516906738,
+                0,
+                1,
+                0.1759185791015625,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0099",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.5916292667388916,
+                0.9946584105491638,
+                0.0,
+                1.0,
+                0.1759185791015625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.5916292667388916,
+                0.9946584105491638,
+                0.0,
+                1.0,
+                0.1759185791015625,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5760042667388916,
+                1.0031744241714478,
+                0.0,
+                1.0,
+                0.18243408203125,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5489957332611084,
+                -0.982105553150177,
+                0.0,
+                1.0,
+                0.18243408203125,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -246.859375,
+                -240,
+                0,
+                -0.578125,
+                1.0020184516906738,
+                0,
+                1,
+                0.1759185791015625,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -246.859375,
+                240,
+                0,
+                -0.578125,
+                -0.9979816675186157,
+                0,
+                1,
+                0.1759185791015625,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -240.1875,
+                240,
+                0,
+                -0.5625,
+                -0.9894657135009766,
+                0,
+                1,
+                0.18243408203125,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -240.1875,
+                -240,
+                0,
+                -0.5625,
+                1.010534405708313,
+                0,
+                1,
+                0.18243408203125,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0102",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.5703303217887878,
+                1.0070433616638184,
+                0.0,
+                1.0,
+                0.18243408203125,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.5703303217887878,
+                1.0070433616638184,
+                0.0,
+                1.0,
+                0.18243408203125,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5547053217887878,
+                1.014009714126587,
+                0.0,
+                1.0,
+                0.1889495849609375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.5390446782112122,
+                -0.9790081977844238,
+                0.0,
+                1.0,
+                0.1889495849609375,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -240.1875,
+                -240,
+                0,
+                -0.5625,
+                1.010534405708313,
+                0,
+                1,
+                0.18243408203125,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -240.1875,
+                240,
+                0,
+                -0.5625,
+                -0.9894657135009766,
+                0,
+                1,
+                0.18243408203125,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -233.515625,
+                240,
+                0,
+                -0.546875,
+                -0.9824992418289185,
+                0,
+                1,
+                0.1889495849609375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -233.515625,
+                -240,
+                0,
+                -0.546875,
+                1.0175007581710815,
+                0,
+                1,
+                0.1889495849609375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        },
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "actor": "def-0114",
+          "frame": 433,
+          "deadsync": {
+            "example_vertex": [
+              0,
+              [
+                -0.49603310227394104,
+                1.0186353921890259,
+                0.0,
+                1.0,
+                0.20849609375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_actual_triangle": [
+              [
+                -0.49603310227394104,
+                1.0186353921890259,
+                0.0,
+                1.0,
+                0.20849609375,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.48040810227394104,
+                1.0131663084030151,
+                0.0,
+                1.0,
+                0.2150115966796875,
+                0.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ],
+              [
+                -0.4883417785167694,
+                -0.9840570092201233,
+                0.0,
+                1.0,
+                0.2150115966796875,
+                0.9375,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            ],
+            "first_native_quad": [
+              [
+                -213.5,
+                -240,
+                0,
+                -0.5,
+                1.0200237035751343,
+                0,
+                1,
+                0.20849609375,
+                0,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -213.5,
+                240,
+                0,
+                -0.5,
+                -0.9799762964248657,
+                0,
+                1,
+                0.20849609375,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -206.828125,
+                240,
+                0,
+                -0.484375,
+                -0.985445499420166,
+                0,
+                1,
+                0.2150115966796875,
+                0.9375,
+                1,
+                1,
+                1,
+                1
+              ],
+              [
+                -206.828125,
+                -240,
+                0,
+                -0.484375,
+                1.0145546197891235,
+                0,
+                1,
+                0.2150115966796875,
+                0,
+                1,
+                1,
+                1,
+                1
+              ]
+            ]
+          }
+        }
+      ],
+      "draw_mismatch_count": 1156,
+      "last_draw_mismatch": {
+        "field": "submitted_clip_uv_color_or_topology",
+        "actor": "def-0384",
+        "frame": 4312,
+        "deadsync": {
+          "example_vertex": [
+            0,
+            [
+              0.908814013004303,
+              0.9803965091705322,
+              0.0,
+              1.0,
+              0.794891357421875,
+              0.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          ],
+          "first_actual_triangle": [
+            [
+              0.908814013004303,
+              0.9803965091705322,
+              0.0,
+              1.0,
+              0.794891357421875,
+              0.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.924439013004303,
+              0.9756985902786255,
+              0.0,
+              1.0,
+              0.8014068603515625,
+              0.0,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ],
+            [
+              0.9193108677864075,
+              -1.0227596759796143,
+              0.0,
+              1.0,
+              0.8014068603515625,
+              0.9375,
+              1.0,
+              1.0,
+              1.0,
+              1.0
+            ]
+          ],
+          "first_native_quad": [
+            [
+              386.96875,
+              -240,
+              0,
+              0.9062498807907104,
+              0.9811674356460571,
+              0,
+              1,
+              0.794891357421875,
+              0,
+              1,
+              1,
+              1,
+              1
+            ],
+            [
+              386.96875,
+              240,
+              0,
+              0.9062498807907104,
+              -1.0188326835632324,
+              0,
+              1,
+              0.794891357421875,
+              0.9375,
+              1,
+              1,
+              1,
+              1
+            ],
+            [
+              393.640625,
+              240,
+              0,
+              0.9218748807907104,
+              -1.0235307216644287,
+              0,
+              1,
+              0.8014069199562073,
+              0.9375,
+              1,
+              1,
+              1,
+              1
+            ],
+            [
+              393.640625,
+              -240,
+              0,
+              0.9218748807907104,
+              0.9764694571495056,
+              0,
+              1,
+              0.8014069199562073,
+              0,
+              1,
+              1,
+              1,
+              1
+            ]
+          ]
+        }
+      },
+      "report_sha256": "abef77998160d56ba192f27172974ae75d5858bfdb01c091e7acf3a6907c1cde",
+      "repair_limit_reached": true,
+      "concrete_failure": "Two attempts exhausted in this sweep. Full 4404-frame replay compared 905092 drawable submissions; 1156 submitted_clip_uv_color_or_topology mismatches remain after fixing unset proxy handling and skewed target sampler addressing. Zero callback errors. No third attempt in this sweep."
     }
   ],
   "counts": {
@@ -1122,5 +2872,5 @@
     "pending_charts": 39,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-18T07:43:39Z"
+  "updated_utc": "2026-10-18T07:50:05Z"
 }
