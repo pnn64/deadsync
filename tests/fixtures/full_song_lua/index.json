@@ -2741,15 +2741,12 @@
     {
       "title": "Hispanic Panic",
       "source_simfile": "Hispanic Panic/sm.sm",
-      "harness_version": "0.1.0",
-      "archive": "7f1e790435f600bc5404f45c093b36882217251cd5d5cd82894b6a4b0a2e3f1a.tar.zst",
-      "sha256": "7f1e790435f600bc5404f45c093b36882217251cd5d5cd82894b6a4b0a2e3f1a",
-      "compressed_bytes": 144708,
-      "uncompressed_sha256": "e2421c2ddb38012dde62ae89aeb27be1775eba5f9c4c3327b2eede4984ad6338",
-      "compression_level": 22,
-      "aliases": [
-        "d35ec42440474eb840634befecaf1a7de0178efee41521e0064225378e22b092.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "7d3d2939d23dae05ea2a057c33b0f615480bcdf5ad34377693fd19e7faede993.tar.zst",
+      "compressed_bytes": 6806236,
+      "sha256": "7d3d2939d23dae05ea2a057c33b0f615480bcdf5ad34377693fd19e7faede993",
+      "uncompressed_sha256": "8aecad38ea92ef397a1bed91fc0f7549f5afd39ff570cbd83cde0cba14c19dd7",
+      "aliases": []
     },
     {
       "title": "HOPE",
