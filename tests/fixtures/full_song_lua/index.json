@@ -3235,15 +3235,13 @@
     {
       "title": "Lesson by DJ",
       "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
-      "harness_version": "0.1.0",
-      "archive": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835.tar.zst",
-      "sha256": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835",
-      "compressed_bytes": 1163564,
-      "uncompressed_sha256": "b49f1fac4c33c5c1c09367d8a33ef4c23254c786cd1fc3de53cdd95794cdbddf",
-      "compression_level": 22,
-      "aliases": [
-        "f403d89b4f2235d1ec2866538927ac55346c2d5d7bcadb977ce27872a7b47fef.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "7aa17e101f7ccd476d60cb9b1ed462ab68444d878fc1d8ed466d8fb4347316c0.tar.zst",
+      "compressed_bytes": 110951228,
+      "sha256": "7aa17e101f7ccd476d60cb9b1ed462ab68444d878fc1d8ed466d8fb4347316c0",
+      "uncompressed_sha256": "fc7810ad8883d6db70b72cd24b6c79215d038324b4811f1f54cd77c8a0fdf1cb",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Levels (Skrillex Remix)",
