@@ -22,7 +22,9 @@ fn native_host_clock_inputs(trace: &Value) -> Result<Vec<deadsync_song_lua::Song
     let Some(inputs) = trace.get("host_clock_inputs") else { return Ok(Vec::new()); };
     inputs.as_array().ok_or("native host clock inputs must be an array")?.iter().map(|input| {
         let clock = input["clock"].as_str().ok_or("host clock domain is missing")?;
-        if !matches!(clock, "GetTimeSinceStart" | "Year" | "MonthOfYear" | "DayOfMonth" | "DayOfYear" | "Hour" | "Minute" | "Second") {
+        if !matches!(clock, "GetTimeSinceStart" | "Year" | "MonthOfYear" | "DayOfMonth" | "DayOfYear" | "Hour" | "Minute" | "Second"
+            | "ArrowEffects.GetXPos" | "ArrowEffects.GetYPos" | "ArrowEffects.GetZPos" | "ArrowEffects.GetAlpha" | "ArrowEffects.GetGlow"
+            | "ArrowEffects.GetRotationX" | "ArrowEffects.GetRotationY" | "ArrowEffects.GetRotationZ" | "ArrowEffects.GetZoom" | "ArrowEffects.GetYOffset") {
             return Err(format!("unsupported external host clock {clock}"));
         }
         let value = number(input, "value")?;
@@ -4442,6 +4444,11 @@ pub(crate) fn replay_with_command_observer(
                     .ok_or("missing native option timer input")? as f32;
             }
             if let Some(scene) = state.song_lua.as_mut() { scene.set_option_clock_deltas(deltas); }
+        }
+        if let Some(clocks) = frame.get("arrow_clock_inputs") {
+            let tipsy = std::array::from_fn(|player| clocks["players"][player]["tipsy_seconds"].as_f64());
+            let tan_tipsy = std::array::from_fn(|player| clocks["players"][player]["tan_tipsy_seconds"].as_f64());
+            if let Some(scene) = state.song_lua.as_mut() { scene.set_arrow_clock_inputs(tipsy, tan_tipsy); }
         }
         gameplay::update_with_input(&mut state, delta as f32, snapshot, || host, &mut effects, |state| {
         while let Some(event) = input_events.get(input_cursor) {

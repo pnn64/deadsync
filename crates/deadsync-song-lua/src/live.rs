@@ -1046,6 +1046,12 @@ impl SongLuaLiveScene {
         self.lua.set_app_data(OptionClockDeltas(deltas));
     }
 
+    /// Raw RageTimer reads at the native ArrowEffects update phase.
+    #[cfg(feature = "test-support")]
+    pub fn set_arrow_clock_inputs(&mut self, tipsy: [Option<f64>; LUA_PLAYERS], tan_tipsy: [Option<f64>; LUA_PLAYERS]) {
+        self.lua.set_app_data(crate::clock_inputs::ArrowFrameClocks { tipsy, tan_tipsy });
+    }
+
     /// ScreenManager dispatches input after the screen's own input handler.
     /// Callback return values only control the remaining Lua callbacks.
     pub fn input(&mut self, event: &crate::SongLuaInputEvent<'_>)
@@ -7653,6 +7659,25 @@ return Def.ActorFrame { primary, other,
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert!(scene.states().iter().any(|state| state.x==0.5 && state.y==1053.0),
             "constructor uptime and each raw clock read must be independent of the frame snapshot");
+    }
+
+    #[cfg(feature = "test-support")]
+    #[test]
+    fn live_native_arrow_clocks_keep_query_and_cache_update_reads_independent() {
+        let mut compiled = compile_with_context("raw-arrow-clock", "return Def.ActorFrame{OnCommand=function(self)\n self:SetUpdateFunction(function(self)\n local ps=GAMESTATE:GetPlayerState(PLAYER_1)\n local po=ps:GetPlayerOptions('ModsLevel_Current');po:Drunk(1);po:Tipsy(1)\n self:x(ArrowEffects.GetXPos(ps,1,0)):y(ArrowEffects.GetXPos(ps,1,0))\n end)\nend}", |context| {
+            context.defer_initial_live_update = true;
+            context.host_clock_inputs = [50.0,51.0].into_iter().map(|value| crate::SongLuaHostClockInput {
+                clock: "ArrowEffects.GetXPos".into(), source: "song:/default.lua".into(), line: 5, value,
+            }).collect();
+        });
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.set_arrow_clock_inputs([Some(40.0), None], [None, None]);
+        let output = scene.advance(SongLuaLiveFrame { uptime_seconds: Some(1000.0), ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        let expected = |time: f32| -96.0 + time.cos()*32.0;
+        assert!(scene.states().iter().any(|state| (state.x-expected(50.0)).abs()<1e-5 && (state.y-expected(51.0)).abs()<1e-5));
+        let y: f32 = scene.lua.load("return ArrowEffects.GetYPos(GAMESTATE:GetPlayerState(PLAYER_1),1,0,0)").eval().unwrap();
+        assert!((y-(40.0_f32*1.2).cos()*25.6).abs()<1e-5, "cached Tipsy uses its own raw update clock: {y}");
     }
 
     #[test]

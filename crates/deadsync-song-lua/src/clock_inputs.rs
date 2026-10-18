@@ -11,6 +11,12 @@ struct ClockInputs {
     reads: HashMap<(String, String, i32), VecDeque<f64>>,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ArrowFrameClocks {
+    pub tipsy: [Option<f64>; crate::LUA_PLAYERS],
+    pub tan_tipsy: [Option<f64>; crate::LUA_PLAYERS],
+}
+
 fn canonical_source(source: &str, song_root: &str) -> String {
     let source = source.trim_start_matches('@').replace('\\', "/").replace("/./", "/");
     if let Some(relative) = source.strip_prefix(song_root) {

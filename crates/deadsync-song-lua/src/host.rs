@@ -1385,12 +1385,22 @@ pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
             .map(|selected| selected.0.clone()).or_else(|| options.as_ref().map(|players| players[player].clone()));
         let selected_state = selected.as_ref().map(|options|
             options.raw_get::<Option<Table>>("__songlua_player_option_state")).transpose()?.flatten();
-        let time = arrow_effects_time(lua, selected_state.as_ref())?;
         let cosecant = selected_state.as_ref().map(|state|
             state.raw_get::<Option<bool>>("cosecant")).transpose()?.flatten().unwrap_or(false);
+        let mut times = [0.0; 2];
+        for (index, prefix) in ["tipsy", "tantipsy"].into_iter().enumerate() {
+            if option(prefix)? == 0.0 { continue; }
+            #[cfg(feature = "test-support")]
+            let raw = lua.app_data_ref::<crate::clock_inputs::ArrowFrameClocks>()
+                .and_then(|clocks| if index == 0 { clocks.tipsy[player] } else { clocks.tan_tipsy[player] });
+            #[cfg(not(feature = "test-support"))]
+            let raw = None;
+            times[index] = arrow_effects_time(lua, selected_state.as_ref(), raw)?;
+        }
         for column in 0..style.columns {
             for (prefix, tan) in [("tipsy", false), ("tantipsy", true)] {
                 let result = if option(prefix)? == 0.0 { 0.0 } else {
+                    let time = times[usize::from(tan)];
                     let angle = time * (option(&format!("{prefix}speed"))? * 1.2 + 1.2)
                         + column as f32 * (option(&format!("{prefix}offset"))? * 1.8 + 1.8);
                     let wave = if tan { if cosecant { 1.0 / angle.sin() } else { angle.tan() } }
@@ -1413,20 +1423,32 @@ pub(crate) fn update_native_arrow_effects(lua: &Lua) -> mlua::Result<()> {
         }
     }
     lua.set_app_data(next);
+    #[cfg(feature = "test-support")]
+    lua.remove_app_data::<crate::clock_inputs::ArrowFrameClocks>();
     Ok(())
 }
 
-fn arrow_effects_time(lua: &Lua, state: Option<&Table>) -> mlua::Result<f32> {
+fn arrow_effects_time(lua: &Lua, state: Option<&Table>, raw_uptime: Option<f64>) -> mlua::Result<f32> {
     let value = |name| -> mlua::Result<f32> {
         Ok(state.map(|state| state.raw_get::<Option<f32>>(name)).transpose()?.flatten().unwrap_or(0.0))
     };
     let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
     let beat = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
     let seconds = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
-    let uptime = runtime.raw_get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(f64::from(seconds));
+    let uptime = raw_uptime.or(runtime.raw_get::<Option<f64>>("__songlua_uptime_seconds")?).unwrap_or(f64::from(seconds));
     let timer = state.map(|state| state.raw_get::<Option<u8>>("modtimersetting")).transpose()?.flatten().unwrap_or(3);
     let clock = match timer { 1 => f64::from(beat), 2 => f64::from(seconds), _ => uptime };
     Ok(((clock + f64::from(value("modtimeroffset")?)) * (1.0 + f64::from(value("modtimermult")?))) as f32)
+}
+
+fn arrow_effects_query_time(lua: &Lua, state: Option<&Table>, domain: &str) -> mlua::Result<f32> {
+    #[cfg(feature = "test-support")]
+    let raw = if matches!(state.map(|state| state.raw_get::<Option<u8>>("modtimersetting")).transpose()?.flatten(), Some(1 | 2)) {
+        None
+    } else { crate::clock_inputs::next(lua, domain) };
+    #[cfg(not(feature = "test-support"))]
+    let raw = { let _ = domain; None };
+    arrow_effects_time(lua, state, raw)
 }
 
 fn arrow_effects_beat_factor(beat: f32, offset: f32, multiplier: f32) -> f32 {
@@ -1528,13 +1550,6 @@ fn arrow_effects_x_pos(
     // _fallback GameplayMargins reserves 272px per side, 544px when centered.
     // ScreenGameplay clamps the resulting style fit zoom to one.
     let field_zoom = arrow_effects_field_zoom(&style);
-    let runtime: Table = lua.globals().raw_get(SONG_LUA_RUNTIME_KEY)?;
-    let beat = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_BEAT_KEY)?;
-    let seconds = runtime.raw_get::<f32>(SONG_LUA_RUNTIME_SECONDS_KEY)?;
-    let uptime = runtime.raw_get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(f64::from(seconds));
-    let timer = state.as_ref().map(|state| state.raw_get::<Option<u8>>("modtimersetting")).transpose()?.flatten().unwrap_or(3);
-    let clock = match timer { 1 => f64::from(beat), 2 => f64::from(seconds), _ => uptime };
-    let time = ((clock + f64::from(value("modtimeroffset")?)) * (1.0 + f64::from(value("modtimermult")?))) as f32;
     let cosecant = state.as_ref().map(|state| state.raw_get::<Option<bool>>("cosecant")).transpose()?.flatten().unwrap_or(false);
     let tangent = |angle: f32| if cosecant { 1.0 / angle.sin() } else { angle.tan() };
     let scale = |x: f32, low: f32, high: f32, to_low: f32, to_high: f32| (x - low) * (to_high - to_low) / (high - low) + to_low;
@@ -1560,6 +1575,7 @@ fn arrow_effects_x_pos(
     for (amount, speed, offset, period, tan) in [("drunk", "drunkspeed", "drunkoffset", "drunkperiod", false), ("tandrunk", "tandrunkspeed", "tandrunkoffset", "tandrunkperiod", true)] {
         let amount = value(amount)?;
         if amount == 0.0 { continue; }
+        let time = arrow_effects_query_time(lua, state.as_ref(), "ArrowEffects.GetXPos")?;
         let angle = time * (1.0 + value(speed)?) + column as f32 * (value(offset)? * 0.2 + 0.2)
             + y * (value(period)? * 10.0 + 10.0) / screen_height;
         let wave = if tan { tangent(angle) } else { angle.cos() };
