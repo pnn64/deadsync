@@ -3118,17 +3118,15 @@
       "aliases": []
     },
     {
-      "title": "KABOOOOOM!!!!",
+      "title": "kaboooooom!",
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.sm",
-      "harness_version": "0.1.0",
-      "archive": "1c196f79f604bf30ec7fdfd1cb92634a16b4326170b6b7131fc2bc2d452d9068.tar.zst",
-      "sha256": "1c196f79f604bf30ec7fdfd1cb92634a16b4326170b6b7131fc2bc2d452d9068",
-      "compressed_bytes": 33350200,
-      "uncompressed_sha256": "98980c9972d317a57a3d44e343a1d27b8083c2e7e24e5088420bfa5b1a1b9892",
-      "compression_level": 22,
-      "aliases": [
-        "fecf92a2d2e13e086ed90744f4b443cf161c927f87314ec25ce6890998b4d434.tar.zst"
-      ]
+      "harness_version": "0.1.84",
+      "archive": "728a2b5faf76610807bc77cf052111c70aa84f29b5a2e1cafd53da1fedb337ff.tar.zst",
+      "compressed_bytes": 163241925,
+      "sha256": "728a2b5faf76610807bc77cf052111c70aa84f29b5a2e1cafd53da1fedb337ff",
+      "uncompressed_sha256": "cb16c5be276f64e0e9676b757255daa519c70ab35ccecfad0589cdbc7373dbd2",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "KABOOOOOM!!!!",
