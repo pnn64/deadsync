@@ -25717,6 +25717,155 @@
       ],
       "draw_mismatch_count": 794501,
       "report_sha256": "f89ce540fe2f85582aabbdadbc4c170f4fed1ec2231a92d90f3b71de2e0f9637"
+    },
+    {
+      "position": 27,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+      "status": "pending",
+      "repair_attempts": 2,
+      "candidate_sha256": "305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sweep-20261016\\seventh\\candidates\\305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0.tar",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "fix_commit": "f4aaa060e845bff1d5ff242db42afc5630a7fa6a",
+      "binary_sha256": "2ed0366aae619ab23a80e91e17bb014ba48f837ee4e9e07db1bf8a3dfc3d9c5c",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\full-song-lua-windows-immediate.exe",
+        "binary_sha256": "2ed0366aae619ab23a80e91e17bb014ba48f837ee4e9e07db1bf8a3dfc3d9c5c",
+        "source_root": "C:\\GitHub\\deadsync",
+        "source_base_commit": "b861ba269",
+        "fix_commit": "f4aaa060e845bff1d5ff242db42afc5630a7fa6a",
+        "modified_sources": {
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/src/compile.rs": "fd44c2d223485594526d0f454eb6b27ca741b54a867f3d680ab4efffce68e86a",
+          "crates/deadsync-song-lua/src/host.rs": "f4358b344657a111c8ac1c364d13bee0964bdd85b176a37311fccd1a011e9a0a",
+          "crates/deadsync-song-lua/src/lib.rs": "553be1052a4806b60b6ea111c1d74c9ba964d657fd6ad82364463ee8069493a2",
+          "crates/deadsync-song-lua/src/live.rs": "7d71c8f35dda64eb9d3dab2d2b4fde7de12801c2ff49a2b111cd31b20575dcba",
+          "crates/deadsync-song-lua/src/lua_util.rs": "7ba83c9528d6e8a4df348ec3c2a998e3540944a642438ba93ae041e73d0e9006",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "c96925f034df9097e03929f0194bc889966eb47fe62e483471dc9ddda691c2fc",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "eca324e80ac9cbff0b6f0731c419204bff776810c5f66e09a6c6d1af1c09b9a9",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-simfile/src/song.rs": "d21411f9fbf9b2fb2a4930369518332307a08097e07bb87ff03fdee560efbd36",
+          "crates/deadsync-simfile/src/cache.rs": "65082b7647813d2f6950d6d4a51a000203af4d050a239209b449d77a02791974",
+          "crates/deadsync-simfile/src/changes.rs": "5c726755073bc2414b26551f16b5621db2e854f5fbc5ba2292dd45f0856eab46",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "b0536cb5aa3f9b6506862fc7350f4511b3787250419c53cf44bdddd24d090e95",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "54315cd0fda6d980a47450cf57f10d76cba10869ea29b7d2651f6370ae2b337d",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "3ad394a21e5a4175b81747a71595521ad356a7e27e261eaf705f44f29f3a7cb3",
+          "crates/deadsync-shell/src/app/mod.rs": "bd446d73081885a0e35ddc81f0eb7171626ad05b4e56b54c5112da4e94ceced1",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535",
+          "crates/deadsync-chart/src/song.rs": "9c5a57b936f6ad5036b871074c75e2da48901776cb626a3904d06d0e5ce728d8",
+          "crates/deadsync-simfile/src/cache_perf.rs": "11d632572c70465470dd8e788bbfcaa729a3735d70a6b7ce6fd2617f69fd7b3a",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "152761f0ccd6f828e41ad080a07424dc336c5ac1215cf1538cd3169cbbba1893",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "fb75e9be5b384bd661601ac47c5a6dec8a2931ab0d63c75eaceaa49d062e46ea",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+          "crates/deadsync-song-lua/src/playback.rs": "75440b684d8b18b6194f6cc16bfe6fb269577188c419a9f2fc899f5adaaf6f46",
+          "crates/deadsync-song-lua/src/playback/actor_conformance.rs": "51d8254918f9451166409382f1da3d071e6b7fbe2423962200d9cad5c3c8090e",
+          "crates/deadsync-song-lua/tests/playback/cases.rs": "a9ff287b313dc49046ac7e150d7a0f7346e160319f09f3a6147d996be2b5026a",
+          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "d068e8322d83c5e00691247cc736d591bc5a63f943fa2944162667a4bad793e7"
+        },
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--no-run"
+        ],
+        "seconds": 117.24585870001465,
+        "targeted_checks": [
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-native-tests-final-v5.log",
+            "sha256": "0d96e6b47691ffeeae2edb39d536692aee0c8865c48d3cb7c02595a9a7b735de",
+            "passed": 66,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "Final source graph, built together with the sealed full replay CLI"
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-custom-tests.log",
+            "sha256": "7493d0b7484dc9152d82a8f8b56bd2e84345263ea0622cacde5216c719652f84",
+            "passed": 3,
+            "failed": 0,
+            "ignored": 0,
+            "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-live-draw-tests.log",
+            "sha256": "09d6bd411223de0580c74b61fd4d05aff703064fc37e3e7bd0bbc5bbb239af8b",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0,
+            "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-loader-tests.log",
+            "sha256": "d1f790f79c7dd5a3330b1813ed31627e8a8c34e58b3182e48e3ba2fa968892ac",
+            "passed": 11,
+            "failed": 0,
+            "ignored": 0,
+            "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-manual-playback-tests.log",
+            "sha256": "e0a6acb6a3f79a7305e4f0ec7e8ec9b465769a600ddd9867310b7a25f2ba5c1d",
+            "passed": 1,
+            "failed": 0,
+            "ignored": 0,
+            "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+          }
+        ],
+        "build_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\windows-immediate-build-v5.log",
+        "build_log_sha256": "e829b62f8d31b0b157c888e05b6fa76d7479a5a064acb4fffe33904f070ae131",
+        "execution_platform": "Windows headless CLI"
+      },
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\chart-27-attempt-2",
+      "execution_platform": "Windows headless CLI",
+      "prior_sweep_failure": [
+        {
+          "field": "submitted_clip_uv_color_or_topology",
+          "frame": 80,
+          "actors": [
+            "def-0003",
+            "def-0005"
+          ],
+          "seconds": 0.05099773406982422,
+          "beat": 0.023829178884625435
+        }
+      ],
+      "replay_exit": 1,
+      "replay_seconds": 65.9560780999891,
+      "preparation_or_execution_error": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.1s] : 0 checks completed, 0 failed\n[16.1s] : 0 checks completed, 0 failed\n[17.8s] replaying every native gameplay frame\n[18.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[20.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[22.1s] replaying every native gameplay frame: frame 70/4404 (1.6%)\n\nthread 'main' (47592) panicked at tests\\song_lua_itgmania_semantic_parity\\whole_song_archives.rs:1539:35:\nnative gameplay replay failed: draw proxy has no prepared target\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n[24.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[26.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[28.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n[30.1s] replaying every native gameplay frame: frame 79/4404 (1.8%)\n"
     }
   ],
   "counts": {
@@ -25725,5 +25874,5 @@
     "pending_charts": 41,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-18T01:31:59Z"
+  "updated_utc": "2026-10-18T02:40:18Z"
 }
