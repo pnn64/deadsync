@@ -3549,17 +3549,15 @@
       "aliases": []
     },
     {
-      "title": "MAWARUCHI SURVIVER",
+      "title": "mawaru7",
       "source_simfile": "mawaru7/mawaru7.sm",
-      "harness_version": "0.1.0",
-      "archive": "dd009566e5b52b87169e2b641303dd1b60d8596e8115e0f81342f21d3e28c18c.tar.zst",
-      "sha256": "dd009566e5b52b87169e2b641303dd1b60d8596e8115e0f81342f21d3e28c18c",
-      "compressed_bytes": 16970414,
-      "uncompressed_sha256": "a13f944d08db582586282a608c597b00e697ce2dbbb6e0c630028969b72da945",
-      "compression_level": 22,
-      "aliases": [
-        "97080b2528e9b7744f033cb8d81627899487e8bc367d35bed2ba1f8e130ced3e.tar.zst"
-      ]
+      "harness_version": "0.1.84",
+      "archive": "97e7ca47890de2ef68c3c67c4366c1db83d00d7a213eaa93e8c8fc0591d7850d.tar.zst",
+      "compressed_bytes": 172048632,
+      "sha256": "97e7ca47890de2ef68c3c67c4366c1db83d00d7a213eaa93e8c8fc0591d7850d",
+      "uncompressed_sha256": "38e8dfe9bd0f888fd13456308fe077bdd2766e96bf2e183260fca0cad0d860a1",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "MAWARU! SETSUGETSUKA!",
