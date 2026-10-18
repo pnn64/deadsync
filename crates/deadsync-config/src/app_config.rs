@@ -349,6 +349,9 @@ pub struct Config {
     /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
     pub groovestats_qr_login_when: GrooveStatsQrLoginWhen,
     pub separate_unlocks_by_player: bool,
+    /// List rips made in Find Content's Rip Packs on itgcontent.net's recent
+    /// rips, and mark the kept ones kept.
+    pub share_rips: bool,
     pub fastload: bool,
     pub cachesongs: bool,
     /// Allow Ctrl+Backspace in Select Music to permanently delete a song directory.
@@ -573,6 +576,7 @@ impl Default for Config {
             arrowcloud_qr_login_when: system.arrowcloud_qr_login_when,
             groovestats_qr_login_when: system.groovestats_qr_login_when,
             separate_unlocks_by_player: system.separate_unlocks_by_player,
+            share_rips: system.share_rips,
             fastload: runtime.fastload,
             cachesongs: runtime.cachesongs,
             allow_song_deletion: runtime.allow_song_deletion,

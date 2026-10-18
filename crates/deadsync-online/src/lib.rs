@@ -9,6 +9,7 @@ pub mod pack_archive;
 pub mod pack_page;
 pub mod player_leaderboards;
 pub mod popular_packs;
+pub mod rip_packs;
 pub mod runtime;
 pub mod score_compat;
 pub mod score_import;

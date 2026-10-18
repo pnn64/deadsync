@@ -16,7 +16,7 @@ use crate::defaults::{
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
     DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
-    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS,
+    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHARE_RIPS,
     DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS, DEFAULT_SHOW_CONSOLE,
     DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_LOCAL_IP, DEFAULT_SHOW_MOST_PLAYED_COURSES,
     DEFAULT_SHOW_MUSIC_WHEEL_GRADES, DEFAULT_SHOW_MUSIC_WHEEL_LAMPS, DEFAULT_SHOW_RANDOM_COURSES,
@@ -251,6 +251,9 @@ pub struct SystemOptions {
     pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
     pub groovestats_qr_login_when: GrooveStatsQrLoginWhen,
     pub separate_unlocks_by_player: bool,
+    /// List rips made in Find Content's Rip Packs on itgcontent.net's recent
+    /// rips, and mark the kept ones kept.
+    pub share_rips: bool,
     pub mine_hit_sound: bool,
     pub show_stats_mode: u8,
     pub frame_stats_overlay_anchor: &'static str,
@@ -317,6 +320,7 @@ impl Default for SystemOptions {
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER,
+            share_rips: DEFAULT_SHARE_RIPS,
             mine_hit_sound: DEFAULT_MINE_HIT_SOUND,
             show_stats_mode: DEFAULT_SHOW_STATS_MODE,
             frame_stats_overlay_anchor: DEFAULT_FRAME_STATS_OVERLAY_ANCHOR,
@@ -642,6 +646,7 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "SeparateUnlocksByPlayer"),
             default.separate_unlocks_by_player,
         ),
+        share_rips: parse_u8_bool_or_default(conf.get("Options", "ShareRips"), default.share_rips),
         mine_hit_sound: parse_u8_bool_or_default(
             conf.get("Options", "MineHitSound"),
             default.mine_hit_sound,
@@ -904,6 +909,7 @@ pub fn push_system_online_option_lines(content: &mut String, options: SystemOpti
         "GrooveStatsQrLoginWhen",
         options.groovestats_qr_login_when.as_str(),
     );
+    push_bool(content, "ShareRips", options.share_rips);
 }
 
 pub fn push_system_input_hardware_option_lines(
@@ -2665,6 +2671,7 @@ mod tests {
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
             groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
             separate_unlocks_by_player: false,
+            share_rips: true,
             mine_hit_sound: true,
             show_stats_mode: 0,
             frame_stats_overlay_anchor: "auto",
@@ -2960,6 +2967,7 @@ mod tests {
             ArrowCloudQrLoginWhen=Always
             GrooveStatsQrLoginWhen=Disabled
             SeparateUnlocksByPlayer=1
+            ShareRips=0
             MineHitSound=0
             ShowStatsMode=9
             FrameStatsOverlayAnchor=bottom-center
@@ -3022,6 +3030,7 @@ mod tests {
             GrooveStatsQrLoginWhen::Disabled
         );
         assert!(loaded.separate_unlocks_by_player);
+        assert!(!loaded.share_rips);
         assert!(!loaded.mine_hit_sound);
         assert_eq!(loaded.show_stats_mode, SHOW_STATS_MODE_MAX);
         assert_eq!(loaded.frame_stats_overlay_anchor, "bottom-center");
@@ -3107,6 +3116,7 @@ mod tests {
         assert_eq!(loaded.log_to_file, default.log_to_file);
         assert_eq!(loaded.show_console, default.show_console);
         assert!(loaded.show_arrowcloud_result_dialogs);
+        assert!(loaded.share_rips, "rips are shared unless turned off");
 
         conf.load_str("[Options]\nShowArrowCloudResultDialogs=0\n");
         assert!(!load_system_options(&conf, default).show_arrowcloud_result_dialogs);
@@ -3132,6 +3142,7 @@ mod tests {
         options.show_arrowcloud_result_dialogs = true;
         options.arrowcloud_qr_login_when = ArrowCloudQrLoginWhen::Always;
         options.groovestats_qr_login_when = GrooveStatsQrLoginWhen::Disabled;
+        options.share_rips = false;
         options.gfx_debug = true;
         options.high_dpi = true;
         options.hide_mouse_cursor = false;
@@ -3168,6 +3179,7 @@ mod tests {
                 "ShowArrowCloudResultDialogs=1\n",
                 "ArrowCloudQrLoginWhen=Always\n",
                 "GrooveStatsQrLoginWhen=Disabled\n",
+                "ShareRips=0\n",
                 "GfxDebug=1\n",
                 "HighDPI=1\n",
                 "HideMouseCursor=0\n",

@@ -388,7 +388,7 @@ fn parse_catalog_line(line: &str, line_number: usize) -> Result<PackInfo, StepMa
         name.to_string(),
         song_count,
         size_bytes,
-        optional_catalog_value(fields[3]),
+        catalog_sync_value(fields[3]),
         optional_catalog_value(fields[2]),
         optional_catalog_value(fields[1]),
         optional_catalog_value(fields[0]),
@@ -410,6 +410,18 @@ where
 fn optional_catalog_value(text: &str) -> Option<String> {
     let text = text.trim();
     if text.is_empty() || text.eq_ignore_ascii_case("none") || text.eq_ignore_ascii_case("null") {
+        None
+    } else {
+        Some(text.to_string())
+    }
+}
+
+/// The sync column, which has its own vocabulary: here the literal `null` is
+/// the site saying the pack is null-synced -- its one positive answer -- not
+/// an unset field, so it is kept rather than read as absent.
+fn catalog_sync_value(text: &str) -> Option<String> {
+    let text = text.trim();
+    if text.is_empty() || text.eq_ignore_ascii_case("none") {
         None
     } else {
         Some(text.to_string())
@@ -1454,6 +1466,13 @@ mod tests {
         assert_eq!(packs[0].sync.as_deref(), Some("n/a"));
         assert_eq!(packs[0].pack_type, None);
         assert_eq!(packs[0].substyle, None);
+    }
+
+    #[test]
+    fn catalog_parser_keeps_a_null_sync_as_the_site_wrote_it() {
+        let text = format!("{HEADER}7, \"Pack\", 1, 99, null, None, None, Stepmania 3.9\n");
+        let packs = parse_catalog(text.as_str()).expect("catalog parses");
+        assert_eq!(packs[0].sync.as_deref(), Some("null"));
     }
 
     #[test]

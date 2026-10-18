@@ -210,6 +210,19 @@ pub fn build_agent(config: AgentConfig) -> ureq::Agent {
         .into()
 }
 
+/// [`build_agent`], with connecting held to `connect` as well: for requests
+/// nobody waits on, which give up on a server that does not answer well
+/// before the whole-request deadline.
+#[must_use]
+pub fn build_agent_with_connect(config: AgentConfig, connect: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .user_agent(deadsync_version::user_agent())
+        .timeout_global(Some(config.timeout))
+        .timeout_connect(Some(connect))
+        .build()
+        .into()
+}
+
 // Reuse a single process-wide agent so score submits and leaderboard requests share
 // one connection pool instead of opening fresh sockets/TLS sessions per request.
 static DEFAULT_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| build_agent(AgentConfig::default()));
@@ -289,6 +302,16 @@ mod tests {
     fn agents_use_dead_sync_user_agent() {
         assert_dead_sync_user_agent(&build_agent(AgentConfig::default()));
         assert_dead_sync_user_agent(&get_streaming_agent());
+        let short = build_agent_with_connect(
+            AgentConfig {
+                timeout: Duration::from_secs(15),
+            },
+            Duration::from_secs(10),
+        );
+        assert_dead_sync_user_agent(&short);
+        let timeouts = short.config().timeouts();
+        assert_eq!(timeouts.global, Some(Duration::from_secs(15)));
+        assert_eq!(timeouts.connect, Some(Duration::from_secs(10)));
     }
 
     #[test]

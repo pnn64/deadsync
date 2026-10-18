@@ -848,6 +848,8 @@ pub enum SimplyLoveOnlineConfigRequest {
     SubmitArrowCloudFails(bool),
     ShowArrowCloudResultDialogs(bool),
     ArrowCloudQrLogin(SimplyLoveQrLoginPolicy),
+    /// Rip Packs' rips listed on itgcontent.net, and kept ones marked kept.
+    ShareRips(bool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -8,12 +8,12 @@
 //!
 //! The original refuses to draw below 700 wide (`LO.MIN_WIDTH`) and shows a
 //! "needs a widescreen display" panel instead. That gate is kept: the tab strip
-//! alone needs 851px, and there is no reflow anywhere in the original.
+//! alone needs 853px, and there is no reflow anywhere in the original.
 
 use deadlib_present::space::{screen_height, screen_width};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Below this the browser will not lay out. Nine tab pills need 851px and the
+/// Below this the browser will not lay out. Ten tab pills need 853px and the
 /// original has no wrap, clip or reflow for them.
 pub(super) const MIN_WIDTH: f32 = 700.0;
 
@@ -31,7 +31,9 @@ pub(super) const HEADER_RULE_Y: f32 = 42.0;
 // --- tab strip --------------------------------------------------------------
 pub(super) const TABS_X: f32 = 196.0;
 pub(super) const TABS_Y: f32 = 22.0;
-pub(super) const TABS_PITCH: f32 = 72.0;
+/// The original's pitch for ten tabs: "196 + 10 x 65 ends at 846". At 72 the
+/// tenth pill would end past the right edge of a 16:9 screen.
+pub(super) const TABS_PITCH: f32 = 65.0;
 pub(super) const TAB_W: f32 = TABS_PITCH - 6.0;
 pub(super) const TAB_H: f32 = 20.0;
 pub(super) const TAB_LABEL_ZOOM: f32 = 0.48;
@@ -147,6 +149,48 @@ pub(super) const BHIST_Y: f32 = 420.0;
 // --- footer -----------------------------------------------------------------
 pub(super) const VERSION_Y: f32 = CONTENT_BOT + 15.0; // 455
 pub(super) const VERSION_ZOOM: f32 = 0.4;
+
+// --- rip packs --------------------------------------------------------------
+// Absolute pixels on the 854x480 basis, as the original's are: none of them
+// scale with the screen width, which is why the tab only fits at 16:9.
+/// The options down the left.
+pub(super) const RIP_PANEL_X: f32 = 16.0;
+pub(super) const RIP_PANEL_W: f32 = 292.0;
+pub(super) const RIP_ROW_Y0: f32 = 74.0;
+pub(super) const RIP_ROW_H: f32 = 42.0;
+/// The stage on the right: its centre, the pack and a card.
+pub(super) const RIP_STAGE_X: f32 = 579.0;
+pub(super) const RIP_STAGE_Y: f32 = 246.0;
+pub(super) const RIP_PACK_W: f32 = 150.0;
+pub(super) const RIP_PACK_H: f32 = 214.0;
+pub(super) const RIP_CARD_W: f32 = 96.0;
+pub(super) const RIP_CARD_H: f32 = 112.0;
+/// The deal's top-left, and the gaps between cards.
+pub(super) const RIP_GRID_X0: f32 = 325.0;
+pub(super) const RIP_GRID_Y0: f32 = 70.0;
+pub(super) const RIP_GAP_X: f32 = 7.0;
+pub(super) const RIP_GAP_Y: f32 = 8.0;
+pub(super) const RIP_GRID_COLS: usize = 5;
+/// The era and author picker: a screenful of rows at most.
+pub(super) const RIP_PICK_W: f32 = 400.0;
+pub(super) const RIP_PICK_ROW: f32 = 22.0;
+pub(super) const RIP_PICK_ROWS: usize = 12;
+
+/// The centre of an option row, `row` counted from zero.
+pub(super) fn rip_row_y(row: usize) -> f32 {
+    RIP_ROW_Y0 + row as f32 * RIP_ROW_H
+}
+
+/// Where a card lands, `card` counted from zero: five to a row, card eight
+/// exactly on the stage's centre.
+pub(super) fn rip_card_xy(card: usize) -> (f32, f32) {
+    let column = (card % RIP_GRID_COLS) as f32;
+    let row = (card / RIP_GRID_COLS) as f32;
+    (
+        RIP_GRID_X0 + RIP_CARD_W / 2.0 + column * (RIP_CARD_W + RIP_GAP_X),
+        RIP_GRID_Y0 + RIP_CARD_H / 2.0 + row * (RIP_CARD_H + RIP_GAP_Y),
+    )
+}
 
 /// Screen width, which everything horizontal is derived from.
 pub(super) fn width() -> f32 {
@@ -334,14 +378,31 @@ mod tests {
         assert!(LIST_TOP_TIGHT + ROWS as f32 * ROW_H <= CONTENT_BOT);
     }
 
-    /// Nine pills at pitch 72 end at 835, so the strip needs 851px. This is
+    /// Ten pills at pitch 65 end at 837, so the strip needs 853px. This is
     /// why the browser refuses to draw narrow rather than reflowing.
     #[test]
     fn the_tab_strip_fits_at_widescreen_and_not_below() {
-        let last_right = tab_x(8) - 3.0 + TAB_W;
-        assert_eq!(last_right, 835.0);
+        let last_right = tab_x(9) - 3.0 + TAB_W;
+        assert_eq!(last_right, 837.0);
         assert!(last_right + 16.0 <= 854.0, "fits at 16:9");
         assert!(last_right + 16.0 > MIN_WIDTH, "and not at the gate width");
+        // RIP PACKS, ninth, is the original's 713 to 772.
+        assert_eq!(tab_x(8) - 3.0, 713.0);
+        assert_eq!(tab_x(8) - 3.0 + TAB_W, 772.0);
+    }
+
+    /// The deal's grid, as the original places it: card eight on the stage's
+    /// centre, and the whole grid inside the content area with its borders.
+    #[test]
+    fn the_rip_cards_land_where_the_original_deals_them() {
+        assert_eq!(rip_card_xy(0), (373.0, 126.0));
+        assert_eq!(rip_card_xy(4), (785.0, 126.0));
+        assert_eq!(rip_card_xy(7), (RIP_STAGE_X, RIP_STAGE_Y));
+        assert_eq!(rip_card_xy(14), (785.0, 366.0));
+        let (_, bottom) = rip_card_xy(14);
+        assert!(bottom + RIP_CARD_H / 2.0 + 2.0 <= CONTENT_BOT);
+        assert_eq!(rip_row_y(0), 74.0);
+        assert_eq!(rip_row_y(7) + 10.0, 378.0, "the button sits ten lower");
     }
 
     /// Nine slots in 2026, and one more every January. The strip has to fit

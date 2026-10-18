@@ -14,6 +14,9 @@ fn entry(name: impl Into<String>, index: usize) -> ZipEntry {
         uncompressed: 40,
         local_header: index as u64 * 100,
         end: (index as u64 + 1) * 100,
+        day: 0,
+        crc: 0,
+        site_name: None,
     }
 }
 

@@ -213,6 +213,7 @@ pub enum SubRowId {
     GsBsOptions,
     ArrowCloudOptions,
     ScoreImport,
+    ShareRips,
     // Null-or-Die (launcher)
     NullOrDieOptions,
     SyncPacks,

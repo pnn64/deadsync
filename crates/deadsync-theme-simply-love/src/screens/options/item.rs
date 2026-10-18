@@ -258,6 +258,7 @@ pub enum ItemId {
     OsGsBsOptions,
     OsArrowCloudOptions,
     OsScoreImport,
+    OsShareRips,
 
     // Null-or-Die menu (launcher)
     NodOptions,
@@ -574,6 +575,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "GsBsOptions")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ArrowCloudOptions")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ScoreImport")),
+            HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ShareRips")),
         ],
     },
     Item {

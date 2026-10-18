@@ -48,6 +48,7 @@ fn browser_chrome_preserves_all_tabs_zones_and_search_text() {
             Zone::List,
             Zone::Installed,
             Zone::Detail,
+            Zone::Rip,
         ] {
             state.zone = zone;
             for query in ["", "find \"Pack\"", "Å猫"] {

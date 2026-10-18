@@ -151,6 +151,9 @@ pub(super) fn commify(n: usize) -> String {
 pub(super) fn readout_text(state: &State) -> String {
     match tab(state) {
         Tab::Installed => format!("{} installed", state.installed.len()),
+        // Mirrored from the current readout when the Rip Packs tab was added,
+        // so the comparison still covers every tab.
+        Tab::Rip => String::new(),
         // Never a status here. The year view says it is indexing with the
         // progress bar beside this line, and a second indicator that flips
         // between "indexing..." and a count reads as a glitch rather than as

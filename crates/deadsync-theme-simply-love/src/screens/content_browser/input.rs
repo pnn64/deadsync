@@ -18,6 +18,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 
 use super::layout as lo;
 use super::preview;
+use super::rip;
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::screens::Screen;
 use crate::screens::content_browser::state::{
@@ -26,7 +27,8 @@ use crate::screens::content_browser::state::{
     clamp_doubles, doubles_column, doubles_cursor, doubles_showing, downloads_active,
     featured_goto, featured_page, featured_row_col, focused_pack, grid_landable, installed_at,
     installed_cell, installed_goto, installed_page, installed_showing, list_page, more_loading,
-    rebuild_results, row_count, search_field_showing, total_pages, visible_rows, years_showing,
+    rebuild_results, rip_showing, row_count, search_field_showing, total_pages, visible_rows,
+    years_showing,
 };
 use crate::screens::content_browser::sync_dialog::{self, SyncAction, SyncStep};
 use deadsync_chart::song::SyncPref;
@@ -79,6 +81,9 @@ pub fn handle_input(state: &mut State, event: &InputEvent) -> ThemeEffect {
             && state.nav_hold.is_some_and(|hold| hold.delta == delta)
         {
             state.nav_hold = None;
+        }
+        if let Some(key) = rip_key(event.action) {
+            rip::release(state, key);
         }
         return ThemeEffect::None;
     }
@@ -136,6 +141,12 @@ fn press(state: &mut State, action: VirtualAction) -> Outcome {
     if state.reload_prompt.is_some() {
         return press_reload(state, action);
     }
+    // So is a rip's text prompt: START takes the answer, BACK leaves it.
+    if state.rip.prompt.is_some() {
+        return rip_key(action).map_or(Outcome::None, |key| {
+            heard(rip::press_prompt(&mut state.rip, key))
+        });
+    }
     match state.zone {
         Zone::Detail => press_detail(state, action),
         Zone::Tabs => press_tabs(state, action),
@@ -145,6 +156,54 @@ fn press(state: &mut State, action: VirtualAction) -> Outcome {
         Zone::DoublesRows => press_doubles_rows(state, action),
         Zone::Installed => press_installed(state, action),
         Zone::List => press_list(state, action),
+        Zone::Rip => press_rip(state, action),
+    }
+}
+
+// --- rip packs ----------------------------------------------------------------
+
+/// The Rip Packs options, the picker over them, and the button. A direction
+/// held down repeats from `update`, as the pack list's does.
+fn press_rip(state: &mut State, action: VirtualAction) -> Outcome {
+    let Some(key) = rip_key(action) else {
+        return Outcome::None;
+    };
+    rip::hold(state, key);
+    heard(rip::press(state, key, true))
+}
+
+/// A pad or keyboard action as one of the keys the rip tab answers to.
+const fn rip_key(action: VirtualAction) -> Option<rip::Key> {
+    if let Some(delta) = nav_delta(action) {
+        return Some(if delta < 0 {
+            rip::Key::Up
+        } else {
+            rip::Key::Down
+        });
+    }
+    if let Some(delta) = tab_delta(action) {
+        return Some(if delta < 0 {
+            rip::Key::Left
+        } else {
+            rip::Key::Right
+        });
+    }
+    match action {
+        VirtualAction::p1_start | VirtualAction::p2_start => Some(rip::Key::Start),
+        VirtualAction::p1_select | VirtualAction::p2_select => Some(rip::Key::Select),
+        VirtualAction::p1_back | VirtualAction::p2_back => Some(rip::Key::Back),
+        _ => None,
+    }
+}
+
+/// What the rip heard, as the browser's sounds: going back is the change,
+/// since DeadSync has no cancel of its own.
+const fn heard(heard: rip::Heard) -> Outcome {
+    match heard {
+        rip::Heard::Nothing => Outcome::None,
+        rip::Heard::Change => Outcome::Moved,
+        rip::Heard::Start => Outcome::Opened,
+        rip::Heard::Invalid => Outcome::Invalid,
     }
 }
 
@@ -193,6 +252,8 @@ fn press_tabs(state: &mut State, action: VirtualAction) -> Outcome {
     match action {
         VirtualAction::p1_start | VirtualAction::p2_start => enter_body(state),
         VirtualAction::p1_back | VirtualAction::p2_back => leave(state),
+        // The rip tab is not the catalogue, so there is nothing to reload.
+        VirtualAction::p1_select | VirtualAction::p2_select if rip_showing(state) => Outcome::None,
         VirtualAction::p1_select | VirtualAction::p2_select => Outcome::Refresh,
         _ => Outcome::None,
     }
@@ -200,7 +261,10 @@ fn press_tabs(state: &mut State, action: VirtualAction) -> Outcome {
 
 /// Coming down off the tabs, into whichever thing this tab actually shows.
 fn enter_body(state: &mut State) -> Outcome {
-    state.zone = if years_showing(state) {
+    // The rip options keep their cursor row, as the original's do.
+    state.zone = if rip_showing(state) {
+        Zone::Rip
+    } else if years_showing(state) {
         Zone::Years
     } else if doubles_showing(state) {
         // The doubles tab opens on its column picker, on a column that has
@@ -418,6 +482,7 @@ fn leave(state: &mut State) -> Outcome {
     if !state.installed_dirs.is_empty()
         && !downloads_active(state)
         && !preview::song_installs_active(state)
+        && !rip::keeping(&state.rip)
     {
         state.reload_prompt = Some(ReloadPrompt::default());
         return Outcome::Closed;
@@ -475,6 +540,11 @@ fn move_tab(state: &mut State, delta: isize) -> Outcome {
         state.query.clear();
         state.query_idle = f32::MAX;
         state.search_why.clear();
+    }
+    // Arriving on the rip tab closes its picker, as the original's Enter
+    // does; the author list is asked for by the shell while the tab shows.
+    if TABS[next] == Tab::Rip {
+        state.rip.picking = None;
     }
     // A tab change is a different question, so it starts at the top rather
     // than trying to keep a selection that may not be in the answer.
@@ -1129,12 +1199,18 @@ pub(super) fn repeat_nav_hold(state: &mut State, dt: f32) {
 /// never swallowed. Text entry owns the keyboard while the browser is open, so
 /// a WASD-style pad mapping cannot scroll the list out from under someone
 /// mid-word.
+///
+/// The Rip Packs tab is the exception: nothing there is a search, so typing
+/// on it goes nowhere -- except into its own prompt, while one is open.
 pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
+    if rip_showing(state) && state.reload_prompt.is_none() {
+        return rip_raw_key_event(state, key, text, effects);
+    }
     if let Some(key) = key {
         if !key.pressed {
             return false;
@@ -1228,6 +1304,52 @@ pub fn handle_raw_key_event(
         let remaining = QUERY_MAX_CHARS.saturating_sub(query.chars().count());
         query.extend(printable.take(remaining));
     }) {
+        effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+    }
+    true
+}
+
+/// The keyboard on the rip tab. With its prompt open every key is the
+/// prompt's -- typed characters go in, Backspace takes one out, Enter takes
+/// the answer and Escape leaves it -- so a letter bound to a pad button does
+/// not also move the cursor. Otherwise the keys are the pad's, and typing
+/// goes nowhere.
+fn rip_raw_key_event(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+    text: Option<&str>,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    if state.rip.prompt.is_none() {
+        return false;
+    }
+    if let Some(key) = key {
+        if !key.pressed {
+            return false;
+        }
+        let heard = match key.code {
+            // Not on a repeat: the Enter that opened the prompt, still held,
+            // must not close it again.
+            KeyCode::Enter | KeyCode::NumpadEnter if !key.repeat => {
+                rip::accept_prompt(&mut state.rip);
+                rip::Heard::Start
+            }
+            KeyCode::Escape if !key.repeat => {
+                rip::cancel_prompt(&mut state.rip);
+                rip::Heard::Change
+            }
+            KeyCode::Backspace if rip::prompt_backspace(&mut state.rip) => rip::Heard::Change,
+            _ => rip::Heard::Nothing,
+        };
+        if let Some(path) = heard.sfx() {
+            effects.push(crate::effects::sfx(path));
+        }
+        return true;
+    }
+    let Some(text) = text else {
+        return false;
+    };
+    if rip::prompt_type(&mut state.rip, text) {
         effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
     true
@@ -2250,6 +2372,154 @@ mod tests {
             &mut effects
         ));
         assert_eq!(state.query, "ky");
+    }
+
+    /// The rip tab is not a search: typing on it goes nowhere, and its keys
+    /// are left to the pad -- until its prompt is open, when every key is
+    /// the prompt's.
+    #[test]
+    fn typing_on_the_rip_tab_goes_to_its_prompt_or_nowhere() {
+        let mut state = browsing(0);
+        state.tab_index = TABS.iter().position(|t| *t == Tab::Rip).unwrap();
+        state.zone = Zone::Rip;
+        let mut effects = Vec::new();
+        assert!(!handle_raw_key_event(
+            &mut state,
+            None,
+            Some("zaia"),
+            &mut effects
+        ));
+        assert!(rip_showing(&state), "not carried to SEARCH");
+        assert!(state.query.is_empty());
+        let escape = raw_key(KeyCode::Escape);
+        assert!(!handle_raw_key_event(
+            &mut state,
+            Some(&escape),
+            None,
+            &mut effects
+        ));
+
+        // START on OR TYPE AUTHORS opens the prompt
+        state.rip.row = 2;
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert!(handle_raw_key_event(
+            &mut state,
+            None,
+            Some("Zaia"),
+            &mut effects
+        ));
+        let letter = raw_key(KeyCode::KeyA);
+        assert!(
+            handle_raw_key_event(&mut state, Some(&letter), None, &mut effects),
+            "a letter is the prompt's, not a pad button's"
+        );
+        let backspace = raw_key(KeyCode::Backspace);
+        assert!(handle_raw_key_event(
+            &mut state,
+            Some(&backspace),
+            None,
+            &mut effects
+        ));
+        // the Enter that opened it, still held, does not close it
+        let mut held = raw_key(KeyCode::Enter);
+        held.repeat = true;
+        assert!(handle_raw_key_event(
+            &mut state,
+            Some(&held),
+            None,
+            &mut effects
+        ));
+        assert!(state.rip.prompt.is_some());
+        let enter = raw_key(KeyCode::Enter);
+        assert!(handle_raw_key_event(
+            &mut state,
+            Some(&enter),
+            None,
+            &mut effects
+        ));
+        assert!(state.rip.prompt.is_none());
+        assert_eq!(state.rip.typed, "Zai");
+
+        // Escape leaves without applying, and so does the pad's BACK
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        handle_raw_key_event(&mut state, None, Some("x"), &mut effects);
+        assert!(handle_raw_key_event(
+            &mut state,
+            Some(&escape),
+            None,
+            &mut effects
+        ));
+        assert_eq!(state.rip.typed, "Zai");
+        assert_eq!(press(&mut state, START), Outcome::Opened);
+        assert_eq!(press(&mut state, BACK), Outcome::Moved);
+        assert!(state.rip.prompt.is_none());
+        assert_eq!(
+            state.zone,
+            Zone::Rip,
+            "BACK closed the prompt, not the options"
+        );
+    }
+
+    /// The reload question waits for a kept rip still coming in, as it does
+    /// for any other install: a rescan now would miss the songs not in yet.
+    #[test]
+    fn leaving_while_a_rip_fills_does_not_ask_to_reload() {
+        use deadsync_online::rip_packs::{KeepPhase, KeepState, RipPhase, RipSnapshot, SongState};
+        let mut state = state::init();
+        state.zone = Zone::Tabs;
+        state.installed_dirs = vec![std::path::PathBuf::from("songs/New Pack")];
+        let filling = std::sync::Arc::new(RipSnapshot {
+            phase: RipPhase::Ready,
+            set: 1,
+            keep: Some(std::sync::Arc::new(KeepState {
+                set: 1,
+                folder: String::new(),
+                phase: KeepPhase::Filling,
+                songs: std::sync::Arc::from(vec![SongState::Waiting]),
+                done_bytes: 0,
+                total_bytes: 1,
+                got: 0,
+                failed: 0,
+                group_dir: None,
+                message: None,
+            })),
+            revision: 1,
+            ..RipSnapshot::default()
+        });
+        let authors = std::sync::Arc::clone(&state.rip.authors);
+        rip::sync(&mut state.rip, filling, authors);
+        assert_eq!(press(&mut state, BACK), Outcome::Leave);
+        assert!(state.reload_prompt.is_none());
+
+        let idle = std::sync::Arc::new(RipSnapshot {
+            revision: 2,
+            ..RipSnapshot::default()
+        });
+        let authors = std::sync::Arc::clone(&state.rip.authors);
+        rip::sync(&mut state.rip, idle, authors);
+        assert_eq!(press(&mut state, BACK), Outcome::Closed, "asked now");
+        assert!(state.reload_prompt.is_some());
+    }
+
+    /// DOWN from the rip tab's strip goes into its options; BACK climbs out;
+    /// SELECT there reloads nothing.
+    #[test]
+    fn the_rip_tab_is_entered_and_left_like_the_others() {
+        let mut state = browsing(0);
+        state.tab_index = TABS.iter().position(|t| *t == Tab::Rip).unwrap();
+        state.zone = Zone::Tabs;
+        assert_eq!(press(&mut state, SELECT), Outcome::None);
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        assert_eq!(state.zone, Zone::Rip);
+        assert_eq!(press(&mut state, DOWN), Outcome::Moved);
+        assert_eq!(press(&mut state, BACK), Outcome::Moved);
+        assert_eq!(state.zone, Zone::Tabs);
+        assert_eq!(press(&mut state, START), Outcome::Moved);
+        assert_eq!(state.rip.row, 1, "back on the row it left");
+        // and the strip moves on with LEFT/RIGHT
+        state.zone = Zone::Tabs;
+        assert_eq!(press(&mut state, RIGHT), Outcome::Moved);
+        assert_eq!(state::tab(&state), Tab::Installed);
     }
 
     /// A query belongs to the tab it was typed on. Carrying it to every other

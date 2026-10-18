@@ -52,6 +52,9 @@ pub struct SongRow {
     /// the same four buttons on every row. The cell's `data-sort` attribute is
     /// not: it carries this song's real styles, and it differs row to row.
     pub styles: Vec<String>,
+    /// The site's id for the song, from its `/song/<id>` link. The song's own
+    /// page lists every chart it has, which the pack page only summarises.
+    pub song_id: Option<u64>,
 }
 
 impl SongRow {
@@ -633,6 +636,7 @@ fn parse_songs(html: &str) -> Vec<SongRow> {
             styles: attribute(cells[6], "data-sort")
                 .map(style_tokens)
                 .unwrap_or_default(),
+            song_id: song_id_of(cells[1]),
         };
         if song.title.is_empty() {
             continue;
@@ -668,6 +672,16 @@ fn title_of(cell: &str) -> Option<&str> {
     let close = cell.get(at..)?.find('>')? + at + 1;
     let end = cell.get(close..)?.find("</a>")? + close;
     Some(&cell[close..end])
+}
+
+/// The number in the cell's `/song/<id>` link.
+fn song_id_of(cell: &str) -> Option<u64> {
+    let at = cell.find("/song/")? + "/song/".len();
+    let digits = cell.get(at..)?;
+    let end = digits
+        .find(|ch: char| !ch.is_ascii_digit())
+        .unwrap_or(digits.len());
+    digits[..end].parse().ok()
 }
 
 /// The artist, which the site puts in a small grey span under the title.
@@ -720,6 +734,7 @@ mod tests {
         // <br> becomes a separator and the trailing comma is dropped
         assert_eq!(first.credit, "Alice, Bob");
         assert_eq!(first.meters, "3, 6, 9, 12");
+        assert_eq!(first.song_id, Some(91));
         assert_eq!(
             first.image_url.as_deref(),
             Some("https://stepmaniaonline.net/media/images/songs/12.png")
