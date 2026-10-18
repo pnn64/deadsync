@@ -235,10 +235,16 @@ pub(crate) fn live_player_fail_type(
 pub(crate) fn advance_option_levels_with_frame_delta(
     lua: &Lua, seconds: f64, delta: f32,
 ) -> mlua::Result<()> {
-    advance_option_levels_inner(lua, seconds, Some(delta))
+    advance_option_levels_inner(lua, seconds, Some([delta; LUA_PLAYERS + 1]))
 }
 
-fn advance_option_levels_inner(lua: &Lua, seconds: f64, frame_delta: Option<f32>) -> mlua::Result<()> {
+pub(crate) fn advance_option_levels_with_clock_deltas(
+    lua: &Lua, seconds: f64, deltas: [f32; LUA_PLAYERS + 1],
+) -> mlua::Result<()> {
+    advance_option_levels_inner(lua, seconds, Some(deltas))
+}
+
+fn advance_option_levels_inner(lua: &Lua, seconds: f64, frame_deltas: Option<[f32; LUA_PLAYERS + 1]>) -> mlua::Result<()> {
     let Some(mut levels) = lua.app_data_mut::<SongLuaOptionLevels>() else {
         return Ok(());
     };
@@ -250,16 +256,18 @@ fn advance_option_levels_inner(lua: &Lua, seconds: f64, frame_delta: Option<f32>
     {
         return Err(mlua::Error::runtime("native option clock moved backwards"));
     }
-    // PlayerState::Update passes its float frame delta directly to options.
-    // Subtracting rounded cumulative screen times loses precision as it grows.
-    let delta = frame_delta.unwrap_or(((time - levels.clock_us) as f64 / 1_000_000.0) as f32);
-    if !delta.is_finite() || delta < 0.0 {
+    // ModsGroup::Update replaces the supplied frame delta with its own
+    // RageTimer delta. Native captures can retain each group's clock input;
+    // generated bake frames use the supplied delta for each synthetic clock.
+    let deltas = frame_deltas.unwrap_or([((time - levels.clock_us) as f64 / 1_000_000.0) as f32; LUA_PLAYERS + 1]);
+    if deltas.iter().any(|delta| !delta.is_finite() || *delta < 0.0) {
         return Err(mlua::Error::runtime("invalid native option frame delta"));
     }
     levels.clock_us = time;
     let players = levels.players.clone();
     let songs = levels.songs.clone();
     drop(levels);
+    let delta = deltas[0];
     // GameState::Update advances SongOptions before PlayerState::Update.
     for (field, speed) in [
         ("__songlua_music_rate", "__songlua_music_rate_speed"),
@@ -283,7 +291,8 @@ fn advance_option_levels_inner(lua: &Lua, seconds: f64, frame_delta: Option<f32>
     } else {
         1.0
     };
-    for player in players {
+    for (index, player) in players.into_iter().enumerate() {
+        let delta = deltas[index + 1];
         let current = player_option_state(lua, &player[3])?;
         let target = player_option_state(lua, &player[2])?;
         let speeds = player_option_speeds(lua, &player[2])?;

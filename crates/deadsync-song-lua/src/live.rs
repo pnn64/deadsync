@@ -452,6 +452,9 @@ pub struct SongLuaLivePlayer {
 pub(crate) struct LivePlayers([SongLuaLivePlayer; LUA_PLAYERS]);
 
 #[cfg(feature = "test-support")]
+struct OptionClockDeltas([f32; LUA_PLAYERS + 1]);
+
+#[cfg(feature = "test-support")]
 #[derive(Clone, Debug)]
 pub struct SongLuaOverlayStageObservation {
     pub beat: f32,
@@ -709,6 +712,27 @@ pub(crate) fn update_player_holds(lua: &Lua, actor: &Table) -> mlua::Result<()> 
         }
         white.raw_set(4, 0.0_f32)?;
         sprite.get::<Function>("diffuse")?.call::<()>((sprite, white))?;
+    }
+    Ok(())
+}
+
+pub(crate) fn update_player_note_field_zoom(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(player) = actor.raw_get::<Option<usize>>("__songlua_player_index")? else { return Ok(()); };
+    let Some(options) = lua.app_data_ref::<crate::song_tables::SongLuaOptionLevels>()
+        .and_then(|levels| levels.players.get(player).map(|levels| levels[3].clone()))
+        else { return Ok(()); };
+    let mini = options.raw_get::<Option<Table>>("__songlua_player_option_state")?
+        .map(|state| state.raw_get::<Option<f32>>("mini")).transpose()?.flatten().unwrap_or(0.0);
+    let Some(field) = crate::actor_children(lua, actor)?.raw_get::<Option<Table>>("NoteField")?
+        else { return Ok(()); };
+    // Player::Update sets the NoteField's Mini zoom after ActorFrame::Update,
+    // before SongForeground callbacks. OITG mode preserves its Z zoom.
+    let zoom = 1.0 - mini * 0.5;
+    for axis in ["zoom_x", "zoom_y"] {
+        crate::lua_util::capture_block_set_f32(lua, &field, axis, zoom)?;
+    }
+    if !actor.raw_get::<Option<bool>>("__songlua_oitg_zoom_mode")?.unwrap_or(false) {
+        crate::lua_util::capture_block_set_f32(lua, &field, "zoom_z", zoom)?;
     }
     Ok(())
 }
@@ -1016,6 +1040,12 @@ impl fmt::Debug for SongLuaLiveScene {
 }
 
 impl SongLuaLiveScene {
+    /// Independent ModsGroup timer inputs, observed before the next screen update.
+    #[cfg(feature = "test-support")]
+    pub fn set_option_clock_deltas(&mut self, deltas: [f32; LUA_PLAYERS + 1]) {
+        self.lua.set_app_data(OptionClockDeltas(deltas));
+    }
+
     /// ScreenManager dispatches input after the screen's own input handler.
     /// Callback return values only control the remaining Lua callbacks.
     pub fn input(&mut self, event: &crate::SongLuaInputEvent<'_>)
@@ -1201,8 +1231,17 @@ impl SongLuaLiveScene {
                     &windows[player], frame.music_seconds as f32)?;
             }
         }
-        crate::song_tables::advance_option_levels_with_frame_delta(
-            &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
+        let option_deltas: Option<[f32; LUA_PLAYERS + 1]> = None;
+        #[cfg(feature = "test-support")]
+        let option_deltas = self.lua.remove_app_data::<OptionClockDeltas>()
+            .map(|inputs| inputs.0).or(option_deltas);
+        if let Some(deltas) = option_deltas {
+            crate::song_tables::advance_option_levels_with_clock_deltas(
+                &self.lua, frame.screen_seconds, deltas)?;
+        } else {
+            crate::song_tables::advance_option_levels_with_frame_delta(
+                &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
+        }
         self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
         let lua = self.lua.clone();
         let root = self.root.clone();
@@ -7467,6 +7506,63 @@ end }
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         scene.lua.load("assert(math.abs(PLAYER:GetX() - 281.25) < 0.0001); assert(PLAYER:GetDestX() == 431.25)")
             .exec().expect("tween starts from the initialized pose");
+    }
+
+    #[test]
+    fn live_native_mini_zoom_updates_before_song_callbacks_and_preserves_oitg_z() {
+        let mut compiled = compile_with_context("native-mini-zoom", r#"
+return Def.ActorFrame {InitCommand=function(self)
+  PLAYER=SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+  FIELD=PLAYER:GetChild('NoteField')
+  assert(PLAYER:get_oitg_zoom_mode()==false)
+  assert(PLAYER:set_oitg_zoom_mode(true)==PLAYER)
+  FIELD:zoomz(3)
+  local ps=GAMESTATE:GetPlayerState(PLAYER_1)
+  ps:GetCurrentPlayerOptions():Mini(0)
+  ps:GetPlayerOptions('ModsLevel_Song'):Mini(1,2)
+  self:SetUpdateFunction(function()
+    SEEN={FIELD:GetZoomX(),FIELD:GetZoomY(),FIELD:GetZoomZ()}
+  end)
+end}
+"#, |context| context.defer_initial_live_update=true);
+        let mut scene=compiled.live_scene.take().unwrap();
+        let frame=|seconds| SongLuaLiveFrame {screen_seconds:seconds,delta_seconds:0.125,..Default::default()};
+        assert!(scene.advance(frame(0.125)).unwrap().errors.is_empty());
+        scene.lua.load("assert(SEEN[1]==0.875 and SEEN[2]==0.875 and SEEN[3]==3)").exec().unwrap();
+        scene.lua.load("PLAYER:set_oitg_zoom_mode(false)").exec().unwrap();
+        assert!(scene.advance(frame(0.25)).unwrap().errors.is_empty());
+        scene.lua.load("assert(SEEN[1]==0.75 and SEEN[2]==0.75 and SEEN[3]==0.75)").exec().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "test-support")]
+    fn live_native_option_clocks_are_independent_and_consumed_once() {
+        let mut compiled=compile_with_context("independent-option-clocks","return Def.ActorFrame {}",
+            |context| {context.defer_initial_live_update=true;context.players[1].enabled=true;});
+        let mut scene=compiled.live_scene.take().unwrap();
+        scene.lua.load(r#"
+for _,pn in ipairs({PLAYER_1,PLAYER_2}) do
+ local ps=GAMESTATE:GetPlayerState(pn)
+ ps:GetCurrentPlayerOptions():Drunk(0)
+ ps:GetPlayerOptions('ModsLevel_Song'):Drunk(1,1)
+end
+GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate(1)
+GAMESTATE:GetSongOptionsObject('ModsLevel_Song'):MusicRate(2,1)
+"#).exec().unwrap();
+        scene.set_option_clock_deltas([0.03125,0.0625,0.125]);
+        let frame=|seconds| SongLuaLiveFrame {screen_seconds:seconds,delta_seconds:0.25,..Default::default()};
+        assert!(scene.advance(frame(0.25)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate()==1.03125)
+assert(GAMESTATE:GetPlayerState(PLAYER_1):GetCurrentPlayerOptions():Drunk()==0.0625)
+assert(GAMESTATE:GetPlayerState(PLAYER_2):GetCurrentPlayerOptions():Drunk()==0.125)
+"#).exec().unwrap();
+        assert!(scene.advance(frame(0.5)).unwrap().errors.is_empty());
+        scene.lua.load(r#"
+assert(GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate()==1.28125)
+assert(GAMESTATE:GetPlayerState(PLAYER_1):GetCurrentPlayerOptions():Drunk()==0.3125)
+assert(GAMESTATE:GetPlayerState(PLAYER_2):GetCurrentPlayerOptions():Drunk()==0.375)
+"#).exec().unwrap();
     }
 
     #[test]

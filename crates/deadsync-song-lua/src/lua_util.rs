@@ -13194,6 +13194,7 @@ pub(crate) fn run_actor_compile_update_functions_with_entry(
             if let SongLuaCompileUpdateJob::PlayerFeedback { actor } = job {
                 crate::live::update_player_holds(lua, actor)?;
                 crate::live::update_player_judgment(lua, actor)?;
+                crate::live::update_player_note_field_zoom(lua, actor)?;
                 continue;
             }
             if let SongLuaCompileUpdateJob::Texture { actor } = job {
@@ -14634,6 +14635,13 @@ pub fn create_top_screen_player_actor(
     actor.set("__songlua_player_index", player_index as i64)?;
     actor.set("__songlua_style_name", style_name)?;
     actor.set("__songlua_visible", true)?;
+    actor.set("get_oitg_zoom_mode", lua.create_function(|_, actor: Table| {
+        Ok(actor.raw_get::<Option<bool>>("__songlua_oitg_zoom_mode")?.unwrap_or(false))
+    })?)?;
+    actor.set("set_oitg_zoom_mode", lua.create_function(|_, (actor, value): (Table, Value)| {
+        actor.raw_set("__songlua_oitg_zoom_mode", truthy(&value))?;
+        Ok(actor)
+    })?)?;
     // Player constructs this unnamed ActorFrame before Init adds its visible
     // parts. AttackDisplay has no child Sprite in the host's regular play mode.
     let attack = create_named_actor(lua, "ActorFrame", "", create_dummy_actor)?;

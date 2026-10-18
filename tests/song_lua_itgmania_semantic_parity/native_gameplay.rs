@@ -4360,6 +4360,15 @@ pub(crate) fn replay_with_command_observer(
         };
         let mut effects = Vec::new();
         let mut input_error=None;
+        if let Some(clocks) = frame.get("option_deltas") {
+            let mut deltas = [0.0; 3];
+            deltas[0] = number(clocks, "song")? as f32;
+            for player in 0..2 {
+                deltas[player + 1] = clocks["players"][player].as_f64()
+                    .ok_or("missing native option timer input")? as f32;
+            }
+            if let Some(scene) = state.song_lua.as_mut() { scene.set_option_clock_deltas(deltas); }
+        }
         gameplay::update_with_input(&mut state, delta as f32, snapshot, || host, &mut effects, |state| {
         while let Some(event) = input_events.get(input_cursor) {
             if event["before_update_sequence"].as_u64() != Some(index as u64+2) { break; }
