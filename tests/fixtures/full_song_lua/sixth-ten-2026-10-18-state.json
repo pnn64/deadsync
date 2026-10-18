@@ -20214,7 +20214,24 @@
             "tween_time_left": 0.0
           }
         }
-      ]
+      ],
+      "native_source_review": {
+        "native_sources": [
+          "itgmania/src/Player.cpp:1181",
+          "itgmania/src/Player.cpp:1242",
+          "itgmania/src/Player.cpp:1539"
+        ],
+        "owned_sources": [
+          "crates/deadsync-gameplay/src/runtime_update.rs:254",
+          "crates/deadsync-gameplay/src/holds.rs:1132"
+        ],
+        "observed_failure": "110 tween_time_left mismatches across five captured frames; effect arguments match. At beat 132.28653 the native HoldJudgment queue has 0.8 seconds and the owned queue is empty.",
+        "source_findings": [
+          "Native roll life decays using frame delta; owned active-hold integration uses the music timestamp interval. The captured roll at beat 132 receives a 1.30447-second frame delta while music advances only about 0.0987 seconds.",
+          "Native hold checking precedes CrossedRows; owned autoplay precedes hold updates. A short hold crossing its head and tail during one frame can therefore resolve on different frames."
+        ],
+        "status": "Source differences consistent with the actual failed frames; no Godspeed repair implemented or second full replay used in this sweep."
+      }
     },
     {
       "position": 395,
