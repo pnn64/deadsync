@@ -4391,9 +4391,14 @@ pub(crate) fn replay_with_command_observer(
             ));
         }
         let seconds = number(frame, "seconds")?;
-        let delta = number(frame, "delta")?;
+        let captured_delta = number(frame, "delta")?;
+        // The observer records BeforeScreenUpdate at ScreenManager::Update's
+        // entry, before ZeroNextUpdate is consumed. ScreenGameplay also forces
+        // its first actor update to zero after LoadNextSong. Retain the raw
+        // input for validation, but replay the engine's actual screen delta.
+        let delta = if starting_scene { 0.0 } else { captured_delta };
         let wall = number(frame, "wall_seconds")?;
-        if delta < 0.0 || previous_wall.is_some_and(|previous| wall < previous) {
+        if captured_delta < 0.0 || previous_wall.is_some_and(|previous| wall < previous) {
             return Err("invalid native input-clock order".into());
         }
         previous_wall = Some(wall);
