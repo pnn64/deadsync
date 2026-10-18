@@ -4136,15 +4136,13 @@
     {
       "title": "Quarantine",
       "source_simfile": "Quarantine/Quarantine.sm",
-      "harness_version": "0.1.0",
-      "archive": "ebcd2074206de79bfa97cfbf8808348e9f4a3062c68b159ab3721a868e027257.tar.zst",
-      "sha256": "ebcd2074206de79bfa97cfbf8808348e9f4a3062c68b159ab3721a868e027257",
-      "compressed_bytes": 1168602,
-      "uncompressed_sha256": "6fe01e70a5c23b78199a41377c66e641ac423db2badaae0acb9597fb97b50e59",
-      "compression_level": 22,
-      "aliases": [
-        "942e488b147978e2c24ea2360e7eee2eddfc5c28a755b885bb418d13f732366d.tar.zst"
-      ]
+      "harness_version": "0.1.81",
+      "archive": "020dcc2a97b078b09945a7d8ff3e4bad9a00d20c15f854806a277e46c4afab00.tar.zst",
+      "compressed_bytes": 153617067,
+      "sha256": "020dcc2a97b078b09945a7d8ff3e4bad9a00d20c15f854806a277e46c4afab00",
+      "uncompressed_sha256": "6fb00754e929c55b94a8136da454685e4ddc9be152d0a8bfd43245c6c4be361d",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Quarantine",
