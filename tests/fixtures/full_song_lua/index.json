@@ -3202,15 +3202,13 @@
     {
       "title": "Lake of Lost Nostalgia",
       "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9edfbab90dc66587a7af65dd794025d5a2e4bef3153195c0e8058fb0e6283c29.tar.zst",
-      "sha256": "9edfbab90dc66587a7af65dd794025d5a2e4bef3153195c0e8058fb0e6283c29",
-      "compressed_bytes": 36568,
-      "uncompressed_sha256": "8cc8da4d325a98cd6be33de680b00887e2c06b2c610a8d354f6040165006f1c1",
-      "compression_level": 22,
-      "aliases": [
-        "1562e32260a0c6921eb60cc825b0dcca6bedf53360bb1e8e8da3e7b8b8fcb192.tar.zst"
-      ]
+      "harness_version": "0.1.82",
+      "archive": "59e43b8df3f34ef787f576165c96da828e6125b84e54d1256a643be1e3adfb4e.tar.zst",
+      "compressed_bytes": 115182946,
+      "sha256": "59e43b8df3f34ef787f576165c96da828e6125b84e54d1256a643be1e3adfb4e",
+      "uncompressed_sha256": "97c434bdf07e37119db157444305be0b6a1468ca1de17f600383ef88565c1f1e",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "LALA [Tier 3]",
