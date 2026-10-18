@@ -3887,15 +3887,13 @@
     {
       "title": "Paint the Town Red",
       "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
-      "harness_version": "0.1.0",
-      "archive": "a38a1138ca11d0face83a5f5eca6869efcfc165accc945116a9178a003eb1df3.tar.zst",
-      "sha256": "a38a1138ca11d0face83a5f5eca6869efcfc165accc945116a9178a003eb1df3",
-      "compressed_bytes": 26053881,
-      "uncompressed_sha256": "11c548881c80f74d7ea9903557b77292d67b52da0f532ec04e93363613d0e3dd",
-      "compression_level": 22,
-      "aliases": [
-        "55a58def3d9edea74d6a8d9dd487e865a5eed0285c9fa8062f13aabcdb93a682.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "e4942b8b777e9f2b992747ad194cd073c09f60011b0778345685ea95b767e6cb.tar.zst",
+      "compressed_bytes": 186011326,
+      "sha256": "e4942b8b777e9f2b992747ad194cd073c09f60011b0778345685ea95b767e6cb",
+      "uncompressed_sha256": "5413b1f144b67821783d2f6a0c29a1bd110df60f9d169aedf153d9869a761bad",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Paint the Town Red",
