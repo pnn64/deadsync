@@ -5413,6 +5413,17 @@
       "compressed_bytes": 38272734,
       "uncompressed_sha256": "394dc6c9625c3726430c4cea8636dba824a76b78f3ec61b719860148cc4ebdc2",
       "aliases": []
+    },
+    {
+      "title": "mr sandman",
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "harness_version": "0.1.85",
+      "archive": "7817e31172693ca9bba50c4d844c0b461d18807edce464baf3977273dfee9782.tar.zst",
+      "compressed_bytes": 126226135,
+      "sha256": "7817e31172693ca9bba50c4d844c0b461d18807edce464baf3977273dfee9782",
+      "uncompressed_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
+      "aliases": [],
+      "local_only": true
     }
   ],
   "compression_level": 22
