@@ -410,8 +410,7 @@
         "missing captured subscriber identity for ScreenGameplay/2/8/4",
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
         "missing captured subscriber identity for ScreenGameplay/3/1",
-        "missing captured subscriber identity for ScreenGameplay/4",
-        "owned gameplay overlay observation phase is unavailable"
+        "missing captured subscriber identity for ScreenGameplay/4"
       ]
     },
     "Mamono/sm.sm": {
@@ -442,6 +441,10 @@
     {
       "scope": "RageSound reader parameter playback",
       "detail": "The native pitch setter now preserves sound identity and its f32 parameter. Full replay does not compare audible reader pitch/volume output; scheduled SongLuaSoundEvent retains path and timing only. This is recorded separately and does not change archive acceptance."
+    },
+    {
+      "scope": "Hallways native song catalog/load offset",
+      "detail": "The capture-engine Song stores first/last note bounds at catalog load and keeps the last-second hint absolute. Captured gameplay global_offset_seconds is -0.00800000037997961. Native duration and owned duration differ by0.009 seconds after the getter/parent repairs, consistent with a different catalog-load offset; that constructor preference input is not retained. Hallways remains pending after two attempts. No observed getter results are injected and this does not add a passing-chart gate."
     }
   ]
 }

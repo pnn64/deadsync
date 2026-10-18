@@ -3608,19 +3608,15 @@
       "aliases": []
     },
     {
-      "title": "MEGALOVANIA",
+      "title": "Megalovania SM5 - [TaroNuke]",
       "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
-      "harness_version": "0.1.0",
-      "archive": "0312287f76b167c790515f620dea5a7d93a78a0ced2e25385889d515a6079a3b.tar.zst",
-      "sha256": "0312287f76b167c790515f620dea5a7d93a78a0ced2e25385889d515a6079a3b",
-      "compressed_bytes": 571650,
-      "uncompressed_sha256": "efa5b569020d3b5c83d3d3ee1b3330ec9adb1fc675788d15433c72541a4e1885",
-      "compression_level": 22,
-      "aliases": [
-        "0754e89ff96a46dcc4e8a00bd72ea1144b36304f8147541952da58f9e2198d33.tar.zst",
-        "59faf24f663f937cbc672e2d368f1cee1e5d2d2095d75526e3f621f496dd6687.tar.zst",
-        "e8aa9ede2025e53c9428dd6e461a188665a9542e728f77f08b68c55b8e30ec87.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "1c886092d9f50df26205d2c2de6c0bfaaa2f39bba8c399230f5de6998c9acf6f.tar.zst",
+      "compressed_bytes": 125526383,
+      "sha256": "1c886092d9f50df26205d2c2de6c0bfaaa2f39bba8c399230f5de6998c9acf6f",
+      "uncompressed_sha256": "22e2a356b1f5500f93b275ca4b09aea6dcf5d05795c86901e0ce3f76759b29f8",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "MEGALOVANIA",
