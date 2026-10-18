@@ -2546,15 +2546,15 @@ mod runtime_regression_tests {
 
     #[test]
     fn set_music_rate_rebuilds_judgment_and_end_times() {
-        let mut state = regression_state();
+        // Isolate rate scaling from cabinet calibration, covered separately above.
+        let mut state = regression_state_with_session_and_config(GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: 0.0, ..Default::default() });
         let baseline_great_ns = state.timing_runtime.player_judgment_timing[0]
             .profile_music_ns
             .windows_ns[2];
         let baseline_notes_end = state.notes_end_time_ns();
         let baseline_music_end = state.music_end_time_ns();
-        // Rate changes retain the resolved catalog bound, including its
-        // initial cabinet offset; only the late-resolution window scales.
-        let song_last_second_ns = state.clock.end_timing.song_last_second_ns();
+        let song_last_second_ns = song_time_ns_from_seconds(state.source.song.precise_last_second());
         assert_eq!(
             baseline_music_end,
             song_last_second_ns + max_step_distance_ns(&state.timing_runtime.timing_profile, 1.0),

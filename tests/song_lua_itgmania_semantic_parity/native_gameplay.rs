@@ -1615,7 +1615,7 @@ end }}
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
-            GameplayViewport::default(), GameplaySession::default(), GameplayConfig { machine_pack_ini_offsets: pack_offsets, machine_default_sync_pref: sync, ..Default::default() },
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig { global_offset_seconds: 0.0, machine_pack_ini_offsets: pack_offsets, machine_default_sync_pref: sync, ..Default::default() },
             5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"),
             None, None, None, None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2],
             false, None, None, [0; 2], Default::default(), Default::default());
@@ -1662,7 +1662,7 @@ end }}
             let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
             let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
             let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
-                GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+                GameplayViewport::default(), GameplaySession::default(), GameplayConfig { global_offset_seconds: 0.0, ..Default::default() },
                 5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
                 None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
                 [0; 2], Default::default(), Default::default());
