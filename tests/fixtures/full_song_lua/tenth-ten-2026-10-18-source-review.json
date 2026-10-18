@@ -167,7 +167,36 @@
       "scope": "Immutable current native-crt-inputs replay executable; includes prior Footer ordering, failed transition, native tween-queue limit, and Windows static CRT contracts."
     }
   ],
-  "pending_diagnoses": [],
+  "pending_diagnoses": [
+    {
+      "position": 491,
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45972-1792348346393555200-0",
+      "partial_uncompressed_spool": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45972-1792348346393555200-0\\Save\\itgmania-harness\\new.song-lua-trace.json.events.new",
+      "partial_spool_bytes": 6090773841,
+      "partial_spool_sha256": "a455c57a0ed355aa01641f276d410dcb5e8108dec00c9e253b1a57c4a6c2bd66",
+      "last_observed_song_seconds": 45.49406051635742,
+      "last_observed_event_sequence": 15168280,
+      "observed_peak_native_resident_bytes": 123142144,
+      "observations_sha256": "e93ec3d77c00cce92c766e22602d3fad61dfcd6888535e6375df1c76fbf56445",
+      "complete_trace": false,
+      "disposition": "One recorder repair was tested this sweep. It fixes the observed event-table memory growth, but native capture throughput still cannot complete within the existing 900-second timeout. No second identified repair or duplicate capture is attempted.",
+      "observations_log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\james-resource-observations.jsonl"
+    },
+    {
+      "position": 492,
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-27484-1792348346404557400-0",
+      "partial_uncompressed_spool": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-27484-1792348346404557400-0\\Save\\itgmania-harness\\new.song-lua-trace.json.events.new",
+      "partial_spool_bytes": 6054185623,
+      "partial_spool_sha256": "02c503f32406a15b811b668b8486f7d415efabfe2760f0bf52cf7b06bf7f5893",
+      "last_observed_song_seconds": 45.17748260498047,
+      "last_observed_event_sequence": 15074067,
+      "observed_peak_native_resident_bytes": 119365632,
+      "observations_sha256": "e93ec3d77c00cce92c766e22602d3fad61dfcd6888535e6375df1c76fbf56445",
+      "complete_trace": false,
+      "disposition": "One recorder repair was tested this sweep. It fixes the observed event-table memory growth, but native capture throughput still cannot complete within the existing 900-second timeout. No second identified repair or duplicate capture is attempted.",
+      "observations_log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\james-resource-observations.jsonl"
+    }
+  ],
   "source_preservation": {
     "user_instruction": "Preserve sources; leave invalid charts pending",
     "unchanged_invalid_sources": [
@@ -237,7 +266,8 @@
           "sha256": "3039de54222bdc10b2aad42ef50eb1b3cc4aa5b3e9855335d60d6055ea82e704"
         },
         "harness_fix_commit": "e4315c422edc3e086dd596b93c1a74850e86aba9"
-      }
+      },
+      "remaining_chart_result": "Both complete James captures still timed out at 900 seconds. Sampled native memory remained bounded at approximately120 MB, while only approximately45 song seconds were observed. The recorder repair resolves memory growth but does not make these fixtures pass."
     }
   ],
   "sweep_status": "in progress"
