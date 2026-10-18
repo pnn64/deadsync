@@ -3127,17 +3127,15 @@
       "local_only": true
     },
     {
-      "title": "KABOOOOOM!!!!",
+      "title": "kaboooooom!",
       "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8a0010cf67e56632b4203cef97c15801ee42266b798462c409eefe16f9ee7f9c.tar.zst",
-      "sha256": "8a0010cf67e56632b4203cef97c15801ee42266b798462c409eefe16f9ee7f9c",
-      "compressed_bytes": 33381214,
-      "uncompressed_sha256": "eba2e05ba5cd4b0c9ac7b0c853b40e034f2490b1234edeaa3d1831e04d01431f",
-      "compression_level": 22,
-      "aliases": [
-        "79af05b0407395c97e53fff6c8438eec99989f3a529905ae0282b46fe53e137a.tar.zst"
-      ]
+      "harness_version": "0.1.84",
+      "archive": "ddfc899ec3e0253d797b85fe8f1c7c0d62b0eeecce508b83b456b25bba605162.tar.zst",
+      "compressed_bytes": 163250513,
+      "sha256": "ddfc899ec3e0253d797b85fe8f1c7c0d62b0eeecce508b83b456b25bba605162",
+      "uncompressed_sha256": "4111e7d3881c7f4b74244c3d1721e282982dcc4a6c006dbf2cc676971a3669eb",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Karachi",
