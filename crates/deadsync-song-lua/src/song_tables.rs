@@ -806,8 +806,10 @@ fn create_player_state_table(
                     .cloned()
                     .and_then(read_string)
                     .unwrap_or_default();
-                let replacement =
-                    create_player_options_table(lua, SongLuaPlayerContext::default())?;
+                // PlayerState::SetPlayerOptions parses into a plain native value.
+                // Installing Lua methods here makes each temporary retain itself
+                // through Rust callback captures, exhausting mlua's references.
+                let replacement = lua.create_table()?;
                 reset_player_options(lua, &replacement)?;
                 apply_player_options_string(lua, &replacement, &options_text)?;
                 #[cfg(feature = "test-support")]
@@ -3312,6 +3314,27 @@ for _, order in ipairs{{'Hallway','Distant','Incoming','Space'}, {'Space','Incom
     end
 end
 "#).exec().expect("stable perspective selection");
+    }
+
+    #[test]
+    fn repeated_state_option_replacement_releases_temporary_values() {
+        let lua = Lua::new();
+        let context = SongLuaCompileContext::new(Path::new("."), "Repeated option assignment");
+        let runtime = create_song_runtime_table(&lua, &context).expect("create runtime");
+        let (state, _) =
+            create_player_state_table(&lua, context.players[0].clone(), 0, &runtime)
+                .expect("create player state");
+        lua.globals().set("player", state).expect("expose player");
+        lua.load(r#"
+local options = player:GetPlayerOptions("ModsLevel_Song")
+for i = 1, 1000 do
+    player:SetPlayerOptions("ModsLevel_Song", "*3 75% Reverse, C500")
+    assert(options:Reverse() == 0.75 and options:CMod() == 500)
+    player:SetPlayerOptions("ModsLevel_Song", "")
+    assert(options:Reverse() == 0 and options:XMod() == 1 and options:CMod() == nil)
+    if i % 10 == 0 then collectgarbage("collect") end
+end
+"#).exec().expect("temporary native option values must not retain Lua references");
     }
 
     #[test]
