@@ -6,8 +6,12 @@
       "source_simfile": "Hallways/hallways.ssc",
       "pending_coverage": [
         "uncompared song operations: Actor.GetX, Actor.GetY, Actor.glow, Actor.xy, GameState.GetHumanPlayers, Player.SetLife, PlayerOptions.FailSetting, PlayerStageStats.FailPlayer, PlayerState.GetHealthState, ScreenGameplay.GetLifeMeter, Song.GetFirstSecond, Song.GetLastSecond",
-        "native drawable state/resources: BitmapText, Quad",
-        "missing captured subscriber identity for ScreenGameplay/19/1",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/5",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
         "missing captured subscriber identity for ScreenGameplay/2/1",
         "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
         "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
@@ -22,7 +26,9 @@
         "missing captured subscriber identity for ScreenGameplay/2/8/3",
         "missing captured subscriber identity for ScreenGameplay/2/8/4",
         "missing captured subscriber identity for ScreenGameplay/2/9/1",
-        "native scene 1: no captured factory identity for 1 background entries; foreground ranks retained"
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4",
+        "owned gameplay overlay observation phase is unavailable"
       ]
     },
     "Think About You/Think About You.sm": {
@@ -236,6 +242,77 @@
       "pending_coverage": [
         "uncompared song operations: Actor.setsize, Actor.stoptweening, Actor.xy, ActorSound.play, BitmapText.settext, GameState.IsEventMode, Screen.AddInputCallback",
         "native drawable state/resources: BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4"
+      ]
+    },
+    "Jumper/Jumper.sm": {
+      "source_simfile": "Jumper/Jumper.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.MaskDest, Actor.MaskSource, Actor.finishtweening, Actor.horizalign, Actor.playcommand, Actor.smooth, Actor.xy, ActorFrame.GetChildren, BitmapText.GetText, BitmapText.settext, GameState.GetHumanPlayers, PlayerStageStats.FailPlayer, Screen.AddInputCallback, ScreenManager.SystemMessage",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4",
+        "owned gameplay overlay observation phase is unavailable"
+      ]
+    },
+    "Jumper/Jumper.ssc": {
+      "source_simfile": "Jumper/Jumper.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.MaskDest, Actor.MaskSource, Actor.finishtweening, Actor.horizalign, Actor.playcommand, Actor.smooth, Actor.xy, ActorFrame.GetChildren, BitmapText.GetText, BitmapText.settext, GameState.GetHumanPlayers, PlayerStageStats.FailPlayer, Screen.AddInputCallback, ScreenManager.SystemMessage",
+        "native drawable state/resources: BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1",
+        "missing captured subscriber identity for ScreenGameplay/4",
+        "owned gameplay overlay observation phase is unavailable"
+      ]
+    },
+    "Godspeed [TaroNuke]/godspeed.sm": {
+      "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetSecsIntoEffect, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.diffuseblink, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadetop, Actor.playcommand, Actor.rotationx, Actor.skewx, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomy, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.GetText, BitmapText.settext, PlayerOptions.Alternate, PlayerOptions.Beat, PlayerOptions.Blind, PlayerOptions.Blink, PlayerOptions.Brake, PlayerOptions.Bumpy, PlayerOptions.Centered, PlayerOptions.Confusion, PlayerOptions.Cover, PlayerOptions.Cross, PlayerOptions.Dark, PlayerOptions.Distant, PlayerOptions.Dizzy, PlayerOptions.Drunk, PlayerOptions.Expand, PlayerOptions.Flip, PlayerOptions.Hallway, PlayerOptions.Hidden, PlayerOptions.HiddenOffset, PlayerOptions.Incoming, PlayerOptions.Invert, PlayerOptions.Mini, PlayerOptions.Roll, PlayerOptions.Space, PlayerOptions.Split, PlayerOptions.Stealth, PlayerOptions.Sudden, PlayerOptions.SuddenOffset, PlayerOptions.Tiny, PlayerOptions.Tipsy, PlayerOptions.Tornado, PlayerOptions.Twirl, PlayerOptions.Wave, PlayerOptions.XMod, PlayerOptions.Xmode, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
         "missing captured subscriber identity for ScreenGameplay/19/1/1",
         "missing captured subscriber identity for ScreenGameplay/19/1/3",
         "missing captured subscriber identity for ScreenGameplay/19/1/4",

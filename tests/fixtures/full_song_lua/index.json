@@ -4481,15 +4481,12 @@
     {
       "title": "Sharkmode",
       "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9ad52da3f9a4dd9baf9fc1b01fa9d4e8bc93d91fd7887f4b371dfbe5a69d72cf.tar.zst",
-      "sha256": "9ad52da3f9a4dd9baf9fc1b01fa9d4e8bc93d91fd7887f4b371dfbe5a69d72cf",
-      "compressed_bytes": 2704096,
-      "uncompressed_sha256": "0d51a2b6c949573c20aa8e7c4d4e673d34a01358f34f374dd17d3822f738e338",
-      "compression_level": 22,
-      "aliases": [
-        "292d4a032d2c6691b7e62e9a0b54e32d65698605a721f1011a65c97ba570042f.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "c0e87ceaf1b5d72eab4c21ebea3e99708582eb20a0b1a0385d076fe8820074fb.tar.zst",
+      "compressed_bytes": 13635371,
+      "sha256": "c0e87ceaf1b5d72eab4c21ebea3e99708582eb20a0b1a0385d076fe8820074fb",
+      "uncompressed_sha256": "4ff6be4b6a6c9b4395217222627ede7550367696785bd94d63bfb3abae0ad5e7",
+      "aliases": []
     },
     {
       "title": "Probe",
