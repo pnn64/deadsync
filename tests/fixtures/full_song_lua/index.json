@@ -5353,15 +5353,13 @@
     {
       "title": "Zoku Shimedore 2000",
       "source_simfile": "Zoku Shimedore 2000/Zoku Shimedore 2000.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a57ea926770a30c77b59c6149fc05d9550e6731965170b18f2e561aae931ed8f.tar.zst",
-      "sha256": "a57ea926770a30c77b59c6149fc05d9550e6731965170b18f2e561aae931ed8f",
-      "compressed_bytes": 2047177,
-      "uncompressed_sha256": "6e64130e8942d5e9fe44652521a784ee76ad47ebf59d8547c8c6e41b7e17ce91",
-      "compression_level": 22,
-      "aliases": [
-        "98e4458662589f8a7e0aade60c3c90ba6093cdc5c8a1d63b07ed9e9f3910e7b9.tar.zst"
-      ]
+      "harness_version": "0.1.82",
+      "archive": "598e00ef0a6b22ef8be1c3d873fbae2870d3d2d52aac6e357c0b1f70b3158b9b.tar.zst",
+      "compressed_bytes": 117442262,
+      "sha256": "598e00ef0a6b22ef8be1c3d873fbae2870d3d2d52aac6e357c0b1f70b3158b9b",
+      "uncompressed_sha256": "f6cabf8cd98f0bc4f9b29d98ae973ab7ce4d87cde28b65bbfca673df84df934e",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Ztar Trek",
