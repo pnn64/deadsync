@@ -20,3 +20,9 @@ rustflags = [
 # environment, so an existing export still wins.
 [env]
 DYLD_FALLBACK_LIBRARY_PATH = "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+
+# ITGmania's Windows reference build uses the static MSVC runtime. Its pow/sin
+# implementations differ from the OS runtime on which the dynamic build relies.
+# Keep the Lua VM and Rust math on the same runtime as the reference engine.
+[target.'cfg(all(target_os = "windows", target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

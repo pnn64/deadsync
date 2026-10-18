@@ -3260,10 +3260,9 @@ fn source_broadcast_value(value: Value, depth: usize, seen: &mut Vec<usize>) -> 
     Ok(match value {
         Value::Nil => Json::Null,
         Value::Boolean(value) => json!(value),
-        Value::Integer(value) => json!(value),
+        Value::Integer(value) => source_broadcast_number(value as f64),
         Value::Number(value) if value.is_finite() => {
-            // Native JSON emits whole Lua numbers without a decimal suffix.
-            serde_json::from_str(&value.to_string()).map_err(|error| error.to_string())?
+            source_broadcast_number(value)
         }
         Value::String(value) => Json::String(value.to_str().map_err(|error| error.to_string())?.replace('\\', "/")),
         Value::Function(value) => {
@@ -3292,6 +3291,19 @@ fn source_broadcast_value(value: Value, depth: usize, seen: &mut Vec<usize>) -> 
         }
         value => return Err(format!("broadcast {} trace remains pending", value.type_name())),
     })
+}
+
+fn source_broadcast_number(value: f64) -> serde_json::Value {
+    // RageUtil.cpp's LuaFunc_JsonEncode tries Json::UInt and Json::Int
+    // (both 32-bit), then retains a double. Integral doubles outside those
+    // ranges must remain JSON floats, including Lua power/hash results.
+    if value == (value as u32) as f64 {
+        serde_json::json!(value as u32)
+    } else if value == (value as i32) as f64 {
+        serde_json::json!(value as i32)
+    } else {
+        serde_json::json!(value)
+    }
 }
 
 fn source_broadcast_table(table: Table, depth: usize, seen: &mut Vec<usize>) -> Result<serde_json::Value, String> {

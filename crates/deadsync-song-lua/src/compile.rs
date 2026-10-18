@@ -267,6 +267,10 @@ where
         .unwrap_or_else(|| context.song_dir.clone());
     let reloaded = retained_lua.is_some();
     let lua = retained_lua.unwrap_or_else(Lua::new);
+    #[cfg(feature = "test-support")]
+    if !reloaded && context.initial_lua_gc_stopped {
+        lua.gc_stop();
+    }
     if context.live {
         crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
     }

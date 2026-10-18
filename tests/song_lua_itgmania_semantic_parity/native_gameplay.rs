@@ -2024,6 +2024,56 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn source_broadcast_numbers_use_native_json_integer_ranges() {
+        let mut state = owned_judgment_control("json-number-ranges", "0000\n1000\n0000\n1000\n", r#"
+return Def.Actor {
+    OnCommand=function(self)
+        MESSAGEMAN:Broadcast('NumberRanges', {
+            uint_max=4294967295, beyond_uint=4294967296,
+            int_min=-2147483648, below_int=-2147483649,
+            power=63^9, fractional=0.5
+        })
+        self:sleep(9999)
+    end,
+}
+"#, 0.0);
+        let output = update_judgment_control(&mut state, 0, 1_000_000_000);
+        let event = output.source_broadcasts.iter().find(|event| event.name == "NumberRanges")
+            .expect("authored number broadcast");
+        let params = event.params.as_ref().unwrap().as_ref().unwrap();
+        assert_eq!(params["uint_max"].as_u64(), Some(u32::MAX as u64));
+        assert_eq!(params["int_min"].as_i64(), Some(i32::MIN as i64));
+        for key in ["beyond_uint", "below_int", "power", "fractional"] {
+            assert!(params[key].is_f64(), "{key}: {}", params[key]);
+        }
+    }
+
+    #[cfg(all(target_os = "windows", target_env = "msvc"))]
+    #[test]
+    fn windows_lua_and_rust_math_match_native_static_crt() {
+        // Native ITGmania and a /MT C control produce this one-ulp result.
+        // The OS DLL CRT produces 15633814156853824 instead; a huge sine
+        // argument in authored hashes amplifies that difference into rotations.
+        let base = std::hint::black_box(63.0_f64);
+        let exponent = std::hint::black_box(9.0_f64);
+        let native = 15633814156853822.0_f64;
+        assert_eq!(base.powf(exponent), native);
+        let mut state = owned_judgment_control("static-crt-math", "0000\n1000\n0000\n1000\n", r#"
+return Def.Actor {
+    OnCommand=function(self)
+        local base, exponent = 63, 9
+        local native = 15633814156853822
+        assert(base ^ exponent == native, 'Lua power opcode must use the reference CRT')
+        assert(math.pow(base, exponent) == native, 'Lua math.pow must use the same CRT')
+        assert(math.abs(math.sin(native * native * 99999) - 0.57016524653281098) < 1e-15)
+        self:sleep(9999)
+    end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, 0, 1_000_000_000);
+    }
+
+    #[test]
     fn gameplay_tween_overflow_finishes_native_queue_and_discards_commands() {
         let mut state = owned_judgment_control("tween-overflow", "0000\n1000\n0000\n1000\n", r#"
 return Def.ActorFrame {
@@ -4298,6 +4348,9 @@ pub(crate) fn replay_with_command_observer(
     // This is a capture-tool observation contract, not a gameplay input.
     // No native command events, query results or expected values enter the VM.
     context.trace_dynamic_commands = dynamic_commands;
+    // Initial VM configuration is an input; event/query observations remain expectations.
+    context.initial_lua_gc_stopped = trace.pointer("/input/lua_gc_mode")
+        .and_then(Value::as_str) == Some("stopped");
     context.capture_overlay_probe = trace["update_frame_phase"].as_str() == Some("gameplay-overlay-probe");
     let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
         trace, 1, song.background_lua_changes.len())?;

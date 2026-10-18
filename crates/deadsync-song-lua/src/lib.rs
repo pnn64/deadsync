@@ -1525,6 +1525,9 @@ pub struct SongLuaCompileContext {
     /// Observational capture profile; does not change actor dispatch or queries.
     #[cfg(feature = "test-support")]
     pub trace_dynamic_commands: bool,
+    /// Explicit initial collector input for deterministic diagnostic captures.
+    #[cfg(feature = "test-support")]
+    pub initial_lua_gc_stopped: bool,
     /// Include the capture tool's visible Overlay probe when replaying its input.
     #[cfg(feature = "test-support")]
     pub capture_overlay_probe: bool,
@@ -1594,6 +1597,8 @@ impl SongLuaCompileContext {
             message_actor_order: Vec::new(),
             #[cfg(feature = "test-support")]
             trace_dynamic_commands: false,
+            #[cfg(feature = "test-support")]
+            initial_lua_gc_stopped: false,
             #[cfg(feature = "test-support")]
             capture_overlay_probe: false,
             #[cfg(feature = "test-support")]
