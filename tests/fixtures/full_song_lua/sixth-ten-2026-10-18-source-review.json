@@ -170,6 +170,30 @@
       },
       "regression": "live_loadactor_uses_helper_source_during_actor_callbacks",
       "affected_pending_chart": "Megalovania SM5 [TaroNuke]/megalovania.ssc"
+    },
+    {
+      "commit": "f4aaa060e845bff1d5ff242db42afc5630a7fa6a",
+      "cause": "Preserve command/update Actor.Draw submissions before later child On setters, replay them once through baked gameplay rendering, and retain normal automatic drawing. BeginRenderingTo resets ancestor transforms; a song ActorProxy with no target submits nothing. Tracked engine layers remain drawable. Actor.Draw itself previously skipped command/update calls outside SetDrawFunction. Restore the replaced normal Simply Love Overlay engine-layer tag so explicit layer draws retain their production binding.",
+      "sources": [
+        "itgmania/src/ActorFrameTexture.cpp",
+        "itgmania/src/RageTextureRenderTarget.cpp",
+        "itgmania/src/ActorProxy.cpp",
+        "rework/lua-songs/7th Gear/lua/default.lua",
+        "itgmania/src/Actor.cpp",
+        "itgmania/src/ScreenWithMenuElements.cpp"
+      ],
+      "source_sha256": {
+        "itgmania/src/ActorFrameTexture.cpp": "38d918bd700777bb0a4ce3978c084fca2764e5d6c11a070fd2f9f9c5fc2b6893",
+        "itgmania/src/RageTextureRenderTarget.cpp": "d5911060381d914e43562fc84968ac11398303acd245803e6939a098bbe41ff8",
+        "itgmania/src/ActorProxy.cpp": "88361635de14dd7777a4c004432b3fe7da171d403d080a5544fda8c2e9f008c4",
+        "rework/lua-songs/7th Gear/lua/default.lua": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+        "itgmania/src/Actor.cpp": "1dc2f98fd812fc48e6ad557391064ba21c27485682bee8eeeead918acd2781ce",
+        "itgmania/src/ScreenWithMenuElements.cpp": "88f95ddf0c66f672f3fa79ab26be6925f1dce019b7544a710e9593c60da7e3ba"
+      },
+      "regression": "gameplay_immediate_draw_freezes_before_child_on_and_preserves_automatic_pass",
+      "affected_pending_chart": "7th Gear/7th Gear.ssc",
+      "acceptance": "Existing native sample values, tolerances, and acceptance checks unchanged; unmatched owned submissions are separate coverage.",
+      "full_chart_status": "7th Gear remains pending after two attempts: the final replay stopped on an unresolved owned proxy target in the draw comparator. No third repair or replay this sweep."
     }
   ],
   "input_repairs": [
@@ -227,6 +251,22 @@
         "trace/semantic.json": "543ce247bdca4621dd39ddf9b70e3dd9201bfd9e64e2b0003941464da8414b68"
       },
       "reason": "Restore the omitted capture observation profile, verified from the retained native executable and injected observer source. Every trace, simfile, Lua, texture and other member remains byte-identical."
+    },
+    {
+      "position": 312,
+      "source_simfile": "Megalovania SM5 - [TaroNuke]/megalovania.sm",
+      "simfile_sha256": "cc4f9cb19318d83f9ea651ecb790ab5d12bcb02fc60dfff11ea2ae79e8cf31f3",
+      "capture_exit": 0,
+      "capture_seconds": 324.82732929999474,
+      "native_engine_sha256": "fdff8b1963d2244e105e031ac13570e8bf221632a2429cd3b37fe6d301261a96",
+      "harness_binary_sha256": "eb21c38a5d4a614902d5d77c35d6b2d61925c707cc51a997b33a0af30293d606",
+      "harness_fix_commit": "8817e591d3e27c61e8e01cc7d85cc4362cbda7eb",
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12784-1792288810645958000-0",
+      "candidate_sha256": "22e2a356b1f5500f93b275ca4b09aea6dcf5d05795c86901e0ce3f76759b29f8",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\local-capture-312\\candidates\\22e2a356b1f5500f93b275ca4b09aea6dcf5d05795c86901e0ce3f76759b29f8.tar",
+      "trace_sha256": "15ac60e642d4df1e15e630478a48a0788f3ac872e1b670a84725b9b3530de868",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12784-1792288810645958000-0\\Themes\\itgmania-harness"
     }
   ],
   "additional_checks": [
@@ -259,36 +299,54 @@
     }
   ],
   "verification": {
-    "sweep_complete": false,
-    "accepted_fixture_records": 9,
-    "native_tests_passed": 65,
-    "loader_tests_passed": 11,
+    "complete": false,
+    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM full replay is in progress.",
+    "current_source_hashes_verified": 47,
+    "native_tests_passed": 66,
     "targeted_checks": [
       {
-        "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-loader-v2-tests.log",
-        "sha256": "5c27ebe3c66a47ea785ba8a6c2580e55442563402c6130d61b512f23f40cc439",
-        "passed": 11,
-        "failed": 0,
-        "ignored": 0
-      },
-      {
-        "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/caller-dir-native-tests.log",
-        "sha256": "5d066c83f735c5bffe8ef523229fea8a7a17ec89b4abcddcfe9fb094356f6663",
-        "passed": 65,
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-native-tests-final-v5.log",
+        "sha256": "0d96e6b47691ffeeae2edb39d536692aee0c8865c48d3cb7c02595a9a7b735de",
+        "passed": 66,
         "failed": 0,
         "ignored": 0,
-        "scope": "Same loader implementation; subsequent source change corrects only the actor type in the cfg(test) loader regression"
+        "scope": "Final source graph, built together with the sealed full replay CLI"
       },
       {
-        "log": "/home/parity/jobs/sixth-ten-fixtures-20261018/background-metadata-cache-tests.log",
-        "sha256": "e45377285cd80258ad1c3e3626a614c7eba61b1584b924ff171549cb0d171ba9",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-custom-tests.log",
+        "sha256": "7493d0b7484dc9152d82a8f8b56bd2e84345263ea0622cacde5216c719652f84",
+        "passed": 3,
+        "failed": 0,
+        "ignored": 0,
+        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+      },
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-live-draw-tests.log",
+        "sha256": "09d6bd411223de0580c74b61fd4d05aff703064fc37e3e7bd0bbc5bbb239af8b",
         "passed": 1,
         "failed": 0,
-        "ignored": 0
+        "ignored": 0,
+        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+      },
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-loader-tests.log",
+        "sha256": "d1f790f79c7dd5a3330b1813ed31627e8a8c34e58b3182e48e3ba2fa968892ac",
+        "passed": 11,
+        "failed": 0,
+        "ignored": 0,
+        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
+      },
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\immediate-v3-existing-manual-playback-tests.log",
+        "sha256": "e0a6acb6a3f79a7305e4f0ec7e8ec9b465769a600ddd9867310b7a25f2ba5c1d",
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "unit_check_profile_override": "profile.release.package.deadsync-song-lua.opt-level=0; full replay and final native tests use opt-level=3"
       }
     ],
-    "current_local_source_hashes_verified": 43,
-    "oversized_fixtures_gitignored": 14,
-    "no_tracked_or_unignored_files_over_100mb": true
+    "binary_sha256": "2ed0366aae619ab23a80e91e17bb014ba48f837ee4e9e07db1bf8a3dfc3d9c5c",
+    "runtime_lua_feature_enabled": false,
+    "utc": "2026-10-18T02:45:05Z"
   }
 }
