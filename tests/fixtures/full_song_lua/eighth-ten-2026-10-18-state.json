@@ -9476,13 +9476,954 @@
         ]
       },
       "archive_git_ignored": true
+    },
+    {
+      "position": 497,
+      "capture_input_proof": {
+        "position": 497,
+        "source_simfile": "mr sandman/mr sandman.sm",
+        "simfile_sha256": "e2262781ebdd5afd187dbdb5ce568db701ed7a4b6f8b856dbeb4f471c17b27c3",
+        "capture_exit": 0,
+        "capture_seconds": 270.0954888999986,
+        "native_engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57",
+        "harness_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+        "harness_fix_commit": "eb349e4c397df20c76fe634bf0c1699dcbbe3c28",
+        "provenance_snapshotted_before_execution": true,
+        "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+        "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-56268-1792323159604689100-0",
+        "command_observer": {
+          "dynamic_commands": true,
+          "capture_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675"
+        },
+        "captured_observer_script_sha256": "ab5fab3c2bf64c535a4312c6243c988b3335277f95675332cc8a64be9328cf19",
+        "candidate_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
+        "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-497\\candidates\\d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b.tar",
+        "trace_sha256": "707913b0ff86409c46e85d7e256481cbebbd28f5d42aa9ab9bc722a298d69827",
+        "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-56268-1792323159604689100-0\\Themes\\itgmania-harness"
+      },
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "simfile_sha256": "e2262781ebdd5afd187dbdb5ce568db701ed7a4b6f8b856dbeb4f471c17b27c3",
+      "status": "pending",
+      "repair_attempts": 1,
+      "candidate_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-497\\candidates\\d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b.tar",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "fix_commit": "de30d22d0d952271c1b68b71f6af88a44bbd4ac6",
+      "binary_sha256": "42f74a11550d82b47a551d2fe7f00a7ef5e3107517b0c7f2ebdb6ca4b9418fbf",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\full-song-lua-raw-clocks.exe",
+        "binary_sha256": "42f74a11550d82b47a551d2fe7f00a7ef5e3107517b0c7f2ebdb6ca4b9418fbf",
+        "source_root": "C:\\GitHub\\deadsync",
+        "source_base_commit": "67e2d366e",
+        "fix_commit": "de30d22d0d952271c1b68b71f6af88a44bbd4ac6",
+        "modified_sources": {
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone splode (doubleres).png": "3e5009c7de7b1ed70e028567e3207d4b52ac0c4de2b21a89e4f4dca28e6dc3a1",
+          "crates/deadsync-shell/src/app/mod.rs": "40cae684542854caa70994dee35594be162565d94b715408106c0837cce66f7e",
+          "crates/deadsync-song-lua/src/live.rs": "080d181e6e5cd4fe94f23bcc390e4a62d636926e07ca3dd3e32701ea34fec2b9",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "c96925f034df9097e03929f0194bc889966eb47fe62e483471dc9ddda691c2fc",
+          "crates/deadlib-present/src/compose.rs": "fac84a48b3aafcb33cc2596ea4c629574452e2abee1c06ebc07913697c1a7973",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone splode (doubleres).png": "d769e6c86c8b5b8a847872d8d0f0c6d563dc8823b79432b88940c099f45579dd",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 1000milestone swoosh.png": "03e91e68444017f0dcc16da04d7d424e390a1d0bcf81535aa126c0e7d84bc6ee",
+          "crates/deadsync-song-lua/src/lib.rs": "60fadde703f0bd13d40186ae86bdf240059e554670a7132017412c770665b7c5",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "b0536cb5aa3f9b6506862fc7350f4511b3787250419c53cf44bdddd24d090e95",
+          "crates/deadsync-song-lua/src/clock_inputs.rs": "abfe863448e3b6b573e07d3259d440e8b0391ddf49659dac3df305e200523b34",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone minisplode (doubleres).png": "4e7ae782dc049aa816047f285a7a84927ee3b059a9ea991c8e15115f14bba0b6",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 1000milestone/default.lua": "787de29687136873586615494199355aa0cea638f13641c8e14b8c2d118d9684",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 100milestone/default.lua": "1482fdc555ff2f9f0ea08989c55ac35540dc1882e0792315ebf19241c5bcb2ea",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+          "crates/deadsync-song-lua/src/tables.rs": "89703e1543e6c12b295e5b086cbb0ac83bf793fd04d4d59fd0a5f584210defad",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "crates/deadsync-song-lua/tests/playback/cases.rs": "a9ff287b313dc49046ac7e150d7a0f7346e160319f09f3a6147d996be2b5026a",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "fb75e9be5b384bd661601ac47c5a6dec8a2931ab0d63c75eaceaa49d062e46ea",
+          "crates/deadsync-simfile/src/cache.rs": "65082b7647813d2f6950d6d4a51a000203af4d050a239209b449d77a02791974",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone splode.png": "5636e16b08b63d0d6f3244160643b1baefbdf834b7e04045e7a92e01fa1f32db",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone splode (doubleres).png": "0b6dfb4ad440ed7c80cb70436bb2ba6458747afbbc3b1306e112c557d1c12177",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone splode (doubleres).png": "763c8817cb2cd38b13b5fa7916960b7b72a01812c05f301acb09b65ca90eece8",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone minisplode (doubleres).png": "b93b85beec207e5507cb723bc2273beb05fdbca0f5486ff963d2473327491a04",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/src/playback/actor_conformance.rs": "51d8254918f9451166409382f1da3d071e6b7fbe2423962200d9cad5c3c8090e",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "152761f0ccd6f828e41ad080a07424dc336c5ac1215cf1538cd3169cbbba1893",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "3ad394a21e5a4175b81747a71595521ad356a7e27e261eaf705f44f29f3a7cb3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 1000milestone swoosh.png": "8a11dd2f7a35f8e53b641b8d3bffc46acdde1a24c53622fd9e0ec257edb8ad21",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone minisplode (doubleres).png": "d88c2be6080e23a48341e51eb4a4538d4cf65812caf96c837d45da724b33e195",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone minisplode (doubleres).png": "1b8860bd0d925ba6ff017e33974b47adc6c7fef3dceba39fdfb7287ebfbf61e4",
+          "crates/deadsync-simfile/src/song.rs": "d21411f9fbf9b2fb2a4930369518332307a08097e07bb87ff03fdee560efbd36",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone minisplode (doubleres).png": "39ffb2d33946c8b2affb9c23af502e880afbf6198638a867d33dfa32a791273c",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone splode (doubleres).png": "52e92ae2b4c8e3a4c90785347be615f5bba5587f21d88a33cbd28b233b5a8655",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 1000milestone swoosh.png": "cee9a1257156a12b9909990cd7a413a2fd604aa955f91add206a6c9106ea099c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone minisplode (doubleres).png": "2d0fdb6a0147643cdc9a697074c8f73db51766f66633b6a74b9f57e06c19218e",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-simfile/src/cache_perf.rs": "11d632572c70465470dd8e788bbfcaa729a3735d70a6b7ce6fd2617f69fd7b3a",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 1000milestone swoosh.png": "d8df8fc80d85fb3821dc0d65bb2a7a6b2a1e36feb7daa1dc1c8eb12b80d69867",
+          "crates/deadsync-song-lua/src/compile.rs": "f46c57972e533f09e0e1c1a3818ce32597fb237d6f4b7d3a441fd8b56f6c3890",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 1000milestone swoosh.png": "2ff268029347dda051e0f8ea725c74835fff517b390719b30b276f211a221801",
+          "crates/deadsync-simfile/src/changes.rs": "5c726755073bc2414b26551f16b5621db2e854f5fbc5ba2292dd45f0856eab46",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+          "crates/deadsync-song-lua/src/host.rs": "4ed219f2cce0eb4947dcda2944b1bc0a2a53b6eb41b4a622b308f8c6d19b48e2",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/src/playback.rs": "75440b684d8b18b6194f6cc16bfe6fb269577188c419a9f2fc899f5adaaf6f46",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "54315cd0fda6d980a47450cf57f10d76cba10869ea29b7d2651f6370ae2b337d",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 1000milestone swoosh.png": "b419d6445f02a2ca20ecf77512c6bc1e1d4b3916c26189da373bc063be860e4b",
+          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "e7c80d6bcc221b883ecf32f1465abbe75e15cf17498a1d77de314692880c3652",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 1000milestone swoosh.png": "cee9a1257156a12b9909990cd7a413a2fd604aa955f91add206a6c9106ea099c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-song-lua/src/song_tables.rs": "2b2e54f33684e680d4cf0539742851b7c8f35c0b0aee95eb4ff4409163d28740",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9c2f04ac4e50d8cfdedf11cf7da819fb4b2f7afb6800ee1f5879ffdbadad2772",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+          "crates/deadsync-chart/src/song.rs": "9c5a57b936f6ad5036b871074c75e2da48901776cb626a3904d06d0e5ce728d8",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 100milestone/explosion.png": "8394f7f8b32f0d6ed45e00f34d1f2ab7fd540282c3d69156d3c61a1b8b7192a3",
+          "crates/deadsync-song-lua/src/lua_util.rs": "9c97adbbb5118d40570acd5359bb9222efdc245233592f8ef1bcbc3565fe18ec",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "crates/deadsync-profile-gameplay/src/lib.rs": "92effef28a881ddff580fcf14d944e1f08d8683284dcd1ce050c4e7d3ee0b445",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone minisplode (doubleres).png": "f6df0b064dff88f53559c19de04892baaec15869efb9ff83da72acc220e9f7e2",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone splode (doubleres).png": "d769e6c86c8b5b8a847872d8d0f0c6d563dc8823b79432b88940c099f45579dd",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone splode (doubleres).png": "e9843196ec31ccf17d8c0d86a2d85e68d7eee6b230da31fa0b259424287f0b8d",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 1000milestone swoosh.png": "38b2f09eaea72042ea95025d418d68b8313b53ccee4f35e22a6e3bcfbb5a60c5",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone minisplode (doubleres).png": "2d0fdb6a0147643cdc9a697074c8f73db51766f66633b6a74b9f57e06c19218e"
+        },
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--no-run"
+        ],
+        "seconds": 397.62979279999854,
+        "targeted_checks": [
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-green.log",
+            "sha256": "6cbe4ce8f53fa4223be88ab291c81a3e20016a7d4dd786f0a5ab7765837d37c9",
+            "passed": 10,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "All native live regressions, including constructor uptime and independent same-frame calendar/uptime reads; opt-level=0."
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-native-tests.log",
+            "sha256": "7d344e3e364367be8ecd94c5cbd43587a6c206332986b780603697ae880d4500",
+            "passed": 68,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "All native gameplay regressions, same opt-level=3 build as full replay CLI."
+          }
+        ],
+        "build_log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-build.log",
+        "build_log_sha256": "f05490d41c67e40bb7ee47cec0742dd1db1f5942643bc7ce67076e37914b6739",
+        "execution_platform": "Windows headless CLI",
+        "known_baseline_failure": {
+          "test": "compile_song_lua_supports_named_player_tap_note_shim",
+          "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+          "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+          "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+          "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+          "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+        },
+        "negative_regression": {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-red.log",
+          "sha256": "e989570a765860cfbcbf5bfecdee0a9dd2c41580897c11d984f11d18b152a3be",
+          "outcome": "Constructor uptime and per-call host calendar reads incorrectly use frame/static compile clocks."
+        },
+        "inherited_validation": "build-receipt-aft-sampler.json; presentation unit suite remains unchanged",
+        "reference_engine_source": {
+          "itgmania-harness/target/native-engine-source/src/Song.cpp": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+          "itgmania-harness/target/native-engine-source/BackgroundEffects/UpperLeft.lua": "f8c948a7f83b1caf1cb09716a6a94ed9d8237ee8a4a69427babc8d6aa47cd359"
+        },
+        "native_control": {
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 535,
+          "replayed_frames": 535,
+          "report_sha256": "c2c59360eb1f8c3aeb92bcd80698511511ecd5052ea0c4818384935958367eca",
+          "candidate_sha256": "d65e4ee9b73a2095fb59a6fcb89b050774334f1db8d5937a85b51c5ae6a4d2ca",
+          "raw_external_inputs": {
+            "run": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-19240-1792322495975838300-0",
+            "clock_input_count": 35,
+            "catalog_preferences": {
+              "global_offset_seconds": -0.00800000037997961,
+              "initialization": "native-catalog-note-time-calculation",
+              "music_rate": 1
+            },
+            "harness_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+            "engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57"
+          }
+        },
+        "source_verification": {
+          "method": "Immutable executable SHA plus exact committed source bytes (native checkout line endings permitted)",
+          "verified_commit": "de30d22d0d952271c1b68b71f6af88a44bbd4ac6",
+          "historical_sources": [
+            "crates/deadsync-song-lua/src/live.rs",
+            "crates/deadsync-song-lua/src/clock_inputs.rs",
+            "crates/deadsync-song-lua/src/host.rs",
+            "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs",
+            "crates/deadsync-profile-gameplay/src/lib.rs"
+          ],
+          "all_receipt_source_hashes_verified": true
+        }
+      },
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\chart-497-attempt-1",
+      "execution_platform": "Windows headless CLI",
+      "prior_sweep_failure": null,
+      "replay_exit": 1,
+      "replay_seconds": 114.02484100000584,
+      "preparation_or_execution_error": "[2.0s] : 0 checks completed, 0 failed\n[4.0s] : 0 checks completed, 0 failed\n[6.0s] : 0 checks completed, 0 failed\n[8.0s] : 0 checks completed, 0 failed\n[10.0s] : 0 checks completed, 0 failed\n[12.0s] : 0 checks completed, 0 failed\n[14.0s] : 0 checks completed, 0 failed\n[16.1s] : 0 checks completed, 0 failed\n[17.2s] replaying every native gameplay frame\n[18.1s] replaying every native gameplay frame: 0 checks completed, 0 failed\n[20.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[22.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[24.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[26.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[28.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[30.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[32.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[34.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[36.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[38.1s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[40.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[42.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[44.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[46.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[48.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[50.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[52.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[54.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[56.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[58.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[60.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[62.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[64.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[66.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[68.2s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[70.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[72.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[74.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[76.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile shared gameplay lua session for 'Mr. Sandman': out of Lua stack, too many arguments to a Lua function or too many return values from a callback; retrying layers independently\n[78.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\ndeadsync_song_lua::playback::prepare: Failed to compile gameplay lua for 'Mr. Sandman' from 'C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\.tmpOsjKIq\\song\\sand\\Default.lua': out of Lua stack, too many arguments to a Lua function or too many return values from a callback\n\nthread 'main' (47060) panicked at tests\\song_lua_itgmania_semantic_parity\\whole_song_archives.rs:1539:35:\nnative gameplay replay failed: preparation did not retain a Lua scene\nstack backtrace:\nnote: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.\n[80.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[82.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[84.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n[86.3s] replaying every native gameplay frame: frame 0/7301 (0.0%)\n"
+    },
+    {
+      "position": 341,
+      "capture_input_proof": {
+        "position": 341,
+        "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+        "simfile_sha256": "8a10265702779990b74a9f9e49c21f41c8eb645e8677a59c98f6d808b628ad5c",
+        "capture_exit": 0,
+        "capture_seconds": 659.7692827999999,
+        "native_engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57",
+        "harness_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+        "harness_fix_commit": "eb349e4c397df20c76fe634bf0c1699dcbbe3c28",
+        "provenance_snapshotted_before_execution": true,
+        "reason": "Prior full replay has actual constructor/per-call uptime, calendar, or catalog-load preference mismatches. Retain the prior complete tape unchanged and capture the missing raw external inputs; no expected query values or actor state are supplied to replay.",
+        "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-57244-1792323003217358400-0",
+        "command_observer": {
+          "dynamic_commands": true,
+          "capture_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675"
+        },
+        "captured_observer_script_sha256": "ab5fab3c2bf64c535a4312c6243c988b3335277f95675332cc8a64be9328cf19",
+        "candidate_sha256": "373ec4bb40fa266f5e357d13ed152d347affa1ccd938f1a787efb616e9393b71",
+        "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-341\\candidates\\373ec4bb40fa266f5e357d13ed152d347affa1ccd938f1a787efb616e9393b71.tar",
+        "trace_sha256": "78e086f12a82ccb29b38603094505ef233152328b559652a4601df00a4109ffe",
+        "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-57244-1792323003217358400-0\\Themes\\itgmania-harness"
+      },
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+      "simfile_sha256": "8a10265702779990b74a9f9e49c21f41c8eb645e8677a59c98f6d808b628ad5c",
+      "status": "passed",
+      "repair_attempts": 1,
+      "candidate_sha256": "373ec4bb40fa266f5e357d13ed152d347affa1ccd938f1a787efb616e9393b71",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-341\\candidates\\373ec4bb40fa266f5e357d13ed152d347affa1ccd938f1a787efb616e9393b71.tar",
+      "native_capture_reused": true,
+      "comparison_input": "uncompressed tar",
+      "fix_commit": "de30d22d0d952271c1b68b71f6af88a44bbd4ac6",
+      "binary_sha256": "42f74a11550d82b47a551d2fe7f00a7ef5e3107517b0c7f2ebdb6ca4b9418fbf",
+      "build_receipt": {
+        "exit_code": 0,
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\full-song-lua-raw-clocks.exe",
+        "binary_sha256": "42f74a11550d82b47a551d2fe7f00a7ef5e3107517b0c7f2ebdb6ca4b9418fbf",
+        "source_root": "C:\\GitHub\\deadsync",
+        "source_base_commit": "67e2d366e",
+        "fix_commit": "de30d22d0d952271c1b68b71f6af88a44bbd4ac6",
+        "modified_sources": {
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone splode (doubleres).png": "3e5009c7de7b1ed70e028567e3207d4b52ac0c4de2b21a89e4f4dca28e6dc3a1",
+          "crates/deadsync-shell/src/app/mod.rs": "40cae684542854caa70994dee35594be162565d94b715408106c0837cce66f7e",
+          "crates/deadsync-song-lua/src/live.rs": "080d181e6e5cd4fe94f23bcc390e4a62d636926e07ca3dd3e32701ea34fec2b9",
+          "crates/deadsync-song-lua/src/playback/prepare.rs": "c96925f034df9097e03929f0194bc889966eb47fe62e483471dc9ddda691c2fc",
+          "crates/deadlib-present/src/compose.rs": "fac84a48b3aafcb33cc2596ea4c629574452e2abee1c06ebc07913697c1a7973",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone splode (doubleres).png": "d769e6c86c8b5b8a847872d8d0f0c6d563dc8823b79432b88940c099f45579dd",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_header.lua": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 1000milestone swoosh.png": "03e91e68444017f0dcc16da04d7d424e390a1d0bcf81535aa126c0e7d84bc6ee",
+          "crates/deadsync-song-lua/src/lib.rs": "60fadde703f0bd13d40186ae86bdf240059e554670a7132017412c770665b7c5",
+          "crates/deadsync-song-lua/src/raw_vm.rs": "22060d0252e71d5017cde427cf08d9b56a1e6b443e4fbe33a94b1429600a6518",
+          "crates/deadsync-gameplay/src/runtime_update.rs": "b0536cb5aa3f9b6506862fc7350f4511b3787250419c53cf44bdddd24d090e95",
+          "crates/deadsync-song-lua/src/clock_inputs.rs": "abfe863448e3b6b573e07d3259d440e8b0391ddf49659dac3df305e200523b34",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone minisplode (doubleres).png": "4e7ae782dc049aa816047f285a7a84927ee3b059a9ea991c8e15115f14bba0b6",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 1000milestone/default.lua": "787de29687136873586615494199355aa0cea638f13641c8e14b8c2d118d9684",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 100milestone/default.lua": "1482fdc555ff2f9f0ea08989c55ac35540dc1882e0792315ebf19241c5bcb2ea",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay toasty.lua": "079a6656e9f3025978c50c57a53c102e5d8656274d1da0534a1a15e0f3381c79",
+          "crates/deadsync-song-lua/src/tables.rs": "89703e1543e6c12b295e5b086cbb0ac83bf793fd04d4d59fd0a5f584210defad",
+          "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "4d5eab03720fffbd8d81fbf4ab53cd355991309af46f90af28ca8fc01c2f92a6",
+          "crates/deadsync-song-lua/tests/playback/cases.rs": "a9ff287b313dc49046ac7e150d7a0f7346e160319f09f3a6147d996be2b5026a",
+          "crates/deadsync-gameplay/src/runtime_methods.rs": "fb75e9be5b384bd661601ac47c5a6dec8a2931ab0d63c75eaceaa49d062e46ea",
+          "crates/deadsync-simfile/src/cache.rs": "65082b7647813d2f6950d6d4a51a000203af4d050a239209b449d77a02791974",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone splode.png": "5636e16b08b63d0d6f3244160643b1baefbdf834b7e04045e7a92e01fa1f32db",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone splode (doubleres).png": "0b6dfb4ad440ed7c80cb70436bb2ba6458747afbbc3b1306e112c557d1c12177",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/WhoIsCurrentlyWinning.lua": "a91dd103841387a66bb67c7ff88d20590afc960e25f0ff6c18de0c3d60e41535",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/FailOnHoldStart.lua": "ffcd8705267aa7f299ce65970810d74de1db24c821c8a21baa6b9a547d70a269",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone splode (doubleres).png": "763c8817cb2cd38b13b5fa7916960b7b72a01812c05f301acb09b65ca90eece8",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone minisplode (doubleres).png": "b93b85beec207e5507cb723bc2273beb05fdbca0f5486ff963d2473327491a04",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/src/playback/actor_conformance.rs": "51d8254918f9451166409382f1da3d071e6b7fbe2423962200d9cad5c3c8090e",
+          "crates/deadsync-song-lua/src/draw_capture.rs": "152761f0ccd6f828e41ad080a07424dc336c5ac1215cf1538cd3169cbbba1893",
+          "crates/deadsync-shell/src/gameplay_entry.rs": "3ad394a21e5a4175b81747a71595521ad356a7e27e261eaf705f44f29f3a7cb3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Bears/Combo 1000milestone swoosh.png": "8a11dd2f7a35f8e53b641b8d3bffc46acdde1a24c53622fd9e0ec257edb8ad21",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone minisplode (doubleres).png": "d88c2be6080e23a48341e51eb4a4538d4cf65812caf96c837d45da724b33e195",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone minisplode (doubleres).png": "1b8860bd0d925ba6ff017e33974b47adc6c7fef3dceba39fdfb7287ebfbf61e4",
+          "crates/deadsync-simfile/src/song.rs": "d21411f9fbf9b2fb2a4930369518332307a08097e07bb87ff03fdee560efbd36",
+          "crates/deadsync-song-lua/src/trace_capture.rs": "e6fea3be1aed8053cea798d5dc4e1fd3c7fc0461e2ac66c8facf6013043d4a8c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone minisplode (doubleres).png": "39ffb2d33946c8b2affb9c23af502e880afbf6198638a867d33dfa32a791273c",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackFailTime.lua": "4bdefd24f8a1b86517b3e156035b4c0beedff2a8880b626c20281c447678377c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone splode (doubleres).png": "52e92ae2b4c8e3a4c90785347be615f5bba5587f21d88a33cbd28b233b5a8655",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/default.lua": "8c78b48fe3058b9c8ad62add6bc67f7c389110970fcee56e07339b6fb2d826d3",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 1000milestone swoosh.png": "cee9a1257156a12b9909990cd7a413a2fd604aa955f91add206a6c9106ea099c",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone minisplode (doubleres).png": "2d0fdb6a0147643cdc9a697074c8f73db51766f66633b6a74b9f57e06c19218e",
+          "crates/deadsync-song-lua/src/runtime.rs": "ee39c0eea9deaee2ec1c5173f05b37c54bbf4ec37d3312f4aa828c6b8261571f",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-simfile/src/cache_perf.rs": "11d632572c70465470dd8e788bbfcaa729a3735d70a6b7ce6fd2617f69fd7b3a",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone splode.png": "71333bebb52dd828e4b582e23b9590668f2bf6475cc8755a7da428899230b7d1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 1000milestone swoosh.png": "d8df8fc80d85fb3821dc0d65bb2a7a6b2a1e36feb7daa1dc1c8eb12b80d69867",
+          "crates/deadsync-song-lua/src/compile.rs": "f46c57972e533f09e0e1c1a3818ce32597fb237d6f4b7d3a441fd8b56f6c3890",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 1000milestone swoosh.png": "2ff268029347dda051e0f8ea725c74835fff517b390719b30b276f211a221801",
+          "crates/deadsync-simfile/src/changes.rs": "5c726755073bc2414b26551f16b5621db2e854f5fbc5ba2292dd45f0856eab46",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone minisplode.png": "382dc402db685c4cbb19488b79f112e914d84cdb02be5a238743bb9395e7e197",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/PerColumnJudgmentTracking.lua": "0f85e3cffcfb27924f3b9fa5f0a6e24a16c39ffb913d550631a8dae195c98ff0",
+          "crates/deadsync-song-lua/src/host.rs": "4ed219f2cce0eb4947dcda2944b1bc0a2a53b6eb41b4a622b308f8c6d19b48e2",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 1000milestone swoosh.png": "5dd4bd3114bd164e12cbec8028bed9d0530c18ddeb4c969b263e587583384ee3",
+          "crates/deadsync-song-lua/src/playback.rs": "75440b684d8b18b6194f6cc16bfe6fb269577188c419a9f2fc899f5adaaf6f46",
+          "crates/deadsync-theme-simply-love/src/screens/gameplay.rs": "54315cd0fda6d980a47450cf57f10d76cba10869ea29b7d2651f6370ae2b337d",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua": "af936b454641616c4056cc09d278f41a12dd6465d6228991cdd0e484d4da2fd1",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 1000milestone swoosh.png": "b419d6445f02a2ca20ecf77512c6bc1e1d4b3916c26189da373bc063be860e4b",
+          "tests/song_lua_itgmania_semantic_parity/interactive.rs": "e7c80d6bcc221b883ecf32f1465abbe75e15cf17498a1d77de314692880c3652",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 1000milestone swoosh.png": "cee9a1257156a12b9909990cd7a413a2fd604aa955f91add206a6c9106ea099c",
+          "crates/deadsync-shell/Cargo.toml": "63c679539f4270171ca7b86553eb108a8d0221f9dc0f782022a321ad63ccf43c",
+          "crates/deadsync-song-lua/Cargo.toml": "8e75d621925c77c01fa45a4657155643185c67fb9cc37d4453979bfc9277afb3",
+          "Cargo.toml": "834039abf46e3b8693344ee9a9141060483fb27155e452c17c76e650c7e4183c",
+          "crates/deadsync-song-lua/src/song_tables.rs": "2b2e54f33684e680d4cf0539742851b7c8f35c0b0aee95eb4ff4409163d28740",
+          "tests/song_lua_performance.rs": "3aac43a2a453286efe51a21fd61ef9e93a1f011b0a4668ab210e48d7052119fa",
+          "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "9c2f04ac4e50d8cfdedf11cf7da819fb4b2f7afb6800ee1f5879ffdbadad2772",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/JudgmentOffsetTracking.lua": "64903994432c38ccebdcece861c629482db9f91071fc354e1ba3980c6bb423fe",
+          "crates/deadsync-chart/src/song.rs": "9c5a57b936f6ad5036b871074c75e2da48901776cb626a3904d06d0e5ce728d8",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/Combo 100milestone/explosion.png": "8394f7f8b32f0d6ed45e00f34d1f2ab7fd540282c3d69156d3c61a1b8b7192a3",
+          "crates/deadsync-song-lua/src/lua_util.rs": "9c97adbbb5118d40570acd5359bb9222efdc245233592f8ef1bcbc3565fe18ec",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_footer.lua": "bf14e0c6a40552718856aeaaeaa2476b9c06da628c6fb48b8a3988ae8164d638",
+          "tests/support/paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+          "crates/deadsync-profile-gameplay/src/lib.rs": "92effef28a881ddff580fcf14d944e1f08d8683284dcd1ce050c4e7d3ee0b445",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay next course song/default.lua": "d06349c6f9a6659360e54367518184055820ea8d6b00f2149cafff4e1249311b",
+          "tests/full_song_lua.rs": "aaf552a3f5f23bd8eda1789ddf41931f736c914ed99860adadc7ceeba2f9329e",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone minisplode (doubleres).png": "f6df0b064dff88f53559c19de04892baaec15869efb9ff83da72acc220e9f7e2",
+          "tests/support/song_lua_metrics.rs": "134c82b2e4795e162e18464f22d2cbf337e417499d3c59fcf2b182664755c702",
+          "crates/deadsync-song-lua/src/perframe.rs": "a2d581ac3731fc9671bda238708d0a333093a99d16236858578632bdd0ed97d5",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone splode (doubleres).png": "d769e6c86c8b5b8a847872d8d0f0c6d563dc8823b79432b88940c099f45579dd",
+          "crates/deadsync-song-lua/src/actor_classes.rs": "a8dc7e8151fb3b9b483ddf22f1ecbec88d26ee3ddebb59d627a405e277baf6fc",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone splode (doubleres).png": "e9843196ec31ccf17d8c0d86a2d85e68d7eee6b230da31fa0b259424287f0b8d",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 1000milestone swoosh.png": "38b2f09eaea72042ea95025d418d68b8313b53ccee4f35e22a6e3bcfbb5a60c5",
+          "crates/deadsync-song-lua/assets/simply-love/BGAnimations/ScreenGameplay overlay/TrackTimeSpentInGameplay.lua": "450f45ad9e1313ac530bf0a2dba8ebbc25e7b45146de692526be75a0a3440107",
+          "crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone minisplode (doubleres).png": "2d0fdb6a0147643cdc9a697074c8f73db51766f66633b6a74b9f57e06c19218e"
+        },
+        "command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--release",
+          "--jobs",
+          "8",
+          "--config",
+          "profile.release.lto=false",
+          "--test",
+          "full_song_lua",
+          "--test",
+          "song_lua_itgmania_semantic_parity",
+          "--no-run"
+        ],
+        "seconds": 397.62979279999854,
+        "targeted_checks": [
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-green.log",
+            "sha256": "6cbe4ce8f53fa4223be88ab291c81a3e20016a7d4dd786f0a5ab7765837d37c9",
+            "passed": 10,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "All native live regressions, including constructor uptime and independent same-frame calendar/uptime reads; opt-level=0."
+          },
+          {
+            "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-native-tests.log",
+            "sha256": "7d344e3e364367be8ecd94c5cbd43587a6c206332986b780603697ae880d4500",
+            "passed": 68,
+            "failed": 0,
+            "ignored": 0,
+            "scope": "All native gameplay regressions, same opt-level=3 build as full replay CLI."
+          }
+        ],
+        "build_log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-build.log",
+        "build_log_sha256": "f05490d41c67e40bb7ee47cec0742dd1db1f5942643bc7ce67076e37914b6739",
+        "execution_platform": "Windows headless CLI",
+        "known_baseline_failure": {
+          "test": "compile_song_lua_supports_named_player_tap_note_shim",
+          "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+          "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+          "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+          "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+          "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+        },
+        "negative_regression": {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\raw-clocks-red.log",
+          "sha256": "e989570a765860cfbcbf5bfecdee0a9dd2c41580897c11d984f11d18b152a3be",
+          "outcome": "Constructor uptime and per-call host calendar reads incorrectly use frame/static compile clocks."
+        },
+        "inherited_validation": "build-receipt-aft-sampler.json; presentation unit suite remains unchanged",
+        "reference_engine_source": {
+          "itgmania-harness/target/native-engine-source/src/Song.cpp": "2fa0405d315ae467c49e138819552c4785f0e7f44b0211f39c2aa5422723d592",
+          "itgmania-harness/target/native-engine-source/BackgroundEffects/UpperLeft.lua": "f8c948a7f83b1caf1cb09716a6a94ed9d8237ee8a4a69427babc8d6aa47cd359"
+        },
+        "native_control": {
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 535,
+          "replayed_frames": 535,
+          "report_sha256": "c2c59360eb1f8c3aeb92bcd80698511511ecd5052ea0c4818384935958367eca",
+          "candidate_sha256": "d65e4ee9b73a2095fb59a6fcb89b050774334f1db8d5937a85b51c5ae6a4d2ca",
+          "raw_external_inputs": {
+            "run": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-19240-1792322495975838300-0",
+            "clock_input_count": 35,
+            "catalog_preferences": {
+              "global_offset_seconds": -0.00800000037997961,
+              "initialization": "native-catalog-note-time-calculation",
+              "music_rate": 1
+            },
+            "harness_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+            "engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57"
+          }
+        },
+        "source_verification": {
+          "method": "Immutable executable SHA plus exact committed source bytes (native checkout line endings permitted)",
+          "verified_commit": "de30d22d0d952271c1b68b71f6af88a44bbd4ac6",
+          "historical_sources": [
+            "crates/deadsync-song-lua/src/live.rs",
+            "crates/deadsync-song-lua/src/clock_inputs.rs",
+            "crates/deadsync-song-lua/src/host.rs",
+            "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs",
+            "crates/deadsync-profile-gameplay/src/lib.rs"
+          ],
+          "all_receipt_source_hashes_verified": true
+        }
+      },
+      "local_chart": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\chart-341-attempt-1",
+      "execution_platform": "Windows headless CLI",
+      "prior_sweep_failure": [
+        {
+          "field": "command_query_count",
+          "native": 846483,
+          "deadsync": 854379
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0001",
+            "args": [],
+            "beat": 84.21338653564453,
+            "command": "UpdateCommand",
+            "definition_id": "def-0001",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 83,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240420,
+            "source": "song:/lua/Ambience/snow-simple.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.visible",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [
+              true
+            ],
+            "results": [
+              {
+                "actor": "0x5f1a1135f190",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.21338653564453,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.21338653564453
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240421,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.21338653564453
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.getaux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0604",
+            "args": [],
+            "beat": 84.21338653564453,
+            "command": "UpdateCommand",
+            "definition_id": "def-0604",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240424,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.getaux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [],
+            "results": [
+              0
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.21338653564453,
+            "caller": {
+              "line": 1017,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0604",
+            "detail": {
+              "results": [
+                84.21338653564453
+              ]
+            },
+            "kind": "query",
+            "line": 1017,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240425,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.21338653564453
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.aux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [
+              0.0228118896484375
+            ],
+            "results": [
+              {
+                "actor": "0x5f1a1135f190",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0604",
+            "args": [],
+            "beat": 84.21338653564453,
+            "command": "UpdateCommand",
+            "definition_id": "def-0604",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240427,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "Actor.getaux",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [],
+            "results": [
+              0.0228118896484375
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0608",
+            "args": [],
+            "beat": 84.21338653564453,
+            "command": "UpdateCommand",
+            "definition_id": "def-0608",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.begin",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240429,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "call",
+            "operation": "Actor.diffusealpha",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [
+              0.0228118896484375
+            ],
+            "results": [
+              {
+                "actor": "0x5f1a1135f190",
+                "name": "",
+                "path": "ScreenGameplay/SongForeground/lua"
+              }
+            ],
+            "tween_time_left": 0.0
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.21338653564453,
+            "caller": {
+              "line": 1017,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "UpdateCommand",
+            "definition_id": "def-0608",
+            "detail": {
+              "results": [
+                84.21338653564453
+              ]
+            },
+            "kind": "query",
+            "line": 1017,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240430,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.21338653564453
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "UpdateCommand",
+            "source": "song:/lua/Ambience/snow-simple.lua",
+            "line": 83,
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "actor": "def-0608",
+            "args": [],
+            "beat": 84.21338653564453,
+            "command": "UpdateCommand",
+            "definition_id": "def-0608",
+            "detail": {
+              "name": "UpdateCommand"
+            },
+            "kind": "command",
+            "line": 1017,
+            "operation": "command.end",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240432,
+            "source": "song:/lua/default.lua"
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 203,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [],
+            "results": [
+              84.21338653564453
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.21338653564453,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.21338653564453
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240473,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.21338653564453
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.begin",
+            "command": "UpdateCommand",
+            "source": "song:/lua/default.lua",
+            "line": 1017,
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": null
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.21338653564453,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.21338653564453
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240475,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.21338653564453
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "query",
+            "operation": "GameState.GetSongBeat",
+            "source": "song:/lua/default.lua",
+            "line": 1017,
+            "phase": "callback",
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": [],
+            "results": [
+              84.21338653564453
+            ]
+          }
+        },
+        {
+          "field": "command_query_event",
+          "native": {
+            "args": [],
+            "beat": 84.21338653564453,
+            "callback": "SetUpdateFunction",
+            "caller": {
+              "line": 203,
+              "source": "song:/lua/default.lua",
+              "tail_call": false
+            },
+            "command": "InitCommand",
+            "definition_id": "def-0109",
+            "detail": {
+              "results": [
+                84.21338653564453
+              ]
+            },
+            "kind": "query",
+            "line": 203,
+            "operation": "GameState.GetSongBeat",
+            "phase": "callback",
+            "scene": 1,
+            "seconds": 25.392017364501953,
+            "seq": 240477,
+            "source": "song:/lua/default.lua",
+            "results": [
+              84.21338653564453
+            ]
+          },
+          "deadsync": {
+            "scene": 1,
+            "kind": "command",
+            "operation": "command.end",
+            "command": "UpdateCommand",
+            "source": "song:/lua/default.lua",
+            "line": 1017,
+            "beat": 84.21338653564453,
+            "seconds": 25.392017364501953,
+            "args": null
+          }
+        }
+      ],
+      "replay_exit": 0,
+      "replay_seconds": 818.4764702000248,
+      "native_frames": 5280,
+      "replayed_frames": 5280,
+      "compared_stage_fields": 2288,
+      "archive_accepted": true,
+      "whole_song_parity_proven": false,
+      "callback_errors": [],
+      "mismatch_count": 0,
+      "concrete_failures": [],
+      "draw_mismatch_count": 0,
+      "last_draw_mismatch": null,
+      "report_sha256": "e018a945fafe322c8acbd33f0c5a733eeba2fc3b9818a92e4a6efa948c3150ab",
+      "packing_tool_sha256": "5aaf24044b820ff5393da56db321e5df973b3d642f85e69820e1c1af9569a708",
+      "archive": "e8b81a5779d5234a7439926e1824649382332656ba1eedc293203454c6ba52fb.tar.zst",
+      "archive_sha256": "e8b81a5779d5234a7439926e1824649382332656ba1eedc293203454c6ba52fb",
+      "compressed_bytes": 192532448,
+      "harness_version": "0.1.85",
+      "title": "Paint the Town Red",
+      "complete_uncompressed_replay_passed": true,
+      "decoded_packed_bytes_verified": true,
+      "local_decompressed_bytes_verified": true,
+      "retained_previous_entry": {
+        "title": "Paint the Town Red",
+        "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+        "harness_version": "0.1.0",
+        "archive": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4.tar.zst",
+        "sha256": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4",
+        "compressed_bytes": 26114576,
+        "uncompressed_sha256": "9fc2366806ae1dd0bfb17be24b70c392d4dd40476ce29929178dd7c0542c00d4",
+        "compression_level": 22,
+        "aliases": [
+          "43eb5b45e970bdb5b4f3db079580c7945a057d72aac9142bb35918dd1d48110a.tar.zst"
+        ]
+      },
+      "archive_git_ignored": true
     }
   ],
   "counts": {
-    "new_passing_fixtures": 5,
-    "passed_fixtures": 475,
-    "pending_charts": 25,
+    "new_passing_fixtures": 6,
+    "passed_fixtures": 476,
+    "pending_charts": 24,
     "ignored_charts": 1
   },
-  "updated_utc": "2026-10-18T11:54:01Z"
+  "updated_utc": "2026-10-18T12:02:10Z"
 }

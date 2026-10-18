@@ -3898,15 +3898,13 @@
     {
       "title": "Paint the Town Red",
       "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
-      "harness_version": "0.1.0",
-      "archive": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4.tar.zst",
-      "sha256": "a90a15ef4259623ae95e0444b800ba3feb3631549e3c0ed2d660821a83f884a4",
-      "compressed_bytes": 26114576,
-      "uncompressed_sha256": "9fc2366806ae1dd0bfb17be24b70c392d4dd40476ce29929178dd7c0542c00d4",
-      "compression_level": 22,
-      "aliases": [
-        "43eb5b45e970bdb5b4f3db079580c7945a057d72aac9142bb35918dd1d48110a.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "e8b81a5779d5234a7439926e1824649382332656ba1eedc293203454c6ba52fb.tar.zst",
+      "compressed_bytes": 192532448,
+      "sha256": "e8b81a5779d5234a7439926e1824649382332656ba1eedc293203454c6ba52fb",
+      "uncompressed_sha256": "373ec4bb40fa266f5e357d13ed152d347affa1ccd938f1a787efb616e9393b71",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Episode 17 \u300e Pale \u300f",
