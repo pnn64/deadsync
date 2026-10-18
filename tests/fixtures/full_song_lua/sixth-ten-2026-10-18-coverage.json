@@ -427,7 +427,8 @@
         "missing captured subscriber identity for ScreenGameplay/3/1",
         "missing captured subscriber identity for ScreenGameplay/4",
         "owned gameplay overlay observation phase is unavailable"
-      ]
+      ],
+      "evidence_scope": "Coverage retained from complete attempt 1. Attempt 2 failed the trace/archive version consistency assertion before replay; no full report was produced."
     }
   }
 }

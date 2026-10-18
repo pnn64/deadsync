@@ -229,7 +229,7 @@
         "live_native_mini_zoom_updates_before_song_callbacks_and_preserves_oitg_z"
       ],
       "input_policy": "Read observed timer inputs only; no native option values, actor poses, tolerances, or acceptance expectations substituted. Legacy captures retain prior frame-delta fallback.",
-      "full_chart_status": "Second and final Igaku SSC full replay will use a fresh native capture because the retained archive lacks independent option timer inputs."
+      "full_chart_status": "Igaku SSC remains pending after two attempts. Final attempt stopped before frame replay because the reused archive metadata template was0.1.80 while the native trace was0.1.81. Existing consistency check preserved. Caller metadata derivation corrected for subsequent charts. Native timer and Mini regressions pass; full chart outcome unproven. No third SSC replay this sweep."
     }
   ],
   "input_repairs": [
@@ -403,7 +403,7 @@
   ],
   "verification": {
     "complete": false,
-    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM is pending after two incomplete attempts. Igaku SSC receives its second and final headless replay after capturing missing independent option timer inputs.",
+    "goal_progress": "Nine new fixtures accepted; one more required. Megalovania SM and Igaku SSC remain pending after two attempts each. Igaku SM is being captured headlessly with timer inputs and corrected archive version metadata.",
     "current_source_hashes_verified": 49,
     "native_tests_passed": 66,
     "targeted_checks": [
@@ -433,7 +433,7 @@
     ],
     "binary_sha256": "796130f039e5d77ef753339e906e1280a2ca5e382a7983027b1c5c128d16ddb4",
     "runtime_lua_feature_enabled": false,
-    "utc": "2026-10-18T04:01:27Z",
+    "utc": "2026-10-18T04:03:23Z",
     "known_baseline_failure": {
       "test": "compile_song_lua_supports_named_player_tap_note_shim",
       "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
