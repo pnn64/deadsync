@@ -2852,17 +2852,15 @@
       "aliases": []
     },
     {
-      "title": "\u30a4\u30ac\u30af",
+      "title": "Igaku",
       "source_simfile": "Igaku/Igaku.sm",
-      "harness_version": "0.1.0",
-      "archive": "9e43102ba43ae63247587005a24a064559f4f5b78d243522aa3dc160436c3617.tar.zst",
-      "sha256": "9e43102ba43ae63247587005a24a064559f4f5b78d243522aa3dc160436c3617",
-      "compressed_bytes": 1268921,
-      "uncompressed_sha256": "636c7e45c86937460db1b5062ecf2fb81dc52391224a3cde317f1a71156de772",
-      "compression_level": 22,
-      "aliases": [
-        "30cc26242a36e124c0d12b97a40d33fe4e72273b40eb73617e19db338477e440.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "17450d1eb6fd1d3b23ca248e6c9c5a5a2c097ed86da9ae6a9d7ac978b016f1ab.tar.zst",
+      "compressed_bytes": 123738222,
+      "sha256": "17450d1eb6fd1d3b23ca248e6c9c5a5a2c097ed86da9ae6a9d7ac978b016f1ab",
+      "uncompressed_sha256": "ceb919fdeb219df56ccc4a84f52a4a055ebe5383145e9a8f0dafa63f18c1be72",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Igaku",
