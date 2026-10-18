@@ -2815,17 +2815,15 @@
       "aliases": []
     },
     {
-      "title": "Ibuprofen & Weed (LEFTS Edit)",
+      "title": "Ibuprofen and Weed - [Freya]",
       "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
-      "harness_version": "0.1.0",
-      "archive": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204.tar.zst",
-      "sha256": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204",
-      "compressed_bytes": 335598,
-      "uncompressed_sha256": "1ae7e8020c76662434ddf6a55cd7da5080d6b1d0a36654c041ea764ea21b797d",
-      "compression_level": 22,
-      "aliases": [
-        "2fb4c77b8c40b4bb144a1f3f412056f17e57550a83d7d04574a9ddce6d4df2d2.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "42b59df74fa8af50c75f4ddfec1aec982936457377d4c339c32701ff732bbde1.tar.zst",
+      "compressed_bytes": 128714773,
+      "sha256": "42b59df74fa8af50c75f4ddfec1aec982936457377d4c339c32701ff732bbde1",
+      "uncompressed_sha256": "124efd0e00d6564c08124aed66ec7b152fc01e03d3d2915db759cf17ae6a8a54",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "ICON KILLER",

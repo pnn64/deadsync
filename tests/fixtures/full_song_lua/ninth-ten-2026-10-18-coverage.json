@@ -170,6 +170,25 @@
         "missing captured subscriber identity for ScreenGameplay/26/1/9",
         "missing captured subscriber identity for ScreenGameplay/3/1"
       ]
+    },
+    "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc": {
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetY, Actor.SetHeight, Actor.SetWidth, Actor.addcommand, Actor.cropbottom, Actor.croptop, Actor.effectclock, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.skewy, Actor.stretchto, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.FromString, PlayerOptions.MMod, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/2/10/1",
+        "missing captured subscriber identity for ScreenGameplay/2/14/1",
+        "missing captured subscriber identity for ScreenGameplay/25",
+        "missing captured subscriber identity for ScreenGameplay/26/1/1",
+        "missing captured subscriber identity for ScreenGameplay/26/1/10",
+        "missing captured subscriber identity for ScreenGameplay/26/1/12",
+        "missing captured subscriber identity for ScreenGameplay/26/1/2",
+        "missing captured subscriber identity for ScreenGameplay/26/1/4",
+        "missing captured subscriber identity for ScreenGameplay/26/1/5",
+        "missing captured subscriber identity for ScreenGameplay/26/1/7",
+        "missing captured subscriber identity for ScreenGameplay/26/1/9",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
     }
   },
   "private_controls": {
