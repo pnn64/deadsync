@@ -3046,8 +3046,6 @@ dependencies = [
 [[package]]
 name = "lua-src"
 version = "551.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d400ffef0e3d4d29287092bdc5a276d0bf468b2c69709d5bab0d469312d9f947"
 dependencies = [
  "cc",
 ]
@@ -5196,7 +5194,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",

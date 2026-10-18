@@ -131,6 +131,9 @@ tempfile = "3.27.0"
 zstd = "0.14.0"
 
 [patch.crates-io]
+# Native actor grids exceed Lua 5.1 C-stack storage used by mlua Rust handles.
+# Permit registry-sized ownership on idle auxiliary threads only.
+lua-src = { path = "vendor/lua-src" }
 # hidapi's windows-native backend imports GetOverlappedResultEx, which is
 # unavailable on Windows 7. The local patch keeps the same backend but uses the
 # Win7-compatible overlapped wait sequence.
