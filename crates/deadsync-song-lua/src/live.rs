@@ -5985,7 +5985,22 @@ return Def.Actor { OnCommand = function()
             assert(tostring(combo):find('ActorFrame', 1, true))
             local number = combo:GetChild('Number')
             assert(tostring(number):find('BitmapText', 1, true))
-            assert(number:GetParent() == combo and combo:GetNumChildren() == 1)
+            assert(number:GetParent() == combo and combo:GetNumChildren() == 3)
+            local hundred = combo:GetChild('OneHundredMilestone')
+            local thousand = combo:GetChild('OneThousandMilestone')
+            assert(hundred:GetNumChildren() == 4 and thousand:GetNumChildren() == 3)
+            assert(hundred:GetParent() == combo and thousand:GetParent() == combo)
+            assert(hundred:GetVisible() == false and thousand:GetVisible() == false)
+            local nested = thousand:GetChildren()[''][1]
+            assert(nested:GetNumChildren() == 4 and nested:GetParent() == thousand)
+            for _, sprite in ipairs(hundred:GetChildren()['']) do
+                assert(tostring(sprite):find('Sprite', 1, true) and sprite:GetRotationZ() == 0)
+                assert(sprite:GetDiffuseAlpha() == 0)
+            end
+            hundred:playcommand('HundredMilestone')
+            assert(hundred:GetVisible() == true and hundred:GetTweenTimeLeft() > 0)
+            hundred:playcommand('Hide')
+            assert(hundred:GetVisible() == false)
             assert(combo:GetChildren().Number == number)
         else
             assert(not tostring(combo):find('ActorFrame', 1, true),

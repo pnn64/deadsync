@@ -13800,6 +13800,72 @@ pub fn create_named_text_actor(
     Ok(actor)
 }
 
+fn load_native_combo_milestone(lua: &Lua, thousand: bool) -> mlua::Result<Value> {
+    let (name, source) = if thousand {
+        ("Combo 1000milestone", include_str!("../assets/simply-love/Graphics/Combo 1000milestone/default.lua"))
+    } else {
+        ("Combo 100milestone", include_str!("../assets/simply-love/Graphics/Combo 100milestone/default.lua"))
+    };
+    let environment = lua.create_table()?;
+    let mt = lua.create_table()?;
+    mt.raw_set("__index", lua.globals())?;
+    environment.set_metatable(Some(mt))?;
+    environment.raw_set("LoadActor", lua.create_function(|lua, path: String| {
+        if path == "../Combo 100milestone" {
+            return load_native_combo_milestone(lua, false);
+        }
+        let key = if path == "explosion.png" {
+            "Combo 100milestone/explosion.png"
+        } else {
+            path.strip_prefix(crate::SONG_LUA_THEME_PATH_PREFIX)
+                .and_then(|path| path.strip_prefix("G/")).unwrap_or(&path)
+        };
+        let definition = lua.create_table()?;
+        definition.raw_set("Texture", load_native_gameplay_in_bitmap(key)?)?;
+        lua.globals().get::<Table>("Def")?.get::<Function>("Sprite")?.call::<Value>(definition)
+    })?)?;
+    lua.load(source).set_environment(environment)
+        .set_name(format!("@theme:/Graphics/{name}/default.lua")).eval()
+}
+
+fn create_native_combo_milestone(lua: &Lua, name: &str, thousand: bool) -> mlua::Result<Table> {
+    let install = lua.app_data_ref::<ActorDefinitionHost>()
+        .map(|host| host.install_methods)
+        .ok_or_else(|| mlua::Error::runtime("combo milestone requires its actor host"))?;
+    let definition = load_native_combo_milestone(lua, thousand)?;
+    let Value::Table(actor) = own_actor_root(lua, definition, install)? else {
+        return Err(mlua::Error::runtime("combo milestone must load an actor"));
+    };
+    actor.raw_set("Name", name)?;
+    native_step_statistics_lookup(lua, &actor)?;
+    run_actor_init_commands_for_table(lua, &actor)?;
+    Ok(actor)
+}
+
+pub(crate) fn install_native_gameplay_combo(lua: &Lua) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let sl = globals.get::<Table>("SL")?;
+    for index in 1..=2 {
+        let player = globals.get::<Table>(format!("__songlua_top_screen_player_{index}"))?;
+        let combo = actor_children(lua, &player)?.get::<Table>("Combo")?;
+        let mods = sl.get::<Table>(format!("P{index}"))?.get::<Table>("ActiveModifiers")?;
+        if !actor_type_is(&combo, "ActorFrame")? || truthy(&mods.get::<Value>("HideComboExplosions")?) {
+            continue;
+        }
+        let children = actor_children(lua, &combo)?;
+        let number = children.get::<Table>("Number")?;
+        for (ordinal, name, thousand) in [(1, "OneHundredMilestone", false), (2, "OneThousandMilestone", true)] {
+            let child = create_native_combo_milestone(lua, name, thousand)?;
+            child.raw_set("__songlua_parent", combo.clone())?;
+            combo.raw_set(ordinal, child.clone())?;
+            children.raw_set(name, child)?;
+        }
+        combo.raw_set(3, number)?;
+    }
+    invalidate_compile_update_plan(lua);
+    Ok(())
+}
+
 pub fn create_named_child_actor(
     lua: &Lua,
     parent: &Table,
@@ -13930,7 +13996,41 @@ struct NativeGameplayInBitmap {
     prepared: OnceLock<Result<String, String>>,
 }
 
-static NATIVE_GAMEPLAY_IN_BITMAPS: [NativeGameplayInBitmap; 23] = [
+static NATIVE_GAMEPLAY_IN_BITMAPS: [NativeGameplayInBitmap; 57] = [
+    NativeGameplayInBitmap { key: "Combo 100milestone/explosion", filename: "Combo 100milestone/explosion.png", bytes: include_bytes!("../assets/simply-love/Graphics/Combo 100milestone/explosion.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Arrows/Combo 1000milestone swoosh", filename: "_VisualStyles/Arrows/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Arrows/Combo 100milestone minisplode", filename: "_VisualStyles/Arrows/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Arrows/Combo 100milestone splode", filename: "_VisualStyles/Arrows/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Bears/Combo 1000milestone swoosh", filename: "_VisualStyles/Bears/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Bears/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Bears/Combo 100milestone minisplode", filename: "_VisualStyles/Bears/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Bears/Combo 100milestone splode", filename: "_VisualStyles/Bears/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Bears/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Cats/Combo 1000milestone swoosh", filename: "_VisualStyles/Cats/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Cats/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Cats/Combo 100milestone minisplode", filename: "_VisualStyles/Cats/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Cats/Combo 100milestone splode", filename: "_VisualStyles/Cats/Combo 100milestone splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Cats/Combo 100milestone splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Ducks/Combo 1000milestone swoosh", filename: "_VisualStyles/Ducks/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Ducks/Combo 100milestone minisplode", filename: "_VisualStyles/Ducks/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Ducks/Combo 100milestone splode", filename: "_VisualStyles/Ducks/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Ducks/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Gay/Combo 1000milestone swoosh", filename: "_VisualStyles/Gay/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Gay/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Gay/Combo 100milestone minisplode", filename: "_VisualStyles/Gay/Combo 100milestone minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Gay/Combo 100milestone splode", filename: "_VisualStyles/Gay/Combo 100milestone splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Gay/Combo 100milestone splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Hearts/Combo 1000milestone swoosh", filename: "_VisualStyles/Hearts/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Hearts/Combo 100milestone minisplode", filename: "_VisualStyles/Hearts/Combo 100milestone minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Hearts/Combo 100milestone splode", filename: "_VisualStyles/Hearts/Combo 100milestone splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Hearts/Combo 100milestone splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Spooky/Combo 1000milestone swoosh", filename: "_VisualStyles/Spooky/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Spooky/Combo 100milestone minisplode", filename: "_VisualStyles/Spooky/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Spooky/Combo 100milestone splode", filename: "_VisualStyles/Spooky/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Spooky/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/SRPG10/Combo 1000milestone swoosh", filename: "_VisualStyles/SRPG10/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/SRPG10/Combo 100milestone minisplode", filename: "_VisualStyles/SRPG10/Combo 100milestone minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone minisplode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/SRPG10/Combo 100milestone splode", filename: "_VisualStyles/SRPG10/Combo 100milestone splode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/SRPG10/Combo 100milestone splode.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Stars/Combo 1000milestone swoosh", filename: "_VisualStyles/Stars/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Stars/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Stars/Combo 100milestone minisplode", filename: "_VisualStyles/Stars/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Stars/Combo 100milestone splode", filename: "_VisualStyles/Stars/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Technique/Combo 1000milestone swoosh", filename: "_VisualStyles/Technique/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Technique/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Technique/Combo 100milestone minisplode", filename: "_VisualStyles/Technique/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Technique/Combo 100milestone splode", filename: "_VisualStyles/Technique/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Technique/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Thonk/Combo 1000milestone swoosh", filename: "_VisualStyles/Thonk/Combo 1000milestone swoosh.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 1000milestone swoosh.png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Thonk/Combo 100milestone minisplode", filename: "_VisualStyles/Thonk/Combo 100milestone minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone minisplode (doubleres).png"), prepared: OnceLock::new() },
+    NativeGameplayInBitmap { key: "_VisualStyles/Thonk/Combo 100milestone splode", filename: "_VisualStyles/Thonk/Combo 100milestone splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Thonk/Combo 100milestone splode (doubleres).png"), prepared: OnceLock::new() },
     NativeGameplayInBitmap { key: "_VisualStyles/Arrows/GameplayIn minisplode", filename: "_VisualStyles/Arrows/GameplayIn minisplode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/GameplayIn minisplode (doubleres).png"), prepared: OnceLock::new() },
     NativeGameplayInBitmap { key: "_VisualStyles/Arrows/GameplayIn splode", filename: "_VisualStyles/Arrows/GameplayIn splode (doubleres).png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Arrows/GameplayIn splode (doubleres).png"), prepared: OnceLock::new() },
     NativeGameplayInBitmap { key: "_VisualStyles/Bears/GameplayIn minisplode", filename: "_VisualStyles/Bears/GameplayIn minisplode.png", bytes: include_bytes!("../assets/simply-love/Graphics/_VisualStyles/Bears/GameplayIn minisplode.png"), prepared: OnceLock::new() },
