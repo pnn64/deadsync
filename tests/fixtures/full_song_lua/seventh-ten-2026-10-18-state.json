@@ -1,0 +1,19 @@
+{
+  "objective": "Ten additional accepted fixtures, starting with faster pending charts",
+  "baseline_passed": 460,
+  "baseline_pending": 40,
+  "base_commit": "77bb5e88e60695717018a08d75ea0112c7253792",
+  "prior_status": "sixth-ten-2026-10-18-summary.json",
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "repair_limit_per_chart": 2,
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "results": [],
+  "counts": {
+    "new_passing_fixtures": 0,
+    "passed_fixtures": 460,
+    "pending_charts": 40,
+    "ignored_charts": 1
+  }
+}
