@@ -2781,6 +2781,32 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn live_background_sprite_keeps_declared_texture_for_upper_left() {
+        let mut compiled = compile_with_context("background-upper-left-texture", r#"
+return Def.Sprite {
+    Texture=GAMESTATE:GetCurrentSong():GetSongDir()..'/image.png',
+    InitCommand=function(self) BG_SPRITE = self end,
+    OnCommand=function(self) self:aux(31) end,
+}
+"#, |context| {
+            image::RgbaImage::from_pixel(8, 8, image::Rgba([255,255,255,255]))
+                .save(context.song_dir.join("image.png")).unwrap();
+            context.background_layer_count = 1;
+            context.layer_start_beats = vec![10.0];
+            context.background_upper_left_colors = vec![Some([1.0;4])];
+        });
+        let mut scene = compiled.live_scene.take().unwrap();
+        let sprite = scene.lua.globals().get::<Table>("BG_SPRITE").unwrap();
+        assert!(sprite.get::<Function>("GetTexture").unwrap().call::<Value>(sprite.clone()).unwrap().is_table());
+        assert!(sprite.get::<Function>("GetParent").unwrap().call::<Value>(sprite.clone()).unwrap().is_table(),
+            "native UpperLeft owns its returned root inside a real ActorFrame");
+        let output=scene.advance(SongLuaLiveFrame { beat: 10.0, music_seconds: 10.0,
+            screen_seconds: 10.0, delta_seconds: 0.1, ..Default::default() }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert!(sprite.get::<Function>("GetTexture").unwrap().call::<Value>(sprite).unwrap().is_table());
+    }
+
+    #[test]
     fn live_background_start_time_uses_native_note_row() {
         let mut compiled = compile_with_context("background-rounded-start", r#"
 return Def.Actor {

@@ -490,9 +490,13 @@ pub fn song_lua_compile_context(
     // The scan applies native chart eligibility and includes hold tails.
     // Neither audio EOF nor its rounded display length defines these bounds.
     let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
+    // Native catalog loading resolves the offset into note times at 1x,
+    // then takes the max with the absolute hint. Song getters retain it.
     context.song_note_bounds = Some([
-        song.precise_first_second(),
-        song.precise_note_last_second_seconds.unwrap_or(-1.0).max(specified_last),
+        song.precise_first_second() - machine_global_offset_seconds,
+        song.precise_note_last_second_seconds
+            .map(|seconds| seconds - machine_global_offset_seconds)
+            .unwrap_or(-1.0).max(specified_last),
     ]);
     context.style_name = match play_style {
         deadsync_gameplay::GameplayInputPlayStyle::Single => "single",

@@ -4289,7 +4289,7 @@ pub fn install_actor_metatable(
 
 /// Background.cpp loads Lua files through UpperLeft.lua, whose declaration
 /// concatenates native callbacks with the authored root before actor creation.
-pub(crate) fn install_background_upper_left(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
+pub(crate) fn install_background_upper_left(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<Table> {
     let factory: Function = lua.load(r#"
 return function(color)
     return {
@@ -4302,7 +4302,12 @@ return function(color)
     }
 end
 "#).set_name("@theme:/BackgroundEffects/UpperLeft.lua").eval()?;
-    merge_actor_concat(lua, actor, &factory.call::<Table>(color.to_vec())?)
+    merge_actor_concat(lua, actor, &factory.call::<Table>(color.to_vec())?)?;
+    // UpperLeft.lua returns an ActorFrame owning the authored actor. The
+    // texture rate callback reads that real parent's update rate.
+    let wrap: Function = lua.load("return function(child)\n\n\nreturn Def.ActorFrame{child}\nend")
+        .set_name("@theme:/BackgroundEffects/UpperLeft.lua").eval()?;
+    wrap.call(actor.clone())
 }
 
 fn merge_actor_concat(lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()> {

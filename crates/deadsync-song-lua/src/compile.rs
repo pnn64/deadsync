@@ -357,12 +357,12 @@ where
                 }
                 Err(err) => return Err(format!("failed to execute '{}': {err}", entry_path.display())),
             };
-            if let Value::Table(actor) = &root
-                && let Some(Some(color)) = context.background_upper_left_colors.get(index)
-            {
-                crate::lua_util::install_background_upper_left(&lua, actor, *color)
-                    .map_err(|err| err.to_string())?;
-            }
+            let root = match (root, context.background_upper_left_colors.get(index)) {
+                (Value::Table(actor), Some(Some(color))) => Value::Table(
+                    crate::lua_util::install_background_upper_left(&lua, &actor, *color)
+                        .map_err(|err| err.to_string())?),
+                (root, _) => root,
+            };
             let root = crate::lua_util::own_actor_root(&lua, root, install_actor_methods)
                 .map_err(|err| err.to_string())?;
             let parent = if let Value::Table(actor) = &root {

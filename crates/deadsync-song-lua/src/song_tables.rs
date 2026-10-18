@@ -2272,24 +2272,13 @@ pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Re
         "MusicLengthSeconds",
         lua.create_function(move |_, _args: MultiValue| Ok(music_length_seconds))?,
     )?;
-    // Song::ReCalculateStepStatsAndLastSecond retains chart endpoints,
-    // independently of audio EOF. The public getters apply the current rate
-    // to the cabinet offset on every read (Song.cpp:135-148).
+    // The capture engine's Song.cpp stores resolved bounds at song load.
+    // Its absolute last-second hint is not shifted by the global offset,
+    // and later music-rate changes do not recalculate either getter.
     let [first_second, last_second] = context.song_note_bounds
         .unwrap_or([0.0, music_length_seconds]);
-    let global_offset = context.global_offset_seconds;
-    table.set(
-        "GetFirstSecond",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(first_second - current_music_rate(lua)? * global_offset)
-        })?,
-    )?;
-    table.set(
-        "GetLastSecond",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(last_second - current_music_rate(lua)? * global_offset)
-        })?,
-    )?;
+    table.set("GetFirstSecond", lua.create_function(move |_, _args: MultiValue| Ok(first_second))?)?;
+    table.set("GetLastSecond", lua.create_function(move |_, _args: MultiValue| Ok(last_second))?)?;
     table.set(
         "GetFirstBeat",
         lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
@@ -3348,7 +3337,7 @@ end
     }
 
     #[test]
-    fn native_song_seconds_use_note_bounds_and_current_rate_offset() {
+    fn native_song_seconds_use_resolved_note_bounds_and_absolute_hint() {
         let lua = Lua::new();
         let mut context = SongLuaCompileContext::new(Path::new("."), "Native song bounds");
         context.music_length_seconds = 120.0;
@@ -3361,11 +3350,11 @@ end
         lua.load(r#"
 local song = GAMESTATE:GetCurrentSong()
 assert(song:MusicLengthSeconds() == 120)
-assert(song:GetFirstSecond() == 9.8125 and song:GetLastSecond() == 89.8125)
+assert(song:GetFirstSecond() == 10 and song:GetLastSecond() == 90)
 GAMESTATE:GetSongOptionsObject('ModsLevel_Current'):MusicRate(2)
-assert(song:GetFirstSecond() == 9.75 and song:GetLastSecond() == 89.75)
+assert(song:GetFirstSecond() == 10 and song:GetLastSecond() == 90)
 assert(song:GetLastSecond() - song:GetFirstSecond() == 80)
-"#).exec().expect("native note endpoints, distinct audio duration and live rate offset");
+"#).exec().expect("capture-engine endpoints remain resolved when the current music rate changes");
     }
 
     #[test]

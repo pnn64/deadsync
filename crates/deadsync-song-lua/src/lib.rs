@@ -1517,8 +1517,8 @@ pub struct SongLuaCompileContext {
     #[cfg(feature = "test-support")]
     pub capture_overlay_probe: bool,
     pub music_length_seconds: f32,
-    /// Whole-song note bounds before the machine offset, independently of
-    /// audio duration; populated from the native-compatible simfile scan.
+    /// Whole-song note bounds resolved at catalog load, independently of
+    /// audio duration. Note times include the load offset; hints stay absolute.
     pub song_note_bounds: Option<[f32; 2]>,
     pub style_name: String,
     /// Song charts in simfile load order; never synthesize missing difficulties.
