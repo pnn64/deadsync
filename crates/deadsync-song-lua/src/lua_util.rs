@@ -3672,18 +3672,21 @@ fn install_tap_note_methods(
     set_string_method(lua, note, "GetTapNoteSubType", &subtype)?;
     set_string_method(lua, note, "GetPlayerNumber", &player)?;
     set_string_method(lua, note, "GetAttackModifiers", &attack_mods)?;
+    // Judgment objects can outlive a callback. Root their result as native
+    // LuaReference does, without one auxiliary-stack slot per retained note.
+    let result = std::sync::Arc::new(lua.create_registry_value(result)?);
     note.set(
         "GetTapNoteResult",
         lua.create_function({
             let result = result.clone();
-            move |_, _args: MultiValue| Ok(result.clone())
+            move |lua, _args: MultiValue| lua.registry_value::<Table>(result.as_ref())
         })?,
     )?;
     note.set(
         "GetHoldNoteResult",
         lua.create_function({
             let result = result;
-            move |_, _args: MultiValue| Ok(result.clone())
+            move |lua, _args: MultiValue| lua.registry_value::<Table>(result.as_ref())
         })?,
     )?;
     note.set(
@@ -22685,6 +22688,28 @@ mod snapshot_tests {
             assert_eq!(calls.raw_get::<usize>(ordinal).unwrap(), ordinal,
                 "Begin runs once per actor in child order");
         }
+    }
+
+    #[test]
+    fn tap_note_results_do_not_consume_auxiliary_references_per_note() {
+        let lua = Lua::new();
+        lua.gc_stop();
+        let notes = lua.create_table().unwrap();
+        let params = lua.create_table().unwrap();
+        params.raw_set("TapNoteScore", "TapNoteScore_W1").unwrap();
+        for index in 1..=10_000 {
+            params.raw_set("TapNoteOffset", index as f32 / 1000.0).unwrap();
+            notes.raw_set(index, create_tap_note_table(&lua, &params, None).unwrap()).unwrap();
+        }
+        for index in [1, 5000, 10_000] {
+            let note = notes.raw_get::<Table>(index).unwrap();
+            let result = note.get::<Function>("GetTapNoteResult").unwrap().call::<Table>(note.clone()).unwrap();
+            let hold = note.get::<Function>("GetHoldNoteResult").unwrap().call::<Table>(note.clone()).unwrap();
+            assert_eq!(result.to_pointer(), hold.to_pointer());
+            assert_eq!(result.get::<Function>("GetTapNoteOffset").unwrap().call::<f32>(result.clone()).unwrap(), index as f32 / 1000.0);
+            assert_eq!(result.get::<Function>("GetTapNoteScore").unwrap().call::<String>(result).unwrap(), "TapNoteScore_W1");
+        }
+        lua.gc_restart();
     }
 
     #[test]

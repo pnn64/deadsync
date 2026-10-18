@@ -76,11 +76,12 @@ pub fn create_single_value_array(lua: &Lua, value: Table) -> mlua::Result<Table>
 }
 
 pub fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> mlua::Result<()> {
-    // Lua strings are immutable: retain one value instead of rebuilding it.
-    let value = lua.create_string(value)?;
+    // Native LuaReference retains values in the registry. Holding an mlua
+    // string inside every getter consumes its limited auxiliary stack instead.
+    let value = lua.create_registry_value(lua.create_string(value)?)?;
     table.set(
         name,
-        lua.create_function(move |_, (): ()| Ok(Value::String(value.clone())))?,
+        lua.create_function(move |lua, (): ()| lua.registry_value::<Value>(&value))?,
     )
 }
 
