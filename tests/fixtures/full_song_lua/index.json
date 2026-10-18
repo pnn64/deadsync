@@ -2942,15 +2942,13 @@
     {
       "title": "Intro Outro",
       "source_simfile": "Intro Outro/intro.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e.tar.zst",
-      "sha256": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e",
-      "compressed_bytes": 3918013,
-      "uncompressed_sha256": "de2241b9e48b401db3717d6bcc86ea58d0fd384e84e88b8c9fe1e6fdbd5df1a6",
-      "compression_level": 22,
-      "aliases": [
-        "eb5c1a52fe28b1a3d120791e5d89059066018cc09dcbb1bf28d70051cdf20512.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "cb1a7556ac4de1c7a4895e3540b805b67c268c432c77ac47cf800a7afafa0ca2.tar.zst",
+      "compressed_bytes": 115739190,
+      "sha256": "cb1a7556ac4de1c7a4895e3540b805b67c268c432c77ac47cf800a7afafa0ca2",
+      "uncompressed_sha256": "8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Invert",

@@ -94,6 +94,33 @@
         "missing captured subscriber identity for ScreenGameplay/3/1",
         "missing captured subscriber identity for ScreenGameplay/4"
       ]
+    },
+    "Intro Outro/intro.ssc": {
+      "source_simfile": "Intro Outro/intro.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.blend, Actor.bob, Actor.bounce, Actor.bounceend, Actor.cropright, Actor.draworder, Actor.effectclock, Actor.skewx, Actor.smooth, Actor.stopeffect, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Sprite.customtexturerect, Sprite.texcoordvelocity",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/2/10/1",
+        "missing captured subscriber identity for ScreenGameplay/2/14/1",
+        "missing captured subscriber identity for ScreenGameplay/25",
+        "missing captured subscriber identity for ScreenGameplay/26/1/1",
+        "missing captured subscriber identity for ScreenGameplay/26/1/10",
+        "missing captured subscriber identity for ScreenGameplay/26/1/12",
+        "missing captured subscriber identity for ScreenGameplay/26/1/2",
+        "missing captured subscriber identity for ScreenGameplay/26/1/4",
+        "missing captured subscriber identity for ScreenGameplay/26/1/5",
+        "missing captured subscriber identity for ScreenGameplay/26/1/7",
+        "missing captured subscriber identity for ScreenGameplay/26/1/9",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    }
+  },
+  "private_controls": {
+    "versus-child-initial": {
+      "pending_coverage": [
+        "Actor.GetDrawOrder is available natively but missing in the owned host. The diagnostic control was narrowed to child names to test the actual traversal failure; no catalog chart acceptance requirement changed."
+      ],
+      "evidence": "target/song-lua-ninth-ten-20261018/versus-child-control/report.json"
     }
   }
 }
