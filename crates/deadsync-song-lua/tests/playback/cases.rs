@@ -41,6 +41,7 @@ fn manual_player_frame(screen_offset: [f32; 2], ordered: bool) -> deadlib_render
     }];
     let frames = Arc::from([SongLuaDrawFrame {
         second: 0.0,
+        immediate: false,
         owners: vec![0],
         owner_ends: vec![3],
         ops: [100.0, if ordered { 105.0 } else { 300.0 }, 500.0]

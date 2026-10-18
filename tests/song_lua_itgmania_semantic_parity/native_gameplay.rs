@@ -2082,6 +2082,93 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn gameplay_immediate_draw_freezes_before_child_on_and_preserves_automatic_pass() {
+        use deadsync_song_lua::{SongLuaDrawOp as Op, SongLuaDrawSource as Source, SongLuaLiveTarget as Target};
+        use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+        let mut state = owned_judgment_control("immediate-aft-draw", "1000\n0000\n0000\n0001\n", r#"
+return Def.ActorFrame {
+    InitCommand=function(self) self:xy(401,211):rotationz(30) end,
+    OnCommand=function(self) self:sleep(9999) end,
+    Def.ActorFrameTexture {
+        Name='EarlyTarget',
+        InitCommand=function(self)
+            self:SetTextureName('EarlyTarget'):SetWidth(SCREEN_WIDTH):SetHeight(SCREEN_HEIGHT)
+                :EnableAlphaBuffer(true):Create()
+        end,
+        OnCommand=function(self) self:Draw() end,
+        Def.Quad {
+            Name='EarlyQuad',
+            InitCommand=function(self) self:xy(3,5):zoomto(7,11):diffuse(.25,.5,.75,1) end,
+            OnCommand=function(self) self:xy(SCREEN_CENTER_X,SCREEN_CENTER_Y)
+                :zoomto(SCREEN_WIDTH,SCREEN_HEIGHT):diffuse(0,0,0,1) end,
+        },
+        Def.ActorProxy { OnCommand=function(self) self:SetTarget(SCREENMAN:GetTopScreen():GetChild('PlayerP1')) end },
+    },
+    Def.Sprite { Name='TargetSample', Texture='EarlyTarget' },
+}
+"#, 0.0);
+        let output = update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        assert_eq!(output.draw_frames.len(), 1, "the parent's On executes one immediate Draw");
+        let mut recorded = output.draw_frames[0].clone();
+        assert!(recorded.immediate);
+        assert_eq!(recorded.ops.len(), 3, "Begin, Quad, Finish; the proxy has no target yet");
+        let Op::Draw { state: frozen, parents, .. } = &recorded.ops[1] else { panic!("frozen Quad") };
+        let frozen = *frozen;
+        assert_eq!([frozen.x, frozen.y], [3.0, 5.0]);
+        assert_eq!(frozen.diffuse, [0.25,0.5,0.75,1.0]);
+        assert!(parents.is_empty(), "BeginRenderingTo resets the translated/rotated ancestor stack");
+        let bindings = state.song_lua.as_ref().unwrap().visual_draw_bindings();
+        let group = bindings.iter().find(|(global, _)| *global == recorded.owners[0]).unwrap().1;
+        let local: std::collections::BTreeMap<_, _> = bindings.iter().filter_map(|&(global, target)| match (group, target) {
+            (Target::Root(_), Target::Root(index)) => Some((global, index)),
+            (Target::Foreground(a, _), Target::Foreground(b, index)) if a == b => Some((global, index)),
+            (Target::Background(a, _), Target::Background(b, index)) if a == b => Some((global, index)),
+            _ => None,
+        }).collect();
+        for owner in &mut recorded.owners { *owner = local[&*owner]; }
+        for op in &mut recorded.ops {
+            match op {
+                Op::Begin { capture, .. } | Op::Finish { capture } => *capture = local[&*capture],
+                Op::Draw { source: Source::Overlay(index), .. } => *index = local[&*index],
+                _ => {}
+            }
+        }
+        let visuals = &state.gameplay.mods.song_lua_visuals;
+        let overlays = match group {
+            Target::Root(_) => &visuals.overlays,
+            Target::Foreground(layer, _) => &visuals.foreground_visual_layers[layer].overlays,
+            Target::Background(layer, _) => &visuals.background_visual_layers[layer].overlays,
+        };
+        let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+        let mut composer = WholeSongComposer::new(overlays);
+        composer.set_draw_frames(overlays, &[recorded.clone()]);
+        let context = state.song_lua.as_ref().unwrap().context();
+        let screen = [context.screen_width, context.screen_height];
+        let first = composer.render_layer_capture_frames(overlays, &states, screen, recorded.second, 0.0);
+        assert_eq!(first.len(), 2, "the immediate target pass precedes the automatic pass; time={}, actors={:?}, draws={:?}",
+            recorded.second,
+            overlays.iter().map(|a| (&a.name,a.parent_index,a.initial_state.visible,a.initial_state.aft_created,
+                a.initial_state.sprite_texture,matches!(a.kind,deadsync_song_lua::SongLuaOverlayKind::ActorFrameTexture{..}))).collect::<Vec<_>>(),
+            first.iter().map(|f|super::interactive::submitted_rows(f).first().copied()).collect::<Vec<_>>());
+        let early = super::interactive::submitted_rows(&first[0]);
+        let late = super::interactive::submitted_rows(&first[1]);
+        assert_eq!(early.len(), 6);
+        assert!(early.iter().all(|v| (v[6]-0.25).abs()<0.002 && (v[7]-0.5).abs()<0.002 && (v[8]-0.75).abs()<0.002));
+        let min = |rows: &[[f32;10]], axis: usize| rows.iter().map(|v|v[axis]).fold(f32::INFINITY,f32::min);
+        let max = |rows: &[[f32;10]], axis: usize| rows.iter().map(|v|v[axis]).fold(f32::NEG_INFINITY,f32::max);
+        assert!((min(&early,0) - (-1.0-1.0/screen[0])).abs()<0.00001);
+        assert!((max(&early,0) - (-1.0+13.0/screen[0])).abs()<0.00001);
+        assert!((min(&early,1) - (1.0-21.0/screen[1])).abs()<0.00001);
+        assert!((max(&early,1) - (1.0+1.0/screen[1])).abs()<0.00001);
+        assert_eq!(late.len(), 6);
+        assert!(late.iter().all(|v|v[6..9]==[0.0;3]));
+        let second = composer.render_layer_capture_frames(overlays, &states, screen, recorded.second+0.01, 0.0);
+        assert_eq!(second.len(), 1, "later frames keep automatic drawing without repeating the early pass");
+        assert!(update_judgment_control(&mut state, 20_000_000, 1_004_000_000).draw_frames.is_empty());
+        assert_eq!(frozen.diffuse, [0.25,0.5,0.75,1.0], "later commands cannot mutate the retained submission");
+    }
+
+    #[test]
     fn gameplay_avoided_mines_dispatch_each_owned_judgment_next_update() {
         let mut state = owned_judgment_control("mine-message", "0000\nM0MM\n0000\n0000\n,\n1000\n0000\n0000\n0000\n", r#"
 local count = 0
@@ -4285,9 +4372,13 @@ pub(crate) fn replay_with_command_observer(
         while draw_samples.get(draw_cursor).is_some_and(|sample|
             sample["update_sequence"].as_u64() == Some(index as u64+1)) { draw_cursor += 1; }
         if draw_cursor > draw_start {
+            let uncompared = draw_checks.uncompared_immediate_draws;
             draw_checks.compare(&state, &draw_samples[draw_start..draw_cursor],
                 [context.screen_width, context.screen_height], [seconds as f32, number(frame,"beat")? as f32],
                 simfile, &mut mismatches)?;
+            if draw_checks.uncompared_immediate_draws > uncompared {
+                runtime_coverage.insert("owned immediate Draw submissions without matching native drawable observations".into());
+            }
         }
         let overlay_observation = state.song_lua.as_ref()
             .and_then(|scene| scene.take_overlay_stage_observation());

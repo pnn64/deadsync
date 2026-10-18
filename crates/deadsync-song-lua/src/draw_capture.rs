@@ -45,6 +45,9 @@ pub enum DrawOp {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DrawFrame {
     pub second: f32,
+    /// A command/update submission, played once before ordinary scene drawing.
+    /// It does not replace the owner's normal DrawPrimitives traversal.
+    pub immediate: bool,
     pub owners: Vec<usize>,
     /// Exclusive operation end for each owner, in the same order as `owners`.
     pub owner_ends: Vec<usize>,
@@ -76,6 +79,7 @@ struct RawCall {
 
 struct RawFrame {
     second: f32,
+    immediate: bool,
     owners: Vec<usize>,
     calls: Vec<RawCall>,
 }
@@ -94,6 +98,7 @@ struct Capture {
     frames: Vec<RawFrame>,
     labels: FxHashMap<usize, String>,
     bytes: usize,
+    frame_ops: usize,
 }
 
 const MAX_BYTES: usize = 256 * 1024 * 1024;
@@ -121,7 +126,7 @@ fn push(lua: &Lua, op: RawOp) -> mlua::Result<()> {
     // Baked whole-song payloads retain a per-frame operation bound. A live
     // replay discards the previous frame and uses the byte bound instead:
     // native actors have no 256-Draw limit (HOPE submits 355 explicit calls).
-    if (!crate::live::active(lua) && capture.calls.len() >= MAX_OPS)
+    if (!crate::live::active(lua) && capture.frame_ops >= MAX_OPS)
         || capture.bytes.saturating_add(bytes) > MAX_BYTES
     {
         return Err(mlua::Error::external(
@@ -129,6 +134,7 @@ fn push(lua: &Lua, op: RawOp) -> mlua::Result<()> {
         ));
     }
     capture.bytes += bytes;
+    capture.frame_ops += 1;
     capture.calls.push(RawCall { owner, op });
     Ok(())
 }
@@ -242,7 +248,7 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let prior = lua
         .app_data_ref::<Capture>()
         .and_then(|capture| capture.context.clone());
-    let Some(prior) = prior else { return Ok(()) };
+    let Some(prior) = prior else { return draw_immediate(lua, actor); };
     let Some(context) = scoped_context(lua, actor, &prior)? else {
         return Ok(());
     };
@@ -288,6 +294,13 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 // Actor::DrawPrimitives is empty. Logic actors still receive
                 // explicit Draw calls, but submit no geometry or draw payload.
                 if kind.eq_ignore_ascii_case("Actor") {
+                    return Ok(());
+                }
+                // ActorProxy::DrawPrimitives submits nothing until SetTarget.
+                // A parent's early Draw must not borrow a later On target.
+                if !external && kind.eq_ignore_ascii_case("ActorProxy")
+                    && actor.raw_get::<Option<Table>>("__songlua_proxy_target_actor")?.is_none()
+                {
                     return Ok(());
                 }
                 if !external
@@ -352,6 +365,42 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     result
 }
 
+fn frame_second(lua: &Lua) -> mlua::Result<f32> {
+    let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+    let elapsed = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
+    let rate = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_RATE_KEY)?;
+    let origin = lua.app_data_ref::<crate::runtime::SongLuaClock>()
+        .map_or(0.0, |clock| clock.0.get_time_for_beat_exact(0.0));
+    Ok(elapsed * rate + origin)
+}
+
+// Lua Actor:Draw executes immediately, including during a parent's OnCommand
+// before its children's OnCommands. Freeze that submission at the call site;
+// using the eventual overlay pose loses its size, crop, color and draw stack.
+fn draw_immediate(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let second = frame_second(lua)?;
+    if lua.app_data_ref::<Capture>().is_none() { lua.set_app_data(Capture::default()); }
+    let owner = actor.to_pointer() as usize;
+    let start = {
+        let mut capture = lua.app_data_mut::<Capture>().expect("capture installed");
+        capture.context = Some(Context { owner, ..Context::default() });
+        capture.calls.len()
+    };
+    let result = draw(lua, actor);
+    let mut capture = lua.app_data_mut::<Capture>().expect("capture retained during Draw");
+    capture.context = None;
+    let calls = capture.calls.split_off(start);
+    if !calls.is_empty() {
+        let bytes = std::mem::size_of::<RawFrame>() + std::mem::size_of::<usize>();
+        if capture.bytes.saturating_add(bytes) > MAX_BYTES {
+            return Err(mlua::Error::external("custom draw capture exceeds its song budget"));
+        }
+        capture.bytes += bytes;
+        capture.frames.push(RawFrame { second, immediate: true, owners: vec![owner], calls });
+    }
+    result
+}
+
 fn visit(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<()> {
     if crate::live::active(lua) && actor.raw_get::<Option<bool>>("__songlua_live_inactive")?.unwrap_or(false) {
         return Ok(());
@@ -402,9 +451,12 @@ pub(crate) fn run_live(lua: &Lua, root: &Table) -> mlua::Result<()> {
         capture.targets.clear();
         capture.calls.clear();
         capture.owners.clear();
-        capture.frames.clear();
-        capture.labels.clear();
-        capture.bytes = 0;
+        capture.frames.retain(|frame| frame.immediate);
+        if capture.frames.is_empty() {
+            capture.labels.clear();
+            capture.bytes = 0;
+        }
+        capture.frame_ops = 0;
     }
     run(lua, root)
 }
@@ -423,6 +475,7 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
         .raw_get::<Option<bool>>(DRAW_INSTALLED_KEY)?
         .unwrap_or(false)
     {
+        if let Some(mut capture) = lua.app_data_mut::<Capture>() { capture.frame_ops = 0; }
         return Ok(());
     }
     let screen = lua
@@ -439,13 +492,7 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
             ..Context::default()
         },
     );
-    let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
-    let elapsed = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
-    let rate = runtime.get::<f32>(crate::SONG_LUA_RUNTIME_RATE_KEY)?;
-    let origin = lua
-        .app_data_ref::<crate::runtime::SongLuaClock>()
-        .map_or(0.0, |clock| clock.0.get_time_for_beat_exact(0.0));
-    let second = elapsed * rate + origin;
+    let second = frame_second(lua)?;
     if let Some(mut capture) = lua.app_data_mut::<Capture>() {
         let bytes =
             std::mem::size_of::<RawFrame>() + capture.owners.len() * std::mem::size_of::<usize>();
@@ -461,9 +508,11 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
         let owners = std::mem::take(&mut capture.owners);
         capture.frames.push(RawFrame {
             second,
+            immediate: false,
             owners,
             calls,
         });
+        capture.frame_ops = 0;
     }
     result
 }
@@ -496,12 +545,39 @@ pub(crate) fn take<Kind>(
         };
         sources.insert(actor.table.to_pointer() as usize, source);
     }
+    convert(capture, &sources)
+}
+
+pub(crate) struct LiveSources(pub FxHashMap<usize, DrawSource>);
+
+pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
+    if lua.app_data_ref::<Capture>().is_none_or(|capture|
+        !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()) {
+        return Ok(Vec::new());
+    }
+    if lua.app_data_ref::<LiveSources>().is_none() { return Ok(Vec::new()); }
+    let mut capture = lua.remove_app_data::<Capture>().expect("complete capture frames");
+    let (immediate, normal) = std::mem::take(&mut capture.frames).into_iter()
+        .partition::<Vec<_>, _>(|frame| frame.immediate);
+    let frozen = Capture { frames: immediate, labels: capture.labels.clone(), ..Capture::default() };
+    capture.frames = normal;
+    if capture.frames.is_empty() && capture.calls.is_empty() && capture.targets.is_empty() {
+        capture.bytes = 0;
+        capture.frame_ops = 0;
+        capture.labels.clear();
+    }
+    lua.set_app_data(capture);
+    let sources = lua.app_data_ref::<LiveSources>().expect("live source bindings");
+    convert(frozen, &sources.0).map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
+}
+
+fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<Vec<(usize, DrawFrame)>, String> {
     let overlay_index = |pointer| match sources.get(&pointer) {
         Some(DrawSource::Overlay(index)) => Ok(*index),
         _ => Err("custom draw references an uncompiled capture or callback owner".to_owned()),
     };
     let mut owners = Vec::new();
-    for frame in &capture.frames {
+    for frame in capture.frames.iter().filter(|frame| !frame.immediate) {
         for &owner in &frame.owners {
             if !owners.contains(&owner) {
                 owners.push(owner);
@@ -511,7 +587,7 @@ pub(crate) fn take<Kind>(
     let mut frames = Vec::new();
     for raw in capture.frames {
         let mut frame_owners = raw.owners;
-        for &owner in &owners {
+        for &owner in owners.iter().filter(|_| !raw.immediate) {
             if !frame_owners.contains(&owner) {
                 frame_owners.push(owner);
             }
@@ -524,6 +600,7 @@ pub(crate) fn take<Kind>(
                     owner,
                     DrawFrame {
                         second: raw.second,
+                        immediate: raw.immediate,
                         owners: vec![owner],
                         owner_ends: Vec::new(),
                         ops: Vec::new(),

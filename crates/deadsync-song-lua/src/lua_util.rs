@@ -9494,11 +9494,11 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
                 let visible = actor
                     .get::<Option<bool>>("__songlua_visible")?
                     .unwrap_or(true);
-                if in_draw_callback && visible {
+                if visible {
                     let player = actor
                         .raw_get::<Option<String>>("__songlua_top_screen_child_name")?
                         .is_some_and(|name| matches!(name.as_str(), "PlayerP1" | "PlayerP2"));
-                    if !player {
+                    if in_draw_callback && !player {
                         let state = lua.create_table()?;
                         for (key, value) in snapshot_actor_semantic_state(lua, &actor)? {
                             state.set(key, value)?;
@@ -22782,6 +22782,9 @@ pub(crate) fn install_native_gameplay_overlay(
         theme.raw_set("__songlua_parent", screen.clone())?;
         set_actor_name(&theme, lua.create_string("Overlay")?)?;
         theme.raw_set("Name", "Overlay")?;
+        // Replacing the placeholder must retain its engine-layer identity for
+        // explicit Draw and proxies, just as naming the native loaded actor.
+        theme.raw_set("__songlua_top_screen_child_name", "Overlay")?;
         let order = overlay.raw_get::<Option<i32>>("__songlua_state_draw_order")?.unwrap_or(0);
         theme.raw_set("__songlua_state_draw_order", order)?;
         for index in 1..=screen.raw_len() {

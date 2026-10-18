@@ -1005,6 +1005,11 @@ impl State {
         std::mem::take(&mut self.song_lua_output)
     }
 
+    #[cfg(feature = "test-support")]
+    pub fn song_lua_draw_frames(&self) -> &[deadsync_song_lua::SongLuaDrawFrame] {
+        &self.song_lua_output.draw_frames
+    }
+
     fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
         scene.apply_pending_player_writes(&mut self.gameplay);

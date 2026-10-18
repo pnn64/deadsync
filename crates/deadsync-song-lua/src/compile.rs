@@ -1602,7 +1602,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
             }
         }
         let frames = &mut outputs[layer].draw_frames;
-        if let Some(last) = frames.last_mut().filter(|last| last.second == frame.second) {
+        // Repeated immediate Draw calls may have the same owner and clock;
+        // keep each submission independent rather than merging owner batches.
+        if let Some(last) = frames.last_mut().filter(|last|
+            !frame.immediate && !last.immediate && last.second == frame.second) {
             last.owner_ends
                 .extend(frame.owner_ends.iter().map(|end| last.ops.len() + end));
             last.owners.extend(frame.owners);

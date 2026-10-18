@@ -952,6 +952,8 @@ pub struct SongLuaLiveOutput {
     /// Missing observational inputs, separate from callback execution errors.
     pub coverage_gaps: Vec<String>,
     pub player_writes: Vec<SongLuaLivePlayerWrite>,
+    /// Frozen command/update Draw submissions, in their execution order.
+    pub draw_frames: Vec<crate::SongLuaDrawFrame>,
 }
 
 impl SongLuaLiveOutput {
@@ -964,6 +966,7 @@ impl SongLuaLiveOutput {
         self.errors.append(&mut next.errors);
         self.coverage_gaps.append(&mut next.coverage_gaps);
         self.player_writes.append(&mut next.player_writes);
+        self.draw_frames.append(&mut next.draw_frames);
     }
 }
 
@@ -1081,6 +1084,20 @@ impl SongLuaLiveScene {
         crate::lua_util::prepare_live_updates(&lua, &root)?;
         let states = actors.iter().map(|actor| read_state(&lua, actor))
             .collect::<mlua::Result<Vec<_>>>()?;
+        let mut draw_sources = actors.iter().enumerate().map(|(index, actor)|
+            (actor.to_pointer() as usize, crate::draw_capture::DrawSource::Overlay(index)))
+            .collect::<rustc_hash::FxHashMap<_, _>>();
+        for (target, actor, _) in &tracked {
+            use crate::draw_capture::DrawSource as S;
+            use SongLuaTrackedActorTarget as T;
+            let source = match *target {
+                T::Player(p) => S::Player(p), T::PlayerJudgment(p) => S::Judgment(p),
+                T::PlayerCombo(p) => S::Combo(p), T::SongForeground => S::SongForeground,
+                T::ScreenLayer(layer) => S::ScreenLayer(layer),
+            };
+            draw_sources.insert(actor.to_pointer() as usize, source);
+        }
+        lua.set_app_data(crate::draw_capture::LiveSources(draw_sources));
         let mut startup_output = take_output(&lua)?;
         startup_broadcasts.append(&mut startup_output.broadcasts);
         startup_output.broadcasts = startup_broadcasts;
@@ -1748,6 +1765,9 @@ impl SongLuaLiveScene {
             Ok((crate::lua_util::message_actor_path(&self.actors[global])?, target))).collect()
     }
 
+    #[cfg(feature = "test-support")]
+    pub fn visual_draw_bindings(&self) -> &[(usize, SongLuaLiveTarget)] { &self.targets }
+
     pub fn states(&self) -> &[SongLuaOverlayState] { &self.states }
 
     /// Screen::GetNextScreenName reads the stored override when the transition
@@ -1816,7 +1836,8 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
         history.clear()?;
     }
     let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
-    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes })
+    let draw_frames = crate::draw_capture::take_live(lua).map_err(mlua::Error::external)?;
+    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes, draw_frames })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {

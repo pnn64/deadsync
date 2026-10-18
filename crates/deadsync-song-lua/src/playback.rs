@@ -3200,6 +3200,10 @@ struct SongLuaManualSlot {
 #[derive(Default)]
 struct SongLuaManualScratch {
     frames: Arc<[SongLuaDrawFrame]>,
+    normal_frames: Box<[usize]>,
+    immediate_frames: Box<[usize]>,
+    immediate_cursor: usize,
+    immediate_second: f32,
     meshes: Vec<Box<[Option<Arc<[TexturedMeshVertex]>>]>>,
     owners: Box<[Option<usize>]>,
     banks: [Vec<SongLuaManualSlot>; SONG_LUA_AFT_FRAME_BANKS],
@@ -3226,7 +3230,7 @@ impl SongLuaManualScratch {
         frames: Arc<[SongLuaDrawFrame]>,
     ) -> Self {
         let mut owner_flags = vec![false; overlays.len()];
-        for frame in frames.iter() {
+        for frame in frames.iter().filter(|frame| !frame.immediate) {
             for &owner in &frame.owners {
                 owner_flags[owner] = true;
             }
@@ -3256,8 +3260,10 @@ impl SongLuaManualScratch {
             .max(5)
             + 2;
         let mut sources = vec![Vec::new(); peak];
+        let mut target_ops = vec![false; peak];
         for frame in frames.iter() {
             for (op, draw) in frame.ops.iter().enumerate() {
+                target_ops[op] |= matches!(draw, SongLuaDrawOp::Begin { .. });
                 if let SongLuaDrawOp::Draw {
                     source: SongLuaDrawSource::Overlay(index),
                     ..
@@ -3316,15 +3322,23 @@ impl SongLuaManualScratch {
                     .collect()
             })
             .collect();
+        let normal_frames = frames.iter().enumerate().filter_map(|(i, frame)|
+            (!frame.immediate).then_some(i)).collect();
+        let immediate_frames = frames.iter().enumerate().filter_map(|(i, frame)|
+            frame.immediate.then_some(i)).collect();
         Self {
             frames,
+            normal_frames,
+            immediate_frames,
+            immediate_cursor: 0,
+            immediate_second: f32::NEG_INFINITY,
             meshes,
             owners,
             banks: std::array::from_fn(|_| {
                 (0..peak)
                     .map(|op| SongLuaManualSlot {
-                        actors: Vec::with_capacity(peak * capacity),
-                        capture: SharedActorFrameScratch::with_capacity(peak * capacity),
+                        actors: Vec::with_capacity(if target_ops[op] { peak * capacity } else { capacity }),
+                        capture: SharedActorFrameScratch::with_capacity(if target_ops[op] { peak * capacity } else { capacity }),
                         meshes: sources[op]
                             .iter()
                             .map(|&index| {
@@ -3361,17 +3375,31 @@ impl SongLuaManualScratch {
     }
 
     fn frame_at(&self, second: f32) -> Option<usize> {
-        self.frames
-            .partition_point(|frame| frame.second <= second)
+        self.normal_frames
+            .partition_point(|&index| self.frames[index].second <= second)
             .checked_sub(1)
+            .map(|index| self.normal_frames[index])
+    }
+
+    fn pending_immediate(&self, second: f32) -> std::ops::Range<usize> {
+        let end = self.immediate_frames.partition_point(|&index| self.frames[index].second <= second);
+        let start = if second < self.immediate_second { 0 } else { self.immediate_cursor.min(end) };
+        start..end
+    }
+
+    fn take_immediate(&mut self, second: f32) -> std::ops::Range<usize> {
+        let range = self.pending_immediate(second);
+        self.immediate_cursor = range.end;
+        self.immediate_second = second;
+        range
     }
 
     fn requests(&self, second: f32) -> SongLuaScreenProxyRequests {
         let mut requests = SongLuaScreenProxyRequests::default();
-        let Some(index) = self.frame_at(second) else {
-            return requests;
-        };
-        for op in &self.frames[index].ops {
+        let normal = self.frame_at(second).into_iter();
+        let immediate = self.immediate_frames[self.pending_immediate(second)].iter().copied();
+        for index in normal.chain(immediate) {
+          for op in &self.frames[index].ops {
             let SongLuaDrawOp::Draw { source, .. } = op else {
                 continue;
             };
@@ -3385,6 +3413,7 @@ impl SongLuaManualScratch {
                 SongLuaDrawSource::ScreenLayer(3) => requests.stage = true,
                 _ => {}
             }
+          }
         }
         requests
     }
@@ -12692,6 +12721,20 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     ) else {
         return;
     };
+    // Command/update Draw calls precede ordinary DrawPrimitives. Consume each
+    // retained submission once, while allowing the same AFT to draw normally.
+    let immediate = aft_capture_scratch.manual.take_immediate(effect_time);
+    for event in immediate {
+        let frame = aft_capture_scratch.manual.immediate_frames[event];
+        let count = aft_capture_scratch.manual.frames[frame].owners.len();
+        for batch in 0..count {
+            let owner = aft_capture_scratch.manual.frames[frame].owners[batch];
+            song_lua_draw_owner(out, targets, overlays, local_overlay_states,
+                topology_index, &mut aft_capture_scratch.manual, frame, owner,
+                proxy_sources, asset_manager, [space_width, space_height],
+                [effect_time, effect_beat], total_elapsed, song_lua_depth.draw_z(0));
+        }
+    }
     for (draw_idx, idx) in order_scratch.iter().copied().enumerate() {
         let Some(overlay) = overlays.get(idx) else {
             continue;

@@ -7,7 +7,7 @@ use deadsync_song_lua::playback::actor_conformance::{
 };
 use deadsync_song_lua::{SongLuaInputEvent, SongLuaInputType, SongLuaLiveTarget};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::{BTreeMap, VecDeque}, path::Path};
 
 pub(super) fn validate(trace: &Value) -> Result<(), String> {
     let injected = trace["input"]["injected_inputs"] == true;
@@ -207,6 +207,21 @@ pub(super) struct DrawChecks {
     pub text_samples: usize,
     pub failures: usize,
     pub culled_samples: usize,
+    pub uncompared_immediate_draws: usize,
+    last_failure: Option<Value>,
+}
+
+struct ImmediateDraw {
+    frame: RenderFrame,
+    texture: Option<String>,
+}
+
+fn target_slot(target: SongLuaLiveTarget) -> (i32, usize) {
+    match target {
+        SongLuaLiveTarget::Root(i) => (0, i),
+        SongLuaLiveTarget::Background(l, i) => (-(l as i32) - 1, i),
+        SongLuaLiveTarget::Foreground(l, i) => (l as i32 + 1, i),
+    }
 }
 
 fn layer(state: &gameplay::State, group: i32) -> &[SongLuaOverlayActor] {
@@ -221,6 +236,55 @@ fn layer(state: &gameplay::State, group: i32) -> &[SongLuaOverlayActor] {
 }
 
 impl DrawChecks {
+    fn immediate(
+        &self, state: &gameplay::State, screen: [f32; 2], clock: [f32; 2],
+    ) -> Result<BTreeMap<(i32, usize), VecDeque<ImmediateDraw>>, String> {
+        let frames = state.song_lua_draw_frames();
+        if frames.is_empty() { return Ok(BTreeMap::new()); }
+        let scene = state.song_lua.as_ref().ok_or("draw submissions have no owned scene")?;
+        let bindings = scene.visual_draw_bindings();
+        let globals: BTreeMap<_, _> = bindings.iter().enumerate().map(|(dense, &(global, _))| (global, dense)).collect();
+        let slots: BTreeMap<_, _> = bindings.iter().enumerate().map(|(dense, &(_, target))| (target_slot(target), dense)).collect();
+        let mut overlays = Vec::with_capacity(bindings.len());
+        for &(_, target) in bindings {
+            let (group, index) = target_slot(target);
+            let mut overlay = layer(state, group)[index].clone();
+            overlay.parent_index = overlay.parent_index.and_then(|parent| slots.get(&(group, parent)).copied());
+            if let SongLuaOverlayKind::ActorProxy { target: deadsync_song_lua::SongLuaProxyTarget::Actor { overlay_index } } = &mut overlay.kind {
+                *overlay_index = *slots.get(&(group, *overlay_index)).ok_or("draw proxy has no prepared target")?;
+            }
+            overlays.push(overlay);
+        }
+        let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+        let mut composer = WholeSongComposer::new(&overlays);
+        let mut draws: BTreeMap<_, VecDeque<_>> = BTreeMap::new();
+        for original in frames {
+            let mut frame = original.clone();
+            let remap = |index: &mut usize| -> Result<(), String> {
+                *index = *globals.get(index).ok_or("recorded draw has no prepared visual binding")?;
+                Ok(())
+            };
+            for owner in &mut frame.owners { remap(owner)?; }
+            for op in &mut frame.ops {
+                match op {
+                    deadsync_song_lua::SongLuaDrawOp::Begin { capture, .. }
+                        | deadsync_song_lua::SongLuaDrawOp::Finish { capture } => remap(capture)?,
+                    deadsync_song_lua::SongLuaDrawOp::Draw { source: deadsync_song_lua::SongLuaDrawSource::Overlay(index), .. } => remap(index)?,
+                    _ => {}
+                }
+            }
+            for (index, frame) in composer.render_recorded_frame(&overlays, &states, &frame, screen, clock[0], clock[1]) {
+                let texture = frame.ops.first().and_then(|op| match op {
+                    DrawOp::TexturedMesh(r) => Some(composer.texture_key(r.texture_handle).to_owned()),
+                    DrawOp::Sprite(r) => Some(composer.texture_key(r.texture_handle).to_owned()),
+                    _ => None,
+                });
+                draws.entry(target_slot(bindings[index].1)).or_default().push_back(ImmediateDraw { frame, texture });
+            }
+        }
+        Ok(draws)
+    }
+
     pub fn bind(
         &mut self,
         state: &gameplay::State,
@@ -296,6 +360,7 @@ impl DrawChecks {
         mismatches: &mut Vec<Value>,
     ) -> Result<(), String> {
         let mut states = BTreeMap::new();
+        let mut immediate = self.immediate(state, screen, clock)?;
         for sample in samples {
             let actor = sample["actor"]
                 .as_str()
@@ -331,8 +396,10 @@ impl DrawChecks {
                 .composers
                 .entry(group)
                 .or_insert_with(|| WholeSongComposer::new(overlays));
-            let frame = composer
-                .render_screen_overlay(overlays, composed, index, screen, clock[0], clock[1], None);
+            let (frame, recorded_texture) = match immediate.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
+                Some(draw) => (draw.frame, Some(draw.texture)),
+                None => (composer.render_screen_overlay(overlays, composed, index, screen, clock[0], clock[1], None), None),
+            };
             let rows = submitted_rows(&frame);
             let reference = sample["vertices"]
                 .as_array()
@@ -360,11 +427,11 @@ impl DrawChecks {
             let expected_texture = expected_texture.strip_prefix("song:/").map(|p| {
                 deadsync_assets::textures::canonical_texture_key(simfile.parent().unwrap().join(p))
             });
-            let actual_texture = frame.ops.first().and_then(|op| match op {
+            let actual_texture = recorded_texture.as_ref().map(Option::as_deref).unwrap_or_else(|| frame.ops.first().and_then(|op| match op {
                 DrawOp::TexturedMesh(r) => Some(composer.texture_key(r.texture_handle)),
                 DrawOp::Sprite(r) => Some(composer.texture_key(r.texture_handle)),
                 _ => None,
-            });
+            }));
             let texture_ok = expected_texture
                 .as_deref()
                 .is_none_or(|key| actual_texture == Some(key));
@@ -412,21 +479,26 @@ impl DrawChecks {
                     "first_actual_triangle":&rows[..rows.len().min(3)],"first_native_quad":&reference[..reference.len().min(4)]}),mismatches);
             }
         }
+        self.uncompared_immediate_draws += immediate.values().map(VecDeque::len).sum::<usize>();
         Ok(())
     }
 
     fn fail(&mut self, sample: &Value, field: &str, actual: Value, mismatches: &mut Vec<Value>) {
         self.failures += 1;
+        let failure = json!({"field":field,"actor":sample["actor"],
+            "frame":sample["update_sequence"],"deadsync":actual});
         if self.failures <= 100 {
-            mismatches.push(json!({"field":field,"actor":sample["actor"],
-            "frame":sample["update_sequence"],"deadsync":actual}));
+            mismatches.push(failure.clone());
         }
+        self.last_failure = Some(failure);
     }
 
     pub fn report(&self, inputs: usize) -> Value {
         json!({"input_events_replayed":inputs,"draw_samples_compared":self.samples,
             "submitted_vertices_compared":self.vertices,"live_text_samples_compared":self.text_samples,
-            "draw_mismatches":self.failures,"equivalent_offscreen_culls":self.culled_samples,"pixel_parity_proven":false})
+            "draw_mismatches":self.failures,"equivalent_offscreen_culls":self.culled_samples,
+            "uncompared_owned_immediate_draws":self.uncompared_immediate_draws,
+            "last_draw_mismatch":self.last_failure,"pixel_parity_proven":false})
     }
 }
 
@@ -459,7 +531,7 @@ fn close(a: f32, b: f32) -> bool {
         || a.is_finite() && b.is_finite() && (a - b).abs() <= 0.002 + b.abs() * 0.00002
 }
 
-fn submitted_rows(frame: &RenderFrame) -> Vec<[f32; 10]> {
+pub(super) fn submitted_rows(frame: &RenderFrame) -> Vec<[f32; 10]> {
     let mut rows = Vec::new();
     for op in &frame.ops {
         match op {
