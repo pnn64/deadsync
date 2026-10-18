@@ -1172,6 +1172,11 @@ pub fn theme_string_names(section: &str) -> Vec<String> {
 
 #[must_use]
 pub fn theme_string(section: &str, name: &str) -> String {
+    // Simply Love and its fallback define no gameplay HeaderText string.
+    // ThemeManager's missing lookup returns an empty string, not the key.
+    if section == "ScreenGameplay" && name == "HeaderText" {
+        return String::new();
+    }
     if section == "OptionTitles" && name == "MusicRateMultiplier" { return "x rate".into(); }
     if section.eq_ignore_ascii_case("Difficulty")
         || section.eq_ignore_ascii_case("CustomDifficulty")

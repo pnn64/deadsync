@@ -14426,7 +14426,19 @@ return {
                     sprite.get::<Function>("diffusealpha")?.call::<()>((sprite.clone(), 0.0))?;
                     push_sequence_child_once(&visuals, sprite)?;
                 }
-                let text = create_named_text_actor(lua, "BitmapText", "", String::new(), create_dummy_actor)?;
+                // ScreenGameplay in/default.lua labels the current stage even
+                // after the lead-in is hidden. Song scripts can still read it.
+                let stage_text = lua.load(r#"
+if GAMESTATE:IsCourseMode() then
+    local entries = GAMESTATE:GetCurrentCourse():GetCourseEntries()
+    return ("%s 1 / %d"):format(THEME:GetString("Stage", "Stage"), #entries)
+elseif GAMESTATE:IsEventMode() then
+    return THEME:GetString("Stage", "Event")
+else
+    return THEME:GetString("Stage", "Stage") .. " " .. tostring(GAMESTATE:GetCurrentStageIndex() + 1)
+end
+"#).set_name("@theme:/BGAnimations/ScreenGameplay in/default.lua").eval::<String>()?;
+                let text = create_named_text_actor(lua, "BitmapText", "", stage_text, create_dummy_actor)?;
                 text.raw_set("__songlua_parent", child.clone())?;
                 text.get::<Function>("accelerate")?.call::<()>((text.clone(), 0.5))?;
                 text.get::<Function>("diffusealpha")?.call::<()>((text.clone(), 1.0))?;
@@ -23192,6 +23204,18 @@ pub(crate) fn install_native_gameplay_underlay(
         lua.load(include_str!("../assets/simply-love/Scripts/SL-Helpers-Text.lua"))
             .set_name("@theme:/Scripts/SL-Helpers-Text.lua").exec()?;
         initialize_native_steps_displays(lua, &screen)?;
+        // ScreenGameplay::LoadNextSong populates these hidden engine displays
+        // from current options before authored foreground construction.
+        for player in players.clone().sequence_values::<Value>() {
+            let player = player?;
+            let Some(index) = player_index_from_value(&player) else { continue; };
+            let child = actor_children(lua, &screen)?.raw_get::<Table>(format!("PlayerOptionsP{}", index + 1))?;
+            let game = lua.globals().get::<Table>("GAMESTATE")?;
+            let state = game.get::<Function>("GetPlayerState")?.call::<Table>((game, player))?;
+            let text = state.get::<Function>("GetPlayerOptionsString")?
+                .call::<String>((state, "ModsLevel_Current"))?;
+            child.raw_set("Text", text)?;
+        }
         let mut panes = Vec::new();
         for player in players.sequence_values::<Value>() {
             let player = player?;
