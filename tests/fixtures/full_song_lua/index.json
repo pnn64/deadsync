@@ -2713,17 +2713,15 @@
       ]
     },
     {
-      "title": "Hello Gordon (Dr. Coomer's Bumpin' Mix)",
+      "title": "Hello Gordon [chairodactyl] - Cameron Wiggers",
       "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
-      "harness_version": "0.1.0",
-      "archive": "db1a39927d2cc432166301e715ada3d22a1484d17d44b51e65a7fb6f05f04e97.tar.zst",
-      "sha256": "db1a39927d2cc432166301e715ada3d22a1484d17d44b51e65a7fb6f05f04e97",
-      "compressed_bytes": 741299,
-      "uncompressed_sha256": "cf30100bacef7a38763b99a1ba1a969eba09c4d3185eeee169c1dcd21e85792f",
-      "compression_level": 22,
-      "aliases": [
-        "4038f16bc894bc1c6ffeda84af222b4bc6f4169655ce3f36610a894428abf812.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "f3cd946337623f7d9dbb7743676e00e4ec50cd57d27913fdb17dd2109dbe4884.tar.zst",
+      "compressed_bytes": 120692819,
+      "sha256": "f3cd946337623f7d9dbb7743676e00e4ec50cd57d27913fdb17dd2109dbe4884",
+      "uncompressed_sha256": "65f267a623cfebda3a83d4fe956f0ff3adc0fa68994690d7adf552354e857d30",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Hispanic Panic",
