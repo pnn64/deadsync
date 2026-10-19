@@ -7,15 +7,60 @@ use crate::runtime::note_song_lua_side_effect;
 // publishing their writes to disk would change the next compile's input. Keep
 // them for this compile only; reads across handles observe closed output files.
 // This is authored file state, not a gameplay cache. No live frame does I/O.
-#[derive(Default)]
-struct FileWrites(Vec<(PathBuf, Vec<u8>)>);
+enum FileWrites {
+    Small(Vec<(PathBuf, Vec<u8>)>),
+    Large(rustc_hash::FxHashMap<PathBuf, Vec<u8>>),
+}
+
+impl Default for FileWrites {
+    fn default() -> Self {
+        Self::Small(Vec::new())
+    }
+}
+
+impl FileWrites {
+    fn get(&self, path: &Path) -> Option<&Vec<u8>> {
+        match self {
+            Self::Small(files) => files
+                .iter()
+                .find(|(name, _)| name == path)
+                .map(|(_, bytes)| bytes),
+            Self::Large(files) => files.get(path),
+        }
+    }
+
+    fn insert(&mut self, path: &Path, bytes: Vec<u8>) {
+        match self {
+            Self::Small(files) => {
+                if let Some((_, current)) = files.iter_mut().find(|(name, _)| name == path) {
+                    *current = bytes;
+                } else if files.len() < 4 {
+                    files.push((path.to_path_buf(), bytes));
+                } else {
+                    // Move existing paths and buffers without copying them.
+                    // Tiny stores retain the original allocation/lookup path.
+                    let mut indexed = rustc_hash::FxHashMap::with_capacity_and_hasher(
+                        files.len() + 1,
+                        Default::default(),
+                    );
+                    indexed.extend(std::mem::take(files));
+                    indexed.insert(path.to_path_buf(), bytes);
+                    *self = Self::Large(indexed);
+                }
+            }
+            Self::Large(files) => {
+                if let Some(current) = files.get_mut(path) {
+                    *current = bytes;
+                } else {
+                    files.insert(path.to_path_buf(), bytes);
+                }
+            }
+        }
+    }
+}
 
 fn written_file(lua: &Lua, path: &Path) -> Option<Vec<u8>> {
-    lua.app_data_ref::<FileWrites>()?
-        .0
-        .iter()
-        .find(|(name, _)| name == path)
-        .map(|(_, bytes)| bytes.clone())
+    lua.app_data_ref::<FileWrites>()?.get(path).cloned()
 }
 
 #[derive(Default)]
@@ -56,18 +101,12 @@ impl RageFile {
             let mut writes = lua
                 .app_data_mut::<FileWrites>()
                 .expect("file store installed with RageFileUtil");
-            if let Some((_, bytes)) = writes.0.iter_mut().find(|(path, _)| path == &self.path) {
-                *bytes = std::mem::take(&mut self.bytes);
-            } else {
-                writes
-                    .0
-                    .push((self.path.clone(), std::mem::take(&mut self.bytes)));
-            }
+            writes.insert(&self.path, std::mem::take(&mut self.bytes));
         }
         self.open = false;
     }
 
-    fn read(&mut self, count: i32) -> mlua::Result<Vec<u8>> {
+    fn read(&mut self, count: i32) -> mlua::Result<&[u8]> {
         self.check(1)?;
         if count < -1 {
             return Err(mlua::Error::RuntimeError(
@@ -88,33 +127,30 @@ impl RageFile {
         if count == -1 || wanted > available {
             self.eof = true;
         }
-        Ok(c_string(&self.bytes[start..start + size]).to_vec())
+        Ok(c_string(&self.bytes[start..start + size]))
     }
 
-    fn get_line(&mut self) -> mlua::Result<Vec<u8>> {
+    fn get_line(&mut self) -> mlua::Result<&[u8]> {
         self.check(1)?;
         let start = self.pos.min(self.bytes.len());
         let rest = &self.bytes[start..];
         if rest.is_empty() {
             self.eof = true;
-            return Ok(Vec::new());
+            return Ok(&[]);
         }
-        let size = rest.iter().position(|&byte| byte == b'\n');
+        let size = memchr::memchr(b'\n', rest);
         let mut end = size.unwrap_or(rest.len());
         if size.is_some() && end > 0 && rest[end - 1] == b'\r' {
             end -= 1;
         }
         self.pos += size.map_or(rest.len(), |size| size + 1);
         // Even an unterminated final line delays EOF until the next call.
-        Ok(c_string(&rest[..end]).to_vec())
+        Ok(c_string(&rest[..end]))
     }
 }
 
 fn c_string(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes
-        .iter()
-        .position(|&byte| byte == 0)
-        .unwrap_or(bytes.len())]
+    &bytes[..memchr::memchr(0, bytes).unwrap_or(bytes.len())]
 }
 
 fn file_path(song_dir: &Path, raw: &str) -> PathBuf {
@@ -244,7 +280,8 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "ReadBytes",
         lua.create_function(move |lua, (_file, count): (Table, i32)| {
-            lua.create_string(handle.borrow_mut::<RageFile>()?.read(count)?)
+            let mut state = handle.borrow_mut::<RageFile>()?;
+            lua.create_string(state.read(count)?)
         })?,
     )?;
     let handle = state.clone();
@@ -341,6 +378,11 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
         )?;
     }
     Ok(file)
+}
+
+#[cfg(test)]
+mod perf {
+    include!("../tests/perf/rage_file.rs");
 }
 
 #[cfg(test)]
