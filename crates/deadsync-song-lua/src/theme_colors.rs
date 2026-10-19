@@ -218,13 +218,14 @@ pub const fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
 #[must_use]
 pub fn color_to_hex(color: [f32; 4]) -> String {
     let component = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
-    format!(
-        "{:02X}{:02X}{:02X}{:02X}",
-        component(color[0]),
-        component(color[1]),
-        component(color[2]),
-        component(color[3])
-    )
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut bytes = [0; 8];
+    for (output, value) in bytes.chunks_exact_mut(2).zip(color) {
+        let value = component(value);
+        output[0] = HEX[(value >> 4) as usize];
+        output[1] = HEX[(value & 0x0f) as usize];
+    }
+    String::from_utf8(bytes.to_vec()).expect("hexadecimal lookup table contains only ASCII")
 }
 
 pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<()> {

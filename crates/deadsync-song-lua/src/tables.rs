@@ -204,34 +204,72 @@ fn seconds_to_time_parts(seconds: f64) -> (i64, i64, i64) {
     (minutes, secs, centis)
 }
 
+// Callers supply two or three parts, a first width of one or two, and
+// centiseconds already clamped by seconds_to_time_parts.
+fn format_clock<const N: usize>(
+    parts: [i64; N],
+    first_width: usize,
+    centis: Option<i64>,
+) -> String {
+    let mut buffers = [itoa::Buffer::new(); N];
+    let mut digits = [""; N];
+    for ((buffer, output), value) in buffers.iter_mut().zip(digits.iter_mut()).zip(parts) {
+        *output = buffer.format(value);
+    }
+    let capacity = digits
+        .iter()
+        .enumerate()
+        .map(|(index, text)| text.len().max(if index == 0 { first_width } else { 2 }))
+        .sum::<usize>()
+        + (N - 1)
+        + if centis.is_some() { 3 } else { 0 };
+    let mut out = String::with_capacity(capacity);
+    for (index, text) in digits.into_iter().enumerate() {
+        if index != 0 {
+            out.push(':');
+        }
+        let width = if index == 0 { first_width } else { 2 };
+        if text.len() < width {
+            out.push('0');
+        }
+        out.push_str(text);
+    }
+    if let Some(centis) = centis {
+        out.push('.');
+        out.push(char::from(b'0' + (centis / 10) as u8));
+        out.push(char::from(b'0' + (centis % 10) as u8));
+    }
+    out
+}
+
 #[must_use]
 pub fn seconds_to_hhmmss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{:02}:{:02}:{seconds:02}", minutes / 60, minutes % 60)
+    format_clock([minutes / 60, minutes % 60, seconds], 2, None)
 }
 
 #[must_use]
 pub fn seconds_to_mss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{minutes:01}:{seconds:02}")
+    format_clock([minutes, seconds], 1, None)
 }
 
 #[must_use]
 pub fn seconds_to_mmss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{minutes:02}:{seconds:02}")
+    format_clock([minutes, seconds], 2, None)
 }
 
 #[must_use]
 pub fn seconds_to_mss_ms_ms(seconds: f64) -> String {
     let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
-    format!("{minutes:01}:{seconds:02}.{centis:02}")
+    format_clock([minutes, seconds], 1, Some(centis))
 }
 
 #[must_use]
 pub fn seconds_to_mmss_ms_ms(seconds: f64) -> String {
     let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
-    format!("{minutes:02}:{seconds:02}.{centis:02}")
+    format_clock([minutes, seconds], 2, Some(centis))
 }
 
 #[must_use]
@@ -246,7 +284,12 @@ pub fn format_number_and_suffix(value: i64) -> String {
             _ => "th",
         }
     };
-    format!("{value}{suffix}")
+    let mut buffer = itoa::Buffer::new();
+    let digits = buffer.format(value);
+    let mut out = String::with_capacity(digits.len() + suffix.len());
+    out.push_str(digits);
+    out.push_str(suffix);
+    out
 }
 
 pub fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
@@ -3358,3 +3401,7 @@ mod tests {
         assert_eq!(rate, 1.5);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/text_format.rs"]
+mod text_perf;

@@ -1743,6 +1743,7 @@ dependencies = [
  "deadsync-simfile",
  "glam",
  "image",
+ "itoa",
  "log",
  "memchr",
  "mlua",

@@ -24,6 +24,7 @@ deadlib-video = { path = "../deadlib-video" }
 deadsync-rules = { path = "../deadsync-rules" }
 chrono = "0.4.45"
 image = "0.25.10"
+itoa = "1.0.18"
 log = "0.4.34"
 memchr = "2.8.3"
 mlua = { version = "0.12.2", features = ["lua51", "vendored", "send"] }
