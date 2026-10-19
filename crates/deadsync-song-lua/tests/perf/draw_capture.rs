@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "draw_convert.rs"]
+mod conversion;
+
 #[path = "../../../../tests/support/perf.rs"]
 #[expect(
     dead_code,
