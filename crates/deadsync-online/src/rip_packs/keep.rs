@@ -5,7 +5,10 @@
 //! the history before anything is downloaded, so a pack whose songs all fail
 //! has still used it and the next pack never takes it again. Then the songs
 //! come one at a time, in card order, each its folder's own counted request
-//! with the pack's `Pack.ini` riding along. Every song is null-synced as it
+//! with the pack's `Pack.ini` riding along -- and one more for a song whose
+//! simfile takes its banner from its pack (`../banner.png`), which brings
+//! that image into the folder, since on its own the folder would show none.
+//! Every song is null-synced as it
 //! lands: one whose pack declares ITG, or declares nothing (taken as ITG),
 //! has its offsets moved 9 ms, so the booster plays right whatever the
 //! machine's `Pack.ini` settings, as the singles group does.
@@ -434,8 +437,10 @@ impl Fill {
     }
 
     /// The song's folder into the scratch folder, `.oldsync` backups left
-    /// out and its pack's `Pack.ini` read in the same request. Returns the
-    /// folder's written name and the `Pack.ini`, if it could be read.
+    /// out and its pack's `Pack.ini` read in the same request, then the
+    /// banner it borrows from its pack, if its simfile takes one from there
+    /// (`pack_archive::fetch_borrowed_banner`). Returns the folder's written
+    /// name and the `Pack.ini`, if it could be read.
     ///
     /// A pack replaced on the site since its index was read has its index
     /// fetched again, once -- a counted request -- and the song looked for in
@@ -488,7 +493,16 @@ impl Fill {
                     self.fresh.insert(pack_id, Arc::clone(&cache));
                     folder = find_folder(&cache.index, &name)?;
                 }
-                fetched => return fetched.map_err(|error| error.to_string()),
+                Ok((written, pack_ini)) => {
+                    pack_archive::fetch_borrowed_banner(
+                        &self.agent,
+                        &cache.index,
+                        folder,
+                        &self.scratch.join(&written),
+                    );
+                    return Ok((written, pack_ini));
+                }
+                Err(error) => return Err(error.to_string()),
             }
         }
     }
