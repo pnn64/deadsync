@@ -506,12 +506,18 @@ impl CompiledSongScene {
     }
     fn render(&mut self) {
         let multiplayer = self.joined.iter().all(|v| *v);
+        let entities = &self.entities;
+        let mut cameras = [None; 2];
         for binding in &self.bindings {
-            let camera = self
-                .entities
-                .iter()
-                .find(|e| e.camera == Some(binding.player))
-                .unwrap();
+            // Component membership is fixed throughout this render. Retain
+            // the first camera per visited player, including duplicate cameras.
+            let (camera, camera_rotation) = *cameras[binding.player].get_or_insert_with(|| {
+                let camera = entities
+                    .iter()
+                    .find(|e| e.camera == Some(binding.player))
+                    .unwrap();
+                (camera, camera.rotation.map(Rotation::new))
+            });
             let e = &self.entities[binding.entity];
             let offset = if multiplayer {
                 if binding.player == 0 {
@@ -534,13 +540,18 @@ impl CompiledSongScene {
             };
             let state = &mut self.states[binding.actor];
             if let Some(mesh) = &e.mesh {
+                let entity_rotation = e.rotation.map(Rotation::new);
                 for (dest, source) in self.points.iter_mut().zip(&mesh.points) {
                     *dest = *source;
-                    rotate(dest, e.rotation, false);
+                    if let Some(rotation) = entity_rotation {
+                        rotation.apply(dest, false);
+                    }
                     for a in 0..3 {
                         dest[a] += e.position[a] - camera.position[a];
                     }
-                    rotate(dest, camera.rotation, true);
+                    if let Some(rotation) = camera_rotation {
+                        rotation.apply(dest, true);
+                    }
                     let z = dest[2];
                     if z <= 0.0 {
                         *dest = [f64::NAN; 3];
@@ -569,7 +580,9 @@ impl CompiledSongScene {
                 }
             } else if let Some(ball) = e.ball {
                 let mut p = std::array::from_fn(|a| e.position[a] - camera.position[a]);
-                rotate(&mut p, camera.rotation, true);
+                if let Some(rotation) = camera_rotation {
+                    rotation.apply(&mut p, true);
+                }
                 let z = p[2];
                 if z <= 0.0 {
                     state.visible = false;
@@ -642,25 +655,41 @@ fn inside(p: V3, c: V3, h: V3) -> bool {
     (p[0] - c[0]).abs() < h[0] && (p[1] - c[1]).abs() < h[1] && (p[2] - c[2]).abs() < h[2]
 }
 fn rotate(v: &mut V3, rotation: Option<[f64; 2]>, inverse: bool) {
-    let Some([pitch, yaw]) = rotation else { return };
-    let sp = pitch.sin();
-    let cp = pitch.cos();
-    let sy = yaw.sin();
-    let cy = yaw.cos();
-    let [x, y, z] = *v;
-    *v = if inverse {
-        [
-            cy * x - sy * z,
-            sp * sy * x + cp * y + sp * cy * z,
-            cp * sy * x - sp * y + cp * cy * z,
-        ]
-    } else {
-        [
-            cy * x + sp * sy * y + cp * sy * z,
-            cp * y - sp * z,
-            -sy * x + sp * cy * y + cp * cy * z,
-        ]
-    };
+    if let Some(angles) = rotation {
+        Rotation::new(angles).apply(v, inverse);
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Rotation([f64; 4]);
+
+impl Rotation {
+    fn new([pitch, yaw]: [f64; 2]) -> Self {
+        Self([pitch.sin(), pitch.cos(), yaw.sin(), yaw.cos()])
+    }
+
+    fn apply(self, v: &mut V3, inverse: bool) {
+        let [sp, cp, sy, cy] = self.0;
+        let [x, y, z] = *v;
+        *v = if inverse {
+            [
+                cy * x - sy * z,
+                sp * sy * x + cp * y + sp * cy * z,
+                cp * sy * x - sp * y + cp * cy * z,
+            ]
+        } else {
+            [
+                cy * x + sp * sy * y + cp * sy * z,
+                cp * y - sp * z,
+                -sy * x + sp * cy * y + cp * cy * z,
+            ]
+        };
+    }
+}
+
+#[cfg(test)]
+mod perf {
+    include!("../../tests/perf/compiled_render.rs");
 }
 
 #[cfg(test)]

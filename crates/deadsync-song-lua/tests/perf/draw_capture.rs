@@ -5,7 +5,7 @@ use super::*;
     dead_code,
     reason = "this benchmark uses only scoped allocation measurement"
 )]
-mod allocations;
+pub(crate) mod allocations;
 #[path = "draw_capture/baseline.rs"]
 #[expect(
     dead_code,
@@ -440,7 +440,7 @@ fn finish_target(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 }
 
 #[cfg(windows)]
-fn cycles() -> u64 {
+pub(crate) fn cycles() -> u64 {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentThread() -> *mut std::ffi::c_void;
@@ -457,11 +457,7 @@ fn cycles() -> u64 {
 }
 
 #[cfg(windows)]
-#[test]
-#[ignore = "release performance measurement; run alone with --nocapture"]
-fn benchmark_draw_capture() {
-    use std::{hint::black_box, time::Instant};
-
+pub(crate) fn pin_cpu2() -> impl Drop {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentThread() -> *mut std::ffi::c_void;
@@ -480,7 +476,15 @@ fn benchmark_draw_capture() {
     // unavailable processor rather than accepting an invalid mask.
     let previous = unsafe { SetThreadAffinityMask(GetCurrentThread(), 1 << 2) };
     assert_ne!(previous, 0, "benchmark requires logical CPU 2");
-    let _affinity = Affinity(previous);
+    Affinity(previous)
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "release performance measurement; run alone with --nocapture"]
+fn benchmark_draw_capture() {
+    use std::{hint::black_box, time::Instant};
+    let _affinity = pin_cpu2();
     let reverse = std::env::var_os("DEADSYNC_PERF_REVERSE").is_some();
     for (name, owners, leaves, wrappers, frames, properties) in [
         ("capture_shallow", 1, 4, 0, 32, false),

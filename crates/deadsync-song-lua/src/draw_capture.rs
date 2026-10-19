@@ -687,6 +687,6 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
 }
 
 #[cfg(test)]
-mod perf {
+pub(crate) mod perf {
     include!("../tests/perf/draw_capture.rs");
 }
