@@ -18,10 +18,13 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
+    parser.add_argument("--baseline-commit", help="require this compiled baseline identity")
     args = parser.parse_args()
     assert args.rounds > 0
     binary = args.binary.resolve()
     records = []
+    baseline = None
+    workloads = None
     for index in range(args.rounds):
         env = os.environ.copy()
         env.pop("DEADSYNC_PERF_REVERSE", None)
@@ -37,9 +40,21 @@ def main():
         for line in run.stdout.splitlines():
             if "DRAW_CAPTURE_METRIC " in line:
                 value = json.loads(line.split("DRAW_CAPTURE_METRIC ", 1)[1])
+                identity = value.get("baseline_commit", "3d8094d9e")
+                if baseline is None:
+                    baseline = identity
+                assert identity == baseline
+                if args.baseline_commit:
+                    assert identity == args.baseline_commit, (identity, args.baseline_commit)
                 value.update(round=index + 1, order="after-first" if index % 2 else "before-first")
                 current.append(value)
-        assert len(current) == 8, run.stdout
+        names = {row["workload"] for row in current}
+        assert names and len(current) == 2 * len(names), run.stdout
+        assert all({row["variant"] for row in current if row["workload"] == name} == {"before", "after"} for name in names)
+        if workloads is None:
+            workloads = names
+        assert names == workloads
+        assert all(len(row["samples"]) == 9 for row in current)
         records.extend(current)
         print(f"Completed round {index + 1}/{args.rounds}", flush=True)
     summary = []
@@ -58,9 +73,12 @@ def main():
     source_paths = ["crates/deadsync-song-lua/src/draw_capture.rs",
                     "crates/deadsync-song-lua/tests/perf/draw_capture.rs",
                     "crates/deadsync-song-lua/tests/perf/draw_capture/baseline.rs",
+                    "crates/deadsync-song-lua/tests/perf/draw_capture/state_baseline.rs",
+                    "crates/deadsync-song-lua/src/lua_util.rs",
+                    "crates/deadsync-song-lua/src/raw_vm.rs",
                     "tests/support/perf.rs", "Cargo.lock", "Cargo.toml",
                     "scripts/benchmark_song_lua_draw_capture.py"]
-    report = dict(baseline_commit="3d8094d9e", worktree_head=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+    report = dict(baseline_commit=baseline, worktree_head=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                   executable_sha256=sha256(binary), source_sha256={path: sha256(root / path) for path in source_paths},
                   rustc=subprocess.check_output(["rustc", "-Vv"], text=True), system=platform.platform(),
                   processor=platform.processor(), logical_processors=os.cpu_count(), logical_cpu=2,

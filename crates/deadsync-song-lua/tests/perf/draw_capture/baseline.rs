@@ -1,5 +1,5 @@
+// Frozen from add695545; shared payload aliases and state-reader/test adapters only.
 //! Bake custom ActorFrame draw stacks without retaining mutable Lua tables.
-// Frozen from 3d8094d9e; only the test adapter below was added.
 
 use std::sync::Arc;
 
@@ -7,9 +7,10 @@ use mlua::{Function, Lua, Table};
 use rustc_hash::FxHashMap;
 
 use crate::lua_util::{
-    SongLuaOverlayCompileActor, actor_overlay_initial_state, call_actor_function,
+    SongLuaOverlayCompileActor, call_actor_function,
     drain_actor_command_queue, read_actor_multi_vertex_mesh,
 };
+use crate::lua_util::draw_state_baseline::initial_state as actor_overlay_initial_state;
 use crate::{
     SongLuaOverlayMeshVertex, SongLuaOverlayState, SongLuaTrackedActor, SongLuaTrackedActorTarget,
 };
@@ -176,8 +177,12 @@ fn scoped_context(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<Opt
     {
         return Ok(None);
     }
-    let mut parents = prior.parents.to_vec();
-    if let Some(wrappers) = actor.raw_get::<Option<Table>>("__songlua_wrappers")? {
+    let wrappers = actor.raw_get::<Option<Table>>("__songlua_wrappers")?;
+    let mut parents = Vec::with_capacity(
+        prior.parents.len() + wrappers.as_ref().map_or(0, Table::raw_len) + 1,
+    );
+    parents.extend_from_slice(&prior.parents);
+    if let Some(wrappers) = wrappers {
         for index in (1..=wrappers.raw_len()).rev() {
             let wrapper = state(lua, &wrappers.raw_get::<Table>(index)?)?;
             if !wrapper.draw_visible()
@@ -247,12 +252,12 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 }
             } else {
                 let kind = actor
-                    .get::<Option<String>>("__songlua_actor_type")?
-                    .unwrap_or_default();
+                    .get::<Option<crate::lua_util::LuaFieldText<32>>>("__songlua_actor_type")?;
+                let kind = kind.as_ref().map_or("", |kind| kind.as_str());
                 let external = actor
-                    .raw_get::<Option<String>>("__songlua_top_screen_child_name")?
+                    .raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_top_screen_child_name")?
                     .is_some()
-                    || actor.raw_get::<Option<String>>("__songlua_player_child_name")?.is_some();
+                    || actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_player_child_name")?.is_some();
                 // Actor::DrawPrimitives is empty. Logic actors still receive
                 // explicit Draw calls, but submit no geometry or draw payload.
                 if kind.eq_ignore_ascii_case("Actor") {
@@ -299,15 +304,14 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         .last()
                         .expect("draw context includes the actor");
                     // The leaf is built separately; wrappers remain in its caller stack.
-                    let mut parents = context.parents.to_vec();
-                    parents.pop();
+                    let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
                     push(
                         lua,
                         RawOp::Draw(
                             pointer,
                             local,
                             Context {
-                                parents: parents.into(),
+                                parents,
                                 ..context
                             },
                             vertices,
@@ -444,7 +448,10 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
         .globals()
         .raw_get::<Option<Table>>("__songlua_top_screen")?;
     let screen = screen.as_ref().map(|actor| state(lua, actor)).transpose()?;
-    let parents = screen.into_iter().collect::<Vec<_>>().into();
+    let parents = screen.as_ref().map_or_else(
+        || Arc::from([]),
+        |state| Arc::from(std::slice::from_ref(state)),
+    );
     let result = visit(
         lua,
         root,
@@ -554,22 +561,18 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
                 frame_owners.push(owner);
             }
         }
-        let mut by_owner = frame_owners
-            .into_iter()
-            .map(|pointer| {
-                let owner = overlay_index(pointer)?;
-                Ok((
-                    owner,
-                    DrawFrame {
-                        second: raw.second,
-                        immediate: raw.immediate,
-                        owners: vec![owner],
-                        owner_ends: Vec::new(),
-                        ops: Vec::new(),
-                    },
-                ))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
+        let start = frames.len();
+        for pointer in frame_owners {
+            let owner = overlay_index(pointer)?;
+            frames.push((owner, DrawFrame {
+                second: raw.second,
+                immediate: raw.immediate,
+                owners: vec![owner],
+                owner_ends: Vec::new(),
+                ops: Vec::new(),
+            }));
+        }
+        let by_owner = &mut frames[start..];
         for call in raw.calls {
             let owner = overlay_index(call.owner)?;
             let op = match call.op {
@@ -603,14 +606,17 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
                 return Err("custom draw lost its callback owner".to_owned());
             }
         }
-        for (_, frame) in &mut by_owner {
+        for (_, frame) in by_owner {
             frame.owner_ends.push(frame.ops.len());
         }
-        frames.extend(by_owner);
     }
     Ok(frames)
 }
 
 pub(super) fn finish_for_test(lua: &Lua, sources: &FxHashMap<usize, DrawSource>) -> Result<Vec<(usize, DrawFrame)>, String> {
     convert(lua.remove_app_data::<Capture>().unwrap(), sources)
+}
+
+pub(super) fn state_for_test(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
+    state(lua, actor)
 }

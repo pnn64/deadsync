@@ -182,7 +182,16 @@ fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
     if crate::live::active(lua) {
         crate::live::read_state(lua, actor)
     } else {
-        actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+        // An uninitialized Sprite may resolve Texture/AFT through authored
+        // __index code before later scalar fields are read. Keep those reads
+        // sequential so mutations and errors from that lookup stay observable.
+        let sprite = matches!(actor.raw_get::<mlua::Value>("__songlua_actor_type")?,
+            mlua::Value::String(kind) if kind.as_bytes().eq_ignore_ascii_case(b"Sprite"));
+        if sprite && actor.raw_get::<mlua::Value>("__songlua_state_sprite_texture")?.is_nil() {
+            actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+        } else {
+            crate::lua_util::actor_overlay_state_batched(lua, actor).map_err(mlua::Error::external)
+        }
     }
 }
 
@@ -599,14 +608,17 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
             }
         }
         let start = frames.len();
+        // With one owner every valid call belongs to that frame. Quiet tails
+        // reserve nothing; multiple owners retain their independent growth.
+        let command_capacity = if frame_owners.len() == 1 { raw.calls.len() } else { 0 };
         for pointer in frame_owners {
             let owner = overlay_index(pointer)?;
             frames.push((owner, DrawFrame {
                 second: raw.second,
                 immediate: raw.immediate,
                 owners: vec![owner],
-                owner_ends: Vec::new(),
-                ops: Vec::new(),
+                owner_ends: Vec::with_capacity(1),
+                ops: Vec::with_capacity(command_capacity),
             }));
         }
         let by_owner = &mut frames[start..];

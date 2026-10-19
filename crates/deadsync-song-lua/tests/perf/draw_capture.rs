@@ -13,7 +13,7 @@ mod allocations;
 )]
 mod baseline;
 
-// The baseline is frozen from 3d8094d9e. It owns independent capture storage
+// The baseline is frozen from add695545. It owns independent capture storage
 // and runs the same callbacks, then compares every emitted frame and operation.
 fn actor(lua: &Lua, kind: &str, index: usize) -> Table {
     let actor = lua.create_table().unwrap();
@@ -127,7 +127,14 @@ fn finish(
 
 #[test]
 fn captured_frames_match_frozen_baseline() {
-    for (owners, leaves, wrappers) in [(1, 1, 0), (3, 12, 4), (8, 3, 1), (9, 3, 1), (32, 2, 1)] {
+    for (owners, leaves, wrappers) in [
+        (1, 1, 0),
+        (1, 128, 0),
+        (3, 12, 4),
+        (8, 3, 1),
+        (9, 3, 1),
+        (32, 2, 1),
+    ] {
         let variants = [false, true].map(|current| {
             let (lua, root, sources) = fixture(current, owners, leaves, wrappers);
             capture(current, &lua, &root, 3);
@@ -147,6 +154,56 @@ fn captured_frames_match_frozen_baseline() {
             "owners={owners}, leaves={leaves}, wrappers={wrappers}"
         );
         assert!(variants[1].iter().any(|(_, frame)| !frame.ops.is_empty()));
+    }
+}
+
+#[test]
+fn draw_state_preserves_sprite_lookup_mutations_and_errors() {
+    for script in [
+        "return {__songlua_actor_type='Quad', __songlua_state_x='1.25', __songlua_visible=0}",
+        "return {__songlua_actor_type='Model', __songlua_state_x=2.5}",
+        r#"local a={__songlua_actor_type='sPrItE'}
+            return setmetatable(a, {__index=function(_, key)
+                events[#events+1]=key
+                if key=='Texture' then a.__songlua_state_x=23; a.__songlua_visible=false; return 'sprite.png' end
+            end})"#,
+        r#"local a={__songlua_actor_type='Sprite'}
+            return setmetatable(a, {__index=function(_, key)
+                events[#events+1]=key
+                if key=='__songlua_aft_capture_name' then a.__songlua_state_z=31; return 'capture' end
+            end})"#,
+        r#"return setmetatable({__songlua_actor_type='Sprite'}, {__index=function(_, key)
+                events[#events+1]=key; error('authored lookup failed') end})"#,
+        r#"return setmetatable({__songlua_actor_type='Sprite', __songlua_state_sprite_texture=true},
+            {__index=function(_, key) events[#events+1]=key; error('unexpected lookup') end})"#,
+        "return {__songlua_actor_type='Quad', __songlua_state_x={}}",
+    ] {
+        let outputs = [false, true].map(|current| {
+            let lua = Lua::new();
+            lua.globals()
+                .raw_set("events", lua.create_table().unwrap())
+                .unwrap();
+            let actor = lua
+                .load(script)
+                .set_name("state-reader-control")
+                .eval::<Table>()
+                .unwrap();
+            let result = if current {
+                state(&lua, &actor)
+            } else {
+                baseline::state_for_test(&lua, &actor)
+            }
+            .map_err(|error| error.to_string());
+            let events = lua
+                .globals()
+                .get::<Table>("events")
+                .unwrap()
+                .sequence_values::<String>()
+                .collect::<mlua::Result<Vec<_>>>()
+                .unwrap();
+            (result, events)
+        });
+        assert_eq!(outputs[0], outputs[1], "{script}");
     }
 }
 
@@ -301,7 +358,9 @@ fn benchmark_draw_capture() {
     for (name, owners, leaves, wrappers, frames) in [
         ("capture_shallow", 1, 4, 0, 32),
         ("capture_wrapped", 3, 12, 4, 12),
+        ("capture_dense", 1, 128, 0, 8),
         ("convert_one_owner", 1, 4, 0, 64),
+        ("convert_dense_owner", 1, 128, 0, 32),
         ("convert_many_owners", 64, 2, 0, 32),
     ] {
         for current in if reverse {
@@ -336,7 +395,8 @@ fn benchmark_draw_capture() {
             println!(
                 "DRAW_CAPTURE_METRIC {}",
                 serde_json::json!({"workload":name,
-                "variant":if current {"after"} else {"before"},"samples":samples})
+                "variant":if current {"after"} else {"before"},"samples":samples,
+                "baseline_commit":"add695545"})
             );
         }
     }

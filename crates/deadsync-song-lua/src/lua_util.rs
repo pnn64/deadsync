@@ -19459,6 +19459,11 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
 
 struct ActorScalarKeys(Table);
 
+#[cfg(test)]
+pub(crate) mod draw_state_baseline {
+    include!("../tests/perf/draw_capture/state_baseline.rs");
+}
+
 fn actor_scalar_keys(lua: &Lua) -> mlua::Result<Table> {
     if let Some(keys) = lua.app_data_ref::<ActorScalarKeys>() {
         return Ok(keys.0.clone());
@@ -19523,6 +19528,24 @@ pub(crate) fn actor_overlay_state_batched(
 #[cfg(test)]
 mod actor_state_read_tests {
     use super::*;
+
+    #[test]
+    fn state_class_and_texture_reads_match_frozen_decoder() {
+        let lua = Lua::new();
+        for field in ["__songlua_actor_type", "Texture"] {
+            for value in [Value::Nil, Value::String(lua.create_string("Model").unwrap()),
+                Value::String(lua.create_string("Sprite").unwrap()),
+                Value::String(lua.create_string("x".repeat(200)).unwrap()),
+                Value::String(lua.create_string([0xff, 0xfe]).unwrap()),
+                Value::Integer(42), Value::Number(1.5), Value::Boolean(false),
+                Value::Table(lua.create_table().unwrap())] {
+                let actor = lua.create_table().unwrap();
+                actor.raw_set("__songlua_actor_type", "Sprite").unwrap();
+                actor.raw_set(field, value).unwrap();
+                assert_eq!(actor_overlay_initial_state(&actor), draw_state_baseline::initial_state(&actor));
+            }
+        }
+    }
 
     #[test]
     fn compile_update_slots_preserve_alias_visits_and_plan_rebuilds() {
@@ -19659,9 +19682,9 @@ fn read_actor_overlay_state(
     let mut state = SongLuaOverlayState::default();
     // Model::Model enables the Z buffer and texture wrapping before Lua overrides.
     state.depth_test = actor
-        .raw_get::<Option<String>>("__songlua_actor_type")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")
         .map_err(|err| err.to_string())?
-        .is_some_and(|kind| kind.eq_ignore_ascii_case("Model"));
+        .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Model"));
     state.texture_wrapping = state.depth_test;
     state.cull_mode = if state.depth_test {
         deadlib_render_core::CullMode::Back
@@ -19692,11 +19715,11 @@ fn read_actor_overlay_state(
         Some(value) => value,
         None => {
             !actor
-                .raw_get::<Option<String>>("__songlua_actor_type")
+                .raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")
                 .map_err(|err| err.to_string())?
-                .is_some_and(|kind| kind.eq_ignore_ascii_case("Sprite"))
+                .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Sprite"))
                 || actor
-                    .get::<Option<String>>("Texture")
+                    .get::<Option<LuaFieldText<64>>>("Texture")
                     .map_err(|err| err.to_string())?
                     .is_some()
                 || actor_aft_capture_name(actor)

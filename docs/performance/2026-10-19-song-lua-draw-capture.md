@@ -65,6 +65,9 @@ changes in this pass.
 
 ## Reproduction
 
+The recorded candidate is commit `add695545`. Check out that revision to use
+the frozen baseline and workload set associated with these measurements.
+
 ```powershell
 cargo test -p deadsync-song-lua --lib --release --config profile.release.lto=false --no-run --message-format=json
 ```
