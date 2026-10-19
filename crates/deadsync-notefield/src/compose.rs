@@ -334,6 +334,13 @@ impl NoteDrawRange {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct CompiledZoomBlend<'a> {
+    next: deadsync_gameplay::SongLuaPositionSpline<'a>,
+    beats: [f32; 2],
+    fraction: f32,
+}
+
 /// Purely prepared composition state consumed by actor emission.
 pub struct PreparedNotefield<'a, S> {
     pub frame_plan: NotefieldFramePlan,
@@ -351,6 +358,7 @@ pub struct PreparedNotefield<'a, S> {
     pub column_x_offsets: [f32; MAX_COLS],
     pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
     pub column_zoom_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub(crate) column_zoom_blends: [Option<CompiledZoomBlend<'a>>; MAX_COLS],
     // Resolved once for each lane by prepare_notefield, valid for this frame.
     pub(crate) column_spline_receptors: [[f32; 3]; MAX_COLS],
     pub spline_origin_y: f32,
@@ -405,10 +413,36 @@ impl<S> PreparedNotefield<'_, S> {
     pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
         let spline = self.column_zoom_splines[col];
         if spline.enabled {
-            spline.sample(self.current_beat, beat).0[0] + if spline.absolute { 0.0 } else { base }
+            let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+                // Evaluate each captured spline with its own song clock before
+                // interpolating. Mixing frozen controls with the render beat
+                // creates a scale sawtooth on the first incoming note.
+                let pinned = beat == self.current_beat;
+                let a = spline.sample(blend.beats[0], if pinned { blend.beats[0] } else { beat }).0[0];
+                let b = blend.next.sample(blend.beats[1], if pinned { blend.beats[1] } else { beat }).0[0];
+                a + (b - a) * blend.fraction
+            } else {
+                spline.sample(self.current_beat, beat).0[0]
+            };
+            zoom + if spline.absolute { 0.0 } else { base }
         } else {
             base
         }
+    }
+
+    pub(crate) fn spline_receptor_zoom(&self, col: usize, base: f32) -> f32 {
+        let spline = self.column_zoom_splines[col];
+        if !spline.enabled {
+            return base;
+        }
+        let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+            let a = spline.receptor(blend.beats[0])[0];
+            let b = blend.next.receptor(blend.beats[1])[0];
+            a + (b - a) * blend.fraction
+        } else {
+            spline.receptor(self.current_beat)[0]
+        };
+        zoom + if spline.absolute { 0.0 } else { base }
     }
 
     pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
@@ -463,11 +497,15 @@ pub fn prepare_notefield<'a, S>(
         current_time_s,
     );
     let mut column_zoom_splines = [deadsync_gameplay::SongLuaPositionSpline::default(); MAX_COLS];
+    let mut column_zoom_blends = [None; MAX_COLS];
     for track in request.song_lua.column_splines {
         if track.column >= frame_plan.num_cols {
             continue;
         }
-        if let Some(frame) = track.at_second(current_time_s) {
+        let index = track.frames.partition_point(|frame| {
+            frame.second + track.time_offset <= current_time_s + 1e-5
+        });
+        if let Some(frame) = index.checked_sub(1).map(|index| &track.frames[index]) {
             if let Some(position) = &frame.position {
                 column_position_splines[track.column] = position.view();
             }
@@ -475,6 +513,30 @@ pub fn prepare_notefield<'a, S>(
                 .zoom
                 .as_ref()
                 .map_or_else(Default::default, |zoom| zoom.view());
+            if let (Some(zoom), Some(next), Some(timing)) = (
+                frame.zoom.as_ref(), track.frames.get(index), request.chart.timing,
+            ) && let Some(next_zoom) = &next.zoom {
+                let span = next.second - frame.second;
+                // Only adjacent reference samples describe continuous motion.
+                // Sparse constant intervals and enable/disable boundaries keep
+                // their authored step instead of anticipating a later change.
+                if span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001
+                    && zoom.beats_per_t == next_zoom.beats_per_t
+                    && zoom.receptor_t == next_zoom.receptor_t
+                    && zoom.subtract_song_beat == next_zoom.subtract_song_beat
+                    && zoom.looping == next_zoom.looping
+                    && zoom.coefficients.len() == next_zoom.coefficients.len()
+                {
+                    column_zoom_blends[track.column] = Some(CompiledZoomBlend {
+                        next: next_zoom.view(),
+                        beats: [
+                            timing.get_beat_for_time(frame.second + track.time_offset),
+                            timing.get_beat_for_time(next.second + track.time_offset),
+                        ],
+                        fraction: ((current_time_s - track.time_offset - frame.second) / span).clamp(0.0, 1.0),
+                    });
+                }
+            }
         }
     }
     let mut column_spline_receptors = [[0.0; 3]; MAX_COLS];
@@ -544,6 +606,7 @@ pub fn prepare_notefield<'a, S>(
         column_x_offsets,
         column_position_splines,
         column_zoom_splines,
+        column_zoom_blends,
         column_spline_receptors,
         spline_origin_y,
         column_zooms,

@@ -5056,8 +5056,65 @@ return Def.ActorFrame{
                     .iter()
                     .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
                     .collect();
+                let mut probes = vec![
+                    (112.0, Some(105.0), None),
+                    (115.0, Some(375.0), None),
+                    (123.0, Some(105.0), None),
+                ];
+                let timing = &state.gameplay.gameplay_chart(0).unwrap().timing;
+                let tracks = &state.gameplay.song_lua_visuals().column_splines[0];
+                let mut smallest_scale = (f32::INFINITY, 0.0f32, 0usize);
+                // Inspect real incoming notes at every compiled swap frame,
+                // rather than only the receptor at three steady-state beats.
+                for track in tracks {
+                    for frame in track.frames.iter() {
+                        let beat = timing.get_beat_for_time(frame.second + track.time_offset);
+                        if !(111.5..174.5).contains(&beat) { continue; }
+                        let Some(zoom) = &frame.zoom else { continue; };
+                        for (index, note) in state.chart_runtime.notes.iter().enumerate() {
+                            if note.column != track.column as usize
+                                || note.beat < beat || note.beat > beat + 2.0
+                                || !matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
+                            { continue; }
+                            let scale = zoom.view().sample(beat, note.beat).0[0];
+                            if scale < smallest_scale.0 { smallest_scale = (scale, beat, index); }
+                        }
+                    }
+                }
+                assert!(smallest_scale.0.is_finite(), "real incoming swap notes");
+                eprintln!("7th Gear incoming note {} at beat {}: spline scale {} at song beat {}",
+                    smallest_scale.2, state.chart_runtime.notes[smallest_scale.2].beat, smallest_scale.0, smallest_scale.1);
+                probes.push((smallest_scale.1, None, None));
+                for beat in [114.45, 114.52, 122.45, 122.52, 122.7, 130.5] {
+                    probes.push((beat, None, None));
+                }
+                let mut hold_directions = [false; 2];
+                for (index, note) in state.chart_runtime.notes.iter().enumerate() {
+                    let Some(hold) = &note.hold else { continue; };
+                    let beat = (note.beat + hold.end_beat) * 0.5;
+                    if !(112.0..174.0).contains(&beat) { continue; }
+                    let track = tracks.iter().find(|track| track.column as usize == note.column).unwrap();
+                    let frame = track.at_second(timing.get_time_for_beat_exact(beat)).unwrap();
+                    let Some(position) = &frame.position else { continue; };
+                    let derivative = position.view().sample(beat, beat).1;
+                    let reversed = usize::from(derivative[1] < 0.0);
+                    if derivative[1] == 0.0 || hold_directions[reversed] { continue; }
+                    hold_directions[reversed] = true;
+                    probes.push((beat, None, Some(index)));
+                }
+                assert_eq!(hold_directions, [true; 2], "actual holds in both spline directions");
+                probes.sort_by(|a, b| a.0.total_cmp(&b.0));
+                let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
+                let body_handles: Vec<_> = ns.hold_columns.iter().chain(&ns.roll_columns)
+                    .flat_map(|column| [column.body_active.as_ref(), column.body_inactive.as_ref()])
+                    .flatten().map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key())).collect();
+                #[cfg(target_os = "windows")]
+                let mut capture = std::env::var_os("DEADSYNC_SEVENTH_CAPTURE").map(|_| {
+                    SongLuaNotePixelCapture::new(&state, &metrics,
+                        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/seventh-swap-geometry"))
+                });
                 let mut tick = 0;
-                for (beat, expected_y) in [(112.0, 105.0), (115.0, 375.0), (123.0, 105.0)] {
+                for (beat, expected_y, active_hold) in probes {
                     let seconds = state
                         .gameplay
                         .gameplay_chart(0)
@@ -5070,6 +5127,37 @@ return Def.ActorFrame{
                         refresh_active_attack_masks(&mut state.gameplay, 1.0 / 120.0);
                     }
                     set_fixture_time(&mut state, seconds);
+                    state.clear_active_holds();
+                    // Recreate autoplay draw visibility after seeking: past
+                    // taps and completed holds must not leave clamped fragments.
+                    // Isolate the selected hold for its width assertion.
+                    for (index, note) in state.chart_runtime.notes.iter_mut().enumerate() {
+                        note.result = (note.beat < beat).then_some(Judgment {
+                            time_error_ms: 0.0,
+                            time_error_music_ns: 0,
+                            grade: JudgeGrade::Fantastic,
+                            window: Some(TimingWindow::W1),
+                            miss_because_held: false,
+                        });
+                        if let Some(hold) = &mut note.hold {
+                            hold.result = (hold.end_beat < beat
+                                || active_hold.is_some_and(|selected| selected != index))
+                                .then_some(deadsync_rules::note::HoldResult::Held);
+                        }
+                    }
+                    if let Some(index) = active_hold {
+                        let note = &state.chart_runtime.notes[index];
+                        let column = note.column;
+                        let hold = deadsync_gameplay::ActiveHold {
+                            note_index: index,
+                            start_time_ns: state.chart_runtime.note_time_cache_ns[index],
+                            end_time_ns: cached_hold_end_time_ns(state.chart_runtime.hold_end_time_cache_ns[index]).unwrap(),
+                            note_type: note.note_type,
+                            let_go: false, is_pressed: true, life: 1.0,
+                            last_update_time_ns: deadsync_core::song_time::song_time_ns_from_seconds(seconds),
+                        };
+                        state.set_active_hold(column, Some(hold));
+                    }
                     state.gameplay.refresh_live_notefield_options(124.0);
                     assert!(
                         (state.field_zoom_for_player(0) - 0.7).abs() < 0.001,
@@ -5089,8 +5177,17 @@ return Def.ActorFrame{
                         .map(|pass| pass.texture_handle).collect();
                     assert_eq!(targets.len(), 3, "actual AFT chain");
                     let mut receptors = 0;
+                    let mut wide_bodies = 0;
                     for pass in &frame.render_targets {
                         for op in &pass.ops {
+                            if let DrawOp::TexturedMesh(run) = op
+                                && body_handles.contains(&run.texture_handle)
+                            {
+                                let vertices = pass.tmesh_geometries[run.geometry as usize].vertices.as_ref();
+                                let min_x = vertices.iter().map(|v| v.pos[0]).fold(f32::INFINITY, f32::min);
+                                let max_x = vertices.iter().map(|v| v.pos[0]).fold(f32::NEG_INFINITY, f32::max);
+                                wide_bodies += usize::from(max_x - min_x > 10.0);
+                            }
                             let DrawOp::Sprite(run) = op else { continue };
                             if !receptor_handles.contains(&run.texture_handle) {
                                 continue;
@@ -5111,8 +5208,8 @@ return Def.ActorFrame{
                                 let y = 240.0 + (pixel_y - pass.viewport[1] as f32 / 2.0)
                                     * 854.0 / pass.viewport[0] as f32;
                                 assert!(
-                                    (y - expected_y).abs() < 0.05,
-                                    "beat {beat}: rendered receptor Y={y}, native={expected_y}; raw={:?}, camera={camera:?}",
+                                    expected_y.is_none_or(|expected_y| (y - expected_y).abs() < 0.05),
+                                    "beat {beat}: rendered receptor Y={y}, native={expected_y:?}; raw={:?}, camera={camera:?}",
                                     instance.center,
                                 );
                                 receptors += 1;
@@ -5120,9 +5217,16 @@ return Def.ActorFrame{
                         }
                     }
                     assert!(receptors >= 4, "all four receptors must reach the AFT pass");
+                    if active_hold.is_some() {
+                        assert!(wide_bodies > 0, "beat {beat}: actual active hold collapsed in AFT geometry");
+                    }
                     eprintln!(
-                        "7th Gear beat {beat}: {receptors} AFT receptor sprites at Y={expected_y}, Mini=60"
+                        "7th Gear beat {beat}: {receptors} AFT receptor sprites, {wide_bodies} full-width hold bodies, Mini=60"
                     );
+                    #[cfg(target_os = "windows")]
+                    if let Some(capture) = &mut capture {
+                        assert!(capture.capture(&mut state, &metrics, beat) > 0, "visible Cel note pixels");
+                    }
                 }
             },
         );

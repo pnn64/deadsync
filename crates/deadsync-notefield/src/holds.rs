@@ -84,6 +84,7 @@ pub(crate) struct HoldPathSample {
     pub arrow_px: f32,
     pub position_offset: [f32; 3],
     pub spline_derivative: [f32; 3],
+    pub spline_absolute: bool,
     pub spline_step: f32,
     pub cap_step: f32,
 }
@@ -466,14 +467,30 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
     let sample_top_cap = |y: f32| {
         let mut sample = sample_path(y);
         sample.position_offset = cap_head.position_offset;
+        if cap_head.spline_absolute {
+            sample.position_offset = [
+                cap_head.center_x + cap_head.position_offset[0] - sample.center_x,
+                request.y_head + cap_head.position_offset[1] - y,
+                cap_head.world_z + cap_head.position_offset[2] - sample.world_z,
+            ];
+        }
         sample.spline_derivative = cap_head.spline_derivative;
+        sample.spline_absolute = cap_head.spline_absolute;
         sample.cap_step = sample.spline_step;
         sample
     };
     let sample_bottom_cap = |y: f32| {
         let mut sample = sample_path(y);
         sample.position_offset = cap_tail.position_offset;
+        if cap_tail.spline_absolute {
+            sample.position_offset = [
+                cap_tail.center_x + cap_tail.position_offset[0] - sample.center_x,
+                request.y_tail + cap_tail.position_offset[1] - y,
+                cap_tail.world_z + cap_tail.position_offset[2] - sample.world_z,
+            ];
+        }
         sample.spline_derivative = cap_tail.spline_derivative;
+        sample.spline_absolute = cap_tail.spline_absolute;
         sample.cap_step = sample.spline_step;
         sample
     };
@@ -1920,7 +1937,11 @@ pub(crate) fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -
 
 // NoteDisplay's spline hold basis uses RageVec3Cross and RageAARotate.
 // Keep the native Y sign and the normalization of both quaternion products.
-fn hold_spline_axes(derivative: [f32; 3], rotation_y_deg: f32) -> ([f32; 3], [f32; 3]) {
+fn hold_spline_axes(
+    derivative: [f32; 3],
+    absolute: bool,
+    rotation_y_deg: f32,
+) -> ([f32; 3], [f32; 3]) {
     let normalize = |vector: [f32; 3]| {
         let square = vector.iter().map(|value| value * value).sum::<f32>();
         let scale = if square > 0.0 {
@@ -1931,7 +1952,10 @@ fn hold_spline_axes(derivative: [f32; 3], rotation_y_deg: f32) -> ([f32; 3], [f3
         vector.map(|value| value * scale)
     };
     let derivative = normalize(derivative);
-    let forward = normalize([derivative[0], derivative[1] + 1.0, derivative[2]]);
+    // NoteDisplay removes ArrowEffects' +Y direction in Position mode.
+    // Adding it to a reversed absolute tangent would cancel the strip's width.
+    let base_y = if absolute { 0.0 } else { 1.0 };
+    let forward = normalize([derivative[0], derivative[1] + base_y, derivative[2]]);
     let left = if forward[2].abs() > 0.9 {
         [forward[2], 0.0, -forward[0]]
     } else {
@@ -1979,10 +2003,14 @@ fn hold_path_row(
         y + sample.position_offset[1],
         sample.world_z + sample.position_offset[2],
     ];
-    if sample.spline_derivative == [0.0; 3] && sample.cap_step == 0.0 {
+    if !sample.spline_absolute && sample.spline_derivative == [0.0; 3] && sample.cap_step == 0.0 {
         return hold_strip_row_3d(center, half_width, rotation_y_deg, u0, u1, v, color);
     }
-    let (forward, left) = hold_spline_axes(sample.spline_derivative, rotation_y_deg);
+    let (forward, left) = hold_spline_axes(
+        sample.spline_derivative,
+        sample.spline_absolute,
+        rotation_y_deg,
+    );
     // Native cap rows after the first advance one field-local unit.
     for axis in 0..3 {
         center[axis] += forward[axis] * sample.cap_step;
@@ -2433,7 +2461,7 @@ mod tests {
     }
 
     #[test]
-    fn position_spline_hold_rows_match_native_orientation() {
+    fn offset_spline_hold_rows_match_native_orientation() {
         // NoteDisplay.cpp cross products and RageMath.cpp rotation/normalize,
         // evaluated by MSVC /O2. Includes Bunny's almost negative-Y tangent.
         let cases = [
@@ -2568,12 +2596,99 @@ mod tests {
         HoldPathSample {
             position_offset: [0.0; 3],
             spline_derivative: [0.0; 3],
+            spline_absolute: false,
             spline_step: 0.0,
             cap_step: 0.0,
             adjusted_travel: y,
             center_x: 32.0,
             world_z: y * 0.1,
             arrow_px: 64.0,
+        }
+    }
+
+    #[test]
+    fn absolute_spline_caps_stay_at_the_native_endpoint() {
+        let top = TestSlot::sprite("top");
+        let bottom = TestSlot::sprite("bottom");
+        for direction in [-1.0, 1.0] {
+            for zoom in [0.7, 1.0] {
+                let mut request = body_cap_request(None, Some(&top), Some(&bottom));
+                request.y_head = 100.0;
+                request.y_tail = 300.0;
+                request.draw_span = Some((100.0, 300.0));
+                request.use_legacy_sprites = false;
+                let mut draws = Vec::new();
+                compose_hold_body_caps(
+                    &mut draws, &mut HoldMeshScratch::with_columns(1), request,
+                    &|y| {
+                        let base = straight_path(y);
+                        HoldPathSample {
+                            position_offset: [
+                                300.0 - base.center_x,
+                                400.0 + direction * (y - 100.0) * zoom - y,
+                                12.0 - base.world_z,
+                            ],
+                            spline_derivative: [0.0, direction * 200.0, 0.0],
+                            spline_absolute: true,
+                            spline_step: zoom,
+                            ..base
+                        }
+                    },
+                    &test_source,
+                );
+                for (key, endpoint) in [("top", 400.0), ("bottom", 400.0 + direction * 200.0 * zoom)] {
+                    let vertices = draws.iter().find_map(|draw| match draw {
+                        FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key() == Some(key) => {
+                            Some(match &mesh.vertices {
+                                FlatMeshVertices::Shared(v) => v.as_ref(),
+                                FlatMeshVertices::Reusable(v) => v.as_slice(),
+                            })
+                        }
+                        _ => None,
+                    }).expect("absolute spline cap");
+                    // Native DrawHoldPart fixes cur_beat for a cap, clears
+                    // ae_pos.y in Position mode, then advances later rows by
+                    // one local unit along the spline tangent.
+                    for vertex in vertices {
+                        assert!((vertex.pos[2] - 12.0).abs() < 0.001);
+                        assert!((vertex.pos[1] - endpoint).abs() < 0.001
+                            || (vertex.pos[1] - endpoint - direction * zoom).abs() < 0.001,
+                            "{key} dir={direction}, zoom={zoom}: {:?}", vertex.pos);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn absolute_spline_holds_keep_width_and_cap_direction_through_reversals() {
+        // NoteDisplay NCSM_Position uses the normalized spline derivative
+        // alone. Both +/-Y paths must have full-width strips, with opposite
+        // winding and cap advance. A zero tangent has no defined width.
+        for (derivative, left, forward) in [
+            ([0.0, 216.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]),
+            ([0.0, -216.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0]),
+            ([0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]),
+            ([0.0; 3], [0.0; 3], [0.0; 3]),
+        ] {
+            for zoom in [0.4, 0.7, 1.0] {
+                let sample = HoldPathSample {
+                    spline_derivative: derivative,
+                    spline_absolute: true,
+                    ..straight_path(100.0)
+                };
+                for cap_step in [0.0, zoom] {
+                    let row = hold_path_row(
+                        HoldPathSample { cap_step, ..sample },
+                        100.0, 32.0 * zoom, 0.0, 0.0, 1.0, 0.5, [1.0; 4],
+                    );
+                    for axis in 0..3 {
+                        let center = [32.0, 100.0, 10.0][axis] + forward[axis] * cap_step;
+                        assert!((row[0].pos[axis] - center - left[axis] * 32.0 * zoom).abs() < 0.001);
+                        assert!((row[1].pos[axis] - center + left[axis] * 32.0 * zoom).abs() < 0.001);
+                    }
+                }
+            }
         }
     }
 
@@ -2882,6 +2997,7 @@ mod tests {
                     spline_derivative: [0.0; 3],
                     spline_step: 0.0,
                     cap_step: 0.0,
+                    spline_absolute: false,
                     adjusted_travel: if reverse { -y } else { y },
                     center_x: 32.0,
                     world_z: 0.0,
@@ -3008,6 +3124,7 @@ mod tests {
             spline_derivative: [0.0; 3],
             spline_step: 0.0,
             cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: y.mul_add(1.25, -3.0),
             center_x: y.mul_add(-0.5, 17.0),
             world_z: y * 0.125,
@@ -3043,6 +3160,7 @@ mod tests {
             spline_derivative: [0.0; 3],
             spline_step: 0.0,
             cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: 37.5,
             center_x: -12.0,
             world_z: 4.0,
@@ -3120,6 +3238,7 @@ mod tests {
             spline_derivative: [0.0; 3],
             spline_step: 0.0,
             cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: y,
             center_x: y.mul_add(0.125, 12.0),
             world_z: y * 0.25,
@@ -3181,6 +3300,7 @@ mod tests {
                         spline_derivative: [0.0; 3],
                         spline_step: 0.0,
                         cap_step: 0.0,
+                        spline_absolute: false,
                         adjusted_travel: travel,
                         center_x: crate::note_x_offset(
                             0,
@@ -3257,6 +3377,7 @@ mod tests {
             spline_derivative: [0.0; 3],
             spline_step: 0.0,
             cap_step: 0.0,
+            spline_absolute: false,
             adjusted_travel: y - 100.0,
             center_x: 200.0
                 + crate::drunk_x_extra(

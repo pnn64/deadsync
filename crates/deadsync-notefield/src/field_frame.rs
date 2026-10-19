@@ -728,6 +728,7 @@ fn compose_field_contents<S, F>(
                 world_z,
                 position_offset: offset,
                 spline_derivative: derivative,
+                spline_absolute: position_splines[local_col].absolute,
                 spline_step: if position_splines[local_col].enabled {
                     field_zoom
                 } else {

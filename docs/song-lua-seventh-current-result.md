@@ -1,5 +1,60 @@
 # 7th Gear: compiled playback (0.5.1872)
 
+## Scroll-swap note and hold geometry
+
+Two remaining rendering errors were outside the earlier receptor-position
+checks. They affect the compiled path even when its spline data is correct:
+
+- Zoom controls were captured at 60 Hz but evaluated against the current
+  rendering beat. That mixed two clocks: a note's scale could fall on one
+  render frame, then jump back when the next captured controls arrived.
+  Compiled zoom playback now evaluates each adjacent reference with its own
+  song beat and interpolates the resulting scale. Held heads and receptors
+  use their corresponding reference beats too. Sparse intervals and spline
+  enable/disable boundaries retain their authored steps. Position splines
+  keep their existing direction-swap boundaries.
+- Hold cross-sections always added ArrowEffects' +Y direction to the normalized
+  spline tangent. ITGmania's `NoteDisplay.cpp` does this for Offset mode, but
+  removes that contribution for Position mode. On a straight reversed absolute
+  path the two directions cancelled, collapsing the body and cap widths.
+  Hold samples now retain the spline mode and use the native basis in both
+  directions, including the cap's forward step. Absolute caps also discard
+  their extra screen-Y offset: native `DrawHoldPart` fixes the cap beat and
+  clears ArrowEffects Y before advancing along the tangent.
+
+The clock regression models native linear spline evaluation
+`z(t,b) = 1+t+(b-t) = 1+b`. The previous renderer fails at the first 240 Hz
+intermediate frame (1.9958334 instead of the constant scale 2), reproducing the
+alternating-frame scale error. It now checks stable incoming-note size,
+smooth pinned-head/receptor size, and sparse/disabled boundaries.
+The native CubicSpline oracle independently returns scale 2 at all four control
+clocks in [zoom-clock-native.json](../tests/fixtures/itgmania-song-lua-micro/zoom-clock-native.json).
+Its [request](../tests/fixtures/itgmania-song-lua-micro/zoom-clock-request.json) can be
+replayed with `itgmania-harness-rs actor-conformance`.
+
+Focused regressions also cover normal/reversed absolute hold geometry, cap
+positions and direction, and Offset mode's existing native reference vectors.
+Full field composition checks straight absolute holds and rolls
+under both ordinary scroll directions and several field zooms. The actual-chart
+test additionally searches incoming chart notes at every compiled reversal
+frame for the smallest scale and isolates active holds in both spline directions
+through the real three-AFT chain. Optional Vulkan GPU captures are enabled with:
+
+```powershell
+$env:DEADSYNC_SEVENTH_CAPTURE = '1'
+cargo test --locked -p deadsync-shell --lib seventh_saved_mini_reaches_aft_receptors -- --ignored --nocapture
+```
+
+The eight focused spline tests and 43 hold tests pass (three tests belong to
+both filters). The M730/Mini60 actual-chart regression also passes all 12 GPU
+probes, with visible Cel notes, full-width active holds in both directions,
+and the expected receptor positions through the three-AFT chain. Preparation
+retains no Lua VM. `target/debug/deadsync.exe` was rebuilt successfully.
+No full fixture corpus was run. These are targeted clock and geometry checks,
+not a whole-song native pixel comparison.
+
+## Earlier profile Mini repair
+
 Production gameplay compiles song Lua during loading and releases the VM before
 playback. The preparation API no longer accepts a live-mode flag; normal entry,
 preload, and practice all use compiled data. Explicit live scenes remain a

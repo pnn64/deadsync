@@ -271,15 +271,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         };
         let base_zoom = crate::visual_arrow_effect_zoom_cached(0.0, transform_cache, 1.0);
         let zoom_spline = prepared.column_zoom_splines[local_col];
-        lane_base_zooms[local_col] = if zoom_spline.enabled {
-            zoom_spline.receptor(current_beat)[0]
-                + if zoom_spline.absolute { 0.0 } else { base_zoom }
-        } else {
-            base_zoom
-        };
+        lane_base_zooms[local_col] = prepared.spline_receptor_zoom(local_col, base_zoom);
         let effect_zoom = if zoom_spline.enabled {
-            zoom_spline.receptor(current_beat)[0]
-                + if zoom_spline.absolute { 0.0 } else { base_zoom }
+            lane_base_zooms[local_col]
         } else {
             (base_zoom
                 + request
@@ -3196,6 +3190,105 @@ mod tests {
     }
 
     #[test]
+    fn compiled_zoom_spline_does_not_oscillate_between_reference_frames() {
+        use deadsync_gameplay::{
+            SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
+        };
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        for rate in [0.75, 1.0, 1.5] {
+            let track = [SongLuaColumnSplineTrack {
+                player: 0,
+                column: 0,
+                time_offset: 0.0,
+                frames: (0..4)
+                    .map(|frame| {
+                        let second = frame as f32 * rate / 60.0;
+                        let beat = timing.get_beat_for_time(second);
+                        SongLuaColumnSplineFrame {
+                            second,
+                            position: None,
+                            zoom: Some(SongLuaSplineData {
+                                coefficients: deadsync_gameplay::solve_song_lua_spline(&[
+                                    [1.0 + beat; 3],
+                                    [2.0 + beat; 3],
+                                ])
+                                .into(),
+                                constant: false,
+                                looping: false,
+                                beats_per_t: 1.0,
+                                receptor_t: 0.0,
+                                subtract_song_beat: true,
+                            }),
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .into(),
+            }];
+            // Native: z(t,b)=1+t+(b-t)=1+b. Mixing a 60 Hz captured
+            // control point with a fresh 240 Hz song beat makes this constant
+            // note size fall then jump back every reference frame.
+            for tick in 0..12 {
+                let second = tick as f32 * rate / 240.0;
+                let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                request.chart.music_rate = rate;
+                request.chart.visible_music_time_ns =
+                    deadsync_core::song_time::song_time_ns_from_seconds(second);
+                request.chart.visible_beat = timing.get_beat_for_time(second);
+                request.song_lua.column_splines = &track;
+                let prepared = prepare_notefield(&request).unwrap();
+                let zoom = prepared.spline_zoom(0, 1.0, 0.7);
+                assert!(
+                    (zoom - 2.0).abs() < 0.00001,
+                    "tick {tick}: scale oscillated to {zoom}"
+                );
+                let pinned = prepared.spline_zoom(0, request.chart.visible_beat, 0.7);
+                let receptor = prepared.spline_receptor_zoom(0, 0.7);
+                let expected = 1.0 + request.chart.visible_beat;
+                assert!(
+                    (pinned - expected).abs() < 0.00001,
+                    "held head at tick {tick}"
+                );
+                assert!(
+                    (receptor - expected).abs() < 0.00001,
+                    "receptor at tick {tick}"
+                );
+            }
+            let mut sparse = track.clone();
+            let mut frames = sparse[0].frames.to_vec();
+            frames[1].second = 1.0;
+            frames[1].zoom = None;
+            frames.truncate(2);
+            sparse[0].frames = frames.into();
+            for second in [0.25, 0.999, 1.0, 1.1] {
+                let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+                request.chart.visible_music_time_ns =
+                    deadsync_core::song_time::song_time_ns_from_seconds(second);
+                request.chart.visible_beat = timing.get_beat_for_time(second);
+                request.song_lua.column_splines = &sparse;
+                let prepared = prepare_notefield(&request).unwrap();
+                let expected = if second >= 1.0 {
+                    0.7
+                } else {
+                    sparse[0].frames[0]
+                        .zoom
+                        .as_ref()
+                        .unwrap()
+                        .view()
+                        .sample(request.chart.visible_beat, 1.0)
+                        .0[0]
+                };
+                assert_eq!(
+                    prepared.spline_zoom(0, 1.0, 0.7),
+                    expected,
+                    "sparse/disabled at {second}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn position_splines_reach_composed_notes_receptors_and_holds() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
@@ -3471,8 +3564,14 @@ mod tests {
                         }
                         if matches!(kind, NoteType::Hold | NoteType::Roll) {
                             assert!(absolute.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key().expect("asset mesh")=="body")));
-                            for curve in
-                                [[points[0]; 4], [points[0], points[0], points[1], points[1]]]
+                            for curve in [
+                                [points[0]; 4],
+                                [points[0], points[0], points[1], points[1]],
+                                [[0.0, -135.0, 0.0], [0.0, 135.0, 0.0],
+                                    [0.0, 405.0, 0.0], [0.0, 675.0, 0.0]],
+                                [[0.0, 135.0, 0.0], [0.0, -135.0, 0.0],
+                                    [0.0, -405.0, 0.0], [0.0, -675.0, 0.0]],
+                            ]
                             {
                                 let constant = curve.iter().all(|point| *point == curve[0]);
                                 let mut tracks = absolute_tracks.clone();
@@ -3494,6 +3593,21 @@ mod tests {
                                 let draws = render(&curve_request);
                                 assert_eq!(draws.iter().any(|draw| matches!(draw, FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key().expect("asset mesh")=="body")), !constant,
                                     "hold path depends on the whole spline");
+                                if !constant {
+                                    let mesh = draws.iter().find_map(|draw| match draw {
+                                        FlatDraw::TexturedMesh(mesh)
+                                            if mesh.texture.texture_key() == Some("body") => Some(mesh),
+                                        _ => None,
+                                    }).unwrap();
+                                    let vertices = match &mesh.vertices {
+                                        FlatMeshVertices::Shared(v) => v.as_ref(),
+                                        FlatMeshVertices::Reusable(v) => v.as_slice(),
+                                    };
+                                    let min_x = vertices.iter().map(|v| v.pos[0]).fold(f32::INFINITY, f32::min);
+                                    let max_x = vertices.iter().map(|v| v.pos[0]).fold(f32::NEG_INFINITY, f32::max);
+                                    assert!(max_x - min_x > 20.0 * zoom,
+                                        "absolute {kind:?} dir={direction}: collapsed hold width for {curve:?}");
+                                }
                             }
                         }
                     }
