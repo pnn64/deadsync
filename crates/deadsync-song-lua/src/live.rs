@@ -1946,14 +1946,82 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
-    let mut state = crate::lua_util::actor_overlay_state_batched(lua, actor).map_err(mlua::Error::external)?;
-    crate::lua_util::replay_tween_pose(lua, actor, &mut state);
+    let mut state = crate::lua_util::live_actor_overlay_state(lua, actor).map_err(mlua::Error::external)?;
     state.spin_baked = crate::lua_util::spin_render_pose(actor)?.is_some();
     Ok(state)
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_native_pose_getters_preserve_queue_and_sibling_order() {
+        let mut compiled = compile_with_context("native-pose-getters", r#"
+return Def.ActorFrame {
+    Def.ActorFrame {
+        InitCommand = function(self)
+            FIRST = self
+            self.authored = { retained = true }
+            self:SetUpdateFunction(function() BEFORE_SECOND = SECOND:GetX() end)
+        end,
+        LaterCommand = function(self)
+            LATER = {self:GetX(), self:getaux(), self:GetDestX()}
+            self:linear(0.25):x(24):aux(12)
+        end,
+    },
+    Def.ActorFrame {
+        InitCommand = function(self)
+            SECOND = self
+            self:SetUpdateFunction(function() AFTER_FIRST = FIRST:GetX() end)
+        end,
+    },
+    Def.Quad {
+        OnCommand = function(self)
+            self:stretchto(10,20,110,220):linear(2):addx(128):addy(64)
+        end,
+    },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+FIRST:stoptweening():x(0):aux(0):zoom(1)
+FIRST:linear(0.5):x(8):aux(4):zoom(2):queuecommand('Later'):linear(0.5):x(16):aux(8):zoom(3)
+FIRST:y(10):z(20):rotationx(30):rotationy(40):rotationz(50):skewx(0.1):skewy(0.2)
+FIRST:cropleft(0.1):cropright(0.2):croptop(0.3):cropbottom(0.4)
+FIRST:fadeleft(0.2):faderight(0.3):fadetop(0.4):fadebottom(0.5)
+FIRST:diffuse(0.1,0.2,0.3,0.4):diffuseupperleft(0.5,0.6,0.7,0.8):glow(0.2,0.3,0.4,0.5)
+SECOND:stoptweening():x(100):linear(1):x(108)
+"#).exec().unwrap();
+        let mut time = 0.0;
+        for (delta, assertion) in [
+            (0.25, "assert(FIRST:GetX()==4 and FIRST:getaux()==2 and FIRST:GetDestX()==16); assert(FIRST:GetZoom()==3); assert(BEFORE_SECOND==100 and AFTER_FIRST==4)"),
+            (0.25, "assert(FIRST:GetX()==8 and FIRST:getaux()==4 and LATER==nil)"),
+            (0.0, "assert(FIRST:GetX()==8 and LATER==nil)"),
+            (0.125, "assert(LATER[1]==8 and LATER[2]==4 and LATER[3]==16); assert(FIRST:GetX()==10 and FIRST:getaux()==5 and FIRST:GetDestX()==24)"),
+        ] {
+            time += delta;
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: time,
+                music_seconds: time, beat: time * 2.0, delta_seconds: delta,
+                ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            scene.lua.load(assertion).exec().unwrap();
+            for actor in &scene.actors {
+                let mut legacy = crate::lua_util::actor_overlay_state_batched(&scene.lua, actor).unwrap();
+                crate::lua_util::replay_tween_pose(&scene.lua, actor, &mut legacy);
+                legacy.spin_baked = crate::lua_util::spin_render_pose(actor).unwrap().is_some();
+                assert_eq!(read_state(&scene.lua, actor).unwrap(), legacy,
+                    "native pose extraction must match the prior table-read/pose-overlay path");
+            }
+        }
+        scene.lua.load(r#"
+FIRST:stoptweening():addx(3):aux(42)
+assert(FIRST:GetX()==13 and FIRST:GetDestX()==13 and FIRST:getaux()==42)
+FIRST:linear(1):x(29):aux(50):finishtweening()
+assert(FIRST:GetX()==29 and FIRST:GetDestX()==29 and FIRST:getaux()==50)
+assert(FIRST.authored.retained)
+"#).exec().unwrap();
+    }
+
     #[cfg(feature = "test-support")]
     #[test]
     fn live_overlay_stage_observation_precedes_foreground_mutations() {

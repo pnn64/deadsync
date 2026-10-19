@@ -778,6 +778,9 @@ fn actor_current_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result
             }
         }
     }
+    if let Some(current) = live_current_pose(lua, actor) {
+        return Ok([current.x, current.y, current.z][axis]);
+    }
     Ok(actor
         .get::<Option<f32>>(POSITION_CURRENT_KEYS[axis])?
         .or(actor.get::<Option<f32>>(POSITION_DEST_KEYS[axis])?)
@@ -4786,6 +4789,14 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
         "z" => Some("__songlua_current_z"),
         _ => None,
     };
+    if current_pos_key.is_some() && live_current_pose(lua, actor).is_some() {
+        // Native current state is authoritative during live playback. The
+        // setter changes the queue tail; GetX/Y/Z/getaux read current directly.
+        // Keep the destination field for destination getters and the offline
+        // presentation adapter, without mirroring current back into Lua.
+        record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::F32(value));
+        return set_actor_capture_state(actor, key, value);
+    }
     let prior_pos = current_pos_key
         .map(|_| actor.get::<Option<f32>>(actor_capture_state_key(key).as_ref()))
         .transpose()?
@@ -8000,7 +8011,8 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "getaux",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
+            move |lua, _self: Option<Value>| {
+                if let Some(current) = live_current_pose(lua, &actor) { return Ok(current.aux); }
                 Ok(actor.get::<Option<f32>>("__songlua_aux")?.unwrap_or(0.0))
             }
         })?,
@@ -11448,6 +11460,12 @@ struct ActorTweenStep {
 
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 
+fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
+    if !crate::live::active(lua) { return None; }
+    lua.app_data_ref::<ActorTweenReplays>()?
+        .0.get(&(actor.to_pointer() as usize)).map(|replay| replay.current)
+}
+
 struct LiveBroadcasts(Vec<(f32, String, bool)>);
 struct LiveSourceBroadcasts(Vec<crate::live::SongLuaLiveBroadcast>);
 
@@ -11931,7 +11949,12 @@ fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64, span: f32) -> mlua
             }
             command
         };
-        sync_tween_getters(lua, actor)?;
+        // Advancing time changes current, never the back tween destination.
+        // Live current getters and rendering read the native pose directly;
+        // rewriting every destination scalar/color here only serializes the
+        // same data back to Lua (including fresh color tables every tick).
+        // Queue replacement and InitState still synchronize destinations.
+        if !crate::live::active(lua) { sync_tween_getters(lua, actor)?; }
         if let Some(command) = command {
             dispatched += 1;
             if dispatched > 10000 {
@@ -19564,6 +19587,7 @@ enum ActorNumberValue {
 pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
     read_actor_overlay_state(
         actor,
+        None,
         |field| actor.raw_get::<Option<f32>>(field.key()),
         |field| actor.raw_get::<Option<bool>>(field.key()),
     )
@@ -19590,7 +19614,36 @@ pub(crate) fn actor_overlay_state_batched(
     lua: &Lua,
     actor: &Table,
 ) -> Result<SongLuaOverlayState, String> {
+    actor_overlay_state_with_pose(lua, actor, None)
+}
+
+pub(crate) fn live_actor_overlay_state(lua: &Lua, actor: &Table) -> Result<SongLuaOverlayState, String> {
+    actor_overlay_state_with_pose(lua, actor, live_current_pose(lua, actor))
+}
+
+fn actor_overlay_state_with_pose(
+    lua: &Lua,
+    actor: &Table,
+    pose: Option<SongLuaOverlayState>,
+) -> Result<SongLuaOverlayState, String> {
     let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
+    if let Some(pose) = &pose {
+        // The native tween queue owns these properties. Do not deserialize
+        // destination fields from Lua just to overwrite them with current.
+        macro_rules! native {
+            ($($field:ident => $member:ident),* $(,)?) => {
+                $(numbers[ActorNumberField::$field as usize] = ActorNumberValue::Value(Some(pose.$member));)*
+            };
+        }
+        native! {
+            Aux => aux, X => x, Y => y, Z => z,
+            Zoom => zoom, ZoomX => zoom_x, ZoomY => zoom_y, ZoomZ => zoom_z,
+            RotXDeg => rot_x_deg, RotYDeg => rot_y_deg, RotZDeg => rot_z_deg,
+            SkewX => skew_x, SkewY => skew_y,
+            Cropleft => cropleft, Cropright => cropright, Croptop => croptop, Cropbottom => cropbottom,
+            Fadeleft => fadeleft, Faderight => faderight, Fadetop => fadetop, Fadebottom => fadebottom,
+        }
+    }
     let mut flags = [None; ActorFlagField::KEYS.len()];
     let keys = actor_scalar_keys(lua).map_err(|error| error.to_string())?;
     // SAFETY: actor and interned keys are rooted in four reserved slots.
@@ -19602,6 +19655,7 @@ pub(crate) fn actor_overlay_state_batched(
                 raw.push(actor)?;
                 raw.push(keys)?;
                 for index in 0..ActorNumberField::KEYS.len() {
+                    if matches!(numbers[index], ActorNumberValue::Value(_)) { continue; }
                     ffi::lua_rawgeti(state, base + 2, (index + 1) as ffi::lua_Integer);
                     ffi::lua_rawget(state, base + 1);
                     numbers[index] = if ffi::lua_type(state, -1) == ffi::LUA_TNIL {
@@ -19629,6 +19683,7 @@ pub(crate) fn actor_overlay_state_batched(
     }
     read_actor_overlay_state(
         actor,
+        pose.as_ref(),
         |field| match numbers[field as usize] {
             ActorNumberValue::Value(value) => Ok(value),
             ActorNumberValue::Fallback => actor.raw_get::<Option<f32>>(field.key()),
@@ -19881,6 +19936,7 @@ mod actor_state_read_tests {
 
 fn read_actor_overlay_state(
     actor: &Table,
+    pose: Option<&SongLuaOverlayState>,
     number: impl Fn(ActorNumberField) -> mlua::Result<Option<f32>>,
     flag: impl Fn(ActorFlagField) -> mlua::Result<Option<bool>>,
 ) -> Result<SongLuaOverlayState, String> {
@@ -19938,19 +19994,24 @@ fn read_actor_overlay_state(
     if let Some(visible) = flag(ActorFlagField::Visible).map_err(|err| err.to_string())? {
         state.visible = visible;
     }
-    if let Some(diffuse) = actor
-        .raw_get::<Option<Table>>("__songlua_state_diffuse")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.diffuse = diffuse;
-    }
-    if let Some(colors) = actor
-        .raw_get::<Option<Table>>("__songlua_state_vertex_colors")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vertex_colors(&value))
-    {
-        state.vertex_colors = Some(colors);
+    if let Some(pose) = pose {
+        state.diffuse = pose.diffuse;
+        state.vertex_colors = pose.vertex_colors;
+    } else {
+        if let Some(diffuse) = actor
+            .raw_get::<Option<Table>>("__songlua_state_diffuse")
+            .map_err(|err| err.to_string())?
+            .and_then(|value| table_vec4(&value))
+        {
+            state.diffuse = diffuse;
+        }
+        if let Some(colors) = actor
+            .raw_get::<Option<Table>>("__songlua_state_vertex_colors")
+            .map_err(|err| err.to_string())?
+            .and_then(|value| table_vertex_colors(&value))
+        {
+            state.vertex_colors = Some(colors);
+        }
     }
     if let Some(value) = number(ActorNumberField::X).map_err(|err| err.to_string())? {
         state.x = value;
@@ -20011,7 +20072,9 @@ fn read_actor_overlay_state(
     {
         state.shadow_color = value;
     }
-    if let Some(value) = actor
+    if let Some(pose) = pose {
+        state.glow = pose.glow;
+    } else if let Some(value) = actor
         .raw_get::<Option<Table>>("__songlua_state_glow")
         .map_err(|err| err.to_string())?
         .and_then(|value| table_vec4(&value))
@@ -20285,6 +20348,16 @@ fn read_actor_overlay_state(
         .and_then(|value| table_vec4(&value))
     {
         state.stretch_rect = Some(value);
+        if pose.is_some() {
+            // Preserve replay_tween_pose's translation from the destination
+            // rectangle to current XY, including its float operation order.
+            let (x, y) = (state.x, state.y);
+            state.x = actor.raw_get::<Option<f32>>("__songlua_state_x")
+                .map_err(|err| err.to_string())?.unwrap_or(0.0);
+            state.y = actor.raw_get::<Option<f32>>("__songlua_state_y")
+                .map_err(|err| err.to_string())?.unwrap_or(0.0);
+            crate::move_overlay(&mut state, x, y);
+        }
     }
     if let Some(raw) = actor
         .raw_get::<Option<LuaFieldText<32>>>("__songlua_state_blend")
