@@ -7,12 +7,12 @@ use crate::{
     create_background_filter_values, create_color_constants_table, create_credits_table,
     create_cryptman_table, create_debug_table, create_ex_judgment_counts, create_fileman_table,
     create_find_files_function, create_ini_file_table, create_lua_compat_table,
-    create_network_table, create_rage_file_util_table, create_range_table, create_split_table,
+    create_network_table, create_rage_file_util_table, create_range_table,
     create_string_array, create_version_parts_table, current_gamestate_player_value,
     current_gamestate_value, current_song_value, current_steps_value, deduplicate_lua_table,
     install_theme_color_helpers, json_to_lua_value, lua_binary_to_hex, lua_table_to_string,
     lua_to_json_value, make_color_table, map_lua_table, note_song_lua_side_effect,
-    parse_chart_info, path_basename, read_color_call, read_color_value, read_f32, read_string,
+    parse_chart_info, read_color_call, read_color_value, read_f32, read_string,
     retarget_loader_env, rotate_lua_table, seconds_to_hhmmss, set_string_method,
     song_lua_is_minimum_product_version, song_lua_is_product_version, stringify_lua_table,
     strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
@@ -79,17 +79,7 @@ pub fn install_stdlib_compat(
     string.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
-            let text = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let separator = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            create_split_table(lua, &text, &separator)
+            crate::string_args::split_args(lua, &args, 0, 1)
         })?,
     )?;
     let math: Table = globals.get("math")?;
@@ -122,26 +112,12 @@ pub fn install_stdlib_compat(
     globals.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
-            let separator = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let text = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            create_split_table(lua, &text, &separator)
+            crate::string_args::split_args(lua, &args, 1, 0)
         })?,
     )?;
     globals.set(
         "Basename",
-        lua.create_function(|lua, value: Value| {
-            Ok(Value::String(lua.create_string(path_basename(
-                &read_string(value).unwrap_or_default(),
-            ))?))
-        })?,
+        lua.create_function(crate::string_args::basename)?,
     )?;
     globals.set(
         "Var",

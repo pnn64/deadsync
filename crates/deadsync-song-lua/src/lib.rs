@@ -57,6 +57,7 @@ mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
+mod string_args;
 mod tables;
 mod theme_colors;
 mod timing;
