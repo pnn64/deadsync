@@ -353,25 +353,24 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
         theme.set(
             method,
             lua.create_function(|_, args: MultiValue| {
-                let name = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_string)
-                    .unwrap_or_default();
-                Ok(name.eq_ignore_ascii_case(SONG_LUA_THEME_NAME))
+                let Some(Value::String(name)) = method_arg(&args, 0) else {
+                    return Ok(false);
+                };
+                Ok(name
+                    .to_str()
+                    .is_ok_and(|name| name.eq_ignore_ascii_case(SONG_LUA_THEME_NAME)))
             })?,
         )?;
     }
     theme.set(
         "DoesLanguageExist",
         lua.create_function(|_, args: MultiValue| {
-            let name = method_arg(&args, 0)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            Ok(matches!(
-                name.to_ascii_lowercase().as_str(),
-                "en" | "english"
-            ))
+            let Some(Value::String(name)) = method_arg(&args, 0) else {
+                return Ok(false);
+            };
+            Ok(name.to_str().is_ok_and(|name| {
+                name.eq_ignore_ascii_case("en") || name.eq_ignore_ascii_case("english")
+            }))
         })?,
     )?;
     theme.set(
