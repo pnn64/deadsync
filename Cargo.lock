@@ -1679,6 +1679,7 @@ dependencies = [
  "sha2",
  "smallvec",
  "winit",
+ "zstd 0.14.0",
 ]
 
 [[package]]

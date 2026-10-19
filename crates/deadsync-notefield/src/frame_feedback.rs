@@ -3401,6 +3401,116 @@ mod tests {
     }
 
     #[test]
+    fn compiled_spline_curvature_uses_the_render_beat() {
+        use deadsync_gameplay::{SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData};
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        // Native CubicSpline evaluates a+b*t+c*t^2+d*t^3 at the draw beat.
+        // The position controls stay quadratic while an independent zoom
+        // write keeps the track sampled at 60 Hz. A lerp of already-evaluated
+        // poses replaces that quadratic with a different chord every frame.
+        let curve = |beat: f32, zoom: bool| SongLuaSplineData {
+            coefficients: vec![
+                [[if zoom { 1.0 + beat } else { 0.0 }, 0.0, 1.0, 0.0]; 3],
+                [[if zoom { 2.0 + beat } else { 1.0 }, 2.0, 0.0, 0.0]; 3],
+            ].into(),
+            constant: false, looping: false, beats_per_t: 1.0,
+            receptor_t: 0.0, subtract_song_beat: true,
+        };
+        let tracks = [SongLuaColumnSplineTrack {
+            player: 0, column: 0, time_offset: 0.0,
+            frames: (0..4).map(|frame| {
+                let second = frame as f32 / 60.0;
+                let beat = timing.get_beat_for_time(second);
+                SongLuaColumnSplineFrame {
+                    second, position: Some(curve(beat, false)), zoom: Some(curve(beat, true)),
+                }
+            }).collect::<Vec<_>>().into(),
+        }];
+        for tick in 0..12 {
+            let second = tick as f32 / 240.0;
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_music_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(second);
+            let beat = timing.get_beat_for_time(second);
+            request.chart.visible_beat = beat;
+            request.song_lua.column_splines = &tracks;
+            let prepared = prepare_notefield(&request).unwrap();
+            let relative = 0.5 - beat;
+            let (position, derivative) = prepared.spline_sample(0, 0.5);
+            assert!((position[0] - relative * relative).abs() < 0.000001,
+                "quadratic position at tick {tick}: {} vs {}", position[0], relative * relative);
+            assert!((derivative[0] - 2.0 * relative).abs() < 0.000001);
+            assert!((prepared.spline_zoom(0, 0.5, 0.7) - (1.0 + beat + relative * relative)).abs() < 0.000001);
+        }
+    }
+
+    #[test]
+    fn compiled_spline_steps_do_not_anticipate_native_point_writes() {
+        use deadsync_gameplay::{SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData};
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let tracks = [SongLuaColumnSplineTrack {
+            player: 0, column: 0, time_offset: 0.0,
+            frames: (0..4).map(|frame| {
+                let second = frame as f32 / 60.0;
+                let beat = timing.get_beat_for_time(second);
+                let sign = if frame < 2 { -1.0 } else { 1.0 };
+                let spline = |points: &[[f32; 3]]| SongLuaSplineData {
+                    coefficients: deadsync_gameplay::solve_song_lua_spline(points).into(),
+                    constant: false, looping: false, beats_per_t: 1.0,
+                    receptor_t: 0.0, subtract_song_beat: true,
+                };
+                SongLuaColumnSplineFrame { second,
+                    position: Some(spline(&[[beat, sign * 200.0, 0.0], [16.0 + beat, sign * 100.0, 0.0]])),
+                    zoom: Some(spline(&[[1.0 + beat; 3], [2.0 + beat; 3]])),
+                }
+            }).collect::<Vec<_>>().into(),
+        }];
+        for tick in 4..12 {
+            let second = tick as f32 / 240.0;
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_music_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(second);
+            request.chart.visible_beat = timing.get_beat_for_time(second);
+            request.song_lua.column_splines = &tracks;
+            let prepared = prepare_notefield(&request).unwrap();
+            let sign = if tick < 8 { -1.0 } else { 1.0 };
+            let expected = sign * (200.0 - 100.0 * (0.5 - request.chart.visible_beat));
+            assert!((prepared.spline_sample(0, 0.5).0[1] - expected).abs() < 0.0001,
+                "native immediate point write anticipated at tick {tick}");
+            assert!((prepared.spline_zoom(0, 0.5, 0.7) - 1.5).abs() < 0.000001,
+                "continuous zoom clock was frozen at tick {tick}");
+        }
+
+        // A ramp starting from rest has no second plateau. It must retain
+        // continuous interpolation instead of being classified as a jump.
+        let mut ramp = tracks.clone();
+        let mut frames = ramp[0].frames.to_vec();
+        for (index, frame) in frames.iter_mut().enumerate().skip(2) {
+            let shift = 100.0 * (index - 1) as f32;
+            let position = frame.position.as_mut().unwrap();
+            position.coefficients = deadsync_gameplay::solve_song_lua_spline(&[
+                [0.0, -200.0 + shift, 0.0],
+                [16.0, -100.0 + shift, 0.0],
+            ]).into();
+        }
+        ramp[0].frames = frames.into();
+        for tick in 4..8 {
+            let second = tick as f32 / 240.0;
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_music_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(second);
+            request.chart.visible_beat = timing.get_beat_for_time(second);
+            request.song_lua.column_splines = &ramp;
+            let prepared = prepare_notefield(&request).unwrap();
+            let expected = -200.0 + 100.0 * (second * 60.0 - 1.0)
+                + 100.0 * (0.5 - request.chart.visible_beat);
+            assert!((prepared.spline_sample(0, 0.5).0[1] - expected).abs() < 0.0001,
+                "continuous ramp was mistaken for a point jump at tick {tick}");
+        }
+    }
+
+    #[test]
     fn compiled_spline_receptor_teleports_keep_their_anchors() {
         use deadsync_gameplay::{
             SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,

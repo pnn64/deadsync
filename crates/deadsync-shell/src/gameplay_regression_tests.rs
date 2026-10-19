@@ -5064,15 +5064,13 @@ return Def.ActorFrame{
                     (115.0, Some(385.0), None),
                     (123.0, Some(115.0), None),
                 ];
-                let native: serde_json::Value = serde_json::from_slice(
-                    &std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
-                        "../../tests/fixtures/itgmania-song-lua-micro/seventh-notefield-native.json",
-                    ))
-                    .unwrap(),
-                )
-                .unwrap();
+                let native: serde_json::Value = serde_json::from_slice(&zstd::stream::decode_all(
+                    include_bytes!("../../../tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.json.zst").as_slice(),
+                ).unwrap()).unwrap();
                 assert_eq!(native["oracle"], "itgmania_notefield_render_trace");
                 assert_eq!(native["input"]["window_visible"], false);
+                assert_eq!(native["input"]["native_source"]["revision"], "704cdd5624155f743b59b8b64fedeb0588dae067");
+                assert_eq!(native["input"]["native_source"]["modified_src"], false);
                 let native_project = |clip: &[f64]| {
                     [
                         ((1.0 + clip[0] / clip[3]) * 427.0) as f32,
@@ -5092,6 +5090,7 @@ return Def.ActorFrame{
                         continue;
                     }
                     let beat = context["draw_beat"].as_f64().unwrap() as f32;
+                    if beat < 130.2 { continue; }
                     if !seen_native_beats.insert(beat.to_bits()) {
                         continue;
                     }
@@ -5156,6 +5155,35 @@ return Def.ActorFrame{
                 for frame in &native_arrivals {
                     probes.push((frame["beat"].as_f64().unwrap() as f32, None, None));
                 }
+                let mut native_caps = Vec::new();
+                let mut seen_cap_beats = std::collections::HashSet::new();
+                for sample in native["drawable_samples"].as_array().unwrap() {
+                    let context = &sample["state"]["note_context"];
+                    let beat = context["draw_beat"].as_f64().unwrap() as f32;
+                    if context["part"] != 2 || sample["state"]["render_target"] == 0
+                        || !((121.91..121.99).contains(&beat) || (129.91..129.99).contains(&beat))
+                        || !seen_cap_beats.insert(beat.to_bits()) {
+                        continue;
+                    }
+                    let tail_beat = context["note_beat"].as_f64().unwrap() as f32;
+                    let column = context["column"].as_u64().unwrap() as usize;
+                    let index = state.chart_runtime.notes.iter().position(|note|
+                        note.column == column && note.hold.as_ref().is_some_and(|hold| hold.end_beat == tail_beat)
+                    ).unwrap();
+                    let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
+                    for vertex in sample["vertices"].as_array().unwrap() {
+                        let clip: Vec<f64> = vertex.as_array().unwrap()[3..7].iter().map(|v| v.as_f64().unwrap()).collect();
+                        let point = native_project(&clip);
+                        for axis in 0..2 {
+                            bounds[axis] = bounds[axis].min(point[axis]);
+                            bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                        }
+                    }
+                    native_caps.push((beat, bounds));
+                    probes.push((beat, None, Some(index)));
+                }
+                assert!(native_caps.iter().any(|(beat, _)| *beat < 122.0));
+                assert!(native_caps.iter().any(|(beat, _)| *beat > 129.0));
                 let timing = &state.gameplay.gameplay_chart(0).unwrap().timing;
                 let tracks = &state.gameplay.song_lua_visuals().column_splines[0];
                 let mut smallest_scale = (f32::INFINITY, 0.0f32, 0usize);
@@ -5247,6 +5275,9 @@ return Def.ActorFrame{
                     .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
                     .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
                     .collect();
+                let cap_handles: std::collections::HashSet<_> = ns.hold_columns.iter()
+                    .flat_map(|column| [column.bottomcap_active.as_ref(), column.bottomcap_inactive.as_ref()])
+                    .flatten().map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key())).collect();
                 #[cfg(target_os = "windows")]
                 let mut capture = std::env::var_os("DEADSYNC_SEVENTH_CAPTURE").map(|_| {
                     SongLuaNotePixelCapture::new(
@@ -5258,6 +5289,7 @@ return Def.ActorFrame{
                 });
                 let mut tick = 0;
                 let mut native_pose_failures = Vec::new();
+                let mut native_pose_errors = Vec::new();
                 for (beat, expected_y, active_hold) in probes {
                     let seconds = state
                         .gameplay
@@ -5275,6 +5307,7 @@ return Def.ActorFrame{
                     let native_arrival = native_arrivals
                         .iter()
                         .find(|frame| frame["beat"].as_f64().unwrap() as f32 == beat);
+                    let native_cap = native_caps.iter().find(|(at, _)| *at == beat).map(|(_, bounds)| bounds);
                     let arrival_note = native_arrival.map(|frame| {
                         let note_beat = frame["note_beat"].as_f64().unwrap() as f32;
                         let column = frame["column"].as_u64().unwrap() as usize - 1;
@@ -5365,8 +5398,32 @@ return Def.ActorFrame{
                     let mut receptors = 0;
                     let mut wide_bodies = 0;
                     let mut arrival_meshes = 0;
+                    let mut cap_meshes = 0;
                     for pass in &frame.render_targets {
                         for op in &pass.ops {
+                            if let Some(expected) = native_cap
+                                && let DrawOp::TexturedMesh(run) = op
+                                && cap_handles.contains(&run.texture_handle) {
+                                let camera = pass.cameras.get(run.camera as usize).copied().unwrap_or_else(|| metrics.projection());
+                                for instance in &pass.tmesh_instances[run.instance_start as usize..(run.instance_start + run.instance_count) as usize] {
+                                    let transform = camera * instance.transform();
+                                    let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
+                                    for vertex in pass.tmesh_geometries[run.geometry as usize].vertices.iter() {
+                                        let clip = transform.mul_vec4([vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0].into());
+                                        let point = [427.0 + clip.x / clip.w * 427.0,
+                                            240.0 - clip.y / clip.w * pass.viewport[1] as f32 * 427.0 / pass.viewport[0] as f32];
+                                        for axis in 0..2 {
+                                            bounds[axis] = bounds[axis].min(point[axis]);
+                                            bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                                        }
+                                    }
+                                    for axis in 0..4 {
+                                        assert!((bounds[axis] - expected[axis]).abs() < 0.05,
+                                            "native cap at beat {beat}, bound {axis}: {bounds:?} vs {expected:?}");
+                                    }
+                                    cap_meshes += 1;
+                                }
+                            }
                             if let Some(native) = native_arrival
                                 && let DrawOp::TexturedMesh(run) = op
                                 && tap_handles.contains(&run.texture_handle)
@@ -5395,6 +5452,13 @@ return Def.ActorFrame{
                                         + (along_x[1] - origin[1]).powi(2))
                                     .sqrt();
                                     let expected_scale = native["scale"].as_f64().unwrap() as f32;
+                                    if arrival_meshes == 0 {
+                                        native_pose_errors.push((beat, [
+                                            origin[0] - native["origin"][0].as_f64().unwrap() as f32,
+                                            origin[1] - native["origin"][1].as_f64().unwrap() as f32,
+                                            scale - expected_scale,
+                                        ]));
+                                    }
                                     if (scale - expected_scale).abs() >= 0.021 {
                                         native_pose_failures.push(format!("native rendered first arrow size at {beat}: {scale} vs {expected_scale}"));
                                     }
@@ -5552,6 +5616,9 @@ return Def.ActorFrame{
                             "beat {beat}: actual active hold collapsed in AFT geometry"
                         );
                     }
+                    if native_cap.is_some() {
+                        assert!(cap_meshes >= 2, "native tail cap must reach both source AFT draws");
+                    }
                     eprintln!(
                         "7th Gear beat {beat}: {receptors} AFT receptor sprites, {wide_bodies} full-width hold bodies, Mini=60"
                     );
@@ -5568,6 +5635,15 @@ return Def.ActorFrame{
                     "{}",
                     native_pose_failures.join("\n")
                 );
+                let max_error: [f32; 3] = std::array::from_fn(|axis| native_pose_errors.iter()
+                    .map(|(_, error)| error[axis].abs()).fold(0.0, f32::max));
+                let max_error_step: [f32; 3] = std::array::from_fn(|axis| native_pose_errors.windows(2)
+                    .map(|pair| (pair[1].1[axis] - pair[0].1[axis]).abs()).fold(0.0, f32::max));
+                eprintln!("native pose errors [x,y,scale]: max={max_error:?}, consecutive delta={max_error_step:?}");
+                for (axis, error) in max_error_step[..2].iter().enumerate() {
+                    assert!(*error < 4.0,
+                        "first-arrow motion differs from native between consecutive frames, axis {axis}: {error}");
+                }
             },
         );
     }

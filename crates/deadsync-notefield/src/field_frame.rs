@@ -702,7 +702,7 @@ fn compose_field_contents<S, F>(
         let use_legacy_hold_sprites = lane_frame.use_legacy_sprites
             && !has_zoom_spline
             && !position_splines[local_col].enabled;
-        let sample_hold_path = |screen_y: f32| {
+        let sample_hold_path = |screen_y: f32, spline_y: f32| {
             // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY/BeatY.
             // NoteDisplay uses that same offset to sample the hold strip.
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
@@ -715,7 +715,7 @@ fn compose_field_contents<S, F>(
                 body_head_beat
             } else {
                 body_head_beat
-                    + (hold.end_beat - body_head_beat) * ((screen_y - y_head) / (y_tail - y_head))
+                    + (hold.end_beat - body_head_beat) * ((spline_y - y_head) / (y_tail - y_head))
             };
             let center_x = lane_center_x_from_adjusted_travel(local_col, adjusted_travel);
             let world_z = world_z_for_adjusted_travel(local_col, adjusted_travel);
@@ -744,7 +744,7 @@ fn compose_field_contents<S, F>(
                                 adjusted_travel / field_zoom,
                                 transform_cache,
                                 1.0,
-                            ) + body_zoom_offset_at_y(screen_y)),
+                            ) + body_zoom_offset_at_y(spline_y)),
                     ),
             }
         };

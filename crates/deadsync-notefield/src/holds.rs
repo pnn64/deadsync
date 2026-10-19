@@ -449,6 +449,8 @@ pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEn
 /// Concrete asset owners inject sprite sources and a path sampler. The sampler
 /// keeps theme/profile state outside this crate while canonical hold geometry,
 /// UV clipping, draw ordering, and glow passes remain shared by every theme.
+/// The sampler receives the row Y for ArrowEffects and a separate Y mapped to
+/// the spline beat. These differ on caps, whose spline beat stays at the end.
 pub(crate) fn compose_hold_body_caps<S, F, P>(
     draws: &mut Vec<FlatDraw>,
     mesh_scratch: &mut HoldMeshScratch,
@@ -458,39 +460,19 @@ pub(crate) fn compose_hold_body_caps<S, F, P>(
 ) where
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
-    P: Fn(f32) -> HoldPathSample,
+    P: Fn(f32, f32) -> HoldPathSample,
 {
-    let rendered = compose_hold_body(draws, mesh_scratch, &request, sample_path, sprite_source);
-    // NoteDisplay gives each cap a constant beat; only the body interpolates.
-    let cap_head = sample_path(request.y_head);
-    let cap_tail = sample_path(request.y_tail);
-    let sample_top_cap = |y: f32| {
-        let mut sample = sample_path(y);
-        sample.position_offset = cap_head.position_offset;
-        if cap_head.spline_absolute {
-            sample.position_offset = [
-                cap_head.center_x + cap_head.position_offset[0] - sample.center_x,
-                request.y_head + cap_head.position_offset[1] - y,
-                cap_head.world_z + cap_head.position_offset[2] - sample.world_z,
-            ];
-        }
-        sample.spline_derivative = cap_head.spline_derivative;
-        sample.spline_absolute = cap_head.spline_absolute;
+    let body_path = |y| sample_path(y, y);
+    let rendered = compose_hold_body(draws, mesh_scratch, &request, &body_path, sprite_source);
+    // DrawHoldPart advances ArrowEffects along each row, but uses the fixed
+    // endpoint beat for every spline component of a cap (position AND zoom).
+    let sample_top_cap = |y| {
+        let mut sample = sample_path(y, request.y_head);
         sample.cap_step = sample.spline_step;
         sample
     };
-    let sample_bottom_cap = |y: f32| {
-        let mut sample = sample_path(y);
-        sample.position_offset = cap_tail.position_offset;
-        if cap_tail.spline_absolute {
-            sample.position_offset = [
-                cap_tail.center_x + cap_tail.position_offset[0] - sample.center_x,
-                request.y_tail + cap_tail.position_offset[1] - y,
-                cap_tail.world_z + cap_tail.position_offset[2] - sample.world_z,
-            ];
-        }
-        sample.spline_derivative = cap_tail.spline_derivative;
-        sample.spline_absolute = cap_tail.spline_absolute;
+    let sample_bottom_cap = |y| {
+        let mut sample = sample_path(y, request.y_tail);
         sample.cap_step = sample.spline_step;
         sample
     };
@@ -2620,23 +2602,24 @@ mod tests {
                 let mut draws = Vec::new();
                 compose_hold_body_caps(
                     &mut draws, &mut HoldMeshScratch::with_columns(1), request,
-                    &|y| {
+                    &|y, spline_y| {
                         let base = straight_path(y);
                         HoldPathSample {
                             position_offset: [
                                 300.0 - base.center_x,
-                                400.0 + direction * (y - 100.0) * zoom - y,
+                                400.0 + direction * (spline_y - 100.0) * zoom - y,
                                 12.0 - base.world_z,
                             ],
                             spline_derivative: [0.0, direction * 200.0, 0.0],
                             spline_absolute: true,
                             spline_step: zoom,
+                            arrow_px: 32.0 + spline_y * 0.2,
                             ..base
                         }
                     },
                     &test_source,
                 );
-                for (key, endpoint) in [("top", 400.0), ("bottom", 400.0 + direction * 200.0 * zoom)] {
+                for (key, endpoint, width) in [("top", 400.0, 52.0), ("bottom", 400.0 + direction * 200.0 * zoom, 92.0)] {
                     let vertices = draws.iter().find_map(|draw| match draw {
                         FlatDraw::TexturedMesh(mesh) if mesh.texture.texture_key() == Some(key) => {
                             Some(match &mesh.vertices {
@@ -2651,6 +2634,8 @@ mod tests {
                     // one local unit along the spline tangent.
                     for vertex in vertices {
                         assert!((vertex.pos[2] - 12.0).abs() < 0.001);
+                        assert!(((vertex.pos[0] - 300.0).abs() - width * 0.5).abs() < 0.001,
+                            "{key}: cap width must use its endpoint beat: {:?}", vertex.pos);
                         assert!((vertex.pos[1] - endpoint).abs() < 0.001
                             || (vertex.pos[1] - endpoint - direction * zoom).abs() < 0.001,
                             "{key} dir={direction}, zoom={zoom}: {:?}", vertex.pos);
@@ -2766,7 +2751,7 @@ mod tests {
                         &mut draws,
                         &mut HoldMeshScratch::default(),
                         request,
-                        &straight_path,
+                        &|y, _| straight_path(y),
                         &test_source,
                     );
                     assert_eq!(draws.len(), 1);
@@ -2837,7 +2822,7 @@ mod tests {
                             &mut draws,
                             &mut scratch,
                             request,
-                            &|y| HoldPathSample {
+                            &|y, _| HoldPathSample {
                                 position_offset: [0.0; 3],
                                 spline_derivative: [0.0; 3],
                                 spline_step: 0.0,
@@ -2956,7 +2941,7 @@ mod tests {
                         &mut draws,
                         &mut HoldMeshScratch::default(),
                         request,
-                        &sample,
+                        &|y, _| sample(y),
                         &test_source,
                     );
                     assert_eq!(
@@ -3007,7 +2992,7 @@ mod tests {
                         &mut draws,
                         &mut HoldMeshScratch::default(),
                         request,
-                        &straight_path,
+                        &|y, _| straight_path(y),
                         &test_source,
                     );
                     assert_eq!(
@@ -3057,7 +3042,7 @@ mod tests {
                 };
                 let mut draws = Vec::new();
                 let mut scratch = HoldMeshScratch::with_columns(1);
-                compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
                 let mut parts = Vec::new();
                 for draw in &draws {
                     let FlatDraw::TexturedMesh(mesh) = draw else {
@@ -3092,7 +3077,7 @@ mod tests {
                     .collect();
                 draws.clear();
                 scratch.begin_frame();
-                compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
                 assert_eq!(
                     draws
                         .iter()
@@ -3118,7 +3103,7 @@ mod tests {
             &mut draws,
             &mut scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
         assert!(!draws.is_empty());
@@ -3153,7 +3138,7 @@ mod tests {
             &mut draws,
             &mut scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
         assert!(!draws.is_empty());
@@ -3301,7 +3286,7 @@ mod tests {
             &mut draws,
             &mut mesh_scratch,
             request,
-            &curved_path,
+            &|y, _| curved_path(y),
             &|slot| {
                 source_calls.set(source_calls.get() + 1);
                 test_source(slot)
@@ -3379,7 +3364,7 @@ mod tests {
                 };
                 let mut scratch = HoldMeshScratch::with_columns(1);
                 let mut draws = Vec::new();
-                compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+                compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
                 let mut parts = Vec::new();
                 for draw in &draws {
                     let FlatDraw::TexturedMesh(mesh) = draw else {
@@ -3446,7 +3431,7 @@ mod tests {
             arrow_px: 64.0,
         };
         let mut draws = Vec::new();
-        compose_hold_body_caps(&mut draws, &mut scratch, request, &sample, &test_source);
+        compose_hold_body_caps(&mut draws, &mut scratch, request, &|y, _| sample(y), &test_source);
         let mut triangles = 0;
         for draw in draws {
             let FlatDraw::TexturedMesh(mesh) = draw else {
@@ -3578,7 +3563,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             body_cap_request(Some(&body), Some(&top), Some(&bottom)),
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -3621,7 +3606,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -3662,7 +3647,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
         let first_ptrs = actors
@@ -3680,7 +3665,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
         for ((draw, first_ptr), first_vertices) in actors.iter().zip(first_ptrs).zip(first_vertices)
@@ -3816,7 +3801,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &|slot| {
                 source_calls.set(source_calls.get() + 1);
                 test_source(slot)
@@ -3893,7 +3878,7 @@ mod tests {
                     &mut draws,
                     &mut HoldMeshScratch::default(),
                     request,
-                    &straight_path,
+                    &|y, _| straight_path(y),
                     &test_source,
                 );
                 let frame = render_hold_draws(&draws);
@@ -3958,7 +3943,7 @@ mod tests {
                         &mut draws,
                         &mut HoldMeshScratch::default(),
                         request,
-                        &straight_path,
+                        &|y, _| straight_path(y),
                         &test_source,
                     );
                     let frame = render_hold_draws(&draws);
@@ -4037,7 +4022,7 @@ mod tests {
                     &mut draws,
                     &mut HoldMeshScratch::default(),
                     request,
-                    &straight_path,
+                    &|y, _| straight_path(y),
                     &test_source,
                 );
                 let frame = render_hold_draws(&draws);
@@ -4080,7 +4065,7 @@ mod tests {
                 &mut draws,
                 &mut HoldMeshScratch::default(),
                 request,
-                &straight_path,
+                &|y, _| straight_path(y),
                 &test_source,
             );
             let frame = render_hold_draws(&draws);
@@ -4113,7 +4098,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -4194,7 +4179,7 @@ mod tests {
                 &mut draws,
                 &mut HoldMeshScratch::default(),
                 request,
-                &|y| HoldPathSample {
+                &|y, _| HoldPathSample {
                     position_offset: [0.0; 3],
                     spline_derivative: [0.0; 3],
                     spline_step: 0.0,
@@ -4236,7 +4221,7 @@ mod tests {
                     &mut draws,
                     &mut HoldMeshScratch::default(),
                     request,
-                    &straight_path,
+                    &|y, _| straight_path(y),
                     &test_source,
                 );
                 assert_eq!(draws.len(), 4);
@@ -4311,7 +4296,7 @@ mod tests {
             &mut actors,
             &mut mesh_scratch,
             request,
-            &straight_path,
+            &|y, _| straight_path(y),
             &test_source,
         );
 
@@ -4457,7 +4442,7 @@ mod tests {
                             &mut draws,
                             &mut HoldMeshScratch::default(),
                             draw,
-                            &|y| HoldPathSample {
+                            &|y, _| HoldPathSample {
                                 position_offset: [0.0; 3],
                                 spline_derivative: [0.0; 3],
                                 spline_step: 0.0,

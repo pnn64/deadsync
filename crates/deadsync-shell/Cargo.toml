@@ -60,6 +60,7 @@ smallvec = "1.16.1"
 winit = "0.30.13"
 
 [dev-dependencies]
+zstd = "0.14.0"
 deadsync-song-lua = { path = "../deadsync-song-lua", features = ["test-support"] }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 

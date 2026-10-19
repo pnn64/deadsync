@@ -336,8 +336,7 @@ impl NoteDrawRange {
 
 #[derive(Clone, Copy)]
 pub(crate) struct CompiledSplineBlend<'a> {
-    next: deadsync_gameplay::SongLuaPositionSpline<'a>,
-    beats: [f32; 2],
+    other: deadsync_gameplay::SongLuaPositionSpline<'a>,
     fraction: f32,
 }
 
@@ -348,27 +347,26 @@ impl CompiledSplineBlend<'_> {
         current_beat: f32,
         note_beat: f32,
     ) -> ([f32; 3], [f32; 3]) {
-        // Controls were authored against their capture clock. Evaluate the
-        // whole pose there before blending; a fresh beat with frozen controls
-        // can sample across a bend and snap back on every reference frame.
-        let pinned = note_beat == current_beat;
-        let a = spline.sample(
-            self.beats[0],
-            if pinned { self.beats[0] } else { note_beat },
-        );
-        let b = self.next.sample(
-            self.beats[1],
-            if pinned { self.beats[1] } else { note_beat },
-        );
+        // Interpolate captured coefficients as CubicSplineN::weighted_average
+        // does, then use NoteDisplay's draw beat. Evaluating both curves
+        // at that same beat is algebraically equivalent and avoids allocating
+        // an interpolated spline. Blending poses at two capture beats instead
+        // replaces the curve with chords and changes its motion each sample.
+        let a = spline.sample(current_beat, note_beat);
+        let b = self.other.sample(current_beat, note_beat);
         (
             std::array::from_fn(|axis| a.0[axis] + (b.0[axis] - a.0[axis]) * self.fraction),
             std::array::from_fn(|axis| a.1[axis] + (b.1[axis] - a.1[axis]) * self.fraction),
         )
     }
 
-    fn receptor(self, spline: deadsync_gameplay::SongLuaPositionSpline<'_>) -> [f32; 3] {
-        let a = spline.receptor(self.beats[0]);
-        let b = self.next.receptor(self.beats[1]);
+    fn receptor(
+        self,
+        spline: deadsync_gameplay::SongLuaPositionSpline<'_>,
+        current_beat: f32,
+    ) -> [f32; 3] {
+        let a = spline.receptor(current_beat);
+        let b = self.other.receptor(current_beat);
         std::array::from_fn(|axis| a[axis] + (b[axis] - a[axis]) * self.fraction)
     }
 }
@@ -477,7 +475,7 @@ impl<S> PreparedNotefield<'_, S> {
             return base;
         }
         let zoom = if let Some(blend) = self.column_zoom_blends[col] {
-            blend.receptor(spline)[0]
+            blend.receptor(spline, self.current_beat)[0]
         } else {
             spline.receptor(self.current_beat)[0]
         };
@@ -552,44 +550,80 @@ pub fn prepare_notefield<'a, S>(
                 .zoom
                 .as_ref()
                 .map_or_else(Default::default, |zoom| zoom.view());
-            if let (Some(next), Some(timing)) = (track.frames.get(index), request.chart.timing) {
+            if let Some(next) = track.frames.get(index) {
                 let span = next.second - frame.second;
                 // Only adjacent reference samples describe continuous motion.
                 // Sparse constant intervals and enable/disable boundaries keep
                 // their authored step instead of anticipating a later change.
                 if span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001 {
-                    let beats = [
-                        timing
-                            .get_song_position(frame.second + track.time_offset)
-                            .beat,
-                        timing
-                            .get_song_position(next.second + track.time_offset)
-                            .beat,
-                    ];
-                    let fraction = ((current_time_s - track.time_offset - frame.second) / span)
-                        .clamp(0.0, 1.0);
-                    for (spline, next_spline, blend) in [
+                    let elapsed = (current_time_s - track.time_offset - frame.second).clamp(0.0, span);
+                    let adjacent = |span: f32| {
+                        span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001
+                    };
+                    let previous = index
+                        .checked_sub(2)
+                        .map(|at| &track.frames[at])
+                        .filter(|previous| adjacent(frame.second - previous.second));
+                    let following = track
+                        .frames
+                        .get(index + 1)
+                        .filter(|following| adjacent(following.second - next.second));
+                    // A jump between two plateaus is a discrete point write,
+                    // not continuous motion starting from rest. Keep the old
+                    // plateau and the other components' prior slope until the
+                    // new sample. Blending across the jump leaks the new bend
+                    // into incoming notes and hold caps a frame early.
+                    let point_step = previous.zip(following).is_some_and(|(previous, following)| {
+                        let (Some(a), Some(b), Some(c), Some(d)) = (
+                            &previous.position, &frame.position,
+                            &next.position, &following.position,
+                        ) else {
+                            return false;
+                        };
+                        let compatible = |other: &deadsync_gameplay::SongLuaSplineData| {
+                            b.beats_per_t == other.beats_per_t
+                                && b.receptor_t == other.receptor_t
+                                && b.subtract_song_beat == other.subtract_song_beat
+                                && b.looping == other.looping
+                                && b.coefficients.len() == other.coefficients.len()
+                        };
+                        [a, c, d].into_iter().all(compatible)
+                            && (0..3).any(|axis| {
+                                a.coefficients.iter().zip(b.coefficients.iter())
+                                    .all(|(a, b)| a[axis] == b[axis])
+                                    && c.coefficients.iter().zip(d.coefficients.iter())
+                                        .all(|(c, d)| c[axis] == d[axis])
+                                    && b.coefficients.iter().zip(c.coefficients.iter())
+                                        .any(|(b, c)| b[axis] != c[axis])
+                            })
+                    });
+                    let (other, fraction) = if point_step {
+                        let previous = previous.unwrap();
+                        (previous, -elapsed / (frame.second - previous.second))
+                    } else {
+                        (next, elapsed / span)
+                    };
+                    for (spline, other_spline, blend) in [
                         (
                             &frame.position,
-                            &next.position,
+                            &other.position,
                             &mut column_position_blends[track.column],
                         ),
                         (
                             &frame.zoom,
-                            &next.zoom,
+                            &other.zoom,
                             &mut column_zoom_blends[track.column],
                         ),
                     ] {
-                        if let (Some(spline), Some(next_spline)) = (spline, next_spline)
-                            && spline.beats_per_t == next_spline.beats_per_t
-                            && spline.receptor_t == next_spline.receptor_t
-                            && spline.subtract_song_beat == next_spline.subtract_song_beat
-                            && spline.looping == next_spline.looping
-                            && spline.coefficients.len() == next_spline.coefficients.len()
+                        if let (Some(spline), Some(other_spline)) = (spline, other_spline)
+                            && spline.beats_per_t == other_spline.beats_per_t
+                            && spline.receptor_t == other_spline.receptor_t
+                            && spline.subtract_song_beat == other_spline.subtract_song_beat
+                            && spline.looping == other_spline.looping
+                            && spline.coefficients.len() == other_spline.coefficients.len()
                         {
                             *blend = Some(CompiledSplineBlend {
-                                next: next_spline.view(),
-                                beats,
+                                other: other_spline.view(),
                                 fraction,
                             });
                         }
