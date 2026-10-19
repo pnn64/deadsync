@@ -9,7 +9,9 @@
 //! lists every chart under its style's tab, each with its difficulty, meter
 //! and id; `/api/chart/<id>` is the site's own reading of that one chart,
 //! author included. Both are ordinary pages, not downloads, so a rip asks them
-//! as freely as it reads a pack page.
+//! as freely as it reads a pack page. The chart's reading also says how long
+//! the song is and how many measures the chart runs to, which a card's BPM
+//! takes its colour from ([`super::bpm`]).
 //!
 //! Everything here blocks on the network. Worker threads only.
 
@@ -204,6 +206,10 @@ pub(super) struct ChartFacts {
     /// The site's hash of the chart's notes, the same in every pack that
     /// carries it.
     pub chart_key: String,
+    /// How long the song plays, as the site measured it.
+    pub length_ms: Option<u32>,
+    /// How many measures the chart's notes run to.
+    pub measures: Option<u32>,
 }
 
 pub(super) fn fetch_chart(agent: &network::HttpAgent, chart_id: u64) -> Result<ChartFacts, String> {
@@ -242,13 +248,51 @@ pub(super) fn parse_chart(body: &str) -> Result<ChartFacts, String> {
         Some(serde_json::Value::String(text)) => text.trim().parse().unwrap_or(0),
         _ => 0,
     };
+    let (length_ms, measures) = lengths(body);
     Ok(ChartFacts {
         author: chart.author.unwrap_or_default().trim().to_owned(),
         meter,
         difficulty: chart.difficulty.unwrap_or_default(),
         charttype: chart.charttype.unwrap_or_default(),
         chart_key: chart.chart_key.unwrap_or_default(),
+        length_ms,
+        measures,
     })
+}
+
+/// The song's length and the chart's, for the tempo a card colours its BPM
+/// by. Read apart from what the rip decides on: a reply that has these in
+/// some other shape loses only the colour's average, never the song.
+#[derive(serde::Deserialize)]
+struct Lengths {
+    #[serde(default)]
+    song: Option<SongLength>,
+    /// The notes, one entry a measure, each read only to be counted.
+    #[serde(default)]
+    chartdata: Option<Vec<serde::de::IgnoredAny>>,
+}
+
+#[derive(serde::Deserialize)]
+struct SongLength {
+    /// Seconds.
+    #[serde(default)]
+    length: Option<f64>,
+}
+
+fn lengths(body: &str) -> (Option<u32>, Option<u32>) {
+    let Ok(lengths) = serde_json::from_str::<Lengths>(body) else {
+        return (None, None);
+    };
+    let length_ms = lengths
+        .song
+        .and_then(|song| song.length)
+        .filter(|seconds| seconds.is_finite() && *seconds > 0.0 && *seconds < 86_400.0)
+        .map(|seconds| (seconds * 1000.0).round() as u32);
+    let measures = lengths
+        .chartdata
+        .map(|measures| u32::try_from(measures.len()).unwrap_or(u32::MAX))
+        .filter(|measures| *measures > 0);
+    (length_ms, measures)
 }
 
 fn fetch_text(agent: &network::HttpAgent, url: String, max_bytes: usize) -> Result<String, String> {
@@ -445,7 +489,32 @@ mod tests {
                 difficulty: "Challenge".to_owned(),
                 charttype: "dance-single".to_owned(),
                 chart_key: "X31013383114125e64aa270738ed05377c1dadd94".to_owned(),
+                length_ms: Some(156_734),
+                measures: Some(1),
             }
+        );
+    }
+
+    #[test]
+    fn lengths_that_are_not_there_or_not_numbers_are_none() {
+        let chart = parse_chart(UNCREDITED_CHART).unwrap();
+        assert_eq!(chart.length_ms, None, "a song with no length");
+        assert_eq!(chart.measures, None, "a chart with no notes");
+        let odd = parse_chart(
+            r#"{"author": "Zaia", "meter": 9, "song": {"length": "2:14"}, "chartdata": "zipped"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            (odd.author.as_str(), odd.meter),
+            ("Zaia", 9),
+            "the chart still reads"
+        );
+        assert_eq!((odd.length_ms, odd.measures), (None, None));
+        let unsong = parse_chart(r#"{"song": "?", "chartdata": [[0, []], [1, []]]}"#).unwrap();
+        assert_eq!(
+            (unsong.length_ms, unsong.measures),
+            (None, None),
+            "read together, or not at all"
         );
     }
 

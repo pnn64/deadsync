@@ -48,8 +48,8 @@
 
 use super::dates::{self, Appearances, PackDate, ZipFacts};
 use super::lists::{self, PackDates};
-use super::pages::{self, Singles};
-use super::{BOOSTER_SONGS, HeldSong, RipSong};
+use super::pages::{self, ChartFacts, Singles};
+use super::{BOOSTER_SONGS, HeldSong, RipSong, bpm};
 use crate::pack_archive::{self, ArchiveError, PackIndex};
 use crate::pack_page::{self, PackPage, SongRow};
 use crate::smo_search::{self, CreditPack};
@@ -1476,14 +1476,7 @@ impl Search<'_> {
                 Place::Taken | Place::Wait => continue,
                 Place::Full => return Pick::Stop,
             }
-            match self.pay(
-                candidate,
-                in_hand.as_ref(),
-                &page.songs,
-                at,
-                &chart.author,
-                meter,
-            ) {
+            match self.pay(candidate, in_hand.as_ref(), &page.songs, at, &chart, meter) {
                 Paid::Song(found, index, names) => {
                     if !self.settle(&key, Some(*found), &names) {
                         return Pick::Nothing;
@@ -1519,16 +1512,18 @@ impl Search<'_> {
 
     /// The counted step, for a song every free page passed: its pack's index,
     /// its folder, and from those its dates, year and size. `in_hand` is the
-    /// index when [`Self::out_of_eras`] already had it.
+    /// index when [`Self::out_of_eras`] already had it; `chart` is SMO's
+    /// reading of its Expert chart.
     fn pay(
         &self,
         candidate: &Candidate,
         in_hand: Option<&Arc<HeldIndex>>,
         rows: &[SongRow],
         at: usize,
-        credit: &str,
+        chart: &ChartFacts,
         meter: u32,
     ) -> Paid {
+        let credit = chart.author.as_str();
         let held = match in_hand {
             Some(held) => Arc::clone(held),
             None => match self.index_of(candidate) {
@@ -1652,6 +1647,7 @@ impl Search<'_> {
             credit: credit.trim().to_owned(),
             meter,
             year: card_year(first),
+            bpm: bpm::card_bpm(&row.bpm, chart.length_ms, chart.measures),
             art_url: row.image_url.clone(),
             folder: folder_name.to_owned(),
             bytes,
@@ -1752,6 +1748,7 @@ mod tests {
             credit: String::new(),
             meter: 10,
             year: None,
+            bpm: bpm::CardBpm::default(),
             art_url: None,
             folder: title.to_owned(),
             bytes: 0,

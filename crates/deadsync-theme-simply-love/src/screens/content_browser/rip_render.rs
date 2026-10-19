@@ -21,7 +21,7 @@ use super::state::{State, Zone, banner_is_lost};
 use crate::act;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
-use deadsync_online::rip_packs::{BOOSTER_SONGS, Era, RipSong, SongState};
+use deadsync_online::rip_packs::{BOOSTER_SONGS, Era, Pace, RipSong, SongState};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -49,6 +49,8 @@ const BADGE_Y: f32 = -lo::RIP_CARD_H / 2.0 + 2.0 + ART_H;
 const INFO_Y: f32 = 22.0;
 const CREDIT_ZOOM: f32 = 0.36;
 const YEAR_ZOOM: f32 = 0.34;
+/// Between the year and the BPM, when a card shows both.
+const YEAR_GAP: f32 = 5.0;
 /// What a card's lines may be, inside its border.
 const CARD_TEXT_W: f32 = lo::RIP_CARD_W - 10.0;
 
@@ -892,9 +894,21 @@ fn push_card(
     }
 }
 
-/// The year, the title and who charted it, as one block centred on its
-/// place: the title takes two lines at most, the year sits over it when the
-/// song has one, and the credit under however many lines it took.
+/// A card's BPM in the ITGmania browser's colours: blue under 140, orange to
+/// 180, red from there, grey for a tempo nobody gave.
+fn pace_ink(pace: Pace) -> [f32; 3] {
+    match pace {
+        Pace::Unknown => [0.6, 0.6, 0.63],
+        Pace::Slow => [0.49, 0.83, 0.99],
+        Pace::Medium => [0.98, 0.57, 0.24],
+        Pace::Fast => [0.98, 0.44, 0.52],
+    }
+}
+
+/// The year and the BPM, the title and who charted it, as one block centred
+/// on its place: the title takes two lines at most, the year and the BPM
+/// share the line over it, side by side, when the song has either, and the
+/// credit sits under however many lines the title took.
 #[allow(clippy::too_many_arguments)]
 fn push_card_info(
     actors: &mut Vec<Actor>,
@@ -907,7 +921,7 @@ fn push_card_info(
     fit: &TitleFit,
     songs: &Arc<[RipSong]>,
 ) {
-    let year_h = if text.year.is_some() {
+    let year_h = if text.year.is_some() || text.bpm.is_some() {
         MISO_LINE * YEAR_ZOOM
     } else {
         0.0
@@ -931,19 +945,36 @@ fn push_card_info(
     let gap = if credit_h > 0.0 { 3.0 } else { 0.0 };
     let total = year_h + year_gap + title_h + gap + credit_h;
 
+    // The year and the BPM as one pair, centred, and drawn smaller should
+    // the pair be wider than the card. Until the font is there to measure
+    // with, the year stands alone.
+    let year_y = INFO_Y - total / 2.0 + year_h / 2.0;
+    let (year_w, bpm_w) = fit.year_line(songs, card).unwrap_or((0.0, 0.0));
+    let pair_gap = if year_w > 0.0 && bpm_w > 0.0 {
+        YEAR_GAP
+    } else {
+        0.0
+    };
+    let natural = (year_w + bpm_w) * YEAR_ZOOM + pair_gap;
+    let squeeze = if natural > CARD_TEXT_W {
+        CARD_TEXT_W / natural
+    } else {
+        1.0
+    };
+    let zoom = YEAR_ZOOM * squeeze;
+    let (year_w, bpm_w, pair_gap) = (year_w * zoom, bpm_w * zoom, pair_gap * squeeze);
+    let pair_w = year_w + pair_gap + bpm_w;
     if let Some(year) = text.year.as_ref() {
         let ink = if gold { rgba(GOLD, 1.0) } else { accent };
-        line(
-            actors,
-            f,
-            "miso",
-            year,
-            0.0,
-            INFO_Y - total / 2.0 + year_h / 2.0,
-            YEAR_ZOOM,
-            NO_MAX,
-            ink,
-        );
+        let x = -pair_w / 2.0 + year_w / 2.0;
+        line(actors, f, "miso", year, x, year_y, zoom, NO_MAX, ink);
+    }
+    if let Some((bpm, pace)) = text.bpm.as_ref()
+        && bpm_w > 0.0
+    {
+        let x = pair_w / 2.0 - bpm_w / 2.0;
+        let ink = rgba(pace_ink(*pace), 1.0);
+        line(actors, f, "miso", bpm, x, year_y, zoom, NO_MAX, ink);
     }
 
     let title_y = INFO_Y - total / 2.0 + year_h + year_gap + title_h / 2.0;
@@ -1232,7 +1263,7 @@ pub(super) fn push_toast(actors: &mut Vec<Actor>, state: &State, w: f32) {
 mod tests {
     use super::*;
     use crate::screens::content_browser::state;
-    use deadsync_online::rip_packs::{KeepPhase, KeepState, RipPhase, RipSnapshot};
+    use deadsync_online::rip_packs::{CardBpm, KeepPhase, KeepState, RipPhase, RipSnapshot};
 
     fn texts(actors: &[Actor]) -> Vec<String> {
         actors
@@ -1346,6 +1377,7 @@ mod tests {
                 credit: "Zaia".into(),
                 meter: if index == 3 { 15 } else { 9 },
                 year: None,
+                bpm: CardBpm::default(),
                 art_url: None,
                 folder: String::new(),
                 bytes: 1,
@@ -1408,6 +1440,122 @@ mod tests {
         assert!(words.iter().any(|word| word == "could not be downloaded"));
         assert!(words.iter().any(|word| word == "--"));
         assert_eq!(words.iter().filter(|word| *word == "HARDEST").count(), 0);
+    }
+
+    /// A card's year and BPM share the line over its title as one centred
+    /// pair, the BPM in its pace's colour; a pair wider than the card is
+    /// drawn smaller to fit it, and until the font is there to measure with
+    /// the year stands alone.
+    #[test]
+    fn a_cards_year_and_bpm_sit_side_by_side() {
+        let mut state = rip_tab();
+        let card = |year: Option<u16>, bpm: &str, tempo: u32| RipSong {
+            key: "1:1".into(),
+            pack_id: 1,
+            pack_name: "Pack".into(),
+            song_id: 1,
+            title: "Title".into(),
+            artist: String::new(),
+            credit: String::new(),
+            meter: 9,
+            year,
+            bpm: CardBpm {
+                text: bpm.into(),
+                tempo,
+            },
+            art_url: None,
+            folder: String::new(),
+            bytes: 1,
+        };
+        let snapshot = Arc::new(RipSnapshot {
+            phase: RipPhase::Ready,
+            set: 1,
+            songs: Arc::from(vec![card(Some(2021), "150-190", 175), card(None, "???", 0)]),
+            revision: 1,
+            ..RipSnapshot::default()
+        });
+        let authors = Arc::clone(&state.rip.authors);
+        rip::sync(&mut state.rip, snapshot, authors);
+        let songs = Arc::clone(&state.rip.snapshot.songs);
+        let accent = [0.1, 0.2, 0.3, 1.0];
+
+        // The year line's words: each with the middle of where it is drawn,
+        // its zoom and its colour.
+        let year_line = |fit: &TitleFit, card: usize| {
+            let mut actors = Vec::new();
+            let frame = Frame::at(0.0, 0.0, 0.0);
+            let text = &state.rip.cards[card];
+            push_card_info(
+                &mut actors,
+                &frame,
+                accent,
+                text,
+                card,
+                false,
+                false,
+                fit,
+                &songs,
+            );
+            actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Text {
+                        content,
+                        offset,
+                        scale,
+                        color,
+                        ..
+                    } if content.as_str() != "Title" => {
+                        Some((content.as_str().to_owned(), offset[0], scale[0], *color))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+        let medium = [0.98, 0.57, 0.24, 1.0];
+        let grey = [0.6, 0.6, 0.63, 1.0];
+
+        // Ten units a letter: 4 x 10 and 11 x 10 at the year's zoom, five
+        // between -- 56 across, from -28 to 28.
+        let fit = rip::fitted_titles(&state.rip, &|text| text.chars().count() as f32 * 10.0);
+        let words = year_line(&fit, 0);
+        assert_eq!(words.len(), 2, "{words:?}");
+        let (year, bpm) = (&words[0], &words[1]);
+        assert_eq!((year.0.as_str(), bpm.0.as_str()), ("2021", "150-190 BPM"));
+        assert!(
+            near(year.1, -28.0 + 6.8) && near(bpm.1, 28.0 - 18.7),
+            "{words:?}"
+        );
+        assert!(near(year.2, YEAR_ZOOM) && near(bpm.2, YEAR_ZOOM));
+        assert_eq!((year.3, bpm.3), (accent, medium));
+        let words = year_line(&fit, 1);
+        assert_eq!(words.len(), 1, "{words:?}");
+        assert_eq!(words[0].0, "??? BPM");
+        assert!(near(words[0].1, 0.0), "alone, it is centred");
+        assert_eq!(words[0].3, grey, "a hidden tempo is grey");
+        drop(fit);
+
+        // Thirty a letter: 158 across at the year's zoom, drawn smaller to
+        // span the card's 86.
+        *state.rip.title_fit.borrow_mut() = TitleFit::default();
+        let fit = rip::fitted_titles(&state.rip, &|text| text.chars().count() as f32 * 30.0);
+        let words = year_line(&fit, 0);
+        let squeeze = CARD_TEXT_W / 158.0;
+        let zoom = YEAR_ZOOM * squeeze;
+        assert!(
+            near(words[0].2, zoom) && near(words[1].2, zoom),
+            "{words:?}"
+        );
+        assert!(near(words[0].1 - 120.0 * zoom / 2.0, -CARD_TEXT_W / 2.0));
+        assert!(near(words[1].1 + 330.0 * zoom / 2.0, CARD_TEXT_W / 2.0));
+        drop(fit);
+
+        // No font: the year alone, as it was.
+        let words = year_line(&TitleFit::default(), 0);
+        assert_eq!(words.len(), 1, "{words:?}");
+        assert_eq!(words[0].0, "2021");
+        assert!(near(words[0].1, 0.0));
     }
 
     /// The picker shows its title, its tally and its rows, and the footer

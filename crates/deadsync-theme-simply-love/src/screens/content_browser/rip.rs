@@ -22,8 +22,8 @@ use super::state::{
 };
 use deadsync_online::rip_packs::{
     AuthorsPhase, AuthorsSnapshot, BOOSTER_SONGS, DEFAULT_HI, DEFAULT_LO, Era, KeepPhase,
-    KeepState, METER_CEILING, METER_FLOOR, RipOptions, RipPhase, RipSnapshot, RipSong, SongState,
-    merge_names, split_names,
+    KeepState, METER_CEILING, METER_FLOOR, Pace, RipOptions, RipPhase, RipSnapshot, RipSong,
+    SongState, merge_names, split_names,
 };
 use deadsync_theme::AudioRequest;
 use std::borrow::Cow;
@@ -253,6 +253,9 @@ pub(super) struct CardText {
     pub(super) meter: u32,
     pub(super) meter_text: Arc<str>,
     pub(super) year: Option<Arc<str>>,
+    /// `150 BPM`, and how fast the song plays, for its colour; nothing when
+    /// SMO gives the song no tempo.
+    pub(super) bpm: Option<(Arc<str>, Pace)>,
     pub(super) title: Arc<str>,
     /// `by <credit>`, or nothing when SMO credits nobody.
     pub(super) credit: Option<Arc<str>>,
@@ -268,7 +271,9 @@ pub(super) struct AuthorRow {
     pub(super) note: Option<Arc<str>>,
 }
 
-/// The cards' titles, wrapped to two lines and cut with "..." past that.
+/// The cards' titles, wrapped to two lines and cut with "..." past that, and
+/// how wide the year and the BPM over each title are, so the two sit
+/// centred as one pair.
 ///
 /// Fitting needs the font, which only drawing has, so it is worked out the
 /// first time a rip's cards are drawn and kept for as long as they are on
@@ -277,20 +282,34 @@ pub(super) struct AuthorRow {
 pub(super) struct TitleFit {
     songs: Option<Arc<[RipSong]>>,
     titles: Vec<(Arc<str>, usize)>,
+    /// Each card's year and BPM widths in the font's own units; 0 for one
+    /// the card does not show.
+    year_lines: Vec<(f32, f32)>,
 }
 
 impl TitleFit {
+    fn fits(&self, songs: &Arc<[RipSong]>) -> bool {
+        self.songs
+            .as_ref()
+            .is_some_and(|fitted| Arc::ptr_eq(fitted, songs))
+    }
+
     /// Card `card`'s fitted title and how many lines it takes, once fitted
     /// for the cards on the table.
     pub(super) fn get(&self, songs: &Arc<[RipSong]>, card: usize) -> Option<(&Arc<str>, usize)> {
-        let current = self
-            .songs
-            .as_ref()
-            .is_some_and(|fitted| Arc::ptr_eq(fitted, songs));
-        if !current {
+        if !self.fits(songs) {
             return None;
         }
         self.titles.get(card).map(|(title, lines)| (title, *lines))
+    }
+
+    /// Card `card`'s year and BPM widths, once fitted for the cards on the
+    /// table.
+    pub(super) fn year_line(&self, songs: &Arc<[RipSong]>, card: usize) -> Option<(f32, f32)> {
+        if !self.fits(songs) {
+            return None;
+        }
+        self.year_lines.get(card).copied()
     }
 }
 
@@ -589,10 +608,8 @@ fn card_texts(songs: &[RipSong]) -> Vec<CardText> {
         .map(|song| CardText {
             meter: song.meter,
             meter_text: Arc::from(song.meter.to_string()),
-            year: song
-                .year
-                .filter(|year| *year > 0)
-                .map(|year| Arc::from(year.to_string())),
+            year: year_text(song).map(Arc::from),
+            bpm: bpm_text(song).map(|text| (Arc::from(text), song.bpm.pace())),
             title: Arc::from(song.title.as_str()),
             credit: (!song.credit.is_empty()).then(|| Arc::from(format!("by {}", song.credit))),
             pack: Arc::from(song.pack_name.as_str()),
@@ -602,6 +619,19 @@ fn card_texts(songs: &[RipSong]) -> Vec<CardText> {
             }),
         })
         .collect()
+}
+
+/// The year a card shows, when something dates the song.
+fn year_text(song: &RipSong) -> Option<String> {
+    song.year
+        .filter(|year| *year > 0)
+        .map(|year| year.to_string())
+}
+
+/// The BPM a card shows -- `150 BPM`, `150-190 BPM`, `??? BPM` -- when SMO
+/// gives the song a tempo.
+fn bpm_text(song: &RipSong) -> Option<String> {
+    (!song.bpm.text.is_empty()).then(|| format!("{} BPM", song.bpm.text))
 }
 
 /// The cards' pictures, for the banner fetcher.
@@ -1641,8 +1671,9 @@ pub(super) fn veil(t: f64, stage: Stage, song: Option<SongState>) -> f32 {
 pub(super) const TITLE_ZOOM: f32 = 0.42;
 pub(super) const TITLE_WRAP: f32 = 204.0;
 
-/// The cards' titles, fitted for the cards on the table -- worked out the
-/// first time they are drawn, with the font drawing measures in.
+/// The cards' titles and year lines, fitted for the cards on the table --
+/// worked out the first time they are drawn, with the font drawing measures
+/// in.
 pub(super) fn fitted_titles<'a>(
     rip: &'a Rip,
     measure: &dyn Fn(&str) -> f32,
@@ -1664,6 +1695,13 @@ pub(super) fn fitted_titles<'a>(
                     let (title, lines) = fit_title(measure, &song.title);
                     (Arc::from(title), lines)
                 })
+                .collect();
+            let width = |text: Option<String>| text.map_or(0.0, |text| measure(&text));
+            fit.year_lines = rip
+                .snapshot
+                .songs
+                .iter()
+                .map(|song| (width(year_text(song)), width(bpm_text(song))))
                 .collect();
             fit.songs = Some(Arc::clone(&rip.snapshot.songs));
         }
@@ -1730,7 +1768,7 @@ fn wrap_words(measure: &dyn Fn(&str) -> f32, words: &[&str], ellipsis: bool) -> 
 mod tests {
     use super::*;
     use crate::screens::content_browser::state;
-    use deadsync_online::rip_packs::RipAuthor;
+    use deadsync_online::rip_packs::{CardBpm, RipAuthor};
 
     fn song(index: usize, meter: u32) -> RipSong {
         RipSong {
@@ -1747,6 +1785,17 @@ mod tests {
             },
             meter,
             year: index.is_multiple_of(2).then_some(2021),
+            bpm: match index {
+                0 => CardBpm::default(),
+                1 => CardBpm {
+                    text: "???".to_owned(),
+                    tempo: 0,
+                },
+                _ => CardBpm {
+                    text: "150-190".to_owned(),
+                    tempo: 175,
+                },
+            },
             art_url: Some(format!("https://example.test/{index}.png")),
             folder: format!("Song {index}"),
             bytes: 1024 * 1024,
@@ -2417,6 +2466,21 @@ mod tests {
         assert_eq!(state.rip.cards[1].credit.as_deref(), Some("by Zaia"));
         assert_eq!(state.rip.cards[0].year.as_deref(), Some("2021"));
         assert!(state.rip.cards[1].year.is_none());
+        let bpm = |card: &CardText| {
+            card.bpm
+                .as_ref()
+                .map(|(text, pace)| (text.to_string(), *pace))
+        };
+        assert_eq!(bpm(&state.rip.cards[0]), None, "no tempo, no BPM");
+        assert_eq!(
+            bpm(&state.rip.cards[1]),
+            Some(("??? BPM".to_owned(), Pace::Unknown))
+        );
+        assert_eq!(
+            bpm(&card_texts(&[song(2, 10)])[0]),
+            Some(("150-190 BPM".to_owned(), Pace::Medium)),
+            "a range, coloured by the tempo it plays at"
+        );
         let before = Arc::as_ptr(&state.rip.cards[1].title);
         sync_with(&mut state, ready_snapshot(1, &[8, 9], 2));
         assert_eq!(

@@ -18,7 +18,8 @@
 //!   nothing more and its answer lands nowhere.
 //! * **Keep** ([`keep`]) -- numbers the pack, downloads each song's folder
 //!   (one counted request each, with the pack's `Pack.ini` riding along),
-//!   moves ITG-synced songs to NULL, and files the pack.
+//!   moves ITG-synced songs to NULL, asks itgcontent.net for the pack's own
+//!   banner, and files the pack.
 //! * **Authors** ([`authors`]) -- the charters the author picker offers.
 //! * **Share** ([`share`]) -- tells itgcontent.net about each rip, for its
 //!   list of recent rips, and marks the kept ones kept there; only while the
@@ -48,12 +49,15 @@
 //!   touches the network or the disk on the caller's thread.
 
 mod authors;
+mod bpm;
 mod dates;
 mod keep;
 mod lists;
 mod pages;
 mod search;
 mod share;
+
+pub use bpm::{CardBpm, Pace};
 
 use crate::smo_songs::PackCache;
 use crate::stepmaniaonline::PackInfo;
@@ -274,6 +278,8 @@ pub struct RipSong {
     /// The year its Expert chart came out, or the best guess at it; `None`
     /// when nothing dates it.
     pub year: Option<u16>,
+    /// The song's tempo, as SMO prints it and as it plays.
+    pub bpm: CardBpm,
     /// The song's picture on SMO, for the card.
     pub art_url: Option<String>,
     /// The song's folder in the pack zip.
@@ -422,6 +428,9 @@ struct RuntimeState {
     /// What the running search was asked for, for the report its answer
     /// makes to itgcontent.net.
     asked: Option<share::Asked>,
+    /// What the rip on the table was asked for, for the banner its pack gets
+    /// when it is kept: the options as the search ran with them.
+    ripped_with: Option<RipOptions>,
     authors: Arc<AuthorsSnapshot>,
     authors_generation: u64,
     history_asked: bool,
@@ -482,6 +491,7 @@ pub fn runtime_rip(
             options: options.clone(),
             thrown: exclude.to_vec(),
         });
+        runtime.ripped_with = Some(options.clone());
         share::SHARE.forget();
         publish(&mut runtime, |snapshot| {
             snapshot.phase = RipPhase::Searching;
@@ -550,6 +560,7 @@ fn reset<W: share::Wire>(
     }
     SEARCH_GENERATION.fetch_add(1, Ordering::AcqRel);
     runtime.held.clear();
+    runtime.ripped_with = None;
     let owed = owed_report(runtime);
     sharer.forget();
     publish(runtime, |snapshot| {
@@ -625,6 +636,7 @@ pub fn runtime_keep(songs_root: &Path, cache_dir: &Path, history: &Path) -> Resu
             set: snapshot.set,
             songs: snapshot.songs.iter().cloned().collect(),
             held: runtime.held.clone(),
+            options: runtime.ripped_with.clone().unwrap_or_default(),
             songs_root: songs_root.to_path_buf(),
             cache_dir: cache_dir.to_path_buf(),
             history: history.to_path_buf(),

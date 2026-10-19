@@ -222,7 +222,7 @@ struct SongBody<'a> {
     bytes: u64,
 }
 
-const fn era_key(era: Era) -> &'static str {
+pub(super) const fn era_key(era: Era) -> &'static str {
     match era {
         Era::Modern => "modern",
         Era::Mid => "mid",
@@ -690,6 +690,10 @@ mod tests {
             credit: credit.to_owned(),
             meter,
             year,
+            bpm: super::super::CardBpm {
+                text: "150-190".to_owned(),
+                tempo: 175,
+            },
             art_url: Some("https://example.invalid/never-sent.png".to_owned()),
             folder: folder.to_owned(),
             bytes,
