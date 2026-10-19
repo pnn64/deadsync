@@ -4,8 +4,8 @@
 //! picked at random within a few limits -- the era its Expert chart came out
 //! in, who charted it, how hard it is, and whether the song has every singles
 //! difficulty. Nothing is downloaded until the player keeps the rip; then the
-//! songs come one at a time into a pack folder of their own, `Content Booster
-//! Pack <n> - <date>`, all null-synced.
+//! songs come, a few at a time, into a pack folder of their own, `Content
+//! Booster Pack <n> - <date>`, all null-synced.
 //!
 //! Three services live here, sharing one runtime:
 //!
@@ -43,8 +43,9 @@
 //!   across a request or a disk access. The search generation is an atomic
 //!   too, so a worker can ask "am I still wanted" before every request
 //!   without the lock.
-//! - Capacity: one search, one keep and one author build at a time; a short
-//!   thread per request to itgcontent.net about a rip ([`share`]).
+//! - Capacity: one search, one keep and one author build at a time -- a keep
+//!   fetching a few songs at once, each on a thread of its own ([`keep`]); a
+//!   short thread per request to itgcontent.net about a rip ([`share`]).
 //! - Worst frame cost: one mutex acquisition plus an `Arc` clone. Nothing here
 //!   touches the network or the disk on the caller's thread.
 
@@ -595,7 +596,8 @@ fn send_owed<W: share::Wire>(sharer: &'static share::Sharer<W>, owed: Option<Owe
 }
 
 /// Keep the rip on the table: number it, make it a pack, and download its
-/// songs one at a time. `history` is where the count of kept boosters lives.
+/// songs, a few at a time. `history` is where the count of kept boosters
+/// lives.
 pub fn runtime_keep(songs_root: &Path, cache_dir: &Path, history: &Path) -> Result<(), String> {
     if songs_root.as_os_str().is_empty() {
         return Err("there is no Songs folder to put it in".to_owned());

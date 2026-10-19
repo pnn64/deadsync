@@ -174,7 +174,7 @@ pub(super) enum Stage {
     Searching,
     /// Its cards are on the table, face up, to keep or throw back.
     Choosing,
-    /// Kept, and its songs coming in one at a time.
+    /// Kept, and its songs coming in, a few at a time.
     Filling,
     /// Kept, and in the library.
     Done,
@@ -1651,8 +1651,8 @@ pub(super) fn stand_in_pulse(t: f64, card: usize) -> f32 {
     0.55 + 0.45 * (t * 5.0 + (card + 1) as f64).sin() as f32
 }
 
-/// The shade over a kept card whose song is not in yet; the one on its way
-/// breathes.
+/// The shade over a kept card whose song is not in yet; those on their way
+/// breathe.
 pub(super) fn veil(t: f64, stage: Stage, song: Option<SongState>) -> f32 {
     if stage != Stage::Filling {
         return 0.0;

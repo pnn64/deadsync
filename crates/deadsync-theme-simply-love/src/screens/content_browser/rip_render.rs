@@ -875,7 +875,7 @@ fn push_card(
     }
 
     // While a kept pack comes in, the cards whose songs are not in yet sit
-    // under a shade, and the one on its way turns a wheel.
+    // under a shade, and those on their way -- a few at once -- turn a wheel.
     let shade = rip::veil(now, rip.stage, song);
     if shade > 0.0 {
         quad(
