@@ -6335,10 +6335,45 @@ pub fn set_actor_sound_file_from_value(
     Ok(())
 }
 
+fn play_sound_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if crate::live::active(lua) {
+        if let Some(file) = actor.get::<Option<String>>("File")? {
+            let path = resolve_actor_asset_path(actor, &file).map_err(mlua::Error::external)?;
+            crate::live::actor_sound(lua, crate::SongLuaActorSound::Play {
+                owner: actor.to_pointer() as u64, path,
+            });
+        }
+        Ok(())
+    } else {
+        capture_block_set_bool(lua, actor, "sound_play", true)
+    }
+}
+
 fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if !actor_type_is(actor, "Sound")? {
         return Ok(());
     }
+    // ActorSound calls are immediate (not tween properties). Preserve their
+    // order and actor identity, including two actors loading the same file.
+    actor.set("stop", lua.create_function({
+        let actor = actor.clone();
+        move |lua, _: MultiValue| {
+            crate::live::actor_sound(lua, crate::SongLuaActorSound::Stop {
+                owner: actor.to_pointer() as u64,
+            });
+            Ok(actor.clone())
+        }
+    })?)?;
+    actor.set("pause", lua.create_function({
+        let actor = actor.clone();
+        move |lua, args: MultiValue| {
+            let paused = method_arg(&args, 0).cloned().and_then(read_boolish).unwrap_or(false);
+            crate::live::actor_sound(lua, crate::SongLuaActorSound::Pause {
+                owner: actor.to_pointer() as u64, paused,
+            });
+            Ok(actor.clone())
+        }
+    })?)?;
     let sound = lua.create_table()?;
     sound.raw_set("__songlua_volume", 1.0_f32)?;
     sound.raw_set("__songlua_pitch", 1.0_f32)?;
@@ -8992,7 +9027,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
                 if actor_type_is(&actor, "Sound")? {
-                    capture_block_set_bool(lua, &actor, "sound_play", true)?;
+                    play_sound_actor(lua, &actor)?;
                 } else {
                     capture_block_set_bool(lua, &actor, "sprite_animate", true)?;
                 }
@@ -9006,7 +9041,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
             let actor = actor.clone();
             move |lua, _args: MultiValue| {
                 if actor_type_is(&actor, "Sound")? {
-                    capture_block_set_bool(lua, &actor, "sound_play", true)?;
+                    play_sound_actor(lua, &actor)?;
                 }
                 Ok(actor.clone())
             }
@@ -10302,7 +10337,6 @@ pub fn install_actor_methods(
     install_actor_command_methods(lua, actor)?;
     install_actor_texture_load_methods(lua, actor)?;
     install_actor_texture_proxy_getter_methods(lua, actor)?;
-    install_sound_methods(lua, actor)?;
     install_actor_transform_methods(lua, actor)?;
     install_actor_display_state_methods(lua, actor)?;
     install_actor_crop_shadow_methods(lua, actor)?;
@@ -10312,6 +10346,7 @@ pub fn install_actor_methods(
     install_actor_sprite_animation_methods(lua, actor)?;
     install_actor_effect_methods(lua, actor)?;
     install_actor_render_compat_methods(lua, actor)?;
+    install_sound_methods(lua, actor)?;
     install_actor_path_child_methods(lua, actor, add_actor_child_from_path)?;
     install_actor_visual_text_methods(lua, actor)?;
     install_actor_tap_note_methods(lua, actor)?;

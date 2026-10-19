@@ -660,6 +660,7 @@ mod tests {
             bus: EFFECT_BUS,
             generation: 0,
             target_stream_frame: total_before + MIX_CHUNK_FRAMES as u64 + 5,
+            voice: None,
         };
         let mut output = vec![f32::NAN; input.len()];
 

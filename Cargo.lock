@@ -1750,7 +1750,6 @@ dependencies = [
  "mlua",
  "rustc-hash 2.1.3",
  "serde_json",
- "sha2",
  "smallvec",
  "twox-hash",
  "winit",

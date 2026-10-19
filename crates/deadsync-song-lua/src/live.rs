@@ -962,8 +962,8 @@ pub struct SongLuaLiveBroadcast {
 
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
-    /// Screen-owned audio from a compiled program; no Lua execution is involved.
-    pub compiled_music: Option<crate::CompiledMusicAction>,
+    /// Ordered actor-owned audio operations emitted by authored Lua callbacks.
+    pub actor_sounds: Vec<SongLuaActorSound>,
     pub request: Option<SongLuaLiveRequest>,
     /// Authored calls retain their multiplicity while the screen manager
     /// consumes only the final queued screen target.
@@ -984,7 +984,7 @@ pub struct SongLuaLiveOutput {
 
 impl SongLuaLiveOutput {
     pub fn append(&mut self, mut next: Self) {
-        if next.compiled_music.is_some() {self.compiled_music=next.compiled_music.take();}
+        self.actor_sounds.append(&mut next.actor_sounds);
         if next.request.is_some() { self.request = next.request; }
         self.source_requests.append(&mut next.source_requests);
         self.broadcasts.append(&mut next.broadcasts);
@@ -994,6 +994,25 @@ impl SongLuaLiveOutput {
         self.coverage_gaps.append(&mut next.coverage_gaps);
         self.player_writes.append(&mut next.player_writes);
         self.draw_frames.append(&mut next.draw_frames);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SongLuaActorSound {
+    Play { owner: u64, path: std::path::PathBuf },
+    Stop { owner: u64 },
+    Pause { owner: u64, paused: bool },
+}
+
+#[derive(Default)]
+struct ActorSounds(Vec<SongLuaActorSound>);
+
+pub(crate) fn actor_sound(lua: &Lua, command: SongLuaActorSound) {
+    if !active(lua) { return; }
+    if let Some(mut sounds) = lua.app_data_mut::<ActorSounds>() {
+        sounds.0.push(command);
+    } else {
+        lua.set_app_data(ActorSounds(vec![command]));
     }
 }
 
@@ -1766,6 +1785,11 @@ impl SongLuaLiveScene {
         if let Value::Table(root) = &self.root {
             crate::lua_util::end_actor_scene(&self.lua, root)?;
         }
+        for actor in &self.actors {
+            if crate::lua_util::actor_type_is(actor, "Sound")? {
+                actor_sound(&self.lua, SongLuaActorSound::Stop { owner: actor.to_pointer() as u64 });
+            }
+        }
         take_output(&self.lua)
     }
 
@@ -1909,6 +1933,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     let source_requests = lua.app_data_mut::<SourceRequests>()
         .map_or_else(Vec::new, |mut events| std::mem::take(&mut events.0));
     let sounds = crate::lua_util::take_runtime_sounds(lua);
+    let actor_sounds = lua.remove_app_data::<ActorSounds>().map_or_else(Vec::new, |sounds| sounds.0);
     let errors = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>()
         .map_or_else(Vec::new, |errors| errors.0);
     let coverage_gaps = crate::lua_util::take_message_coverage(lua);
@@ -1917,7 +1942,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     }
     let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
     let draw_frames = crate::draw_capture::take_live(lua).map_err(mlua::Error::external)?;
-    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes, draw_frames, ..Default::default() })
+    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, actor_sounds, errors, coverage_gaps, player_writes, draw_frames })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
@@ -3139,6 +3164,141 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
 
     fn compile(name: &str, source: &str) -> Compiled {
         compile_with_context(name, source, |_| {})
+    }
+
+    fn write_interactive_sound(dir: &Path, name: &str) {
+        let path = dir.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // One silent PCM sample: real, independently named audio assets.
+        let mut wav = b"RIFF\x26\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0".to_vec();
+        wav.extend_from_slice(&8000_u32.to_le_bytes());
+        wav.extend_from_slice(&16000_u32.to_le_bytes());
+        wav.extend_from_slice(b"\x02\0\x10\0data\x02\0\0\0\0\0");
+        fs::write(path, wav).unwrap();
+    }
+
+    #[test]
+    fn interactive_runtime_uses_authored_controls_motion_timers_sounds_and_reload() {
+        // Two independently authored configurations: no known chart filenames,
+        // globals, system layout, constants or asset names enter the runtime.
+        for (name, button, speed, delay, duration, sound) in [
+            ("pilot-a", "Left", 14.0, 0.25, 2.0, "custom/chime.wav"),
+            ("pilot-b", "Up", 38.0, 0.5, 3.0, "different/tone.wav"),
+        ] {
+            let source = format!(r#"
+-- Changing this comment or any parameter must not select another engine path.
+VISITS = (VISITS or 0) + 1
+local tone, velocity, elapsed, finished = nil, 0, 0, false
+return Def.ActorFrame {{
+    Def.Sound {{ File='{sound}', InitCommand=function(self) tone=self end }},
+    Def.ActorFrame {{
+        Name='Pilot',
+        Def.Quad {{ InitCommand=function(self) self:zoomto(20,20) end }},
+        InitCommand=function(self) self:x(17) end,
+        OnCommand=function(self)
+            self:sleep({delay}):queuecommand('Arm')
+        end,
+        ArmCommand=function(self)
+            SCREENMAN:GetTopScreen():AddInputCallback(function(event)
+                if event.button == '{button}' then
+                    if event.type == 'InputEventType_FirstPress' then
+                        velocity={speed}; tone:play()
+                    elseif event.type == 'InputEventType_Release' then
+                        velocity=0; tone:pause(true):pause(false):stop()
+                    end
+                end
+            end)
+            self:SetUpdateFunction(function(self, dt)
+                self:x(self:GetX() + velocity*dt)
+                elapsed=elapsed+dt
+                if elapsed >= {duration} and not finished then
+                    finished=true
+                    SCREENMAN:SetNewScreen('ScreenGameplay')
+                end
+            end)
+        end,
+    }},
+}}
+"#);
+            let mut compiled = compile_with_context(name, &source,
+                |context| write_interactive_sound(&context.song_dir, sound));
+            let index = compiled.overlays.iter().position(|a| a.name.as_deref() == Some("Pilot")).unwrap();
+            let index = compiled.live_actor_indices()[index];
+            let mut scene = compiled.live_scene.take().unwrap();
+            let mut input = crate::SongLuaInputEvent {
+                player: Some(0), controller: Some(0), button, game_button: button,
+                kind: crate::SongLuaInputType::FirstPress, device: "InputDevice_Key",
+                device_button: "DeviceButton_space", level: 1.0, z: 0, down: true,
+                ago: 0.0, is_joystick: false, is_mouse: false,
+            };
+            assert!(scene.input(&input).unwrap().1.actor_sounds.is_empty(), "controls are not registered yet");
+            let frame = |seconds, delta| SongLuaLiveFrame {
+                screen_seconds: seconds, music_seconds: seconds, beat: seconds * 2.0,
+                delta_seconds: delta, ..Default::default()
+            };
+            for step in 1..=8 {
+                let output = scene.advance(frame(f64::from(step) / 8.0, 0.125)).unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                assert!(output.request.is_none());
+            }
+            assert_eq!(scene.states()[index].x, 17.0);
+            let output = scene.input(&input).unwrap().1;
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let [SongLuaActorSound::Play { owner, path }] = output.actor_sounds.as_slice() else {
+                panic!("authored sound was not played: {:?}", output.actor_sounds);
+            };
+            let owner = *owner;
+            assert!(path.ends_with(sound));
+            scene.advance(frame(1.5, 0.5)).unwrap();
+            assert_eq!(scene.states()[index].x, 17.0 + speed as f32 * 0.5);
+            input.kind = crate::SongLuaInputType::Release;
+            input.down = false;
+            let output = scene.input(&input).unwrap().1;
+            assert_eq!(output.actor_sounds, [
+                SongLuaActorSound::Pause { owner, paused: true },
+                SongLuaActorSound::Pause { owner, paused: false },
+                SongLuaActorSound::Stop { owner },
+            ]);
+            let mut requested_at = None;
+            for step in 13..=32 {
+                let seconds = f64::from(step) / 8.0;
+                let output = scene.advance(frame(seconds, 0.125)).unwrap();
+                assert!(output.errors.is_empty());
+                if let Some(request) = output.request {
+                    assert!(matches!(request, SongLuaLiveRequest::NewScreen(ref screen) if screen == "ScreenGameplay"));
+                    requested_at = Some(seconds);
+                    break;
+                }
+            }
+            let at = requested_at.expect("Lua timer requested a screen reload");
+            assert!((at - (delay + duration)).abs() <= 0.25, "timer at {at}");
+            let mut layers = crate::reload_song_lua_with_default_host::<(), (), _>(scene,
+                |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+            let scene = layers.iter_mut().find_map(|layer| layer.live_scene.take()).unwrap();
+            assert_eq!(scene.lua.globals().get::<i32>("VISITS").unwrap(), 2,
+                "screen replacement preserves arbitrary Lua globals");
+        }
+    }
+
+    #[test]
+    fn interactive_runtime_stops_only_the_authored_sound_actor() {
+        let mut compiled = compile_with_context("independent-sounds", r#"
+local a,b
+return Def.ActorFrame {
+    Def.Sound { File='same.wav', InitCommand=function(self) a=self end },
+    Def.Sound { File='same.wav', InitCommand=function(self) b=self end },
+    OnCommand=function(self) a:play(); b:play(); a:stop() end,
+}
+"#, |context| write_interactive_sound(&context.song_dir, "same.wav"));
+        let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+        let [SongLuaActorSound::Play { owner: a, path: pa },
+            SongLuaActorSound::Play { owner: b, path: pb },
+            SongLuaActorSound::Stop { owner: stop }] = output.actor_sounds.as_slice() else {
+                panic!("unexpected audio sequence: {:?}", output.actor_sounds);
+            };
+        assert_ne!(a, b);
+        assert_eq!(pa, pb);
+        assert_eq!(a, stop);
     }
 
     #[test]

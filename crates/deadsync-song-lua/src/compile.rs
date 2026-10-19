@@ -301,7 +301,6 @@ where
     lua.set_app_data(crate::song_tables::SongLuaSpeedWrites::default());
     #[cfg(feature = "test-support")]
     lua.set_app_data(crate::host::SongLuaStateCalls::default());
-    crate::compiled_scene::install_initial_state(&lua, context).map_err(|e|e.to_string())?;
     let mut scene_context = crate::host::selected_scene_context(&lua, context)
         .map_err(|err| err.to_string())?;
     let mut reloads = 0u32;
@@ -471,14 +470,7 @@ where
         lua.globals().raw_set("__songlua_screen_loading", false)
             .map_err(|err| err.to_string())?;
         crate::lua_util::begin_overlay_update_capture_from_indices(&lua, std::iter::empty());
-        let mut startup_context = context.clone();
-        if !context.live && crate::compiled_scene::detected(&lua, &root)? {
-            // This source has a native executable lowering. Do not run future
-            // commands as discovery probes or advance its input-dependent state.
-            startup_context.live = true;
-            startup_context.defer_initial_live_update = true;
-        }
-        let captured_startup = run_actor_startup_commands(&lua, &root, initial_actor_states, &startup_context)
+        let captured_startup = run_actor_startup_commands(&lua, &root, initial_actor_states, context)
             .map_err(|err| {
                 format!(
                     "failed to run actor startup commands for song lua session '{}': {err}",
@@ -538,8 +530,8 @@ where
     let mut initial_updates = captured_startup.updates;
     let initial_broadcasts = captured_startup.broadcasts;
     compile_timer.push_stage("startup_commands");
-    let native_scene = !context.live && crate::compiled_scene::detected(&lua, &root)?;
-    if context.live || native_scene {
+    if !context.live { crate::input::require_offline_compatible(&lua)?; }
+    if context.live {
         // A live scene stops at native Update(0). In particular, extracting
         // assets must never call listeners or replay future queued commands.
         mark_compile_layers(&root).map_err(|err| err.to_string())?;
@@ -600,15 +592,9 @@ where
                 TrackedCompileActorTarget::ScreenLayer(index) => out.screen_layers[index].initial_state = state,
             }
         }
-        if native_scene {
-            out.compiled_scene = Some(crate::compiled_scene::lower(&lua, &root, context, &tables)?);
-            // Lua and all Tables/Functions are dropped before returning to the
-            // caller. The program owns only typed Rust data and resource paths.
-        } else {
-            out.live_scene = Some(crate::SongLuaLiveScene::new(lua, root, scene_context,
-                entry_paths.clone(), primary_index, tables, tracked_tables, initial_broadcasts)
-                .map_err(|err| err.to_string())?);
-        }
+        out.live_scene = Some(crate::SongLuaLiveScene::new(lua, root, scene_context,
+            entry_paths.clone(), primary_index, tables, tracked_tables, initial_broadcasts)
+            .map_err(|err| err.to_string())?);
         compile_timer.push_stage("live_scene");
         log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
         if entry_paths.is_empty() {
@@ -1342,6 +1328,7 @@ where
     crate::push_song_lua_overlay_sound_paths(&out.overlays, &mut seen, &mut out.sound_paths);
     compile_timer.push_stage("finalize");
     log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
+    crate::input::require_offline_compatible(&lua)?;
     split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
 }
 
@@ -1657,7 +1644,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
                 .map_or(usize::MAX, |(_, local)| *local);
         }
         outputs[layer].overlays.push(overlay);
-        if compiled.live_scene.is_some() || compiled.compiled_scene.is_some() {
+        if compiled.live_scene.is_some() {
             outputs[layer].live_indices.push(global_index);
         }
     }
@@ -1720,7 +1707,6 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
     let primary = &mut outputs[primary_index];
     primary.live_scene = compiled.live_scene.take();
-    primary.compiled_scene = compiled.compiled_scene.take();
     #[cfg(feature = "test-support")]
     {
         primary.boolean_writes = compiled.boolean_writes;

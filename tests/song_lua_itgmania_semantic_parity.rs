@@ -1903,8 +1903,9 @@ fn position_spline_tracks_keep_native_clock_and_modifier_state() {
         &[],
     );
     let shifted =
-        deadsync_song_lua::gameplay::song_lua_column_spline_tracks(&compiled[0], 0, &timing, 0.1);
-    let shift = timing.get_time_for_beat_exact(0.0) - 0.1;
+        deadsync_song_lua::gameplay::song_lua_column_spline_tracks(&compiled[0], 0, &timing);
+    // TimingData already returns raw music timestamps, including the offset.
+    let shift = timing.get_time_for_beat_exact(0.0);
     assert_eq!(
         shifted[0]
             .at_second(1.5 + shift)
@@ -4235,7 +4236,7 @@ fn compare_column_splines(
             .iter()
             .flat_map(|layer| {
                 deadsync_song_lua::gameplay::song_lua_column_spline_tracks(
-                    layer, player, &timing, 0.0,
+                    layer, player, &timing,
                 )
             })
             .collect::<Vec<_>>();

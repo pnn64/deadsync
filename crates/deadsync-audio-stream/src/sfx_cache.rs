@@ -1,6 +1,6 @@
 use crate::mix::ASSIST_TICK_BUS;
 use deadlib_audio::stream::{OutputFormat, load_and_resample_sfx};
-use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxSender};
+use deadlib_audio_core::{MixBus, MixControls, QueuedSfx, SfxSender, SfxVoiceControl};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,7 @@ pub struct SfxCache {
     sounds: HashMap<PathBuf, SfxId>,
     sender: SfxSender,
     controls: Arc<MixControls>,
+    owned_voices: HashMap<u64, Arc<SfxVoiceControl>>,
 }
 
 impl SfxCache {
@@ -30,6 +31,7 @@ impl SfxCache {
             sounds: HashMap::new(),
             sender,
             controls,
+            owned_voices: HashMap::new(),
         }
     }
 
@@ -62,7 +64,38 @@ impl SfxCache {
             bus,
             generation: self.controls.bus_generation(bus),
             target_stream_frame,
+            voice: None,
         });
+    }
+
+    /// RageSound::Play starts a detached copy if the actor is already playing.
+    /// Stop/Pause affect the actor's original voice, not other actors or copies.
+    pub fn play_owned(&mut self, owner: u64, sound: &SfxId, bus: MixBus) {
+        if self.owned_voices.get(&owner).is_some_and(|voice| voice.is_playing()) {
+            self.play(sound, bus, 0);
+            return;
+        }
+        self.owned_voices.retain(|_, voice| voice.is_playing());
+        let voice = Arc::new(SfxVoiceControl::new());
+        if self.sender.try_send(QueuedSfx {
+            data: Arc::clone(&sound.0), bus,
+            generation: self.controls.bus_generation(bus), target_stream_frame: 0,
+            voice: Some(Arc::clone(&voice)),
+        }).is_ok() {
+            self.owned_voices.insert(owner, voice);
+        }
+    }
+
+    pub fn stop_owned(&mut self, owner: u64) {
+        if let Some(voice) = self.owned_voices.remove(&owner) { voice.stop(); }
+    }
+
+    pub fn pause_owned(&self, owner: u64, paused: bool) {
+        if let Some(voice) = self.owned_voices.get(&owner) { voice.pause(paused); }
+    }
+
+    pub fn stop_owned_voices(&mut self) {
+        for (_, voice) in self.owned_voices.drain() { voice.stop(); }
     }
 
     pub fn play_assist_tick(&mut self, sound: &SfxId, target_stream_frame: u64) {
@@ -74,6 +107,37 @@ impl SfxCache {
 mod tests {
     use super::*;
     use deadlib_audio_core::sfx_transport;
+
+    #[test]
+    fn actor_sound_stop_pause_and_overlapping_play_are_independent() {
+        use deadlib_audio_core::{mix_active_sfx, push_queued_sfx, i16_to_f32};
+        let controls = Arc::new(MixControls::new());
+        let (sender, mut receiver) = sfx_transport(8);
+        let mut cache = SfxCache::new(Arc::clone(&controls), sender);
+        let sound = SfxId(Arc::from([1000_i16; 64]));
+        let bus = MixBus::new(1);
+        cache.play_owned(11, &sound, bus);
+        cache.play_owned(22, &sound, bus);
+        cache.play_owned(11, &sound, bus); // Native PlayCopy while original is playing.
+        cache.stop_owned(11);
+        cache.pause_owned(22, true);
+        let mut active = Vec::new();
+        for sound in receiver.try_iter() { push_queued_sfx(&mut active, sound, &controls); }
+        let mut mix = [0.0; 8];
+        mix_active_sfx(&mut active, &mut mix, 0, 1, &controls);
+        assert_eq!(mix, [i16_to_f32(1000); 8], "only detached copy plays");
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].cursor, 0, "pause preserves actor cursor");
+        cache.pause_owned(22, false);
+        mix.fill(0.0);
+        mix_active_sfx(&mut active, &mut mix, 8, 1, &controls);
+        assert_eq!(mix, [i16_to_f32(1000) * 2.0; 8]);
+        cache.stop_owned_voices();
+        controls.stop_bus(bus);
+        mix.fill(0.0);
+        assert!(!mix_active_sfx(&mut active, &mut mix, 16, 1, &controls));
+        assert!(active.is_empty(), "screen exit also stops detached copies");
+    }
 
     #[test]
     fn prepared_sfx_survives_source_removal_and_bus_stop() {

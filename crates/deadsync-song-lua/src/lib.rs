@@ -17,8 +17,6 @@ mod cmd;
 mod compat;
 mod compile;
 mod compile_timing;
-mod compiled_scene;
-pub use compiled_scene::{CompiledSongScene, CompiledSceneRestart, CompiledMusicAction};
 mod crypto;
 mod draw_capture;
 pub use draw_capture::{
@@ -35,7 +33,7 @@ mod json;
 mod lua_util;
 mod raw_vm;
 mod live;
-pub use live::{SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
+pub use live::{SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
 #[cfg(feature = "test-support")]
 pub use live::SongLuaOverlayStageObservation;
 mod mod_windows;
@@ -1484,8 +1482,6 @@ pub struct SongLuaHostClockInput {
 
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
-    /// Plain state carried into a load-worker compilation after an interactive screen reload.
-    pub compiled_scene_restart: Option<CompiledSceneRestart>,
     /// Retain the initialized scene for actual gameplay instead of probing
     /// future callbacks on the load worker.
     pub live: bool,
@@ -1592,7 +1588,6 @@ impl SongLuaCompileContext {
             background_upper_left_colors: Vec::new(),
             foreground_names: Vec::new(),
             live: false,
-            compiled_scene_restart: None,
             defer_initial_live_update: false,
             screen_loading: false,
             song_dir,
@@ -2003,7 +1998,6 @@ pub struct SongLuaStateCall {
 
 #[derive(Debug)]
 pub struct CompiledSongLua<OverlayActor> {
-    pub compiled_scene: Option<CompiledSongScene>,
     pub live_scene: Option<SongLuaLiveScene>,
     /// Retained scene positions corresponding to this layer's overlays.
     pub live_indices: Vec<usize>,
@@ -2061,7 +2055,6 @@ impl<OverlayActor> CompiledSongLua<OverlayActor> {
 impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
     fn default() -> Self {
         Self {
-            compiled_scene: None,
             live_scene: None,
             live_indices: Vec::new(),
             loaded_steps: None,
@@ -6026,6 +6019,29 @@ mod tests {
             test_model_layer_from_slot,
             |_context, _noteskin| None,
         )
+    }
+
+    #[test]
+    fn offline_compile_rejects_input_callbacks_instead_of_dropping_them() {
+        for (name, command) in [
+            ("immediate-input", "OnCommand=function(self) register() end"),
+            ("delayed-input", "OnCommand=function(self) self:sleep(0.1):queuecommand('Ready') end, ReadyCommand=function(self) register() end"),
+        ] {
+            let dir = test_dir(name);
+            let entry = dir.join("custom.lua");
+            std::fs::write(&entry, format!(r#"
+local function register()
+    local screen=SCREENMAN:GetTopScreen()
+    local callback=function(event) return event.button=='Down' end
+    screen:AddInputCallback(callback):RemoveInputCallback(callback)
+end
+return Def.Actor {{ {command} }}
+"#)).unwrap();
+            let mut context = SongLuaCompileContext::new(&dir, name);
+            context.music_length_seconds = 0.5;
+            let error = test_compile_song_lua(&entry, &context).unwrap_err();
+            assert!(error.contains("requires runtime Lua"), "{error}");
+        }
     }
 
     fn test_compile_song_lua_layers(

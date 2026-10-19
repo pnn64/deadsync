@@ -2,14 +2,14 @@
 
 ## Current production status (2026-10-19)
 
-The normal compiled path now runs the Fof Guys minigame with Rust-owned
-physics, input and dynamic geometry. Lua runs only during loading and is
-released before gameplay. The focused native Single and Versus captures pass
-through normal preparation with no retained VM. The historical replay below
-covers fewer behaviors and remains separate from those new checks.
+Production now retains the shared Lua scene and executes the authored physics,
+input, timers, sounds and scene transitions. The source-specific Rust FOF
+adapter has been removed. The historical compiled reports describe that removed
+adapter; use the headless harness's `--production` mode for current gameplay.
+The historical replay below covers fewer behaviors and remains separate.
 
 Full-song completion and framebuffer pixel parity remain unverified. See
-[the compiled-path repair and evidence](song-lua-fof-production-audit.md).
+[the execution audit and historical evidence](song-lua-fof-production-audit.md).
 
 `fof_guys/fof.ssc` **passed** the existing full replay on 2026-10-16:
 7,378/7,378 native frames, 129 stage samples, 1,419 stage fields, zero

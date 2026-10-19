@@ -879,12 +879,6 @@ struct SongLuaRandomState(SongLuaRandom);
 impl Default for SongLuaRandom {
     fn default() -> Self { Self::seeded(1) }
 }
-pub(crate) fn compiled_random(lua: &Lua) -> SongLuaRandom {
-    lua.app_data_ref::<SongLuaRandomState>().map(|state|state.0.clone()).unwrap_or_default()
-}
-pub(crate) fn restore_compiled_random(lua: &Lua, random: &SongLuaRandom) {
-    if let Some(mut state)=lua.app_data_mut::<SongLuaRandomState>() {state.0=random.clone();}
-}
 
 pub(crate) struct RandomSnapshot {
     lua: Lua,

@@ -1,5 +1,5 @@
-//! Replay native observations through gameplay. `--compiled` exercises normal
-//! preparation and requires Rust-owned execution without a retained Lua VM.
+//! Replay native observations through gameplay. `--production` exercises normal
+//! preparation and the shared Lua scene used by interactive song scripts.
 #[path = "song_lua_itgmania_semantic_parity/native_gameplay.rs"]
 mod native_gameplay;
 #[path = "support/paths.rs"]
@@ -21,9 +21,9 @@ fn main() -> ExitCode {
 
 fn run() -> ExitCode {
     let mut args: Vec<_> = std::env::args_os().skip(1).collect();
-    let compiled_path = args
+    let production_path = args
         .iter()
-        .position(|arg| arg == "--compiled")
+        .position(|arg| arg == "--production")
         .is_some_and(|index| {
             args.remove(index);
             true
@@ -39,7 +39,7 @@ fn run() -> ExitCode {
     };
     if args.is_empty() {
         eprintln!(
-            "cargo test --test live_song_lua -- <trace.json> <simfile> <report.json> [--entry|--first-query]"
+            "cargo test --test live_song_lua -- <trace.json> <simfile> <report.json> [--production] [--entry|--first-query]"
         );
         return ExitCode::SUCCESS;
     }
@@ -49,10 +49,10 @@ fn run() -> ExitCode {
     }
     eprintln!(
         "{}",
-        if compiled_path {
-            "Normal compiled gameplay replay; no runtime Lua VM"
+        if production_path {
+            "Production gameplay replay; authored runtime Lua callbacks"
         } else {
-            "Diagnostic live Lua replay; normal compiled gameplay preparation is not exercised"
+            "Diagnostic live Lua replay; production preparation is not exercised"
         }
     );
     let trace: serde_json::Value = match std::fs::read(&args[0])
@@ -77,8 +77,8 @@ fn run() -> ExitCode {
             eprintln!("replay {used}/{total}");
         }
     };
-    let result = if compiled_path {
-        native_gameplay::replay_compiled(
+    let result = if production_path {
+        native_gameplay::replay_production(
             &trace,
             Path::new(&args[0]),
             Path::new(&args[1]),
@@ -103,8 +103,8 @@ fn run() -> ExitCode {
                     std::fs::write(&args[2], bytes).map_err(|error| error.to_string())
                 }) {
                 Ok(())
-                    if report[if compiled_path {
-                        "compiled_gameplay_checks_passed"
+                    if report[if production_path {
+                        "production_gameplay_checks_passed"
                     } else {
                         "interactive_checks_passed"
                     }] == true =>
