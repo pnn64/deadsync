@@ -1030,7 +1030,6 @@ pub struct SongLuaLiveScene {
     pub(crate) actors: Vec<Table>,
     pub(crate) states: Vec<SongLuaOverlayState>,
     pub(crate) tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
-    pub(crate) registry: Vec<Table>,
     targets: Vec<(usize, SongLuaLiveTarget)>,
     visual_targets: rustc_hash::FxHashMap<usize, SongLuaLiveTarget>,
     context: SongLuaCompileContext,
@@ -1185,7 +1184,8 @@ impl SongLuaLiveScene {
         }
         for layer in &mut background_layers { layer.changes.sort_by(|a,b| a.1.start_beat.total_cmp(&b.1.start_beat)); }
         let background_order = (0..backgrounds.len()).collect();
-        Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
+        crate::lua_util::begin_live_actor_playback(&lua, &registry)?;
+        Ok(Self { lua, root, stage, players, actors, states, tracked,
             targets: Vec::new(), visual_targets: Default::default(), context, entry_paths, primary_index, last_beat,
             last_music_seconds: -9999.0, prepared_frame_beat: None, backgrounds, background_layers, background_order, foregrounds, startup_output,
             outro_started: false, outro_options_reset: false, outro_off_pending: false, outro_failed: false,
@@ -1269,11 +1269,6 @@ impl SongLuaLiveScene {
         }
         for (_, actor, state) in &mut self.tracked {
             *state = read_state(&self.lua, actor)?;
-        }
-        // Capture blocks are compiler audit history. Actual tween destinations
-        // and commands live in the bounded pending queue; discard old blocks.
-        for actor in &self.registry {
-            crate::reset_actor_capture(&self.lua, actor)?;
         }
         // ScreenGameplay updates health after its actor tree. GetHealthState
         // during a SetLife/LifeChanged callback still sees the previous state.
@@ -1389,7 +1384,6 @@ impl SongLuaLiveScene {
         for (_, actor, state) in &mut self.tracked {
             *state = read_state(&self.lua, actor)?;
         }
-        for actor in &self.registry { crate::reset_actor_capture(&self.lua, actor)?; }
         take_output(&self.lua)
     }
 
@@ -1953,6 +1947,72 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_native_queues_preserve_behavior_without_capture_history() {
+        let source = r#"
+local tick = 0
+return Def.ActorFrame {
+    OnCommand = function(self)
+        self:SetUpdateFunction(function()
+            tick = tick + 1
+            Q:visible(tick % 2 == 0):shadowlengthx(tick):shadowlengthy(-tick)
+                :zwrite(tick % 2 == 0):SetTextureFiltering(tick % 2 == 0)
+                :diffusealpha(0.5):glow(0.1,0.2,0.3,0.4)
+            S:customtexturerect(0,0,1,1):setstate(0)
+            if tick == 3 then Q:hibernate(0.125):hurrytweening(0.5) end
+            if tick == 7 then Q:stoptweening():addx(3):sleep(0):queuecommand('Again') end
+            if tick == 11 then Q:finishtweening() end
+            if tick == 13 then Q:xy(7,9):addy(2):shadowlength(3) end
+            OBSERVED = string.format('%g,%g,%g,%g',Q:GetX(),Q:GetDestX(),Q:getaux(),Q:GetTweenTimeLeft())
+        end)
+        self:SetDrawFunction(function()
+            Q:basezoomx(tick / 10 + 1)
+            Q:Draw()
+        end)
+    end,
+    Def.Quad {
+        InitCommand = function(self) Q=self; self:zoomto(12,18) end,
+        OnCommand = function(self) self:linear(0.125):x(8):aux(2):queuecommand('Again') end,
+        AgainCommand = function(self)
+            self:addx(4):aux(self:getaux()+1):sleep(0.125):queuecommand('Again')
+        end,
+    },
+    Def.Sprite { InitCommand = function(self) S=self end },
+}
+"#;
+        let build = || compile_with_context("live-capture-history", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut live = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        // Exercise the previous capture-backed setters with identical Lua,
+        // queues and frames. Its old frame boundary discarded audit blocks.
+        legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
+        for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
+        for frame in 0..20 {
+            let seconds = f64::from(frame) / 16.0;
+            let input = SongLuaLiveFrame { screen_seconds: seconds, music_seconds: seconds,
+                beat: seconds * 2.0, delta_seconds: if frame == 0 { 0.0 } else { 0.0625 },
+                ..Default::default() };
+            let output = live.advance(input.clone()).unwrap();
+            let before = legacy.advance(input).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(live.states(), legacy.states(), "frame {frame}");
+            assert_eq!(live.tracked_states().map(|(_, state)| state).collect::<Vec<_>>(),
+                legacy.tracked_states().map(|(_, state)| state).collect::<Vec<_>>());
+            assert_eq!(live.lua.globals().get::<String>("OBSERVED").unwrap(),
+                legacy.lua.globals().get::<String>("OBSERVED").unwrap(), "getters at frame {frame}");
+            for actor in registry(&live) {
+                for key in ["__songlua_capture_blocks", "__songlua_capture_block", "__songlua_capture_immediate_block"] {
+                    assert!(actor.raw_get::<Value>(key).unwrap().is_nil(), "live actor retained {key}");
+                }
+            }
+            for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
+        }
+    }
+
     #[test]
     fn live_native_pose_getters_preserve_queue_and_sibling_order() {
         let mut compiled = compile_with_context("native-pose-getters", r#"

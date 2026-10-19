@@ -1162,11 +1162,14 @@ fn record_overlay_update_capture(
     value: SongLuaOverlayUpdateValue,
 ) -> bool {
     let Some(target) = capture_target_for_key(key) else {
-        return false;
+        return live_actor_playback(lua);
     };
     if let Some(recorded) = record_tween_write(lua, actor, target, &value) {
         return recorded;
     }
+    // Live setters have already updated native pose state, or will write an
+    // immediate property below. Neither needs an offline command-history block.
+    if live_actor_playback(lua) { return true; }
     let direct_message_actor = {
         let Some(capture) = lua.app_data_ref::<SongLuaOverlayUpdateCapture>() else {
             return false;
@@ -1276,6 +1279,7 @@ fn record_overlay_update_capture_immediate(
     key: &str,
     value: SongLuaOverlayUpdateValue,
 ) -> bool {
+    if live_actor_playback(lua) { return true; }
     let Some(target) = capture_target_for_key(key) else {
         return false;
     };
@@ -3840,7 +3844,8 @@ fn run_actor_message_with_params(
     name: &str,
     params: Option<Value>,
 ) -> mlua::Result<()> {
-    if let Some(scope) = lua.app_data_ref::<SongLuaQueuedCommand>() {
+    if !live_actor_playback(lua)
+        && let Some(scope) = lua.app_data_ref::<SongLuaQueuedCommand>() {
         let cursor = actor
             .get::<Option<f32>>("__songlua_capture_cursor")?
             .unwrap_or(0.0);
@@ -3919,8 +3924,8 @@ fn run_guarded_actor_command(
     active.set(name, true)?;
     let recurring_cursor_key = "__songlua_recurring_update_start_cursor";
     // This long key is not interned by Lua; reuse it across all scope accesses.
-    let recurring_exact_key = lua.create_string("__songlua_recurring_update_exact_interval")?;
-    let previous_recurring_state = {
+    let previous_recurring_state = if live_actor_playback(lua) { None } else {
+        let recurring_exact_key = lua.create_string("__songlua_recurring_update_exact_interval")?;
         let previous_cursor = actor.get::<Value>(recurring_cursor_key)?;
         let previous_exact = actor.get::<Value>(&recurring_exact_key)?;
         actor.set(
@@ -3930,7 +3935,7 @@ fn run_guarded_actor_command(
                 .unwrap_or(0.0),
         )?;
         actor.set(&recurring_exact_key, 0.0_f64)?;
-        (previous_cursor, previous_exact)
+        Some((recurring_exact_key, previous_cursor, previous_exact))
     };
     #[cfg(feature = "test-support")]
     let prior_update = lua
@@ -3984,8 +3989,10 @@ fn run_guarded_actor_command(
         }
         Ok(())
     });
-    actor.set(recurring_cursor_key, previous_recurring_state.0)?;
-    actor.set(&recurring_exact_key, previous_recurring_state.1)?;
+    if let Some((key, cursor, exact)) = previous_recurring_state {
+        actor.set(recurring_cursor_key, cursor)?;
+        actor.set(key, exact)?;
+    }
     active.set(name, Value::Nil)?;
     result
 }
@@ -4359,10 +4366,9 @@ fn merge_actor_concat(lua: &Lua, actor: &Table, rhs: &Table) -> mlua::Result<()>
 }
 
 pub fn actor_shadow_len(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 2]> {
-    let block = actor_current_capture_block(lua, actor)?;
-    if let Some(value) = block
-        .get::<Option<Table>>("shadow_len")?
-        .and_then(|value| table_vec2(&value))
+    if !live_actor_playback(lua)
+        && let Some(value) = actor_current_capture_block(lua, actor)?
+            .get::<Option<Table>>("shadow_len")?.and_then(|value| table_vec2(&value))
     {
         return Ok(value);
     }
@@ -4520,6 +4526,7 @@ pub fn capture_actor_message_commands(
 }
 
 pub fn actor_current_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    debug_assert!(!live_actor_playback(lua), "live actor requested compiler capture history");
     record_probe_actor_call(lua, actor)?;
     prepare_capture_scope_actor(lua, actor)?;
     if let Some(block) = actor.get::<Option<Table>>("__songlua_capture_block")? {
@@ -4755,7 +4762,8 @@ fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) ->
         }
         _ => None,
     });
-    if !update.is_some_and(|value| record_overlay_update_capture_immediate(lua, actor, key, value))
+    if !live_actor_playback(lua)
+        && !update.is_some_and(|value| record_overlay_update_capture_immediate(lua, actor, key, value))
     {
         let block = actor_immediate_capture_block(lua, actor)?;
         block.set(key, value)?;
@@ -5272,7 +5280,8 @@ pub fn capture_block_set_string(
         }
         _ => None,
     });
-    if !update_value.is_some_and(|value| record_overlay_update_capture(lua, actor, key, value)) {
+    if !live_actor_playback(lua)
+        && !update_value.is_some_and(|value| record_overlay_update_capture(lua, actor, key, value)) {
         let block = actor_current_capture_block(lua, actor)?;
         block.set(key, value)?;
         block.set("__songlua_has_changes", true)?;
@@ -5308,9 +5317,11 @@ pub fn set_actor_sprite_state(lua: &Lua, actor: &Table, state_index: u32) -> mlu
     // Sprite::SetState changes animation state immediately, outside Actor's
     // tween queue. A same-command state selection must follow Load's reset.
     capture_immediate_u32(lua, actor, "sprite_state_index", state_index)?;
-    let block = actor_current_capture_block(lua, actor)?;
-    block.set("custom_texture_rect", Value::Nil)?;
-    block.set("__songlua_has_changes", true)?;
+    if !live_actor_playback(lua) {
+        let block = actor_current_capture_block(lua, actor)?;
+        block.set("custom_texture_rect", Value::Nil)?;
+        block.set("__songlua_has_changes", true)?;
+    }
     actor.set("__songlua_state_custom_texture_rect", Value::Nil)?;
     Ok(())
 }
@@ -6678,11 +6689,9 @@ pub fn make_actor_add_f32_method(
         let Some(delta) = delta.and_then(read_f32) else {
             return Ok(actor.clone());
         };
-        let block = actor_current_capture_block(lua, &actor)?;
-        let current = block
-            .get::<Option<f32>>(key)?
-            .or(actor.get::<Option<f32>>(state_key.as_ref())?)
-            .unwrap_or(0.0);
+        let captured = if live_actor_playback(lua) { None }
+            else { actor_current_capture_block(lua, &actor)?.get::<Option<f32>>(key)? };
+        let current = captured.or(actor.get::<Option<f32>>(state_key.as_ref())?).unwrap_or(0.0);
         capture_block_set_f32(lua, &actor, key, current + delta)?;
         Ok(actor.clone())
     })
@@ -6734,6 +6743,11 @@ fn begin_actor_tween(lua: &Lua, actor: &Table, duration: f32, exact_duration: f6
     easing: Option<&str>) -> mlua::Result<Table> {
     prepare_capture_scope_actor(lua, actor)?;
     finish_overflowing_tween_queue(lua, actor)?;
+    if live_actor_playback(lua) {
+        queue_spin_tween(lua, actor, exact_duration, easing)?;
+        queue_replay_tween(lua, actor, exact_duration, easing);
+        return Ok(actor.clone());
+    }
     flush_actor_capture(actor)?;
     let mut cursor = actor.get::<Option<f32>>("__songlua_capture_cursor")?.unwrap_or(0.0);
     queue_spin_tween(lua, actor, exact_duration, easing)?;
@@ -11460,6 +11474,24 @@ struct ActorTweenStep {
 
 struct ActorTweenReplays(FxHashMap<usize, ActorTweenReplay>);
 
+// Preparation can still need compiler captures while constructing visual
+// bindings. After ownership transfers to the live scene, pending native queues
+// and immediate actor properties are sufficient; audit history is disposable.
+pub(crate) struct LiveActorPlayback;
+
+fn live_actor_playback(lua: &Lua) -> bool {
+    lua.app_data_ref::<LiveActorPlayback>().is_some()
+}
+
+pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {
+    for actor in actors {
+        reset_actor_capture(lua, actor)?;
+        actor.raw_set("__songlua_capture_blocks", Value::Nil)?;
+    }
+    lua.set_app_data(LiveActorPlayback);
+    Ok(())
+}
+
 fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
     if !crate::live::active(lua) { return None; }
     lua.app_data_ref::<ActorTweenReplays>()?
@@ -11470,6 +11502,7 @@ struct LiveBroadcasts(Vec<(f32, String, bool)>);
 struct LiveSourceBroadcasts(Vec<crate::live::SongLuaLiveBroadcast>);
 
 pub(crate) fn begin_live_runtime(lua: &Lua) -> mlua::Result<()> {
+    lua.remove_app_data::<LiveActorPlayback>();
     lua.remove_app_data::<CanonicalLiveActorHandles>();
     // The process VM survives ScreenGameplay reentry; the actor execution
     // plan belongs to the outgoing screen and must release its old tables.
@@ -11671,7 +11704,7 @@ fn record_tween_write(
     let broadcast = lua
         .app_data_ref::<SongLuaOverlayUpdateCapture>()
         .is_some_and(|capture| capture.active_broadcast.is_some());
-    if broadcast {
+    if broadcast && !live_actor_playback(lua) {
         let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
         let duration = actor
             .get::<Option<f32>>("__songlua_capture_duration")
@@ -18898,6 +18931,7 @@ fn capture_reset_keys(lua: &Lua) -> mlua::Result<Table> {
 }
 
 pub fn reset_actor_capture(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if live_actor_playback(lua) { return Ok(()); }
     if crate::live::active(lua) {
         let keys = capture_reset_keys(lua)?;
         // These are private audit fields, not actor commands. Reset them under
@@ -19111,6 +19145,7 @@ fn is_capture_block_meta_key(key: &str) -> bool {
 pub fn finish_actor_tweening(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     flush_actor_capture(actor)?;
     finish_pending_tweens(lua, actor)?;
+    if live_actor_playback(lua) { return Ok(()); }
     let final_block = lua.create_table()?;
     let mut has_changes = false;
     if let Some(blocks) = actor.get::<Option<Table>>("__songlua_capture_blocks")? {
