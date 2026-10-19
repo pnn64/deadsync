@@ -1186,7 +1186,6 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 compiled,
                 player,
                 params.timing_players[player],
-                player_global_offset_seconds,
             );
         }
 

@@ -1454,3 +1454,41 @@ fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
         assert!((runtime.scroll[0].reverse.expect("reverse") - amount.min(0.1)).abs() < 0.00001);
     }
 }
+
+#[test]
+fn column_spline_origin_applies_global_offset_once() {
+    use deadsync_gameplay::{SongLuaColumnSplineFrame, SongLuaColumnSplineTrack};
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+    for offset in [-0.025, -0.008, 0.0, 0.023] {
+        let timing = TimingData::from_segments(
+            -0.021,
+            offset,
+            &TimingSegments {
+                bpms: vec![(0.0, 110.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        for captured_origin in [None, Some(timing.get_time_for_beat_exact(0.0))] {
+            let mut compiled = deadsync_song_lua::CompiledSongLua::<()>::default();
+            compiled.column_spline_origin = captured_origin;
+            compiled.column_splines.push(SongLuaColumnSplineTrack {
+                player: 0,
+                column: 0,
+                time_offset: 0.0,
+                frames: vec![SongLuaColumnSplineFrame {
+                    second: 1.0,
+                    position: None,
+                    zoom: None,
+                }]
+                .into(),
+            });
+            let tracks =
+                deadsync_song_lua::gameplay::song_lua_column_spline_tracks(&compiled, 0, &timing);
+            let at = 1.0 + timing.get_time_for_beat_exact(0.0);
+            assert!(tracks[0].at_second(at - 0.0001).is_none());
+            assert!(tracks[0].at_second(at).is_some(), "offset {offset}");
+            assert!((timing.get_song_position(at).beat - 110.0 / 60.0).abs() < 0.00001);
+        }
+    }
+}

@@ -356,7 +356,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         );
         if spline.enabled && spline.absolute {
             center = [
-                field.playfield_center_x + spline.receptor(current_beat)[0] * field_zoom,
+                field.playfield_center_x + prepared.column_spline_receptors[local_col][0] * field_zoom,
                 receptor_y,
             ];
         }
@@ -3190,7 +3190,84 @@ mod tests {
     }
 
     #[test]
-    fn compiled_zoom_spline_does_not_oscillate_between_reference_frames() {
+    fn seventh_native_swap_frames_evaluate_on_their_captured_clock() {
+        use deadsync_gameplay::{
+            SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
+        };
+        let captures: [serde_json::Value; 2] = [
+            include_str!("../../../tests/fixtures/itgmania-song-lua-micro/seventh-swap-native.json"),
+            include_str!(
+                "../../../tests/fixtures/itgmania-song-lua-micro/seventh-swap-approach-native.json"
+            ),
+        ]
+        .map(|json| serde_json::from_str(json).unwrap());
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        for frame in captures
+            .iter()
+            .flat_map(|native| native["frames"].as_array().unwrap())
+        {
+            let spline = |key: &str| {
+                let points: Vec<[f32; 3]> = serde_json::from_value(frame[key].clone()).unwrap();
+                SongLuaSplineData {
+                    coefficients: deadsync_gameplay::solve_song_lua_spline(&points).into(),
+                    constant: false,
+                    looping: false,
+                    beats_per_t: 0.125,
+                    receptor_t: 0.0,
+                    subtract_song_beat: true,
+                }
+            };
+            let beat = frame["beat"].as_f64().unwrap() as f32;
+            let second = frame["seconds"].as_f64().unwrap() as f32;
+            let note = frame["note_beat"].as_f64().unwrap() as f32;
+            let tracks = [SongLuaColumnSplineTrack {
+                player: 0,
+                column: 0,
+                time_offset: 0.0,
+                frames: vec![SongLuaColumnSplineFrame {
+                    second,
+                    position: Some(spline("position_points")),
+                    zoom: Some(spline("zoom_points")),
+                }]
+                .into(),
+            }];
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_music_time_ns =
+                deadsync_core::song_time::song_time_ns_from_seconds(second);
+            request.chart.visible_beat = beat;
+            request.song_lua.column_splines = &tracks;
+            let prepared = prepare_notefield(&request).unwrap();
+            let position = prepared.spline_sample(0, note).0;
+            for axis in 0..3 {
+                let expected = frame["position"][axis].as_f64().unwrap() as f32;
+                assert!(
+                    (position[axis] - expected).abs() < 0.001,
+                    "native first arrow at beat {beat}, axis {axis}: {position:?}"
+                );
+            }
+            let zoom = prepared.spline_zoom(0, note, 1.0);
+            assert!(
+                (zoom - frame["zoom"][0].as_f64().unwrap() as f32).abs() < 0.00001,
+                "native first arrow size at beat {beat}: {zoom}"
+            );
+            if let Some(neighbor) = frame.get("neighbor_position") {
+                // All lanes share this Y path. Check the following up arrow
+                // against its independent native observation too: the first
+                // arrow's spline bend changes their spacing before the swap.
+                let following_y = prepared.spline_sample(0, 131.0).0[1];
+                let expected_y = neighbor[1].as_f64().unwrap() as f32;
+                assert!(
+                    (following_y - expected_y).abs() < 0.001,
+                    "native following arrow at beat {beat}: {following_y} vs {expected_y}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn compiled_splines_share_reference_clocks_between_frames() {
         use deadsync_gameplay::{
             SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
         };
@@ -3208,7 +3285,22 @@ mod tests {
                         let beat = timing.get_beat_for_time(second);
                         SongLuaColumnSplineFrame {
                             second,
-                            position: None,
+                            position: Some(SongLuaSplineData {
+                                coefficients: deadsync_gameplay::solve_song_lua_spline(&[
+                                    [16.0 * beat, -32.0 * beat, 8.0 * beat],
+                                    [
+                                        16.0 * (1.0 + beat),
+                                        -32.0 * (1.0 + beat),
+                                        8.0 * (1.0 + beat),
+                                    ],
+                                ])
+                                .into(),
+                                constant: false,
+                                looping: false,
+                                beats_per_t: 1.0,
+                                receptor_t: 0.0,
+                                subtract_song_beat: true,
+                            }),
                             zoom: Some(SongLuaSplineData {
                                 coefficients: deadsync_gameplay::solve_song_lua_spline(&[
                                     [1.0 + beat; 3],
@@ -3238,6 +3330,26 @@ mod tests {
                 request.chart.visible_beat = timing.get_beat_for_time(second);
                 request.song_lua.column_splines = &track;
                 let prepared = prepare_notefield(&request).unwrap();
+                let (position, tangent) = prepared.spline_sample(0, 0.5);
+                for axis in 0..3 {
+                    let slope = [16.0, -32.0, 8.0][axis];
+                    assert!(
+                        (position[axis] - slope * 0.5).abs() < 0.00001,
+                        "position at tick {tick}, axis {axis}: {position:?}"
+                    );
+                    assert!((tangent[axis] - slope).abs() < 0.00001);
+                    let receptor = prepared.column_spline_receptors[0][axis];
+                    let captured_beat = timing.get_beat_for_time((tick / 4) as f32 * rate / 60.0);
+                    assert!(
+                        (receptor - slope * captured_beat).abs() < 0.00001,
+                        "position receptor at tick {tick}, axis {axis}"
+                    );
+                    let pinned = prepared.spline_sample(0, request.chart.visible_beat).0[axis];
+                    assert!(
+                        (pinned - receptor).abs() < 0.00001,
+                        "position held head at tick {tick}, axis {axis}"
+                    );
+                }
                 let zoom = prepared.spline_zoom(0, 1.0, 0.7);
                 assert!(
                     (zoom - 2.0).abs() < 0.00001,
@@ -3285,6 +3397,57 @@ mod tests {
                     "sparse/disabled at {second}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn compiled_spline_receptor_teleports_keep_their_anchors() {
+        use deadsync_gameplay::{
+            SongLuaColumnSplineFrame, SongLuaColumnSplineTrack, SongLuaSplineData,
+        };
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let tracks = [SongLuaColumnSplineTrack {
+            player: 0,
+            column: 0,
+            time_offset: 0.0,
+            frames: [-1.0, 1.0]
+                .into_iter()
+                .enumerate()
+                .map(|(index, sign)| SongLuaColumnSplineFrame {
+                    second: index as f32 / 60.0,
+                    position: Some(SongLuaSplineData {
+                        coefficients: deadsync_gameplay::solve_song_lua_spline(&[
+                            [0.0, sign * 200.0, 0.0],
+                            [0.0, sign * 100.0, 0.0],
+                        ])
+                        .into(),
+                        constant: false,
+                        looping: false,
+                        beats_per_t: 1.0,
+                        receptor_t: 0.0,
+                        subtract_song_beat: true,
+                    }),
+                    zoom: None,
+                })
+                .collect::<Vec<_>>()
+                .into(),
+        }];
+        for tick in 0..8 {
+            let second = tick as f32 / 240.0;
+            let mut request = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.visible_music_time_ns =
+                deadsync_core::song_time::song_time_ns_from_seconds(second);
+            request.chart.visible_beat = timing.get_song_position(second).beat;
+            request.song_lua.column_splines = &tracks;
+            let prepared = prepare_notefield(&request).unwrap();
+            let expected = if tick < 4 { -200.0 } else { 200.0 };
+            assert_eq!(prepared.column_spline_receptors[0][1], expected);
+            assert_eq!(
+                prepared.spline_sample(0, request.chart.visible_beat).0[1],
+                expected
+            );
         }
     }
 
@@ -3531,7 +3694,10 @@ mod tests {
                             let actual = sprite(&absolute, key);
                             let expected = [
                                 field.playfield_center_x + position[0] * zoom,
-                                request.geometry.screen_center_y + position[1] * zoom,
+                                // Player::Load centers NoteField between the
+                                // native standard and reversed receptor metrics.
+                                f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse)
+                                    + position[1] * zoom,
                                 position[2] * zoom,
                             ];
                             for axis in 0..3 {

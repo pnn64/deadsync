@@ -444,6 +444,13 @@ fn model_draw_transform(model_size: [f32; 2], affine: Matrix4) -> Matrix4 {
 /// Restore model Z without changing its existing perspective or screen position.
 /// The caller brackets each mine's meshes with depth clears.
 pub fn noteskin_model_depth(model: &ModelMesh, transform: &mut Matrix4) {
+    if transform.x_axis.w == 0.0
+        && transform.y_axis.w == 0.0
+        && transform.z_axis.w == 0.0
+        && transform.w_axis.w == 1.0
+    {
+        return;
+    }
     let size = model.size();
     let focal = (size[0].max(size[1]) * 6.0).max(180.0);
     transform.x_axis.z = -transform.x_axis.w * focal;
@@ -758,7 +765,10 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
 
     let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
     let affine = model_affine_transform(model, size, rotation_deg, draw);
-    let local_transform = model_draw_transform(model.size(), affine);
+    // Field draws inherit the Player or proxy/AFT camera. Preserve XYZ and
+    // let that camera project them; a model-local focal distance also distorts
+    // orthographic AFT draws. The flat stream uses Y-up world coordinates.
+    let local_transform = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)) * affine;
     let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(flat_from_vertices(

@@ -701,6 +701,9 @@ mod tests {
         renderer: &str,
         until_beat: Option<f32>,
     ) -> screen_gameplay::State {
+        // Fixture charts are loaded at zero global offset below. Compile and
+        // play with that same clock rather than the cabinet default (-8 ms).
+        let config = GameplayConfig { global_offset_seconds: 0.0, ..Default::default() };
         let song = Arc::new(
             deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
                 .expect("generated gameplay fixture should parse"),
@@ -750,7 +753,7 @@ mod tests {
                 16.0 / 9.0,
                 0.0,
                 &session,
-                &GameplayConfig::default(),
+                &config,
                 renderer,
                 1,
             )
@@ -767,7 +770,7 @@ mod tests {
                 16.0 / 9.0,
                 0.0,
                 &session,
-                &GameplayConfig::default(),
+                &config,
                 renderer,
                 1,
                 false,
@@ -796,7 +799,7 @@ mod tests {
             gameplay_charts,
             viewport,
             session,
-            GameplayConfig::default(),
+            config,
             5,
             1.0,
             scroll_speed,
@@ -5057,10 +5060,102 @@ return Def.ActorFrame{
                     .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
                     .collect();
                 let mut probes = vec![
-                    (112.0, Some(105.0), None),
-                    (115.0, Some(375.0), None),
-                    (123.0, Some(105.0), None),
+                    (112.0, Some(115.0), None),
+                    (115.0, Some(385.0), None),
+                    (123.0, Some(115.0), None),
                 ];
+                let native: serde_json::Value = serde_json::from_slice(
+                    &std::fs::read(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+                        "../../tests/fixtures/itgmania-song-lua-micro/seventh-notefield-native.json",
+                    ))
+                    .unwrap(),
+                )
+                .unwrap();
+                assert_eq!(native["oracle"], "itgmania_notefield_render_trace");
+                assert_eq!(native["input"]["window_visible"], false);
+                let native_project = |clip: &[f64]| {
+                    [
+                        ((1.0 + clip[0] / clip[3]) * 427.0) as f32,
+                        ((1.0 - clip[1] / clip[3]) * 240.0) as f32,
+                    ]
+                };
+                let mut seen_native_beats = std::collections::HashSet::new();
+                let mut native_arrivals = Vec::new();
+                for sample in native["model_geometry_samples"].as_array().unwrap() {
+                    let context = &sample["state"]["note_context"];
+                    if context["kind"] != "actor" || context["note_beat"] != 130.75
+                        || context["column"] != 3 || sample["state"]["mesh_index"] != 0
+                        // Native also draws the original Player to target zero.
+                        // Match the submitted AFT geometry instead of that pass.
+                        || sample["state"]["render_target"].as_u64().unwrap() == 0
+                    {
+                        continue;
+                    }
+                    let beat = context["draw_beat"].as_f64().unwrap() as f32;
+                    if !seen_native_beats.insert(beat.to_bits()) {
+                        continue;
+                    }
+                    let anchors: Vec<Vec<f64>> =
+                        serde_json::from_value(sample["state"]["anchors_clip"].clone()).unwrap();
+                    let origin = native_project(&anchors[0]);
+                    let axis = native_project(&anchors[1]);
+                    let scale = ((axis[0] - origin[0]).powi(2) + (axis[1] - origin[1]).powi(2)).sqrt();
+                    let geometry = native["model_geometry_meshes"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|mesh| mesh["id"] == sample["geometry"])
+                        .unwrap();
+                    let vertices: Vec<[f64; 3]> =
+                        serde_json::from_value(geometry["vertices"].clone()).unwrap();
+                    let mut bounds = [
+                        f32::INFINITY,
+                        f32::INFINITY,
+                        f32::NEG_INFINITY,
+                        f32::NEG_INFINITY,
+                    ];
+                    let mut native_points = Vec::new();
+                    for vertex in vertices {
+                        let clip: Vec<f64> = (0..4)
+                            .map(|axis| {
+                                anchors[0][axis]
+                                    + (0..3)
+                                        .map(|component| {
+                                            vertex[component]
+                                                * (anchors[component + 1][axis] - anchors[0][axis])
+                                        })
+                                        .sum::<f64>()
+                            })
+                            .collect();
+                        let point = native_project(&clip);
+                        native_points.push(point);
+                        for axis in 0..2 {
+                            bounds[axis] = bounds[axis].min(point[axis]);
+                            bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                        }
+                    }
+                    let center: [f32; 2] = std::array::from_fn(|axis| {
+                        native_points.iter().map(|point| point[axis]).sum::<f32>()
+                            / native_points.len() as f32
+                    });
+                    for point in &mut native_points {
+                        for axis in 0..2 {
+                            point[axis] = (point[axis] - center[axis]) / scale;
+                        }
+                    }
+                    native_arrivals.push(
+                        serde_json::json!({"beat":beat,"note_beat":130.75,"column":4,
+                        "origin":origin,"scale":scale,"normalized_points":native_points,
+                        "normalized_extent":[(bounds[2]-bounds[0])/scale,(bounds[3]-bounds[1])/scale]}),
+                    );
+                }
+                assert!(
+                    native_arrivals.len() >= 20,
+                    "consecutive native rendered first-arrow frames"
+                );
+                for frame in &native_arrivals {
+                    probes.push((frame["beat"].as_f64().unwrap() as f32, None, None));
+                }
                 let timing = &state.gameplay.gameplay_chart(0).unwrap().timing;
                 let tracks = &state.gameplay.song_lua_visuals().column_splines[0];
                 let mut smallest_scale = (f32::INFINITY, 0.0f32, 0usize);
@@ -5069,51 +5164,100 @@ return Def.ActorFrame{
                 for track in tracks {
                     for frame in track.frames.iter() {
                         let beat = timing.get_beat_for_time(frame.second + track.time_offset);
-                        if !(111.5..174.5).contains(&beat) { continue; }
-                        let Some(zoom) = &frame.zoom else { continue; };
+                        if !(111.5..174.5).contains(&beat) {
+                            continue;
+                        }
+                        let Some(zoom) = &frame.zoom else {
+                            continue;
+                        };
                         for (index, note) in state.chart_runtime.notes.iter().enumerate() {
                             if note.column != track.column as usize
-                                || note.beat < beat || note.beat > beat + 2.0
-                                || !matches!(note.note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
-                            { continue; }
+                                || note.beat < beat
+                                || note.beat > beat + 2.0
+                                || !matches!(
+                                    note.note_type,
+                                    NoteType::Tap | NoteType::Hold | NoteType::Roll
+                                )
+                            {
+                                continue;
+                            }
                             let scale = zoom.view().sample(beat, note.beat).0[0];
-                            if scale < smallest_scale.0 { smallest_scale = (scale, beat, index); }
+                            if scale < smallest_scale.0 {
+                                smallest_scale = (scale, beat, index);
+                            }
                         }
                     }
                 }
                 assert!(smallest_scale.0.is_finite(), "real incoming swap notes");
-                eprintln!("7th Gear incoming note {} at beat {}: spline scale {} at song beat {}",
-                    smallest_scale.2, state.chart_runtime.notes[smallest_scale.2].beat, smallest_scale.0, smallest_scale.1);
+                eprintln!(
+                    "7th Gear incoming note {} at beat {}: spline scale {} at song beat {}",
+                    smallest_scale.2,
+                    state.chart_runtime.notes[smallest_scale.2].beat,
+                    smallest_scale.0,
+                    smallest_scale.1
+                );
                 probes.push((smallest_scale.1, None, None));
                 for beat in [114.45, 114.52, 122.45, 122.52, 122.7, 130.5] {
                     probes.push((beat, None, None));
                 }
                 let mut hold_directions = [false; 2];
                 for (index, note) in state.chart_runtime.notes.iter().enumerate() {
-                    let Some(hold) = &note.hold else { continue; };
+                    let Some(hold) = &note.hold else {
+                        continue;
+                    };
                     let beat = (note.beat + hold.end_beat) * 0.5;
-                    if !(112.0..174.0).contains(&beat) { continue; }
-                    let track = tracks.iter().find(|track| track.column as usize == note.column).unwrap();
-                    let frame = track.at_second(timing.get_time_for_beat_exact(beat)).unwrap();
-                    let Some(position) = &frame.position else { continue; };
+                    if !(112.0..174.0).contains(&beat) {
+                        continue;
+                    }
+                    let track = tracks
+                        .iter()
+                        .find(|track| track.column as usize == note.column)
+                        .unwrap();
+                    let frame = track
+                        .at_second(timing.get_time_for_beat_exact(beat))
+                        .unwrap();
+                    let Some(position) = &frame.position else {
+                        continue;
+                    };
                     let derivative = position.view().sample(beat, beat).1;
                     let reversed = usize::from(derivative[1] < 0.0);
-                    if derivative[1] == 0.0 || hold_directions[reversed] { continue; }
+                    if derivative[1] == 0.0 || hold_directions[reversed] {
+                        continue;
+                    }
                     hold_directions[reversed] = true;
                     probes.push((beat, None, Some(index)));
                 }
-                assert_eq!(hold_directions, [true; 2], "actual holds in both spline directions");
+                assert_eq!(
+                    hold_directions, [true; 2],
+                    "actual holds in both spline directions"
+                );
                 probes.sort_by(|a, b| a.0.total_cmp(&b.0));
                 let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
-                let body_handles: Vec<_> = ns.hold_columns.iter().chain(&ns.roll_columns)
+                let body_handles: Vec<_> = ns
+                    .hold_columns
+                    .iter()
+                    .chain(&ns.roll_columns)
                     .flat_map(|column| [column.body_active.as_ref(), column.body_inactive.as_ref()])
-                    .flatten().map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key())).collect();
+                    .flatten()
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let tap_handles: std::collections::HashSet<_> = ns
+                    .notes
+                    .iter()
+                    .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
                 #[cfg(target_os = "windows")]
                 let mut capture = std::env::var_os("DEADSYNC_SEVENTH_CAPTURE").map(|_| {
-                    SongLuaNotePixelCapture::new(&state, &metrics,
-                        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/seventh-swap-geometry"))
+                    SongLuaNotePixelCapture::new(
+                        &state,
+                        &metrics,
+                        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                            .join("../../target/seventh-swap-geometry"),
+                    )
                 });
                 let mut tick = 0;
+                let mut native_pose_failures = Vec::new();
                 for (beat, expected_y, active_hold) in probes {
                     let seconds = state
                         .gameplay
@@ -5128,11 +5272,30 @@ return Def.ActorFrame{
                     }
                     set_fixture_time(&mut state, seconds);
                     state.clear_active_holds();
+                    let native_arrival = native_arrivals
+                        .iter()
+                        .find(|frame| frame["beat"].as_f64().unwrap() as f32 == beat);
+                    let arrival_note = native_arrival.map(|frame| {
+                        let note_beat = frame["note_beat"].as_f64().unwrap() as f32;
+                        let column = frame["column"].as_u64().unwrap() as usize - 1;
+                        state
+                            .chart_runtime
+                            .notes
+                            .iter()
+                            .position(|note| {
+                                note.beat == note_beat
+                                    && note.column == column
+                                    && note.note_type == NoteType::Tap
+                            })
+                            .expect("native first incoming tap")
+                    });
                     // Recreate autoplay draw visibility after seeking: past
                     // taps and completed holds must not leave clamped fragments.
                     // Isolate the selected hold for its width assertion.
                     for (index, note) in state.chart_runtime.notes.iter_mut().enumerate() {
-                        note.result = (note.beat < beat).then_some(Judgment {
+                        note.result = (arrival_note
+                            .map_or(note.beat < beat, |selected| selected != index))
+                        .then_some(Judgment {
                             time_error_ms: 0.0,
                             time_error_music_ns: 0,
                             grade: JudgeGrade::Fantastic,
@@ -5140,9 +5303,22 @@ return Def.ActorFrame{
                             miss_because_held: false,
                         });
                         if let Some(hold) = &mut note.hold {
-                            hold.result = (hold.end_beat < beat
+                            hold.result = (arrival_note.is_some()
+                                || hold.end_beat < beat
                                 || active_hold.is_some_and(|selected| selected != index))
-                                .then_some(deadsync_rules::note::HoldResult::Held);
+                            .then_some(deadsync_rules::note::HoldResult::Held);
+                        }
+                    }
+                    {
+                        let runtime = &mut state.chart_runtime;
+                        for row in &mut runtime.row_entries {
+                            row.final_outcome = row
+                                .note_indices()
+                                .iter()
+                                .all(|index| runtime.notes[index.get()].result.is_some())
+                                .then_some(deadsync_gameplay::FinalizedRowOutcome {
+                                    final_grade: JudgeGrade::Fantastic,
+                                });
                         }
                     }
                     if let Some(index) = active_hold {
@@ -5151,10 +5327,17 @@ return Def.ActorFrame{
                         let hold = deadsync_gameplay::ActiveHold {
                             note_index: index,
                             start_time_ns: state.chart_runtime.note_time_cache_ns[index],
-                            end_time_ns: cached_hold_end_time_ns(state.chart_runtime.hold_end_time_cache_ns[index]).unwrap(),
+                            end_time_ns: cached_hold_end_time_ns(
+                                state.chart_runtime.hold_end_time_cache_ns[index],
+                            )
+                            .unwrap(),
                             note_type: note.note_type,
-                            let_go: false, is_pressed: true, life: 1.0,
-                            last_update_time_ns: deadsync_core::song_time::song_time_ns_from_seconds(seconds),
+                            let_go: false,
+                            is_pressed: true,
+                            life: 1.0,
+                            last_update_time_ns: deadsync_core::song_time::song_time_ns_from_seconds(
+                                seconds,
+                            ),
                         };
                         state.set_active_hold(column, Some(hold));
                     }
@@ -5173,19 +5356,145 @@ return Def.ActorFrame{
                     );
                     // Update explicitly draws these AFTs, and their visible
                     // actors draw them again: six passes, three textures.
-                    let targets: std::collections::HashSet<_> = frame.render_targets.iter()
-                        .map(|pass| pass.texture_handle).collect();
+                    let targets: std::collections::HashSet<_> = frame
+                        .render_targets
+                        .iter()
+                        .map(|pass| pass.texture_handle)
+                        .collect();
                     assert_eq!(targets.len(), 3, "actual AFT chain");
                     let mut receptors = 0;
                     let mut wide_bodies = 0;
+                    let mut arrival_meshes = 0;
                     for pass in &frame.render_targets {
                         for op in &pass.ops {
+                            if let Some(native) = native_arrival
+                                && let DrawOp::TexturedMesh(run) = op
+                                && tap_handles.contains(&run.texture_handle)
+                            {
+                                let camera = pass
+                                    .cameras
+                                    .get(run.camera as usize)
+                                    .copied()
+                                    .unwrap_or_else(|| metrics.projection());
+                                for instance in &pass.tmesh_instances[run.instance_start as usize
+                                    ..(run.instance_start + run.instance_count) as usize]
+                                {
+                                    let transform = camera * instance.transform();
+                                    let project = |p: [f32; 4]| {
+                                        let clip = transform.mul_vec4(p.into());
+                                        [
+                                            427.0 + clip.x / clip.w * 427.0,
+                                            240.0
+                                                - clip.y / clip.w * pass.viewport[1] as f32 * 427.0
+                                                    / pass.viewport[0] as f32,
+                                        ]
+                                    };
+                                    let origin = project([0.0, 0.0, 0.0, 1.0]);
+                                    let along_x = project([1.0, 0.0, 0.0, 1.0]);
+                                    let scale = ((along_x[0] - origin[0]).powi(2)
+                                        + (along_x[1] - origin[1]).powi(2))
+                                    .sqrt();
+                                    let expected_scale = native["scale"].as_f64().unwrap() as f32;
+                                    if (scale - expected_scale).abs() >= 0.021 {
+                                        native_pose_failures.push(format!("native rendered first arrow size at {beat}: {scale} vs {expected_scale}"));
+                                    }
+                                    for axis in 0..2 {
+                                        let expected = native["origin"][axis].as_f64().unwrap() as f32;
+                                        if (origin[axis] - expected).abs() >= 4.0 {
+                                            native_pose_failures.push(format!("native rendered first arrow position at {beat}: {origin:?}, axis {axis}={expected}"));
+                                        }
+                                    }
+                                    let vertices = pass.tmesh_geometries[run.geometry as usize]
+                                        .vertices
+                                        .as_ref();
+                                    let local_width = vertices
+                                        .iter()
+                                        .map(|v| v.pos[0])
+                                        .fold(f32::NEG_INFINITY, f32::max)
+                                        - vertices
+                                            .iter()
+                                            .map(|v| v.pos[0])
+                                            .fold(f32::INFINITY, f32::min);
+                                    if local_width > 60.0 {
+                                        let mut bounds = [
+                                            f32::INFINITY,
+                                            f32::INFINITY,
+                                            f32::NEG_INFINITY,
+                                            f32::NEG_INFINITY,
+                                        ];
+                                        let mut actual_points = Vec::new();
+                                        for vertex in vertices {
+                                            let point = project([
+                                                vertex.pos[0],
+                                                vertex.pos[1],
+                                                vertex.pos[2],
+                                                1.0,
+                                            ]);
+                                            actual_points.push(point);
+                                            for axis in 0..2 {
+                                                bounds[axis] = bounds[axis].min(point[axis]);
+                                                bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                                            }
+                                        }
+                                        let center: [f32; 2] = std::array::from_fn(|axis| {
+                                            actual_points.iter().map(|point| point[axis]).sum::<f32>()
+                                                / actual_points.len() as f32
+                                        });
+                                        for point in &mut actual_points {
+                                            for axis in 0..2 {
+                                                point[axis] = (point[axis] - center[axis]) / scale;
+                                            }
+                                        }
+                                        let expected_points: Vec<[f32; 2]> =
+                                            serde_json::from_value(native["normalized_points"].clone())
+                                                .unwrap();
+                                        let distance = |from: &[[f32; 2]], to: &[[f32; 2]]| {
+                                            from.iter()
+                                                .map(|a| {
+                                                    to.iter()
+                                                        .map(|b| {
+                                                            ((a[0] - b[0]).powi(2)
+                                                                + (a[1] - b[1]).powi(2))
+                                                            .sqrt()
+                                                        })
+                                                        .fold(f32::INFINITY, f32::min)
+                                                })
+                                                .fold(0.0, f32::max)
+                                        };
+                                        let error = distance(&actual_points, &expected_points)
+                                            .max(distance(&expected_points, &actual_points));
+                                        assert!(
+                                            error < 0.2,
+                                            "native rendered 3D vertex cloud at {beat}: {error} model units"
+                                        );
+                                        for axis in 0..2 {
+                                            let extent = (bounds[axis + 2] - bounds[axis]) / scale;
+                                            let expected =
+                                                native["normalized_extent"][axis].as_f64().unwrap()
+                                                    as f32;
+                                            assert!(
+                                                (extent - expected).abs() < 0.35,
+                                                "native rendered 3D arrow extent at {beat}, axis {axis}: {extent} vs {expected}"
+                                            );
+                                        }
+                                    }
+                                    arrival_meshes += 1;
+                                }
+                            }
                             if let DrawOp::TexturedMesh(run) = op
                                 && body_handles.contains(&run.texture_handle)
                             {
-                                let vertices = pass.tmesh_geometries[run.geometry as usize].vertices.as_ref();
-                                let min_x = vertices.iter().map(|v| v.pos[0]).fold(f32::INFINITY, f32::min);
-                                let max_x = vertices.iter().map(|v| v.pos[0]).fold(f32::NEG_INFINITY, f32::max);
+                                let vertices = pass.tmesh_geometries[run.geometry as usize]
+                                    .vertices
+                                    .as_ref();
+                                let min_x = vertices
+                                    .iter()
+                                    .map(|v| v.pos[0])
+                                    .fold(f32::INFINITY, f32::min);
+                                let max_x = vertices
+                                    .iter()
+                                    .map(|v| v.pos[0])
+                                    .fold(f32::NEG_INFINITY, f32::max);
                                 wide_bodies += usize::from(max_x - min_x > 10.0);
                             }
                             let DrawOp::Sprite(run) = op else { continue };
@@ -5198,15 +5507,29 @@ return Def.ActorFrame{
                                 // Direct proxy draws retain their transform in
                                 // a camera; instances are centered world-space
                                 // coordinates, not already projected pixels.
-                                let camera = pass.cameras.get(run.camera as usize)
-                                    .copied().unwrap_or_else(|| metrics.projection());
-                                let clip = camera.mul_vec4([
-                                    instance.center[0], instance.center[1], instance.center[2], 1.0,
-                                ].into());
+                                let camera = pass
+                                    .cameras
+                                    .get(run.camera as usize)
+                                    .copied()
+                                    .unwrap_or_else(|| metrics.projection());
+                                let clip = camera.mul_vec4(
+                                    [
+                                        instance.center[0],
+                                        instance.center[1],
+                                        instance.center[2],
+                                        1.0,
+                                    ]
+                                    .into(),
+                                );
                                 let pixel_y = (1.0 - clip.y / clip.w) * pass.viewport[1] as f32 / 2.0;
                                 // FrameProxyP1 uses dh/2; ProxyP1N uses dw/sw.
-                                let y = 240.0 + (pixel_y - pass.viewport[1] as f32 / 2.0)
-                                    * 854.0 / pass.viewport[0] as f32;
+                                let y = 240.0
+                                    + (pixel_y - pass.viewport[1] as f32 / 2.0) * 854.0
+                                        / pass.viewport[0] as f32;
+                                assert!(
+                                    (y - 115.0).abs() < 0.05 || (y - 385.0).abs() < 0.05,
+                                    "beat {beat}: receptor swept between native anchors: Y={y}"
+                                );
                                 assert!(
                                     expected_y.is_none_or(|expected_y| (y - expected_y).abs() < 0.05),
                                     "beat {beat}: rendered receptor Y={y}, native={expected_y:?}; raw={:?}, camera={camera:?}",
@@ -5217,17 +5540,34 @@ return Def.ActorFrame{
                         }
                     }
                     assert!(receptors >= 4, "all four receptors must reach the AFT pass");
+                    if native_arrival.is_some() {
+                        assert!(
+                            arrival_meshes >= 2,
+                            "first arrow must reach both source AFT draws"
+                        );
+                    }
                     if active_hold.is_some() {
-                        assert!(wide_bodies > 0, "beat {beat}: actual active hold collapsed in AFT geometry");
+                        assert!(
+                            wide_bodies > 0,
+                            "beat {beat}: actual active hold collapsed in AFT geometry"
+                        );
                     }
                     eprintln!(
                         "7th Gear beat {beat}: {receptors} AFT receptor sprites, {wide_bodies} full-width hold bodies, Mini=60"
                     );
                     #[cfg(target_os = "windows")]
                     if let Some(capture) = &mut capture {
-                        assert!(capture.capture(&mut state, &metrics, beat) > 0, "visible Cel note pixels");
+                        assert!(
+                            capture.capture(&mut state, &metrics, beat) > 0,
+                            "visible Cel note pixels"
+                        );
                     }
                 }
+                assert!(
+                    native_pose_failures.is_empty(),
+                    "{}",
+                    native_pose_failures.join("\n")
+                );
             },
         );
     }

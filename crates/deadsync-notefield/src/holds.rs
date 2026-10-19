@@ -2661,6 +2661,58 @@ mod tests {
     }
 
     #[test]
+    fn seventh_caps_match_native_drawn_rows_in_both_directions() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/seventh-swap-native.json"
+        ))
+        .unwrap();
+        for caps in native["caps"].as_array().unwrap() {
+            for part in ["top", "bottom"] {
+                let vertices: Vec<Vec<f32>> = serde_json::from_value(caps[part].clone()).unwrap();
+                let center: [f32; 3] = std::array::from_fn(|axis| vertices[1][axis]);
+                let forward: [f32; 3] = std::array::from_fn(|axis| vertices[4][axis] - center[axis]);
+                let half_width = (0..3)
+                    .map(|axis| (vertices[0][axis] - center[axis]).powi(2))
+                    .sum::<f32>()
+                    .sqrt();
+                // This is the native cap's entire extent, not a missing
+                // bottom-cap asset: later rows advance one tangent unit.
+                assert!((forward.iter().map(|x| x * x).sum::<f32>().sqrt() - 1.0).abs() < 0.0001);
+                for (index, vertices) in vertices.chunks_exact(3).enumerate() {
+                    let row = hold_path_row(
+                        HoldPathSample {
+                            center_x: center[0],
+                            world_z: center[2],
+                            position_offset: [0.0, center[1], 0.0],
+                            spline_derivative: forward,
+                            spline_absolute: true,
+                            cap_step: if index == 0 { 0.0 } else { 1.0 },
+                            ..straight_path(0.0)
+                        },
+                        0.0,
+                        half_width,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        [1.0; 4],
+                    );
+                    for (actual, expected) in row.iter().zip([&vertices[0], &vertices[2]]) {
+                        for axis in 0..3 {
+                            assert!(
+                                (actual.pos[axis] - expected[axis]).abs() < 0.001,
+                                "native cap beat {}, {part}, row {index}: {:?} vs {expected:?}",
+                                caps["beat"],
+                                actual.pos
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn absolute_spline_holds_keep_width_and_cap_direction_through_reversals() {
         // NoteDisplay NCSM_Position uses the normalized spline derivative
         // alone. Both +/-Y paths must have full-width strips, with opposite
