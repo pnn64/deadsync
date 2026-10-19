@@ -13800,11 +13800,53 @@ pub fn actor_table_has_update_functions(lua: &Lua, actor: &Table) -> mlua::Resul
     Ok(false)
 }
 
+// Table::get supplies a live result slot under the VM lock. Classify this
+// frequent name without copying it; retain String's validation and coercions.
+struct ActorIsFrameTexture(bool);
+impl mlua::FromLua for ActorIsFrameTexture {
+    fn from_lua(value: mlua::Value, lua: &Lua) -> mlua::Result<Self> {
+        Ok(Self(
+            String::from_lua(value, lua)?.eq_ignore_ascii_case("ActorFrameTexture"),
+        ))
+    }
+    unsafe fn from_stack(index: c_int, lua: &mlua::state::RawLua) -> mlua::Result<Self> {
+        // SAFETY: only a type-checked, rooted string is borrowed. Validation and
+        // comparison finish without Lua calls, and no pointer or slice escapes.
+        // Other types delegate to the original checked String conversion.
+        unsafe {
+            let state = lua.state();
+            if ffi::lua_type(state, index) == ffi::LUA_TSTRING {
+                let mut len = 0;
+                let ptr = ffi::lua_tolstring(state, index, &mut len);
+                let bytes = std::slice::from_raw_parts(ptr.cast::<u8>(), len);
+                std::str::from_utf8(bytes).map_err(|e| mlua::Error::FromLuaConversionError {
+                    from: "string",
+                    to: "String".into(),
+                    message: Some(e.to_string()),
+                })?;
+                return Ok(Self(bytes.eq_ignore_ascii_case(b"ActorFrameTexture")));
+            }
+            Ok(Self(
+                String::from_stack(index, lua)?.eq_ignore_ascii_case("ActorFrameTexture"),
+            ))
+        }
+    }
+}
+
+#[inline]
 pub fn actor_type_is(actor: &Table, expected: &str) -> mlua::Result<bool> {
+    if expected.eq_ignore_ascii_case("ActorFrameTexture") {
+        return Ok(actor
+            .get::<Option<ActorIsFrameTexture>>("__songlua_actor_type")?
+            .is_some_and(|kind| kind.0));
+    }
     Ok(actor
         .get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
-        .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case(expected)
-            || (expected.eq_ignore_ascii_case("Sprite") && kind.as_str().eq_ignore_ascii_case("Banner"))))
+        .is_some_and(|kind| {
+            kind.as_str().eq_ignore_ascii_case(expected)
+                || (expected.eq_ignore_ascii_case("Sprite")
+                    && kind.as_str().eq_ignore_ascii_case("Banner"))
+        }))
 }
 
 pub fn actor_is_bitmap_text(actor: &Table) -> mlua::Result<bool> {
@@ -20588,20 +20630,21 @@ pub fn read_actor_multi_vertex_mesh(
         return Ok(None);
     };
     let draw_mode = actor
-        .get::<Option<String>>("__songlua_draw_state_mode")
-        .map_err(|err| err.to_string())?
-        .unwrap_or_else(|| "DrawMode_Triangles".to_string());
+        .get::<Option<LuaFieldText<32>>>("__songlua_draw_state_mode")
+        .map_err(|err| err.to_string())?;
+    let draw_mode = draw_mode
+        .as_ref()
+        .map_or("DrawMode_Triangles", LuaFieldText::as_str);
     let line_width = actor
         .get::<Option<f32>>("__songlua_line_width")
         .map_err(|err| err.to_string())?
         .unwrap_or(1.0)
         .max(0.0);
-    let mesh = actor_multi_vertex_triangles(&source[start..end], draw_mode.as_str(), line_width);
-    if mesh.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(Arc::from(mesh.into_boxed_slice())))
-    }
+    Ok(actor_multi_vertex_mesh_arc(
+        &source[start..end],
+        draw_mode,
+        line_width,
+    ))
 }
 
 pub(crate) fn live_multi_vertex_texture_path(actor: &Table) -> mlua::Result<Option<PathBuf>> {
@@ -21582,80 +21625,68 @@ fn read_actor_multi_vertex_point(
     }))
 }
 
-fn actor_multi_vertex_triangles(
+fn actor_multi_vertex_mesh_arc(
     vertices: &[SongLuaActorMultiVertexPoint],
-    draw_mode: &str,
-    line_width: f32,
-) -> Vec<SongLuaOverlayMeshVertex> {
-    if draw_mode.eq_ignore_ascii_case("DrawMode_Quads") {
-        return actor_multi_vertex_quads(vertices);
-    }
-    if draw_mode.eq_ignore_ascii_case("DrawMode_QuadStrip") {
-        return actor_multi_vertex_quad_strip(vertices);
-    }
-    if draw_mode.eq_ignore_ascii_case("DrawMode_LineStrip") {
-        return actor_multi_vertex_line_strip(vertices, line_width);
-    }
-    if draw_mode.eq_ignore_ascii_case("DrawMode_Fan") {
-        return actor_multi_vertex_fan(vertices);
-    }
-    actor_multi_vertex_triangle_list(vertices)
-}
-
-fn actor_multi_vertex_triangle_list(
-    vertices: &[SongLuaActorMultiVertexPoint],
-) -> Vec<SongLuaOverlayMeshVertex> {
-    let mut out = Vec::with_capacity(vertices.len() / 3 * 3);
-    for chunk in vertices.as_chunks::<3>().0 {
-        push_actor_multi_vertex_triangle(&mut out, chunk[0], chunk[1], chunk[2]);
-    }
-    out
-}
-
-fn actor_multi_vertex_quads(
-    vertices: &[SongLuaActorMultiVertexPoint],
-) -> Vec<SongLuaOverlayMeshVertex> {
-    let mut out = Vec::with_capacity(vertices.len() / 4 * 6);
-    for chunk in vertices.as_chunks::<4>().0 {
-        push_actor_multi_vertex_quad(&mut out, chunk[0], chunk[1], chunk[2], chunk[3]);
-    }
-    out
-}
-
-fn actor_multi_vertex_quad_strip(
-    vertices: &[SongLuaActorMultiVertexPoint],
-) -> Vec<SongLuaOverlayMeshVertex> {
-    let mut out = Vec::with_capacity(vertices.len().saturating_sub(2) / 2 * 6);
-    let mut index = 0usize;
-    while index + 3 < vertices.len() {
-        push_actor_multi_vertex_quad(
-            &mut out,
-            vertices[index],
-            vertices[index + 1],
-            vertices[index + 3],
-            vertices[index + 2],
-        );
-        index += 2;
-    }
-    out
-}
-
-fn actor_multi_vertex_fan(
-    vertices: &[SongLuaActorMultiVertexPoint],
-) -> Vec<SongLuaOverlayMeshVertex> {
-    if vertices.len() < 3 {
-        return Vec::new();
-    }
-    let mut out = Vec::with_capacity(vertices.len().saturating_sub(2) * 3);
-    for index in 1..vertices.len() - 1 {
-        push_actor_multi_vertex_triangle(
-            &mut out,
-            vertices[0],
-            vertices[index],
-            vertices[index + 1],
+    mode: &str,
+    width: f32,
+) -> Option<Arc<[SongLuaOverlayMeshVertex]>> {
+    if mode.eq_ignore_ascii_case("DrawMode_Quads") {
+        let groups = vertices.as_chunks::<4>().0;
+        if groups.is_empty() {
+            return None;
+        }
+        return Some(
+            (0..groups.len() * 6)
+                .map(|i| {
+                    actor_multi_vertex_mesh_vertex(vertices[i / 6 * 4 + [0, 1, 2, 2, 3, 0][i % 6]])
+                })
+                .collect(),
         );
     }
-    out
+    if mode.eq_ignore_ascii_case("DrawMode_QuadStrip") {
+        let count = vertices.len().saturating_sub(2) / 2;
+        if count == 0 {
+            return None;
+        }
+        return Some(
+            (0..count * 6)
+                .map(|i| {
+                    actor_multi_vertex_mesh_vertex(vertices[i / 6 * 2 + [0, 1, 3, 3, 2, 0][i % 6]])
+                })
+                .collect(),
+        );
+    }
+    if mode.eq_ignore_ascii_case("DrawMode_LineStrip") {
+        let mesh = actor_multi_vertex_line_strip(vertices, width);
+        return (!mesh.is_empty()).then(|| mesh.into());
+    }
+    if mode.eq_ignore_ascii_case("DrawMode_Fan") {
+        if vertices.len() < 3 {
+            return None;
+        }
+        return Some(
+            (0..(vertices.len() - 2) * 3)
+                .map(|i| {
+                    actor_multi_vertex_mesh_vertex(match i % 3 {
+                        0 => vertices[0],
+                        1 => vertices[i / 3 + 1],
+                        _ => vertices[i / 3 + 2],
+                    })
+                })
+                .collect(),
+        );
+    }
+    let count = vertices.len() / 3 * 3;
+    if count == 0 {
+        return None;
+    }
+    Some(
+        vertices[..count]
+            .iter()
+            .copied()
+            .map(actor_multi_vertex_mesh_vertex)
+            .collect(),
+    )
 }
 
 fn actor_multi_vertex_line_strip(
@@ -21760,17 +21791,6 @@ fn actor_multi_vertex_offset_point(
         color: vertex.color,
         uv: vertex.uv,
     }
-}
-
-fn push_actor_multi_vertex_quad(
-    out: &mut Vec<SongLuaOverlayMeshVertex>,
-    a: SongLuaActorMultiVertexPoint,
-    b: SongLuaActorMultiVertexPoint,
-    c: SongLuaActorMultiVertexPoint,
-    d: SongLuaActorMultiVertexPoint,
-) {
-    push_actor_multi_vertex_triangle(out, a, b, c);
-    push_actor_multi_vertex_triangle(out, c, d, a);
 }
 
 fn push_actor_multi_vertex_triangle(
@@ -23427,4 +23447,9 @@ pub(crate) fn install_native_gameplay_underlay(
     if let Some(song_output) = song_output { lua.set_app_data(song_output); }
     if let Some(source_output) = source_output { lua.set_app_data(source_output); }
     result
+}
+
+#[cfg(test)]
+mod mesh_perf {
+    include!("../tests/perf/mesh.rs");
 }
