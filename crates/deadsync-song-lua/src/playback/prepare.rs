@@ -868,6 +868,77 @@ fn log_unsupported_song_lua_ease_target(
     }
 }
 
+/// Shared gameplay tracks live on the session's primary compilation output.
+/// With no foreground at beat zero, that output is the first background (or
+/// first later foreground). Its graphics still belong to their timed layer.
+fn song_lua_shared_screen<S: Clone>(compiled: &CompiledSongLua<S>) -> CompiledSongLua<S> {
+    let Some(index) = compiled.screen_overlay_index else {
+        return CompiledSongLua::default();
+    };
+    let Some(actor) = compiled.overlays.get(index) else {
+        return CompiledSongLua::default();
+    };
+    let mut actor = actor.clone();
+    actor.parent_index = None;
+    let mut screen = CompiledSongLua {
+        screen_width: compiled.screen_width,
+        screen_height: compiled.screen_height,
+        messages: compiled.messages.clone(),
+        overlays: vec![actor],
+        screen_overlay_index: Some(0),
+        overlay_update_unit: compiled.overlay_update_unit,
+        ..Default::default()
+    };
+    screen.overlay_eases = compiled
+        .overlay_eases
+        .iter()
+        .filter(|ease| ease.overlay_index == index)
+        .cloned()
+        .map(|mut ease| {
+            ease.overlay_index = 0;
+            ease
+        })
+        .collect();
+    screen.overlay_updates = compiled
+        .overlay_updates
+        .iter()
+        .filter(|track| track.overlay_index == index)
+        .cloned()
+        .map(|mut track| {
+            track.overlay_index = 0;
+            track
+        })
+        .collect();
+    for capture in &compiled.stateful_message_captures {
+        let targets: Vec<_> = capture
+            .overlay_targets
+            .iter()
+            .filter(|(target, _)| *target == index)
+            .map(|(_, targets)| (0, targets.clone()))
+            .collect();
+        if targets.is_empty() {
+            continue;
+        }
+        screen
+            .stateful_message_captures
+            .push(crate::SongLuaStatefulMessageCapture {
+                message: capture.message.clone(),
+                overlay_targets: targets,
+                writes: capture
+                    .writes
+                    .iter()
+                    .filter(|write| write.overlay_index == index)
+                    .cloned()
+                    .map(|mut write| {
+                        write.overlay_index = 0;
+                        write
+                    })
+                    .collect(),
+            });
+    }
+    screen
+}
+
 fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
     params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
     song_lua_data: PreparedGameplaySongLua<S>,
@@ -954,11 +1025,35 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
     let mut out_screen_width = params.screen_width;
     let mut out_screen_height = params.screen_height;
 
-    if let Some(primary) = song_lua_data.primary.as_ref() {
-        let compiled = &primary.compiled;
+    let shared = song_lua_data
+        .primary
+        .as_ref()
+        .map(|primary| (&primary.compiled, primary.compile_ms))
+        .or_else(|| {
+            song_lua_data
+                .background_layers
+                .first()
+                .map(|layer| (&layer.compiled, 0.0))
+        })
+        .or_else(|| {
+            song_lua_data
+                .foreground_layers
+                .first()
+                .map(|layer| (&layer.compiled, 0.0))
+        });
+    if let Some((compiled, compile_ms)) = shared {
+        let shared_screen;
+        let visual_compiled = if song_lua_data.primary.is_some() {
+            compiled
+        } else {
+            // Keep late/background graphics in their original layers. Only
+            // ScreenGameplay's shared pose belongs to the always-owned root.
+            shared_screen = song_lua_shared_screen(compiled);
+            &shared_screen
+        };
         let runtime_started = Instant::now();
         overlays = song_lua_runtime_overlays(
-            compiled,
+            visual_compiled,
             params.timing_players[0],
             params.machine_global_offset_seconds,
         );
@@ -968,18 +1063,18 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
             params.machine_global_offset_seconds,
         );
         overlay_events = crate::gameplay::build_song_lua_overlay_message_events_with_seconds(
-            compiled,
+            visual_compiled,
             &message_seconds,
         );
         let overlay_runtime_eases =
             crate::gameplay::build_song_lua_overlay_ease_windows_with_events(
-                compiled,
+                visual_compiled,
                 params.timing_players[0],
                 params.machine_global_offset_seconds,
                 &overlay_events,
             );
         (overlay_eases, overlay_ease_ranges) = deadsync_gameplay::group_song_lua_overlay_eases(
-            compiled.overlays.len(),
+            visual_compiled.overlays.len(),
             overlay_runtime_eases,
         );
         deadsync_gameplay::apply_song_lua_player_actor_overrides(
@@ -1016,7 +1111,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 )
             },
         );
-        screen_overlay_index = compiled.screen_overlay_index;
+        screen_overlay_index = visual_compiled.screen_overlay_index;
         song_foreground = compiled.song_foreground.clone();
         song_foreground_events = crate::gameplay::build_song_lua_actor_message_events_for_commands(
             &compiled.messages,
@@ -1112,7 +1207,7 @@ fn build_song_lua_runtime_windows_for_data<S: Clone + std::fmt::Debug>(
                 total_eases,
                 total_column_offsets,
                 unsupported_targets,
-                primary.compile_ms,
+                compile_ms,
                 runtime_ms,
             );
             log_song_lua_runtime_debug(

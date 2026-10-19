@@ -114,6 +114,7 @@ struct PipelineSet {
     add: wgpu::RenderPipeline,
     multiply: wgpu::RenderPipeline,
     subtract: wgpu::RenderPipeline,
+    no_effect: wgpu::RenderPipeline,
 }
 
 impl PipelineSet {
@@ -124,6 +125,7 @@ impl PipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -133,6 +135,7 @@ struct MeshPipelineSet {
     add: wgpu::RenderPipeline,
     multiply: wgpu::RenderPipeline,
     subtract: wgpu::RenderPipeline,
+    no_effect: wgpu::RenderPipeline,
 }
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -145,6 +148,7 @@ impl MeshPipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -2994,6 +2998,18 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
         operation: op,
     };
     match mode {
+        BlendMode::NoEffect => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+        }),
         BlendMode::Alpha => Some(wgpu::BlendState {
             color: comp(
                 wgpu::BlendFactor::SrcAlpha,
@@ -3147,6 +3163,15 @@ fn build_pipelines(
             write_mask,
             depth_format,
         ),
+        no_effect: build_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            write_mask,
+            depth_format,
+        ),
     }
 }
 
@@ -3237,6 +3262,15 @@ fn build_mesh_pipelines(
             write_mask,
             depth_format,
         ),
+        no_effect: build_mesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            write_mask,
+            depth_format,
+        ),
     }
 }
 
@@ -3322,6 +3356,16 @@ fn build_tmesh_pipelines(
             layout,
             format,
             BlendMode::Subtract,
+            shader,
+            use_depth,
+            write_mask,
+            depth_format,
+        ),
+        no_effect: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
             shader,
             use_depth,
             write_mask,

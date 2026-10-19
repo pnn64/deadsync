@@ -786,6 +786,8 @@ pub enum BlendMode {
     Multiply,
     #[allow(dead_code)]
     Subtract,
+    /// Preserve destination color and alpha while still rasterizing depth.
+    NoEffect,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

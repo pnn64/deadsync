@@ -1275,12 +1275,16 @@ fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>
             });
         }
         let (src, dst) = match want {
+            BlendMode::NoEffect => (glow::ZERO, glow::ONE),
             BlendMode::Alpha => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
             BlendMode::Add => (glow::SRC_ALPHA, glow::ONE),
             BlendMode::Multiply => (glow::DST_COLOR, glow::ZERO),
             BlendMode::Subtract => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
         };
-        gl.blend_func_separate(src, dst, glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+        let (src_alpha, dst_alpha) = if want == BlendMode::NoEffect {
+            (glow::ZERO, glow::ONE)
+        } else { (glow::ONE, glow::ONE_MINUS_SRC_ALPHA) };
+        gl.blend_func_separate(src, dst, src_alpha, dst_alpha);
     }
 }
 

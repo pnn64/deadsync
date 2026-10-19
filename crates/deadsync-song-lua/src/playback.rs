@@ -3521,9 +3521,9 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         environment: None,
         align: [0.0; 2],
         offset: [0.0; 2],
-        world_z: state.z_bias,
+        world_z: 0.0,
         size: [SizeSpec::Px(0.0); 2],
-        local_transform: song_lua_projected_local_transform(view_proj, canvas * model * leaf),
+        local_transform: song_lua_projected_local_transform(view_proj, canvas * model * leaf, *state),
         texture,
         tint,
         glow: state.glow,
@@ -7204,6 +7204,7 @@ fn song_lua_style_capture_actor_in_place(
 #[inline(always)]
 const fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
     match blend {
+        SongLuaOverlayBlendMode::NoEffect => BlendMode::NoEffect,
         SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
         SongLuaOverlayBlendMode::Add => BlendMode::Add,
         SongLuaOverlayBlendMode::Multiply => BlendMode::Multiply,
@@ -9619,8 +9620,23 @@ fn song_lua_screen_proj(depth: f32) -> Matrix4 {
 fn song_lua_projected_local_transform(
     (view, projection): (Matrix4, Matrix4),
     model: Matrix4,
+    state: SongLuaOverlayState,
 ) -> Matrix4 {
-    song_lua_screen_proj(1.0).inverse() * projection * (view * model)
+    // Actor::SetGlobalRenderStates gives NoEffect masks an implicit ZBias=1.
+    // RageDisplay_OGL maps the depth range to [.05*(1-bias), 1-.05*bias].
+    // Apply that range in homogeneous clip space before the screen projection
+    // is cancelled; painter order must not replace the mask's depth ordering.
+    let bias = if state.z_bias == 0.0 && state.blend == SongLuaOverlayBlendMode::NoEffect {
+        1.0
+    } else {
+        state.z_bias
+    };
+    let mut depth_range = Matrix4::from_scale(Vector3::new(1.0, 1.0, 0.95));
+    depth_range.w_axis.z = 0.05 - 0.1 * bias;
+    if !state.depth_test {
+        depth_range = Matrix4::IDENTITY;
+    }
+    song_lua_screen_proj(1.0).inverse() * depth_range * projection * (view * model)
 }
 
 fn append_projected_mesh_vertices(
@@ -9842,7 +9858,7 @@ fn song_lua_projected_overlay_actor(
     // the GPU clip triangles which cross the near/camera planes.  Dividing by
     // W here made one behind-camera corner discard the whole sprite and also
     // forced affine texture interpolation across projected quads.
-    let local_transform = song_lua_projected_local_transform(view_proj, model);
+    let local_transform = song_lua_projected_local_transform(view_proj, model, state);
     let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
     for &y in &ys {
         for &x in &xs {
@@ -9877,7 +9893,7 @@ fn song_lua_projected_overlay_actor(
                     else { deadlib_render_core::SamplerWrap::Clamp },
             },
             local_transform,
-            world_z: state.z_bias,
+            world_z: 0.0,
             depth_test: state.depth_test,
             visible: true,
             glow: [1.0, 1.0, 1.0, 0.0],
@@ -10668,7 +10684,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let view_proj = camera_state.and_then(|camera|
                     song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height))
                     .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
-                let transform = song_lua_projected_local_transform(view_proj, model);
+                let transform = song_lua_projected_local_transform(view_proj, model, state);
                 let mesh_actor = if let Some(scratch) = projected_mesh_scratch.as_deref_mut() {
                     let mesh = scratch.update_textured(|out| {
                         append_song_lua_actor_multi_vertex_textured_mesh(out, vertices);
@@ -10686,7 +10702,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         }),
                         align: [0.0, 0.0],
                         offset: [0.0; 2],
-                        world_z: state.z_bias,
+                        world_z: 0.0,
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                         local_transform: transform,
                         texture: texture.clone(),
@@ -10720,7 +10736,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         }),
                         align: [0.0, 0.0],
                         offset: [0.0; 2],
-                        world_z: state.z_bias,
+                        world_z: 0.0,
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                         local_transform: transform,
                         texture,
@@ -14261,6 +14277,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 player_transform.z,
             );
             let player_blend = match player_state.blend {
+                SongLuaOverlayBlendMode::NoEffect => Some(BlendMode::NoEffect),
                 SongLuaOverlayBlendMode::Alpha => None,
                 SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
                 SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),

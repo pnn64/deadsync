@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-19",
+  "chart": "mawaru7/mawaru7.sm",
+  "chart_hash": "f7fdd8fafaee6188",
+  "lua_sha256": "dc7e509519680b26374b3cc139e5a8d529290bb8c3a18c11746277173bd4c339",
+  "execution": {
+    "path": "compiled normal gameplay preparation",
+    "compile_horizon": "full original chart",
+    "runtime_lua_vm": false,
+    "backend": "Vulkan (wgpu)",
+    "design_size": [
+      854,
+      480
+    ],
+    "output_size": [
+      1600,
+      900
+    ],
+    "noteskin": "cel",
+    "scroll": "M730",
+    "saved_mini_percent": 60,
+    "background_filter_percent": 95
+  },
+  "pixel_measure": "RGBA pixels changed by removing tap-note texture draw operations from the same render frame",
+  "before_render_fix": {
+    "compile_horizon_beat": 110,
+    "visible_tap_pixels": {
+      "70": 0,
+      "94": 0
+    }
+  },
+  "after_full_production_compile": {
+    "test_passed": true,
+    "test_seconds": 467.02,
+    "samples": [
+      {
+        "beat": 8,
+        "noteskin_draws": 4
+      },
+      {
+        "beat": 70,
+        "noteskin_draws": 40,
+        "visible_tap_pixels": 24281
+      },
+      {
+        "beat": 94,
+        "noteskin_draws": 16,
+        "visible_tap_pixels": 10255
+      },
+      {
+        "beat": 116,
+        "noteskin_draws": 4,
+        "visible_tap_pixels": 0
+      },
+      {
+        "beat": 196,
+        "noteskin_draws": 4,
+        "visible_tap_pixels": 0
+      }
+    ]
+  },
+  "other_checks": {
+    "late_foreground_shared_tracks": "passed with and without background owner, including explicit numeric depth disable and NoEffect capture",
+    "renderer_mask_depth": "passed DirectX, Vulkan (wgpu), OpenGL, native Vulkan",
+    "projection_regressions": "2 passed including pinned Step Your Game Up geometry",
+    "small_door_mask": {
+      "passed": true,
+      "test_seconds": 20.72,
+      "closed_visible_tap_pixels": 27741,
+      "open_visible_tap_pixels": 0
+    },
+    "foreground_compile_guard": {
+      "passed": true,
+      "horizon_beat": 110,
+      "test_seconds": 90.53
+    }
+  },
+  "native_control": "native-result.json",
+  "native_render_source_revision": "704cdd5624155f743b59b8b64fedeb0588dae067",
+  "scope": "Targeted note visibility, compiled handoff, blend/depth and projection checks; not whole-song pixel parity or an all-fixture run."
+}

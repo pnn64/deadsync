@@ -1616,7 +1616,7 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
 
 fn workspace_root() -> std::path::PathBuf {
     let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    if manifest.join("assets").is_dir() {
+    if manifest.join("Cargo.lock").is_file() && manifest.join("assets").is_dir() {
         manifest
     } else {
         manifest.join("../..")
@@ -4595,7 +4595,7 @@ fn song_lua_projection_preserves_vertices_behind_camera_for_gpu_clipping() {
         .expect("positive FOV should produce a projection");
     let model = Matrix4::from_translation(Vector3::new(427.0, 240.0, 0.0))
         * song_lua_overlay_local_transform([50.0, 20.0, 397.350_98], 0.0, 0.0);
-    let local_transform = song_lua_projected_local_transform(view_proj, model);
+    let local_transform = song_lua_projected_local_transform(view_proj, model, SongLuaOverlayState::default());
     let screen_projection = glam::camera::rh::proj::opengl::orthographic(
         0.0,
         screen_width(),

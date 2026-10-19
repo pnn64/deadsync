@@ -3060,12 +3060,15 @@ fn blend_color(dst: [f32; 4], src: [f32; 4], mode: BlendMode) -> [f32; 4] {
     let alpha = clamp01(src[3]);
     let inv = 1.0 - alpha;
     let mut color = std::array::from_fn(|i| match mode {
+        BlendMode::NoEffect => dst[i],
         BlendMode::Alpha => src[i].mul_add(alpha, dst[i] * inv),
         BlendMode::Add => src[i].mul_add(alpha, dst[i]),
         BlendMode::Multiply => src[i] * dst[i],
         BlendMode::Subtract => dst[i].mul_add(inv, -(src[i] * alpha)),
     });
-    color[3] = if mode == BlendMode::Subtract {
+    color[3] = if mode == BlendMode::NoEffect {
+        dst[3]
+    } else if mode == BlendMode::Subtract {
         dst[3].mul_add(inv, -src[3])
     } else {
         src[3] + dst[3] * inv

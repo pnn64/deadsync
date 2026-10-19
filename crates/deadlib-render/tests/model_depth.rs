@@ -217,10 +217,46 @@ fn model_depth_isolation() {
         assert_pixels(&mut backend, &frame, &textures, kind);
         assert_padded_capture(&mut backend, &textures, kind);
         assert_depth_capture(&mut backend, &textures, kind);
+        assert_no_effect_mask(&mut backend, &textures, kind);
         assert_float_capture(&mut backend, &textures, kind);
         drop(textures);
         backend.cleanup();
     }
+}
+
+// A NoEffect mask leaves existing pixels untouched and still occludes later
+// geometry. Drawing it with alpha blending paints over an existing notefield.
+fn assert_no_effect_mask(
+    backend: &mut Backend,
+    textures: &TextureHandleMap<Texture>,
+    kind: BackendType,
+) {
+    let mut frame = model_frame();
+    frame.clear_color = [0.0, 1.0, 0.0, 1.0];
+    frame.tmesh_geometries = vec![quad(0.4, 0.4), quad(0.8, 0.0)];
+    frame.tmesh_instances.truncate(2);
+    frame.tmesh_instances[1].tint = [1.0, 0.0, 0.0, 1.0];
+    frame.ops.truncate(2);
+    let DrawOp::TexturedMesh(mask) = &mut frame.ops[0] else {
+        unreachable!()
+    };
+    mask.blend = BlendMode::NoEffect;
+    mask.clear_depth = true;
+    backend.request_screenshot();
+    backend
+        .draw(&frame, textures, false)
+        .expect("draw NoEffect depth mask");
+    let image = backend.capture_frame().expect("capture NoEffect mask");
+    assert_eq!(
+        image.get_pixel(image.width() / 2, image.height() / 2).0[..3],
+        [0, 255, 0],
+        "{kind}: NoEffect must preserve color and occlude later geometry"
+    );
+    assert_eq!(
+        image.get_pixel(image.width() * 3 / 4, image.height() / 2).0[..3],
+        [255, 0, 0],
+        "{kind}: geometry outside the mask must remain visible"
+    );
 }
 
 fn assert_depth_capture(

@@ -5206,6 +5206,7 @@ fn retained_frame_key(
             Some(BlendMode::Add) => 2,
             Some(BlendMode::Multiply) => 3,
             Some(BlendMode::Subtract) => 4,
+            Some(BlendMode::NoEffect) => 5,
         },
     }
 }

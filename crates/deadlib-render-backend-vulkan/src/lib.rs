@@ -3322,6 +3322,15 @@ fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlend
         vk::ColorComponentFlags::R | vk::ColorComponentFlags::G | vk::ColorComponentFlags::B
     };
     match mode {
+        BlendMode::NoEffect => vk::PipelineColorBlendAttachmentState::default()
+            .color_write_mask(write_mask)
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::ZERO)
+            .dst_color_blend_factor(vk::BlendFactor::ONE)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE)
+            .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Alpha => vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(write_mask)
             .blend_enable(true)
@@ -4834,11 +4843,11 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
 // five geometry kinds and four blends. Initialization warms all variants;
 // gameplay only selects handles. No misses, pruning, I/O or frame allocations.
 struct PassPipelines {
-    sprites: [PipelinePair; 4],
-    video: [PipelinePair; 4],
-    meshes: [PipelinePair; 4],
-    textured: [PipelinePair; 4],
-    depth: Option<[PipelinePair; 4]>,
+    sprites: [PipelinePair; 5],
+    video: [PipelinePair; 5],
+    meshes: [PipelinePair; 5],
+    textured: [PipelinePair; 5],
+    depth: Option<[PipelinePair; 5]>,
 }
 
 struct CapturePass {
@@ -4854,17 +4863,19 @@ const fn blend_index(mode: BlendMode) -> usize {
         BlendMode::Add => 1,
         BlendMode::Multiply => 2,
         BlendMode::Subtract => 3,
+        BlendMode::NoEffect => 4,
     }
 }
 
 fn build_blend_pipelines(
     mut build: impl FnMut(BlendMode) -> Result<PipelinePair, Box<dyn Error>>,
-) -> Result<[PipelinePair; 4], Box<dyn Error>> {
+) -> Result<[PipelinePair; 5], Box<dyn Error>> {
     Ok([
         build(BlendMode::Alpha)?,
         build(BlendMode::Add)?,
         build(BlendMode::Multiply)?,
         build(BlendMode::Subtract)?,
+        build(BlendMode::NoEffect)?,
     ])
 }
 

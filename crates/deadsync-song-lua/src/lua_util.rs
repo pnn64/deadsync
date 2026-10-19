@@ -6482,6 +6482,17 @@ pub fn run_named_command_on_children_recursively(
     Ok(())
 }
 
+// ActorFrame overrides SetZTestMode and SetZWrite to apply the setter to
+// every owned child. Capture these writes on the children themselves so a
+// child's later ztest(0) still overrides its parent's earlier ztest(1).
+fn capture_actor_depth_recursive(lua: &Lua, actor: &Table, enabled: bool) -> mlua::Result<()> {
+    capture_block_set_bool(lua, actor, "depth_test", enabled)?;
+    for child in actor_direct_children(lua, actor)? {
+        capture_actor_depth_recursive(lua, &child, enabled)?;
+    }
+    Ok(())
+}
+
 pub fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
     lua.create_function(move |_, _args: MultiValue| Ok(actor.clone()))
@@ -8724,6 +8735,7 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
                     && let Some(blend) = parse_overlay_blend_mode(raw.as_str())
                 {
                     let label = match blend {
+                        SongLuaOverlayBlendMode::NoEffect => "noeffect",
                         SongLuaOverlayBlendMode::Alpha => "alpha",
                         SongLuaOverlayBlendMode::Add => "add",
                         SongLuaOverlayBlendMode::Multiply => "multiply",
@@ -9778,8 +9790,13 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             lua.create_function({
                 let actor = actor.clone();
                 move |lua, args: MultiValue| {
-                    let enabled = method_arg(&args, 0).is_none_or(truthy);
-                    capture_block_set_bool(lua, &actor, "depth_test", enabled)?;
+                    let enabled = match method_arg(&args, 0) {
+                        Some(Value::Boolean(value)) => *value,
+                        Some(Value::Integer(value)) => *value != 0,
+                        Some(Value::Number(value)) => value.trunc() != 0.0,
+                        _ => return Err(mlua::Error::runtime(format!("{name} expects a boolean or number"))),
+                    };
+                    capture_actor_depth_recursive(lua, &actor, enabled)?;
                     Ok(actor.clone())
                 }
             })?,
@@ -9800,7 +9817,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                             .to_ascii_lowercase();
                         !matches!(normalized.as_str(), "off" | "none" | "false")
                     });
-                capture_block_set_bool(lua, &actor, "depth_test", enabled)?;
+                capture_actor_depth_recursive(lua, &actor, enabled)?;
                 Ok(actor.clone())
             }
         })?,

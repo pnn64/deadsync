@@ -85,6 +85,7 @@ struct PipelineSet {
     add: RenderPipelineState,
     multiply: RenderPipelineState,
     subtract: RenderPipelineState,
+    no_effect: RenderPipelineState,
 }
 
 impl PipelineSet {
@@ -95,6 +96,7 @@ impl PipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -1106,6 +1108,7 @@ fn build_pipeline_set(
         add: build_pipeline(device, &vertex, &fragment, BlendMode::Add, write_alpha)?,
         multiply: build_pipeline(device, &vertex, &fragment, BlendMode::Multiply, write_alpha)?,
         subtract: build_pipeline(device, &vertex, &fragment, BlendMode::Subtract, write_alpha)?,
+        no_effect: build_pipeline(device, &vertex, &fragment, BlendMode::NoEffect, write_alpha)?,
     })
 }
 
@@ -1142,6 +1145,14 @@ fn build_pipeline(
 
 fn configure_blend(attachment: &RenderPipelineColorAttachmentDescriptorRef, blend: BlendMode) {
     let (src, dst, op, src_alpha, dst_alpha, alpha_op) = match blend {
+        BlendMode::NoEffect => (
+            MTLBlendFactor::Zero,
+            MTLBlendFactor::One,
+            MTLBlendOperation::Add,
+            MTLBlendFactor::Zero,
+            MTLBlendFactor::One,
+            MTLBlendOperation::Add,
+        ),
         BlendMode::Alpha => (
             MTLBlendFactor::SourceAlpha,
             MTLBlendFactor::OneMinusSourceAlpha,
@@ -1906,6 +1917,7 @@ const fn blend_key(blend: BlendMode) -> u8 {
         BlendMode::Add => 1,
         BlendMode::Multiply => 2,
         BlendMode::Subtract => 3,
+        BlendMode::NoEffect => 4,
     }
 }
 

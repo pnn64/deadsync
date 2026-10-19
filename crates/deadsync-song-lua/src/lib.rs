@@ -2168,6 +2168,7 @@ pub enum SongLuaOverlayBlendMode {
     Add,
     Multiply,
     Subtract,
+    NoEffect,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2430,7 +2431,9 @@ pub fn overlay_text_at<'a>(
 
 #[must_use]
 pub const fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
-    if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
+    if raw.eq_ignore_ascii_case("noeffect") || raw.eq_ignore_ascii_case("blendmode_noeffect") {
+        Some(SongLuaOverlayBlendMode::NoEffect)
+    } else if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
         Some(SongLuaOverlayBlendMode::Add)
     } else if raw.eq_ignore_ascii_case("multiply") || raw.eq_ignore_ascii_case("blendmode_multiply")
     {
