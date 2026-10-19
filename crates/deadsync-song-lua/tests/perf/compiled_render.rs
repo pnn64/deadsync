@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "compiled_physics.rs"]
+mod physics;
+
 #[path = "compiled_render_before.rs"]
 mod before;
 

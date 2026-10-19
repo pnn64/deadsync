@@ -93,6 +93,10 @@ def main():
                     "crates/deadsync-song-lua/src/model_texture.rs",
                     "crates/deadsync-song-lua/tests/perf/compiled_render.rs",
                     "crates/deadsync-song-lua/tests/perf/compiled_render_before.rs",
+                    "crates/deadsync-song-lua/tests/perf/compiled_physics.rs",
+                    "crates/deadsync-song-lua/tests/perf/compiled_physics_before.rs",
+                    "crates/deadsync-song-lua/src/compiled_scene.rs",
+                    "crates/deadsync-song-lua/src/compat.rs",
                     "crates/deadsync-song-lua/tests/perf/material_clock.rs",
                     "crates/deadsync-song-lua/tests/perf/material_clock_before.rs",
                     "tests/support/perf.rs", "Cargo.lock", "Cargo.toml",
@@ -105,7 +109,7 @@ def main():
                   cycles="QueryThreadCycleTime: scheduled current-thread CPU cycles, including kernel time; not a user-only PMU counter",
                   allocation_scope="current-thread Rust GlobalAlloc, including mlua; direct native malloc excluded",
                   test_filters=args.test_filter or ["draw_capture::perf::benchmark_draw_capture"],
-                  timing_scope="capture: run calls retaining scene frames; conversion: consume captured input and retain converted output, output drop excluded; render: projected frame updates; reads/ticks: unchanged reads or update plus UV sampling; initialization: create and drop clocks; fixture setup excluded; see each workload unit",
+                  timing_scope="capture: run calls retaining scene frames; conversion: consume captured input and retain converted output, output drop excluded; render: projected frame updates; physics: simulation ticks with empty render bindings and reused sound output; reads/ticks: unchanged reads or update plus UV sampling; initialization: repeated scene initialization or create/drop clocks; fixture setup excluded; see each workload unit",
                   samples_per_variant_per_workload=args.rounds * 9, summary=summary, records=records)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

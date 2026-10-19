@@ -9,6 +9,8 @@ use std::{path::PathBuf, sync::Arc};
 
 type V3 = [f64; 3];
 
+const INDEXED_QUERY_MIN_ENTITIES: usize = 64;
+
 #[derive(Debug, Clone)]
 pub struct CompiledSceneRestart {
     pub joined: [bool; 2],
@@ -102,6 +104,9 @@ pub struct CompiledSongScene {
     pub(super) restart: Option<CompiledSceneRestart>,
     pub(super) held: [[bool; 4]; 2],
     pub(super) points: Vec<V3>,
+    pub(super) indexed_queries: bool,
+    pub(super) ball_indices: Box<[usize]>,
+    pub(super) physics_indices: Box<[usize]>,
     pub(super) join_mode: bool,
     pub(super) join_players: [Option<usize>; 2],
     pub(super) timer_only: bool,
@@ -134,6 +139,42 @@ impl CompiledSongScene {
                 .unwrap_or(0),
             [0.0; 3],
         );
+        // Small scenes retain the original loops; query indirection costs more
+        // than it saves when there are few unrelated entities to skip.
+        if self.entities.len() < INDEXED_QUERY_MIN_ENTITIES {
+            self.indexed_queries = false;
+            self.ball_indices = Box::default();
+            self.physics_indices = Box::default();
+            return;
+        }
+        // Lowering fixes component membership. Cache each query in authored
+        // order, reserving exactly once for its song-lifetime index storage.
+        let (balls, physics) = self
+            .entities
+            .iter()
+            .fold((0, 0), |(balls, physics), entity| {
+                (
+                    balls + usize::from(entity.ball.is_some()),
+                    physics + usize::from(entity.physics.is_some()),
+                )
+            });
+        // Dense ball groups keep the original contiguous traversal. Building
+        // gather lists there adds bookkeeping without avoiding much scanning.
+        self.indexed_queries = balls * 2 < self.entities.len();
+        let mut ball_indices = Vec::with_capacity(if self.indexed_queries { balls } else { 0 });
+        let mut physics_indices = Vec::with_capacity(if self.indexed_queries { physics } else { 0 });
+        if self.indexed_queries {
+            for (index, entity) in self.entities.iter().enumerate() {
+                if entity.ball.is_some() {
+                    ball_indices.push(index);
+                }
+                if entity.physics.is_some() {
+                    physics_indices.push(index);
+                }
+            }
+        }
+        self.ball_indices = ball_indices.into_boxed_slice();
+        self.physics_indices = physics_indices.into_boxed_slice();
     }
     pub fn bind_targets(&mut self, targets: Vec<(usize, SongLuaLiveTarget)>) {
         self.targets = targets;
@@ -331,6 +372,13 @@ impl CompiledSongScene {
         output
     }
     fn tick(&mut self, output: &mut SongLuaLiveOutput) {
+        if self.indexed_queries {
+            self.tick_queries::<true>(output);
+        } else {
+            self.tick_queries::<false>(output);
+        }
+    }
+    fn tick_queries<const INDEXED: bool>(&mut self, output: &mut SongLuaLiveOutput) {
         // Preserve authored system and entity order; computations stay double
         // until values cross the native actor setter boundary.
         for e in &mut self.entities {
@@ -376,13 +424,14 @@ impl CompiledSongScene {
                 }
             }
         }
-        for e in &mut self.entities {
+        visit_query_mut::<INDEXED>(&mut self.entities, &self.physics_indices, |e| {
             if let Some(p) = &mut e.physics {
                 p.collision = false;
             }
-        }
+        });
+        let mut collided = false;
         for _ in 0..2 {
-            for e in &mut self.entities {
+            visit_query_mut::<INDEXED>(&mut self.entities, &self.physics_indices, |e| {
                 if let Some(p) = &mut e.physics {
                     if p.gravity {
                         p.velocity[1] = (p.velocity[1] - 0.5 * 0.01).max(-0.25);
@@ -391,7 +440,7 @@ impl CompiledSongScene {
                         e.position[a] += 0.5 * p.velocity[a];
                     }
                 }
-            }
+            });
             for box_index in 0..self.entities.len() {
                 let entity = &self.entities[box_index];
                 let Some(half) = entity.half_box else {
@@ -401,8 +450,8 @@ impl CompiledSongScene {
                 let rotation = entity.rotation;
                 let velocity = entity.physics.map_or([0.0; 3], |p| p.velocity);
                 let slippy = entity.box_slippy;
-                for ball in &mut self.entities {
-                    let Some(mut data) = ball.ball else { continue };
+                visit_query_mut::<INDEXED>(&mut self.entities, &self.ball_indices, |ball| {
+                    let Some(mut data) = ball.ball else { return };
                     let mut closest = std::array::from_fn(|a| ball.position[a] - position[a]);
                     rotate(&mut closest, rotation, true);
                     for a in 0..3 {
@@ -421,13 +470,15 @@ impl CompiledSongScene {
                             ball.position[a] -= (data.radius - distance) * direction[a];
                         }
                         let physics = ball.physics.as_mut().unwrap();
-                        let relative: V3 =
-                            std::array::from_fn(|a| physics.velocity[a] - velocity[a]);
+                        let relative: V3 = std::array::from_fn(|a| physics.velocity[a] - velocity[a]);
                         let mut t = relative[0] * direction[0]
                             + relative[1] * direction[1]
                             + relative[2] * direction[2];
                         if t > 0.0 {
                             physics.collision = true;
+                            if INDEXED {
+                                collided = true;
+                            }
                             t = (1.0 + 0.5) * t + 0.1;
                             for a in 0..3 {
                                 direction[a] = t * direction[a];
@@ -440,10 +491,10 @@ impl CompiledSongScene {
                             ball.ball = Some(data);
                         }
                     }
-                }
+                });
             }
         }
-        for e in &mut self.entities {
+        visit_query_mut::<INDEXED>(&mut self.entities, &self.ball_indices, |e| {
             if let Some(ball) = &mut e.ball {
                 if e.position[1] < -50.0 {
                     e.position = ball.spawn;
@@ -451,7 +502,7 @@ impl CompiledSongScene {
                     e.physics.as_mut().unwrap().velocity = [0.0; 3];
                 }
             }
-        }
+        });
         for i in 0..self.entities.len() {
             if let Some((target, offset)) = self.entities[i].follow {
                 let target = &self.entities[target];
@@ -468,14 +519,14 @@ impl CompiledSongScene {
             let position = e.position;
             if let Some(half) = e.checkpoint {
                 let mut checkpoint = 0;
-                for ball in &mut self.entities {
+                visit_query_mut::<INDEXED>(&mut self.entities, &self.ball_indices, |ball| {
                     if let Some(b) = &mut ball.ball {
                         if inside(ball.position, position, half) && b.spawn != position {
                             b.spawn = position;
                             checkpoint += 1;
                         }
                     }
-                }
+                });
                 for _ in 0..checkpoint {
                     self.sound(1, output);
                 }
@@ -483,21 +534,36 @@ impl CompiledSongScene {
         }
         for goal in &self.entities {
             if let Some(half) = goal.goal {
-                for ball in &self.entities {
-                    if ball.ball.is_some() && inside(ball.position, goal.position, half) {
-                        self.winner = ball.input;
-                        self.running = false;
-                        output.compiled_music = Some(CompiledMusicAction::Stop);
-                        self.sound(2, output);
+                if INDEXED {
+                    for &index in &self.ball_indices {
+                        let ball = &self.entities[index];
+
+                        if ball.ball.is_some() && inside(ball.position, goal.position, half) {
+                            self.winner = ball.input;
+                            self.running = false;
+                            output.compiled_music = Some(CompiledMusicAction::Stop);
+                            self.sound(2, output);
+                        }
+                    }
+                } else {
+                    for ball in &self.entities {
+                        if ball.ball.is_some() && inside(ball.position, goal.position, half) {
+                            self.winner = ball.input;
+                            self.running = false;
+                            output.compiled_music = Some(CompiledMusicAction::Stop);
+                            self.sound(2, output);
+                        }
                     }
                 }
             }
         }
-        if self
-            .entities
-            .iter()
-            .any(|e| e.physics.is_some_and(|p| p.collision))
-        {
+        if if INDEXED {
+            collided
+        } else {
+            self.entities
+                .iter()
+                .any(|e| e.physics.is_some_and(|p| p.collision))
+        } {
             let sound = 3 + (3.0 * self.random.real()).floor() as usize;
             self.sound(sound.min(5), output);
         }
@@ -637,6 +703,17 @@ impl CompiledSongScene {
             }
         }
         Ok(())
+    }
+}
+
+// Constant specialization keeps the original contiguous loop in dense
+// scenes. Sparse queries select only their fixed, authored-order components.
+#[inline(always)]
+fn visit_query_mut<const INDEXED: bool>(entities: &mut [Entity], indices: &[usize], mut visit: impl FnMut(&mut Entity)) {
+    if INDEXED {
+        for &index in indices { visit(&mut entities[index]); }
+    } else {
+        for entity in entities { visit(entity); }
     }
 }
 
