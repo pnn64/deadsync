@@ -1,4 +1,4 @@
-// Frozen from add695545; shared payload aliases and state-reader/test adapters only.
+// Frozen from 8c2c68c77; shared payload types and frozen state-reader/test adapters only.
 //! Bake custom ActorFrame draw stacks without retaining mutable Lua tables.
 
 use std::sync::Arc;
@@ -145,7 +145,16 @@ fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
     if crate::live::active(lua) {
         crate::live::read_state(lua, actor)
     } else {
-        actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+        // An uninitialized Sprite may resolve Texture/AFT through authored
+        // __index code before later scalar fields are read. Keep those reads
+        // sequential so mutations and errors from that lookup stay observable.
+        let sprite = matches!(actor.raw_get::<mlua::Value>("__songlua_actor_type")?,
+            mlua::Value::String(kind) if kind.as_bytes().eq_ignore_ascii_case(b"Sprite"));
+        if sprite && actor.raw_get::<mlua::Value>("__songlua_state_sprite_texture")?.is_nil() {
+            actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+        } else {
+            crate::lua_util::draw_state_baseline::batched(lua, actor).map_err(mlua::Error::external)
+        }
     }
 }
 
@@ -562,14 +571,17 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
             }
         }
         let start = frames.len();
+        // With one owner every valid call belongs to that frame. Quiet tails
+        // reserve nothing; multiple owners retain their independent growth.
+        let command_capacity = if frame_owners.len() == 1 { raw.calls.len() } else { 0 };
         for pointer in frame_owners {
             let owner = overlay_index(pointer)?;
             frames.push((owner, DrawFrame {
                 second: raw.second,
                 immediate: raw.immediate,
                 owners: vec![owner],
-                owner_ends: Vec::new(),
-                ops: Vec::new(),
+                owner_ends: Vec::with_capacity(1),
+                ops: Vec::with_capacity(command_capacity),
             }));
         }
         let by_owner = &mut frames[start..];
@@ -616,7 +628,8 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
 pub(super) fn finish_for_test(lua: &Lua, sources: &FxHashMap<usize, DrawSource>) -> Result<Vec<(usize, DrawFrame)>, String> {
     convert(lua.remove_app_data::<Capture>().unwrap(), sources)
 }
-
-pub(super) fn state_for_test(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
-    state(lua, actor)
+pub(super) fn state_for_test(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> { state(lua, actor) }
+pub(super) fn sprite_for_test(actor: &Table) -> mlua::Result<bool> {
+    Ok(matches!(actor.raw_get::<mlua::Value>("__songlua_actor_type")?,
+        mlua::Value::String(kind) if kind.as_bytes().eq_ignore_ascii_case(b"Sprite")))
 }

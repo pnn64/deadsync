@@ -1,10 +1,60 @@
-// Frozen state decoder from add695545; helpers and scalar-field enums are shared.
+// Frozen from 8c2c68c77. Decoder, scalar batch and vector/color readers are frozen;
+// field enums, key storage and unchanged parse helpers are shared.
 use super::*;
-
 pub(crate) fn initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
     read_actor_overlay_state(actor,
         |field| actor.raw_get::<Option<f32>>(field.key()),
         |field| actor.raw_get::<Option<bool>>(field.key()))
+}
+pub(crate) fn batched(
+    lua: &Lua,
+    actor: &Table,
+) -> Result<SongLuaOverlayState, String> {
+    let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
+    let mut flags = [None; ActorFlagField::KEYS.len()];
+    let keys = actor_scalar_keys(lua).map_err(|error| error.to_string())?;
+    // SAFETY: actor and interned keys are rooted in four reserved slots.
+    // Only raw reads and primitive conversions run under this lock. They
+    // neither allocate Lua objects nor call authored code or metamethods.
+    unsafe {
+        crate::raw_vm::with_read_stack(lua, 4, |raw, base| {
+                let state = raw.state();
+                raw.push(actor)?;
+                raw.push(keys)?;
+                for index in 0..ActorNumberField::KEYS.len() {
+                    ffi::lua_rawgeti(state, base + 2, (index + 1) as ffi::lua_Integer);
+                    ffi::lua_rawget(state, base + 1);
+                    numbers[index] = if ffi::lua_type(state, -1) == ffi::LUA_TNIL {
+                        ActorNumberValue::Value(None)
+                    } else if ffi::lua_isnumber(state, -1) != 0 {
+                        ActorNumberValue::Value(Some(ffi::lua_tonumber(state, -1) as f32))
+                    } else {
+                        // Preserve the standard reader's exact type error, and
+                        // only raise it if the decoder actually reads this key.
+                        ActorNumberValue::Fallback
+                    };
+                    ffi::lua_pop(state, 1);
+                }
+                for index in 0..ActorFlagField::KEYS.len() {
+                    ffi::lua_rawgeti(state, base + 2, (ActorNumberField::KEYS.len() + index + 1) as ffi::lua_Integer);
+                    ffi::lua_rawget(state, base + 1);
+                    if ffi::lua_type(state, -1) != ffi::LUA_TNIL {
+                        flags[index] = Some(ffi::lua_toboolean(state, -1) != 0);
+                    }
+                    ffi::lua_pop(state, 1);
+                }
+                Ok(())
+        })
+        .map_err(|error| error.to_string())?;
+    }
+    read_actor_overlay_state(
+        actor,
+        |field| match numbers[field as usize] {
+            ActorNumberValue::Value(value) => Ok(value),
+            ActorNumberValue::Fallback => actor.raw_get::<Option<f32>>(field.key()),
+        },
+        |field| Ok(flags[field as usize]),
+    )
 }
 
 fn read_actor_overlay_state(
@@ -17,9 +67,9 @@ fn read_actor_overlay_state(
     let mut state = SongLuaOverlayState::default();
     // Model::Model enables the Z buffer and texture wrapping before Lua overrides.
     state.depth_test = actor
-        .raw_get::<Option<String>>("__songlua_actor_type")
+        .raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")
         .map_err(|err| err.to_string())?
-        .is_some_and(|kind| kind.eq_ignore_ascii_case("Model"));
+        .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Model"));
     state.texture_wrapping = state.depth_test;
     state.cull_mode = if state.depth_test {
         deadlib_render_core::CullMode::Back
@@ -50,11 +100,11 @@ fn read_actor_overlay_state(
         Some(value) => value,
         None => {
             !actor
-                .raw_get::<Option<String>>("__songlua_actor_type")
+                .raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")
                 .map_err(|err| err.to_string())?
-                .is_some_and(|kind| kind.eq_ignore_ascii_case("Sprite"))
+                .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Sprite"))
                 || actor
-                    .get::<Option<String>>("Texture")
+                    .get::<Option<LuaFieldText<64>>>("Texture")
                     .map_err(|err| err.to_string())?
                     .is_some()
                 || actor_aft_capture_name(actor)
@@ -426,4 +476,44 @@ fn read_actor_overlay_state(
         state.effect_mode = raw;
     }
     Ok(state)
+}
+
+pub fn table_vec2(table: &Table) -> Option<[f32; 2]> {
+    Some([table.raw_get::<f32>(1).ok()?, table.raw_get::<f32>(2).ok()?])
+}
+
+pub fn table_vec3(table: &Table) -> Option<[f32; 3]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+    ])
+}
+
+pub fn table_vec4(table: &Table) -> Option<[f32; 4]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+        table.raw_get::<f32>(4).ok()?,
+    ])
+}
+
+pub fn table_vec5(table: &Table) -> Option<[f32; 5]> {
+    Some([
+        table.raw_get::<f32>(1).ok()?,
+        table.raw_get::<f32>(2).ok()?,
+        table.raw_get::<f32>(3).ok()?,
+        table.raw_get::<f32>(4).ok()?,
+        table.raw_get::<f32>(5).ok()?,
+    ])
+}
+
+pub fn table_vertex_colors(table: &Table) -> Option<[[f32; 4]; 4]> {
+    Some([
+        table_vec4(&table.raw_get::<Table>(1).ok()?)?,
+        table_vec4(&table.raw_get::<Table>(2).ok()?)?,
+        table_vec4(&table.raw_get::<Table>(3).ok()?)?,
+        table_vec4(&table.raw_get::<Table>(4).ok()?)?,
+    ])
 }

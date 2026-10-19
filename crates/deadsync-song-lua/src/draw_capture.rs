@@ -178,6 +178,31 @@ pub(crate) fn finish(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+struct IsSprite(bool);
+
+impl mlua::FromLua for IsSprite {
+    fn from_lua(value: mlua::Value, _: &Lua) -> mlua::Result<Self> {
+        Ok(Self(matches!(value, mlua::Value::String(kind)
+            if kind.as_bytes().eq_ignore_ascii_case(b"Sprite"))))
+    }
+
+    unsafe fn from_stack(index: std::os::raw::c_int, raw: &mlua::state::RawLua) -> mlua::Result<Self> {
+        // SAFETY: mlua supplies a live stack slot under its VM lock. Borrow
+        // only an actual Lua string; no coercion, allocation or pointer escapes.
+        // Non-strings and arbitrary binary strings retain Value's predicate.
+        unsafe {
+            let state = raw.state();
+            if mlua::ffi::lua_type(state, index) != mlua::ffi::LUA_TSTRING {
+                return Ok(Self(false));
+            }
+            let mut len = 0;
+            let data = mlua::ffi::lua_tolstring(state, index, &mut len);
+            let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+            Ok(Self(bytes.eq_ignore_ascii_case(b"Sprite")))
+        }
+    }
+}
+
 fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
     if crate::live::active(lua) {
         crate::live::read_state(lua, actor)
@@ -185,8 +210,7 @@ fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
         // An uninitialized Sprite may resolve Texture/AFT through authored
         // __index code before later scalar fields are read. Keep those reads
         // sequential so mutations and errors from that lookup stay observable.
-        let sprite = matches!(actor.raw_get::<mlua::Value>("__songlua_actor_type")?,
-            mlua::Value::String(kind) if kind.as_bytes().eq_ignore_ascii_case(b"Sprite"));
+        let sprite = actor.raw_get::<IsSprite>("__songlua_actor_type")?.0;
         if sprite && actor.raw_get::<mlua::Value>("__songlua_state_sprite_texture")?.is_nil() {
             actor_overlay_initial_state(actor).map_err(mlua::Error::external)
         } else {

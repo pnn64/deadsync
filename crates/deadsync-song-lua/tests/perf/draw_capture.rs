@@ -13,7 +13,7 @@ mod allocations;
 )]
 mod baseline;
 
-// The baseline is frozen from add695545. It owns independent capture storage
+// The baseline is frozen from 8c2c68c77. It owns independent capture storage
 // and runs the same callbacks, then compares every emitted frame and operation.
 fn actor(lua: &Lua, kind: &str, index: usize) -> Table {
     let actor = lua.create_table().unwrap();
@@ -25,11 +25,81 @@ fn actor(lua: &Lua, kind: &str, index: usize) -> Table {
     actor
 }
 
+fn actor_with_properties(lua: &Lua, kind: &str, index: usize, properties: bool) -> Table {
+    let actor = actor(lua, kind, index);
+    if properties {
+        for key in [
+            "__songlua_state_diffuse",
+            "__songlua_state_glow",
+            "__songlua_state_shadow_color",
+            "__songlua_state_effect_color1",
+            "__songlua_state_effect_color2",
+            "__songlua_state_custom_texture_rect",
+            "__songlua_state_stretch_rect",
+        ] {
+            actor
+                .raw_set(
+                    key,
+                    lua.create_sequence_from([0.25_f32, 0.5, 0.75, 1.0])
+                        .unwrap(),
+                )
+                .unwrap();
+        }
+        for key in [
+            "__songlua_state_shadow_len",
+            "__songlua_state_vanishpoint",
+            "__songlua_state_texcoord_offset",
+            "__songlua_state_texcoord_velocity",
+            "__songlua_state_size",
+        ] {
+            actor
+                .raw_set(key, lua.create_sequence_from([1.25_f32, 2.5]).unwrap())
+                .unwrap();
+        }
+        for key in [
+            "__songlua_state_base_rotation",
+            "__songlua_state_effect_magnitude",
+        ] {
+            actor
+                .raw_set(key, lua.create_sequence_from([0.5_f32, 1.0, 1.5]).unwrap())
+                .unwrap();
+        }
+        actor
+            .raw_set(
+                "__songlua_state_effect_timing",
+                lua.create_sequence_from([0.1_f32, 0.2, 0.3, 0.4, 0.5])
+                    .unwrap(),
+            )
+            .unwrap();
+        let rows = (0..4).map(|_| {
+            lua.create_sequence_from([0.25_f32, 0.5, 0.75, 1.0])
+                .unwrap()
+        });
+        actor
+            .raw_set(
+                "__songlua_state_vertex_colors",
+                lua.create_sequence_from(rows).unwrap(),
+            )
+            .unwrap();
+    }
+    actor
+}
+
 fn fixture(
     current: bool,
     owners: usize,
     leaves: usize,
     wrappers: usize,
+) -> (Lua, Table, FxHashMap<usize, DrawSource>) {
+    fixture_with_properties(current, owners, leaves, wrappers, false)
+}
+
+fn fixture_with_properties(
+    current: bool,
+    owners: usize,
+    leaves: usize,
+    wrappers: usize,
+    properties: bool,
 ) -> (Lua, Table, FxHashMap<usize, DrawSource>) {
     let lua = Lua::new();
     let runtime = lua.create_table().unwrap();
@@ -43,23 +113,24 @@ fn fixture(
         .raw_set(crate::SONG_LUA_RUNTIME_KEY, runtime)
         .unwrap();
     lua.globals().raw_set(DRAW_INSTALLED_KEY, true).unwrap();
-    let root = actor(&lua, "ActorFrame", 0);
-    let screen = actor(&lua, "ActorFrame", 1);
+    let root = actor_with_properties(&lua, "ActorFrame", 0, properties);
+    let screen = actor_with_properties(&lua, "ActorFrame", 1, properties);
     screen.raw_set("__songlua_state_fov", 45.0).unwrap();
     lua.globals()
         .raw_set("__songlua_top_screen", screen)
         .unwrap();
     let mut sources = FxHashMap::default();
     for owner in 0..owners {
-        let frame = actor(&lua, "ActorFrame", owner + 2);
+        let frame = actor_with_properties(&lua, "ActorFrame", owner + 2, properties);
         sources.insert(frame.to_pointer() as usize, DrawSource::Overlay(owner));
         let mut children = Vec::new();
         for leaf in 0..leaves {
             let index = owners + owner * leaves + leaf;
-            let child = actor(
+            let child = actor_with_properties(
                 &lua,
                 if leaf % 3 == 0 { "ActorProxy" } else { "Quad" },
                 index,
+                properties,
             );
             // Exercise external proxies and both String-compatible name reads.
             if leaf % 3 == 0 {
@@ -75,7 +146,10 @@ fn fixture(
             let states = lua.create_table().unwrap();
             for wrapper in 0..wrappers {
                 states
-                    .raw_set(wrapper + 1, actor(&lua, "WrapperState", index + wrapper))
+                    .raw_set(
+                        wrapper + 1,
+                        actor_with_properties(&lua, "WrapperState", index + wrapper, properties),
+                    )
                     .unwrap();
             }
             child.raw_set("__songlua_wrappers", states).unwrap();
@@ -154,6 +228,59 @@ fn captured_frames_match_frozen_baseline() {
             "owners={owners}, leaves={leaves}, wrappers={wrappers}"
         );
         assert!(variants[1].iter().any(|(_, frame)| !frame.ops.is_empty()));
+    }
+}
+
+#[test]
+fn populated_vector_and_color_frames_match_frozen_baseline() {
+    let frames = [false, true].map(|current| {
+        let (lua, root, sources) = fixture_with_properties(current, 3, 12, 4, true);
+        capture(current, &lua, &root, 3);
+        finish(current, &lua, &sources).unwrap()
+    });
+    assert_eq!(frames[0], frames[1]);
+    assert!(frames[1].iter().flat_map(|(_,f)| &f.ops).any(|op| matches!(op,
+        DrawOp::Draw {state, ..} if state.vertex_colors.is_some() && state.effect_timing.is_some())));
+}
+
+#[test]
+fn sprite_predicate_preserves_all_value_types_and_binary_strings() {
+    let lua = Lua::new();
+    let actor = lua.create_table().unwrap();
+    for code in [
+        "nil",
+        "false",
+        "123",
+        "1.25",
+        "{}",
+        "function() end",
+        "coroutine.create(function() end)",
+        "newproxy(true)",
+        "string.char(255)",
+        "'sPrItE'",
+        "'Sprite\\0'",
+        "string.rep('x',200)",
+    ] {
+        let value = lua
+            .load(format!("return {code}"))
+            .eval::<mlua::Value>()
+            .unwrap();
+        actor
+            .raw_set("__songlua_actor_type", value.clone())
+            .unwrap();
+        let before = baseline::sprite_for_test(&actor).unwrap();
+        assert_eq!(
+            actor.raw_get::<IsSprite>("__songlua_actor_type").unwrap().0,
+            before,
+            "{code}"
+        );
+        assert_eq!(
+            <IsSprite as mlua::FromLua>::from_lua(value, &lua)
+                .unwrap()
+                .0,
+            before,
+            "{code}"
+        );
     }
 }
 
@@ -355,13 +482,11 @@ fn benchmark_draw_capture() {
     assert_ne!(previous, 0, "benchmark requires logical CPU 2");
     let _affinity = Affinity(previous);
     let reverse = std::env::var_os("DEADSYNC_PERF_REVERSE").is_some();
-    for (name, owners, leaves, wrappers, frames) in [
-        ("capture_shallow", 1, 4, 0, 32),
-        ("capture_wrapped", 3, 12, 4, 12),
-        ("capture_dense", 1, 128, 0, 8),
-        ("convert_one_owner", 1, 4, 0, 64),
-        ("convert_dense_owner", 1, 128, 0, 32),
-        ("convert_many_owners", 64, 2, 0, 32),
+    for (name, owners, leaves, wrappers, frames, properties) in [
+        ("capture_shallow", 1, 4, 0, 32, false),
+        ("capture_wrapped", 3, 12, 4, 12, false),
+        ("capture_dense", 1, 128, 0, 8, false),
+        ("capture_properties", 3, 12, 4, 12, true),
     ] {
         for current in if reverse {
             [true, false]
@@ -370,7 +495,8 @@ fn benchmark_draw_capture() {
         } {
             let mut samples = Vec::new();
             for sample in 0..10 {
-                let (lua, root, sources) = fixture(current, owners, leaves, wrappers);
+                let (lua, root, sources) =
+                    fixture_with_properties(current, owners, leaves, wrappers, properties);
                 if name.starts_with("convert") {
                     capture(current, &lua, &root, frames);
                 }
@@ -387,7 +513,7 @@ fn benchmark_draw_capture() {
                 let nanos = started.elapsed().as_nanos();
                 if sample != 0 {
                     samples.push(serde_json::json!({"ns":nanos,"thread_cycles":used_cycles,
-                        "frames":frames,"allocations":churn.allocs,"reallocations":churn.reallocs,
+                        "frames":frames,"units":frames,"allocations":churn.allocs,"reallocations":churn.reallocs,
                         "allocated_bytes":churn.allocated_bytes,"frees":churn.frees,
                         "frames_per_second": frames as f64 * 1e9 / nanos as f64}));
                 }
@@ -396,7 +522,105 @@ fn benchmark_draw_capture() {
                 "DRAW_CAPTURE_METRIC {}",
                 serde_json::json!({"workload":name,
                 "variant":if current {"after"} else {"before"},"samples":samples,
-                "baseline_commit":"add695545"})
+                "unit":"scene_frames", "baseline_commit":"8c2c68c77"})
+            );
+        }
+    }
+    for name in [
+        "sprite_predicate",
+        "vector_2",
+        "vector_3",
+        "vector_4",
+        "vector_5",
+        "vertex_colors",
+    ] {
+        for current in if reverse {
+            [true, false]
+        } else {
+            [false, true]
+        } {
+            let lua = Lua::new();
+            let vector = lua
+                .create_sequence_from([1.25_f32, 2.5, 3.75, 4.125, 5.75])
+                .unwrap();
+            let matrix = lua
+                .create_sequence_from([
+                    vector.clone(),
+                    vector.clone(),
+                    vector.clone(),
+                    vector.clone(),
+                ])
+                .unwrap();
+            let actor = actor(&lua, "Quad", 0);
+            let count = 20_000;
+            let mut samples = Vec::new();
+            for sample in 0..10 {
+                let started = Instant::now();
+                let start_cycles = cycles();
+                let (_, churn) = allocations::measure(|| {
+                    for _ in 0..count {
+                        let vector = black_box(&vector);
+                        match name {
+                            "sprite_predicate" => {
+                                black_box(if current {
+                                    actor.raw_get::<IsSprite>("__songlua_actor_type").unwrap().0
+                                } else {
+                                    baseline::sprite_for_test(&actor).unwrap()
+                                });
+                            }
+                            "vector_2" => {
+                                black_box(if current {
+                                    crate::table_vec2(vector)
+                                } else {
+                                    crate::lua_util::draw_state_baseline::table_vec2(vector)
+                                });
+                            }
+                            "vector_3" => {
+                                black_box(if current {
+                                    crate::table_vec3(vector)
+                                } else {
+                                    crate::lua_util::draw_state_baseline::table_vec3(vector)
+                                });
+                            }
+                            "vector_4" => {
+                                black_box(if current {
+                                    crate::table_vec4(vector)
+                                } else {
+                                    crate::lua_util::draw_state_baseline::table_vec4(vector)
+                                });
+                            }
+                            "vector_5" => {
+                                black_box(if current {
+                                    crate::table_vec5(vector)
+                                } else {
+                                    crate::lua_util::draw_state_baseline::table_vec5(vector)
+                                });
+                            }
+                            _ => {
+                                black_box(if current {
+                                    crate::table_vertex_colors(black_box(&matrix))
+                                } else {
+                                    crate::lua_util::draw_state_baseline::table_vertex_colors(
+                                        black_box(&matrix),
+                                    )
+                                });
+                            }
+                        }
+                    }
+                });
+                let used_cycles = cycles() - start_cycles;
+                let nanos = started.elapsed().as_nanos();
+                if sample > 0 {
+                    samples.push(serde_json::json!({"ns":nanos,"thread_cycles":used_cycles,"units":count,
+                    "allocations":churn.allocs,"reallocations":churn.reallocs,"allocated_bytes":churn.allocated_bytes,
+                    "frees":churn.frees,"units_per_second":count as f64*1e9/nanos as f64}));
+                }
+            }
+            println!(
+                "DRAW_CAPTURE_METRIC {}",
+                serde_json::json!({"workload":name,
+                "variant":if current {"after"} else {"before"},"samples":samples,
+                "unit":"reads", "baseline_commit":"8c2c68c77"})
             );
         }
     }

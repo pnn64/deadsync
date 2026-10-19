@@ -68,6 +68,9 @@ Native fixtures, comparison tolerances and acceptance rules are unchanged.
 
 ## Reproduction and scope
 
+The recorded candidate is `8c2c68c77`; check out that revision to reproduce
+this pass with its associated frozen baseline and workload set.
+
 ```powershell
 cargo test -p deadsync-song-lua --lib --release --config profile.release.lto=false --no-run --message-format=json
 python scripts/benchmark_song_lua_draw_capture.py --binary <test-executable> --baseline-commit add695545 --out docs/performance/2026-10-19-song-lua-state-reads.json

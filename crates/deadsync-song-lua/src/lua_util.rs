@@ -19529,6 +19529,101 @@ pub(crate) fn actor_overlay_state_batched(
 mod actor_state_read_tests {
     use super::*;
 
+    fn vector_bits<const N: usize>(value: Option<[f32; N]>) -> Option<[u32; N]> {
+        value.map(|items| items.map(f32::to_bits))
+    }
+
+    fn compare_vectors(table: &Table) {
+        assert_eq!(vector_bits(table_vec2(table)), vector_bits(draw_state_baseline::table_vec2(table)));
+        assert_eq!(vector_bits(table_vec3(table)), vector_bits(draw_state_baseline::table_vec3(table)));
+        assert_eq!(vector_bits(table_vec4(table)), vector_bits(draw_state_baseline::table_vec4(table)));
+        assert_eq!(vector_bits(table_vec5(table)), vector_bits(draw_state_baseline::table_vec5(table)));
+    }
+
+    #[test]
+    fn vector_batches_preserve_bits_coercions_holes_and_raw_lookup() {
+        let lua = Lua::new();
+        let table = lua.create_sequence_from([1.0, 2.0, 3.0, 4.0, 5.0]).unwrap();
+        for value in [Value::Nil, Value::Boolean(false), Value::Table(lua.create_table().unwrap()),
+            Value::String(lua.create_string(" -0.0 ").unwrap()),
+            Value::String(lua.create_string("0x10").unwrap()),
+            Value::String(lua.create_string("not a number").unwrap()),
+            Value::String(lua.create_string([b'1',0,b'x']).unwrap()),
+            Value::String(lua.create_string([0xff]).unwrap()),
+            Value::Number(f64::INFINITY), Value::Number(f64::NEG_INFINITY),
+            Value::Number(f64::from_bits(0xfff8_2468_0000_1234)), Value::Number(-0.0)] {
+            for position in 1..=6 {
+                table.raw_set(position, value.clone()).unwrap();
+                compare_vectors(&table);
+                table.raw_set(position, position as f32).unwrap();
+            }
+        }
+        let missing = lua.load(r#"lookups=0; return setmetatable({}, {__index=function()
+            lookups=lookups+1; error('raw reads must not call __index') end})"#).eval::<Table>().unwrap();
+        compare_vectors(&missing);
+        assert_eq!(lua.globals().get::<i32>("lookups").unwrap(), 0);
+        let bad = lua.create_sequence_from([false]).unwrap();
+        lua.exec_raw_lua(|raw| unsafe {
+            assert_ne!(ffi::lua_checkstack(raw.state(), 8), 0);
+            raw.push(77).unwrap();
+            let top = ffi::lua_gettop(raw.state());
+            compare_vectors(&table);
+            compare_vectors(&bad);
+            assert_eq!(ffi::lua_gettop(raw.state()), top);
+            assert_eq!(raw.pop::<i32>().unwrap(), 77);
+        });
+        lua.globals().set("read_vector", lua.create_function(|_, table: Table| Ok(table_vec4(&table))).unwrap()).unwrap();
+        let (ok, result): (bool, Table) = lua.load("return coroutine.resume(coroutine.create(function() return read_vector{1,2,3,4} end))").eval().unwrap();
+        assert!(ok);
+        assert_eq!(table_vec4(&result), Some([1.0,2.0,3.0,4.0]));
+    }
+
+    #[test]
+    fn color_batches_preserve_nested_failures_aliases_and_stack() {
+        let lua = Lua::new();
+        let row = lua.create_sequence_from([1.0, 0.5, 0.25, 0.75, 99.0]).unwrap();
+        let colors = lua.create_sequence_from([row.clone(),row.clone(),row.clone(),row.clone(),row.clone()]).unwrap();
+        let compare = || {
+            let bits = |v: Option<[[f32;4];4]>| v.map(|rows| rows.map(|items| items.map(f32::to_bits)));
+            assert_eq!(bits(table_vertex_colors(&colors)), bits(draw_state_baseline::table_vertex_colors(&colors)));
+        };
+        compare();
+        for position in 1..=5 {
+            for value in [Value::Nil, Value::Boolean(false), Value::Number(2.0),
+                Value::Table(lua.create_table().unwrap())] {
+                colors.raw_set(position, value).unwrap();
+                compare();
+            }
+            colors.raw_set(position, row.clone()).unwrap();
+        }
+        for position in 1..=5 {
+            for value in [Value::Nil, Value::Boolean(true),
+                Value::String(lua.create_string(" 0.25 ").unwrap()),
+                Value::Number(f64::NAN), Value::Number(f64::INFINITY), Value::Number(-0.0)] {
+                row.raw_set(position, value).unwrap();
+                compare();
+            }
+            row.raw_set(position, 0.5).unwrap();
+        }
+        colors.raw_set(3, false).unwrap();
+        lua.exec_raw_lua(|raw| unsafe {
+            assert_ne!(ffi::lua_checkstack(raw.state(), 8), 0);
+            raw.push(42).unwrap();
+            let top = ffi::lua_gettop(raw.state());
+            compare();
+            assert_eq!(ffi::lua_gettop(raw.state()), top);
+            assert_eq!(raw.pop::<i32>().unwrap(),42);
+        });
+        lua.globals().set("color_lookups",0).unwrap();
+        let missing=lua.load(r#"return setmetatable({}, {__index=function()
+            color_lookups=color_lookups+1; error('unexpected color lookup') end})"#).eval::<Table>().unwrap();
+        assert_eq!(table_vertex_colors(&missing),draw_state_baseline::table_vertex_colors(&missing));
+        colors.raw_set(3,missing).unwrap();
+        compare();
+        assert_eq!(lua.globals().get::<i32>("color_lookups").unwrap(),0);
+        assert_eq!(lua.load("return 6*7").eval::<i32>().unwrap(),42);
+    }
+
     #[test]
     fn state_class_and_texture_reads_match_frozen_decoder() {
         let lua = Lua::new();
@@ -22604,44 +22699,61 @@ pub fn make_color_table(lua: &Lua, rgba: [f32; 4]) -> mlua::Result<Table> {
     Ok(table)
 }
 
-pub fn table_vec2(table: &Table) -> Option<[f32; 2]> {
-    Some([table.raw_get::<f32>(1).ok()?, table.raw_get::<f32>(2).ok()?])
+// SAFETY: index must be a positive index of a rooted table in the locked VM,
+// with one spare stack slot. Numeric conversion neither allocates Lua objects
+// nor invokes metamethods. Each component is popped before returning.
+unsafe fn stack_vector<const N: usize>(state: *mut ffi::lua_State, index: c_int) -> Option<[f32; N]> {
+    let mut out = [0.0; N];
+    for (component, dest) in out.iter_mut().enumerate() {
+        unsafe {
+            ffi::lua_rawgeti(state, index, (component + 1) as ffi::lua_Integer);
+            let mut numeric = 0;
+            let value = ffi::lua_tonumberx(state, -1, &mut numeric);
+            ffi::lua_pop(state, 1);
+            if numeric == 0 { return None; }
+            *dest = value as f32;
+        }
+    }
+    Some(out)
 }
 
-pub fn table_vec3(table: &Table) -> Option<[f32; 3]> {
-    Some([
-        table.raw_get::<f32>(1).ok()?,
-        table.raw_get::<f32>(2).ok()?,
-        table.raw_get::<f32>(3).ok()?,
-    ])
+fn table_vector<const N: usize>(table: &Table) -> Option<[f32; N]> {
+    let lua = table.weak_lua().upgrade();
+    // SAFETY: the owning table stays rooted. Three slots match raw_get's
+    // original stack reservation and cover the table plus each component.
+    unsafe {
+        crate::raw_vm::with_read_stack(&lua, 3, |raw, base| {
+            raw.push(table)?;
+            Ok(stack_vector(raw.state(), base + 1))
+        }).ok().flatten()
+    }
 }
 
-pub fn table_vec4(table: &Table) -> Option<[f32; 4]> {
-    Some([
-        table.raw_get::<f32>(1).ok()?,
-        table.raw_get::<f32>(2).ok()?,
-        table.raw_get::<f32>(3).ok()?,
-        table.raw_get::<f32>(4).ok()?,
-    ])
-}
-
-pub fn table_vec5(table: &Table) -> Option<[f32; 5]> {
-    Some([
-        table.raw_get::<f32>(1).ok()?,
-        table.raw_get::<f32>(2).ok()?,
-        table.raw_get::<f32>(3).ok()?,
-        table.raw_get::<f32>(4).ok()?,
-        table.raw_get::<f32>(5).ok()?,
-    ])
-}
+pub fn table_vec2(table: &Table) -> Option<[f32; 2]> { table_vector(table) }
+pub fn table_vec3(table: &Table) -> Option<[f32; 3]> { table_vector(table) }
+pub fn table_vec4(table: &Table) -> Option<[f32; 4]> { table_vector(table) }
+pub fn table_vec5(table: &Table) -> Option<[f32; 5]> { table_vector(table) }
 
 pub fn table_vertex_colors(table: &Table) -> Option<[[f32; 4]; 4]> {
-    Some([
-        table_vec4(&table.raw_get::<Table>(1).ok()?)?,
-        table_vec4(&table.raw_get::<Table>(2).ok()?)?,
-        table_vec4(&table.raw_get::<Table>(3).ok()?)?,
-        table_vec4(&table.raw_get::<Table>(4).ok()?)?,
-    ])
+    let lua = table.weak_lua().upgrade();
+    // SAFETY: three reserved slots hold the root, current row and component.
+    // Every row is type-checked before indexing; only raw reads and numeric
+    // conversions run. The shared guard restores the stack on every exit.
+    unsafe {
+        crate::raw_vm::with_read_stack(&lua, 3, |raw, base| {
+            raw.push(table)?;
+            let state = raw.state();
+            let mut out = [[0.0; 4]; 4];
+            for (row, dest) in out.iter_mut().enumerate() {
+                ffi::lua_rawgeti(state, base + 1, (row + 1) as ffi::lua_Integer);
+                if ffi::lua_type(state, -1) != ffi::LUA_TTABLE { return Ok(None); }
+                let Some(value) = stack_vector(state, base + 2) else { return Ok(None); };
+                *dest = value;
+                ffi::lua_pop(state, 1);
+            }
+            Ok(Some(out))
+        }).ok().flatten()
+    }
 }
 
 pub fn make_vertex_color_table(lua: &Lua, colors: [[f32; 4]; 4]) -> mlua::Result<Table> {
