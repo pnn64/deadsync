@@ -231,7 +231,28 @@ fn saved_mini_reaches_song_lua_constructor_and_reverse_path() {
                     sample["note_beat"], position[axis]);
             }
         }
-        let zoom = 1.0 - mini * 0.5;
+        let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+            &compiled, &timing, 0, 0.0,
+        );
+        let (eases, unsupported) = deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled, &timing, 0, 0.0, &constants,
+        );
+        assert_eq!(unsupported, 0);
+        assert!(eases.iter().any(|window| window.target == SongLuaEaseMaskTarget::MiniPercent),
+            "the regression must exercise the compiled Mini write");
+        let mut runtime = deadsync_gameplay::GameplayAttackRuntimeState::new(
+            [constants, vec![]], [eases, vec![]],
+        );
+        for tick in 0..=60 {
+            runtime.refresh_player(0, tick as f32 / 60.0, 1.0 / 60.0,
+                Default::default(), || deadsync_gameplay::AttackBaseEffects {
+                    mini_percent: mini * 100.0, ..Default::default()
+                }, Default::default());
+        }
+        let current_mini = runtime.mini_percent[0].expect("compiled Mini reaches gameplay");
+        assert!((current_mini - mini * 100.0).abs() < 0.001,
+            "{side:?}: runtime Mini={current_mini}; native setter replaces saved Mini");
+        let zoom = 1.0 - current_mini / 200.0;
         let receptor_y = 240.0 + path.view().receptor(0.0)[1] * zoom;
         assert!((receptor_y - 375.0).abs() < 0.001, "reversed receptor: {receptor_y}");
         let endpoint_y = 240.0 + path.view().sample(0.0, 8.0).0[1] * zoom;

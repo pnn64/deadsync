@@ -646,7 +646,9 @@ pub fn build_song_lua_constant_attack_mask_window(
         perspective: mods.perspective,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
-        mini_mode: MiniAttackMode::Delta,
+        // PlayerOptions::Mini and FromString assign the Song value. The
+        // profile already initialized that option before Lua construction.
+        mini_mode: MiniAttackMode::Absolute,
         mini_speed: mods.mini_speed,
     })
 }
@@ -5860,7 +5862,6 @@ pub fn apply_song_lua_attack_eases(
     player: &mut SongLuaPlayerTransformValues,
     windows: &[SongLuaEaseMaskWindow],
     now: f32,
-    mini_base_percent: f32,
 ) {
     apply_song_lua_attack_eases_selected(
         attack,
@@ -5869,7 +5870,6 @@ pub fn apply_song_lua_attack_eases(
         windows,
         None,
         now,
-        mini_base_percent,
         false,
     );
 }
@@ -5881,7 +5881,6 @@ fn apply_song_lua_attack_eases_selected(
     windows: &[SongLuaEaseMaskWindow],
     indices: Option<&[usize]>,
     now: f32,
-    mini_base_percent: f32,
     skip_approached: bool,
 ) {
     for_each_selected(windows, indices, |window| {
@@ -5889,11 +5888,6 @@ fn apply_song_lua_attack_eases_selected(
             return;
         }
         if let Some(value) = song_lua_ease_window_value(window, now) {
-            let value = if matches!(window.target, SongLuaEaseMaskTarget::MiniPercent) {
-                mini_base_percent + value
-            } else {
-                value
-            };
             song_lua_apply_eased_target(
                 window.target,
                 value,
@@ -5919,7 +5913,6 @@ fn apply_song_lua_approach_targets(
     windows: &[SongLuaEaseMaskWindow],
     indices: Option<&[usize]>,
     now: f32,
-    mini_base_percent: f32,
 ) {
     for_each_selected(windows, indices, |window| {
         let Some(speed) = window.approach_speed else {
@@ -5927,11 +5920,6 @@ fn apply_song_lua_approach_targets(
         };
         let Some(value) = song_lua_ease_window_value(window, now) else {
             return;
-        };
-        let value = if window.target == SongLuaEaseMaskTarget::MiniPercent {
-            mini_base_percent + value
-        } else {
-            value
         };
         song_lua_apply_eased_target(
             window.target,
@@ -6538,7 +6526,6 @@ fn refresh_active_attack_player_full(
             input.song_lua_ease_windows,
             approach.1,
             approach.0,
-            input.base_mini_percent,
         );
     }
 
@@ -6660,7 +6647,6 @@ fn refresh_active_attack_player_full(
         input.song_lua_ease_windows,
         ease_window_indices,
         input.now,
-        base_mini_percent,
         true,
     );
 

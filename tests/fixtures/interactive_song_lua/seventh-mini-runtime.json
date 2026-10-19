@@ -1,0 +1,1090 @@
+{
+  "schema_version": 1,
+  "problem": "Compiled Mini added saved Mini again, moving receptors and clamping future notes at a visible endpoint in either scroll direction.",
+  "native_control": "tests/fixtures/itgmania-song-lua-micro/profile-mini/runtime-native.json",
+  "native_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_sha256": {
+    "7th Gear.ssc": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+    "lua/default.lua": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+    "lua/mods.lua": "d85736d4ec9effdff36773b81c9256080f562fae2ea212aecc1b30039c8ea9d7"
+  },
+  "before": {
+    "actual_chart_reproduced": true,
+    "failed_check": "song Mini must replace saved Mini at beat 112",
+    "beat": 112,
+    "mini_percent": 119.986176,
+    "field_zoom": 0.40006912,
+    "receptor_y": 162.84381,
+    "endpoint_y": 426.63132
+  },
+  "after": {
+    "song": "7th Gear",
+    "chart_hash": "477fed829d289df2",
+    "retained_lua_vm": false,
+    "aft_stages": 3,
+    "mini_percent": 60,
+    "scroll_speed": "MMod(730.0)",
+    "compile_ms": 110355.76849999999,
+    "reversal_checks_passed": 34,
+    "observations": [
+      {
+        "beat": 112.0,
+        "column": 0,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          -96.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              -96.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              -96.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              -96.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              -96.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              -96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              -96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              -96.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 112.0,
+        "column": 1,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          -32.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              -32.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              -32.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              -32.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              -32.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              -32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              -32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              -32.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 112.0,
+        "column": 2,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          32.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              32.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              32.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              32.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              32.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              32.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 112.0,
+        "column": 3,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          96.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              96.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              96.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              96.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              96.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              96.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 115.0,
+        "column": 0,
+        "y0": 192.85714721679688,
+        "y1": 145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          -96.0,
+          -466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              -96.0,
+              192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              -96.0,
+              98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              -96.0,
+              4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              -96.0,
+              -183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              -96.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              -96.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              -96.0,
+              -466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 375.0,
+        "endpoint_y": -86.54837036132812
+      },
+      {
+        "beat": 115.0,
+        "column": 1,
+        "y0": 192.85714721679688,
+        "y1": 145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          -32.0,
+          -466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              -32.0,
+              192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              -32.0,
+              98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              -32.0,
+              4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              -32.0,
+              -183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              -32.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              -32.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              -32.0,
+              -466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 375.0,
+        "endpoint_y": -86.54837036132812
+      },
+      {
+        "beat": 115.0,
+        "column": 2,
+        "y0": 192.85714721679688,
+        "y1": 145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          32.0,
+          -466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              32.0,
+              192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              32.0,
+              98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              32.0,
+              4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              32.0,
+              -183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              32.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              32.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              32.0,
+              -466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 375.0,
+        "endpoint_y": -86.54837036132812
+      },
+      {
+        "beat": 115.0,
+        "column": 3,
+        "y0": 192.85714721679688,
+        "y1": 145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          96.0,
+          -466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              96.0,
+              192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              96.0,
+              98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              96.0,
+              4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              96.0,
+              -183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              96.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              96.0,
+              -466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              96.0,
+              -466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 375.0,
+        "endpoint_y": -86.54837036132812
+      },
+      {
+        "beat": 123.0,
+        "column": 0,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          -96.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              -96.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              -96.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              -96.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              -96.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              -96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              -96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              -96.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 123.0,
+        "column": 1,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          -32.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              -32.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              -32.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              -32.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              -32.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              -32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              -32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              -32.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 123.0,
+        "column": 2,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          32.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              32.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              32.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              32.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              32.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              32.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              32.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 123.0,
+        "column": 3,
+        "y0": -192.85714721679688,
+        "y1": -145.7603759765625,
+        "position": true,
+        "zoom": true,
+        "points": 15,
+        "last_point": [
+          96.0,
+          466.4976806640625,
+          0.0
+        ],
+        "samples": [
+          {
+            "ahead": 0.0,
+            "position": [
+              96.0,
+              -192.85714721679688,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.25,
+            "position": [
+              96.0,
+              -98.6635971069336,
+              0.0
+            ]
+          },
+          {
+            "ahead": 0.5,
+            "position": [
+              96.0,
+              -4.4700493812561035,
+              0.0
+            ]
+          },
+          {
+            "ahead": 1.0,
+            "position": [
+              96.0,
+              183.91705322265625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 2.0,
+            "position": [
+              96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 4.0,
+            "position": [
+              96.0,
+              466.4976806640625,
+              0.0
+            ]
+          },
+          {
+            "ahead": 8.0,
+            "position": [
+              96.0,
+              466.4976806640625,
+              0.0
+            ]
+          }
+        ],
+        "receptor_y": 105.0,
+        "endpoint_y": 566.54833984375
+      },
+      {
+        "beat": 175.0,
+        "column": 0,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 175.0,
+        "column": 1,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 175.0,
+        "column": 2,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 175.0,
+        "column": 3,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 206.75,
+        "column": 0,
+        "position": true,
+        "zoom": false,
+        "slope_y": -758.6553955078125
+      },
+      {
+        "beat": 206.75,
+        "column": 1,
+        "position": true,
+        "zoom": false,
+        "slope_y": -1020.7041015625
+      },
+      {
+        "beat": 206.75,
+        "column": 2,
+        "position": true,
+        "zoom": false,
+        "slope_y": -6026.89111328125
+      },
+      {
+        "beat": 206.75,
+        "column": 3,
+        "position": true,
+        "zoom": false,
+        "slope_y": 6028.38671875
+      },
+      {
+        "beat": 207.5,
+        "column": 0,
+        "position": true,
+        "zoom": false,
+        "slope_y": -5088.7509765625
+      },
+      {
+        "beat": 207.5,
+        "column": 1,
+        "position": true,
+        "zoom": false,
+        "slope_y": -6014.97314453125
+      },
+      {
+        "beat": 207.5,
+        "column": 2,
+        "position": true,
+        "zoom": false,
+        "slope_y": -6026.89111328125
+      },
+      {
+        "beat": 207.5,
+        "column": 3,
+        "position": true,
+        "zoom": false,
+        "slope_y": -2269.841552734375
+      },
+      {
+        "beat": 208.5,
+        "column": 0,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 208.5,
+        "column": 1,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 208.5,
+        "column": 2,
+        "position": false,
+        "zoom": false
+      },
+      {
+        "beat": 208.5,
+        "column": 3,
+        "position": false,
+        "zoom": false
+      }
+    ],
+    "reverse_modifier_samples": [
+      {
+        "beat": 112.0,
+        "mini_percent": 59.986175537109375,
+        "field_zoom": 0.7000691294670105,
+        "receptor_y": 104.98666381835938,
+        "endpoint_y": 566.5806274414062
+      },
+      {
+        "beat": 115.0,
+        "mini_percent": 59.986175537109375,
+        "field_zoom": 0.7000691294670105,
+        "receptor_y": 375.0133361816406,
+        "endpoint_y": -86.58062744140625
+      },
+      {
+        "beat": 123.0,
+        "mini_percent": 59.986175537109375,
+        "field_zoom": 0.7000691294670105,
+        "receptor_y": 104.98666381835938,
+        "endpoint_y": 566.5806274414062
+      },
+      {
+        "beat": 206.5,
+        "reverse": 0.0
+      },
+      {
+        "beat": 207.5,
+        "reverse": 0.7214416265487671
+      },
+      {
+        "beat": 208.5,
+        "reverse": 1.0
+      }
+    ],
+    "whole_song_parity_proven": false,
+    "pixel_parity_proven": false
+  },
+  "production_build": {
+    "path": "target/debug/deadsync.exe",
+    "sha256": "003b258bd4a80e6b4247a830e9b31fdffc6fda500f6d6e15c73661b0594c7177"
+  },
+  "validation": {
+    "focused_mini_tests_passed": 17,
+    "profile_constructor_and_runtime_regression_passed": true,
+    "all_fixtures_run": false,
+    "full_song_pixel_parity_proven": false,
+    "aft_receptor_composition": {
+      "test": "gameplay_regression_tests::tests::seventh_saved_mini_reaches_aft_receptors",
+      "passed": true,
+      "aft_textures": 3,
+      "beats": [
+        112,
+        115,
+        123
+      ],
+      "receptor_sprites_per_sample": 4,
+      "expected_pre_proxy_y": [
+        105,
+        375,
+        105
+      ],
+      "maximum_design_pixel_error": 0.05,
+      "camera_projection_applied": true,
+      "retained_lua_vm": false
+    }
+  }
+}

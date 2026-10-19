@@ -22,6 +22,9 @@ return Def.ActorFrame{
             spline:SetPoint(point, {-96, 135 / scale - 8 * (point - 1) * speed, 0})
         end
         spline:Solve()
+        -- 7th Gear restores its saved Mini through this Song-level setter.
+        -- Playback must assign that value, not add the profile a second time.
+        options:Mini(mini, 10000)
     end,
     Def.Quad{
         Name="InitialMini",

@@ -182,12 +182,34 @@ fn main() {
             second,
             (second - previous).max(0.0),
             deadsync_gameplay::AppearanceEffects::default(),
-            deadsync_gameplay::AttackBaseEffects::default,
+            || deadsync_gameplay::AttackBaseEffects {
+                mini_percent: profiles[0].mini_percent as f32,
+                ..Default::default()
+            },
             transform,
         ) {
             transform = next;
         }
         previous = second;
+        if [13440, 13800, 14760].contains(&tick) {
+            let mini = attacks.mini_percent[0].unwrap_or(profiles[0].mini_percent as f32);
+            let zoom = 1.0 - mini / 200.0;
+            let spline = tracks[0].at_second(second).unwrap().position.as_ref().unwrap().view();
+            let receptor_y = 240.0 + spline.receptor(beat)[1] * zoom;
+            let endpoint_y = 240.0 + spline.sample(beat, beat + 8.0).0[1] * zoom;
+            println!("Runtime at beat {beat}: Mini={mini}, zoom={zoom}, receptor_y={receptor_y}, endpoint_y={endpoint_y}");
+            // The final authored pulse sample precedes its endpoint at 60 Hz
+            // (59.986% for saved Mini 60); allow less than 0.05 design pixels.
+            assert!((mini - profiles[0].mini_percent as f32).abs() < 0.05,
+                "song Mini must replace saved Mini at beat {beat}");
+            let expected_y = if beat == 115.0 { 375.0 } else { 105.0 };
+            assert!((receptor_y - expected_y).abs() < 0.05,
+                "runtime receptor moved from its authored position at beat {beat}");
+            assert!(endpoint_y < -20.0 || endpoint_y > 500.0,
+                "future notes stack at a visible spline endpoint at beat {beat}: {endpoint_y}");
+            reverse_samples.push(serde_json::json!({"beat":beat,"mini_percent":mini,
+                "field_zoom":zoom,"receptor_y":receptor_y,"endpoint_y":endpoint_y}));
+        }
         let expected = match tick {
             24780 => Some(0.0),
             24900 => Some(0.75),

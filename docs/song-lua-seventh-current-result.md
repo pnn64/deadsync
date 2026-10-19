@@ -10,28 +10,55 @@ renderer used the profile's 60% Mini while `PlayerOptions:Mini()` returned zero
 to the song. At M730, 7th Gear therefore built 10 reverse-path knots instead of
 15. Future notes clamped to the last knot at logical Y=37.79, near the score;
 native ITGmania places that endpoint above the screen at Y=-86.5484. The reversed
-receptor was also at Y=334.5 instead of Y=375.
+receptor was also at Y=334.5 instead of Y=375. That constructor repair alone
+did not fix gameplay: the compiled modifier runtime still added the profile
+Mini to every authored Mini amount.
+
+The updated actual-chart check reproduced that second bug at beat 112 with
+M730/60% Mini: Current Mini=119.986176%, field zoom=0.40006912,
+receptor Y=162.84381, and spline endpoint Y=426.63132. Future notes clamped at
+that visible endpoint form the reported feeding row. Reversing mirrors the
+same placement error. ITGmania's native option control confirms that Song and
+Current Mini setters, and `FromString`, assign absolute amounts. Compiled
+constants, direct eases and approached Song targets now follow that behavior.
 
 The original 31 direction/modifier checks still passed with that incorrect
-path. The focused `saved_mini_reaches_song_lua_constructor_and_reverse_path`
+path, and its runtime modifier loop used a zero-Mini base. The focused
+`saved_mini_reaches_song_lua_constructor_and_reverse_path`
 regression now covers constructor reads, all four option levels, P1/P2 profile
-mapping, and compiled sample positions against the retained
+mapping, compiled setter playback using the saved profile, and sample positions against the retained
 [native PlayerOptions and CubicSpline controls](../tests/fixtures/itgmania-song-lua-micro/profile-mini/README.md).
-The actual-chart checker also verifies that receptor positions agree with the
-selected Mini and accepts optional MMod/Mini arguments:
+The actual-chart checker now advances the real compiled modifier windows with
+the selected profile, checks Current Mini, and verifies receptor and endpoint
+positions in both directions. A separate focused shell test composes the real
+three-AFT branch and checks the final receptor sprite coordinates. The checker
+accepts optional MMod/Mini arguments:
 
 ```powershell
 cargo test --locked -p deadsync-profile-gameplay saved_mini_reaches_song_lua_constructor_and_reverse_path
+cargo test --locked -p deadsync-gameplay mini
+cargo test --locked -p deadsync-shell --lib seventh_saved_mini_reaches_aft_receptors -- --ignored --nocapture
 cargo run --locked -p deadsync-shell --example seventh_compiled -- 'C:\GitHub\rework\lua-songs\7th Gear\7th Gear.ssc' target/seventh-mini60.json 730 60
 ```
 
 These checks cover the profile-dependent path; a passing semantic replay alone
 does not establish final gameplay pixel parity for other player options.
-The M730/60% Mini production check passes all 31 sampled reversal observations,
-retains no Lua VM, and confirms 15 knots, receptor Y=375, and endpoint
-Y=-86.54837 at beat 115. The native-backed profile regression and the focused
-notefield composition regression also pass. The normal debug application was
-rebuilt successfully; no full fixture corpus was replayed for this repair.
+The updated M730/60% Mini production check passes all 34 observations and retains
+no Lua VM. Its final pulse sample leaves Current Mini=59.986176%, matching the
+compiled 60 Hz sampling. At beat 115 the actual runtime gives receptor
+Y=375.01334 and endpoint Y=-86.58063; at beats 112 and 123 the receptor is
+Y=104.986664 and the endpoint is Y=566.5806. The native-backed profile
+regression and all 17 focused Mini tests pass. The final AFT composition test
+also passes: all four receptor sprites project to the authored positions at
+beats 112, 115 and 123 through the three-texture chain. The normal application
+at `target/debug/deadsync.exe` was rebuilt successfully; no full fixture corpus
+was replayed for this repair. These checks cover final draw coordinates, not a
+whole-song native pixel comparison.
+
+The before/after values and chart/source hashes are retained in
+[`seventh-mini-runtime.json`](../tests/fixtures/interactive_song_lua/seventh-mini-runtime.json).
+
+## Earlier compiled-path audit
 
 The live prototype dropped note-column position and zoom splines when transferring
 its scene into gameplay. That explains the missing reversal behavior beginning

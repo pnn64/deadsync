@@ -5353,7 +5353,7 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn song_lua_constant_mini_layers_on_profile_mini() {
+    fn song_lua_constant_mini_replaces_profile_mini() {
         let mut state = regression_state_with_profiles(std::array::from_fn(|player| TestProfile {
             mini_percent: if player == 0 { 50.0 } else { 0.0 },
             ..TestProfile::default()
@@ -5380,11 +5380,11 @@ mod runtime_regression_tests {
         state.clock.visible_timing.current_music_time[0] = 1.016;
         refresh_active_attack_masks(&mut state, 1.0);
         let mini = effective_mini_percent_for_player(&state, 0);
-        assert!((mini + 50.0).abs() <= 0.000_1);
+        assert!((mini + 100.0).abs() <= 0.000_1);
     }
 
     #[test]
-    fn song_lua_eased_mini_layers_on_profile_mini() {
+    fn song_lua_eased_mini_replaces_profile_mini() {
         let mut state = regression_state_with_profiles(std::array::from_fn(|player| TestProfile {
             mini_percent: if player == 0 { 50.0 } else { 0.0 },
             ..TestProfile::default()
@@ -5407,7 +5407,7 @@ mod runtime_regression_tests {
         refresh_active_attack_masks(&mut state, 0.0);
 
         let mini = effective_mini_percent_for_player(&state, 0);
-        assert!(mini.abs() <= 0.000_1);
+        assert!((mini + 50.0).abs() <= 0.000_1);
     }
 
     #[test]

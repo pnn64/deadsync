@@ -2718,7 +2718,7 @@ mod tests {
         assert_eq!(window.chart, ChartAttackEffects::default());
         assert_eq!(window.visual.drunk, Some(0.5));
         assert_eq!(window.mini_percent, Some(25.0));
-        assert_eq!(window.mini_mode, MiniAttackMode::Delta);
+        assert_eq!(window.mini_mode, MiniAttackMode::Absolute);
         assert_eq!(window.scroll_speed, Some(ScrollSpeedSetting::CMod(600.0)));
     }
 
@@ -4170,7 +4170,6 @@ mod tests {
                 &mut SongLuaPlayerTransformValues::default(),
                 &windows,
                 second,
-                0.0,
             );
             assert_eq!(values.visual.dizzy_holds, Some(expected), "{second}");
         }
@@ -9081,7 +9080,7 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_attack_eases_apply_active_windows_and_mini_delta() {
+    fn song_lua_attack_eases_apply_active_windows_and_absolute_mini() {
         let windows = [
             song_lua_ease_mask_window(SongLuaEaseMaskTarget::AccelBoost, 1.0, 3.0, 3.0, 0.0, 1.0),
             song_lua_ease_mask_window(
@@ -9127,7 +9126,6 @@ mod tests {
             &mut player,
             &windows,
             2.0,
-            30.0,
         );
 
         assert_near(attack.accel.boost.unwrap(), 0.5);
@@ -9136,7 +9134,7 @@ mod tests {
             attack.scroll_speed,
             Some(ScrollSpeedSetting::CMod(v)) if (v - 450.0).abs() <= 0.000_001
         ));
-        assert_near(attack.mini_percent.unwrap(), 45.0);
+        assert_near(attack.mini_percent.unwrap(), 15.0);
         assert_near(player.rotation_z.unwrap(), 45.0);
     }
 

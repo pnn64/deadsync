@@ -667,6 +667,22 @@ mod tests {
         session: GameplaySession,
         player_profiles: [profile_data::Profile; MAX_PLAYERS],
     ) -> screen_gameplay::State {
+        build_test_state_with_renderer(
+            simfile,
+            viewport,
+            session,
+            player_profiles,
+            &deadlib_render_core::BackendType::Software.to_string(),
+        )
+    }
+
+    fn build_test_state_with_renderer(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+    ) -> screen_gameplay::State {
         let song = Arc::new(
             deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
                 .expect("generated gameplay fixture should parse"),
@@ -716,7 +732,7 @@ mod tests {
             0.0,
             &session,
             &GameplayConfig::default(),
-            &deadlib_render_core::BackendType::Software.to_string(),
+            renderer,
             1,
         );
         assert!(prepared.take_live_scene().expect("compiled preparation").is_none(),
@@ -4400,6 +4416,115 @@ return Def.ActorFrame{
             );
         }
         backend.cleanup();
+    }
+
+    #[test]
+    #[ignore = "requires the local 7th Gear source chart"]
+    fn seventh_saved_mini_reaches_aft_receptors() {
+        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../rework/lua-songs/7th Gear/7th Gear.ssc");
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                let profiles = std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"),
+                    scroll_speed: ScrollSpeedSetting::MMod(730.0),
+                    mini_percent: 60,
+                    ..Default::default()
+                });
+                // OpenGL selects the song's real three-AFT branch during loading.
+                let mut state = build_test_state_with_renderer(
+                    &simfile,
+                    GameplayViewport::design(),
+                    GameplaySession::default(),
+                    profiles,
+                    "OpenGL",
+                );
+                let assets = fixture_assets();
+                let receptor_handles: Vec<_> = state.noteskin_assets.receptor_noteskin[0]
+                    .as_ref()
+                    .or(state.noteskin_assets.noteskin[0].as_ref())
+                    .unwrap()
+                    .receptor_off
+                    .iter()
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let mut tick = 0;
+                for (beat, expected_y) in [(112.0, 105.0), (115.0, 375.0), (123.0, 105.0)] {
+                    let seconds = state
+                        .gameplay
+                        .gameplay_chart(0)
+                        .unwrap()
+                        .timing
+                        .get_time_for_beat_exact(beat);
+                    while tick < (seconds * 120.0) as u32 {
+                        tick += 1;
+                        set_fixture_time(&mut state, tick as f32 / 120.0);
+                        refresh_active_attack_masks(&mut state.gameplay, 1.0 / 120.0);
+                    }
+                    set_fixture_time(&mut state, seconds);
+                    state.gameplay.refresh_live_notefield_options(124.0);
+                    assert!(
+                        (state.field_zoom_for_player(0) - 0.7).abs() < 0.001,
+                        "saved Mini was applied twice at beat {beat}"
+                    );
+                    let frame = compose_fixture_frame(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &mut Vec::new(),
+                        &mut compose::TextLayoutCache::default(),
+                        &mut compose::ComposeScratch::default(),
+                    );
+                    // Update explicitly draws these AFTs, and their visible
+                    // actors draw them again: six passes, three textures.
+                    let targets: std::collections::HashSet<_> = frame.render_targets.iter()
+                        .map(|pass| pass.texture_handle).collect();
+                    assert_eq!(targets.len(), 3, "actual AFT chain");
+                    let mut receptors = 0;
+                    for pass in &frame.render_targets {
+                        for op in &pass.ops {
+                            let DrawOp::Sprite(run) = op else { continue };
+                            if !receptor_handles.contains(&run.texture_handle) {
+                                continue;
+                            }
+                            for instance in &pass.sprite_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                // Direct proxy draws retain their transform in
+                                // a camera; instances are centered world-space
+                                // coordinates, not already projected pixels.
+                                let camera = pass.cameras.get(run.camera as usize)
+                                    .copied().unwrap_or_else(|| metrics.projection());
+                                let clip = camera.mul_vec4([
+                                    instance.center[0], instance.center[1], instance.center[2], 1.0,
+                                ].into());
+                                let pixel_y = (1.0 - clip.y / clip.w) * pass.viewport[1] as f32 / 2.0;
+                                // FrameProxyP1 uses dh/2; ProxyP1N uses dw/sw.
+                                let y = 240.0 + (pixel_y - pass.viewport[1] as f32 / 2.0)
+                                    * 854.0 / pass.viewport[0] as f32;
+                                assert!(
+                                    (y - expected_y).abs() < 0.05,
+                                    "beat {beat}: rendered receptor Y={y}, native={expected_y}; raw={:?}, camera={camera:?}",
+                                    instance.center,
+                                );
+                                receptors += 1;
+                            }
+                        }
+                    }
+                    assert!(receptors >= 4, "all four receptors must reach the AFT pass");
+                    eprintln!(
+                        "7th Gear beat {beat}: {receptors} AFT receptor sprites at Y={expected_y}, Mini=60"
+                    );
+                }
+            },
+        );
     }
 
     #[test]
