@@ -396,6 +396,7 @@ fn draw_mine_layers(
                 if let Actor::TexturedMesh {
                     local_transform,
                     depth_test,
+                    depth_write,
                     clear_depth,
                     tint,
                     glow,
@@ -411,6 +412,7 @@ fn draw_mine_layers(
                     *local_transform =
                         glam::Mat4::from_scale(glam::Vec3::new(1.0, 1.0, 0.001)) * *local_transform;
                     *depth_test = true;
+                    *depth_write = true;
                     *clear_depth = first_mesh;
                     first_mesh = false;
                 }
@@ -423,6 +425,8 @@ fn draw_mine_layers(
         .find_map(|actor| match actor {
             Actor::TexturedMesh {
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
                 tint,
                 glow,
                 clear_depth_after,

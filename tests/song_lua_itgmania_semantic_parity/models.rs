@@ -422,8 +422,10 @@ fn compare_frame(
             parity,
             reported,
             &format!("{prefix} depth"),
-            run.depth_test == (draw.z_test != 0),
-            || format!("Model {actor} pass {pass} changes native depth testing"),
+            run.depth_test == (draw.z_test != 0)
+                && run.depth_write == draw.z_write
+                && run.depth_test_on_fail == (draw.z_test == 2),
+            || format!("Model {actor} pass {pass} changes native depth comparison or writing"),
         );
         check_flag(
             parity,
@@ -453,7 +455,7 @@ fn compare_frame(
             parity,
             reported,
             &format!("{prefix} unsupported state"),
-            ((draw.z_write && draw.z_test == 1) || (!draw.z_write && draw.z_test == 0))
+            matches!(draw.z_test, 0..=2)
                 && matches!(draw.cull_mode, 0..=2)
                 && draw.render_target == 0,
             || {

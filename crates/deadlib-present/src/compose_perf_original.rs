@@ -30,6 +30,8 @@ fn clone_retained_object(objects: &FrameBuilder, index: usize) -> Option<Editabl
                 vertices: payload.vertices.clone(),
                 geom_cache_key: payload.geom_cache_key,
                 depth_test: payload.depth_test,
+                depth_write: payload.depth_write,
+                depth_test_on_fail: payload.depth_test_on_fail,
                 clear_depth: payload.clear_depth,
                 clear_depth_after: payload.clear_depth_after,
                 sampler: payload.sampler,

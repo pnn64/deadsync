@@ -227,8 +227,7 @@ pub struct State {
     opaque_mesh_pipelines: PipelineSet,
     tmesh_pipelines: PipelineSet,
     opaque_tmesh_pipelines: PipelineSet,
-    depth_disabled: DepthStencilState,
-    depth_enabled: DepthStencilState,
+    depth_states: [DepthStencilState; 6],
     depth_clear: DepthStencilState,
     depth_clear_pipeline: RenderPipelineState,
     depth: metal::Texture,
@@ -324,7 +323,7 @@ pub fn init(
         "textured_mesh_fragment",
         false,
     )?;
-    let (depth_disabled, depth_enabled) = build_depth_states(&device);
+    let depth_states = build_depth_states(&device);
     let clear_desc = DepthStencilDescriptor::new();
     clear_desc.set_depth_compare_function(MTLCompareFunction::Always);
     clear_desc.set_depth_write_enabled(true);
@@ -363,8 +362,7 @@ pub fn init(
         opaque_mesh_pipelines,
         tmesh_pipelines,
         opaque_tmesh_pipelines,
-        depth_disabled,
-        depth_enabled,
+        depth_states,
         depth_clear,
         depth_clear_pipeline,
         depth,
@@ -740,8 +738,8 @@ fn draw_inner(
                 if cache.cull_changed(CullMode::Back) {
                     encoder.set_cull_mode(MTLCullMode::Back);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 let yuv420 = texture.images.is_yuv420();
                 if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
@@ -808,8 +806,8 @@ fn draw_inner(
                 if cache.cull_changed(CullMode::None) {
                     encoder.set_cull_mode(MTLCullMode::None);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(state.mesh_pipelines.get(run.blend));
@@ -858,12 +856,8 @@ fn draw_inner(
                 if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(state.tmesh_pipelines.get(run.blend));
                 }
-                if cache.depth_changed(run.depth_test) {
-                    encoder.set_depth_stencil_state(if run.depth_test {
-                        &state.depth_enabled
-                    } else {
-                        &state.depth_disabled
-                    });
+                if cache.depth_changed(run.depth_mode()) {
+                    encoder.set_depth_stencil_state(&state.depth_states[run.depth_mode() as usize]);
                 }
                 let cull = if run.depth_test {
                     CullMode::Back
@@ -1195,16 +1189,19 @@ fn configure_blend(attachment: &RenderPipelineColorAttachmentDescriptorRef, blen
     attachment.set_alpha_blend_operation(alpha_op);
 }
 
-fn build_depth_states(device: &DeviceRef) -> (DepthStencilState, DepthStencilState) {
-    let disabled_desc = DepthStencilDescriptor::new();
-    disabled_desc.set_depth_compare_function(MTLCompareFunction::Always);
-    disabled_desc.set_depth_write_enabled(false);
-    let disabled = device.new_depth_stencil_state(&disabled_desc);
-    let enabled_desc = DepthStencilDescriptor::new();
-    enabled_desc.set_depth_compare_function(MTLCompareFunction::LessEqual);
-    enabled_desc.set_depth_write_enabled(true);
-    let enabled = device.new_depth_stencil_state(&enabled_desc);
-    (disabled, enabled)
+fn build_depth_states(device: &DeviceRef) -> [DepthStencilState; 6] {
+    deadlib_render_core::DepthMode::ALL.map(|mode| {
+    let desc = DepthStencilDescriptor::new();
+        desc.set_depth_compare_function(if mode.on_fail() {
+            MTLCompareFunction::Greater
+        } else if mode.tests() {
+            MTLCompareFunction::LessEqual
+        } else {
+            MTLCompareFunction::Always
+        });
+        desc.set_depth_write_enabled(mode.writes());
+        device.new_depth_stencil_state(&desc)
+    })
 }
 
 fn create_depth_target(device: &DeviceRef, width: u32, height: u32) -> metal::Texture {
@@ -1430,8 +1427,8 @@ fn record_offscreen_pass(
                 if cache.cull_changed(CullMode::Back) {
                     encoder.set_cull_mode(MTLCullMode::Back);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 let yuv420 = texture.images.is_yuv420();
                 if cache.pipeline_changed(DrawKind::Sprite, blend_key(run.blend), yuv420) {
@@ -1498,8 +1495,8 @@ fn record_offscreen_pass(
                 if cache.cull_changed(CullMode::None) {
                     encoder.set_cull_mode(MTLCullMode::None);
                 }
-                if cache.depth_changed(false) {
-                    encoder.set_depth_stencil_state(&state.depth_disabled);
+                if cache.depth_changed(deadlib_render_core::DepthMode::Off) {
+                    encoder.set_depth_stencil_state(&state.depth_states[0]);
                 }
                 if cache.pipeline_changed(DrawKind::Mesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(mesh_pipelines.get(run.blend));
@@ -1546,12 +1543,8 @@ fn record_offscreen_pass(
                 if cache.pipeline_changed(DrawKind::TexturedMesh, blend_key(run.blend), false) {
                     encoder.set_render_pipeline_state(tmesh_pipelines.get(run.blend));
                 }
-                if cache.depth_changed(run.depth_test) {
-                    encoder.set_depth_stencil_state(if run.depth_test {
-                        &state.depth_enabled
-                    } else {
-                        &state.depth_disabled
-                    });
+                if cache.depth_changed(run.depth_mode()) {
+                    encoder.set_depth_stencil_state(&state.depth_states[run.depth_mode() as usize]);
                 }
                 let cull = if run.depth_test {
                     CullMode::Back

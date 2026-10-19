@@ -91,6 +91,7 @@ struct OffscreenTarget {
 struct DepthRows<'a> {
     pixels: &'a mut [f32],
     unorm16: bool,
+    mode: deadlib_render_core::DepthMode,
 }
 
 impl DepthRows<'_> {
@@ -106,10 +107,18 @@ impl DepthRows<'_> {
         } else {
             z
         };
-        if z > self.pixels[index] {
+        if self.mode.tests()
+            && if self.mode.on_fail() {
+                z <= self.pixels[index]
+            } else {
+                z > self.pixels[index]
+            }
+        {
             return false;
         }
+        if self.mode.writes() {
         self.pixels[index] = z;
+        }
         true
     }
 }
@@ -200,6 +209,8 @@ enum PreparedObject {
         texture_mask: bool,
         blend: BlendMode,
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         texture_handle: TextureHandle,
         sampler: Option<MeshSampler>,
     },
@@ -209,6 +220,8 @@ enum PreparedObject {
         mvp: Matrix4,
         blend: BlendMode,
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         texture_handle: TextureHandle,
         sampler: Option<MeshSampler>,
     },
@@ -1163,6 +1176,8 @@ fn prepare_objects(
                             mvp,
                             blend: run.blend,
                             depth_test: frame.depth && run.depth_test,
+                            depth_write: frame.depth && run.depth_write,
+                            depth_test_on_fail: frame.depth && run.depth_test_on_fail,
                             texture_handle: run.texture_handle,
                             sampler: run.sampler,
                         });
@@ -1193,6 +1208,8 @@ fn prepare_objects(
                         texture_mask: instance.texture_mask != 0.0,
                         blend: run.blend,
                         depth_test: frame.depth && run.depth_test,
+                        depth_write: frame.depth && run.depth_write,
+                        depth_test_on_fail: frame.depth && run.depth_test_on_fail,
                         texture_handle: run.texture_handle,
                         sampler: run.sampler,
                     });
@@ -1226,6 +1243,7 @@ fn draw_rows(
     let mut depth = DepthRows {
         pixels: depth,
         unorm16: frame.depth_unorm,
+        mode: deadlib_render_core::DepthMode::TestWrite,
     };
     if let Some(items) = stripe_items {
         for &item in items {
@@ -1314,6 +1332,12 @@ fn apply_depth_reset(prepared: &PreparedObject, depth: &mut [f32], pending: &mut
         }
         | PreparedObject::DirectTexturedMesh {
             depth_test: true, ..
+        }
+        | PreparedObject::TexturedMesh {
+            depth_write: true, ..
+        }
+        | PreparedObject::DirectTexturedMesh {
+            depth_write: true, ..
         } => {
             if std::mem::take(pending) {
                 depth.fill(1.0);
@@ -1341,9 +1365,30 @@ fn draw_prepared<'a>(
 
     depth: &mut DepthRows<'_>,
 ) -> u32 {
+    if let PreparedObject::TexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    }
+    | PreparedObject::DirectTexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    } = prepared
+    {
+        depth.mode = deadlib_render_core::DepthMode::from_flags(
+            *depth_test,
+            *depth_write,
+            *depth_test_on_fail,
+        );
+    }
+
     let mut no_depth = DepthRows {
         pixels: &mut [],
         unorm16: false,
+        mode: deadlib_render_core::DepthMode::TestWrite,
     };
     match prepared {
         // `draw_rows` applies resets before dispatching depth-tested draws.
@@ -1429,6 +1474,8 @@ fn draw_prepared<'a>(
             texture_mask,
             blend,
             depth_test,
+            depth_write,
+            depth_test_on_fail: _,
             texture_handle,
             sampler,
             ..
@@ -1450,7 +1497,7 @@ fn draw_prepared<'a>(
                     stripe_y_end,
                     buffer,
                     width,
-                    if *depth_test { depth } else { &mut no_depth },
+                    if *depth_test || *depth_write { depth } else { &mut no_depth },
                 );
             }
             0
@@ -1461,6 +1508,8 @@ fn draw_prepared<'a>(
             mvp,
             blend,
             depth_test,
+            depth_write,
+            depth_test_on_fail: _,
             texture_handle,
             sampler,
         } => {
@@ -1492,7 +1541,7 @@ fn draw_prepared<'a>(
                     stripe_y_start,
                     stripe_y_end,
                     buffer,
-                    if *depth_test { depth } else { &mut no_depth },
+                    if *depth_test || *depth_write { depth } else { &mut no_depth },
                 );
             }
             rasterize_textured_mesh_triangles(
@@ -1513,7 +1562,7 @@ fn draw_prepared<'a>(
                 stripe_y_end,
                 buffer,
                 instance.cull_mode,
-                if *depth_test { depth } else { &mut no_depth },
+                if *depth_test || *depth_write { depth } else { &mut no_depth },
             )
         }
     }
@@ -1534,9 +1583,30 @@ fn draw_prepared_triangle<'a>(
 
     depth: &mut DepthRows<'_>,
 ) {
+    if let PreparedObject::TexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    }
+    | PreparedObject::DirectTexturedMesh {
+        depth_test,
+        depth_write,
+        depth_test_on_fail,
+        ..
+    } = prepared
+    {
+        depth.mode = deadlib_render_core::DepthMode::from_flags(
+            *depth_test,
+            *depth_write,
+            *depth_test_on_fail,
+        );
+    }
+
     let mut no_depth = DepthRows {
         pixels: &mut [],
         unorm16: false,
+        mode: deadlib_render_core::DepthMode::TestWrite,
     };
     match prepared {
         PreparedObject::Mesh { blend, .. } => {
@@ -1555,6 +1625,8 @@ fn draw_prepared_triangle<'a>(
             texture_mask,
             blend,
             depth_test,
+            depth_write,
+            depth_test_on_fail: _,
             texture_handle,
             sampler,
             ..
@@ -1575,7 +1647,7 @@ fn draw_prepared_triangle<'a>(
                 stripe_y_end,
                 buffer,
                 width,
-                if *depth_test { depth } else { &mut no_depth },
+                if *depth_test || *depth_write { depth } else { &mut no_depth },
             );
         }
         _ => debug_assert!(false, "whole objects must use whole-object stripe items"),
@@ -3750,6 +3822,8 @@ mod tests {
                             texture_handle: handle,
                             camera: 0,
                             depth_test: false,
+                            depth_write: false,
+                            depth_test_on_fail: false,
                             clear_depth: false,
                         })
                     } else {
@@ -4353,6 +4427,7 @@ mod tests {
                 &mut DepthRows {
                     pixels: &mut [],
                     unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
                 },
             );
             let actual = pixels[32 * 64 + 32];
@@ -4390,6 +4465,7 @@ mod tests {
                 &mut DepthRows {
                     pixels: &mut [],
                     unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
                 },
             );
             let actual = pixels[32 * 64 + 32];
@@ -4835,11 +4911,61 @@ mod tests {
                         blend: BlendMode::Alpha,
                         camera: 0,
                         depth_test: true,
+                        depth_write: true,
+                        depth_test_on_fail: false,
                         // Runs 0 and 1 share depth; run 2 is isolated from them.
                         clear_depth: i == 2,
                     })
                 })
                 .collect(),
+        }
+    }
+
+    #[test]
+    fn independent_depth_modes_preserve_painter_order() {
+        let textures = TestTextures {
+            texture: create_texture(&RgbaImage::from_pixel(1, 1, Rgba([255; 4])), SamplerDesc::default()).unwrap(),
+            lookups: AtomicUsize::new(0),
+        };
+        for mode in deadlib_render_core::DepthMode::ALL {
+            let mut frame = depth_frame();
+            let expected = if mode.on_fail() {
+                frame.tmesh_geometries.swap(1, 2);
+                let DrawOp::TexturedMesh(rear) = &mut frame.ops[1] else { unreachable!() };
+                rear.depth_test_on_fail = true;
+                rear.depth_write = mode.writes();
+                let DrawOp::TexturedMesh(middle) = &mut frame.ops[2] else { unreachable!() };
+                middle.clear_depth = false;
+                if mode.writes() { 0x0000ff } else { 0xff0000 }
+            } else {
+                frame.ops.truncate(2);
+                let DrawOp::TexturedMesh(sky) = &mut frame.ops[0] else { unreachable!() };
+                sky.depth_test = mode.tests();
+                sky.depth_write = mode.writes();
+                if mode.writes() { 0x00ff00 } else { 0xff0000 }
+            };
+            for staged in [false, true] {
+                let mut prepared = Vec::new();
+                let mut mesh = Vec::new();
+                let mut tmesh = Vec::new();
+                let fixed = prepare_objects((&frame).into(), Matrix4::from_scale(Vec3::new(1.0, 1.0, -1.0)),
+                    &textures, WIDTH, HEIGHT, &mut prepared, &mut mesh, &mut tmesh, staged);
+                let mut bins = StripeBins::warmed();
+                bins.build(&prepared, &mesh, &tmesh, HEIGHT);
+                for indexed in [false, true] {
+                    let mut pixels = vec![0; WIDTH * HEIGHT];
+                    for (index, stripe) in pixels.chunks_mut(WIDTH * SOFTWARE_ROW_CHUNK).enumerate() {
+                        let start = index * SOFTWARE_ROW_CHUNK;
+                        let end = start + stripe.len() / WIDTH;
+                        let mut depth = vec![1.0; stripe.len()];
+                        draw_rows((&frame).into(), &prepared, indexed.then(|| bins.stripe(index)),
+                            &mesh, &tmesh, &textures, WIDTH, HEIGHT, start, end,
+                            &mut byte_writer(stripe), fixed, &mut depth);
+                    }
+                    assert_eq!(pixels[HEIGHT / 2 * WIDTH + WIDTH / 2] & 0xffffff, expected,
+                        "{mode:?}, staged={staged}, indexed={indexed}");
+                }
+            }
         }
     }
 
@@ -4880,6 +5006,8 @@ mod tests {
                     blend: BlendMode::Alpha,
                     camera: 0,
                     depth_test: true,
+                    depth_write: true,
+                    depth_test_on_fail: false,
                     clear_depth: true,
                 }));
             }
@@ -5046,6 +5174,8 @@ mod tests {
                                 blend: BlendMode::Alpha,
                                 camera: 0,
                                 depth_test: false,
+                                depth_write: false,
+                                depth_test_on_fail: false,
                                 clear_depth: false,
                             })],
                         };
@@ -5135,6 +5265,8 @@ mod tests {
                 blend: BlendMode::Alpha,
                 camera: 0,
                 depth_test,
+                depth_write: depth_test,
+                depth_test_on_fail: false,
                 clear_depth,
             })
         };
@@ -5295,6 +5427,7 @@ mod tests {
                     &mut DepthRows {
                         pixels: &mut [],
                         unorm16: false,
+                        mode: deadlib_render_core::DepthMode::TestWrite,
                     },
                 );
                 let mut prepared = Vec::with_capacity(4);
@@ -5327,6 +5460,7 @@ mod tests {
                     &mut DepthRows {
                         pixels: &mut [],
                         unorm16: false,
+                        mode: deadlib_render_core::DepthMode::TestWrite,
                     },
                 );
                 assert_eq!(retained, direct, "staged and direct culling must agree");
@@ -5451,6 +5585,7 @@ mod tests {
             &mut DepthRows {
                 pixels: &mut [],
                 unorm16: false,
+                mode: deadlib_render_core::DepthMode::TestWrite,
             },
         );
         assert_eq!(
@@ -5474,7 +5609,8 @@ mod tests {
                 0.0,
                 &mut DepthRows {
                     pixels: &mut [],
-                    unorm16: false
+                    unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
                 },
             ),
             3
@@ -5858,6 +5994,8 @@ mod tests {
                     texture_handle: TEXTURE_HANDLE,
                     camera: 0,
                     depth_test: false,
+                    depth_write: false,
+                    depth_test_on_fail: false,
                     clear_depth: false,
                 }),
                 DrawOp::TexturedMesh(TexturedMeshRun {
@@ -5870,6 +6008,8 @@ mod tests {
                     texture_handle: MISSING_TEXTURE_HANDLE,
                     camera: 0,
                     depth_test: false,
+                    depth_write: false,
+                    depth_test_on_fail: false,
                     clear_depth: false,
                 }),
                 DrawOp::Sprite(SpriteRun {

@@ -3145,7 +3145,7 @@ fn compare_speed_playback(compiled: &[CompiledSongLua], context: &SongLuaCompile
             let Some(fields) = fields else { continue; };
             runtime.refresh_player(player, second + origin, 1_000_000.0, Default::default(), AttackBaseEffects::default, Default::default());
             let mut targets = ActiveAttackMaskValues { scroll_speed: runtime.scroll_speed[player], ..ActiveAttackMaskValues::new(Default::default()) };
-            deadsync_gameplay::apply_song_lua_attack_eases(&mut targets, &mut Default::default(), &mut Default::default(), &runtime.song_lua_ease_windows[player], second + origin, 0.0);
+            deadsync_gameplay::apply_song_lua_attack_eases(&mut targets, &mut Default::default(), &mut Default::default(), &runtime.song_lua_ease_windows[player], second + origin);
             let base = match context.players[player].speedmod {
                 SongLuaSpeedMod::X(value) => ScrollSpeedSetting::XMod(value),
                 SongLuaSpeedMod::C(value) => ScrollSpeedSetting::CMod(value),
@@ -3266,7 +3266,6 @@ pub(super) fn compare_runtime_modifiers(
                 &mut player_targets,
                 &runtime.song_lua_ease_windows[player],
                 second,
-                0.0,
             );
             *transform = player_targets.resolve();
             runtime.accel[player] = targets.accel;
@@ -3534,7 +3533,7 @@ fn native_speed_fields_drive_playback() {
             let mut targets = ActiveAttackMaskValues::new(Default::default());
             deadsync_gameplay::apply_song_lua_attack_eases(
                 &mut targets, &mut Default::default(), &mut Default::default(),
-                &runtime.song_lua_ease_windows[player], second, 0.0,
+                &runtime.song_lua_ease_windows[player], second,
             );
             assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
         }
@@ -3599,7 +3598,7 @@ fn startup_speeds_keep_native_default_approaches() {
             let mut targets = ActiveAttackMaskValues::new(Default::default());
             deadsync_gameplay::apply_song_lua_attack_eases(
                 &mut targets, &mut Default::default(), &mut Default::default(),
-                &runtime.song_lua_ease_windows[player], second, 0.0,
+                &runtime.song_lua_ease_windows[player], second,
             );
             assert_eq!(targets.scroll_speed, Some(expected), "P{} at {second}s", player + 1);
         }

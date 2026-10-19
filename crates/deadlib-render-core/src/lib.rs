@@ -21,6 +21,54 @@ pub type TextureHandle = u64;
 /// whose clip depth is 0 <= z <= w must remap z to (z + w) / 2 before clipping.
 pub type ProjectionMatrix = Matrix4;
 
+/// Independent depth comparison and writing, as selected by the drawing actor.
+/// The six states index pipelines created before frame recording.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DepthMode {
+    #[default]
+    Off,
+    Write,
+    Test,
+    TestWrite,
+    TestFail,
+    TestFailWrite,
+}
+
+impl DepthMode {
+    pub const ALL: [Self; 6] = [
+        Self::Off,
+        Self::Write,
+        Self::Test,
+        Self::TestWrite,
+        Self::TestFail,
+        Self::TestFailWrite,
+    ];
+
+    pub const fn from_flags(test: bool, write: bool, on_fail: bool) -> Self {
+        match (test, write, on_fail) {
+            (false, false, _) => Self::Off,
+            (false, true, _) => Self::Write,
+            (true, false, false) => Self::Test,
+            (true, true, false) => Self::TestWrite,
+            (true, false, true) => Self::TestFail,
+            (true, true, true) => Self::TestFailWrite,
+        }
+    }
+
+    pub const fn tests(self) -> bool {
+        !matches!(self, Self::Off | Self::Write)
+    }
+
+    pub const fn writes(self) -> bool {
+        matches!(self, Self::Write | Self::TestWrite | Self::TestFailWrite)
+    }
+
+    pub const fn on_fail(self) -> bool {
+        matches!(self, Self::TestFail | Self::TestFailWrite)
+    }
+}
+
 /// Clamp a target's pixel viewport to its backing allocation.
 pub fn render_target_viewport(frame: &RenderTargetFrame) -> [u32; 2] {
     [

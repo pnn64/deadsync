@@ -582,6 +582,8 @@ fn actor_from_vertices<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         depth_test,
+        depth_write: depth_test,
+        depth_test_on_fail: false,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: if slot.model_cull_back() {
@@ -625,6 +627,8 @@ fn flat_from_vertices<S: NoteskinSlot>(
         uv_offset,
         uv_tex_shift,
         depth_test: false,
+        depth_write: false,
+        depth_test_on_fail: false,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: if slot.model_cull_back() {

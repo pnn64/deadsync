@@ -518,6 +518,8 @@ pub const fn song_lua_overlay_delta_mask(
     field!(mask_source);
     field!(mask_dest);
     field!(depth_test);
+    field!(depth_write);
+    field!(depth_test_on_fail);
     field!(zoom);
     field!(zoom_x);
     field!(zoom_y);

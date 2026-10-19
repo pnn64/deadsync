@@ -606,6 +606,7 @@ fn compose_flat_mine_slot<S, F, Z>(
             if let FlatDraw::TexturedMesh(mesh) = draw {
                 crate::noteskin_model::noteskin_model_depth(model, &mut mesh.local_transform);
                 mesh.depth_test = true;
+                mesh.depth_write = true;
             }
         }
     }

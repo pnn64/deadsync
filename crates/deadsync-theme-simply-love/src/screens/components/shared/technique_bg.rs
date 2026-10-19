@@ -360,8 +360,14 @@ fn push_layers(
             Arc::clone(&layer.vertices),
             layer.geom_cache_key,
         ) {
-            if let Actor::TexturedMesh { depth_test, .. } = &mut actor {
+            if let Actor::TexturedMesh {
+                depth_test,
+                depth_write,
+                ..
+            } = &mut actor
+            {
                 *depth_test = false;
+                *depth_write = false;
             }
             out.push(actor);
         }

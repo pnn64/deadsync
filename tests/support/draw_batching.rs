@@ -106,6 +106,8 @@ pub fn fixture(kind: usize, blend: BlendMode, depth: bool, glow: bool) -> Render
                     additive_texture: 0,
                     camera,
                     depth_test: depth,
+                    depth_write: depth,
+                    depth_test_on_fail: false,
                     clear_depth: false,
                 }));
             }

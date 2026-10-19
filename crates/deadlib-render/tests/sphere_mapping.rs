@@ -65,6 +65,8 @@ fn frame(mode: f32) -> RenderFrame {
             texture_handle: 1,
             camera: 0,
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
         })],
     }

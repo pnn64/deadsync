@@ -1243,6 +1243,8 @@ macro_rules! overlay_value_fields {
         $visit!(max_h_pre_zoom);
         $visit!(max_dimension_uses_zoom);
         $visit!(depth_test);
+        $visit!(depth_write);
+        $visit!(depth_test_on_fail);
         $visit!(texture_filtering);
         $visit!(texture_wrapping);
     };

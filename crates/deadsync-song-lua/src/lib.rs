@@ -2998,6 +2998,8 @@ pub struct SongLuaOverlayState {
     pub mask_source: bool,
     pub mask_dest: bool,
     pub depth_test: bool,
+    pub depth_write: bool,
+    pub depth_test_on_fail: bool,
     pub cull_mode: deadlib_render_core::CullMode,
     pub zoom: f32,
     pub zoom_x: f32,
@@ -3107,6 +3109,8 @@ impl Default for SongLuaOverlayState {
             mask_source: false,
             mask_dest: false,
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             cull_mode: deadlib_render_core::CullMode::None,
             zoom: 1.0,
             zoom_x: 1.0,
@@ -3261,6 +3265,8 @@ pub struct SongLuaOverlayStateDelta {
     pub mask_source: Option<bool>,
     pub mask_dest: Option<bool>,
     pub depth_test: Option<bool>,
+    pub depth_write: Option<bool>,
+    pub depth_test_on_fail: Option<bool>,
     pub cull_mode: Option<deadlib_render_core::CullMode>,
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
@@ -3354,6 +3360,8 @@ impl SongLuaOverlayStateDelta {
             Target::MaskSource => self.mask_source.is_some(),
             Target::MaskDest => self.mask_dest.is_some(),
             Target::DepthTest => self.depth_test.is_some(),
+            Target::DepthWrite => self.depth_write.is_some(),
+            Target::DepthTestOnFail => self.depth_test_on_fail.is_some(),
             Target::CullMode => self.cull_mode.is_some(),
             Target::Zoom => self.zoom.is_some(),
             Target::ZoomX => self.zoom_x.is_some(),
@@ -3752,6 +3760,12 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.depth_test {
         state.depth_test = value;
+    }
+    if let Some(value) = delta.depth_write {
+        state.depth_write = value;
+    }
+    if let Some(value) = delta.depth_test_on_fail {
+        state.depth_test_on_fail = value;
     }
     if let Some(value) = delta.cull_mode {
         state.cull_mode = value;
@@ -4301,6 +4315,16 @@ pub fn overlay_state_lerp(
     {
         from.depth_test = to;
     }
+    if let Some(to) = delta.depth_write
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.depth_write = to;
+    }
+    if let Some(to) = delta.depth_test_on_fail
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.depth_test_on_fail = to;
+    }
 }
 
 const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
@@ -4337,6 +4361,8 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.mask_source.is_none()
         && delta.mask_dest.is_none()
         && delta.depth_test.is_none()
+        && delta.depth_write.is_none()
+        && delta.depth_test_on_fail.is_none()
         && delta.cull_mode.is_none()
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
@@ -4488,6 +4514,12 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.depth_test.is_some() {
         into.depth_test = from.depth_test;
+    }
+    if from.depth_write.is_some() {
+        into.depth_write = from.depth_write;
+    }
+    if from.depth_test_on_fail.is_some() {
+        into.depth_test_on_fail = from.depth_test_on_fail;
     }
     if from.cull_mode.is_some() {
         into.cull_mode = from.cull_mode;
@@ -4730,6 +4762,8 @@ pub fn overlay_delta_intersection(
     copy_pair!(mask_source);
     copy_pair!(mask_dest);
     copy_pair!(depth_test);
+    copy_pair!(depth_write);
+    copy_pair!(depth_test_on_fail);
     copy_pair!(cull_mode);
     copy_pair!(zoom);
     copy_pair!(zoom_x);
@@ -5174,6 +5208,8 @@ pub enum SongLuaOverlayUpdateTarget {
     AftCreated,
     AftPreserve,
     Hibernating,
+    DepthWrite,
+    DepthTestOnFail,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -3533,6 +3533,8 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         uv_offset: [0.0; 2],
         uv_tex_shift: [0.0; 2],
         depth_test: state.depth_test,
+        depth_write: state.depth_write,
+        depth_test_on_fail: state.depth_test_on_fail,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: deadlib_render_core::CullMode::None,
@@ -4906,6 +4908,7 @@ fn song_lua_map_opaque_rect(
         && !state.mask_source
         && !state.mask_dest
         && !state.depth_test
+        && !state.depth_write
         && state.cropleft <= f32::EPSILON
         && state.cropright <= f32::EPSILON
         && state.croptop <= f32::EPSILON
@@ -5727,6 +5730,8 @@ fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayStat
         mask_source: state.mask_source,
         mask_dest: state.mask_dest,
         depth_test: state.depth_test,
+        depth_write: state.depth_write,
+        depth_test_on_fail: state.depth_test_on_fail,
         blend: state.blend,
         ..SongLuaOverlayState::default()
     }
@@ -6474,6 +6479,8 @@ pub fn apply_overlay_update(
     set_value!(MaskSource, Bool, mask_source);
     set_value!(MaskDest, Bool, mask_dest);
     set_value!(DepthTest, Bool, depth_test);
+    set_value!(DepthWrite, Bool, depth_write);
+    set_value!(DepthTestOnFail, Bool, depth_test_on_fail);
     set_value!(CullMode, CullMode, cull_mode);
     set_value!(Zoom, F32, zoom);
     set_value!(ZoomX, F32, zoom_x);
@@ -8153,6 +8160,8 @@ fn append_song_lua_model_actors(
                 uv_offset,
                 uv_tex_shift,
                 depth_test: state.depth_test,
+                depth_write: state.depth_write,
+                depth_test_on_fail: state.depth_test_on_fail,
                 clear_depth: false,
                 clear_depth_after: false,
                 cull_mode: state.cull_mode,
@@ -8519,6 +8528,8 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                     local_transform,
                     environment,
                     depth_test,
+                    depth_write,
+                    depth_test_on_fail,
                     world_z,
                     ..
                 } = &mut actor
@@ -8545,6 +8556,8 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                         },
                     });
                     *depth_test = state.depth_test;
+                    *depth_write = state.depth_write;
+                    *depth_test_on_fail = state.depth_test_on_fail;
                     *world_z += state.z + song_lua_biased_world_z(state, effect_offset[2]);
                     *local_transform =
                         Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
@@ -9633,7 +9646,7 @@ fn song_lua_projected_local_transform(
     };
     let mut depth_range = Matrix4::from_scale(Vector3::new(1.0, 1.0, 0.95));
     depth_range.w_axis.z = 0.05 - 0.1 * bias;
-    if !state.depth_test {
+    if !state.depth_test && !state.depth_write {
         depth_range = Matrix4::IDENTITY;
     }
     song_lua_screen_proj(1.0).inverse() * depth_range * projection * (view * model)
@@ -9676,6 +9689,8 @@ struct SongLuaProjectedMeshParams {
     local_transform: Matrix4,
     world_z: f32,
     depth_test: bool,
+    depth_write: bool,
+    depth_test_on_fail: bool,
     visible: bool,
     blend: BlendMode,
     z: i16,
@@ -9709,6 +9724,8 @@ fn song_lua_projected_mesh_actor_from_grid(
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: params.depth_test,
+            depth_write: params.depth_write,
+            depth_test_on_fail: params.depth_test_on_fail,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::None,
@@ -9743,6 +9760,8 @@ fn song_lua_projected_mesh_actor_from_grid(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test: params.depth_test,
+        depth_write: params.depth_write,
+        depth_test_on_fail: params.depth_test_on_fail,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: deadlib_render_core::CullMode::None,
@@ -9816,6 +9835,8 @@ fn song_lua_flat_skewed_overlay_actor(
             local_transform: Matrix4::IDENTITY,
             world_z,
             depth_test: state.depth_test,
+            depth_write: state.depth_write,
+            depth_test_on_fail: state.depth_test_on_fail,
             visible: state.draw_visible(),
             glow: [1.0, 1.0, 1.0, 0.0],
             texture,
@@ -9895,6 +9916,8 @@ fn song_lua_projected_overlay_actor(
             local_transform,
             world_z: 0.0,
             depth_test: state.depth_test,
+            depth_write: state.depth_write,
+            depth_test_on_fail: state.depth_test_on_fail,
             visible: true,
             glow: [1.0, 1.0, 1.0, 0.0],
             texture,
@@ -10714,6 +10737,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         uv_offset: state.texcoord_offset.unwrap_or([0.0; 2]),
                         uv_tex_shift: [0.0, 0.0],
                         depth_test: state.depth_test,
+                        depth_write: state.depth_write,
+                        depth_test_on_fail: state.depth_test_on_fail,
                         clear_depth: false,
                         clear_depth_after: false,
                         cull_mode: deadlib_render_core::CullMode::None,
@@ -10748,6 +10773,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         uv_offset: state.texcoord_offset.unwrap_or([0.0; 2]),
                         uv_tex_shift: [0.0, 0.0],
                         depth_test: state.depth_test,
+                        depth_write: state.depth_write,
+                        depth_test_on_fail: state.depth_test_on_fail,
                         clear_depth: false,
                         clear_depth_after: false,
                         cull_mode: deadlib_render_core::CullMode::None,
@@ -11459,6 +11486,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             visible,
             blend,
             z,
@@ -11496,6 +11525,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
+                    depth_write: *depth_write,
+                    depth_test_on_fail: *depth_test_on_fail,
                     clear_depth: false,
                     clear_depth_after: false,
                     cull_mode: deadlib_render_core::CullMode::None,
@@ -11529,6 +11560,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
+                    depth_write: *depth_write,
+                    depth_test_on_fail: *depth_test_on_fail,
                     clear_depth: false,
                     clear_depth_after: false,
                     cull_mode: deadlib_render_core::CullMode::None,
@@ -11566,6 +11599,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
+                    depth_write: *depth_write,
+                    depth_test_on_fail: *depth_test_on_fail,
                     clear_depth: false,
                     clear_depth_after: false,
                     cull_mode: deadlib_render_core::CullMode::None,
@@ -11588,6 +11623,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             visible,
             blend,
             z,
@@ -11623,6 +11660,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
                 depth_test: *depth_test,
+                depth_write: *depth_write,
+                depth_test_on_fail: *depth_test_on_fail,
                 clear_depth: false,
                 clear_depth_after: false,
                 cull_mode: deadlib_render_core::CullMode::None,

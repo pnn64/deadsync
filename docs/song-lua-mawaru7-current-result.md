@@ -1,3 +1,60 @@
+# Mawaru7 Titan scene depth follow-up
+
+The flat green Titan screen at beats 308 and 320 is a second valid rendering
+failure. The production capture reproduces the reported image: the sky and
+instruction text draw, while the trees, ground and characters disappear.
+The previous note-visibility fix did not establish parity for this scene.
+
+ITGmania keeps `ztest`, `ztestmode` and `zwrite` independent. An Actor starts
+with testing off and writing disabled; a Model enables both. `zbuffer` changes
+both settings. ActorFrame propagates each setter separately, preserving a
+child's later override. `WriteOnPass` compares LEQUAL and `WriteOnFail`
+compares GREATER; neither comparison mode implicitly enables writing.
+See `Actor.cpp`, `Actor.h`, `ActorFrame.cpp`, `Model.cpp` and
+`RageDisplay_OGL.cpp` at native revision
+`704cdd5624155f743b59b8b64fedeb0588dae067`.
+
+The Titan frames (`actor_jw` and `actor_ix`) enable testing. Their sky sprites
+must not write depth. The invisible quad (`actor_jx`) explicitly enables
+writing to mask the other player's half. Combining testing and writing made
+the sky occlude subsequently painted scenery, including geometry farther
+from the camera. Retain both settings and the comparison direction through
+capture, compiled state/deltas, playback, composition and every renderer.
+Write-only geometry also participates in depth reset boundaries. Ordinary
+noteskin meshes retain their previous combined test/write behavior.
+
+The focused renderer regression covers the six compare/write combinations,
+NoEffect masks, model isolation and offscreen depth retention on DirectX,
+Vulkan (wgpu), OpenGL and native Vulkan. Native semantic comparisons now
+check depth writing and comparison direction separately instead of assuming
+that writing matches testing. The small compiled-state regression covers
+frame propagation, child overrides, write-only masks and WriteOnFail.
+
+The actual-chart regression now captures beats 308, 320 and 338 as well as
+the earlier gameplay samples. At 308 and 320 it removes Titan ground/tree/
+character draws and asserts that they contribute more than 1,000 pixels.
+Thus a flat sky can no longer pass merely because the scene compiled or
+produced geometry. This follow-up uses `DEADSYNC_MAWARU7_UNTIL_BEAT=342`;
+it checks the production compiled path with no surviving Lua VM. It does
+not establish whole-song pixel or interactive-minigame parity. No complete
+fixture sweep is run.
+
+The focused actual-chart run passes in 239.81 seconds. Removing scenery and
+character draws changes 487,486 pixels at beat 308 and 483,118 at beat 320;
+the Titan and player are visible in the retained beat-308 capture. Earlier
+tap contributions remain 24,281 pixels at beat 70 and 10,255 at beat 94.
+The four-backend GPU regression passes in 5.32 seconds, and all three small
+compiled-state/delta checks pass. Before/after captures are in
+`target/mawaru7-titan-before` and `target/mawaru7-titan-after`. The normal
+`cargo build --locked --bin deadsync` succeeds.
+
+All four selected software depth checks pass, including independent modes
+in retained/direct and indexed/unindexed raster paths. Type checking the
+affected renderer, notefield and root test targets also passes. That check
+found four stale parity-harness calls to the old six-argument attack-ease
+API; remove their obsolete Mini-baseline argument to match the current
+five-argument API. No fixture executions are added by this compile check.
+
 # Mawaru7 gameplay integration follow-up (0.5.1872)
 
 The retained semantic results below do not cover the production handoff from

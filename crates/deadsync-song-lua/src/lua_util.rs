@@ -1094,6 +1094,8 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "mask_source" => Target::MaskSource,
         "mask_dest" => Target::MaskDest,
         "depth_test" => Target::DepthTest,
+        "depth_write" => Target::DepthWrite,
+        "depth_test_on_fail" => Target::DepthTestOnFail,
         "cull_mode" => Target::CullMode,
         "zoom" => Target::Zoom,
         "zoom_x" => Target::ZoomX,
@@ -4892,6 +4894,8 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "mask_source" => "__songlua_state_mask_source",
         "mask_dest" => "__songlua_state_mask_dest",
         "depth_test" => "__songlua_state_depth_test",
+        "depth_write" => "__songlua_state_depth_write",
+        "depth_test_on_fail" => "__songlua_state_depth_test_on_fail",
         "cull_mode" => "__songlua_state_cull_mode",
         "zoom" => "__songlua_state_zoom",
         "zoom_x" => "__songlua_state_zoom_x",
@@ -6485,10 +6489,10 @@ pub fn run_named_command_on_children_recursively(
 // ActorFrame overrides SetZTestMode and SetZWrite to apply the setter to
 // every owned child. Capture these writes on the children themselves so a
 // child's later ztest(0) still overrides its parent's earlier ztest(1).
-fn capture_actor_depth_recursive(lua: &Lua, actor: &Table, enabled: bool) -> mlua::Result<()> {
-    capture_block_set_bool(lua, actor, "depth_test", enabled)?;
+fn capture_actor_depth_recursive(lua: &Lua, actor: &Table, field: &str, enabled: bool) -> mlua::Result<()> {
+    capture_block_set_bool(lua, actor, field, enabled)?;
     for child in actor_direct_children(lua, actor)? {
-        capture_actor_depth_recursive(lua, &child, enabled)?;
+        capture_actor_depth_recursive(lua, &child, field, enabled)?;
     }
     Ok(())
 }
@@ -9796,7 +9800,13 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                         Some(Value::Number(value)) => value.trunc() != 0.0,
                         _ => return Err(mlua::Error::runtime(format!("{name} expects a boolean or number"))),
                     };
-                    capture_actor_depth_recursive(lua, &actor, enabled)?;
+                    if name != "zwrite" {
+                        capture_actor_depth_recursive(lua, &actor, "depth_test", enabled)?;
+                        capture_actor_depth_recursive(lua, &actor, "depth_test_on_fail", false)?;
+                    }
+                    if name != "ztest" {
+                        capture_actor_depth_recursive(lua, &actor, "depth_write", enabled)?;
+                    }
                     Ok(actor.clone())
                 }
             })?,
@@ -9807,17 +9817,17 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         lua.create_function({
             let actor = actor.clone();
             move |lua, args: MultiValue| {
-                let enabled = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_string)
-                    .is_none_or(|mode| {
-                        let normalized = mode
-                            .trim()
-                            .trim_start_matches("ZTestMode_")
-                            .to_ascii_lowercase();
-                        !matches!(normalized.as_str(), "off" | "none" | "false")
-                    });
-                capture_actor_depth_recursive(lua, &actor, enabled)?;
+                let mode = method_arg(&args, 0).cloned().and_then(read_string)
+                    .ok_or_else(|| mlua::Error::runtime("ztestmode expects a ZTestMode"))?;
+                let normalized = mode.trim().trim_start_matches("ZTestMode_").to_ascii_lowercase();
+                let (enabled, on_fail) = match normalized.as_str() {
+                    "off" => (false, false),
+                    "writeonpass" => (true, false),
+                    "writeonfail" => (true, true),
+                    _ => return Err(mlua::Error::runtime(format!("invalid ZTestMode: {mode}"))),
+                };
+                capture_actor_depth_recursive(lua, &actor, "depth_test", enabled)?;
+                capture_actor_depth_recursive(lua, &actor, "depth_test_on_fail", on_fail)?;
                 Ok(actor.clone())
             }
         })?,
@@ -10849,7 +10859,7 @@ pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<
                 | "cropleft" | "cropright" | "croptop" | "cropbottom"
                 | "fadeleft" | "faderight" | "fadetop" | "fadebottom" | "stretch_rect"
                 | "diffuse" | "vertex_colors" | "glow" | "blend" | "shadow_len" | "shadow_color"
-                | "depth_test" | "cull_mode" | "texture_filtering" | "texture_wrapping"
+                | "depth_test" | "depth_write" | "depth_test_on_fail" | "cull_mode" | "texture_filtering" | "texture_wrapping"
                 | "texcoord_offset" | "vibrate" | "rainbow" | "rainbow_scroll" | "spin"
                 | "motion_clock" | "hibernating") || name.starts_with("effect_"));
         (native_state || matches!(name.as_ref(), "__songlua_visible" | "__songlua_current_x"
@@ -19241,6 +19251,12 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                 depth_test: block
                     .get::<Option<bool>>("depth_test")
                     .map_err(|err| err.to_string())?,
+                depth_write: block
+                    .get::<Option<bool>>("depth_write")
+                    .map_err(|err| err.to_string())?,
+                depth_test_on_fail: block
+                    .get::<Option<bool>>("depth_test_on_fail")
+                    .map_err(|err| err.to_string())?,
                 zoom: block
                     .get::<Option<f32>>("zoom")
                     .map_err(|err| err.to_string())?,
@@ -19486,6 +19502,8 @@ actor_scalar_fields!(ActorFlagField {
     MaskSource => "__songlua_state_mask_source",
     MaskDest => "__songlua_state_mask_dest",
     DepthTest => "__songlua_state_depth_test",
+    DepthWrite => "__songlua_state_depth_write",
+    DepthTestOnFail => "__songlua_state_depth_test_on_fail",
     Vibrate => "__songlua_state_vibrate",
     EffectTimer => "__songlua_state_effect_timer",
     Rainbow => "__songlua_state_rainbow",
@@ -19839,6 +19857,7 @@ fn read_actor_overlay_state(
         .raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")
         .map_err(|err| err.to_string())?
         .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Model"));
+    state.depth_write = state.depth_test;
     state.texture_wrapping = state.depth_test;
     state.cull_mode = if state.depth_test {
         deadlib_render_core::CullMode::Back
@@ -20009,6 +20028,12 @@ fn read_actor_overlay_state(
     }
     if let Some(value) = flag(ActorFlagField::DepthTest).map_err(|err| err.to_string())? {
         state.depth_test = value;
+    }
+    if let Some(value) = flag(ActorFlagField::DepthWrite).map_err(|err| err.to_string())? {
+        state.depth_write = value;
+    }
+    if let Some(value) = flag(ActorFlagField::DepthTestOnFail).map_err(|err| err.to_string())? {
+        state.depth_test_on_fail = value;
     }
     if let Some(value) = number(ActorNumberField::Zoom).map_err(|err| err.to_string())? {
         state.zoom = value;

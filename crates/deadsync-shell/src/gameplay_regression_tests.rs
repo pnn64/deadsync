@@ -4728,6 +4728,14 @@ return Def.ActorFrame{
                     sky.initial_state.depth_test,
                     "door sky must receive its ActorFrame's depth test"
                 );
+                assert!(
+                    !sky.initial_state.depth_write,
+                    "testing must not enable writing"
+                );
+                assert!(
+                    mask.initial_state.depth_write,
+                    "the mask explicitly writes depth"
+                );
                 let assets = fixture_assets();
                 let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
                 let mut handles = Vec::new();
@@ -4743,7 +4751,7 @@ return Def.ActorFrame{
                         .unwrap_or_else(|| std::env::temp_dir().join("deadsync-mawaru7-capture")),
                 ));
                 let mut tick = 0;
-                for beat in [8.0, 70.0, 94.0, 116.0, 196.0] {
+                for beat in [8.0, 70.0, 94.0, 116.0, 196.0, 308.0, 320.0, 338.0] {
                     if until_beat.is_some_and(|end| beat > end) {
                         break;
                     }
@@ -4795,7 +4803,7 @@ return Def.ActorFrame{
                     );
                     #[cfg(target_os = "windows")]
                     if let Some(gpu) = &mut gpu {
-                        if [70.0, 94.0, 116.0, 196.0].contains(&beat) {
+                        if [70.0, 94.0, 116.0, 196.0, 308.0, 320.0, 338.0].contains(&beat) {
                             let visible_pixels = gpu.capture(&mut state, &metrics, beat);
                             if beat == 94.0 {
                                 assert!(visible_pixels > 100, "rhythm section has no visible notes");
@@ -4934,6 +4942,50 @@ return Def.ActorFrame{
             image
                 .save(self.output.join(format!("mawaru7-beat-{beat}.png")))
                 .unwrap();
+            if [308.0, 320.0].contains(&beat) {
+                let visuals = state.gameplay.song_lua_visuals();
+                let titan: std::collections::HashSet<_> = visuals
+                    .foreground_visual_layers
+                    .iter()
+                    .flat_map(|layer| &layer.overlays)
+                    .filter_map(|overlay| match &overlay.kind {
+                        deadsync_assets::song_lua::SongLuaOverlayKind::Sprite {
+                            texture_key,
+                            ..
+                        } if texture_key.contains("games/titan/")
+                            && !texture_key.contains("/skyp")
+                            && !texture_key.ends_with("/note.png") =>
+                        {
+                            Some(self.assets.texture_context().texture_handle(texture_key))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert!(!titan.is_empty(), "Titan scene image resources");
+                let mut without_art = frame.clone();
+                without_art.ops.retain(|op| match op {
+                    DrawOp::Sprite(run) => !titan.contains(&run.texture_handle),
+                    DrawOp::TexturedMesh(run) => !titan.contains(&run.texture_handle),
+                    _ => true,
+                });
+                self.backend.request_screenshot();
+                self.backend
+                    .draw(&without_art, self.assets.textures(), false)
+                    .unwrap();
+                let no_art = self.backend.capture_frame().unwrap();
+                let changed = image
+                    .pixels()
+                    .zip(no_art.pixels())
+                    .filter(|(a, b)| a != b)
+                    .count();
+                eprintln!(
+                    "Mawaru7 GPU beat {beat}: {changed} visible Titan scenery/character pixels"
+                );
+                assert!(
+                    changed > 1_000,
+                    "Titan scenery and characters are hidden behind the sky"
+                );
+            }
             let without_taps = |op: &DrawOp| match op {
                 DrawOp::Sprite(run) => !taps.contains(&run.texture_handle),
                 DrawOp::TexturedMesh(run) => !taps.contains(&run.texture_handle),

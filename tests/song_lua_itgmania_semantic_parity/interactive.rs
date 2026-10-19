@@ -444,11 +444,14 @@ impl DrawChecks {
             let texture_ok = expected_texture
                 .as_deref()
                 .is_none_or(|key| actual_texture == Some(key));
-            let native_depth = sample["state"]["z_test"] == 1;
+            let native_depth = sample["state"]["z_test"] != 0;
+            let native_write = sample["state"]["z_write"] == true;
+            let native_fail = sample["state"]["z_test"] == 2;
             let depth_ok = frame.ops.iter().all(|op| match op {
-                DrawOp::TexturedMesh(r) => r.depth_test == native_depth,
-                _ => !native_depth,
-            }) && sample["state"]["z_write"] == native_depth;
+                DrawOp::TexturedMesh(r) => r.depth_test == native_depth
+                    && r.depth_write == native_write && r.depth_test_on_fail == native_fail,
+                _ => !native_depth && !native_write,
+            });
             let sampler_ok = frame.ops.iter().all(|op| match op {
                 DrawOp::TexturedMesh(r) => r.sampler.is_some_and(|s| {
                     (s.filter == deadlib_present::render::SamplerFilter::Linear)

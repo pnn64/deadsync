@@ -70,6 +70,7 @@ fn read_actor_overlay_state(
         .raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")
         .map_err(|err| err.to_string())?
         .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Model"));
+    state.depth_write = state.depth_test;
     state.texture_wrapping = state.depth_test;
     state.cull_mode = if state.depth_test {
         deadlib_render_core::CullMode::Back
@@ -240,6 +241,12 @@ fn read_actor_overlay_state(
     }
     if let Some(value) = flag(ActorFlagField::DepthTest).map_err(|err| err.to_string())? {
         state.depth_test = value;
+    }
+    if let Some(value) = flag(ActorFlagField::DepthWrite).map_err(|err| err.to_string())? {
+        state.depth_write = value;
+    }
+    if let Some(value) = flag(ActorFlagField::DepthTestOnFail).map_err(|err| err.to_string())? {
+        state.depth_test_on_fail = value;
     }
     if let Some(value) = number(ActorNumberField::Zoom).map_err(|err| err.to_string())? {
         state.zoom = value;

@@ -1615,6 +1615,8 @@ pub(crate) fn overlay_state_update_value(
         Target::MaskSource => value!(Bool, mask_source),
         Target::MaskDest => value!(Bool, mask_dest),
         Target::DepthTest => value!(Bool, depth_test),
+        Target::DepthWrite => value!(Bool, depth_write),
+        Target::DepthTestOnFail => value!(Bool, depth_test_on_fail),
         Target::CullMode => value!(CullMode, cull_mode),
         Target::Zoom => value!(F32, zoom),
         Target::ZoomX => value!(F32, zoom_x),
@@ -1758,6 +1760,8 @@ pub(crate) fn set_overlay_state_update_value(
     set_value!(MaskSource, Bool, mask_source);
     set_value!(MaskDest, Bool, mask_dest);
     set_value!(DepthTest, Bool, depth_test);
+    set_value!(DepthWrite, Bool, depth_write);
+    set_value!(DepthTestOnFail, Bool, depth_test_on_fail);
     set_value!(CullMode, CullMode, cull_mode);
     set_value!(Zoom, F32, zoom);
     set_value!(ZoomX, F32, zoom_x);
