@@ -716,8 +716,8 @@ end
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
-            let code = crate::preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
-            let mut chunk = lua.load(&code);
+            let code = crate::cmd::preprocess_lua_cmd_syntax_cow(&code).map_err(mlua::Error::external)?;
+            let mut chunk = lua.load(code.as_ref());
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);
             }

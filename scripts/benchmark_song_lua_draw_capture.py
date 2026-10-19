@@ -95,6 +95,11 @@ def main():
                     "crates/deadsync-song-lua/tests/perf/rage_file_before.rs",
                     "crates/deadsync-song-lua/tests/perf/file_open.rs",
                     "crates/deadsync-song-lua/tests/perf/file_open_before.rs",
+                    "crates/deadsync-song-lua/src/cmd.rs",
+                    "crates/deadsync-song-lua/tests/perf/cmd.rs",
+                    "crates/deadsync-song-lua/tests/perf/cmd_before.rs",
+                    "tests/fixtures/song_lua/spooky-door.lua",
+                    "tests/fixtures/song_lua/runtime-eases.lua",
                     "crates/deadsync-song-lua/src/raw_vm.rs",
                     "crates/deadsync-song-lua/src/compiled_scene/runtime.rs",
                     "crates/deadsync-song-lua/src/model_texture.rs",
@@ -116,7 +121,7 @@ def main():
                   cycles="QueryThreadCycleTime: scheduled current-thread CPU cycles, including kernel time; not a user-only PMU counter",
                   allocation_scope="current-thread Rust GlobalAlloc, including mlua; direct native malloc excluded",
                   test_filters=args.test_filter or ["draw_capture::perf::benchmark_draw_capture"],
-                  timing_scope="capture: run calls retaining scene frames; conversion: consume captured input and retain converted output, output drop excluded; render: projected frame updates; physics: simulation ticks with empty render bindings and reused sound output; mesh/predicate: repeated reads, including returned mesh destruction; file core: buffered reads with cursor reset; file API: seek/read pairs including returned LuaString handle drop; file open: reopen existing virtual output, no disk I/O; path text/paths: separator conversion or lexical normalization, warm output reused except cold path; snapshot copies: virtual lookup plus copy, returned baseline buffer drop included; reads/ticks: unchanged reads or update plus UV sampling; initialization: repeated scene initialization or create/drop clocks; fixture setup excluded; see each workload unit",
+                  timing_scope="capture: run calls retaining scene frames; conversion: consume captured input and retain converted output, output drop excluded; render: projected frame updates; physics: simulation ticks with empty render bindings and reused sound output; mesh/predicate: repeated reads, including returned mesh destruction; file core: buffered reads with cursor reset; file API: seek/read pairs including returned LuaString handle drop; file open: reopen existing virtual output, no disk I/O; path text/paths: separator conversion or lexical normalization, warm output reused except cold path; snapshot copies: virtual lookup plus copy, returned baseline buffer drop included; cmd: preprocess sources including returned output/error drop; quoted scans: delimiter scanning; prepared chunks: preprocessing plus Lua compilation and Function handle drop, no file I/O; reads/ticks: unchanged reads or update plus UV sampling; initialization: repeated scene initialization or create/drop clocks; fixture setup excluded; see each workload unit",
                   samples_per_variant_per_workload=args.rounds * 9, summary=summary, records=records)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

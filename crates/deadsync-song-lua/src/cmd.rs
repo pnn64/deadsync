@@ -1,35 +1,64 @@
+#[inline]
+fn lua_special_offset(bytes: &[u8]) -> usize {
+    // A scalar prefix handles tightly packed markers. Fixed-size search
+    // windows keep the two delimiter sets linear even when one set is absent.
+    // Every returned position is an ASCII marker or EOF, hence a UTF-8 boundary.
+    let prefix = bytes.len().min(16);
+    if let Some(at) = bytes[..prefix]
+        .iter()
+        .position(|&byte| matches!(byte, b'-' | b'[' | b'c' | b'\'' | b'"'))
+    {
+        return at;
+    }
+    for (base, chunk) in bytes[prefix..].chunks(64).enumerate() {
+        let a = memchr::memchr3(b'-', b'[', b'c', chunk);
+        let b = memchr::memchr2(b'\'', b'"', chunk);
+        if let Some(at) = a.into_iter().chain(b).min() {
+            return prefix + base * 64 + at;
+        }
+    }
+    bytes.len()
+}
 /// # Panics
 ///
 /// Panics if an internal state invariant is violated.
 pub fn preprocess_lua_cmd_syntax(source: &str) -> Result<String, String> {
+    preprocess_lua_cmd_syntax_cow(source).map(std::borrow::Cow::into_owned)
+}
+
+pub(crate) fn preprocess_lua_cmd_syntax_cow(
+    source: &str,
+) -> Result<std::borrow::Cow<'_, str>, String> {
     let bytes = source.as_bytes();
-    let mut out = String::with_capacity(source.len());
+    let mut out: Option<String> = None;
+    let mut copied_until = 0;
     let mut index = 0;
     while index < bytes.len() {
         if source[index..].starts_with("--") {
-            let end = lua_comment_end(source, index);
-            out.push_str(&source[index..end]);
-            index = end;
+            index = lua_comment_end(source, index);
         } else if matches!(bytes[index], b'\'' | b'"') {
-            let end = lua_quoted_end(source, index)?;
-            out.push_str(&source[index..end]);
-            index = end;
+            index = lua_quoted_end(source, index)?;
         } else if let Some(open_end) = lua_long_bracket_end(source, index) {
-            let end = lua_long_string_end(source, index, open_end)?;
-            out.push_str(&source[index..end]);
-            index = end;
+            index = lua_long_string_end(source, index, open_end)?;
         } else if let Some(open) = lua_cmd_open_at(source, index) {
-            // Native Lua's cmd parser starts the function at the opening
-            // parenthesis and retains every consumed source line.
+            let out = out.get_or_insert_with(|| String::with_capacity(source.len()));
+            out.push_str(&source[copied_until..index]);
+            // Native cmd retains the newlines consumed before its parenthesis.
             out.extend(source[index..open].chars().filter(|&ch| ch == '\n'));
-            index = parse_lua_cmd_call(source, open, &mut out)?;
+            index = parse_lua_cmd_call(source, open, out)?;
+            copied_until = index;
+        } else if matches!(bytes[index], b'c' | b'-' | b'[') {
+            index += 1;
         } else {
-            let ch = source[index..].chars().next().unwrap();
-            out.push(ch);
-            index += ch.len_utf8();
+            index += lua_special_offset(&bytes[index..]);
         }
     }
-    Ok(out)
+    if let Some(mut out) = out {
+        out.push_str(&source[copied_until..]);
+        Ok(std::borrow::Cow::Owned(out))
+    } else {
+        Ok(std::borrow::Cow::Borrowed(source))
+    }
 }
 
 fn lua_cmd_open_at(source: &str, index: usize) -> Option<usize> {
@@ -462,6 +491,33 @@ fn lua_quoted_end(source: &str, index: usize) -> Result<usize, String> {
     let bytes = source.as_bytes();
     let quote = bytes[index];
     let mut cursor = index + 1;
+    // Preserve the cheap scalar loop for ordinary short literals.
+    let prefix_end = cursor.saturating_add(32).min(bytes.len());
+    while cursor < prefix_end {
+        if bytes[cursor] == b'\\' {
+            cursor = (cursor + 2).min(bytes.len());
+        } else if bytes[cursor] == quote {
+            return Ok(cursor + 1);
+        } else {
+            cursor += 1;
+        }
+    }
+    let mut dense_escapes = 0;
+    while cursor < bytes.len() {
+        let Some(offset) = memchr::memchr2(b'\\', quote, &bytes[cursor..]) else {
+            return Err("unterminated Lua string".to_string());
+        };
+        cursor += offset;
+        if bytes[cursor] != b'\\' {
+            return Ok(cursor + 1);
+        }
+        cursor = (cursor + 2).min(bytes.len());
+        dense_escapes = if offset < 16 { dense_escapes + 1 } else { 0 };
+        // Repeated nearby escapes favor the original scalar loop.
+        if dense_escapes == 8 {
+            break;
+        }
+    }
     while cursor < bytes.len() {
         if bytes[cursor] == b'\\' {
             cursor = (cursor + 2).min(bytes.len());
@@ -516,6 +572,11 @@ fn lua_long_string_end(source: &str, index: usize, open_end: usize) -> Result<us
         }
     }
     Err("unterminated Lua long string".to_string())
+}
+
+#[cfg(test)]
+mod perf {
+    include!("../tests/perf/cmd.rs");
 }
 
 #[cfg(test)]

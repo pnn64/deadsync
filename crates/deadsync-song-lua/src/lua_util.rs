@@ -1419,14 +1419,14 @@ fn load_script_file_with_source(
     environment: Option<Table>,
 ) -> mlua::Result<Function> {
     let source = fs::read_to_string(path).map_err(mlua::Error::external)?;
-    let source = crate::preprocess_lua_cmd_syntax(&source).map_err(mlua::Error::external)?;
+    let source = crate::cmd::preprocess_lua_cmd_syntax_cow(&source).map_err(mlua::Error::external)?;
     let environment = match environment {
         Some(environment) => environment,
         None => initial_chunk_environment(lua, source_path)?,
     };
     let chunk_env = create_chunk_env_proxy(lua, environment)?;
     let chunk = lua
-        .load(&source)
+        .load(source.as_ref())
         .set_name(source_path.to_string_lossy().as_ref())
         .set_environment(chunk_env.clone());
     let inner = chunk.into_function()?;
