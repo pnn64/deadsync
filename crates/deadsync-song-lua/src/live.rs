@@ -2285,6 +2285,56 @@ Q:diffusetopedge()
     }
 
     #[test]
+    fn live_native_scalar_methods_follow_receivers_and_reset() {
+        let mut compiled = compile_with_context("native-scalar-methods", r#"
+return Def.ActorFrame {
+    Def.Quad { InitCommand=function(self) A=self end },
+    Def.Quad { InitCommand=function(self) B=self end },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+SET_X, ADD_X = Actor.x, Actor.addx
+SET_X(A, 4); SET_X(B, 20)
+A:linear(1):x(12):linear(1):x(20)
+ADD_X(A, 4); ADD_X(B, 2)
+assert(A:GetX()==4 and A:GetDestX()==24)
+assert(B:GetX()==22 and B:GetDestX()==22)
+-- Public methods remain replaceable, and saved methods use their receiver.
+local native = Actor.x
+Actor.x = function(self, value) return native(self, value + 1) end
+B:x(30)
+Actor.x = native
+assert(B:GetX()==31 and A:GetDestX()==24)
+"#).exec().unwrap();
+        let output = scene.advance(SongLuaLiveFrame {
+            delta_seconds: 0.5, screen_seconds: 0.5, music_seconds: 0.5,
+            ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.lua.load(r#"
+assert(A:GetX()==8 and A:GetDestX()==24 and B:GetX()==31)
+A:stoptweening()
+ADD_X(A, 5)
+assert(A:GetX()==13 and A:GetDestX()==13)
+"#).exec().unwrap();
+        let actor: Table = scene.lua.globals().get("A").unwrap();
+        crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+        scene.lua.load(r#"
+assert(A:GetX()==0 and A:GetDestX()==0)
+SET_X(A, -3)
+assert(A:GetX()==-3)
+A:linear(1)
+SET_X(A, 16)
+ADD_X(A, 4)
+assert(A:GetX()==-3 and A:GetDestX()==20 and B:GetX()==31)
+A:finishtweening()
+assert(A:GetX()==20)
+"#).exec().unwrap();
+    }
+
+    #[test]
     fn live_native_scalars_export_current_and_destination_snapshots() {
         let mut compiled = compile_with_context("native-scalar-snapshots", r#"
 return Def.Quad { InitCommand=function(self) ROOT=self; self.authored={retained=true} end }
