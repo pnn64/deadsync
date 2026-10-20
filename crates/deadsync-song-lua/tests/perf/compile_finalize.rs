@@ -410,7 +410,12 @@ fn late_targets_preserve_sprite_fallback_proxy_rebinding_and_getter_errors() {
 
 #[test]
 fn complete_fixture_compiles_preserve_outputs_and_initial_live_updates() {
-    for (paths, live) in fixture_paths() {
+    let mut cases = fixture_paths();
+    cases.push((
+        vec![Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/perf/startup_capture.lua")],
+        false,
+    ));
+    for (paths, live) in cases {
         let mut prior = compile_fixture(false, &paths, live);
         let mut current = compile_fixture(true, &paths, live);
         assert_eq!(format!("{current:?}"), format!("{prior:?}"), "{paths:?}");

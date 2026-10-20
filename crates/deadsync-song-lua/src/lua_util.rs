@@ -12792,7 +12792,7 @@ pub(crate) fn run_actor_startup_commands(
         for (actor, _) in initial_states.values() {
             actor.for_each::<Value, Value>(|_, value| {
                 if let Value::Function(function) = value
-                    && function.info().what != "C"
+                    && function.environment().is_some()
                     && seen.insert(function.to_pointer() as usize)
                 {
                     function_count += 1;
@@ -18325,8 +18325,9 @@ fn snapshot_function_action_table(lua: &Lua, table: Table) -> mlua::Result<Table
     // Keep the traversal key on Lua's stack. `pairs` clones it for its Rust
     // cursor, allocating a shared handle for each reference-valued key.
     table.for_each::<Value, Value>(|key, value| {
-        count += 1;
-        entries.raw_set(count, lua.create_sequence_from([key, value])?)?;
+        count += 2;
+        entries.raw_set(count - 1, key)?;
+        entries.raw_set(count, value)?;
         Ok(())
     })?;
     lua.create_sequence_from([table, entries])
@@ -18386,22 +18387,16 @@ fn snapshot_function_locals(
         pending.raw_set(pending_count, Value::Nil)?;
         pending_count -= 1;
         match value {
-            Value::Function(function)
-                if function.info().what != "C" && seen.insert(function.to_pointer() as usize) =>
-            {
+            Value::Function(function) => {
+                let Some(environment) = function.environment() else { continue; };
+                if !seen.insert(function.to_pointer() as usize) { continue; }
                 let chunk = function.dump(true);
                 let globals = lua.globals();
-                let environment = function
-                    .environment()
-                    .map(|environment| {
-                        Ok::<_, mlua::Error>(
-                            environment
-                                .raw_get::<Option<Table>>("__songlua_env_target")?
-                                .unwrap_or(environment),
-                        )
-                    })
-                    .transpose()?
-                    .filter(|environment| environment.to_pointer() != globals.to_pointer());
+                let environment = environment
+                    .raw_get::<Option<Table>>("__songlua_env_target")?
+                    .unwrap_or(environment);
+                let environment = (environment.to_pointer() != globals.to_pointer())
+                    .then_some(environment);
                 for namespace in [Some(globals), environment].into_iter().flatten() {
                     namespace.for_each::<Value, Value>(|key, value| {
                         if let Value::String(name) = key
@@ -18443,9 +18438,10 @@ fn snapshot_function_locals(
                     && table.raw_get::<Value>("__songlua_actor_type")?.is_nil() =>
             {
                 let snapshot = snapshot_function_action_table(lua, table)?;
-                for entry in snapshot.raw_get::<Table>(2)?.sequence_values::<Table>() {
+                let entries = snapshot.raw_get::<Table>(2)?;
+                for index in (2..=entries.raw_len()).step_by(2) {
                     pending_count += 1;
-                    pending.raw_set(pending_count, entry?.raw_get::<Value>(2)?)?;
+                    pending.raw_set(pending_count, entries.raw_get::<Value>(index)?)?;
                 }
                 snapshots.raw_set(snapshots.raw_len() + 1, snapshot)?;
             }
@@ -18502,9 +18498,9 @@ fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -
         let row = row?;
         let table = row.raw_get::<Table>(1)?;
         table.clear()?;
-        for entry in row.raw_get::<Table>(2)?.sequence_values::<Table>() {
-            let entry = entry?;
-            table.raw_set(entry.raw_get::<Value>(1)?, entry.raw_get::<Value>(2)?)?;
+        let entries = row.raw_get::<Table>(2)?;
+        for index in (2..=entries.raw_len()).step_by(2) {
+            table.raw_set(entries.raw_get::<Value>(index - 1)?, entries.raw_get::<Value>(index)?)?;
         }
     }
     Ok(())
@@ -24242,3 +24238,7 @@ pub(crate) fn install_native_gameplay_underlay(
 mod mesh_perf {
     include!("../tests/perf/mesh.rs");
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/startup_capture.rs"]
+mod startup_capture_perf;

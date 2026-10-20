@@ -595,6 +595,7 @@ fn is_core(kind: &str) -> bool {
     )
 }
 
+// Lua 5.1 gives every Lua closure a table environment; C functions have none.
 pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let bound = match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
         Some(bound) => bound,
@@ -606,7 +607,7 @@ pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             let name = name.to_str()?;
             if !name.starts_with("__songlua_")
                 && !name.ends_with("Command")
-                && function.info().what == "C"
+                && function.environment().is_none()
             {
                 methods.push((key, value));
             }
@@ -654,7 +655,7 @@ pub(crate) fn assign(_: &Lua, (actor, key, value): (Table, Value, Value)) -> mlu
         let name = name.to_str()?;
         if !name.starts_with("__songlua_")
             && !name.ends_with("Command")
-            && function.info().what == "C"
+            && function.environment().is_none()
             && let Some(methods) = actor.raw_get::<Option<Table>>(METHODS_KEY)?
         {
             return methods.raw_set(key, value);
@@ -662,6 +663,10 @@ pub(crate) fn assign(_: &Lua, (actor, key, value): (Table, Value, Value)) -> mlu
     }
     actor.raw_set(key, value)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/native_function.rs"]
+mod native_function_perf;
 
 #[cfg(test)]
 mod tests {

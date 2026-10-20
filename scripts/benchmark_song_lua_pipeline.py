@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--pairs", type=int, default=6)
     parser.add_argument("--samples", type=int, default=9)
+    parser.add_argument("--suite", choices=("live", "startup"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -36,6 +37,9 @@ def main():
         ("extract_plain128", "extract_plain", "crates/deadsync-song-lua/tests/perf/compile_finalize.lua"),
         ("extract_proxy129", "extract_proxy", "crates/deadsync-song-lua/tests/perf/compile_finalize.lua"),
     ]
+    if args.suite == "startup":
+        cases = cases[:5]
+        cases.insert(1, ("offline_capture", "offline", "crates/deadsync-song-lua/tests/perf/startup_capture.lua"))
     args.out.mkdir(parents=True, exist_ok=True)
     paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / name for name in sorted({case[2] for case in cases})]
@@ -82,7 +86,7 @@ def main():
     assert all(sha(root/name) == digest for name,digest in sources.items())
     assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == head
     result = dict(worktree_head=head, binaries={key:{"path":str(path),"sha256":binary_hashes[key]} for key,path in binaries.items()},
-                  source_sha256=sources, pairs=args.pairs, samples_per_variant_per_case=args.pairs*args.samples,
+                  source_sha256=sources, suite=args.suite, pairs=args.pairs, samples_per_variant_per_case=args.pairs*args.samples,
                   rustc=subprocess.check_output(["rustc", "+1.98.1", "-Vv"], text=True),
                   system=platform.platform(), logical_processors=os.cpu_count(), logical_cpu=2,
                   summary=summary, records=records,

@@ -561,6 +561,7 @@ where
             .get::<Option<usize>>(COMPILE_LAYER_KEY).map(|layer| layer.unwrap_or(primary_index))
             .map_err(|err| err.to_string())).collect::<Result<Vec<_>, _>>()?;
         let mut out = CompiledSongLua {
+            overlays: Vec::with_capacity(overlays.len()),
             startup, loaded_steps: Some(context.player_step_indices.map(|index| index.and_then(|index|
                 if context.song_step_chart_indices.is_empty() { Some(index) }
                 else { context.song_step_chart_indices.get(index).copied().flatten() }))),

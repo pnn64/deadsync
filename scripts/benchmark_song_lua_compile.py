@@ -1,4 +1,4 @@
-"""Measure frozen/current compile finalization and complete fixture compilation."""
+"""Measure frozen/current compile finalization or startup preparation scopes."""
 import argparse
 import hashlib
 import json
@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
+    parser.add_argument("--suite", choices=("finalize", "startup"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -35,6 +36,16 @@ def main():
         ".cargo/config.toml", "scripts/benchmark_song_lua_compile.py",
     ]]
     sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
+    if args.suite == "startup":
+        for name in ["native_function.rs", "native_function_before.rs", "startup_capture.rs", "startup_capture_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
+    filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
+        "actor_classes::native_function_perf::benchmark_native_binding",
+        "lua_util::startup_capture_perf::benchmark_snapshot_storage",
+    ]
+    baseline = "bacdc3e37" if args.suite == "finalize" else "31a7355f5"
+    expected_names = 14 if args.suite == "finalize" else 3
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -43,23 +54,25 @@ def main():
         env.pop("DEADSYNC_PERF_REVERSE", None)
         if index % 2:
             env["DEADSYNC_PERF_REVERSE"] = "1"
-        run = subprocess.run([str(binary), "compile::perf::benchmark_compile_finalize",
-                              "--exact", "--ignored", "--nocapture", "--test-threads=1"],
-                             cwd=root, env=env, capture_output=True, text=True, encoding="utf-8")
-        log = root / "target" / f"compile-finalize-round-{index+1}.log"
-        log.write_text(run.stdout + run.stderr, encoding="utf-8")
-        assert run.returncode == 0, f"benchmark failed; see {log}"
         current = []
-        for line in run.stdout.splitlines():
-            if "DRAW_CAPTURE_METRIC " not in line:
-                continue
-            row = json.loads(line.split("DRAW_CAPTURE_METRIC ", 1)[1])
-            assert row["baseline_commit"] == "bacdc3e37"
-            assert len(row["samples"]) == 9
-            row.update(round=index+1, order="after-first" if index % 2 else "before-first")
-            current.append(row)
+        for filter_index, test_filter in enumerate(filters):
+            run = subprocess.run([str(binary), test_filter,
+                                  "--exact", "--ignored", "--nocapture", "--test-threads=1"],
+                                 cwd=root, env=env, capture_output=True, text=True, encoding="utf-8")
+            stem = "compile-finalize" if args.suite == "finalize" else f"startup-scope-{filter_index+1}"
+            log = root / "target" / f"{stem}-round-{index+1}.log"
+            log.write_text(run.stdout + run.stderr, encoding="utf-8")
+            assert run.returncode == 0, f"benchmark failed; see {log}"
+            for line in run.stdout.splitlines():
+                if "DRAW_CAPTURE_METRIC " not in line:
+                    continue
+                row = json.loads(line.split("DRAW_CAPTURE_METRIC ", 1)[1])
+                assert row["baseline_commit"] == baseline
+                assert len(row["samples"]) == 9
+                row.update(round=index+1, order="after-first" if index % 2 else "before-first")
+                current.append(row)
         names = {row["workload"] for row in current}
-        assert len(names) == 14 and len(current) == 28
+        assert len(names) == expected_names and len(current) == expected_names * 2
         assert all({row["variant"] for row in current if row["workload"] == name}
                    == {"before", "after"} for name in names)
         records.extend(current)
@@ -82,7 +95,7 @@ def main():
     assert all(sha(root/name) == digest for name, digest in sources.items()), "source changed while measuring"
     assert sha(binary) == binary_sha, "executable changed while measuring"
     assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == head
-    report = dict(baseline_commit="bacdc3e37", worktree_head=head,
+    report = dict(baseline_commit=baseline, suite=args.suite, worktree_head=head,
                   executable=str(binary), executable_sha256=binary_sha, source_sha256=sources,
                   rustc=subprocess.check_output(["rustc", "+1.98.1", "-Vv"], text=True),
                   system=platform.platform(), processor=platform.processor(), logical_processors=os.cpu_count(),
@@ -92,6 +105,8 @@ def main():
                   allocation_scope="current-thread Rust GlobalAlloc, including mlua and its normal Rust-backed Lua allocator; direct native malloc excluded",
                   timing_scope="wrapper orders borrow prepared actors; splits consume prepared compiled DTOs and include output destruction; complete fixtures include context construction, file read, host creation, Lua execution/startup, actor extraction and layer finalization; returned DTO/VM destruction and complete output validation excluded for fixture compiles; inputs and fixtures unchanged",
                   stack_bytes=33554432, records=records, summary=summary)
+    if args.suite == "startup":
+        report["timing_scope"] = ("Prepared Lua states, keys, functions and actors are excluded. Each sample handles 64 actors with 128 native methods/assignments, or 64 snapshots of a 256-field table. Result handle drops are included; Lua state destruction is excluded. Snapshot GC is stopped before timing. Each of ten samples prepares a new Lua state; first sample discarded.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:
