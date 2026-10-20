@@ -1968,6 +1968,112 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_native_render_flags_preserve_recursive_writes_draws_and_reset() {
+        let source = r#"
+local tick = 0
+return Def.ActorFrame {
+    InitCommand=function(self) ROOT=self; self.authored={retained=true} end,
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            ROOT:zbuffer(false)
+            Q:ztestmode('WriteOnFail'):zwrite(true):texturewrapping(true)
+        end)
+        self:SetUpdateFunction(function()
+            tick = tick + 1
+            ROOT:SetDrawByZPosition(tick % 2 == 0):zbuffer(tick % 3 == 0)
+            Q:ztestmode('WriteOnFail'):zwrite(false)
+                :SetTextureFiltering(tick % 2 == 0):texturewrapping(tick % 2 ~= 0)
+                :MaskSource():MaskDest()
+            if tick == 1 then Q:linear(2):x(100) end
+            if tick == 3 then Q:stoptweening() end
+            if tick == 4 then Q:linear(1):x(200):finishtweening() end
+        end)
+        self:SetDrawFunction(function()
+            Q:ztest(false):SetTextureFiltering(false):Draw()
+            Q:ztestmode('WriteOnFail'):SetTextureFiltering(true):Draw()
+        end)
+    end,
+    Def.Quad { InitCommand=function(self) Q=self; self:zoomto(16,16) end },
+    Def.ActorFrame {
+        InitCommand=function(self) CHILD=self end,
+        Def.Quad { InitCommand=function(self) GRANDCHILD=self end },
+    },
+}
+"#;
+        let build = || compile_with_context("native-render-flags", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut live = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        let q: Table = live.lua.globals().get("Q").unwrap();
+        for frame in 0..6 {
+            if frame == 2 {
+                let input = crate::SongLuaInputEvent {
+                    player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+                    kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+                    level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+                };
+                assert!(live.input(&input).unwrap().1.errors.is_empty());
+                assert!(legacy.input(&input).unwrap().1.errors.is_empty());
+                assert_eq!(live.states(), legacy.states(), "input flags");
+                let state = read_state(&live.lua, &q).unwrap();
+                assert!(state.depth_test && state.depth_test_on_fail && state.depth_write);
+            }
+            let frame = SongLuaLiveFrame { screen_seconds: frame as f64 / 16.0,
+                music_seconds: frame as f64 / 16.0, beat: frame as f64 / 8.0,
+                delta_seconds: 0.0625, ..Default::default() };
+            let output = live.advance(frame.clone()).unwrap();
+            let before = legacy.advance(frame).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(live.states(), legacy.states());
+            assert_eq!(output.draw_frames, before.draw_frames, "separate Draw calls retain their own flags");
+            let state = read_state(&live.lua, &q).unwrap();
+            assert!(state.depth_test && state.depth_test_on_fail && !state.depth_write);
+            assert!(state.mask_source && state.mask_dest && state.texture_filtering);
+            for actor in registry(&live) {
+                for flag in crate::render_flags::RenderFlag::ALL {
+                    assert!(actor.raw_get::<Value>(flag.state_key()).unwrap().is_nil(),
+                        "native render flags must not maintain Lua mirrors");
+                }
+            }
+        }
+        let copied = live.lua.create_table().unwrap();
+        crate::lua_util::copy_live_actor_pose(&live.lua, &q, &copied).unwrap();
+        let saved = crate::actor_overlay_initial_state(&copied).unwrap();
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&live.lua, &q).unwrap();
+        let restored = live.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored, snapshot).unwrap();
+        assert_eq!(crate::actor_overlay_initial_state(&restored).unwrap().depth_test_on_fail,
+            saved.depth_test_on_fail);
+        // Reset both representations and compare recursive child state. Draw
+        // policy and masks survive; depth and texture settings return to defaults.
+        for scene in [&live, &legacy] {
+            let root = scene.lua.globals().get::<Table>("ROOT").unwrap();
+            crate::lua_util::init_actor_native_state(&scene.lua, &root).unwrap();
+            scene.lua.load("assert(ROOT.authored.retained)").exec().unwrap();
+        }
+        for name in ["ROOT", "Q", "CHILD", "GRANDCHILD"] {
+            let actor: Table = live.lua.globals().get(name).unwrap();
+            let old_actor: Table = legacy.lua.globals().get(name).unwrap();
+            assert_eq!(read_state(&live.lua, &actor).unwrap(), read_state(&legacy.lua, &old_actor).unwrap());
+        }
+        let reset = read_state(&live.lua, &q).unwrap();
+        assert!(!reset.depth_test && !reset.depth_write && !reset.depth_test_on_fail);
+        assert!(reset.texture_filtering && !reset.texture_wrapping && reset.mask_source && reset.mask_dest);
+        assert_eq!(crate::actor_overlay_initial_state(&copied).unwrap(), saved,
+            "earlier state exports stay independent of InitState");
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                crate::lua_util::capture_block_set_bool(&live.lua, &q, "texture_filtering", i % 2 == 0).unwrap();
+                crate::lua_util::capture_block_set_bool(&live.lua, &q, "depth_test", i % 2 == 0).unwrap();
+            }
+        });
+    }
+
+    #[test]
     fn live_effect_clocks_preserve_effects_getters_and_update_order() {
         let source = r#"
 local actors, tick = {}, 0
@@ -2018,6 +2124,7 @@ return root
         let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
             .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
         legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
+        crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
         for actor in registry(&legacy) {
             let key = "__songlua_state_motion_clock";
             let value = actor.raw_get::<Value>(key).unwrap();
@@ -2121,6 +2228,7 @@ return Def.ActorFrame {
         // Exercise the previous capture-backed setters with identical Lua,
         // queues and frames. Its old frame boundary discarded audit blocks.
         legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
+        crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
         for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
         for frame in 0..20 {
             if frame == 5 {

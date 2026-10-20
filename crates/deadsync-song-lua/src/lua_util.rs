@@ -1,5 +1,6 @@
 use crate::tween_pose::TweenPose;
 use crate::native_vector::ActorVectorValue;
+use crate::render_flags::{RenderFlag, RenderFlags};
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use mlua::{FromLua, Function, Lua, MultiValue, Table, Value, ffi};
@@ -2841,8 +2842,10 @@ fn snapshot_actor_state(
             out.push((key.to_string(), clone_actor_state(lua, &key, value)?));
         }
     }
-    if let Some(pose) = live_pose_snapshot(lua, actor)? {
-        for (key, value) in pose {
+    {
+        let pose = live_pose_snapshot(lua, actor)?.into_iter().flatten();
+        let flags = live_render_flags(lua, actor).into_iter().flat_map(RenderFlags::snapshot);
+        for (key, value) in pose.chain(flags) {
             if !keep_key(key) { continue; }
             if let Some(entry) = out.iter_mut().find(|(name, _)| name == key) {
                 entry.1 = value;
@@ -4908,6 +4911,7 @@ pub fn capture_block_set_bool(
     key: &str,
     value: bool,
 ) -> mlua::Result<()> {
+    if set_live_render_flag(lua, actor, key, value) { return Ok(()); }
     if key == "visible"
         && (lua.app_data_ref::<SongLuaStartupQueues>().is_some()
             || lua.app_data_ref::<SongLuaQueuedStartup>().is_some()
@@ -10964,6 +10968,7 @@ pub fn run_actor_startup_commands_for_table(lua: &Lua, actor: &Table) -> mlua::R
 }
 
 pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let previous_flags = live_render_flags(lua, actor);
     // ActorFrame::InitState resets children and base Actor state, preserving
     // names, Lua fields, command handlers, callbacks and loaded resources.
     for child in actor.sequence_values::<Table>() { init_actor_native_state(lua, &child?)?; }
@@ -10993,10 +10998,18 @@ pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<
         actor.raw_set("__songlua_state_sprite_animate", true)?;
     }
     let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
+    let render_flags = (previous_flags.is_some() || live_actor_playback(lua)).then(|| {
+        let mut flags = RenderFlags::from(current);
+        if let Some(previous) = previous_flags { flags.preserve_on_reset(previous); }
+        flags
+    });
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current: current.into(), queue: Default::default(), progress: None, targets: 0,
+            current: current.into(), render_flags, queue: Default::default(), progress: None, targets: 0,
         });
+    }
+    if render_flags.is_some() {
+        for flag in RenderFlag::ALL { actor.raw_set(flag.state_key(), Value::Nil)?; }
     }
     reset_actor_capture(lua, actor)?;
     sync_tween_getters(lua, actor)
@@ -11514,6 +11527,7 @@ pub struct SongLuaStartupState {
 // native float time-left samples become immutable startup playback blocks.
 struct ActorTweenReplay {
     current: TweenPose,
+    render_flags: Option<RenderFlags>,
     queue: std::collections::VecDeque<ActorTweenStep>,
     progress: Option<Vec<Vec<[f32; 2]>>>,
     targets: u128,
@@ -11543,10 +11557,55 @@ fn live_actor_playback(lua: &Lua) -> bool {
 
 pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {
     for actor in actors {
+        ensure_tween_replay(lua, actor)?;
+        // Promotion must not re-read unrelated properties such as Sprite's
+        // Texture fallback, which can invoke authored __index code.
+        let model = actor.raw_get::<Option<LuaFieldText<32>>>("__songlua_actor_type")?
+            .is_some_and(|kind| kind.as_str().eq_ignore_ascii_case("Model"));
+        let mut flags = RenderFlags::from(SongLuaOverlayState {
+            depth_test: model, depth_write: model, texture_wrapping: model,
+            ..Default::default()
+        });
+        for flag in RenderFlag::ALL {
+            if let Some(value) = actor.raw_get::<Option<bool>>(flag.state_key())? {
+                flags.set(flag, value);
+            }
+        }
+        if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>()
+            && let Some(replay) = replays.0.get_mut(&(actor.to_pointer() as usize)) {
+            replay.render_flags = Some(flags);
+        }
+        for flag in RenderFlag::ALL { actor.raw_set(flag.state_key(), Value::Nil)?; }
         reset_actor_capture(lua, actor)?;
         actor.raw_set("__songlua_capture_blocks", Value::Nil)?;
     }
     lua.set_app_data(LiveActorPlayback);
+    Ok(())
+}
+
+fn live_render_flags(lua: &Lua, actor: &Table) -> Option<RenderFlags> {
+    lua.app_data_ref::<ActorTweenReplays>()?
+        .0.get(&(actor.to_pointer() as usize))?.render_flags
+}
+
+fn set_live_render_flag(lua: &Lua, actor: &Table, key: &str, value: bool) -> bool {
+    let Some(flag) = RenderFlag::from_key(key) else { return false; };
+    let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() else { return false; };
+    let Some(flags) = replays.0.get_mut(&(actor.to_pointer() as usize))
+        .and_then(|replay| replay.render_flags.as_mut()) else { return false; };
+    flags.set(flag, value);
+    true
+}
+
+#[cfg(test)]
+pub(crate) fn use_table_render_flags(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {
+    for actor in actors {
+        let flags = lua.app_data_mut::<ActorTweenReplays>().and_then(|mut replays|
+            replays.0.get_mut(&(actor.to_pointer() as usize))?.render_flags.take());
+        if let Some(flags) = flags {
+            for (key, value) in flags.snapshot() { actor.raw_set(key, value)?; }
+        }
+    }
     Ok(())
 }
 
@@ -11653,6 +11712,9 @@ pub(crate) fn copy_live_actor_pose(lua: &Lua, source: &Table, into: &Table) -> m
     if let Some(pose) = live_pose_snapshot(lua, source)? {
         for (key, value) in pose { into.raw_set(key, value)?; }
     }
+    if let Some(flags) = live_render_flags(lua, source) {
+        for (key, value) in flags.snapshot() { into.raw_set(key, value)?; }
+    }
     Ok(())
 }
 
@@ -11746,6 +11808,7 @@ pub(crate) fn begin_tween_replay<Kind>(
             pointer,
             ActorTweenReplay {
                 current: current.into(),
+                render_flags: None,
                 queue,
                 progress: Some(vec![Vec::new(); startup.steps.len()]),
                 targets,
@@ -11971,11 +12034,15 @@ pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> 
         return Ok(());
     }
     let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
+    let render_flags = live_actor_playback(lua).then(|| RenderFlags::from(current));
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current: current.into(), queue: Default::default(),
+            current: current.into(), render_flags, queue: Default::default(),
             progress: (!crate::live::active(lua)).then(Vec::new), targets: 0,
         });
+    }
+    if render_flags.is_some() {
+        for flag in RenderFlag::ALL { actor.raw_set(flag.state_key(), Value::Nil)?; }
     }
     Ok(())
 }
@@ -19798,17 +19865,22 @@ pub(crate) fn actor_overlay_state_batched(
     lua: &Lua,
     actor: &Table,
 ) -> Result<SongLuaOverlayState, String> {
-    actor_overlay_state_with_pose(lua, actor, None)
+    actor_overlay_state_with_pose(lua, actor, None, None)
 }
 
 pub(crate) fn live_actor_overlay_state(lua: &Lua, actor: &Table) -> Result<SongLuaOverlayState, String> {
-    actor_overlay_state_with_pose(lua, actor, live_current_pose(lua, actor))
+    if !crate::live::active(lua) { return actor_overlay_state_batched(lua, actor); }
+    let state = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays|
+        replays.0.get(&(actor.to_pointer() as usize))
+            .map(|replay| (replay.current, replay.render_flags)));
+    actor_overlay_state_with_pose(lua, actor, state.map(|state| state.0), state.and_then(|state| state.1))
 }
 
 fn actor_overlay_state_with_pose(
     lua: &Lua,
     actor: &Table,
     pose: Option<TweenPose>,
+    render_flags: Option<RenderFlags>,
 ) -> Result<SongLuaOverlayState, String> {
     let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
     if let Some(pose) = &pose {
@@ -19829,6 +19901,20 @@ fn actor_overlay_state_with_pose(
         }
     }
     let mut flags = [None; ActorFlagField::KEYS.len()];
+    if let Some(native) = render_flags {
+        for (field, flag) in [
+            (ActorFlagField::DrawByZPosition, RenderFlag::DrawByZPosition),
+            (ActorFlagField::MaskSource, RenderFlag::MaskSource),
+            (ActorFlagField::MaskDest, RenderFlag::MaskDest),
+            (ActorFlagField::DepthTest, RenderFlag::DepthTest),
+            (ActorFlagField::DepthWrite, RenderFlag::DepthWrite),
+            (ActorFlagField::DepthTestOnFail, RenderFlag::DepthTestOnFail),
+            (ActorFlagField::TextureFiltering, RenderFlag::TextureFiltering),
+            (ActorFlagField::TextureWrapping, RenderFlag::TextureWrapping),
+        ] {
+            flags[field as usize] = Some(native.get(flag));
+        }
+    }
     let keys = actor_scalar_keys(lua).map_err(|error| error.to_string())?;
     // SAFETY: actor and interned keys are rooted in four reserved slots.
     // Only raw reads and primitive conversions run under this lock. They
@@ -19854,6 +19940,7 @@ fn actor_overlay_state_with_pose(
                     ffi::lua_pop(state, 1);
                 }
                 for index in 0..ActorFlagField::KEYS.len() {
+                    if flags[index].is_some() { continue; }
                     ffi::lua_rawgeti(state, base + 2, (ActorNumberField::KEYS.len() + index + 1) as ffi::lua_Integer);
                     ffi::lua_rawget(state, base + 1);
                     if ffi::lua_type(state, -1) != ffi::LUA_TNIL {
@@ -19880,6 +19967,36 @@ fn actor_overlay_state_with_pose(
 #[cfg(test)]
 mod actor_state_read_tests {
     use super::*;
+
+    #[test]
+    fn native_render_flag_promotion_avoids_authored_reads_and_retains_model_defaults() {
+        let lua = Lua::new();
+        begin_live_runtime(&lua).unwrap();
+        let actor = lua.load(r#"
+TEXTURE_READS = 0
+return setmetatable({__songlua_actor_type='Sprite'}, {
+    __index=function(_, key)
+        if key == 'Texture' then TEXTURE_READS=TEXTURE_READS+1 end
+    end,
+})
+"#).eval::<Table>().unwrap();
+        ensure_tween_replay(&lua, &actor).unwrap();
+        let reads: u32 = lua.globals().get("TEXTURE_READS").unwrap();
+        assert!(reads > 0);
+        begin_live_actor_playback(&lua, &[actor]).unwrap();
+        assert_eq!(lua.globals().get::<u32>("TEXTURE_READS").unwrap(), reads);
+
+        let model = lua.load("{__songlua_actor_type='Model'}").eval::<Table>().unwrap();
+        ensure_tween_replay(&lua, &model).unwrap();
+        let state = live_actor_overlay_state(&lua, &model).unwrap();
+        assert!(state.depth_test && state.depth_write && state.texture_wrapping && state.texture_filtering);
+        capture_block_set_bool(&lua, &model, "depth_test", false).unwrap();
+        capture_block_set_bool(&lua, &model, "texture_wrapping", false).unwrap();
+        assert!(!live_actor_overlay_state(&lua, &model).unwrap().depth_test);
+        init_actor_native_state(&lua, &model).unwrap();
+        let state = live_actor_overlay_state(&lua, &model).unwrap();
+        assert!(state.depth_test && state.depth_write && state.texture_wrapping && state.texture_filtering);
+    }
 
     fn vector_bits<const N: usize>(value: Option<[f32; N]>) -> Option<[u32; N]> {
         value.map(|items| items.map(f32::to_bits))
@@ -20076,6 +20193,8 @@ mod actor_state_read_tests {
         capture_block_set_color(&lua, &actor, [0.25, 0.5, 0.75, 1.0]).unwrap();
         capture_block_set_vec4(&lua, &actor, "glow", [1.0, 0.75, 0.5, 0.25]).unwrap();
         capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
+        capture_block_set_bool(&lua, &actor, "depth_test", true).unwrap();
+        capture_block_set_bool(&lua, &actor, "texture_filtering", false).unwrap();
         for (key, value) in [("x",12.0), ("zoom_y",3.0), ("skew_x",0.25), ("fadeleft",0.5)] {
             capture_block_set_f32(&lua, &actor, key, value).unwrap();
         }
@@ -20084,14 +20203,19 @@ mod actor_state_read_tests {
         let definition = clone_actor_def(&lua, &actor, |_, _| Ok(()), false).unwrap();
         capture_block_set_color(&lua, &actor, [0.0; 4]).unwrap();
         capture_block_set_f32(&lua, &actor, "x", 24.0).unwrap();
+        capture_block_set_bool(&lua, &actor, "depth_test", false).unwrap();
         for copy in [generic, definition] {
             assert_eq!(actor_overlay_initial_state(&copy).unwrap().diffuse, [0.25, 0.5, 0.75, 1.0]);
             assert_eq!(actor_glow(&lua, &copy).unwrap(), [1.0, 0.75, 0.5, 0.25]);
             assert_eq!(actor_vertex_colors(&lua, &copy).unwrap(), [[0.5; 4]; 4]);
             let pose = actor_overlay_initial_state(&copy).unwrap();
+            assert!(pose.depth_test && !pose.texture_filtering);
             assert_eq!((pose.x,pose.zoom_y,pose.skew_x,pose.fadeleft), (12.0,3.0,0.25,0.5));
             assert_eq!(copy.get::<Table>("authored").unwrap().get::<u32>("score").unwrap(), 17);
             ensure_tween_replay(&lua, &copy).unwrap();
+            assert!(!live_actor_overlay_state(&lua, &actor).unwrap().depth_test);
+            assert!(live_actor_overlay_state(&lua, &copy).unwrap().depth_test);
+            assert!(copy.raw_get::<Value>("__songlua_state_depth_test").unwrap().is_nil());
             capture_block_set_color(&lua, &copy, [0.75; 4]).unwrap();
             capture_block_set_f32(&lua, &copy, "x", 36.0).unwrap();
             assert_eq!(actor_diffuse(&lua, &actor).unwrap(), [0.0; 4]);
