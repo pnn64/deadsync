@@ -21625,6 +21625,11 @@ where
         &read_noteskin_tap_actor_slots,
         &mut on_skipped_message_capture,
     )?;
+    if !out.iter().any(|overlay| matches!(overlay.actor.kind,
+        SongLuaOverlayKind::ActorProxy { target: SongLuaProxyTarget::Actor { .. } }))
+    {
+        return Ok(out);
+    }
     let actor_indices = out
         .iter()
         .enumerate()

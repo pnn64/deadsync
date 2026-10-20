@@ -535,10 +535,8 @@ where
         // A live scene stops at native Update(0). In particular, extracting
         // assets must never call listeners or replay future queued commands.
         mark_compile_layers(&root).map_err(|err| err.to_string())?;
-        let mut reader_context = context.clone();
-        reader_context.live = true; // Retain initially empty meshes and hidden sprites.
         let mut overlays = read_overlay_compile_actors(
-            &lua, &root, &reader_context,
+            &lua, &root, context,
             |actor| read_actor_model_layers(actor, read_model_slots, model_layer_from_slot),
             |actor, _| read_noteskin_tap_actor_slots(actor, read_model_slots),
             |_| {},
@@ -597,9 +595,13 @@ where
             .map_err(|err| err.to_string())?);
         compile_timer.push_stage("live_scene");
         log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
-        if entry_paths.is_empty() {
+        if entry_paths.is_empty() || (entry_paths.len() == 1
+            && overlay_layers.iter().all(|&layer| layer == 0)
+            && out.overlays.iter().enumerate().all(|(index, overlay)|
+                overlay.parent_index.is_none_or(|parent| parent < index)))
+        {
             // ScreenGameplay and its theme actors exist without authored song
-            // actors. Retain that owned scene without inventing an entry file.
+            // actors. A single already-ordered layer also owns the output as-is.
             out.live_indices.extend(0..out.overlays.len());
             return Ok(vec![out]);
         }
@@ -1375,11 +1377,17 @@ fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
     >],
     hidden_players: &mut [bool; crate::LUA_PLAYERS],
 ) -> Result<(), String> {
-    let actor_indices = overlays
-        .iter()
-        .enumerate()
-        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
-        .collect::<std::collections::HashMap<_, _>>();
+    let actor_indices = if overlays.iter().any(|overlay|
+        matches!(overlay.actor.kind, SongLuaOverlayKind::ActorProxy { .. }))
+    {
+        overlays
+            .iter()
+            .enumerate()
+            .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
+            .collect::<std::collections::HashMap<_, _>>()
+    } else {
+        std::collections::HashMap::new()
+    };
     for overlay in overlays {
         if matches!(overlay.actor.kind, SongLuaOverlayKind::Actor)
             && overlay

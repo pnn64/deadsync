@@ -242,10 +242,17 @@ fn fixture_paths() -> Vec<(Vec<PathBuf>, bool)> {
     ]
 }
 
-fn compile_fixture(current: bool, paths: &[PathBuf], live: bool) -> Vec<Compiled> {
+fn try_compile_fixture(
+    current: bool,
+    paths: &[PathBuf],
+    live: bool,
+) -> Result<Vec<Compiled>, String> {
     let refs: Vec<_> = paths.iter().map(PathBuf::as_path).collect();
-    let mut context =
-        SongLuaCompileContext::new(paths[0].parent().unwrap(), "finalization fixture");
+    let directory = paths
+        .first()
+        .and_then(|path| path.parent())
+        .unwrap_or(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let mut context = SongLuaCompileContext::new(directory, "finalization fixture");
     context.live = live;
     context.music_length_seconds = 1.0;
     if current {
@@ -269,7 +276,136 @@ fn compile_fixture(current: bool, paths: &[PathBuf], live: bool) -> Vec<Compiled
             |_, _| None,
         )
     }
-    .unwrap()
+}
+
+fn compile_fixture(current: bool, paths: &[PathBuf], live: bool) -> Vec<Compiled> {
+    try_compile_fixture(current, paths, live).unwrap()
+}
+
+#[test]
+fn live_identity_output_preserves_empty_sessions_and_invalid_layer_errors() {
+    let prior = compile_fixture(false, &[], true);
+    let current = compile_fixture(true, &[], true);
+    assert_eq!(format!("{current:?}"), format!("{prior:?}"));
+    assert_eq!(current.len(), 1);
+    assert_eq!(
+        current[0].live_indices,
+        (0..current[0].overlays.len()).collect::<Vec<_>>()
+    );
+
+    let paths =
+        [Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/perf/compile_invalid_layer.lua")];
+    let prior = try_compile_fixture(false, &paths, true).unwrap_err();
+    let current = try_compile_fixture(true, &paths, true).unwrap_err();
+    assert_eq!(current, prior);
+    assert_eq!(current, "song lua overlay has invalid layer index 1");
+}
+
+#[test]
+fn late_targets_preserve_sprite_fallback_proxy_rebinding_and_getter_errors() {
+    fn resolve(
+        current: bool,
+        proxies: bool,
+        fail: bool,
+    ) -> (Result<String, String>, [bool; 2], Vec<String>) {
+        let lua = Lua::new();
+        lua.globals().set("fail", fail).unwrap();
+        let tables = lua
+            .load(
+                r#"
+            log = {}
+            local function probe(name, values)
+                return setmetatable({}, {__index = function(_, key)
+                    log[#log + 1] = name .. ':' .. key
+                    return values[key]
+                end})
+            end
+            local target = probe('target', {__songlua_visible = false})
+            local sprite = probe('sprite', {
+                __songlua_actor_type = 'Sprite', __songlua_aft_capture_name = 'capture',
+            })
+            local proxy = probe('actor', {
+                __songlua_proxy_target_kind = fail and {} or 'actor',
+                __songlua_proxy_target_actor = target,
+            })
+            local player = probe('player', {
+                __songlua_proxy_target_kind = 'player', __songlua_proxy_player_index = 0,
+                __songlua_proxy_target_actor = target,
+            })
+            return {target, sprite, proxy, player, target}
+        "#,
+            )
+            .eval::<Table>()
+            .unwrap();
+        let mut overlays: Vec<crate::SongLuaOverlayCompileActor<_>> = tables
+            .sequence_values::<Table>()
+            .enumerate()
+            .map(|(index, table)| {
+                let mut value = actor(None, false);
+                value.kind = match index {
+                    1 => SongLuaOverlayKind::Actor,
+                    2 | 3 => SongLuaOverlayKind::ActorProxy {
+                        // Both proxies begin with a player target. Lua may rebind either one to an actor.
+                        target: crate::SongLuaProxyTarget::Player { player_index: 1 },
+                    },
+                    _ => SongLuaOverlayKind::ActorFrame,
+                };
+                crate::SongLuaOverlayCompileActor {
+                    actor: value,
+                    table: table.unwrap(),
+                    message_sounds: Vec::new(),
+                }
+            })
+            .collect();
+        if !proxies {
+            overlays.truncate(2);
+        }
+        let mut hidden = [false; 2];
+        let result = if current {
+            resolve_late_actor_targets(&mut overlays, &mut hidden)
+        } else {
+            before::resolve_late_actor_targets(&mut overlays, &mut hidden)
+        };
+        if !fail {
+            assert!(
+                matches!(&overlays[1].actor.kind, SongLuaOverlayKind::AftSprite { capture_name } if capture_name == "capture")
+            );
+            if proxies {
+                assert!(matches!(
+                    overlays[2].actor.kind,
+                    SongLuaOverlayKind::ActorProxy {
+                        target: crate::SongLuaProxyTarget::Actor { overlay_index: 4 }
+                    }
+                ));
+                assert_eq!(hidden, [true, false]);
+            }
+        }
+        let result = result.map(|_| {
+            format!(
+                "{:?}",
+                overlays
+                    .iter()
+                    .map(|overlay| &overlay.actor)
+                    .collect::<Vec<_>>()
+            )
+        });
+        let log = lua
+            .globals()
+            .get::<Table>("log")
+            .unwrap()
+            .sequence_values::<String>()
+            .collect::<mlua::Result<Vec<_>>>()
+            .unwrap();
+        (result, hidden, log)
+    }
+    for proxies in [false, true] {
+        for fail in [false, true] {
+            let prior = resolve(false, proxies, fail);
+            let current = resolve(true, proxies, fail);
+            assert_eq!(current, prior, "proxies={proxies}, fail={fail}");
+            assert_eq!(current.0.is_err(), proxies && fail);
+        }
+    }
 }
 
 #[test]

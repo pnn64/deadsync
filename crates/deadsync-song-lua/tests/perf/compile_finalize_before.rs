@@ -1,4 +1,4 @@
-// Frozen compile.rs from bacdc3e37; two private helpers have parent visibility.
+// Frozen compile.rs from bacdc3e37; three private helpers have parent visibility.
 use crate::lua_util::run_actor_startup_commands;
 use deadlib_present::actors::TextAttribute;
 use mlua::{Lua, Table, Value};
@@ -1370,7 +1370,7 @@ fn merge_runtime_messages(
     }
 }
 
-fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
+pub(super) fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
     overlays: &mut [crate::SongLuaOverlayCompileActor<
         SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
     >],
