@@ -22803,44 +22803,51 @@ pub fn read_bitmap_text_attributes(actor: &Table) -> Result<Arc<[TextAttribute]>
     let mut out = Vec::with_capacity(attributes.raw_len());
     for entry in attributes.sequence_values::<Table>() {
         let entry = entry.map_err(|err| err.to_string())?;
-        let start_value = entry
-            .raw_get::<Value>("start")
-            .map_err(|err| err.to_string())?;
-        let start = read_i32_value(start_value).unwrap_or(0).max(0) as usize;
-        let length_value = entry
-            .raw_get::<Value>("length")
-            .map_err(|err| err.to_string())?;
-        let length_raw = read_i32_value(length_value).unwrap_or(1);
-        if length_raw == 0 {
-            continue;
+        if let Some(attribute) = read_bitmap_text_attribute(&entry)? {
+            out.push(attribute);
         }
-        let length = if length_raw < 0 {
-            usize::MAX
-        } else {
-            length_raw as usize
-        };
-        let color = entry
-            .raw_get::<Table>("color")
-            .ok()
-            .and_then(|color| table_vec4(&color))
-            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
-        let vertex_colors = entry
-            .raw_get::<Table>("vertex_colors")
-            .ok()
-            .and_then(|colors| table_vertex_colors(&colors));
-        let glow = entry
-            .raw_get::<Table>("glow")
-            .ok()
-            .and_then(|color| table_vec4(&color));
-        out.push(TextAttribute {
-            start,
-            length,
-            color,
-            vertex_colors,
-            glow,
-        });
     }
     Ok(Arc::from(out.into_boxed_slice()))
+}
+
+pub(crate) fn read_bitmap_text_attribute(entry: &Table) -> Result<Option<TextAttribute>, String> {
+    let start_value = entry
+        .raw_get::<Value>("start")
+        .map_err(|err| err.to_string())?;
+    let start = read_i32_value(start_value).unwrap_or(0).max(0) as usize;
+    let length_value = entry
+        .raw_get::<Value>("length")
+        .map_err(|err| err.to_string())?;
+    let length_raw = read_i32_value(length_value).unwrap_or(1);
+    if length_raw == 0 {
+        return Ok(None);
+    }
+    let length = if length_raw < 0 {
+        usize::MAX
+    } else {
+        length_raw as usize
+    };
+    // Missing or non-table optional colors retain the same fallback without
+    // constructing and discarding a Lua conversion error for each field.
+    let color = match entry.raw_get::<Value>("color") {
+        Ok(Value::Table(color)) => table_vec4(&color),
+        _ => None,
+    }.unwrap_or([1.0, 1.0, 1.0, 1.0]);
+    let vertex_colors = match entry.raw_get::<Value>("vertex_colors") {
+        Ok(Value::Table(colors)) => table_vertex_colors(&colors),
+        _ => None,
+    };
+    let glow = match entry.raw_get::<Value>("glow") {
+        Ok(Value::Table(color)) => table_vec4(&color),
+        _ => None,
+    };
+    Ok(Some(TextAttribute {
+        start,
+        length,
+        color,
+        vertex_colors,
+        glow,
+    }))
 }
 
 fn song_lua_uses_builtin_theme_font(raw: &str) -> bool {

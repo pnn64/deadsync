@@ -1916,10 +1916,8 @@ fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind
             }
         }
         crate::SongLuaOverlayKind::BitmapText { text, attributes, stroke_color, .. } => {
-            let current = crate::lua_util::lua_text_value(owned.get("Text").map_err(|error| error.to_string())?)
-                .map_err(|error| error.to_string())?;
-            if text.as_ref() != current { *text = current.into(); }
-            *attributes = crate::lua_util::read_bitmap_text_attributes(owned)?;
+            crate::text_publication::sync_text(owned, text).map_err(|error| error.to_string())?;
+            crate::text_publication::sync_attributes(owned, attributes)?;
             *stroke_color = crate::lua_util::read_actor_color_field(owned, "__songlua_stroke_color")?;
         }
         crate::SongLuaOverlayKind::Sprite { texture_path, texture_key, states, .. } => {
@@ -3812,6 +3810,79 @@ return Def.Sprite {
             assert_eq!(state.frame, index as u32);
             assert_eq!(state.delay, ((1.0_f64 / 144.0) * (184.0 / 60.0 * 2.0)) as f32);
         }
+    }
+
+    #[test]
+    fn live_text_publication_preserves_input_update_draw_and_lookup_order() {
+        let mut compiled = compile_with_context("live-text-publication", r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            LABEL:settext('input'):AddAttribute(1, {Length=2, Diffuse={1,0,0,1}})
+        end)
+        self:SetUpdateFunction(function()
+            LABEL:settext('update'):ClearAttributes():AddAttribute(2, {Length=3, Glow={0,1,0,1}})
+        end)
+        self:SetDrawFunction(function() LABEL:settext('draw'):ClearAttributes(); LABEL:Draw() end)
+    end,
+    Def.BitmapText {
+        Name='Label', Font='Common normal', Text='initial',
+        InitCommand=function(self) LABEL=self end,
+    },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let local = compiled.overlays.iter().position(|actor| actor.name.as_deref()==Some("Label")).unwrap();
+        let global = compiled.live_actor_indices()[local];
+        let mut kind = compiled.overlays[local].kind.clone();
+        let payload = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
+            SongLuaOverlayKind::BitmapText { text, attributes, .. } => (text.clone(), attributes.clone()),
+            _ => panic!("text visual slot"),
+        };
+        let original = payload(&kind);
+        let mut scene = compiled.live_scene.take().unwrap();
+        let owned = scene.actors[global].clone();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(Arc::ptr_eq(&original.0, &payload(&kind).0));
+        assert!(Arc::ptr_eq(&original.1, &payload(&kind).1));
+        let input = crate::SongLuaInputEvent {
+            player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+            kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+            level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+        };
+        assert!(scene.input(&input).unwrap().1.errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        let after_input = payload(&kind);
+        assert_eq!(after_input.0.as_ref(), "input");
+        assert_eq!((after_input.1[0].start, after_input.1[0].length), (1, 2));
+        assert!(scene.update(SongLuaLiveFrame::default()).unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        let after_update = payload(&kind);
+        assert_eq!(after_update.0.as_ref(), "update");
+        assert_eq!(after_update.1[0].glow, Some([0.0,1.0,0.0,1.0]));
+        assert!(scene.draw().unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(payload(&kind).0.as_ref(), "draw");
+        assert!(payload(&kind).1.is_empty());
+        assert_eq!(original.0.as_ref(), "initial");
+        assert_eq!(after_input.0.as_ref(), "input");
+        assert_eq!(after_input.1[0].color, [1.0,0.0,0.0,1.0]);
+        assert_eq!(after_update.1.len(), 1);
+
+        // Text publishes before attributes, and stroke lookup follows both.
+        // A failed attribute read retains the previous attributes and stroke.
+        let failing: Table = scene.lua.load(r#"
+visits = ''
+return setmetatable({}, {__index=function(_, key)
+    visits=visits .. key .. ';'
+    if key=='Text' then return 'new text' end
+    if key=='__songlua_text_attributes' then return false end
+    error('stroke must not be read')
+end})
+"#).eval().unwrap();
+        assert!(sync_visual_content(&failing, &mut kind).is_err());
+        assert_eq!(scene.lua.globals().get::<String>("visits").unwrap(), "Text;__songlua_text_attributes;");
+        assert_eq!(payload(&kind).0.as_ref(), "new text");
+        assert!(payload(&kind).1.is_empty());
     }
 
     #[test]

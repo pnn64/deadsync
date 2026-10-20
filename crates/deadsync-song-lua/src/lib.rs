@@ -65,6 +65,7 @@ mod sl;
 mod song_tables;
 mod string_args;
 mod tables;
+mod text_publication;
 mod theme_colors;
 mod timing;
 mod top_screen;
