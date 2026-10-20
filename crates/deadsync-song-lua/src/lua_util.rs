@@ -20017,6 +20017,8 @@ fn actor_overlay_state_with_pose(
 mod actor_state_read_tests {
     use super::*;
 
+    include!("../tests/overlay_state_reads.rs");
+
     #[test]
     fn native_render_flag_promotion_avoids_authored_reads_and_retains_model_defaults() {
         let lua = Lua::new();
