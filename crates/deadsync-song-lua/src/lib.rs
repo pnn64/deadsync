@@ -50,6 +50,7 @@ pub use model_texture::{
 mod multitap;
 mod native_vector;
 mod render_flags;
+mod base_transform;
 mod tween_pose;
 mod net;
 mod noteskin;

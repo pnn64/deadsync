@@ -1,6 +1,7 @@
 use crate::tween_pose::TweenPose;
 use crate::native_vector::ActorVectorValue;
 use crate::render_flags::{RenderFlag, RenderFlags};
+use crate::base_transform::{BaseField, BaseTransform};
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use mlua::{FromLua, Function, Lua, MultiValue, Table, Value, ffi};
@@ -2845,7 +2846,8 @@ fn snapshot_actor_state(
     {
         let pose = live_pose_snapshot(lua, actor)?.into_iter().flatten();
         let flags = live_render_flags(lua, actor).into_iter().flat_map(RenderFlags::snapshot);
-        for (key, value) in pose.chain(flags) {
+        let base = live_base_transform(lua, actor).into_iter().flat_map(BaseTransform::snapshot);
+        for (key, value) in pose.chain(flags).chain(base) {
             if !keep_key(key) { continue; }
             if let Some(entry) = out.iter_mut().find(|(name, _)| name == key) {
                 entry.1 = value;
@@ -4663,6 +4665,7 @@ fn capture_immediate_bool(lua: &Lua, actor: &Table, key: &str, value: bool) -> m
 }
 
 fn capture_immediate_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
+    if set_live_base_field(lua, actor, key, value) { return Ok(()); }
     if !record_overlay_update_capture_immediate(
         lua,
         actor,
@@ -4811,6 +4814,7 @@ fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) ->
 }
 
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
+    if set_live_base_field(lua, actor, key, value) { return Ok(()); }
     if live_destination_scalar(lua, actor, key).is_some() {
         record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::F32(value));
         return Ok(());
@@ -5393,13 +5397,15 @@ pub fn capture_texture_rect(lua: &Lua, actor: &Table, rect: [f32; 4]) -> mlua::R
     capture_block_set_vec4(lua, actor, "custom_texture_rect", rect)
 }
 
-pub fn actor_halign(actor: &Table) -> mlua::Result<f32> {
+pub fn actor_halign(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
+    if let Some(base) = live_base_transform(lua, actor) { return Ok(base.get(BaseField::HAlign).unwrap_or(0.5)); }
     Ok(actor
         .get::<Option<f32>>("__songlua_state_halign")?
         .unwrap_or(0.5))
 }
 
-pub fn actor_valign(actor: &Table) -> mlua::Result<f32> {
+pub fn actor_valign(lua: &Lua, actor: &Table) -> mlua::Result<f32> {
+    if let Some(base) = live_base_transform(lua, actor) { return Ok(base.get(BaseField::VAlign).unwrap_or(0.5)); }
     Ok(actor
         .get::<Option<f32>>("__songlua_state_valign")?
         .unwrap_or(0.5))
@@ -5835,7 +5841,7 @@ pub fn scale_actor_to_rect_with_base_size(
     cover: bool,
     base_size: [f32; 2],
 ) -> mlua::Result<()> {
-    let align = [actor_halign(actor)?, actor_valign(actor)?];
+    let align = [actor_halign(lua, actor)?, actor_valign(lua, actor)?];
     let Some(plan) = scale_to_rect_plan(rect, base_size, align, cover) else {
         return Ok(());
     };
@@ -10705,36 +10711,21 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetBaseZoomX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_basezoom_x")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            move |lua, _args: MultiValue| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_x")
         })?,
     )?;
     actor.set(
         "GetBaseZoomY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_basezoom_y")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            move |lua, _args: MultiValue| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_y")
         })?,
     )?;
     actor.set(
         "GetBaseZoomZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_basezoom_z")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            move |lua, _args: MultiValue| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_z")
         })?,
     )?;
     actor.set(
@@ -10769,14 +10760,14 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetHAlign",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| actor_halign(&actor)
+            move |lua, _args: MultiValue| actor_halign(lua, &actor)
         })?,
     )?;
     actor.set(
         "GetVAlign",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| actor_valign(&actor)
+            move |lua, _args: MultiValue| actor_valign(lua, &actor)
         })?,
     )?;
     actor.set(
@@ -11003,13 +10994,18 @@ pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<
         if let Some(previous) = previous_flags { flags.preserve_on_reset(previous); }
         flags
     });
+    let native_base = live_actor_playback(lua);
+    let base_transform = native_base.then(|| BaseTransform::read(actor).map(Box::new)).transpose()?;
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current: current.into(), render_flags, queue: Default::default(), progress: None, targets: 0,
+            current: current.into(), render_flags, base_transform, queue: Default::default(), progress: None, targets: 0,
         });
     }
     if render_flags.is_some() {
         for flag in RenderFlag::ALL { actor.raw_set(flag.state_key(), Value::Nil)?; }
+    }
+    if native_base {
+        for field in BaseField::ALL { actor.raw_set(field.state_key(), Value::Nil)?; }
     }
     reset_actor_capture(lua, actor)?;
     sync_tween_getters(lua, actor)
@@ -11528,6 +11524,7 @@ pub struct SongLuaStartupState {
 struct ActorTweenReplay {
     current: TweenPose,
     render_flags: Option<RenderFlags>,
+    base_transform: Option<Box<BaseTransform>>,
     queue: std::collections::VecDeque<ActorTweenStep>,
     progress: Option<Vec<Vec<[f32; 2]>>>,
     targets: u128,
@@ -11571,15 +11568,44 @@ pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Re
                 flags.set(flag, value);
             }
         }
+        let base_transform = BaseTransform::read(actor)?;
         if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>()
             && let Some(replay) = replays.0.get_mut(&(actor.to_pointer() as usize)) {
             replay.render_flags = Some(flags);
+            replay.base_transform = Some(Box::new(base_transform));
         }
         for flag in RenderFlag::ALL { actor.raw_set(flag.state_key(), Value::Nil)?; }
+        for field in BaseField::ALL { actor.raw_set(field.state_key(), Value::Nil)?; }
         reset_actor_capture(lua, actor)?;
         actor.raw_set("__songlua_capture_blocks", Value::Nil)?;
     }
     lua.set_app_data(LiveActorPlayback);
+    Ok(())
+}
+
+fn live_base_transform(lua: &Lua, actor: &Table) -> Option<BaseTransform> {
+    lua.app_data_ref::<ActorTweenReplays>()?
+        .0.get(&(actor.to_pointer() as usize))?.base_transform.as_deref().copied()
+}
+
+fn set_live_base_field(lua: &Lua, actor: &Table, key: &str, value: f32) -> bool {
+    let Some(field) = BaseField::from_key(key) else { return false; };
+    let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() else { return false; };
+    let Some(base) = replays.0.get_mut(&(actor.to_pointer() as usize))
+        .and_then(|replay| replay.base_transform.as_mut()) else { return false; };
+    base.set(field, value);
+    true
+}
+
+#[cfg(test)]
+pub(crate) fn use_table_base_transform(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {
+    for actor in actors {
+        let base = lua.app_data_mut::<ActorTweenReplays>().and_then(|mut replays|
+            replays.0.get_mut(&(actor.to_pointer() as usize))?.base_transform.take());
+        if let Some(base) = base {
+            for (key, value) in base.snapshot() { actor.raw_set(key, value)?; }
+        }
+    }
     Ok(())
 }
 
@@ -11715,6 +11741,9 @@ pub(crate) fn copy_live_actor_pose(lua: &Lua, source: &Table, into: &Table) -> m
     if let Some(flags) = live_render_flags(lua, source) {
         for (key, value) in flags.snapshot() { into.raw_set(key, value)?; }
     }
+    if let Some(base) = live_base_transform(lua, source) {
+        for (key, value) in base.snapshot() { into.raw_set(key, value)?; }
+    }
     Ok(())
 }
 
@@ -11809,6 +11838,7 @@ pub(crate) fn begin_tween_replay<Kind>(
             ActorTweenReplay {
                 current: current.into(),
                 render_flags: None,
+                base_transform: None,
                 queue,
                 progress: Some(vec![Vec::new(); startup.steps.len()]),
                 targets,
@@ -12035,14 +12065,19 @@ pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> 
     }
     let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
     let render_flags = live_actor_playback(lua).then(|| RenderFlags::from(current));
+    let native_base = live_actor_playback(lua);
+    let base_transform = native_base.then(|| BaseTransform::read(actor).map(Box::new)).transpose()?;
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current: current.into(), render_flags, queue: Default::default(),
+            current: current.into(), render_flags, base_transform, queue: Default::default(),
             progress: (!crate::live::active(lua)).then(Vec::new), targets: 0,
         });
     }
     if render_flags.is_some() {
         for flag in RenderFlag::ALL { actor.raw_set(flag.state_key(), Value::Nil)?; }
+    }
+    if native_base {
+        for field in BaseField::ALL { actor.raw_set(field.state_key(), Value::Nil)?; }
     }
     Ok(())
 }
@@ -19865,15 +19900,16 @@ pub(crate) fn actor_overlay_state_batched(
     lua: &Lua,
     actor: &Table,
 ) -> Result<SongLuaOverlayState, String> {
-    actor_overlay_state_with_pose(lua, actor, None, None)
+    actor_overlay_state_with_pose(lua, actor, None, None, None)
 }
 
 pub(crate) fn live_actor_overlay_state(lua: &Lua, actor: &Table) -> Result<SongLuaOverlayState, String> {
     if !crate::live::active(lua) { return actor_overlay_state_batched(lua, actor); }
     let state = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays|
         replays.0.get(&(actor.to_pointer() as usize))
-            .map(|replay| (replay.current, replay.render_flags)));
-    actor_overlay_state_with_pose(lua, actor, state.map(|state| state.0), state.and_then(|state| state.1))
+            .map(|replay| (replay.current, replay.render_flags, replay.base_transform.as_deref().copied())));
+    actor_overlay_state_with_pose(lua, actor, state.map(|state| state.0),
+        state.and_then(|state| state.1), state.and_then(|state| state.2))
 }
 
 fn actor_overlay_state_with_pose(
@@ -19881,6 +19917,7 @@ fn actor_overlay_state_with_pose(
     actor: &Table,
     pose: Option<TweenPose>,
     render_flags: Option<RenderFlags>,
+    base_transform: Option<BaseTransform>,
 ) -> Result<SongLuaOverlayState, String> {
     let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
     if let Some(pose) = &pose {
@@ -19898,6 +19935,18 @@ fn actor_overlay_state_with_pose(
             SkewX => skew_x, SkewY => skew_y,
             Cropleft => cropleft, Cropright => cropright, Croptop => croptop, Cropbottom => cropbottom,
             Fadeleft => fadeleft, Faderight => faderight, Fadetop => fadetop, Fadebottom => fadebottom,
+        }
+    }
+    if let Some(base) = base_transform {
+        for (field, native) in [
+            (ActorNumberField::Basezoom, BaseField::Zoom),
+            (ActorNumberField::BasezoomX, BaseField::ZoomX),
+            (ActorNumberField::BasezoomY, BaseField::ZoomY),
+            (ActorNumberField::BasezoomZ, BaseField::ZoomZ),
+            (ActorNumberField::Halign, BaseField::HAlign),
+            (ActorNumberField::Valign, BaseField::VAlign),
+        ] {
+            numbers[field as usize] = ActorNumberValue::Value(base.get(native));
         }
     }
     let mut flags = [None; ActorFlagField::KEYS.len()];
@@ -20195,6 +20244,9 @@ return setmetatable({__songlua_actor_type='Sprite'}, {
         capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
         capture_block_set_bool(&lua, &actor, "depth_test", true).unwrap();
         capture_block_set_bool(&lua, &actor, "texture_filtering", false).unwrap();
+        capture_block_set_f32(&lua, &actor, "basezoom", 2.0).unwrap();
+        capture_block_set_f32(&lua, &actor, "basezoom_x", 1.0).unwrap();
+        capture_block_set_f32(&lua, &actor, "halign", 0.25).unwrap();
         for (key, value) in [("x",12.0), ("zoom_y",3.0), ("skew_x",0.25), ("fadeleft",0.5)] {
             capture_block_set_f32(&lua, &actor, key, value).unwrap();
         }
@@ -20210,12 +20262,22 @@ return setmetatable({__songlua_actor_type='Sprite'}, {
             assert_eq!(actor_vertex_colors(&lua, &copy).unwrap(), [[0.5; 4]; 4]);
             let pose = actor_overlay_initial_state(&copy).unwrap();
             assert!(pose.depth_test && !pose.texture_filtering);
+            assert_eq!((pose.basezoom,pose.basezoom_x,pose.halign), (2.0,1.0,0.25));
             assert_eq!((pose.x,pose.zoom_y,pose.skew_x,pose.fadeleft), (12.0,3.0,0.25,0.5));
             assert_eq!(copy.get::<Table>("authored").unwrap().get::<u32>("score").unwrap(), 17);
             ensure_tween_replay(&lua, &copy).unwrap();
             assert!(!live_actor_overlay_state(&lua, &actor).unwrap().depth_test);
             assert!(live_actor_overlay_state(&lua, &copy).unwrap().depth_test);
             assert!(copy.raw_get::<Value>("__songlua_state_depth_test").unwrap().is_nil());
+            assert!(copy.raw_get::<Value>("__songlua_state_basezoom_x").unwrap().is_nil());
+            assert_eq!(actor_base_zoom_axis(&lua, &copy, "__songlua_state_basezoom_x").unwrap(), 1.0);
+            assert_eq!(actor_base_zoom_axis(&lua, &copy, "__songlua_state_basezoom_y").unwrap(), 2.0);
+            capture_block_set_f32(&lua, &copy, "halign", 0.75).unwrap();
+            assert_eq!(actor_halign(&lua, &actor).unwrap(), 0.25);
+            set_actor_overlay_update_getter_value(&lua, &copy,
+                SongLuaOverlayUpdateTarget::BaseZoomX, &SongLuaOverlayUpdateValue::F32(5.0)).unwrap();
+            assert_eq!(actor_base_zoom_axis(&lua, &copy, "__songlua_state_basezoom_x").unwrap(), 5.0);
+            assert!(copy.raw_get::<Value>("__songlua_state_basezoom_x").unwrap().is_nil());
             capture_block_set_color(&lua, &copy, [0.75; 4]).unwrap();
             capture_block_set_f32(&lua, &copy, "x", 36.0).unwrap();
             assert_eq!(actor_diffuse(&lua, &actor).unwrap(), [0.0; 4]);
@@ -20803,10 +20865,18 @@ pub fn set_actor_overlay_getter_state(
     set!("__songlua_state_zoom_x", state.zoom_x);
     set!("__songlua_state_zoom_y", state.zoom_y);
     set!("__songlua_state_zoom_z", state.zoom_z);
-    set!("__songlua_state_basezoom", state.basezoom);
-    set!("__songlua_state_basezoom_x", state.basezoom_x);
-    set!("__songlua_state_basezoom_y", state.basezoom_y);
-    set!("__songlua_state_basezoom_z", state.basezoom_z);
+    if !set_live_base_field(lua, actor, "basezoom", state.basezoom) {
+        set!("__songlua_state_basezoom", state.basezoom);
+    }
+    if !set_live_base_field(lua, actor, "basezoom_x", state.basezoom_x) {
+        set!("__songlua_state_basezoom_x", state.basezoom_x);
+    }
+    if !set_live_base_field(lua, actor, "basezoom_y", state.basezoom_y) {
+        set!("__songlua_state_basezoom_y", state.basezoom_y);
+    }
+    if !set_live_base_field(lua, actor, "basezoom_z", state.basezoom_z) {
+        set!("__songlua_state_basezoom_z", state.basezoom_z);
+    }
     set!("__songlua_state_rot_x_deg", state.rot_x_deg);
     set!("__songlua_state_rot_y_deg", state.rot_y_deg);
     set!("__songlua_state_rot_z_deg", state.rot_z_deg);
@@ -20815,8 +20885,12 @@ pub fn set_actor_overlay_getter_state(
         lua.create_sequence_from(state.base_rotation)
             .map_err(|err| err.to_string())?
     );
-    set!("__songlua_state_halign", state.halign);
-    set!("__songlua_state_valign", state.valign);
+    if !set_live_base_field(lua, actor, "halign", state.halign) {
+        set!("__songlua_state_halign", state.halign);
+    }
+    if !set_live_base_field(lua, actor, "valign", state.valign) {
+        set!("__songlua_state_valign", state.valign);
+    }
     set!(
         "__songlua_state_effect_mode",
         crate::effect_mode_label(state.effect_mode)
@@ -20923,6 +20997,7 @@ pub fn set_actor_overlay_update_getter_value(
     };
     match value {
         UpdateValue::F32(value) if !key.is_empty() => {
+            if set_live_base_field(lua, actor, key, *value) { return Ok(()); }
             let current_key = match target {
                 Target::Aux => Some("__songlua_aux"),
                 Target::X => Some("__songlua_current_x"),
@@ -22503,6 +22578,15 @@ const fn actor_multi_vertex_mesh_vertex(
     }
 }
 
+fn actor_base_zoom_axis(lua: &Lua, actor: &Table, key: &str) -> mlua::Result<f32> {
+    if let Some(field) = key.strip_prefix("__songlua_state_").and_then(BaseField::from_key)
+        && let Some(base) = live_base_transform(lua, actor) {
+        return Ok(base.zoom_axis(field));
+    }
+    Ok(actor.get::<Option<f32>>(key)?
+        .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?).unwrap_or(1.0))
+}
+
 pub fn actor_zoom_axis(lua: &Lua, actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::Result<f32> {
     let zoom = match zoom_key.strip_prefix("__songlua_state_")
         .and_then(|key| live_destination_scalar(lua, actor, key)) {
@@ -22510,10 +22594,7 @@ pub fn actor_zoom_axis(lua: &Lua, actor: &Table, zoom_key: &str, basezoom_key: &
         None => actor.get::<Option<f32>>(zoom_key)?
             .or(actor.get::<Option<f32>>("__songlua_state_zoom")?).unwrap_or(1.0),
     };
-    let basezoom = actor
-        .get::<Option<f32>>(basezoom_key)?
-        .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
-        .unwrap_or(1.0);
+    let basezoom = actor_base_zoom_axis(lua, actor, basezoom_key)?;
     Ok(basezoom * zoom)
 }
 

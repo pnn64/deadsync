@@ -1968,6 +1968,103 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_native_base_transforms_preserve_getters_draws_and_reset() {
+        let source = r#"
+local tick = 0
+return Def.ActorFrame {
+    InitCommand=function(self) ROOT=self; self.authored={retained=true} end,
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            Q:basezoom(2):basezoomx(1):halign(0):valign(1)
+            assert(Q:GetBaseZoomX()==1 and Q:GetBaseZoomY()==2 and Q:GetBaseZoomZ()==2)
+        end)
+        self:SetUpdateFunction(function()
+            tick=tick+1
+            if tick==1 then Q:linear(2):zoom(2):x(100) end
+            if tick==3 then Q:stoptweening() end
+            if tick==4 then Q:linear(1):zoom(3):finishtweening() end
+            local v=tick/8
+            Q:basezoom(v):basezoomx(1):basezoomy(v+1):basezoomz(-v):align(v,1-v)
+            assert(Q:GetBaseZoomX()==1 and Q:GetBaseZoomY()==v+1 and Q:GetBaseZoomZ()==-v)
+            assert(Q:GetHAlign()==v and Q:GetVAlign()==1-v)
+            assert(Q:GetZoomedWidth()==8*Q:GetZoomX())
+            assert(Q:GetZoomedHeight()==12*((v+1)*Q:GetZoomY()))
+        end)
+        self:SetDrawFunction(function()
+            Q:basezoomx(2):halign(0):Draw()
+            Q:basezoomx(3):halign(1):Draw()
+        end)
+    end,
+    Def.Quad { InitCommand=function(self) Q=self; self:SetSize(8,12) end },
+}
+"#;
+        let build = || compile_with_context("native-base-transform", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut live = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
+        let q: Table = live.lua.globals().get("Q").unwrap();
+        for index in 0..6 {
+            if index == 2 {
+                let input = crate::SongLuaInputEvent {
+                    player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+                    kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+                    level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+                };
+                assert!(live.input(&input).unwrap().1.errors.is_empty());
+                assert!(legacy.input(&input).unwrap().1.errors.is_empty());
+                assert_eq!(live.states(), legacy.states(), "input transforms");
+            }
+            let frame = SongLuaLiveFrame { screen_seconds: index as f64 / 16.0,
+                music_seconds: index as f64 / 16.0, beat: index as f64 / 8.0,
+                delta_seconds: 0.0625, ..Default::default() };
+            let actual = live.advance(frame.clone()).unwrap();
+            let expected = legacy.advance(frame).unwrap();
+            assert!(actual.errors.is_empty(), "{:?}", actual.errors);
+            assert!(expected.errors.is_empty(), "{:?}", expected.errors);
+            assert_eq!(live.states(), legacy.states());
+            assert_eq!(actual.draw_frames, expected.draw_frames, "each Draw keeps its own transform");
+            for actor in registry(&live) {
+                for field in crate::base_transform::BaseField::ALL {
+                    assert!(actor.raw_get::<Value>(field.state_key()).unwrap().is_nil(),
+                        "native base transforms must not maintain Lua mirrors");
+                }
+            }
+        }
+        // Scaling to a rectangle consumes alignment through the same getter as Lua.
+        for scene in [&live, &legacy] {
+            scene.lua.load("Q:stoptweening():align(0.25,0.75):scaletofit(10,20,110,120)").exec().unwrap();
+        }
+        let legacy_q: Table = legacy.lua.globals().get("Q").unwrap();
+        assert_eq!(read_state(&live.lua, &q).unwrap(), read_state(&legacy.lua, &legacy_q).unwrap());
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&live.lua, &q).unwrap();
+        let exported = live.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&exported, snapshot).unwrap();
+        let saved = crate::actor_overlay_initial_state(&exported).unwrap();
+        assert_eq!(saved.halign, 0.25);
+        assert_eq!(saved.valign, 0.75);
+        for scene in [&live, &legacy] {
+            let root = scene.lua.globals().get::<Table>("ROOT").unwrap();
+            crate::lua_util::init_actor_native_state(&scene.lua, &root).unwrap();
+            scene.lua.load("assert(ROOT.authored.retained)").exec().unwrap();
+        }
+        let reset = read_state(&live.lua, &q).unwrap();
+        assert_eq!(reset, read_state(&legacy.lua, &legacy_q).unwrap());
+        assert_eq!((reset.basezoom, reset.basezoom_x, reset.basezoom_y, reset.basezoom_z), (1.0,1.0,1.0,1.0));
+        assert_eq!((reset.halign, reset.valign), (0.5,0.5));
+        assert_eq!(crate::actor_overlay_initial_state(&exported).unwrap(), saved);
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                crate::lua_util::capture_block_set_f32(&live.lua, &q, "basezoom_x", i as f32).unwrap();
+                crate::lua_util::capture_block_set_f32(&live.lua, &q, "halign", i as f32 / 100.0).unwrap();
+                crate::lua_util::actor_halign(&live.lua, &q).unwrap();
+            }
+        });
+    }
+
+    #[test]
     fn live_native_render_flags_preserve_recursive_writes_draws_and_reset() {
         let source = r#"
 local tick = 0
@@ -2007,6 +2104,7 @@ return Def.ActorFrame {
         let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
             .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
         crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
         let q: Table = live.lua.globals().get("Q").unwrap();
         for frame in 0..6 {
             if frame == 2 {
@@ -2125,6 +2223,7 @@ return root
             .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
         legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
         crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
         for actor in registry(&legacy) {
             let key = "__songlua_state_motion_clock";
             let value = actor.raw_get::<Value>(key).unwrap();
@@ -2229,6 +2328,7 @@ return Def.ActorFrame {
         // queues and frames. Its old frame boundary discarded audit blocks.
         legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
         crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
         for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
         for frame in 0..20 {
             if frame == 5 {
