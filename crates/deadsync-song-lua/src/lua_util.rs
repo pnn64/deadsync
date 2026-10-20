@@ -2139,6 +2139,7 @@ fn clone_actor_def(
         };
         actor.raw_set(key, value)
     })?;
+    copy_live_actor_colors(lua, source, &actor)?;
     // Installed methods close over their owning table; rebind them to the new
     // instance while sharing user command functions and their Lua upvalues.
     install_methods(lua, &actor)?;
@@ -2839,6 +2840,16 @@ fn snapshot_actor_state(
             out.push((key.to_string(), clone_actor_state(lua, &key, value)?));
         }
     }
+    if let Some(colors) = live_color_snapshot(lua, actor)? {
+        for (key, value) in colors {
+            if !keep_key(key) { continue; }
+            if let Some(entry) = out.iter_mut().find(|(name, _)| name == key) {
+                entry.1 = value;
+            } else if !value.is_nil() {
+                out.push((key.to_owned(), value));
+            }
+        }
+    }
     Ok(out)
 }
 
@@ -2954,6 +2965,16 @@ pub fn restore_actors_semantic_state(
 }
 
 pub fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
+    if live_destination_value(lua, actor, |_| ()).is_some() {
+        let snapshot = lua.create_table()?;
+        for (index, (key, value)) in snapshot_actor_semantic_state(lua, actor)?.into_iter().enumerate() {
+            let entry = lua.create_table_with_capacity(2, 0)?;
+            entry.raw_set(1, key)?;
+            entry.raw_set(2, value)?;
+            snapshot.raw_set(index + 1, entry)?;
+        }
+        return Ok(snapshot);
+    }
     let snapshot = lua.create_table()?;
     let mut index = 1usize;
     for pair in actor.pairs::<Value, Value>() {
@@ -5005,6 +5026,10 @@ fn set_actor_capture_state(
 }
 
 pub fn capture_block_set_color(lua: &Lua, actor: &Table, color: [f32; 4]) -> mlua::Result<()> {
+    if live_actor_playback(lua) && has_tween_replay(lua, actor) {
+        record_overlay_update_capture(lua, actor, "diffuse", SongLuaOverlayUpdateValue::Vec4(color));
+        return Ok(());
+    }
     let value = lua.create_table_with_capacity(4, 0)?;
     value.raw_set(1, color[0])?;
     value.raw_set(2, color[1])?;
@@ -5034,7 +5059,7 @@ pub fn capture_actor_vertex_diffuse(
     let Some(color) = read_color_args(args) else {
         return Ok(());
     };
-    let mut colors = actor_vertex_colors(actor)?;
+    let mut colors = actor_vertex_colors(lua, actor)?;
     for (index, vertex_color) in colors.iter_mut().enumerate() {
         if corner_mask & (1 << index) != 0 {
             *vertex_color = color;
@@ -5119,6 +5144,10 @@ pub fn capture_block_set_vec4(
     key: &str,
     value4: [f32; 4],
 ) -> mlua::Result<()> {
+    if key == "glow" && live_actor_playback(lua) && has_tween_replay(lua, actor) {
+        record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec4(value4));
+        return Ok(());
+    }
     let value = lua.create_table_with_capacity(4, 0)?;
     value.raw_set(1, value4[0])?;
     value.raw_set(2, value4[1])?;
@@ -5138,6 +5167,11 @@ pub fn capture_block_set_vertex_colors(
     actor: &Table,
     colors: [[f32; 4]; 4],
 ) -> mlua::Result<()> {
+    if live_actor_playback(lua) && has_tween_replay(lua, actor) {
+        record_overlay_update_capture(lua, actor, "vertex_colors",
+            SongLuaOverlayUpdateValue::VertexColors(Arc::new(colors)));
+        return Ok(());
+    }
     let value = make_vertex_color_table(lua, colors)?;
     if !record_overlay_update_capture(
         lua,
@@ -7907,7 +7941,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
                     value => read_f32(value),
                 });
                 if let Some(alpha) = alpha {
-                    let mut diffuse = actor_diffuse(&actor)?;
+                    let mut diffuse = actor_diffuse(lua, &actor)?;
                     diffuse[3] = alpha;
                     capture_block_set_color(lua, &actor, diffuse)?;
                 }
@@ -10131,7 +10165,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                     return Ok(actor.clone());
                 };
                 // Actor::SetDiffuseColor replaces RGB without changing alpha.
-                color[3] = actor_diffuse(&actor)?[3];
+                color[3] = actor_diffuse(lua, &actor)?[3];
                 capture_block_set_color(lua, &actor, color)?;
                 Ok(actor.clone())
             }
@@ -10695,28 +10729,28 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetAlpha",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(actor_diffuse(&actor)?[3])
+            move |lua, _args: MultiValue| Ok(actor_diffuse(lua, &actor)?[3])
         })?,
     )?;
     actor.set(
         "GetDiffuse",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| make_color_table(lua, actor_diffuse(&actor)?)
+            move |lua, _args: MultiValue| make_color_table(lua, actor_diffuse(lua, &actor)?)
         })?,
     )?;
     actor.set(
         "GetGlow",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| make_color_table(lua, actor_glow(&actor)?)
+            move |lua, _args: MultiValue| make_color_table(lua, actor_glow(lua, &actor)?)
         })?,
     )?;
     actor.set(
         "GetDiffuseAlpha",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(actor_diffuse(&actor)?[3])
+            move |lua, _args: MultiValue| Ok(actor_diffuse(lua, &actor)?[3])
         })?,
     )?;
     actor.set(
@@ -11514,6 +11548,41 @@ fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
         .0.get(&(actor.to_pointer() as usize)).map(|replay| replay.current)
 }
 
+// Color commands and getters address the destination, while drawing reads
+// current. During playback the replay owns both; Lua tables are only exported
+// for public getter results and explicit definition/state snapshots.
+fn live_destination_value<T>(
+    lua: &Lua,
+    actor: &Table,
+    read: impl FnOnce(&SongLuaOverlayState) -> T,
+) -> Option<T> {
+    if !live_actor_playback(lua) { return None; }
+    lua.app_data_ref::<ActorTweenReplays>()?
+        .0.get(&(actor.to_pointer() as usize))
+        .map(|replay| read(replay.queue.back().map_or(&replay.current, |step| &step.to)))
+}
+
+fn live_color_snapshot(lua: &Lua, actor: &Table) -> mlua::Result<Option<[(&'static str, Value); 4]>> {
+    let Some((diffuse, glow, vertices)) = live_destination_value(lua, actor,
+        |dest| (dest.diffuse, dest.glow, dest.vertex_colors)) else { return Ok(None); };
+    // Release the native state borrow before allocating or calling Lua.
+    Ok(Some([
+        ("__songlua_diffuse", Value::Table(make_color_table(lua, diffuse)?)),
+        ("__songlua_state_diffuse", Value::Table(make_color_table(lua, diffuse)?)),
+        ("__songlua_state_glow", Value::Table(make_color_table(lua, glow)?)),
+        ("__songlua_state_vertex_colors", vertices
+            .map(|colors| make_vertex_color_table(lua, colors).map(Value::Table))
+            .transpose()?.unwrap_or(Value::Nil)),
+    ]))
+}
+
+pub(crate) fn copy_live_actor_colors(lua: &Lua, source: &Table, into: &Table) -> mlua::Result<()> {
+    if let Some(colors) = live_color_snapshot(lua, source)? {
+        for (key, value) in colors { into.raw_set(key, value)?; }
+    }
+    Ok(())
+}
+
 struct LiveBroadcasts(Vec<(f32, String, bool)>);
 struct LiveSourceBroadcasts(Vec<crate::live::SongLuaLiveBroadcast>);
 
@@ -11817,18 +11886,20 @@ fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     ] {
         set_actor_capture_state(actor, key, value)?;
     }
-    actor.raw_set("__songlua_diffuse", make_color_table(lua, dest.diffuse)?)?;
-    actor.raw_set(
-        "__songlua_state_diffuse",
-        make_color_table(lua, dest.diffuse)?,
-    )?;
-    actor.raw_set("__songlua_state_glow", make_color_table(lua, dest.glow)?)?;
-    actor.raw_set(
-        "__songlua_state_vertex_colors",
-        dest.vertex_colors
-            .map(|colors| make_vertex_color_table(lua, colors))
-            .transpose()?,
-    )?;
+    if !live_actor_playback(lua) {
+        actor.raw_set("__songlua_diffuse", make_color_table(lua, dest.diffuse)?)?;
+        actor.raw_set(
+            "__songlua_state_diffuse",
+            make_color_table(lua, dest.diffuse)?,
+        )?;
+        actor.raw_set("__songlua_state_glow", make_color_table(lua, dest.glow)?)?;
+        actor.raw_set(
+            "__songlua_state_vertex_colors",
+            dest.vertex_colors
+                .map(|colors| make_vertex_color_table(lua, colors))
+                .transpose()?,
+        )?;
+    }
     actor.raw_set("__songlua_aux", current.aux)?;
     for (key, value) in POSITION_CURRENT_KEYS
         .into_iter()
@@ -19931,6 +20002,33 @@ mod actor_state_read_tests {
     }
 
     #[test]
+    fn native_color_definition_clones_keep_destination_and_independence() {
+        let lua = Lua::new();
+        begin_live_runtime(&lua).unwrap();
+        let actor = lua.load("{__songlua_actor_type='Quad', authored={score=17}}")
+            .eval::<Table>().unwrap();
+        ensure_tween_replay(&lua, &actor).unwrap();
+        begin_live_actor_playback(&lua, &[actor.clone()]).unwrap();
+        queue_replay_tween(&lua, &actor, 1.0, Some("linear"));
+        capture_block_set_color(&lua, &actor, [0.25, 0.5, 0.75, 1.0]).unwrap();
+        capture_block_set_vec4(&lua, &actor, "glow", [1.0, 0.75, 0.5, 0.25]).unwrap();
+        capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
+        let Value::Table(generic) = clone_lua_value(&lua, Value::Table(actor.clone())).unwrap()
+            else { panic!("table clone"); };
+        let definition = clone_actor_def(&lua, &actor, |_, _| Ok(()), false).unwrap();
+        capture_block_set_color(&lua, &actor, [0.0; 4]).unwrap();
+        for copy in [generic, definition] {
+            assert_eq!(actor_overlay_initial_state(&copy).unwrap().diffuse, [0.25, 0.5, 0.75, 1.0]);
+            assert_eq!(actor_glow(&lua, &copy).unwrap(), [1.0, 0.75, 0.5, 0.25]);
+            assert_eq!(actor_vertex_colors(&lua, &copy).unwrap(), [[0.5; 4]; 4]);
+            assert_eq!(copy.get::<Table>("authored").unwrap().get::<u32>("score").unwrap(), 17);
+            ensure_tween_replay(&lua, &copy).unwrap();
+            capture_block_set_color(&lua, &copy, [0.75; 4]).unwrap();
+            assert_eq!(actor_diffuse(&lua, &actor).unwrap(), [0.0; 4]);
+        }
+    }
+
+    #[test]
     fn live_scalar_read_preserves_defaults_coercions_and_errors() {
         let lua = Lua::new();
         let actor = lua.create_table().unwrap();
@@ -22468,14 +22566,18 @@ pub fn read_actor_color_field(actor: &Table, key: &str) -> Result<Option<[f32; 4
         .and_then(|value| table_vec4(&value)))
 }
 
-pub fn actor_diffuse(actor: &Table) -> mlua::Result<[f32; 4]> {
+pub fn actor_diffuse(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 4]> {
+    if let Some(diffuse) = live_destination_value(lua, actor, |dest| dest.diffuse) { return Ok(diffuse); }
     Ok(actor
         .get::<Option<Table>>("__songlua_diffuse")?
         .and_then(|value| table_vec4(&value))
         .unwrap_or([1.0, 1.0, 1.0, 1.0]))
 }
 
-pub fn actor_vertex_colors(actor: &Table) -> mlua::Result<[[f32; 4]; 4]> {
+pub fn actor_vertex_colors(lua: &Lua, actor: &Table) -> mlua::Result<[[f32; 4]; 4]> {
+    if let Some(colors) = live_destination_value(lua, actor, |dest| dest.vertex_colors) {
+        return Ok(colors.unwrap_or([[1.0; 4]; 4]));
+    }
     Ok(actor
         .get::<Option<Table>>("__songlua_state_vertex_colors")?
         .and_then(|value| table_vertex_colors(&value))
@@ -22519,7 +22621,8 @@ pub fn text_attribute_value(params: &Table, keys: &[&str]) -> mlua::Result<Optio
     Ok(None)
 }
 
-pub fn actor_glow(actor: &Table) -> mlua::Result<[f32; 4]> {
+pub fn actor_glow(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 4]> {
+    if let Some(glow) = live_destination_value(lua, actor, |dest| dest.glow) { return Ok(glow); }
     Ok(actor
         .get::<Option<Table>>("__songlua_state_glow")?
         .and_then(|value| table_vec4(&value))

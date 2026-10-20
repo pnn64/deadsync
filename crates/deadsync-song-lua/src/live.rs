@@ -1992,12 +1992,17 @@ return Def.ActorFrame {
             if tick == 7 then Q:stoptweening():addx(3):sleep(0):queuecommand('Again') end
             if tick == 11 then Q:finishtweening() end
             if tick == 13 then Q:xy(7,9):addy(2):shadowlength(3) end
-            OBSERVED = string.format('%g,%g,%g,%g',Q:GetX(),Q:GetDestX(),Q:getaux(),Q:GetTweenTimeLeft())
+            Q:diffusecolor(0.2,0.4,0.6,0.8):diffuseupperleft(0.9,0.7,0.5,0.3)
+            local color, glow = Q:GetDiffuse(), Q:GetGlow()
+            OBSERVED = string.format('%g,%g,%g,%g,%g,%g,%g',Q:GetX(),Q:GetDestX(),
+                Q:getaux(),Q:GetTweenTimeLeft(),color[1],color[4],glow[2])
+            color[1], glow[2] = 99, 99
+            assert(Q:GetDiffuse()[1] ~= 99 and Q:GetGlow()[2] ~= 99)
         end)
         self:SetDrawFunction(function()
-            Q:basezoomx(tick / 10 + 1):SetHeight(40+tick):shadowlengthy(tick+2)
+            Q:basezoomx(tick / 10 + 1):SetHeight(40+tick):shadowlengthy(tick+2):glow(1,0,0,0.1)
             Q:Draw()
-            Q:SetHeight(80+tick):shadowlengthy(tick+4)
+            Q:SetHeight(80+tick):shadowlengthy(tick+4):glow(0,1,0,0.2)
             Q:Draw()
         end)
     end,
@@ -2060,6 +2065,59 @@ return Def.ActorFrame {
             read_state(&scene.lua, &actor).unwrap()
         };
         assert_eq!(reset(&live), reset(&legacy), "InitState resets native properties as before");
+    }
+
+    #[test]
+    fn live_native_colors_export_independent_destination_snapshots() {
+        let mut compiled = compile_with_context("native-color-snapshots", r#"
+return Def.Actor {
+    InitCommand=function(self) ROOT=self; self.authored={retained=true} end,
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+ROOT:diffuse(0.25,0.5,0.75,1):glow(0,0,0,0)
+ROOT:linear(1):diffuse(0.5,0.75,1,0.5):diffuseupperleft(1,0,0,1):glow(1,0.5,0.25,0.75)
+assert(ROOT:GetDiffuse()[1]==0.5 and ROOT:GetGlow()[4]==0.75)
+"#).exec().unwrap();
+        let actor: Table = scene.lua.globals().get("ROOT").unwrap();
+        let before = read_state(&scene.lua, &actor).unwrap();
+        assert_eq!(before.diffuse, [0.25, 0.5, 0.75, 1.0]);
+        assert_eq!(before.glow, [0.0; 4]);
+        let copied = scene.lua.create_table().unwrap();
+        crate::lua_util::copy_live_actor_colors(&scene.lua, &actor, &copied).unwrap();
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&scene.lua, &actor).unwrap();
+        let semantic = crate::lua_util::snapshot_actor_semantic_state_table(&scene.lua, &actor).unwrap();
+        let restored = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored, snapshot).unwrap();
+        let restored_semantic = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored_semantic,
+            crate::lua_util::read_actor_semantic_state_table(&semantic).unwrap()).unwrap();
+        for snapshot in [&copied, &restored, &restored_semantic] {
+            let state = crate::actor_overlay_initial_state(snapshot).unwrap();
+            assert_eq!(state.diffuse, [0.5, 0.75, 1.0, 0.5]);
+            assert_eq!(state.glow, [1.0, 0.5, 0.25, 0.75]);
+            assert_eq!(state.vertex_colors.unwrap()[0], [1.0, 0.0, 0.0, 1.0]);
+        }
+        // A snapshot owns its tables; neither mutation direction changes the other.
+        copied.raw_get::<Table>("__songlua_diffuse").unwrap().raw_set(1, 99).unwrap();
+        scene.lua.load(r#"
+assert(ROOT:GetDiffuse()[1]==0.5)
+ROOT:finishtweening():diffuse(0.75,0.25,0.5,1):glow(0,0,0,0)
+assert(ROOT:GetDiffuse()[1]==0.75 and ROOT:GetGlow()[4]==0)
+assert(ROOT.authored.retained)
+"#).exec().unwrap();
+        assert_eq!(crate::actor_overlay_initial_state(&restored).unwrap().diffuse,
+            [0.5, 0.75, 1.0, 0.5]);
+        assert_eq!(before.diffuse, [0.25, 0.5, 0.75, 1.0], "earlier draw state is immutable");
+        // Immediate native color writes do not allocate replacement Lua tables.
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                crate::lua_util::capture_block_set_color(&scene.lua, &actor, [i as f32; 4]).unwrap();
+                crate::lua_util::capture_block_set_vec4(&scene.lua, &actor, "glow", [i as f32; 4]).unwrap();
+            }
+        });
     }
 
     #[test]
