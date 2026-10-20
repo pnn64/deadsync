@@ -74,6 +74,32 @@ spline regression both pass.
 
 ## Current focused verification
 
+### Replay source identity correction (2026-10-20)
+
+The performance follow-ups replayed the native Single capture against the
+installed `target/debug/Songs/lua-songs/fof_guys/fof.ssc`. That simfile has a
+locally changed offset of `0.036000`; the captured source archive has `0.000`.
+This invalid comparison produced the reported 12,519 draw mismatches beginning
+at frame 226. They do not establish an engine defect. Replaying the original
+source with the same executable produces zero mismatches.
+
+ITGmania's `Foreground::Update` uses song timing to choose the activation frame
+and the first update delta. Changing the offset therefore changes how often
+the authored queued commands run, including this minigame's simulation.
+
+The replay harness now checks a capture's sibling `manifest.json` when it
+declares `captures` and `source_archive`. It verifies the capture hash, the
+content-addressed source archive, and every recorded song file before gameplay
+preparation. This includes the simfile, Lua dependencies and media; relocated
+identical sources remain valid. Reports include `source_identity`. Standalone
+traces without this provenance explicitly report `not-recorded`.
+
+Use the original source directory in the commands below. A changed source
+returns exit code 1 as an invalid replay input; a valid replay with behavior
+mismatches still returns 2. Deliberate modified-source controls also require
+their own explicit provenance instead of reusing this positive capture's
+manifest. The native observations and installed song files remain unchanged.
+
 The unchanged native captures pass through public production preparation with
 `retained_lua_vm=true` and `production_gameplay_checks_passed=true`:
 

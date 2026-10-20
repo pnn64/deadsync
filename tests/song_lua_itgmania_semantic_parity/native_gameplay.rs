@@ -18,6 +18,9 @@ use std::{
 #[path = "interactive.rs"]
 mod interactive;
 
+#[path = "../support/song_lua_source_identity.rs"]
+mod source_identity;
+
 fn native_host_clock_inputs(trace: &Value) -> Result<Vec<deadsync_song_lua::SongLuaHostClockInput>, String> {
     let Some(inputs) = trace.get("host_clock_inputs") else { return Ok(Vec::new()); };
     inputs.as_array().ok_or("native host clock inputs must be an array")?.iter().map(|input| {
@@ -4228,6 +4231,7 @@ fn replay_mode(
     // receives a relative simfile path.
     let absolute_simfile = std::path::absolute(simfile).map_err(|error| error.to_string())?;
     let simfile = absolute_simfile.as_path();
+    let source_identity = source_identity::verify(trace_path, simfile)?;
     validate_capture(&trace)?;
     let autoplay = native_autoplay(&trace)?;
     let session = native_gameplay_session(trace)?;
@@ -4769,6 +4773,7 @@ fn replay_mode(
             && interactive["draw_mismatches"] == 0;
         return Ok(
             json!({"execution_path":"production-live-lua","production_preparation_exercised":true,
+            "source_identity":source_identity,
             "application_build_exercised":false,"test_support_enabled":true,
             "retained_lua_vm":true,"production_gameplay_checks_passed":passed,
             "production_parity_proven":false,"whole_song_parity_proven":false,"pixel_parity_proven":false,
@@ -4796,7 +4801,7 @@ fn replay_mode(
             "scope":match scope { Scope::Entry => "entry", Scope::FirstQuery => "first-point-query",
                 Scope::ThroughSecond(_) => "through-second", Scope::Full => "full" },
             "through_second":match scope { Scope::ThroughSecond(at) => Some(at), _ => None },
-            "native_trace":trace_path,"source_simfile":simfile,
+            "native_trace":trace_path,"source_simfile":simfile,"source_identity":source_identity,
             "native_frames":frames.len(),"replayed_frames":used_frames,"replayed_scenes":scene_count,
             "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
             "mismatches":mismatches,"errors":errors,"lua_requests":requests,
@@ -4888,7 +4893,7 @@ fn replay_mode(
         .extend(runtime_coverage.iter().map(|gap| json!(gap)));
     let mut report = json!({"diagnostic_only":false,"whole_song_parity_proven":false,"archive_accepted":false,
         "execution_path":"diagnostic-live-lua","production_preparation_exercised":false,"production_parity_proven":false,
-        "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
+        "source_simfile":simfile,"source_identity":source_identity,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
         "errors":errors,"lua_requests":requests,"native_transition_requests":native_requests,

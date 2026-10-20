@@ -1,0 +1,145 @@
+{
+  "change": "Verify the source identity of manifest-backed native replays before gameplay preparation.",
+  "baseline_commit": "c9bc4016b3b6c992279f702c5ca8f590052ba0a1",
+  "finding": {
+    "previous_report": "target/live-native-clocks-bench/fof-native-after.json",
+    "previous_report_sha256": "60f2cc35d6828a3b0beb2fc87b8071089b610ab2de764f2f45ef997a81d113fc",
+    "previous_draw_mismatches": 12519,
+    "first_mismatch_frame": 226,
+    "cause": "The replay used a resynced installed simfile with OFFSET 0.036000 against native observations captured with OFFSET 0.000. The Lua sources and other archived song files matched.",
+    "original_simfile_sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6",
+    "installed_simfile_sha256": "ac714db6e3c2681e394fcdeec55eeaf514d85e98f5dc9be204b16620ad9369fe",
+    "same_executable_original_source_report": {
+      "path": "target/live-parity-source-audit/fof-original-before.json",
+      "sha256": "3516a40932293f091c5226f027e4ebf4dd4e644b0704a0519a190a74c382956b",
+      "draw_mismatches": 0
+    },
+    "interpretation": "The historical native replay failure was an invalid input comparison, not evidence of a DeadSync engine defect. Existing performance comparisons still used the same workload for both variants; this finding does not turn their visual fingerprints into native parity proof."
+  },
+  "reference": {
+    "path": "C:/GitHub/itgmania/src/Foreground.cpp",
+    "checkout_commit": "704cdd5624155f743b59b8b64fedeb0588dae067",
+    "sha256": "04655fe3db304e08f8d424ac6a928858b74182f74ba14ceb658b709324153847",
+    "behavior": "Foreground::Update gates activation by song beat and computes its first delta from music seconds minus the start beat's elapsed time. An offset change can alter the frame and queued-command cadence that starts an authored simulation."
+  },
+  "implementation": {
+    "scope": "Harness only. No production behavior, chart-specific dispatch, ITGmania changes or fixture expectation changes.",
+    "checks": [
+      "Selected capture hash and SHA-256 content-addressed source archive.",
+      "Recorded simfile, Lua dependency and media bytes against the archive manifest.",
+      "Reject changed or missing inputs before preparing gameplay; no parity report is emitted.",
+      "Allow identical relocated sources and report the checked source identity.",
+      "Standalone traces without a capture source manifest report not-recorded."
+    ],
+    "source_sha256": {
+      "tests/support/song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+      "tests/song_lua_source_identity.rs": "9cc07089f0c3a7c9336581d1af376cc52976e0a85859da57e9bbe1da3bde34a6",
+      "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "2d5390fecdf2217eb13a2f0f63c81dcfb6192cb762a3c8565113bad35db3eac0"
+    }
+  },
+  "validation": {
+    "focused_regressions_passed": 6,
+    "regressions_log": "target/live-parity-source-audit/source-identity-tests.log",
+    "real_modified_source": "Rejected with exit code 1 before replay 0/preparation. No invalid parity report emitted.",
+    "commands": [
+      {
+        "name": "source-identity-tests",
+        "argv": [
+          "target\\debug\\deps\\song_lua_source_identity-a075d1e10b3159d9.exe",
+          "--nocapture"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "modified-source-rejected",
+        "argv": [
+          "target\\debug\\deps\\live_song_lua-262f07963cf9f93b.exe",
+          "tests\\fixtures\\interactive_song_lua\\fof-single.trace.json.zst",
+          "target/debug/Songs/lua-songs/fof_guys/fof.ssc",
+          "target\\live-parity-source-audit\\invalid.json",
+          "--production"
+        ],
+        "exit_code": 1
+      },
+      {
+        "name": "fof-single-verified",
+        "argv": [
+          "target\\debug\\deps\\live_song_lua-262f07963cf9f93b.exe",
+          "tests\\fixtures\\interactive_song_lua\\fof-single.trace.json.zst",
+          "../rework/lua-songs/fof_guys/fof.ssc",
+          "target\\live-parity-source-audit\\fof-single-verified.json",
+          "--production"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "fof-versus-verified",
+        "argv": [
+          "target\\debug\\deps\\live_song_lua-262f07963cf9f93b.exe",
+          "tests\\fixtures\\interactive_song_lua\\fof-versus.trace.json.zst",
+          "../rework/lua-songs/fof_guys/fof.ssc",
+          "target\\live-parity-source-audit\\fof-versus-verified.json",
+          "--production"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "native_replays": {
+      "single": {
+        "report": "target/live-parity-source-audit/fof-single-verified.json",
+        "sha256": "bcad3d867934e8cc9aef3d3564ddb0290116524213ebe8e89edb0d6a33c2f256",
+        "frames": 448,
+        "scenes": 1,
+        "inputs": 59,
+        "draws": 15387,
+        "vertices": 699774,
+        "stage_fields": 209,
+        "draw_mismatches": 0,
+        "errors": [],
+        "source_identity": {
+          "status": "verified",
+          "manifest": "tests\\fixtures\\interactive_song_lua\\manifest.json",
+          "trace_sha256": "0d7895242bd19b26d50368507888ed6ea360728ed6cf06975b6eea69e14bb682",
+          "source_archive": "tests\\fixtures\\interactive_song_lua\\../full_song_lua/50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb.tar.zst",
+          "source_archive_sha256": "50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb",
+          "simfile": "C:\\GitHub\\rework\\lua-songs\\fof_guys\\fof.ssc",
+          "simfile_sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6",
+          "verified_song_files": 39
+        }
+      },
+      "versus": {
+        "report": "target/live-parity-source-audit/fof-versus-verified.json",
+        "sha256": "8229dc1dff18e0e55c4e4ca37399b6f2d09088b423099df4c700c32e9426afab",
+        "frames": 698,
+        "scenes": 2,
+        "inputs": 102,
+        "draws": 16343,
+        "vertices": 734094,
+        "stage_fields": 660,
+        "draw_mismatches": 0,
+        "errors": [],
+        "source_identity": {
+          "status": "verified",
+          "manifest": "tests\\fixtures\\interactive_song_lua\\manifest.json",
+          "trace_sha256": "2a17a3f75d0cb248f8335cc3d26478a74c009333981398bc3ca87fbe14537cf8",
+          "source_archive": "tests\\fixtures\\interactive_song_lua\\../full_song_lua/50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb.tar.zst",
+          "source_archive_sha256": "50ada90f96b306f583ae02382994d5c4497b33546c02fac6b3f826b0b00913fb",
+          "simfile": "C:\\GitHub\\rework\\lua-songs\\fof_guys\\fof.ssc",
+          "simfile_sha256": "a40dbf6a805eb74a544ba1fb6179d15d18c6df1ba2220218e3937e25a82a5fe6",
+          "verified_song_files": 39
+        }
+      }
+    },
+    "normal_application_build": {
+      "command": "cargo +1.98.1 build --locked --offline -j 2 --bin deadsync",
+      "log": "target/live-parity-source-audit/build-app.log",
+      "sha256": "39ef3be314f25a95b489c4d9206669a7837ce4cf7613328f5092065b41cd8591"
+    }
+  },
+  "limits": [
+    "Two explicitly selected short captures, not all fixtures, whole-song completion or framebuffer pixels.",
+    "Source verification covers the recorded song files; it is not a sandbox or a guarantee for every possible external dependency.",
+    "No runtime performance change or speedup is claimed. CPU-cycle, throughput and allocation benchmarking resumes with the next runtime change.",
+    "Direct native actor bindings and removal of frame/publication copies remain future work."
+  ]
+}
