@@ -13263,6 +13263,35 @@ fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::R
     clock.set("delta", delta)
 }
 
+#[cfg(test)]
+mod actor_clock_tests {
+    use super::*;
+
+    #[test]
+    fn effect_clock_timer_preserves_itgmania_single_subtraction_and_getters() {
+        for native in [false, true] {
+            let lua = Lua::new();
+            if native { lua.set_app_data(LiveActorPlayback); }
+            let actor = lua.create_table().unwrap();
+            install_actor_effect_time_getter_methods(&lua, &actor).unwrap();
+            let units = actor.get::<Function>("GetSecsIntoEffect").unwrap();
+            let delta = actor.get::<Function>("GetEffectDelta").unwrap();
+            // Actor.cpp uses >, not >=, and subtracts the period only once.
+            for (elapsed, expected) in [(0.5, 0.5), (0.5, 1.0), (0.0, 1.0), (2.5, 2.5), (-0.5, 1.0)] {
+                advance_motion_clock(&lua, &actor, elapsed).unwrap();
+                assert_eq!(units.call::<f32>(()).unwrap(), expected);
+                assert_eq!(delta.call::<f32>(()).unwrap(), elapsed as f32);
+            }
+            actor.raw_set("__songlua_state_effect_period", 0.0).unwrap();
+            advance_motion_clock(&lua, &actor, 2.0).unwrap();
+            assert_eq!(units.call::<f32>(()).unwrap(), 3.0);
+            actor.raw_set("__songlua_state_effect_period", -1.0).unwrap();
+            advance_motion_clock(&lua, &actor, 0.0).unwrap();
+            assert_eq!(units.call::<f32>(()).unwrap(), 4.0);
+        }
+    }
+}
+
 pub(crate) fn effect_render_time(
     actor: &Table,
     frame_clock: [f32; 2],

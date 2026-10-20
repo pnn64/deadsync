@@ -1968,6 +1968,89 @@ pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverla
 #[cfg(test)]
 mod tests {
     #[test]
+    fn live_effect_clocks_preserve_effects_getters_and_update_order() {
+        let source = r#"
+local actors, tick = {}, 0
+local root = Def.ActorFrame {
+    OnCommand = function(self)
+        self:SetUpdateRate(0.5)
+        self:SetUpdateFunction(function()
+            tick = tick + 1
+            for i, actor in ipairs(actors) do
+                if tick == 2 then actor:bob():effectperiod(0.5) end
+                if tick == 4 then actor:pulse() end
+                if tick == 6 then actor:hibernate(0.125) end
+                if tick == 8 then actor:diffuseblink():effectclock('beat') end
+                if tick == 10 then actor:diffuseshift():effectclock('music') end
+                if tick == 12 then actor:bounce():effectclock('timer') end
+                if tick == 14 then actor:spin():effectmagnitude(20,30,40):linear(0.25):rotationz(45) end
+                if tick == 16 then actor:stopeffect():finishtweening() end
+                if tick == 18 then actor:bob():effectperiod(0.75) end
+                if tick == 20 then actor:bob():effectperiod(0.5) end
+                actor:x(actor:GetSecsIntoEffect()):y(actor:GetEffectDelta())
+            end
+        end)
+        self:SetDrawFunction(function()
+            local values = {}
+            for i, actor in ipairs(actors) do
+                values[#values+1] = string.format('%.9g:%.9g',
+                    actor:GetSecsIntoEffect(), actor:GetEffectDelta())
+                actor:Draw()
+            end
+            OBSERVED = table.concat(values, ',')
+        end)
+    end,
+}
+for i = 1, 3 do
+    root[#root+1] = Def.Quad {
+        InitCommand = function(self) actors[i] = self end,
+        OnCommand = function(self)
+            self:zoomto(16,16):effectclock(({'timer','music','beat'})[i])
+        end,
+    }
+end
+return root
+"#;
+        let build = || compile_with_context("live-effect-clocks", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut native = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
+        for actor in registry(&legacy) {
+            let key = "__songlua_state_motion_clock";
+            let value = actor.raw_get::<Value>(key).unwrap();
+            actor.raw_set(key, crate::host::clone_lua_value(&legacy.lua, value).unwrap()).unwrap();
+            crate::reset_actor_capture(&legacy.lua, &actor).unwrap();
+        }
+        for frame in 0..24 {
+            let seconds = f64::from(frame) / 8.0;
+            let input = SongLuaLiveFrame {
+                screen_seconds: seconds, music_seconds: if frame == 9 { seconds - 0.5 } else { seconds },
+                beat: seconds * 3.0, delta_seconds: match frame { 0 | 5 => 0.0, 7 => 2.5, _ => 0.125 },
+                ..Default::default()
+            };
+            let after = native.advance(input.clone()).unwrap();
+            let before = legacy.advance(input).unwrap();
+            assert!(after.errors.is_empty(), "{:?}", after.errors);
+            assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(after.draw_frames, before.draw_frames, "draws at frame {frame}");
+            assert_eq!(native.states(), legacy.states(), "states at frame {frame}");
+            assert_eq!(native.lua.globals().get::<String>("OBSERVED").unwrap(),
+                legacy.lua.globals().get::<String>("OBSERVED").unwrap(), "getters at frame {frame}");
+            for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
+        }
+        let actors = registry(&native);
+        let key = "__songlua_state_motion_clock";
+        assert!(actors.iter().any(|actor| !actor.raw_get::<Value>(key).unwrap().is_nil()));
+        for actor in actors {
+            crate::lua_util::init_actor_native_state(&native.lua, &actor).unwrap();
+            assert!(actor.raw_get::<Value>(key).unwrap().is_nil());
+        }
+    }
+
+    #[test]
     fn live_native_queues_preserve_behavior_without_capture_history() {
         let source = r#"
 local tick = 0
