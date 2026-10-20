@@ -3153,17 +3153,35 @@ pub fn register_song_lua_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         ensure_tween_replay(lua, actor)?;
     }
     let registry = song_lua_actor_registry(lua)?;
-    let actor_ptr = actor.to_pointer() as usize;
-    for value in registry.sequence_values::<Value>() {
-        let Value::Table(existing) = value? else {
-            continue;
-        };
-        if existing.to_pointer() as usize == actor_ptr {
-            return Ok(());
-        }
+    if !registry_contains_actor(lua, &registry, actor)? {
+        registry.raw_set(registry.raw_len() + 1, actor)?;
     }
-    registry.raw_set(registry.raw_len() + 1, actor.clone())?;
     Ok(())
+}
+
+fn registry_contains_actor(lua: &Lua, registry: &Table, actor: &Table) -> mlua::Result<bool> {
+    // SAFETY: registry/actor are rooted in two reserved slots. A third holds
+    // one raw sequence value. Reads and identity checks cannot invoke Lua.
+    unsafe {
+        crate::raw_vm::with_read_stack(lua, 3, |raw, base| {
+            raw.push(registry)?;
+            raw.push(actor)?;
+            let state = raw.state();
+            for index in 1.. {
+                ffi::lua_rawgeti(state, base + 1, index);
+                match ffi::lua_type(state, base + 3) {
+                    ffi::LUA_TNIL => return Ok(false),
+                    ffi::LUA_TTABLE => {
+                        if ffi::lua_rawequal(state, base + 2, base + 3) != 0 { return Ok(true); }
+                    }
+                    // Preserve checked conversion of unusual registry values.
+                    _ => { let _ = Value::from_stack(base + 3, raw)?; }
+                }
+                ffi::lua_pop(state, 1);
+            }
+            unreachable!()
+        })
+    }
 }
 
 pub fn inherit_actor_dirs(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -18415,7 +18433,7 @@ fn snapshot_function_locals(
                         Ok(())
                     })?;
                 }
-                for index in 1..=function.info().num_upvalues {
+                for index in 1..=function_upvalue_count(lua, &function)? {
                     let (name, value) = read_function_upvalue(lua, function.clone(), index.into())?;
                     if matches!(&name, Value::String(name) if name.to_str()?.as_ref() == "_ENV") {
                         continue;
@@ -18452,6 +18470,19 @@ fn snapshot_function_locals(
         tables: snapshots,
         cells,
     })
+}
+
+fn function_upvalue_count(lua: &Lua, function: &Function) -> mlua::Result<u8> {
+    // SAFETY: >u consumes a rooted function and fills only debug metadata.
+    // It does not execute the function or allocate/throw in Lua 5.1.
+    unsafe {
+        crate::raw_vm::with_read_stack(lua, 1, |raw, _| {
+            raw.push(function)?;
+            let mut info: ffi::lua_Debug = std::mem::zeroed();
+            assert_ne!(ffi::lua_getinfo(raw.state(), c">u".as_ptr(), &mut info), 0);
+            Ok(info.nups as u8)
+        })
+    }
 }
 
 fn read_function_upvalue(
@@ -24242,3 +24273,7 @@ mod mesh_perf {
 #[cfg(test)]
 #[path = "../tests/perf/startup_capture.rs"]
 mod startup_capture_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/vm_reads_registry.rs"]
+mod vm_reads_perf;

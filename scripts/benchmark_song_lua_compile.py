@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -40,12 +40,20 @@ def main():
         for name in ["native_function.rs", "native_function_before.rs", "startup_capture.rs", "startup_capture_before.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "vm_reads":
+        for name in ["vm_reads_actor.rs", "vm_reads_actor_before.rs", "vm_reads_registry.rs", "vm_reads_registry_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
     ]
     baseline = "bacdc3e37" if args.suite == "finalize" else "31a7355f5"
     expected_names = 14 if args.suite == "finalize" else 3
+    if args.suite == "vm_reads":
+        filters = ["actor_classes::vm_reads_perf::benchmark_method_keys", "lua_util::vm_reads_perf::benchmark_registry_and_upvalues"]
+        baseline = "4277c1b63"
+        expected_names = 6
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -59,7 +67,7 @@ def main():
             run = subprocess.run([str(binary), test_filter,
                                   "--exact", "--ignored", "--nocapture", "--test-threads=1"],
                                  cwd=root, env=env, capture_output=True, text=True, encoding="utf-8")
-            stem = "compile-finalize" if args.suite == "finalize" else f"startup-scope-{filter_index+1}"
+            stem = "compile-finalize" if args.suite == "finalize" else f"{args.suite}-scope-{filter_index+1}"
             log = root / "target" / f"{stem}-round-{index+1}.log"
             log.write_text(run.stdout + run.stderr, encoding="utf-8")
             assert run.returncode == 0, f"benchmark failed; see {log}"
@@ -107,6 +115,8 @@ def main():
                   stack_bytes=33554432, records=records, summary=summary)
     if args.suite == "startup":
         report["timing_scope"] = ("Prepared Lua states, keys, functions and actors are excluded. Each sample handles 64 actors with 128 native methods/assignments, or 64 snapshots of a 256-field table. Result handle drops are included; Lua state destruction is excluded. Snapshot GC is stopped before timing. Each of ten samples prepares a new Lua state; first sample discarded.")
+    if args.suite == "vm_reads":
+        report["timing_scope"] = ("Each sample prepares a fresh Lua state outside timing; first of ten samples discarded. Key cases process 64 actors with 128 bind/assign/lookup operations. Assign/lookup materialize fresh keys from a prepared Lua array inside timing. Registration cases register 128 fresh actors into an initially empty registry, or repeatedly register the last actor in a prepared 1024-entry registry. Upvalue cases query a prepared 32-upvalue function 8192 times. Result/temporary handle destruction is included; VM/input destruction is excluded. GC policy unchanged.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:
