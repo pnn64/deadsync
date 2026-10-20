@@ -1485,14 +1485,31 @@ fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
         return Ok((0..overlays.len()).collect());
     }
     let count = overlays.len();
-    let mut children = vec![Vec::new(); count + 1];
-    for (index, overlay) in overlays.iter().enumerate() {
+    // Parent zero is the root list; parent i + 1 owns actor i.
+    // Keep all child lists in one buffer instead of allocating a Vec per parent.
+    let mut offsets = vec![0usize; count + 2];
+    for overlay in overlays {
         let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
-        let Some(list) = children.get_mut(parent) else {
+        let Some(size) = offsets.get_mut(parent + 1) else {
             return Err("Runtime wrapper has an invalid parent".into());
         };
-        list.push(index);
+        *size += 1;
     }
+    for index in 1..offsets.len() {
+        offsets[index] += offsets[index - 1];
+    }
+    let mut children = vec![0usize; count];
+    // Fill from the end so each list retains original sibling order.
+    // Consumed ends become starts; shift them back to the parent-key positions.
+    for (index, overlay) in overlays.iter().enumerate().rev() {
+        let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
+        offsets[parent + 1] -= 1;
+        children[offsets[parent + 1]] = index;
+    }
+    for parent in 0..=count {
+        offsets[parent] = offsets[parent + 1];
+    }
+    offsets[count + 1] = count;
     let mut source = overlays
         .iter()
         .enumerate()
@@ -1513,7 +1530,7 @@ fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
                 return Err("Cycle in runtime wrapper ownership".into());
             }
             chain.push(next);
-            let Some(&child) = children[next + 1].first() else {
+            let Some(&child) = children[offsets[next + 1]..offsets[next + 2]].first() else {
                 source[next] = next;
                 break;
             };
@@ -1523,17 +1540,26 @@ fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
             source[index] = source[next];
         }
     }
-    for list in &mut children {
-        list.sort_by_key(|&index| source[index]);
+    for parent in 0..=count {
+        children[offsets[parent]..offsets[parent + 1]].sort_by_key(|&index| source[index]);
     }
     let mut order = Vec::with_capacity(count);
-    let mut pending = children[0].iter().rev().copied().collect::<Vec<_>>();
+    let mut pending = children[offsets[0]..offsets[1]]
+        .iter()
+        .rev()
+        .copied()
+        .collect::<Vec<_>>();
     while let Some(index) = pending.pop() {
         if order.len() >= count {
             return Err("Cycle in runtime wrapper hierarchy".into());
         }
         order.push(index);
-        pending.extend(children[index + 1].iter().rev().copied());
+        pending.extend(
+            children[offsets[index + 1]..offsets[index + 2]]
+                .iter()
+                .rev()
+                .copied(),
+        );
     }
     if order.len() != count {
         return Err("Runtime wrapper hierarchy has no reachable root".into());
@@ -1563,13 +1589,35 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
     let mut outputs = entry_paths
         .iter()
-        .map(|entry_path| DefaultCompiledSongLua {
+        .enumerate()
+        .map(|(layer, entry_path)| DefaultCompiledSongLua {
+            overlays: Vec::with_capacity(local_counts[layer]),
+            live_indices: if compiled.live_scene.is_some() {
+                Vec::with_capacity(local_counts[layer])
+            } else {
+                Vec::new()
+            },
             entry_path: entry_path.clone(),
+            loaded_steps: compiled.loaded_steps,
+            loaded_style: if layer + 1 == entry_paths.len() {
+                compiled.loaded_style.take()
+            } else {
+                compiled.loaded_style.clone()
+            },
+            startup_reloads: compiled.startup_reloads,
             screen_width: compiled.screen_width,
             screen_height: compiled.screen_height,
             overlay_update_unit: compiled.overlay_update_unit,
-            messages: compiled.messages.clone(),
-            sound_paths: compiled.sound_paths.clone(),
+            messages: if layer + 1 == entry_paths.len() {
+                std::mem::take(&mut compiled.messages)
+            } else {
+                compiled.messages.clone()
+            },
+            sound_paths: if layer + 1 == entry_paths.len() {
+                std::mem::take(&mut compiled.sound_paths)
+            } else {
+                compiled.sound_paths.clone()
+            },
             ..DefaultCompiledSongLua::default()
         })
         .collect::<Vec<_>>();
@@ -1612,8 +1660,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         let frames = &mut outputs[layer].draw_frames;
         // Repeated immediate Draw calls may have the same owner and clock;
         // keep each submission independent rather than merging owner batches.
-        if let Some(last) = frames.last_mut().filter(|last|
-            !frame.immediate && !last.immediate && last.second == frame.second) {
+        if let Some(last) = frames
+            .last_mut()
+            .filter(|last| !frame.immediate && !last.immediate && last.second == frame.second)
+        {
             last.owner_ends
                 .extend(frame.owner_ends.iter().map(|end| last.ops.len() + end));
             last.owners.extend(frame.owners);
@@ -1626,7 +1676,9 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     let mut overlays = compiled.overlays.drain(..).map(Some).collect::<Vec<_>>();
     for global_index in overlay_order {
         // The validated traversal visits each owned node exactly once.
-        let mut overlay = overlays[global_index].take().expect("unique overlay traversal");
+        let mut overlay = overlays[global_index]
+            .take()
+            .expect("unique overlay traversal");
         let (layer, _) = overlay_map[global_index];
         overlay.parent_index = overlay.parent_index.and_then(|parent| {
             overlay_map
@@ -1700,11 +1752,6 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         }
     }
 
-    for output in &mut outputs {
-        output.loaded_steps = compiled.loaded_steps;
-        output.loaded_style = compiled.loaded_style.clone();
-        output.startup_reloads = compiled.startup_reloads;
-    }
     let primary = &mut outputs[primary_index];
     primary.live_scene = compiled.live_scene.take();
     #[cfg(feature = "test-support")]
@@ -1732,3 +1779,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
     Ok(outputs)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/compile_finalize.rs"]
+mod perf;

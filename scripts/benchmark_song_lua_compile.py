@@ -1,0 +1,102 @@
+"""Measure frozen/current compile finalization and complete fixture compilation."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import statistics
+import subprocess
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--rounds", type=int, default=6)
+    args = parser.parse_args()
+    assert args.rounds > 0
+    root = Path(__file__).resolve().parent.parent
+    binary = args.binary.resolve()
+    binary_sha = sha(binary)
+    paths = sorted((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
+    paths += [root / name for name in [
+        "crates/deadsync-song-lua/tests/perf/compile_finalize.rs",
+        "crates/deadsync-song-lua/tests/perf/compile_finalize_before.rs",
+        "crates/deadsync-song-lua/tests/perf/compile_finalize.lua",
+        "crates/deadsync-song-lua/tests/perf/live_actors.lua",
+        "crates/deadsync-song-lua/tests/perf/draw_capture.rs",
+        "tests/fixtures/song_lua/basic.lua", "tests/support/perf.rs",
+        "crates/deadsync-song-lua/Cargo.toml", "Cargo.toml", "Cargo.lock",
+        ".cargo/config.toml", "scripts/benchmark_song_lua_compile.py",
+    ]]
+    sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    records = []
+    for index in range(args.rounds):
+        env = os.environ.copy()
+        env["RUST_MIN_STACK"] = "33554432"
+        env.pop("DEADSYNC_PERF_REVERSE", None)
+        if index % 2:
+            env["DEADSYNC_PERF_REVERSE"] = "1"
+        run = subprocess.run([str(binary), "compile::perf::benchmark_compile_finalize",
+                              "--exact", "--ignored", "--nocapture", "--test-threads=1"],
+                             cwd=root, env=env, capture_output=True, text=True, encoding="utf-8")
+        log = root / "target" / f"compile-finalize-round-{index+1}.log"
+        log.write_text(run.stdout + run.stderr, encoding="utf-8")
+        assert run.returncode == 0, f"benchmark failed; see {log}"
+        current = []
+        for line in run.stdout.splitlines():
+            if "DRAW_CAPTURE_METRIC " not in line:
+                continue
+            row = json.loads(line.split("DRAW_CAPTURE_METRIC ", 1)[1])
+            assert row["baseline_commit"] == "bacdc3e37"
+            assert len(row["samples"]) == 9
+            row.update(round=index+1, order="after-first" if index % 2 else "before-first")
+            current.append(row)
+        names = {row["workload"] for row in current}
+        assert len(names) == 14 and len(current) == 28
+        assert all({row["variant"] for row in current if row["workload"] == name}
+                   == {"before", "after"} for name in names)
+        records.extend(current)
+        print(f"Completed round {index+1}/{args.rounds}", flush=True)
+    summary = []
+    fields = ("ns", "thread_cycles", "allocations", "reallocations", "allocated_bytes", "frees")
+    for name in dict.fromkeys(row["workload"] for row in records):
+        values = {}
+        for variant in ("before", "after"):
+            samples = [sample for row in records if row["workload"] == name
+                       and row["variant"] == variant for sample in row["samples"]]
+            values[variant] = {key: statistics.median(s[key] / s["units"] for s in samples)
+                               for key in fields}
+            values[variant]["units_per_second"] = 1e9 / values[variant]["ns"]
+        values.update(workload=name,
+                      unit=next(row["unit"] for row in records if row["workload"] == name),
+                      throughput_gain_percent=100*(values["before"]["ns"]/values["after"]["ns"]-1),
+                      cycle_reduction_percent=100*(1-values["after"]["thread_cycles"]/values["before"]["thread_cycles"]))
+        summary.append(values)
+    assert all(sha(root/name) == digest for name, digest in sources.items()), "source changed while measuring"
+    assert sha(binary) == binary_sha, "executable changed while measuring"
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == head
+    report = dict(baseline_commit="bacdc3e37", worktree_head=head,
+                  executable=str(binary), executable_sha256=binary_sha, source_sha256=sources,
+                  rustc=subprocess.check_output(["rustc", "+1.98.1", "-Vv"], text=True),
+                  system=platform.platform(), processor=platform.processor(), logical_processors=os.cpu_count(),
+                  logical_cpu=2, rounds=args.rounds, samples_per_variant_per_workload=args.rounds*9,
+                  profile="release opt-level=3, LTO disabled, pinned rustc 1.98.1; same executable and allocator",
+                  cycles="QueryThreadCycleTime: scheduled current-thread CPU cycles including kernel execution; not a user-only PMU counter",
+                  allocation_scope="current-thread Rust GlobalAlloc, including mlua and its normal Rust-backed Lua allocator; direct native malloc excluded",
+                  timing_scope="wrapper orders borrow prepared actors; splits consume prepared compiled DTOs and include output destruction; complete fixtures include context construction, file read, host creation, Lua execution/startup, actor extraction and layer finalization; returned DTO/VM destruction and complete output validation excluded for fixture compiles; inputs and fixtures unchanged",
+                  stack_bytes=33554432, records=records, summary=summary)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
+    for row in summary:
+        print(row["workload"], f"throughput {row['throughput_gain_percent']:+.1f}%; cycles {-row['cycle_reduction_percent']:+.1f}%")
+
+
+if __name__ == "__main__":
+    main()
