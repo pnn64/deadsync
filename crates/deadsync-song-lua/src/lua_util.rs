@@ -21534,12 +21534,49 @@ where
 
 pub(crate) fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpriteState>, String> {
     let mut states = Vec::new();
+    visit_sprite_states(actor, |state| states.push(state))?;
+    Ok(states)
+}
+
+/// Retain the published native array until authored frame values change.
+/// Inspect values in one pass: Frames can be edited in place, and legacy
+/// frame fields can invoke __index. Identity checks or a second decoding pass
+/// would miss mutations or repeat authored getter side effects.
+pub(crate) fn sync_sprite_states(
+    actor: &Table,
+    states: &mut Arc<[crate::SongLuaSpriteState]>,
+) -> Result<(), String> {
+    let mut replacement: Option<Vec<crate::SongLuaSpriteState>> = None;
+    let mut index = 0;
+    visit_sprite_states(actor, |state| {
+        if let Some(values) = &mut replacement {
+            values.push(state);
+        } else if states.get(index).is_none_or(|old|
+            old.frame != state.frame || old.delay.to_bits() != state.delay.to_bits())
+        {
+            let mut values = Vec::with_capacity(states.len().max(index + 1));
+            values.extend_from_slice(&states[..index]);
+            values.push(state);
+            replacement = Some(values);
+        }
+        index += 1;
+    })?;
+    // Publish only after a successful read; old draw snapshots keep their Arc.
+    if let Some(values) = replacement { *states = values.into(); }
+    else if index != states.len() { *states = Arc::from(&states[..index]); }
+    Ok(())
+}
+
+fn visit_sprite_states(
+    actor: &Table,
+    mut visit: impl FnMut(crate::SongLuaSpriteState),
+) -> Result<(), String> {
     if actor
         .raw_get::<Option<bool>>("__songlua_state_sprite_default_states")
         .map_err(|err| err.to_string())?
         .unwrap_or(false)
     {
-        return Ok(states);
+        return Ok(());
     }
     if let Some(frames) = actor
         .raw_get::<Option<Table>>("Frames")
@@ -21556,9 +21593,9 @@ pub(crate) fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpri
                 .get::<Option<f32>>("Delay")
                 .map_err(|err| err.to_string())?
                 .unwrap_or(0.1);
-            states.push(crate::SongLuaSpriteState { frame, delay });
+            visit(crate::SongLuaSpriteState { frame, delay });
         }
-        return Ok(states);
+        return Ok(());
     }
     let mut key = [0u8; 16];
     for index in 0i32.. {
@@ -21576,9 +21613,9 @@ pub(crate) fn read_sprite_states(actor: &Table) -> Result<Vec<crate::SongLuaSpri
             .get::<Option<f32>>(delay_key)
             .map_err(|err| err.to_string())?
             .unwrap_or(0.1);
-        states.push(crate::SongLuaSpriteState { frame, delay });
+        visit(crate::SongLuaSpriteState { frame, delay });
     }
-    Ok(states)
+    Ok(())
 }
 
 fn write_sprite_frame_key(index: i32, key: &mut [u8; 16]) -> usize {
@@ -21588,6 +21625,109 @@ fn write_sprite_frame_key(index: i32, key: &mut [u8; 16]) -> usize {
     // Five prefix bytes plus the longest signed i32 fit in sixteen bytes.
     write!(&mut output, "Frame{index:04}").expect("sprite key buffer fits every i32");
     16 - output.len()
+}
+
+#[cfg(test)]
+mod sprite_state_publication_tests {
+    use super::*;
+
+    fn assert_fresh(actor: &Table, states: &mut Arc<[crate::SongLuaSpriteState]>) {
+        let expected = read_sprite_states(actor).unwrap();
+        sync_sprite_states(actor, states).unwrap();
+        assert_eq!(states.as_ref(), expected);
+    }
+
+    #[test]
+    fn native_sprite_array_reuses_unchanged_values_and_preserves_old_snapshots() {
+        let lua = Lua::new();
+        let actor: Table = lua.load("return {Frames={{Frame=2,Delay='0.25'},{Delay=0.5}}}").eval().unwrap();
+        let mut states: Arc<[_]> = Arc::from([]);
+        assert_fresh(&actor, &mut states);
+        let original = states.clone();
+        assert_fresh(&actor, &mut states);
+        assert!(Arc::ptr_eq(&original, &states));
+        let frames = actor.raw_get::<Table>("Frames").unwrap();
+        frames.raw_get::<Table>(1).unwrap().set("Frame", 3).unwrap();
+        assert_fresh(&actor, &mut states);
+        assert_eq!(states.iter().map(|state| state.frame).collect::<Vec<_>>(), [3, 3]);
+        assert_eq!(original.iter().map(|state| state.frame).collect::<Vec<_>>(), [2, 2]);
+        assert!(!Arc::ptr_eq(&original, &states));
+        frames.raw_set(3, lua.load("return {Frame=7}").eval::<Table>().unwrap()).unwrap();
+        assert_fresh(&actor, &mut states);
+        assert_eq!(states.len(), 3);
+        frames.raw_set(2, Value::Nil).unwrap();
+        assert_fresh(&actor, &mut states);
+        assert_eq!(states.len(), 1, "sequence traversal stops at the first hole");
+        actor.raw_set("__songlua_state_sprite_default_states", true).unwrap();
+        assert_fresh(&actor, &mut states);
+        assert!(states.is_empty());
+        let empty = states.clone();
+        assert_fresh(&actor, &mut states);
+        assert!(Arc::ptr_eq(&empty, &states));
+        actor.raw_set("__songlua_state_sprite_default_states", false).unwrap();
+        assert_fresh(&actor, &mut states);
+        assert_eq!(states.len(), 1);
+        actor.raw_set("Frames", Value::Nil).unwrap();
+        actor.set("Frame0000", "9").unwrap();
+        actor.set("Delay0000", 0.75).unwrap();
+        assert_fresh(&actor, &mut states);
+        assert_eq!(states[0].frame, 9);
+        let legacy = states.clone();
+        assert_fresh(&actor, &mut states);
+        assert!(Arc::ptr_eq(&legacy, &states));
+    }
+
+    #[test]
+    fn native_sprite_publication_visits_getters_once_and_keeps_last_good_array_on_error() {
+        let lua = Lua::new();
+        let actor: Table = lua.load(r#"
+reads, frame, bad = 0, 4, false
+return setmetatable({}, {__index=function(_, key)
+    reads=reads+1
+    if key=='Frame0000' then return frame end
+    if key=='Delay0000' then return '0.5' end
+    if key=='Frame0001' and bad then return {} end
+end})
+"#).eval().unwrap();
+        let mut states: Arc<[_]> = Arc::from([]);
+        for frame in [4, 4, 8] {
+            lua.globals().set("reads", 0).unwrap();
+            lua.globals().set("frame", frame).unwrap();
+            let previous = states.clone();
+            sync_sprite_states(&actor, &mut states).unwrap();
+            assert_eq!(lua.globals().get::<u32>("reads").unwrap(), 3);
+            assert_eq!(states[0].frame, frame);
+            if previous.first().is_some_and(|state| state.frame == frame) {
+                assert!(Arc::ptr_eq(&previous, &states));
+            }
+        }
+        let previous = states.clone();
+        lua.load("reads=0; frame=20; bad=true").exec().unwrap();
+        let error = sync_sprite_states(&actor, &mut states).unwrap_err();
+        assert_eq!(lua.globals().get::<u32>("reads").unwrap(), 3);
+        assert_eq!(error, read_sprite_states(&actor).unwrap_err());
+        assert!(Arc::ptr_eq(&previous, &states), "a partial read must not publish");
+    }
+
+    #[test]
+    fn native_sprite_publication_compares_delay_bits() {
+        let lua = Lua::new();
+        let actor: Table = lua.load("return {Frames={{Frame=0,Delay=0}}}").eval().unwrap();
+        let entry = actor.raw_get::<Table>("Frames").unwrap().raw_get::<Table>(1).unwrap();
+        let mut states: Arc<[_]> = Arc::from([]);
+        sync_sprite_states(&actor, &mut states).unwrap();
+        let positive_zero = states.clone();
+        entry.set("Delay", -0.0_f32).unwrap();
+        sync_sprite_states(&actor, &mut states).unwrap();
+        assert_eq!(states[0].delay.to_bits(), (-0.0_f32).to_bits());
+        assert!(!Arc::ptr_eq(&positive_zero, &states));
+        entry.set("Delay", f64::NAN).unwrap();
+        sync_sprite_states(&actor, &mut states).unwrap();
+        assert!(states[0].delay.is_nan());
+        let nan = states.clone();
+        sync_sprite_states(&actor, &mut states).unwrap();
+        assert!(Arc::ptr_eq(&nan, &states), "unchanged NaNs should not force allocations");
+    }
 }
 
 fn read_actor_multi_vertex_range(

@@ -1909,7 +1909,7 @@ fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind
                 *texture_key = std::sync::Arc::from(path.to_string_lossy().as_ref());
                 *texture_path = path;
             }
-            *states = crate::lua_util::read_sprite_states(owned)?.into();
+            crate::lua_util::sync_sprite_states(owned, states)?;
         }
         _ => {}
     }
@@ -3214,6 +3214,65 @@ return Def.Sprite {
             assert_eq!(state.frame, index as u32);
             assert_eq!(state.delay, ((1.0_f64 / 144.0) * (184.0 / 60.0 * 2.0)) as f32);
         }
+    }
+
+    #[test]
+    fn live_sprite_publication_preserves_input_update_draw_and_texture_loads() {
+        let mut compiled = compile_with_context("live-sprite-publication", r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function() SPRITE.Frames[1].Frame=2 end)
+        self:SetUpdateFunction(function() SPRITE.Frames[1].Delay=0.25 end)
+        self:SetDrawFunction(function() SPRITE.Frames[1].Frame=3; SPRITE:Draw() end)
+    end,
+    Def.Sprite {
+        Name='Animated', Texture='first.png', Frames={{Frame=0,Delay=0.5}},
+        InitCommand=function(self) SPRITE=self end,
+    },
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            for file in ["first.png", "second.png"] {
+                image::RgbaImage::new(16, 16).save(context.song_dir.join(file)).unwrap();
+            }
+        });
+        let local = compiled.overlays.iter().position(|actor| actor.name.as_deref()==Some("Animated")).unwrap();
+        let global = compiled.live_actor_indices()[local];
+        let mut kind = compiled.overlays[local].kind.clone();
+        let frames = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
+            SongLuaOverlayKind::Sprite { states, .. } => states.clone(),
+            _ => panic!("sprite visual slot"),
+        };
+        let original = frames(&kind);
+        let mut scene = compiled.live_scene.take().unwrap();
+        let owned = scene.actors[global].clone();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(Arc::ptr_eq(&original, &frames(&kind)));
+        let input = crate::SongLuaInputEvent {
+            player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+            kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+            level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+        };
+        assert!(scene.input(&input).unwrap().1.errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(frames(&kind)[0].frame, 2);
+        assert!(scene.update(SongLuaLiveFrame::default()).unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(frames(&kind)[0].delay, 0.25);
+        assert!(scene.draw().unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(frames(&kind)[0].frame, 3);
+        assert_eq!(original[0], crate::SongLuaSpriteState { frame:0, delay:0.5 });
+        let drawn = frames(&kind);
+        let next = crate::lua_util::actor_texture_path(&owned).unwrap().unwrap().with_file_name("second.png");
+        scene.lua.globals().set("NEXT_TEXTURE", next.to_string_lossy().as_ref()).unwrap();
+        scene.lua.load("SPRITE:SetTexture(NEXT_TEXTURE)").exec().unwrap();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(Arc::ptr_eq(&drawn, &frames(&kind)), "SetTexture keeps custom frames");
+        scene.lua.load("SPRITE:Load(NEXT_TEXTURE)").exec().unwrap();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(frames(&kind).is_empty(), "Load replaces custom frames with texture defaults");
+        assert_eq!(drawn[0].frame, 3, "previous draw snapshots remain immutable");
     }
 
     #[test]
