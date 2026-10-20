@@ -217,6 +217,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut hash = Fingerprint(Sha256::new());
     if retained_lua_vm {
         for frame in 0..frame_count {
+            #[cfg(feature = "song-lua-performance")]
+            if frame == 60 { deadsync_song_lua::reset_live_profile(); }
             let seconds = frame as f64 / 60.0;
             let host = 1_000_000_000 + (seconds * 1e9).round() as u64;
             let measurement = (benchmark && frame >= 60).then(metrics::Measurement::start);
@@ -254,7 +256,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let total_allocations: u64 = samples.iter().map(|sample| sample["allocations"].as_u64().unwrap()).sum();
     let total_reallocations: u64 = samples.iter().map(|sample| sample["reallocations"].as_u64().unwrap()).sum();
     let total_bytes: u64 = samples.iter().map(|sample| sample["allocated_bytes"].as_u64().unwrap()).sum();
+    #[cfg(feature = "song-lua-performance")]
+    let live_profile = Some(deadsync_song_lua::live_profile_report());
+    #[cfg(not(feature = "song-lua-performance"))]
+    let live_profile: Option<Value> = None;
     let result = json!({"song":song.title,"source_simfile":simfile,"retained_lua_vm":retained_lua_vm,
+        "live_profile":live_profile,
         "execution_path":"application-gameplay-init-and-update","prepare_ms":prepare_ms,
         "frames":frames,"changed_visual_frames":changed_frames,"actor_sound_operations":actor_sound_operations,
         "errors":errors,"initial_actors":initial,"final_actors":previous,

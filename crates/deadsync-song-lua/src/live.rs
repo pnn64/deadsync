@@ -1081,10 +1081,14 @@ impl SongLuaLiveScene {
     {
         if self.ended { return Err(mlua::Error::runtime("cannot send input to an ended song Lua scene")); }
         let (handled, errors) = crate::input::dispatch(&self.lua, event)?;
+        #[cfg(feature = "performance")]
+        let state_read_profile = crate::live_profile::scope(crate::live_profile::Phase::StateRead);
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
         for (_, actor, state) in &mut self.tracked { *state = read_state(&self.lua, actor)?; }
+        #[cfg(feature = "performance")]
+        drop(state_read_profile);
         let mut output = take_output(&self.lua)?;
         output.errors.extend(errors);
         Ok((handled, output))
@@ -1220,12 +1224,16 @@ impl SongLuaLiveScene {
         } else { self.prepare_frame(&frame)? };
         let lua = self.lua.clone();
         let root = self.root.clone();
+        #[cfg(feature = "performance")]
+        let actor_update_profile = crate::live_profile::scope(crate::live_profile::Phase::ActorUpdate);
         crate::lua_util::run_actor_compile_update_functions_with_entry(
             &lua, &root, frame.delta_seconds, |actor| {
                 // Foreground is sorted after the screen's underlay and Player
                 // actors. Its On callbacks observe their current-frame queues.
                 self.advance_foreground(actor, beat as f32, frame.music_seconds as f32)
             })?;
+        #[cfg(feature = "performance")]
+        drop(actor_update_profile);
         for foreground in &mut self.foregrounds {
             if foreground.started && !foreground.finished && beat as f32 > foreground.stop_beat {
                 foreground.actor.get::<Function>("visible")?.call::<()>((foreground.actor.clone(), false))?;
@@ -1264,12 +1272,16 @@ impl SongLuaLiveScene {
         }
         self.outro_started |= frame.gameplay_outro;
         self.last_music_seconds = frame.music_seconds as f32;
+        #[cfg(feature = "performance")]
+        let state_read_profile = crate::live_profile::scope(crate::live_profile::Phase::StateRead);
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
         for (_, actor, state) in &mut self.tracked {
             *state = read_state(&self.lua, actor)?;
         }
+        #[cfg(feature = "performance")]
+        drop(state_read_profile);
         // ScreenGameplay updates health after its actor tree. GetHealthState
         // during a SetLife/LifeChanged callback still sees the previous state.
         if let Err(error) = finish_health_update(&self.lua) {
@@ -1376,14 +1388,20 @@ impl SongLuaLiveScene {
         // Only authored Draw callbacks can mutate them again in this phase.
         if !self.has_custom_draw()? { return take_output(&self.lua); }
         if let Value::Table(root) = &self.root {
+            #[cfg(feature = "performance")]
+            let _actor_draw_profile = crate::live_profile::scope(crate::live_profile::Phase::ActorDraw);
             crate::lua_util::run_actor_draw_functions_for_table(&self.lua, root)?;
         }
+        #[cfg(feature = "performance")]
+        let state_read_profile = crate::live_profile::scope(crate::live_profile::Phase::StateRead);
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
         for (_, actor, state) in &mut self.tracked {
             *state = read_state(&self.lua, actor)?;
         }
+        #[cfg(feature = "performance")]
+        drop(state_read_profile);
         take_output(&self.lua)
     }
 
@@ -1826,6 +1844,8 @@ impl SongLuaLiveScene {
             crate::SongLuaOverlayActor<crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>>, crate::SongLuaCapturedActor,
             crate::gameplay::SongLuaRuntimeOverlayStateDelta>,
     ) -> Result<(), String> {
+        #[cfg(feature = "performance")]
+        let _visual_profile = crate::live_profile::scope(crate::live_profile::Phase::VisualPublication);
         for &(global, target) in &self.targets {
             let actor = match target {
                 SongLuaLiveTarget::Root(local) => visuals.overlays.get_mut(local),
@@ -1953,11 +1973,20 @@ mod tests {
 local tick = 0
 return Def.ActorFrame {
     OnCommand = function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            Q:SetWidth(99):shadowlength(7):effectmagnitude(4,5,6)
+        end)
         self:SetUpdateFunction(function()
             tick = tick + 1
             Q:visible(tick % 2 == 0):shadowlengthx(tick):shadowlengthy(-tick)
                 :zwrite(tick % 2 == 0):SetTextureFiltering(tick % 2 == 0)
                 :diffusealpha(0.5):glow(0.1,0.2,0.3,0.4)
+                :SetWidth(12+tick):SetHeight(18+tick):shadowcolor(0.1,0.2,0.3,0.4)
+                :baserotationx(tick):baserotationy(tick*2):baserotationz(-tick)
+                :effectmagnitude(tick,2,3):effectcolor1(0.2,0.4,0.6,0.8)
+                :effectcolor2(0.8,0.6,0.4,0.2):effecttiming(0.1,0.2,0.3,0.4,0.5)
+                :effect_hold_at_full(0.2):effectperiod(2)
+            assert(Q:GetWidth()==12+tick and Q:GetHeight()==18+tick)
             S:customtexturerect(0,0,1,1):setstate(0)
             if tick == 3 then Q:hibernate(0.125):hurrytweening(0.5) end
             if tick == 7 then Q:stoptweening():addx(3):sleep(0):queuecommand('Again') end
@@ -1966,7 +1995,9 @@ return Def.ActorFrame {
             OBSERVED = string.format('%g,%g,%g,%g',Q:GetX(),Q:GetDestX(),Q:getaux(),Q:GetTweenTimeLeft())
         end)
         self:SetDrawFunction(function()
-            Q:basezoomx(tick / 10 + 1)
+            Q:basezoomx(tick / 10 + 1):SetHeight(40+tick):shadowlengthy(tick+2)
+            Q:Draw()
+            Q:SetHeight(80+tick):shadowlengthy(tick+4)
             Q:Draw()
         end)
     end,
@@ -1991,6 +2022,17 @@ return Def.ActorFrame {
         legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
         for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
         for frame in 0..20 {
+            if frame == 5 {
+                let input = crate::SongLuaInputEvent {
+                    player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+                    kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+                    level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+                };
+                assert!(live.input(&input).unwrap().1.errors.is_empty());
+                assert!(legacy.input(&input).unwrap().1.errors.is_empty());
+                assert_eq!(live.states(), legacy.states(), "input snapshot");
+                live.lua.load("assert(Q:GetWidth()==99)").exec().unwrap();
+            }
             let seconds = f64::from(frame) / 16.0;
             let input = SongLuaLiveFrame { screen_seconds: seconds, music_seconds: seconds,
                 beat: seconds * 2.0, delta_seconds: if frame == 0 { 0.0 } else { 0.0625 },
@@ -1999,6 +2041,7 @@ return Def.ActorFrame {
             let before = legacy.advance(input).unwrap();
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(output.draw_frames, before.draw_frames, "draw snapshots at frame {frame}");
             assert_eq!(live.states(), legacy.states(), "frame {frame}");
             assert_eq!(live.tracked_states().map(|(_, state)| state).collect::<Vec<_>>(),
                 legacy.tracked_states().map(|(_, state)| state).collect::<Vec<_>>());
@@ -2011,6 +2054,12 @@ return Def.ActorFrame {
             }
             for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
         }
+        let reset = |scene: &SongLuaLiveScene| {
+            let actor = scene.lua.globals().get::<Table>("Q").unwrap();
+            crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+            read_state(&scene.lua, &actor).unwrap()
+        };
+        assert_eq!(reset(&live), reset(&legacy), "InitState resets native properties as before");
     }
 
     #[test]

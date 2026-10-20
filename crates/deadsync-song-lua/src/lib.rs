@@ -33,6 +33,10 @@ mod json;
 mod lua_util;
 mod raw_vm;
 mod live;
+#[cfg(feature = "performance")]
+mod live_profile;
+#[cfg(feature = "performance")]
+pub use live_profile::{live_profile_report, reset_live_profile};
 pub use live::{SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
 #[cfg(feature = "test-support")]
 pub use live::SongLuaOverlayStageObservation;
@@ -44,6 +48,7 @@ pub use model_texture::{
     SongLuaModelTextureFrame, SongLuaModelTextureUv, SongLuaTextureSample, model_texture_at,
 };
 mod multitap;
+mod native_vector;
 mod net;
 mod noteskin;
 mod option_rows;

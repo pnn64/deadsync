@@ -1,3 +1,4 @@
+use crate::native_vector::ActorVectorValue;
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use mlua::{FromLua, Function, Lua, MultiValue, Table, Value, ffi};
@@ -4373,8 +4374,8 @@ pub fn actor_shadow_len(lua: &Lua, actor: &Table) -> mlua::Result<[f32; 2]> {
         return Ok(value);
     }
     Ok(actor
-        .get::<Option<Table>>("__songlua_state_shadow_len")?
-        .and_then(|value| table_vec2(&value))
+        .get::<Option<ActorVectorValue<2>>>("__songlua_state_shadow_len")?
+        .and_then(|value| value.0)
         .unwrap_or([0.0, 0.0]))
 }
 
@@ -4665,6 +4666,9 @@ fn capture_immediate_u32(lua: &Lua, actor: &Table, key: &str, value: u32) -> mlu
 }
 
 fn capture_immediate_vec2(lua: &Lua, actor: &Table, key: &str, size: [f32; 2]) -> mlua::Result<()> {
+    if live_actor_playback(lua) {
+        return crate::native_vector::store(lua, actor, actor_capture_state_key(key).as_ref(), size);
+    }
     let table = lua.create_table_from(
         size.into_iter()
             .enumerate()
@@ -4689,6 +4693,9 @@ fn capture_immediate_vec3(
     key: &str,
     value: [f32; 3],
 ) -> mlua::Result<()> {
+    if live_actor_playback(lua) {
+        return crate::native_vector::store(lua, actor, actor_capture_state_key(key).as_ref(), value);
+    }
     let table = lua.create_table_with_capacity(3, 0)?;
     for (index, component) in value.into_iter().enumerate() {
         table.raw_set(index + 1, component)?;
@@ -4712,6 +4719,9 @@ fn capture_immediate_vec4(
     key: &str,
     value: [f32; 4],
 ) -> mlua::Result<()> {
+    if live_actor_playback(lua) {
+        return crate::native_vector::store(lua, actor, actor_capture_state_key(key).as_ref(), value);
+    }
     let table = lua.create_table_with_capacity(4, 0)?;
     for (index, component) in value.into_iter().enumerate() {
         table.raw_set(index + 1, component)?;
@@ -4735,6 +4745,9 @@ fn capture_immediate_vec5(
     key: &str,
     value: [f32; 5],
 ) -> mlua::Result<()> {
+    if live_actor_playback(lua) {
+        return crate::native_vector::store(lua, actor, actor_capture_state_key(key).as_ref(), value);
+    }
     let table = lua.create_table_with_capacity(5, 0)?;
     for (index, component) in value.into_iter().enumerate() {
         table.raw_set(index + 1, component)?;
@@ -5211,6 +5224,9 @@ pub fn capture_block_set_stretch(lua: &Lua, actor: &Table, rect: [f32; 4]) -> ml
 }
 
 pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua::Result<()> {
+    if live_actor_playback(lua) {
+        return crate::native_vector::store(lua, actor, "__songlua_state_size", size);
+    }
     let value = lua.create_table_with_capacity(2, 0)?;
     value.raw_set(1, size[0])?;
     value.raw_set(2, size[1])?;
@@ -5345,7 +5361,7 @@ pub fn set_actor_effect_mode(lua: &Lua, actor: &Table, mode: &str) -> mlua::Resu
 fn capture_effect_period(lua: &Lua, actor: &Table, period: f32) -> mlua::Result<()> {
     capture_immediate_f32(lua, actor, "effect_period", period)?;
     if actor
-        .raw_get::<Option<Table>>("__songlua_state_effect_timing")?
+        .raw_get::<Option<ActorVectorValue<5>>>("__songlua_state_effect_timing")?
         .is_some()
     {
         capture_immediate_vec5(
@@ -5584,8 +5600,8 @@ pub fn actor_base_size_with_image(
     image_frame_size: Option<(f32, f32)>,
 ) -> mlua::Result<(f32, f32)> {
     if let Some(size) = actor
-        .get::<Option<Table>>("__songlua_state_size")?
-        .and_then(|value| table_vec2(&value))
+        .get::<Option<ActorVectorValue<2>>>("__songlua_state_size")?
+        .and_then(|value| value.0)
     {
         return Ok((size[0].abs(), size[1].abs()));
     }
@@ -8667,8 +8683,8 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
                 record_probe_method_call(lua, &actor, method)?;
                 if let Some(value) = value.and_then(read_f32) {
                     let mut rotation = actor
-                        .get::<Option<Table>>("__songlua_state_base_rotation")?
-                        .and_then(|table| table_vec3(&table))
+                        .get::<Option<ActorVectorValue<3>>>("__songlua_state_base_rotation")?
+                        .and_then(|table| table.0)
                         .unwrap_or([0.0; 3]);
                     rotation[axis] = value;
                     capture_immediate_vec3(lua, &actor, "base_rotation", rotation)?;
@@ -9476,8 +9492,8 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                     .get::<Option<f32>>("__songlua_state_effect_period")?
                     .unwrap_or(1.0);
                 let mut timing = actor
-                    .get::<Option<Table>>("__songlua_state_effect_timing")?
-                    .and_then(|value| table_vec5(&value))
+                    .get::<Option<ActorVectorValue<5>>>("__songlua_state_effect_timing")?
+                    .and_then(|value| value.0)
                     .unwrap_or([period / 2.0, 0.0, period / 2.0, 0.0, 0.0]);
                 timing[3] = hold;
                 if hold < 0.0 || timing.iter().sum::<f32>() <= 0.0 {
@@ -20094,16 +20110,16 @@ fn read_actor_overlay_state(
         state.uppercase = value;
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_shadow_len")
+        .raw_get::<Option<ActorVectorValue<2>>>("__songlua_state_shadow_len")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
+        .and_then(|value| value.0)
     {
         state.shadow_len = value;
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_shadow_color")
+        .raw_get::<Option<ActorVectorValue<4>>>("__songlua_state_shadow_color")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
+        .and_then(|value| value.0)
     {
         state.shadow_color = value;
     }
@@ -20202,9 +20218,9 @@ fn read_actor_overlay_state(
         state.rot_z_deg = value;
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_base_rotation")
+        .raw_get::<Option<ActorVectorValue<3>>>("__songlua_state_base_rotation")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec3(&value))
+        .and_then(|value| value.0)
     {
         state.base_rotation = value;
     }
@@ -20218,9 +20234,9 @@ fn read_actor_overlay_state(
         state.vibrate = value;
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_effect_magnitude")
+        .raw_get::<Option<ActorVectorValue<3>>>("__songlua_state_effect_magnitude")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec3(&value))
+        .and_then(|value| value.0)
     {
         state.effect_magnitude = value;
     }
@@ -20237,16 +20253,16 @@ fn read_actor_overlay_state(
         .map_err(|err| err.to_string())?
         .unwrap_or(true);
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_effect_color1")
+        .raw_get::<Option<ActorVectorValue<4>>>("__songlua_state_effect_color1")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
+        .and_then(|value| value.0)
     {
         state.effect_color1 = value;
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_effect_color2")
+        .raw_get::<Option<ActorVectorValue<4>>>("__songlua_state_effect_color2")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
+        .and_then(|value| value.0)
     {
         state.effect_color2 = value;
     }
@@ -20257,9 +20273,9 @@ fn read_actor_overlay_state(
         state.effect_offset = value;
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_effect_timing")
+        .raw_get::<Option<ActorVectorValue<5>>>("__songlua_state_effect_timing")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec5(&value))
+        .and_then(|value| value.0)
     {
         state.effect_timing = Some(value);
     }
@@ -20371,9 +20387,9 @@ fn read_actor_overlay_state(
         state.texcoord_velocity = Some(value);
     }
     if let Some(value) = actor
-        .raw_get::<Option<Table>>("__songlua_state_size")
+        .raw_get::<Option<ActorVectorValue<2>>>("__songlua_state_size")
         .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
+        .and_then(|value| value.0)
     {
         state.size = Some(value);
     }
@@ -21126,8 +21142,8 @@ fn create_aft(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         }
     }
     let size = actor
-        .raw_get::<Option<Table>>("__songlua_state_size")?
-        .and_then(|size| table_vec2(&size))
+        .raw_get::<Option<ActorVectorValue<2>>>("__songlua_state_size")?
+        .and_then(|size| size.0)
         .unwrap_or([1.0; 2])
         .map(f32::trunc);
     if size.iter().any(|value| !value.is_finite() || *value < 1.0) {
@@ -22512,8 +22528,8 @@ pub fn actor_glow(actor: &Table) -> mlua::Result<[f32; 4]> {
 
 pub fn actor_effect_magnitude(actor: &Table) -> mlua::Result<[f32; 3]> {
     Ok(actor
-        .get::<Option<Table>>("__songlua_state_effect_magnitude")?
-        .and_then(|value| table_vec3(&value))
+        .get::<Option<ActorVectorValue<3>>>("__songlua_state_effect_magnitude")?
+        .and_then(|value| value.0)
         .unwrap_or([0.0, 0.0, 0.0]))
 }
 
@@ -23062,7 +23078,7 @@ unsafe fn stack_vector<const N: usize>(state: *mut ffi::lua_State, index: c_int)
     Some(out)
 }
 
-fn table_vector<const N: usize>(table: &Table) -> Option<[f32; N]> {
+pub(crate) fn table_vector<const N: usize>(table: &Table) -> Option<[f32; N]> {
     let lua = table.weak_lua().upgrade();
     // SAFETY: the owning table stays rooted. Three slots match raw_get's
     // original stack reservation and cover the table plus each component.

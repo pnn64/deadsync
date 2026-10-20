@@ -221,6 +221,8 @@ fn install_compile_globals(
 
 pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
     match value {
+        Value::UserData(data) => Ok(crate::native_vector::snapshot(lua, &data)?
+            .map_or(Value::UserData(data), Value::Table)),
         Value::Table(table) => {
             let cloned = lua.create_table()?;
             // Keep the traversal key on Lua's stack instead of cloning a Rust
