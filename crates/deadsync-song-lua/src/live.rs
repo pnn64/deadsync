@@ -1993,6 +1993,10 @@ return Def.ActorFrame {
             if tick == 11 then Q:finishtweening() end
             if tick == 13 then Q:xy(7,9):addy(2):shadowlength(3) end
             Q:diffusecolor(0.2,0.4,0.6,0.8):diffuseupperleft(0.9,0.7,0.5,0.3)
+                :diffuseupperright(0.1,0.2,0.3,0.4):diffuselowerleft(0.2,0.3,0.4,0.5)
+                :diffuselowerright(0.3,0.4,0.5,0.6):diffusetopedge(0.4,0.5,0.6,0.7)
+                :diffuserightedge(0.5,0.6,0.7,0.8):diffusebottomedge(0.6,0.7,0.8,0.9)
+                :diffuseleftedge(0.7,0.8,0.9,1)
             Q:zoom(1+tick/32):zoomy(2+tick/32):zoomz(3+tick/32)
                 :y(tick):z(-tick):addz(2):skewx(tick/32):skewy(-tick/32)
                 :cropleft(0.125):cropright(0.25):croptop(0.375):cropbottom(0.5)
@@ -2010,6 +2014,8 @@ return Def.ActorFrame {
             Q:Draw()
             Q:SetHeight(80+tick):shadowlengthy(tick+4):glow(0,1,0,0.2):zoomx(2):addx(1)
             Q:Draw()
+            D:diffusetopedge(1,0,0,1):diffusebottomedge(0,0,1,0.5):Draw()
+            D:diffuseleftedge(0,1,0,0.25):Draw()
         end)
     end,
     Def.Quad {
@@ -2020,6 +2026,7 @@ return Def.ActorFrame {
         end,
     },
     Def.Sprite { InitCommand = function(self) S=self end },
+    Def.Quad { InitCommand = function(self) D=self; self:zoomto(8,8) end },
 }
 "#;
         let build = || compile_with_context("live-capture-history", source,
@@ -2124,6 +2131,74 @@ assert(ROOT.authored.retained)
                 crate::lua_util::capture_block_set_vec4(&scene.lua, &actor, "glow", [i as f32; 4]).unwrap();
             }
         });
+    }
+
+    #[test]
+    fn live_native_vertex_colors_mutate_destinations_without_allocation() {
+        let mut compiled = compile_with_context("native-vertex-color-writes", r#"
+return Def.Quad { InitCommand=function(self) Q=self end }
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        let actor: Table = scene.lua.globals().get("Q").unwrap();
+        let base = [0.25, 0.5, 0.75, 1.0];
+        let color = [1.0, 0.75, 0.5, 0.25];
+        // Actor.h's corners use the renderer's clockwise order here: UL, UR, LR, LL.
+        for (method, mask) in [
+            ("diffuseupperleft", 1), ("diffuseupperright", 2),
+            ("diffuselowerleft", 8), ("diffuselowerright", 4),
+            ("diffusetopedge", 3), ("diffuserightedge", 6),
+            ("diffusebottomedge", 12), ("diffuseleftedge", 9),
+        ] {
+            for queued in [false, true] {
+                crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+                scene.lua.load("Q:stoptweening():diffuse(0.25,0.5,0.75,1)").exec().unwrap();
+                if queued { scene.lua.load("Q:linear(1)").exec().unwrap(); }
+                let before = read_state(&scene.lua, &actor).unwrap();
+                scene.lua.load(format!("Q:{method}(1,0.75,0.5,0.25)")).exec().unwrap();
+                let expected = std::array::from_fn(|i| if mask & (1 << i) != 0 { color } else { [1.0; 4] });
+                assert_eq!(crate::lua_util::actor_vertex_colors(&scene.lua, &actor).unwrap(), expected);
+                let current = read_state(&scene.lua, &actor).unwrap();
+                if queued {
+                    assert_eq!(current, before, "a destination write cannot change current");
+                    scene.lua.load("Q:finishtweening()").exec().unwrap();
+                } else {
+                    assert_eq!(current.vertex_colors, Some(expected));
+                }
+                assert_eq!(read_state(&scene.lua, &actor).unwrap().vertex_colors, Some(expected));
+            }
+        }
+        // Read color tables at the call boundary; later edits cannot change native state.
+        scene.lua.load(r#"
+local color = {0,1,0,0.5}
+Q:diffusetopedge(color)
+color[2] = 99
+Q:diffusetopedge()
+"#).exec().unwrap();
+        assert_eq!(crate::lua_util::actor_vertex_colors(&scene.lua, &actor).unwrap()[0], [0.0,1.0,0.0,0.5]);
+
+        // Measure the production mutation path, without the optional observer's owned samples.
+        // Its observation semantics are checked separately in lua_util.
+        crate::lua_util::end_overlay_update_capture(&scene.lua);
+        let args = mlua::MultiValue::from_vec(vec![
+            Value::Table(actor.clone()), Value::Number(1.0), Value::Number(0.75),
+            Value::Number(0.5), Value::Number(0.25),
+        ]);
+        for queued in [false, true] {
+            crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+            scene.lua.load("Q:stoptweening():diffuse(0.25,0.5,0.75,1)").exec().unwrap();
+            if queued { scene.lua.load("Q:linear(1)").exec().unwrap(); }
+            let before = read_state(&scene.lua, &actor).unwrap();
+            crate::draw_capture::perf::allocations::assert_no_churn(|| {
+                // Includes the first conversion from a uniform diffuse to four corner colors.
+                for _ in 0..100 {
+                    crate::lua_util::capture_actor_vertex_diffuse(&scene.lua, &actor, &args, 3).unwrap();
+                    crate::lua_util::capture_block_set_vertex_colors(&scene.lua, &actor, [base; 4]).unwrap();
+                }
+            });
+            assert_eq!(crate::lua_util::actor_vertex_colors(&scene.lua, &actor).unwrap(), [base; 4]);
+            if queued { assert_eq!(read_state(&scene.lua, &actor).unwrap(), before); }
+        }
     }
 
     #[test]

@@ -5063,6 +5063,13 @@ pub fn capture_actor_vertex_diffuse(
     let Some(color) = read_color_args(args) else {
         return Ok(());
     };
+    if write_live_vertex_colors(lua, actor, |colors| {
+        for (index, vertex_color) in colors.iter_mut().enumerate() {
+            if corner_mask & (1 << index) != 0 { *vertex_color = color; }
+        }
+    }) {
+        return Ok(());
+    }
     let mut colors = actor_vertex_colors(lua, actor)?;
     for (index, vertex_color) in colors.iter_mut().enumerate() {
         if corner_mask & (1 << index) != 0 {
@@ -5171,9 +5178,7 @@ pub fn capture_block_set_vertex_colors(
     actor: &Table,
     colors: [[f32; 4]; 4],
 ) -> mlua::Result<()> {
-    if live_actor_playback(lua) && has_tween_replay(lua, actor) {
-        record_overlay_update_capture(lua, actor, "vertex_colors",
-            SongLuaOverlayUpdateValue::VertexColors(Arc::new(colors)));
+    if write_live_vertex_colors(lua, actor, |dest| *dest = colors) {
         return Ok(());
     }
     let value = make_vertex_color_table(lua, colors)?;
@@ -5189,6 +5194,35 @@ pub fn capture_block_set_vertex_colors(
     }
     actor.set("__songlua_state_vertex_colors", value)?;
     Ok(())
+}
+
+// Actor::SetDiffuses and its corner/edge variants mutate the back tween state.
+// Live playback owns that fixed-size array already; only capture observers need
+// an independently owned update value.
+fn write_live_vertex_colors(
+    lua: &Lua,
+    actor: &Table,
+    write: impl FnOnce(&mut [[f32; 4]; 4]),
+) -> bool {
+    if !live_actor_playback(lua) { return false; }
+    let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() else { return false; };
+    let Some(replay) = replays.0.get_mut(&(actor.to_pointer() as usize)) else { return false; };
+    let target = SongLuaOverlayUpdateTarget::VertexColors;
+    replay.targets |= 1u128 << target as usize;
+    #[cfg(feature = "test-support")]
+    let queued = !replay.queue.is_empty();
+    let dest = replay.queue.back_mut().map_or(&mut replay.current, |step| &mut step.to);
+    // Preserve actor_vertex_colors' neutral fallback. Overlay diffuse is stored
+    // separately from these optional corner colors.
+    let colors = dest.vertex_colors.get_or_insert([[1.0; 4]; 4]);
+    write(colors);
+    #[cfg(feature = "test-support")]
+    let colors = *colors;
+    drop(replays);
+    #[cfg(feature = "test-support")]
+    observe_tween_write(lua, actor, target, queued,
+        || SongLuaOverlayUpdateValue::VertexColors(Arc::new(colors)));
+    true
 }
 
 pub fn capture_block_set_vec5(
@@ -11876,15 +11910,25 @@ fn record_tween_write(
         }
     }
     #[cfg(feature = "test-support")]
-    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>() {
-        if let Some(index) = capture.touch(actor) {
-            let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
-            capture.record_write(index, beat, target, value, queued);
-        }
-    }
+    observe_tween_write(lua, actor, target, queued, || value.clone());
     #[cfg(not(feature = "test-support"))]
     let _ = queued;
     Some(true)
+}
+
+#[cfg(feature = "test-support")]
+fn observe_tween_write(
+    lua: &Lua,
+    actor: &Table,
+    target: SongLuaOverlayUpdateTarget,
+    queued: bool,
+    value: impl FnOnce() -> SongLuaOverlayUpdateValue,
+) {
+    if let Some(mut capture) = lua.app_data_mut::<SongLuaOverlayUpdateCapture>()
+        && let Some(index) = capture.touch(actor) {
+        let beat = compile_song_runtime_values(lua).map_or(0.0, |(beat, _)| beat);
+        capture.record_write(index, beat, target, &value(), queued);
+    }
 }
 
 fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -20084,6 +20128,51 @@ mod actor_state_read_tests {
             assert_eq!(actor_destination_position(&lua, &actor, 0).unwrap(), 24.0);
             assert_eq!(actor_current_position(&lua, &copy, 0).unwrap(), 36.0);
         }
+    }
+
+    #[test]
+    #[cfg(feature = "test-support")]
+    fn live_vertex_color_observer_preserves_owned_samples_and_queue_rules() {
+        let run = |live| {
+            let lua = Lua::new();
+            begin_live_runtime(&lua).unwrap();
+            let actor = lua.load("{__songlua_actor_type='Quad'}").eval::<Table>().unwrap();
+            ensure_tween_replay(&lua, &actor).unwrap();
+            if live { begin_live_actor_playback(&lua, &[actor.clone()]).unwrap(); }
+            begin_overlay_update_capture_from_indices(&lua, [(actor.to_pointer() as usize, 0)]);
+            let sample = || {
+                let capture = lua.app_data_ref::<SongLuaOverlayUpdateCapture>().unwrap();
+                let samples = &capture.writes[&(0, SongLuaOverlayUpdateTarget::VertexColors)];
+                assert_eq!(samples.len(), 1);
+                let SongLuaOverlayUpdateValue::VertexColors(colors) = &samples[0].value
+                    else { panic!("owned vertex color observation"); };
+                colors.clone()
+            };
+            capture_block_set_vertex_colors(&lua, &actor, [[0.25; 4]; 4]).unwrap();
+            let first = sample();
+            queue_replay_tween(&lua, &actor, 1.0, Some("linear"));
+            capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
+            assert_eq!(*sample(), *first, "same-beat queued writes retain the earlier observation");
+            clear_replay_tweens(&lua, &actor, false).unwrap();
+            let args = MultiValue::from_vec(vec![Value::Table(actor.clone()), Value::Number(1.0),
+                Value::Number(0.75), Value::Number(0.5), Value::Number(0.25)]);
+            capture_actor_vertex_diffuse(&lua, &actor, &args, 3).unwrap();
+            let second = sample();
+            assert_eq!(second[0], [1.0, 0.75, 0.5, 0.25]);
+            assert_eq!(*first, [[0.25; 4]; 4], "later writes cannot mutate an owned sample");
+            lua.app_data_mut::<SongLuaOverlayUpdateCapture>().unwrap().queued_depth = 1;
+            capture_block_set_vertex_colors(&lua, &actor, [[0.75; 4]; 4]).unwrap();
+            assert_eq!(*sample(), *second, "ordinary queued commands are not update samples");
+            lua.app_data_mut::<SongLuaOverlayUpdateCapture>().unwrap().update_command = true;
+            capture_block_set_vertex_colors(&lua, &actor, [[1.0; 4]; 4]).unwrap();
+            let third = sample();
+            assert_eq!(*third, [[1.0; 4]; 4]);
+            lua.app_data_mut::<SongLuaOverlayUpdateCapture>().unwrap().active_broadcast = Some("Tint".into());
+            capture_block_set_vertex_colors(&lua, &actor, [[0.0; 4]; 4]).unwrap();
+            assert_eq!(*sample(), *third, "broadcast writes are not update samples");
+            [*first, *second, *third]
+        };
+        assert_eq!(run(true), run(false), "live mutation retains capture-backed observation rules");
     }
 
     #[test]
