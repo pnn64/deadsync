@@ -1993,16 +1993,22 @@ return Def.ActorFrame {
             if tick == 11 then Q:finishtweening() end
             if tick == 13 then Q:xy(7,9):addy(2):shadowlength(3) end
             Q:diffusecolor(0.2,0.4,0.6,0.8):diffuseupperleft(0.9,0.7,0.5,0.3)
+            Q:zoom(1+tick/32):zoomy(2+tick/32):zoomz(3+tick/32)
+                :y(tick):z(-tick):addz(2):skewx(tick/32):skewy(-tick/32)
+                :cropleft(0.125):cropright(0.25):croptop(0.375):cropbottom(0.5)
+                :fadeleft(0.5):faderight(0.375):fadetop(0.25):fadebottom(0.125)
             local color, glow = Q:GetDiffuse(), Q:GetGlow()
-            OBSERVED = string.format('%g,%g,%g,%g,%g,%g,%g',Q:GetX(),Q:GetDestX(),
-                Q:getaux(),Q:GetTweenTimeLeft(),color[1],color[4],glow[2])
+            OBSERVED = table.concat({Q:GetX(),Q:GetDestX(),Q:GetY(),Q:GetDestY(),
+                Q:GetZ(),Q:GetDestZ(),Q:getaux(),Q:GetTweenTimeLeft(),color[1],color[4],glow[2],
+                Q:GetZoom(),Q:GetZoomX(),Q:GetZoomY(),Q:GetZoomZ(),
+                Q:GetZoomedWidth(),Q:GetZoomedHeight()}, ',')
             color[1], glow[2] = 99, 99
             assert(Q:GetDiffuse()[1] ~= 99 and Q:GetGlow()[2] ~= 99)
         end)
         self:SetDrawFunction(function()
             Q:basezoomx(tick / 10 + 1):SetHeight(40+tick):shadowlengthy(tick+2):glow(1,0,0,0.1)
             Q:Draw()
-            Q:SetHeight(80+tick):shadowlengthy(tick+4):glow(0,1,0,0.2)
+            Q:SetHeight(80+tick):shadowlengthy(tick+4):glow(0,1,0,0.2):zoomx(2):addx(1)
             Q:Draw()
         end)
     end,
@@ -2086,7 +2092,7 @@ assert(ROOT:GetDiffuse()[1]==0.5 and ROOT:GetGlow()[4]==0.75)
         assert_eq!(before.diffuse, [0.25, 0.5, 0.75, 1.0]);
         assert_eq!(before.glow, [0.0; 4]);
         let copied = scene.lua.create_table().unwrap();
-        crate::lua_util::copy_live_actor_colors(&scene.lua, &actor, &copied).unwrap();
+        crate::lua_util::copy_live_actor_pose(&scene.lua, &actor, &copied).unwrap();
         let snapshot = crate::lua_util::snapshot_actor_mutable_state(&scene.lua, &actor).unwrap();
         let semantic = crate::lua_util::snapshot_actor_semantic_state_table(&scene.lua, &actor).unwrap();
         let restored = scene.lua.create_table().unwrap();
@@ -2116,6 +2122,67 @@ assert(ROOT.authored.retained)
             for i in 0..100 {
                 crate::lua_util::capture_block_set_color(&scene.lua, &actor, [i as f32; 4]).unwrap();
                 crate::lua_util::capture_block_set_vec4(&scene.lua, &actor, "glow", [i as f32; 4]).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn live_native_scalars_export_current_and_destination_snapshots() {
+        let mut compiled = compile_with_context("native-scalar-snapshots", r#"
+return Def.Quad { InitCommand=function(self) ROOT=self; self.authored={retained=true} end }
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+ROOT:SetSize(8,12):basezoomx(2):basezoomy(3):xy(4,8):z(12):aux(16):zoom(1)
+ROOT:linear(1):xy(20,24):z(28):aux(32):zoom(2):zoomx(3):zoomy(4):zoomz(5)
+    :skewx(0.25):skewy(-0.5):cropleft(0.125):cropright(0.25):croptop(0.375):cropbottom(0.5)
+    :fadeleft(0.5):faderight(0.375):fadetop(0.25):fadebottom(0.125)
+assert(ROOT:GetX()==4 and ROOT:GetDestX()==20 and ROOT:getaux()==16)
+assert(ROOT:GetZoom()==3 and ROOT:GetZoomX()==3 and ROOT:GetZoomY()==4 and ROOT:GetZoomZ()==5)
+assert(ROOT:GetZoomedWidth()==48 and ROOT:GetZoomedHeight()==144)
+"#).exec().unwrap();
+        scene.advance(SongLuaLiveFrame { delta_seconds:0.25, screen_seconds:0.25,
+            music_seconds:0.25, ..Default::default() }).unwrap();
+        let actor: Table = scene.lua.globals().get("ROOT").unwrap();
+        let current = read_state(&scene.lua, &actor).unwrap();
+        assert_eq!((current.x, current.y, current.z, current.aux), (8.0,12.0,16.0,20.0));
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&scene.lua, &actor).unwrap();
+        let semantic = crate::lua_util::snapshot_actor_semantic_state_table(&scene.lua, &actor).unwrap();
+        let copied = scene.lua.create_table().unwrap();
+        crate::lua_util::copy_live_actor_pose(&scene.lua, &actor, &copied).unwrap();
+        let restored = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored, snapshot).unwrap();
+        let restored_semantic = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored_semantic,
+            crate::lua_util::read_actor_semantic_state_table(&semantic).unwrap()).unwrap();
+        for snapshot in [&copied, &restored, &restored_semantic] {
+            let dest = crate::actor_overlay_initial_state(snapshot).unwrap();
+            assert_eq!((dest.x,dest.y,dest.z,dest.aux), (20.0,24.0,28.0,32.0));
+            assert_eq!((dest.zoom_x,dest.zoom_y,dest.zoom_z), (3.0,4.0,5.0));
+            assert_eq!((dest.skew_x,dest.skew_y), (0.25,-0.5));
+            assert_eq!([dest.cropleft,dest.cropright,dest.croptop,dest.cropbottom], [0.125,0.25,0.375,0.5]);
+            assert_eq!([dest.fadeleft,dest.faderight,dest.fadetop,dest.fadebottom], [0.5,0.375,0.25,0.125]);
+            for (key, expected) in [("__songlua_current_x",8.0), ("__songlua_current_y",12.0),
+                ("__songlua_current_z",16.0), ("__songlua_aux",20.0)] {
+                assert_eq!(snapshot.raw_get::<f32>(key).unwrap(), expected);
+            }
+        }
+        scene.lua.load(r#"
+ROOT:stoptweening():addx(3):addy(4):addz(5)
+assert(ROOT:GetX()==11 and ROOT:GetDestX()==11 and ROOT:GetY()==16 and ROOT:GetZ()==21)
+ROOT:linear(1):zoom(6):x(40):finishtweening()
+assert(ROOT:GetZoom()==6 and ROOT:GetZoomX()==6 and ROOT:GetZoomY()==6 and ROOT:GetZoomZ()==6)
+assert(ROOT:GetX()==40 and ROOT.authored.retained)
+"#).exec().unwrap();
+        assert_eq!(crate::actor_overlay_initial_state(&restored).unwrap().x, 20.0);
+        assert_eq!(current.x, 8.0, "previous draw pose remains independent");
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                for key in ["x","y","z","aux","zoom","zoom_x","zoom_y","zoom_z","skew_x","skew_y",
+                    "cropleft","cropright","croptop","cropbottom","fadeleft","faderight","fadetop","fadebottom"] {
+                    crate::lua_util::capture_block_set_f32(&scene.lua, &actor, key, i as f32).unwrap();
+                }
             }
         });
     }
@@ -2173,7 +2240,15 @@ SECOND:stoptweening():x(100):linear(1):x(108)
             assert!(output.errors.is_empty(), "{:?}", output.errors);
             scene.lua.load(assertion).exec().unwrap();
             for actor in &scene.actors {
-                let mut legacy = crate::lua_util::actor_overlay_state_batched(&scene.lua, actor).unwrap();
+                // Export a table-backed destination for the old decoder. Live
+                // setters no longer maintain these private mirror fields.
+                let snapshot = scene.lua.create_table().unwrap();
+                for pair in actor.pairs::<Value, Value>() {
+                    let (key, value) = pair.unwrap();
+                    snapshot.raw_set(key, value).unwrap();
+                }
+                crate::lua_util::copy_live_actor_pose(&scene.lua, actor, &snapshot).unwrap();
+                let mut legacy = crate::lua_util::actor_overlay_state_batched(&scene.lua, &snapshot).unwrap();
                 crate::lua_util::replay_tween_pose(&scene.lua, actor, &mut legacy);
                 legacy.spin_baked = crate::lua_util::spin_render_pose(actor).unwrap().is_some();
                 assert_eq!(read_state(&scene.lua, actor).unwrap(), legacy,

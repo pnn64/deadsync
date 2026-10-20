@@ -230,7 +230,7 @@ pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
             table.for_each::<Value, Value>(|key, value| {
                 cloned.set(clone_lua_value(lua, key)?, clone_lua_value(lua, value)?)
             })?;
-            crate::lua_util::copy_live_actor_colors(lua, &table, &cloned)?;
+            crate::lua_util::copy_live_actor_pose(lua, &table, &cloned)?;
             Ok(Value::Table(cloned))
         }
         other => Ok(other),

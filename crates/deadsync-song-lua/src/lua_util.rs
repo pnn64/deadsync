@@ -779,8 +779,8 @@ fn actor_current_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result
             }
         }
     }
-    if let Some(current) = live_current_pose(lua, actor) {
-        return Ok([current.x, current.y, current.z][axis]);
+    if let Some(value) = live_current_value(lua, actor, |current| [current.x, current.y, current.z][axis]) {
+        return Ok(value);
     }
     Ok(actor
         .get::<Option<f32>>(POSITION_CURRENT_KEYS[axis])?
@@ -2139,7 +2139,7 @@ fn clone_actor_def(
         };
         actor.raw_set(key, value)
     })?;
-    copy_live_actor_colors(lua, source, &actor)?;
+    copy_live_actor_pose(lua, source, &actor)?;
     // Installed methods close over their owning table; rebind them to the new
     // instance while sharing user command functions and their Lua upvalues.
     install_methods(lua, &actor)?;
@@ -2840,8 +2840,8 @@ fn snapshot_actor_state(
             out.push((key.to_string(), clone_actor_state(lua, &key, value)?));
         }
     }
-    if let Some(colors) = live_color_snapshot(lua, actor)? {
-        for (key, value) in colors {
+    if let Some(pose) = live_pose_snapshot(lua, actor)? {
+        for (key, value) in pose {
             if !keep_key(key) { continue; }
             if let Some(entry) = out.iter_mut().find(|(name, _)| name == key) {
                 entry.1 = value;
@@ -4807,6 +4807,10 @@ fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) ->
 }
 
 pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) -> mlua::Result<()> {
+    if live_destination_scalar(lua, actor, key).is_some() {
+        record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::F32(value));
+        return Ok(());
+    }
     if let Some(axis) = ["rot_x_deg", "rot_y_deg", "rot_z_deg"]
         .iter()
         .position(|axis| *axis == key)
@@ -6082,10 +6086,11 @@ pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "GetZoomedWidth",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |lua, _args: MultiValue| {
                 let width = actor_base_size(&actor)?.0;
                 Ok(width
                     * actor_zoom_axis(
+                        lua,
                         &actor,
                         "__songlua_state_zoom_x",
                         "__songlua_state_basezoom_x",
@@ -6111,10 +6116,11 @@ pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "GetZoomedHeight",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |lua, _args: MultiValue| {
                 let height = actor_base_size(&actor)?.1;
                 Ok(height
                     * actor_zoom_axis(
+                        lua,
                         &actor,
                         "__songlua_state_zoom_y",
                         "__songlua_state_basezoom_y",
@@ -6626,8 +6632,10 @@ pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result
         reset_actor_capture(lua, &actor)?;
         // StopTweening removes the back state; relative setters now start at
         // the current position, including a later child's pre-update pose.
-        for (key, value) in POSITION_DEST_KEYS.into_iter().zip(position) {
-            actor.set(key, value)?;
+        if !live_actor_playback(lua) || !has_tween_replay(lua, &actor) {
+            for (key, value) in POSITION_DEST_KEYS.into_iter().zip(position) {
+                actor.set(key, value)?;
+            }
         }
         Ok(actor.clone())
     })
@@ -6741,7 +6749,10 @@ pub fn make_actor_add_f32_method(
         };
         let captured = if live_actor_playback(lua) { None }
             else { actor_current_capture_block(lua, &actor)?.get::<Option<f32>>(key)? };
-        let current = captured.or(actor.get::<Option<f32>>(state_key.as_ref())?).unwrap_or(0.0);
+        let current = match live_destination_scalar(lua, &actor, key) {
+            Some(value) => value,
+            None => captured.or(actor.get::<Option<f32>>(state_key.as_ref())?).unwrap_or(0.0),
+        };
         capture_block_set_f32(lua, &actor, key, current + delta)?;
         Ok(actor.clone())
     })
@@ -8076,7 +8087,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         lua.create_function({
             let actor = actor.clone();
             move |lua, _self: Option<Value>| {
-                if let Some(current) = live_current_pose(lua, &actor) { return Ok(current.aux); }
+                if let Some(aux) = live_current_value(lua, &actor, |current| current.aux) { return Ok(aux); }
                 Ok(actor.get::<Option<f32>>("__songlua_aux")?.unwrap_or(0.0))
             }
         })?,
@@ -8811,26 +8822,20 @@ pub fn install_actor_extra_transform_methods(lua: &Lua, actor: &Table) -> mlua::
         "addrotationz",
         make_actor_add_f32_method(lua, actor, "rot_z_deg")?,
     )?;
-    for (name, state_key) in [
-        ("skewx", "__songlua_state_skew_x"),
-        ("skewy", "__songlua_state_skew_y"),
-    ] {
+    for (name, key) in [("skewx", "skew_x"), ("skewy", "skew_y")] {
         actor.set(
             name,
             lua.create_function({
                 let actor = actor.clone();
                 let method_name = name.to_string();
-                let state_key = state_key.to_string();
                 move |lua, (_self, value): (Option<Value>, Option<Value>)| {
                     record_probe_method_call(lua, &actor, &method_name)?;
                     if let Some(value) = value.and_then(read_f32) {
-                        actor.set(state_key.as_str(), value)?;
-                        let block_key = if method_name == "skewx" {
-                            "skew_x"
-                        } else {
-                            "skew_y"
-                        };
-                        capture_block_set_f32(lua, &actor, block_key, value)?;
+                        if !live_actor_playback(lua) || !has_tween_replay(lua, &actor) {
+                            // Keep the compiler's pre-capture write ordering.
+                            set_actor_capture_state(&actor, key, value)?;
+                        }
+                        capture_block_set_f32(lua, &actor, key, value)?;
                     }
                     Ok(actor.clone())
                 }
@@ -10538,33 +10543,21 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetDestX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_x")?
-                    .unwrap_or(0.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_destination_position(lua, &actor, 0)
         })?,
     )?;
     actor.set(
         "GetDestY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_y")?
-                    .unwrap_or(0.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_destination_position(lua, &actor, 1)
         })?,
     )?;
     actor.set(
         "GetDestZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_z")?
-                    .unwrap_or(0.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_destination_position(lua, &actor, 2)
         })?,
     )?;
     actor.set(
@@ -10582,13 +10575,8 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetZoom",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                // Actor::GetZoom aliases the destination X scale.
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_zoom_x")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            // Actor::GetZoom aliases the destination X scale.
+            move |lua, _self: Option<Value>| actor_destination_zoom(lua, &actor, "zoom_x")
         })?,
     )?;
     Ok(())
@@ -10657,36 +10645,21 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetZoomX",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_zoom_x")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_destination_zoom(lua, &actor, "zoom_x")
         })?,
     )?;
     actor.set(
         "GetZoomY",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_zoom_y")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_destination_zoom(lua, &actor, "zoom_y")
         })?,
     )?;
     actor.set(
         "GetZoomZ",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _self: Option<Value>| {
-                Ok(actor
-                    .get::<Option<f32>>("__songlua_state_zoom_z")?
-                    .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
-                    .unwrap_or(1.0_f32))
-            }
+            move |lua, _self: Option<Value>| actor_destination_zoom(lua, &actor, "zoom_z")
         })?,
     )?;
     actor.set(
@@ -11542,13 +11515,17 @@ pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Re
     Ok(())
 }
 
-fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
+fn live_current_value<T>(lua: &Lua, actor: &Table, read: impl FnOnce(&SongLuaOverlayState) -> T) -> Option<T> {
     if !crate::live::active(lua) { return None; }
     lua.app_data_ref::<ActorTweenReplays>()?
-        .0.get(&(actor.to_pointer() as usize)).map(|replay| replay.current)
+        .0.get(&(actor.to_pointer() as usize)).map(|replay| read(&replay.current))
 }
 
-// Color commands and getters address the destination, while drawing reads
+fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
+    live_current_value(lua, actor, |current| *current)
+}
+
+// Tween setters and destination getters address the queue tail, while drawing reads
 // current. During playback the replay owns both; Lua tables are only exported
 // for public getter results and explicit definition/state snapshots.
 fn live_destination_value<T>(
@@ -11562,23 +11539,84 @@ fn live_destination_value<T>(
         .map(|replay| read(replay.queue.back().map_or(&replay.current, |step| &step.to)))
 }
 
-fn live_color_snapshot(lua: &Lua, actor: &Table) -> mlua::Result<Option<[(&'static str, Value); 4]>> {
-    let Some((diffuse, glow, vertices)) = live_destination_value(lua, actor,
-        |dest| (dest.diffuse, dest.glow, dest.vertex_colors)) else { return Ok(None); };
+fn live_destination_scalar(lua: &Lua, actor: &Table, key: &str) -> Option<f32> {
+    live_destination_value(lua, actor, |dest| Some(match key {
+        "aux" => dest.aux,
+        "x" => dest.x,
+        "y" => dest.y,
+        "z" => dest.z,
+        "zoom" => dest.zoom,
+        "zoom_x" => dest.zoom_x,
+        "zoom_y" => dest.zoom_y,
+        "zoom_z" => dest.zoom_z,
+        "skew_x" => dest.skew_x,
+        "skew_y" => dest.skew_y,
+        "cropleft" => dest.cropleft,
+        "cropright" => dest.cropright,
+        "croptop" => dest.croptop,
+        "cropbottom" => dest.cropbottom,
+        "fadeleft" => dest.fadeleft,
+        "faderight" => dest.faderight,
+        "fadetop" => dest.fadetop,
+        "fadebottom" => dest.fadebottom,
+        // Spin still owns a separate rotation queue. Keep its table-backed
+        // getter synchronization until that queue shares the native pose.
+        _ => return None,
+    })).flatten()
+}
+
+fn actor_destination_position(lua: &Lua, actor: &Table, axis: usize) -> mlua::Result<f32> {
+    if let Some(value) = live_destination_value(lua, actor, |dest| [dest.x, dest.y, dest.z][axis]) {
+        return Ok(value);
+    }
+    Ok(actor.get::<Option<f32>>(POSITION_DEST_KEYS[axis])?.unwrap_or(0.0))
+}
+
+fn actor_destination_zoom(lua: &Lua, actor: &Table, key: &str) -> mlua::Result<f32> {
+    if let Some(value) = live_destination_scalar(lua, actor, key) { return Ok(value); }
+    Ok(actor.get::<Option<f32>>(actor_capture_state_key(key).as_ref())?
+        .or(actor.get::<Option<f32>>("__songlua_state_zoom")?).unwrap_or(1.0))
+}
+
+fn live_pose_snapshot(lua: &Lua, actor: &Table) -> mlua::Result<Option<[(&'static str, Value); 26]>> {
+    let Some(dest) = live_destination_value(lua, actor, |dest| *dest) else { return Ok(None); };
+    let current = live_current_pose(lua, actor).expect("live destination has a current pose");
     // Release the native state borrow before allocating or calling Lua.
     Ok(Some([
-        ("__songlua_diffuse", Value::Table(make_color_table(lua, diffuse)?)),
-        ("__songlua_state_diffuse", Value::Table(make_color_table(lua, diffuse)?)),
-        ("__songlua_state_glow", Value::Table(make_color_table(lua, glow)?)),
-        ("__songlua_state_vertex_colors", vertices
+        ("__songlua_diffuse", Value::Table(make_color_table(lua, dest.diffuse)?)),
+        ("__songlua_state_diffuse", Value::Table(make_color_table(lua, dest.diffuse)?)),
+        ("__songlua_state_glow", Value::Table(make_color_table(lua, dest.glow)?)),
+        ("__songlua_state_vertex_colors", dest.vertex_colors
             .map(|colors| make_vertex_color_table(lua, colors).map(Value::Table))
             .transpose()?.unwrap_or(Value::Nil)),
+        ("__songlua_state_aux", Value::Number(dest.aux.into())),
+        ("__songlua_state_x", Value::Number(dest.x.into())),
+        ("__songlua_state_y", Value::Number(dest.y.into())),
+        ("__songlua_state_z", Value::Number(dest.z.into())),
+        ("__songlua_state_zoom", Value::Number(dest.zoom.into())),
+        ("__songlua_state_zoom_x", Value::Number(dest.zoom_x.into())),
+        ("__songlua_state_zoom_y", Value::Number(dest.zoom_y.into())),
+        ("__songlua_state_zoom_z", Value::Number(dest.zoom_z.into())),
+        ("__songlua_state_skew_x", Value::Number(dest.skew_x.into())),
+        ("__songlua_state_skew_y", Value::Number(dest.skew_y.into())),
+        ("__songlua_state_cropleft", Value::Number(dest.cropleft.into())),
+        ("__songlua_state_cropright", Value::Number(dest.cropright.into())),
+        ("__songlua_state_croptop", Value::Number(dest.croptop.into())),
+        ("__songlua_state_cropbottom", Value::Number(dest.cropbottom.into())),
+        ("__songlua_state_fadeleft", Value::Number(dest.fadeleft.into())),
+        ("__songlua_state_faderight", Value::Number(dest.faderight.into())),
+        ("__songlua_state_fadetop", Value::Number(dest.fadetop.into())),
+        ("__songlua_state_fadebottom", Value::Number(dest.fadebottom.into())),
+        ("__songlua_aux", Value::Number(current.aux.into())),
+        ("__songlua_current_x", Value::Number(current.x.into())),
+        ("__songlua_current_y", Value::Number(current.y.into())),
+        ("__songlua_current_z", Value::Number(current.z.into())),
     ]))
 }
 
-pub(crate) fn copy_live_actor_colors(lua: &Lua, source: &Table, into: &Table) -> mlua::Result<()> {
-    if let Some(colors) = live_color_snapshot(lua, source)? {
-        for (key, value) in colors { into.raw_set(key, value)?; }
+pub(crate) fn copy_live_actor_pose(lua: &Lua, source: &Table, into: &Table) -> mlua::Result<()> {
+    if let Some(pose) = live_pose_snapshot(lua, source)? {
+        for (key, value) in pose { into.raw_set(key, value)?; }
     }
     Ok(())
 }
@@ -11850,6 +11888,17 @@ fn record_tween_write(
 }
 
 fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    if live_actor_playback(lua) {
+        // Rotation remains shared with the spin queue. Other tween properties
+        // are native-owned and exported only at explicit snapshot boundaries.
+        if let Some(rotation) = live_destination_value(lua, actor,
+            |dest| [dest.rot_x_deg, dest.rot_y_deg, dest.rot_z_deg]) {
+            for (key, value) in ["rot_x_deg", "rot_y_deg", "rot_z_deg"].into_iter().zip(rotation) {
+                set_actor_capture_state(actor, key, value)?;
+            }
+        }
+        return Ok(());
+    }
     let poses = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays| {
         replays.0.get(&(actor.to_pointer() as usize)).map(|replay| {
             (
@@ -11886,20 +11935,18 @@ fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     ] {
         set_actor_capture_state(actor, key, value)?;
     }
-    if !live_actor_playback(lua) {
-        actor.raw_set("__songlua_diffuse", make_color_table(lua, dest.diffuse)?)?;
-        actor.raw_set(
-            "__songlua_state_diffuse",
-            make_color_table(lua, dest.diffuse)?,
-        )?;
-        actor.raw_set("__songlua_state_glow", make_color_table(lua, dest.glow)?)?;
-        actor.raw_set(
-            "__songlua_state_vertex_colors",
-            dest.vertex_colors
-                .map(|colors| make_vertex_color_table(lua, colors))
-                .transpose()?,
-        )?;
-    }
+    actor.raw_set("__songlua_diffuse", make_color_table(lua, dest.diffuse)?)?;
+    actor.raw_set(
+        "__songlua_state_diffuse",
+        make_color_table(lua, dest.diffuse)?,
+    )?;
+    actor.raw_set("__songlua_state_glow", make_color_table(lua, dest.glow)?)?;
+    actor.raw_set(
+        "__songlua_state_vertex_colors",
+        dest.vertex_colors
+            .map(|colors| make_vertex_color_table(lua, colors))
+            .transpose()?,
+    )?;
     actor.raw_set("__songlua_aux", current.aux)?;
     for (key, value) in POSITION_CURRENT_KEYS
         .into_iter()
@@ -19710,6 +19757,7 @@ pub fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState,
     read_actor_overlay_state(
         actor,
         None,
+        None,
         |field| actor.raw_get::<Option<f32>>(field.key()),
         |field| actor.raw_get::<Option<bool>>(field.key()),
     )
@@ -19805,6 +19853,7 @@ fn actor_overlay_state_with_pose(
     }
     read_actor_overlay_state(
         actor,
+        Some(lua),
         pose.as_ref(),
         |field| match numbers[field as usize] {
             ActorNumberValue::Value(value) => Ok(value),
@@ -20002,7 +20051,7 @@ mod actor_state_read_tests {
     }
 
     #[test]
-    fn native_color_definition_clones_keep_destination_and_independence() {
+    fn native_pose_definition_clones_keep_destination_and_independence() {
         let lua = Lua::new();
         begin_live_runtime(&lua).unwrap();
         let actor = lua.load("{__songlua_actor_type='Quad', authored={score=17}}")
@@ -20013,18 +20062,27 @@ mod actor_state_read_tests {
         capture_block_set_color(&lua, &actor, [0.25, 0.5, 0.75, 1.0]).unwrap();
         capture_block_set_vec4(&lua, &actor, "glow", [1.0, 0.75, 0.5, 0.25]).unwrap();
         capture_block_set_vertex_colors(&lua, &actor, [[0.5; 4]; 4]).unwrap();
+        for (key, value) in [("x",12.0), ("zoom_y",3.0), ("skew_x",0.25), ("fadeleft",0.5)] {
+            capture_block_set_f32(&lua, &actor, key, value).unwrap();
+        }
         let Value::Table(generic) = clone_lua_value(&lua, Value::Table(actor.clone())).unwrap()
             else { panic!("table clone"); };
         let definition = clone_actor_def(&lua, &actor, |_, _| Ok(()), false).unwrap();
         capture_block_set_color(&lua, &actor, [0.0; 4]).unwrap();
+        capture_block_set_f32(&lua, &actor, "x", 24.0).unwrap();
         for copy in [generic, definition] {
             assert_eq!(actor_overlay_initial_state(&copy).unwrap().diffuse, [0.25, 0.5, 0.75, 1.0]);
             assert_eq!(actor_glow(&lua, &copy).unwrap(), [1.0, 0.75, 0.5, 0.25]);
             assert_eq!(actor_vertex_colors(&lua, &copy).unwrap(), [[0.5; 4]; 4]);
+            let pose = actor_overlay_initial_state(&copy).unwrap();
+            assert_eq!((pose.x,pose.zoom_y,pose.skew_x,pose.fadeleft), (12.0,3.0,0.25,0.5));
             assert_eq!(copy.get::<Table>("authored").unwrap().get::<u32>("score").unwrap(), 17);
             ensure_tween_replay(&lua, &copy).unwrap();
             capture_block_set_color(&lua, &copy, [0.75; 4]).unwrap();
+            capture_block_set_f32(&lua, &copy, "x", 36.0).unwrap();
             assert_eq!(actor_diffuse(&lua, &actor).unwrap(), [0.0; 4]);
+            assert_eq!(actor_destination_position(&lua, &actor, 0).unwrap(), 24.0);
+            assert_eq!(actor_current_position(&lua, &copy, 0).unwrap(), 36.0);
         }
     }
 
@@ -20085,6 +20143,7 @@ mod actor_state_read_tests {
 
 fn read_actor_overlay_state(
     actor: &Table,
+    lua: Option<&Lua>,
     pose: Option<&SongLuaOverlayState>,
     number: impl Fn(ActorNumberField) -> mlua::Result<Option<f32>>,
     flag: impl Fn(ActorFlagField) -> mlua::Result<Option<bool>>,
@@ -20501,10 +20560,16 @@ fn read_actor_overlay_state(
             // Preserve replay_tween_pose's translation from the destination
             // rectangle to current XY, including its float operation order.
             let (x, y) = (state.x, state.y);
-            state.x = actor.raw_get::<Option<f32>>("__songlua_state_x")
-                .map_err(|err| err.to_string())?.unwrap_or(0.0);
-            state.y = actor.raw_get::<Option<f32>>("__songlua_state_y")
-                .map_err(|err| err.to_string())?.unwrap_or(0.0);
+            if let Some([dest_x, dest_y]) = lua.and_then(|lua|
+                live_destination_value(lua, actor, |dest| [dest.x, dest.y])) {
+                state.x = dest_x;
+                state.y = dest_y;
+            } else {
+                state.x = actor.raw_get::<Option<f32>>("__songlua_state_x")
+                    .map_err(|err| err.to_string())?.unwrap_or(0.0);
+                state.y = actor.raw_get::<Option<f32>>("__songlua_state_y")
+                    .map_err(|err| err.to_string())?.unwrap_or(0.0);
+            }
             crate::move_overlay(&mut state, x, y);
         }
     }
@@ -22255,11 +22320,13 @@ const fn actor_multi_vertex_mesh_vertex(
     }
 }
 
-pub fn actor_zoom_axis(actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::Result<f32> {
-    let zoom = actor
-        .get::<Option<f32>>(zoom_key)?
-        .or(actor.get::<Option<f32>>("__songlua_state_zoom")?)
-        .unwrap_or(1.0);
+pub fn actor_zoom_axis(lua: &Lua, actor: &Table, zoom_key: &str, basezoom_key: &str) -> mlua::Result<f32> {
+    let zoom = match zoom_key.strip_prefix("__songlua_state_")
+        .and_then(|key| live_destination_scalar(lua, actor, key)) {
+        Some(value) => value,
+        None => actor.get::<Option<f32>>(zoom_key)?
+            .or(actor.get::<Option<f32>>("__songlua_state_zoom")?).unwrap_or(1.0),
+    };
     let basezoom = actor
         .get::<Option<f32>>(basezoom_key)?
         .or(actor.get::<Option<f32>>("__songlua_state_basezoom")?)
