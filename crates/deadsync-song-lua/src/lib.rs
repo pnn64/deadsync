@@ -49,6 +49,7 @@ pub use model_texture::{
 };
 mod multitap;
 mod native_vector;
+mod tween_pose;
 mod net;
 mod noteskin;
 mod option_rows;

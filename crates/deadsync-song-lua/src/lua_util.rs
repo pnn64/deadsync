@@ -1,3 +1,4 @@
+use crate::tween_pose::TweenPose;
 use crate::native_vector::ActorVectorValue;
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
@@ -10994,7 +10995,7 @@ pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<
     let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current, queue: Default::default(), progress: None, targets: 0,
+            current: current.into(), queue: Default::default(), progress: None, targets: 0,
         });
     }
     reset_actor_capture(lua, actor)?;
@@ -11512,7 +11513,7 @@ pub struct SongLuaStartupState {
 // delta after ancestor hibernation, wrappers and ActorFrame update rates. Its
 // native float time-left samples become immutable startup playback blocks.
 struct ActorTweenReplay {
-    current: SongLuaOverlayState,
+    current: TweenPose,
     queue: std::collections::VecDeque<ActorTweenStep>,
     progress: Option<Vec<Vec<[f32; 2]>>>,
     targets: u128,
@@ -11522,8 +11523,8 @@ struct ActorTweenStep {
     index: usize,
     duration: f32,
     left: f32,
-    from: Option<SongLuaOverlayState>,
-    to: SongLuaOverlayState,
+    from: Option<TweenPose>,
+    to: TweenPose,
     easing: Option<String>,
     opt1: Option<f32>,
     command: Option<String>,
@@ -11549,13 +11550,13 @@ pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Re
     Ok(())
 }
 
-fn live_current_value<T>(lua: &Lua, actor: &Table, read: impl FnOnce(&SongLuaOverlayState) -> T) -> Option<T> {
+fn live_current_value<T>(lua: &Lua, actor: &Table, read: impl FnOnce(&TweenPose) -> T) -> Option<T> {
     if !crate::live::active(lua) { return None; }
     lua.app_data_ref::<ActorTweenReplays>()?
         .0.get(&(actor.to_pointer() as usize)).map(|replay| read(&replay.current))
 }
 
-fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
+fn live_current_pose(lua: &Lua, actor: &Table) -> Option<TweenPose> {
     live_current_value(lua, actor, |current| *current)
 }
 
@@ -11565,7 +11566,7 @@ fn live_current_pose(lua: &Lua, actor: &Table) -> Option<SongLuaOverlayState> {
 fn live_destination_value<T>(
     lua: &Lua,
     actor: &Table,
-    read: impl FnOnce(&SongLuaOverlayState) -> T,
+    read: impl FnOnce(&TweenPose) -> T,
 ) -> Option<T> {
     if !live_actor_playback(lua) { return None; }
     lua.app_data_ref::<ActorTweenReplays>()?
@@ -11690,65 +11691,7 @@ pub(crate) fn set_live_frame(lua: &Lua, seconds: f64, beat: f64, delta: f64) {
     }
 }
 
-pub(crate) const TWEEN_POSE_TARGETS: [SongLuaOverlayUpdateTarget; 24] = {
-    use SongLuaOverlayUpdateTarget as T;
-    [
-        T::Aux,
-        T::X,
-        T::Y,
-        T::Z,
-        T::Zoom,
-        T::ZoomX,
-        T::ZoomY,
-        T::ZoomZ,
-        T::RotationX,
-        T::RotationY,
-        T::RotationZ,
-        T::SkewX,
-        T::SkewY,
-        T::CropLeft,
-        T::CropRight,
-        T::CropTop,
-        T::CropBottom,
-        T::FadeLeft,
-        T::FadeRight,
-        T::FadeTop,
-        T::FadeBottom,
-        T::Diffuse,
-        T::VertexColors,
-        T::Glow,
-    ]
-};
-
-fn tween_pose_delta(state: SongLuaOverlayState) -> SongLuaOverlayStateDelta {
-    SongLuaOverlayStateDelta {
-        aux: Some(state.aux),
-        x: Some(state.x),
-        y: Some(state.y),
-        z: Some(state.z),
-        zoom: Some(state.zoom),
-        zoom_x: Some(state.zoom_x),
-        zoom_y: Some(state.zoom_y),
-        zoom_z: Some(state.zoom_z),
-        rot_x_deg: Some(state.rot_x_deg),
-        rot_y_deg: Some(state.rot_y_deg),
-        rot_z_deg: Some(state.rot_z_deg),
-        skew_x: Some(state.skew_x),
-        skew_y: Some(state.skew_y),
-        cropleft: Some(state.cropleft),
-        cropright: Some(state.cropright),
-        croptop: Some(state.croptop),
-        cropbottom: Some(state.cropbottom),
-        fadeleft: Some(state.fadeleft),
-        faderight: Some(state.faderight),
-        fadetop: Some(state.fadetop),
-        fadebottom: Some(state.fadebottom),
-        diffuse: Some(state.diffuse),
-        vertex_colors: state.vertex_colors,
-        glow: Some(state.glow),
-        ..SongLuaOverlayStateDelta::default()
-    }
-}
+pub(crate) use crate::tween_pose::TARGETS as TWEEN_POSE_TARGETS;
 
 pub(crate) fn begin_tween_replay<Kind>(
     lua: &Lua,
@@ -11793,7 +11736,7 @@ pub(crate) fn begin_tween_replay<Kind>(
                 duration,
                 left: duration,
                 from: None,
-                to,
+                to: to.into(),
                 easing,
                 opt1,
                 command: startup.commands.get(index).cloned().flatten(),
@@ -11802,7 +11745,7 @@ pub(crate) fn begin_tween_replay<Kind>(
         replays.insert(
             pointer,
             ActorTweenReplay {
-                current,
+                current: current.into(),
                 queue,
                 progress: Some(vec![Vec::new(); startup.steps.len()]),
                 targets,
@@ -11854,7 +11797,7 @@ fn record_tween_write(
         .queue
         .back_mut()
         .map_or(&mut replay.current, |step| &mut step.to);
-    crate::perframe::set_overlay_state_update_value(dest, target, value);
+    dest.set(target, value);
     drop(replays);
     // Pose replay owns the queue, but message provenance must retain its
     // actual delay. Static command blocks cannot describe an existing tail.
@@ -12017,8 +11960,7 @@ pub(crate) fn replay_tween_pose(lua: &Lua, actor: &Table, state: &mut SongLuaOve
     if let Some(replays) = lua.app_data_ref::<ActorTweenReplays>()
         && let Some(replay) = replays.0.get(&(actor.to_pointer() as usize))
     {
-        crate::apply_overlay_delta(state, &tween_pose_delta(replay.current));
-        state.vertex_colors = replay.current.vertex_colors;
+        replay.current.write_to(state);
         return true;
     }
     false
@@ -12031,7 +11973,7 @@ pub(crate) fn ensure_tween_replay(lua: &Lua, actor: &Table) -> mlua::Result<()> 
     let current = actor_overlay_initial_state(actor).map_err(mlua::Error::external)?;
     if let Some(mut replays) = lua.app_data_mut::<ActorTweenReplays>() {
         replays.0.insert(actor.to_pointer() as usize, ActorTweenReplay {
-            current, queue: Default::default(),
+            current: current.into(), queue: Default::default(),
             progress: (!crate::live::active(lua)).then(Vec::new), targets: 0,
         });
     }
@@ -12144,8 +12086,7 @@ fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64, span: f32) -> mlua
                 progress[step.index].push([time, step.left]);
             }
             if step.left == 0.0 {
-                crate::apply_overlay_delta(&mut replay.current, &tween_pose_delta(step.to));
-                replay.current.vertex_colors = step.to.vertex_colors;
+                replay.current = step.to;
                 replay.queue.pop_front();
             } else {
                 let factor = crate::overlay_command_ease_factor(
@@ -12155,8 +12096,8 @@ fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64, span: f32) -> mlua
                 );
                 replay.current = step
                     .from
-                    .expect("the queue head captured its starting pose");
-                crate::overlay_state_lerp(&mut replay.current, &tween_pose_delta(step.to), factor);
+                    .expect("the queue head captured its starting pose")
+                    .lerp(step.to, factor);
             }
             command
         };
@@ -12216,7 +12157,7 @@ pub(crate) fn capture_tween_poses(lua: &Lua, actors: &[Table]) {
             if replay.targets & (1u128 << target as usize) == 0 {
                 continue;
             }
-            let value = crate::perframe::overlay_state_update_value(&replay.current, target);
+            let value = replay.current.get(target);
             SongLuaOverlayUpdateCapture::replace_value(
                 &mut capture.values[index],
                 target,
@@ -19867,7 +19808,7 @@ pub(crate) fn live_actor_overlay_state(lua: &Lua, actor: &Table) -> Result<SongL
 fn actor_overlay_state_with_pose(
     lua: &Lua,
     actor: &Table,
-    pose: Option<SongLuaOverlayState>,
+    pose: Option<TweenPose>,
 ) -> Result<SongLuaOverlayState, String> {
     let mut numbers = [ActorNumberValue::Fallback; ActorNumberField::KEYS.len()];
     if let Some(pose) = &pose {
@@ -20262,7 +20203,7 @@ mod actor_state_read_tests {
 fn read_actor_overlay_state(
     actor: &Table,
     lua: Option<&Lua>,
-    pose: Option<&SongLuaOverlayState>,
+    pose: Option<&TweenPose>,
     number: impl Fn(ActorNumberField) -> mlua::Result<Option<f32>>,
     flag: impl Fn(ActorFlagField) -> mlua::Result<Option<bool>>,
 ) -> Result<SongLuaOverlayState, String> {
