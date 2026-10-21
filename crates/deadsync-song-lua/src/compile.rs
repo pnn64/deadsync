@@ -1519,7 +1519,7 @@ fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
                 let texture_path =
                     crate::lua_util::resolve_actor_asset_path(&overlay.table, &texture)?;
                 overlay.actor.kind = SongLuaOverlayKind::Sprite {
-                    texture_key: std::sync::Arc::from(texture_path.to_string_lossy().into_owned()),
+                    texture_key: crate::lua_util::texture_path_key(&texture_path),
                     texture_path,
                     states: crate::lua_util::read_sprite_states(&overlay.table)?.into(),
                     textures: [].into(),

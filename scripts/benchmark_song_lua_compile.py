@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -68,6 +68,10 @@ def main():
         for name in ["finalization_events.rs", "finalization_events_before.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "asset_strings":
+        for name in ["asset_strings.rs", "asset_strings_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -102,6 +106,10 @@ def main():
         filters = ["compile::finalization_events_perf::benchmark_finalization_events"]
         baseline = "87e58ae89"
         expected_names = 17
+    if args.suite == "asset_strings":
+        filters = ["lua_util::asset_strings_perf::benchmark_asset_strings"]
+        baseline = "0c335501b"
+        expected_names = 14
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -177,6 +185,8 @@ def main():
         report["timing_scope"] = ("Each sample prepares a fresh Lua state outside timing. Binding scopes process 64 actors with zero/eight/128/512 native methods, including an existing destination. Forwarding scopes call the production native adapter, a frozen baseline, or input-only/result-only adapters 8192 times through a prepared Lua closure and Lua semantic method. Shapes cover one/two/three/eight arguments and zero/one/three/eight returns. A full warmup precedes forwarding timing; GC is stopped. Return-count checks and temporary drops are included; VM/input destruction excluded. First of ten samples discarded. Partial adapters differ only in argument/result storage; trace logging is off in timing.")
     if args.suite == "finalization_events":
         report["timing_scope"] = ("Each sample prepares a fresh Lua state and 16 independent inputs outside timing. Sprite cases finalize captured texture bindings across unique, aliased or absent targets. Judgment cases finalize tracked actors and consume captured sheet changes. Message cases reconcile scheduled actions and runtime broadcasts through the actual helper. Consumed events, temporary groups and tracked-table handle destruction are included; result/VM and other prepared input destruction are excluded. GC is stopped. First of ten samples discarded. Frozen helpers are exact baseline bodies extracted into test-only functions.")
+    if args.suite == "asset_strings":
+        report["timing_scope"] = ("Setter samples prepare fresh Lua states, actor tables and string values outside timing; GC is stopped after one warmup call. Each sample invokes the actual setter 8192 times, including its field writes and texture/video classification. Input/VM destruction is excluded; temporary and result destruction is included. Key scopes convert a prepared empty/ASCII/Unicode/long/lossy Windows path into the production Arc key 8192 times, including key destruction. First of ten samples discarded. Frozen setters are exact baseline bodies and share unchanged downstream helpers.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:

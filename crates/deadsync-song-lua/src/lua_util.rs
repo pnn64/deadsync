@@ -5653,7 +5653,12 @@ pub fn set_actor_texture_from_value(
     }
     match value {
         Some(Value::String(texture)) => {
-            actor.set("Texture", texture.to_str()?.to_string())?;
+            if actor.weak_lua() == texture.weak_lua() {
+                let _validated = texture.to_str()?;
+                actor.set("Texture", texture)?;
+            } else {
+                actor.set("Texture", texture.to_str()?.to_string())?;
+            }
             actor.raw_set("__songlua_default_texture", false)?;
             actor.set("__songlua_aft_capture_name", Value::Nil)?;
             set_actor_decode_movie_for_texture(actor)?;
@@ -5690,6 +5695,11 @@ pub fn set_actor_texture_from_value(
         _ => {}
     }
     Ok(())
+}
+
+#[inline]
+pub(crate) fn texture_path_key(path: &Path) -> Arc<str> {
+    Arc::from(path.to_string_lossy().as_ref())
 }
 
 pub fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
@@ -6501,7 +6511,14 @@ pub fn set_actor_sound_file_from_value(
     clear_on_nil: bool,
 ) -> mlua::Result<()> {
     match value {
-        Some(Value::String(file)) => actor.set("File", file.to_str()?.to_string())?,
+        Some(Value::String(file)) => {
+            if actor.weak_lua() == file.weak_lua() {
+                let _validated = file.to_str()?;
+                actor.set("File", file)?;
+            } else {
+                actor.set("File", file.to_str()?.to_string())?;
+            }
+        }
         Some(Value::Nil) | None if clear_on_nil => actor.set("File", Value::Nil)?,
         _ => {}
     }
@@ -21904,7 +21921,7 @@ where
                     let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
                         return Ok(None);
                     };
-                    let texture_key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
+                    let texture_key = texture_path_key(&texture_path);
                     SongLuaOverlayKind::Sprite {
                         texture_path,
                         texture_key,
@@ -21979,7 +21996,7 @@ where
         } else { read_actor_multi_vertex_texture_path(actor, aft_capture_names)? };
         let texture_key = texture_path
             .as_ref()
-            .map(|path| Arc::<str>::from(path.to_string_lossy().into_owned()));
+            .map(|path| texture_path_key(path));
         SongLuaOverlayKind::ActorMultiVertex {
             vertices,
             texture_path,
@@ -24326,3 +24343,7 @@ mod prefix_args_perf;
 #[cfg(test)]
 #[path = "../tests/perf/metatable_storage.rs"]
 mod metatable_storage_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/asset_strings.rs"]
+mod asset_strings_perf;
