@@ -2827,22 +2827,56 @@ fn clone_actor_state(lua: &Lua, key: &str, value: Value) -> mlua::Result<Value> 
     clone_lua_value(lua, value)
 }
 
+fn retained_key_text(lua: &Lua, key: &mlua::LuaString, keep: fn(&str) -> bool) -> mlua::Result<Option<String>> {
+    // SAFETY: one rooted, checked Lua string; UTF-8 validation and the fixed
+    // Rust predicate do not call Lua. Only owned text leaves the read scope.
+    unsafe {
+        crate::raw_vm::with_read_stack(lua, 1, |raw, base| {
+            raw.push(key)?;
+            let mut len = 0;
+            let data = ffi::lua_tolstring(raw.state(), base + 1, &mut len);
+            let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+            let text = std::str::from_utf8(bytes).map_err(|error| mlua::Error::FromLuaConversionError {
+                from: "string", to: "&str".into(), message: Some(error.to_string()),
+            })?;
+            Ok(keep(text).then(|| text.to_owned()))
+        })
+    }
+}
+
+fn remove_scalar_global(lua: &Lua, key: &mlua::LuaString, scalar: bool, retained: &HashSet<&str>) -> mlua::Result<bool> {
+    // SAFETY: same rooted immutable-string read; hashing is pure Rust.
+    unsafe {
+        crate::raw_vm::with_read_stack(lua, 1, |raw, base| {
+            raw.push(key)?;
+            let mut len = 0;
+            let data = ffi::lua_tolstring(raw.state(), base + 1, &mut len);
+            let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+            let text = std::str::from_utf8(bytes).map_err(|error| mlua::Error::FromLuaConversionError {
+                from: "string", to: "&str".into(), message: Some(error.to_string()),
+            })?;
+            Ok(scalar && !retained.contains(text))
+        })
+    }
+}
+
 fn snapshot_actor_state(
     lua: &Lua,
     actor: &Table,
     keep_key: fn(&str) -> bool,
 ) -> mlua::Result<Vec<(String, Value)>> {
     let mut out = Vec::new();
-    for pair in actor.clone().pairs::<Value, Value>() {
-        let (key, value) = pair?;
+    let key_lua = actor.weak_lua().upgrade();
+    actor.for_each::<Value, Value>(|key, value| {
         let Value::String(key) = key else {
-            continue;
+            return Ok(());
         };
-        let key = key.to_str()?;
-        if keep_key(&key) {
-            out.push((key.to_string(), clone_actor_state(lua, &key, value)?));
+        if let Some(key) = retained_key_text(&key_lua, &key, keep_key)? {
+            let value = clone_actor_state(lua, &key, value)?;
+            out.push((key, value));
         }
-    }
+        Ok(())
+    })?;
     {
         let pose = live_pose_snapshot(lua, actor)?.into_iter().flatten();
         let flags = live_render_flags(lua, actor).into_iter().flat_map(RenderFlags::snapshot);
@@ -2926,22 +2960,19 @@ fn restore_scalar_globals(lua: &Lua, snapshot: Vec<(String, Value)>) -> mlua::Re
         .map(|(key, _)| key.as_str())
         .collect::<HashSet<_>>();
     let mut remove = smallvec::SmallVec::<[mlua::LuaString; 16]>::new();
-    for pair in globals.pairs::<Value, Value>() {
-        let (key, value) = pair?;
+    globals.for_each::<Value, Value>(|key, value| {
         let Value::String(key) = key else {
-            continue;
+            return Ok(());
         };
         // Validate every string key before making any changes, including keys
         // whose values are not scalar. Retain Lua handles instead of copying
         // temporary key bytes into Rust strings.
-        let should_remove = {
-            let text = key.to_str()?;
-            is_scalar_lua_value(&value) && !keys.contains(text.as_ref())
-        };
+        let should_remove = remove_scalar_global(lua, &key, is_scalar_lua_value(&value), &keys)?;
         if should_remove {
             remove.push(key);
         }
-    }
+        Ok(())
+    })?;
     for key in remove {
         globals.set(key, Value::Nil)?;
     }
@@ -2983,22 +3014,23 @@ pub fn snapshot_actor_semantic_state_table(lua: &Lua, actor: &Table) -> mlua::Re
     }
     let snapshot = lua.create_table()?;
     let mut index = 1usize;
-    for pair in actor.pairs::<Value, Value>() {
-        let (key, value) = pair?;
+    let key_lua = actor.weak_lua().upgrade();
+    actor.for_each::<Value, Value>(|key, value| {
         let Value::String(key) = key else {
-            continue;
+            return Ok(());
         };
         // Validate every string key, including keys excluded from the snapshot.
-        if !is_actor_semantic_state_key(&key.to_str()?) {
-            continue;
-        }
-        let value = clone_actor_state(lua, &key.to_str()?, value)?;
+        let Some(name) = retained_key_text(&key_lua, &key, is_actor_semantic_state_key)? else {
+            return Ok(());
+        };
+        let value = clone_actor_state(lua, &name, value)?;
         let entry = lua.create_table_with_capacity(2, 0)?;
         entry.raw_set(1, key)?;
         entry.raw_set(2, value)?;
         snapshot.raw_set(index, entry)?;
         index += 1;
-    }
+        Ok(())
+    })?;
     Ok(snapshot)
 }
 
@@ -4484,20 +4516,19 @@ pub struct SongLuaCapturedMessageCommands {
 
 fn for_each_actor_message_command(
     actor: &Table,
-    mut visit: impl FnMut(&str, Function),
+    mut visit: impl FnMut(String, Function),
 ) -> mlua::Result<()> {
     // Filter values before borrowing/allocating names. Keep keys on Lua's stack
     // and copy only selected names into the caller's pre-execution snapshot.
+    let lua = actor.weak_lua().upgrade();
     actor.for_each::<Value, Value>(|key, value| {
         let (Value::String(key), Value::Function(command)) = (key, value) else {
             return Ok(());
         };
-        let Ok(name) = key.to_str() else {
+        let Ok(Some(name)) = retained_key_text(&lua, &key, |name| name.ends_with("MessageCommand")) else {
             return Ok(());
         };
-        if name.ends_with("MessageCommand") {
-            visit(&name, command);
-        }
+        visit(name, command);
         Ok(())
     })
 }
@@ -4511,7 +4542,7 @@ pub fn capture_actor_message_commands(
     }
     let mut out = SongLuaCapturedMessageCommands::default();
     let mut command_names = Vec::new();
-    for_each_actor_message_command(actor, |name, _| command_names.push(name.to_owned()))
+    for_each_actor_message_command(actor, |name, _| command_names.push(name))
         .map_err(|err| err.to_string())?;
     command_names.sort_unstable();
 
@@ -18821,12 +18852,13 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
         for_each_actor_message_command(&source.table, |name, function| {
             let message = name
                 .strip_suffix("MessageCommand")
-                .expect("filtered suffix");
+                .expect("filtered suffix")
+                .to_owned();
             commands.push((
                 source_index,
                 source.table.clone(),
-                name.to_owned(),
-                message.to_owned(),
+                name,
+                message,
                 function,
             ));
         })
@@ -24277,3 +24309,7 @@ mod startup_capture_perf;
 #[cfg(test)]
 #[path = "../tests/perf/vm_reads_registry.rs"]
 mod vm_reads_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/actor_state.rs"]
+mod actor_state_perf;

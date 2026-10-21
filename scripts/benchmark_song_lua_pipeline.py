@@ -20,7 +20,9 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--pairs", type=int, default=6)
     parser.add_argument("--samples", type=int, default=9)
-    parser.add_argument("--suite", choices=("live", "startup"), default="live")
+    parser.add_argument("--reverse-first", action="store_true",
+                        help="Start with after/before, then alternate subsequent pairs")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -40,6 +42,11 @@ def main():
     if args.suite == "startup":
         cases = cases[:5]
         cases.insert(1, ("offline_capture", "offline", "crates/deadsync-song-lua/tests/perf/startup_capture.lua"))
+    if args.suite == "actor_state":
+        cases = [
+            ("offline_actor_state", "offline", "crates/deadsync-song-lua/tests/perf/actor_state.lua"),
+            ("offline_sampling_buffers", "offline", "tests/fixtures/song_lua/sampling_buffers.lua"),
+        ]
     args.out.mkdir(parents=True, exist_ok=True)
     paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / name for name in sorted({case[2] for case in cases})]
@@ -52,7 +59,7 @@ def main():
     snapshots = {}
     for trial in range(1, args.pairs + 1):
         for name, mode, source in cases:
-            for variant in (("before", "after") if trial % 2 else ("after", "before")):
+            for variant in (("before", "after") if bool(trial % 2) != args.reverse_first else ("after", "before")):
                 report = args.out / f"{name}-{variant}-{trial}.json"
                 with report.with_suffix(".log").open("wb") as log:
                     subprocess.run([str(binaries[variant]), mode, str(root/source), str(report.resolve()),
@@ -86,7 +93,7 @@ def main():
     assert all(sha(root/name) == digest for name,digest in sources.items())
     assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == head
     result = dict(worktree_head=head, binaries={key:{"path":str(path),"sha256":binary_hashes[key]} for key,path in binaries.items()},
-                  source_sha256=sources, suite=args.suite, pairs=args.pairs, samples_per_variant_per_case=args.pairs*args.samples,
+                  source_sha256=sources, suite=args.suite, pairs=args.pairs, reverse_first=args.reverse_first, samples_per_variant_per_case=args.pairs*args.samples,
                   rustc=subprocess.check_output(["rustc", "+1.98.1", "-Vv"], text=True),
                   system=platform.platform(), logical_processors=os.cpu_count(), logical_cpu=2,
                   summary=summary, records=records,
