@@ -2800,6 +2800,7 @@ impl App {
         let song_path = song.simfile_path.clone();
         let charts = plan.charts;
         let gameplay_session = gameplay_session();
+        let metrics = self.state.shell.metrics;
         let viewport = gameplay_viewport(self.state.shell.metrics);
         let display_size = space::current_window_px();
         let display_aspect_ratio = cfg.display_aspect_ratio;
@@ -2811,6 +2812,7 @@ impl App {
         let spawn = std::thread::Builder::new()
             .name("select-music-gameplay-preload".to_string())
             .spawn(move || {
+                space::set_current_metrics(metrics);
                 let started = Instant::now();
                 let payload_started = Instant::now();
                 let result = song_loading::load_gameplay_charts(

@@ -18,6 +18,7 @@ pub const ITG_ACTOR_UPDATE_COMMAND: &str = "__deadsync_actor_update";
 pub const ITG_BEAT_FADE_GLOW_UPDATE: &str = "beat_fade_glow";
 pub const ITG_BEAT_RECEPTOR_UPDATE: &str = "beat_receptor";
 pub const ITG_ACTOR_FRAME_CHILD: &str = "__deadsync_actor_frame_child";
+pub const ITG_PARENT_COMMANDS: &str = "__deadsync_parent_commands";
 pub const ITG_FRAME_ROTATION_Z: &str = "__deadsync_frame_rotation_z";
 pub const ITG_HOLD_EMITTER: &str = "__deadsync_hold_emitter";
 pub const ITG_ROLL_EMITTER: &str = "__deadsync_roll_emitter";

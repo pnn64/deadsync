@@ -374,6 +374,7 @@ pub struct ItgReceptorColumn<T> {
 pub struct ReceptorOverlay<T> {
     pub slot: T,
     pub reverse: ReceptorReverseBehavior,
+    pub before_target: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1028,6 +1029,7 @@ fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
                     animation: parse_itg_tap_explosion_animation_commands(
                         source.commands,
                         mode,
+                        key,
                         command,
                     ),
                 });
@@ -1318,9 +1320,36 @@ pub fn itg_apply_child_actor_commands<T>(
         if let Some(frame) = frame_override {
             apply_frame(&mut sprite.slot, frame);
         }
-        for commands in command_sets {
-            for (key, value) in *commands {
-                sprite.commands.insert(key.clone(), value.clone());
+        if sprite.commands.contains_key(actor::ITG_ACTOR_FRAME_CHILD)
+            && itg_has_tap_explosion_command(&sprite.commands)
+        {
+            // A wrapper on an ActorFrame changes the frame's commands, not
+            // the commands of its Sprite children. Both receive Judgment/Wn.
+            let mut parents: Vec<HashMap<String, String>> = sprite
+                .commands
+                .get(actor::ITG_PARENT_COMMANDS)
+                .and_then(|value| serde_json::from_str(value).ok())
+                .unwrap_or_default();
+            let mut parent = HashMap::new();
+            for commands in command_sets {
+                parent.extend(
+                    commands
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone())),
+                );
+            }
+            if !parent.is_empty() {
+                parents.push(parent);
+                sprite.commands.insert(
+                    actor::ITG_PARENT_COMMANDS.into(),
+                    serde_json::to_string(&parents).expect("actor commands serialize"),
+                );
+            }
+        } else {
+            for commands in command_sets {
+                for (key, value) in *commands {
+                    sprite.commands.insert(key.clone(), value.clone());
+                }
             }
         }
         apply_state(&mut sprite.slot, &sprite.commands);
@@ -2135,17 +2164,21 @@ pub fn itg_receptor_column<T: Clone>(
         off,
         glow: visuals.glow,
         idle_glow_layer,
-        overlays: itg_receptor_effect_start(layers)
-            .map(|start| {
-                layers[start + 3..]
-                    .iter()
-                    .map(|layer| ReceptorOverlay {
-                        slot: layer.slot.clone(),
-                        reverse: receptor::receptor_reverse_behavior(&layer.commands),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        overlays: {
+            let (off, glow, idle) = receptor_layer_indices(layers);
+            layers
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| {
+                    Some(*index) != off && Some(*index) != glow && Some(*index) != idle
+                })
+                .map(|(index, layer)| ReceptorOverlay {
+                    slot: layer.slot.clone(),
+                    reverse: receptor::receptor_reverse_behavior(&layer.commands),
+                    before_target: off.is_some_and(|off| index < off),
+                })
+                .collect()
+        },
         off_reverse,
         glow_reverse,
         idle_glow_reverse,
@@ -2166,7 +2199,9 @@ fn itg_receptor_layer_refs<'a, T>(
     if let Some([off, _, glow]) = actor_effect_layers {
         visual_layers.extend([off, glow]);
     } else {
-        visual_layers.extend(itg_receptor_visual_layers(layers));
+        let (off, glow, _) = receptor_layer_indices(layers);
+        visual_layers.extend(off.map(|index| &layers[index]));
+        visual_layers.extend(glow.map(|index| &layers[index]));
     }
     visual_layers
 }
@@ -2213,17 +2248,44 @@ fn itg_receptor_effect_start<T>(layers: &[ItgResolvedSprite<T>]) -> Option<usize
                 .get(key)
                 .is_some_and(|command| !command.trim().is_empty())
         });
-        let has_press_glow =
-            glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
+        let has_press_glow = has_receptor_press_commands(&glow.commands);
         has_idle_command && has_press_glow
     })
 }
 
-fn itg_receptor_visual_layers<T>(layers: &[ItgResolvedSprite<T>]) -> &[ItgResolvedSprite<T>] {
-    if layers.len() > 2 {
-        &layers[layers.len() - 2..]
-    } else {
-        layers
+fn has_receptor_press_commands(commands: &HashMap<String, String>) -> bool {
+    ["presscommand", "liftcommand"].iter().any(|key| {
+        commands
+            .get(*key)
+            .is_some_and(|command| !command.trim().is_empty())
+    })
+}
+
+fn receptor_layer_indices<T>(
+    layers: &[ItgResolvedSprite<T>],
+) -> (Option<usize>, Option<usize>, Option<usize>) {
+    let len = layers.len();
+    // Some skins put a press light below a foreground receptor. Empty metric
+    // commands on the foreground do not turn it into a press-only glow.
+    if len >= 3
+        && has_receptor_press_commands(&layers[len - 2].commands)
+        && !has_receptor_press_commands(&layers[len - 1].commands)
+        && ["nonecommand", "w1command"].iter().any(|key| {
+            layers[len - 1]
+                .commands
+                .get(*key)
+                .is_some_and(|command| !command.trim().is_empty())
+        })
+    {
+        return (Some(len - 1), Some(len - 2), None);
+    }
+    if let Some(start) = itg_receptor_effect_start(layers) {
+        return (Some(start), Some(start + 2), Some(start + 1));
+    }
+    match len {
+        0 => (None, None, None),
+        1 => (Some(0), None, None),
+        _ => (Some(len - 2), Some(len - 1), None),
     }
 }
 
@@ -2231,8 +2293,15 @@ pub fn itg_receptor_glow_behavior_from_layers<T>(
     layers: &[ItgResolvedSprite<T>],
     metric_command: impl FnMut(&str) -> Option<String>,
 ) -> ReceptorGlowBehavior {
+    let (off, glow, _) = receptor_layer_indices(layers);
+    let draw_before_target = matches!((off, glow), (Some(off), Some(glow)) if glow < off);
     let layers = itg_receptor_layer_refs(layers, itg_receptor_actor_effect_layers(layers));
-    receptor::receptor_glow_behavior(layers.get(1).map(|sprite| &sprite.commands), metric_command)
+    let mut behavior = receptor::receptor_glow_behavior(
+        layers.get(1).map(|sprite| &sprite.commands),
+        metric_command,
+    );
+    behavior.draw_before_target = draw_before_target;
+    behavior
 }
 
 pub fn itg_receptor_pulse_from_command(command: Option<&str>) -> ReceptorPulse {
@@ -2938,12 +3007,13 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             ops,
         );
         (ops.apply_masks)(&mut sprites);
-        if element.eq_ignore_ascii_case("Receptor")
-            && let Some(start) = itg_receptor_effect_start(&sprites)
-        {
+        if element.eq_ignore_ascii_case("Receptor") {
+            let (off, glow, _) = receptor_layer_indices(&sprites);
             // Independent overlays run Init/On once at load, then retain their
             // animation programs for allocation-free frame sampling.
-            for index in std::iter::once(start + 1).chain(start + 3..sprites.len()) {
+            for index in
+                (0..sprites.len()).filter(|index| Some(*index) != off && Some(*index) != glow)
+            {
                 let sprite = &mut sprites[index];
                 sprite.slot = (ops.apply_active_cmd)(&sprite.slot, &sprite.commands, "oncommand");
             }
@@ -3668,6 +3738,7 @@ mod tests {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            parents: Vec::new(),
         };
         let long = ExplosionAnimation {
             initial: ExplosionState::default(),
@@ -3683,6 +3754,7 @@ mod tests {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            parents: Vec::new(),
         };
         let explosion = TapExplosion::from_inline_layers(SmallVec::from_vec(vec![
             TapExplosionLayer {

@@ -477,6 +477,11 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
 }
 
 fn itg_prepare_commands(commands: &mut HashMap<String, String>) {
+    noteskin_script::resolve_screen_args(
+        commands,
+        deadlib_present::space::screen_width(),
+        deadlib_present::space::screen_height(),
+    );
     if !commands
         .values()
         .any(|s| s.contains("math.random") || s.contains("PREFSMAN"))
@@ -1792,6 +1797,213 @@ end }
                 }
             }
         }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn screen_height_receptor_transform_survives_cache_reload_and_logical_sizes() {
+        use deadlib_present::space::{self, Metrics};
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("screen-globals");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Receptor" then
+        return LoadActor(NOTESKIN:GetPath("Down", "Receptor"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "_arrow"))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Receptor.lua"),
+            include_str!("../../../deadsync-noteskin/tests/fixtures/screen-globals/Receptor.lua"),
+        )
+        .unwrap();
+        image::RgbaImage::from_pixel(64, 1, image::Rgba([255; 4]))
+            .save(root.join("_backdrop.png"))
+            .unwrap();
+        write_noteskin_png(&root.join("_arrow.png"));
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "screen-globals".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        assert!(
+            bundle.actors.files.iter().any(|file| {
+                file.decl.sprites.iter().any(|sprite| {
+                    sprite
+                        .commands
+                        .values()
+                        .any(|script| script.contains("SCREEN_HEIGHT"))
+                })
+            }),
+            "cached commands must retain screen globals"
+        );
+        let original_metrics = Metrics::centered(space::screen_width(), space::screen_height());
+        for (width, height) in [(640.0, 480.0), (800.0, 600.0)] {
+            space::set_current_metrics(Metrics::centered(width, height));
+            for parts in [None, Some(SkinParts::default().with(SkinPart::Receptors))] {
+                let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                    &data,
+                    &Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    &bundle.loader,
+                    &bundle.actors,
+                    parts,
+                )
+                .unwrap();
+                for background in &skin.receptor_off {
+                    let draw = background.model_draw_at(0.0, 0.0);
+                    assert_eq!(background.def.size, [64, 1]);
+                    assert_eq!(draw.zoom, [1.0, height, 1.0]);
+                    assert_eq!(draw.vert_align, 1.0);
+                    assert_eq!(draw.rot, [0.0, 0.0, 180.0]);
+                    assert_eq!(background.logical_size()[1] * draw.zoom[1], height);
+                }
+            }
+        }
+        space::set_current_metrics(original_metrics);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn layered_receptor_and_frame_explosion_keep_visible_children() {
+        use deadlib_present::space::{self, Metrics};
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("actor-layers");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Receptor" or element == "Explosion" then
+        return LoadActor(NOTESKIN:GetPath("Down", element))
+    end
+    if string.find(element, "Tap Explosion") then
+        return LoadActor(NOTESKIN:GetPath("Down", "Flash"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "_note"))
+end }
+"#,
+        )
+        .unwrap();
+        for (name, source) in [
+            (
+                "Receptor",
+                include_str!("../../../deadsync-noteskin/tests/fixtures/actor-layers/Receptor.lua"),
+            ),
+            (
+                "Flash",
+                include_str!("../../../deadsync-noteskin/tests/fixtures/actor-layers/Flash.lua"),
+            ),
+            (
+                "Explosion",
+                include_str!(
+                    "../../../deadsync-noteskin/tests/fixtures/actor-layers/Explosion.lua"
+                ),
+            ),
+        ] {
+            fs::write(root.join(format!("Down {name}.lua")), source).unwrap();
+        }
+        for (name, width, height) in [
+            ("_rail", 64, 1),
+            ("_press", 64, 64),
+            ("_target 4x1", 256, 32),
+            ("_flash 16x1", 1024, 64),
+            ("_note", 64, 20),
+        ] {
+            image::RgbaImage::from_pixel(width, height, image::Rgba([255; 4]))
+                .save(root.join(format!("{name}.png")))
+                .unwrap();
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "actor-layers".into(),
+            overrides: Vec::new(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&path).unwrap();
+        let old = Metrics::centered(space::screen_width(), space::screen_height());
+        space::set_current_metrics(Metrics::centered(854.0, 480.0));
+        let skin = super::load_itg_sprite_noteskin_parts_compiled(
+            &data,
+            &Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            &bundle.loader,
+            &bundle.actors,
+            None,
+        )
+        .unwrap();
+        for col in 0..4 {
+            assert!(
+                skin.receptor_off[col]
+                    .texture_key()
+                    .ends_with("_target 4x1.png")
+            );
+            assert!(
+                skin.receptor_glow[col]
+                    .as_ref()
+                    .unwrap()
+                    .texture_key()
+                    .ends_with("_press.png")
+            );
+            assert!(skin.receptor_idle_glow_layers[col].is_none());
+            assert_eq!(skin.receptor_overlays[col].len(), 1);
+            let rail = &skin.receptor_overlays[col][0];
+            assert!(rail.before_target);
+            assert_eq!(rail.slot.model_draw.zoom, [1.0, 480.0, 1.0]);
+            for bright in [false, true] {
+                let flash = skin
+                    .tap_explosion_for_col_with_bright(col, "W1", bright)
+                    .unwrap();
+                assert!((flash.duration() - 0.31).abs() < 1e-6);
+                assert!(
+                    flash.layers.iter().any(|layer| {
+                        let state = layer.animation.state_at(0.05);
+                        state.visible && state.diffuse[3] > 0.99
+                    }),
+                    "{bright}: {flash:?}"
+                );
+                assert!(
+                    flash
+                        .layers
+                        .iter()
+                        .all(|layer| layer.animation.state_at(0.32).diffuse[3] == 0.0)
+                );
+                let hidden = skin
+                    .tap_explosion_for_col_with_bright(col, "W2", bright)
+                    .unwrap();
+                assert!(
+                    hidden
+                        .layers
+                        .iter()
+                        .all(|layer| layer.animation.state_at(0.0).diffuse[3] == 0.0)
+                );
+            }
+        }
+        assert!(skin.receptor_glow_behavior.draw_before_target);
+        space::set_current_metrics(old);
         fs::remove_dir_all(root).unwrap();
     }
 

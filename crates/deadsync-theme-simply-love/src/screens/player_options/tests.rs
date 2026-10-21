@@ -2233,6 +2233,7 @@ pub(super) mod tests {
             skin.receptor_idle_glow_layers = vec![Some(slot.clone())];
             skin.receptor_idle_glow = deadsync_noteskin::ReceptorIdleGlow::ActorEffect;
             skin.receptor_overlays = vec![Arc::from([ReceptorOverlay {
+                before_target: false,
                 slot,
                 reverse: Default::default(),
             }])];
@@ -2629,6 +2630,7 @@ pub(super) mod tests {
             receptors[3..]
                 .iter()
                 .map(|slot| deadsync_noteskin::runtime::ReceptorOverlay {
+                    before_target: false,
                     slot: slot.clone(),
                     reverse: Default::default(),
                 })

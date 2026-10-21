@@ -145,6 +145,7 @@ pub struct ExplosionAnimation {
     pub glow: Option<GlowEffect>,
     pub blend_add: bool,
     pub animation_seconds: Option<f32>,
+    pub parents: Vec<ExplosionAnimation>,
 }
 
 impl Default for ExplosionAnimation {
@@ -173,6 +174,7 @@ impl Default for ExplosionAnimation {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            parents: Vec::new(),
         }
     }
 }
@@ -185,6 +187,7 @@ impl ExplosionAnimation {
             .map(|segment| segment.duration.max(0.0))
             .sum::<f32>()
             .max(0.0)
+            .max(self.parents.iter().map(Self::duration).fold(0.0, f32::max))
     }
 
     #[must_use]
@@ -203,6 +206,26 @@ impl ExplosionAnimation {
     /// are sampled per hit, never per frame or at noteskin load.
     #[must_use]
     pub fn state_at_seeded(&self, time: f32, effect_time: f32, seed: u64) -> ExplosionVisualState {
+        let mut state = self.local_state_at_seeded(time, effect_time, seed);
+        for parent in &self.parents {
+            let parent = parent.state_at_seeded(time, effect_time, seed);
+            state.zoom *= parent.zoom;
+            state.rotation_z += parent.rotation_z;
+            state.visible &= parent.visible;
+            for channel in 0..4 {
+                state.diffuse[channel] *= parent.diffuse[channel];
+            }
+            state.glow[3] *= parent.diffuse[3];
+        }
+        state
+    }
+
+    fn local_state_at_seeded(
+        &self,
+        time: f32,
+        effect_time: f32,
+        seed: u64,
+    ) -> ExplosionVisualState {
         if time.is_finite()
             && let Some(state) = self.canonical_fade_state_at(time)
         {
@@ -230,7 +253,7 @@ impl ExplosionAnimation {
                 continue;
             }
 
-            if elapsed > duration {
+            if elapsed >= duration {
                 if let Some(zoom) = segment.end_zoom {
                     current.zoom = zoom;
                 }
@@ -435,6 +458,7 @@ fn parse_explosion_animation_parts<'a>(
         glow: None,
         blend_add: false,
         animation_seconds: None,
+        parents: Vec::new(),
     };
 
     let mut current_state = ExplosionState::default();
@@ -504,9 +528,20 @@ fn parse_explosion_animation_parts<'a>(
         if let Some(duration) = parse_script_sleep(command, args) {
             recognized_command = true;
             finish_pending(&mut pending, &mut animation, &mut current_state, true);
+            animation.segments.push(ExplosionSegment {
+                duration: duration.max(0.0),
+                tween: TweenType::Linear,
+                start: current_state,
+                end_zoom: None,
+                end_color: None,
+                end_rotation_z: None,
+                end_visible: None,
+            });
+            // Actor::Sleep adds a hold followed by a zero-duration destination.
+            // A setter after sleep jumps at its end instead of fading across it.
             pending = Some(PendingSegment {
                 tween: TweenType::Linear,
-                duration: duration.max(0.0),
+                duration: 0.0,
                 start: current_state,
                 target_zoom: None,
                 target_color: None,
@@ -935,6 +970,31 @@ pub fn itg_partition_tap_explosion_sources<T>(
 }
 
 pub(crate) fn parse_itg_tap_explosion_animation_commands(
+    commands: &HashMap<String, String>,
+    mode: ItgTapExplosionMode,
+    command_key: &str,
+    command: &str,
+) -> ExplosionAnimation {
+    let mut animation = parse_itg_tap_explosion_actor_commands(commands, mode, command);
+    if let Some(parents) = commands
+        .get(crate::actor::ITG_PARENT_COMMANDS)
+        .and_then(|value| serde_json::from_str::<Vec<HashMap<String, String>>>(value).ok())
+    {
+        animation.parents = parents
+            .iter()
+            .map(|parent| {
+                parse_itg_tap_explosion_actor_commands(
+                    parent,
+                    mode,
+                    parent.get(command_key).map_or("", String::as_str),
+                )
+            })
+            .collect();
+    }
+    animation
+}
+
+fn parse_itg_tap_explosion_actor_commands(
     commands: &HashMap<String, String>,
     mode: ItgTapExplosionMode,
     command: &str,
@@ -1511,6 +1571,7 @@ mod tests {
         let animation = parse_itg_tap_explosion_animation_commands(
             &commands,
             ItgTapExplosionMode::Dim,
+            "w1command",
             "playcommand,\"Flash\"",
         );
         assert_eq!(animation.segments.len(), 1);
@@ -1527,6 +1588,7 @@ mod tests {
         let animation = parse_itg_tap_explosion_animation_commands(
             &HashMap::new(),
             ItgTapExplosionMode::Dim,
+            "w1command",
             "diffusealpha,1;linear,0.4;playcommand,'Missing';diffusealpha,0",
         );
         assert!((animation.state_at(0.2).diffuse[3] - 0.5).abs() < 1e-6);
@@ -1542,6 +1604,7 @@ mod tests {
         let animation = parse_itg_tap_explosion_animation_commands(
             &commands,
             ItgTapExplosionMode::Dim,
+            "w1command",
             "diffusealpha,1;linear,0.4;playcommand,'Loop'",
         );
         assert!((animation.state_at(0.2).diffuse[3] - 0.5).abs() < 1e-6);
@@ -1558,6 +1621,7 @@ mod tests {
         let animation = parse_itg_tap_explosion_animation_commands(
             &commands,
             ItgTapExplosionMode::Dim,
+            "w1command",
             "playcommand,'C0'",
         );
         assert!(!animation.segments.is_empty());
@@ -2026,6 +2090,41 @@ mod tests {
                 "Tap Explosion Bright W5",
             ]
         );
+    }
+
+    #[test]
+    fn frame_child_flash_retains_native_sleep_timing() {
+        let parent = HashMap::from([
+            ("initcommand".to_owned(), "diffusealpha,0".to_owned()),
+            ("w1command".to_owned(), "diffusealpha,1".to_owned()),
+        ]);
+        let command = "diffusealpha,1;sleep,0.31;diffusealpha,0";
+        let commands = HashMap::from([
+            ("w1command".into(), command.into()),
+            (
+                crate::actor::ITG_PARENT_COMMANDS.into(),
+                serde_json::to_string(&[parent]).unwrap(),
+            ),
+        ]);
+        let animation = parse_itg_tap_explosion_animation_commands(
+            &commands,
+            ItgTapExplosionMode::Dim,
+            "w1command",
+            command,
+        );
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/actor-layers/native-timing-expected.json"
+        ))
+        .unwrap();
+        assert!((animation.duration() - 0.31).abs() < 1e-6);
+        for sample in expected["samples"].as_array().unwrap() {
+            assert_eq!(
+                animation
+                    .state_at(sample["time"].as_f64().unwrap() as f32)
+                    .diffuse[3],
+                sample["alpha"].as_f64().unwrap() as f32
+            );
+        }
     }
 }
 

@@ -1,0 +1,22 @@
+{
+  "provenance": {
+    "execution": "embedded_native_sources",
+    "git_dirty": "false",
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+  },
+  "samples": [
+    {
+      "time": 0.05000000074505806,
+      "alpha": 1.0
+    },
+    {
+      "time": 0.30000001192092896,
+      "alpha": 1.0
+    },
+    {
+      "time": 0.3199999928474426,
+      "alpha": 0.0
+    }
+  ]
+}

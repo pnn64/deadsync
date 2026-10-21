@@ -427,6 +427,61 @@ pub fn parse_script_number(raw: &str) -> Option<f32> {
     itg_parse_lua_float_expr(raw)
 }
 
+/// Bind logical screen globals when an actor is loaded. Compiled commands stay
+/// independent of the display, so the same cache can be used at another size.
+pub fn resolve_screen_args(commands: &mut HashMap<String, String>, width: f32, height: f32) {
+    // ScreenDimensions::ReloadScreenDimensions publishes integer Lua globals,
+    // including truncated centers when a logical dimension is odd.
+    let center_x = f64::from((width * 0.5) as i32);
+    let center_y = f64::from((height * 0.5) as i32);
+    let width = f64::from(width as i32);
+    let height = f64::from(height as i32);
+    for script in commands.values_mut() {
+        if !script.contains("SCREEN_") {
+            continue;
+        }
+        let normalized = normalized_script_command(script);
+        let mut out = String::with_capacity(normalized.len());
+        let mut changed = false;
+        for raw in normalized.split(';') {
+            if !out.is_empty() {
+                out.push(';');
+            }
+            let Some(token) = split_script_token(raw) else {
+                out.push_str(raw);
+                continue;
+            };
+            out.push_str(token.command().as_str());
+            for arg in token.args() {
+                out.push(',');
+                let value = arg
+                    .contains("SCREEN_")
+                    .then(|| {
+                        crate::lua::parse_float_expr(arg, &mut |name| match name {
+                            "SCREEN_WIDTH" | "SCREEN_RIGHT" => Some(width),
+                            "SCREEN_HEIGHT" | "SCREEN_BOTTOM" => Some(height),
+                            "SCREEN_CENTER_X" => Some(center_x),
+                            "SCREEN_CENTER_Y" => Some(center_y),
+                            "SCREEN_LEFT" | "SCREEN_TOP" => Some(0.0),
+                            _ => None,
+                        })
+                    })
+                    .flatten();
+                if let Some(value) = value {
+                    use std::fmt::Write;
+                    let _ = write!(out, "{value}");
+                    changed = true;
+                } else {
+                    out.push_str(arg);
+                }
+            }
+        }
+        if changed {
+            *script = out;
+        }
+    }
+}
+
 pub(crate) fn script_random(seed: u64, sample: u32) -> f32 {
     let mut bits = seed.wrapping_add((u64::from(sample) + 1).wrapping_mul(0x9e3779b97f4a7c15));
     bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
@@ -1718,6 +1773,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn screen_global_transforms_match_native_actor_assertions() {
+        // These expected states are also asserted through ITGmania's native
+        // Lua Actor bindings by tests/fixtures/screen-globals/native-input.json.
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/screen-globals/cases.json"))
+                .unwrap();
+        for case in cases.as_array().unwrap() {
+            let mut commands = HashMap::from([(
+                "initcommand".to_owned(),
+                case["script"].as_str().unwrap().to_owned(),
+            )]);
+            resolve_screen_args(
+                &mut commands,
+                case["screen"][0].as_f64().unwrap() as f32,
+                case["screen"][1].as_f64().unwrap() as f32,
+            );
+            let (draw, timeline, _) = model_draw_program(&commands);
+            assert!(timeline.is_empty());
+            for (field, actual) in [
+                ("zoom", draw.zoom),
+                ("position", draw.pos),
+                ("rotation", draw.rot),
+            ] {
+                let expected: [f32; 3] =
+                    std::array::from_fn(|index| case[field][index].as_f64().unwrap() as f32);
+                assert_eq!(actual, expected, "{case}: {field}");
+            }
+            assert_eq!(draw.vert_align, case["vert_align"].as_f64().unwrap() as f32);
+        }
+    }
+
+    #[test]
+    fn screen_globals_preserve_tweens_and_leave_strings_and_unknowns_untouched() {
+        let mut commands: HashMap<String, String> = HashMap::from([
+            ("initcommand".into(), "zoomy,SCREEN_HEIGHT;linear,0.25;zoomy,SCREEN_HEIGHT / 2".into()),
+            ("presscommand".into(), "playcommand,'SCREEN_HEIGHT';zoomx,SCREEN_HEIGHT_SUFFIX;zoomz,unknown(SCREEN_WIDTH)".into()),
+        ]);
+        let untouched = commands["presscommand"].clone();
+        resolve_screen_args(&mut commands, 854.0, 480.0);
+        assert_eq!(commands["presscommand"], untouched);
+        let (draw, timeline, effect) = model_draw_program(&commands);
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(timeline[0].from.zoom, [1.0, 480.0, 1.0]);
+        assert_eq!(timeline[0].to.zoom, [1.0, 240.0, 1.0]);
+        assert_eq!(timeline[0].duration, 0.25);
+        assert_eq!(
+            crate::draw::model_draw_at(draw, &timeline, effect, 0.0, &[], 0.125, 0.0).zoom,
+            [1.0, 360.0, 1.0]
+        );
+    }
+
+    #[test]
     fn script_token_reuses_split_semantics() {
         let source = " SetStateProperties, 4, { 0.1, 0.2 }, nested(1, 2) ";
         let token = split_script_token(source).unwrap();
@@ -2114,6 +2221,12 @@ mod tests {
         let mut effects = HashMap::from([("initcommand".into(), "spin;effectmagnitude,0,0,math.random(70,190);effectoffset,PREFSMAN:GetPreference(\"GlobalOffsetSeconds\")".into())]);
         resolve_effect_args(&mut effects, 0.125, 13);
         model_draw_program(&effects);
+        let mut screen = HashMap::from([(
+            "initcommand".into(),
+            "valign,1;zoomy,SCREEN_HEIGHT;addrotationz,180".into(),
+        )]);
+        resolve_screen_args(&mut screen, 854.0, 480.0);
+        assert_eq!(model_draw_program(&screen).0.zoom, [1.0, 480.0, 1.0]);
         let animation = crate::explosion::parse_explosion_animation(
             "SetSecondsIntoAnimation,0;rate,2;linear,0.15;rotationz,90;rate,0.5;diffusealpha,0",
         );

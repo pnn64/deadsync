@@ -245,9 +245,14 @@ impl Service {
     fn start(&mut self, work: Work) {
         let (tx, rx) = mpsc::sync_channel(1);
         let task = work.clone();
+        let metrics = deadlib_present::space::Metrics::centered(
+            deadlib_present::space::screen_width(),
+            deadlib_present::space::screen_height(),
+        );
         match std::thread::Builder::new()
             .name("option-preview".into())
             .spawn(move || {
+                deadlib_present::space::set_current_metrics(metrics);
                 let started = std::time::Instant::now();
                 let kind = if matches!(task, Work::Skin(..)) {
                     "runtime"

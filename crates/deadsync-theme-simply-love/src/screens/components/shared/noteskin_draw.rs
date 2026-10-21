@@ -7,8 +7,8 @@
 //! timing, and appends to the caller's actor list without allocating storage
 //! of its own.
 //!
-//! Two sizing conventions coexist. The menu helpers (`draw_noteskin_note`,
-//! `draw_receptor_note`, `draw_skin_part`, ...) fit each piece to a menu icon.
+//! Note previews preserve authored proportions at the same field scale as taps.
+//! Other menu helpers fit their component to the requested icon bounds.
 //! The field helpers (`draw_tap`, `draw_mine`, `draw_receptor`,
 //! `draw_explosion`) scale every layer by gameplay's field zoom, so a
 //! receptor glow or an explosion keeps its authored size relative to the arrow
@@ -154,8 +154,7 @@ pub(crate) fn draw_noteskin_note(
     let spacing = ns.note_display_metrics.part_texture_translate[part as usize].note_color_spacing;
     let translation = [spacing[0] * quant_idx, spacing[1] * quant_idx];
     let slots = preview_note_slots(ns, part, note_idx);
-    let Some(primary) = slots.first() else { return };
-    let note_scale = target_height / primary.logical_size()[1].max(1.0);
+    let note_scale = target_height / FIELD_UNIT_PX;
     draw_note_slots(
         actors,
         slots,
@@ -606,7 +605,7 @@ fn draw_slot(
         let ox = draw.pos[0] * size[0] / logical[0].max(1.0);
         let oy = draw.pos[1] * size[1] / logical[1].max(1.0);
         let (sin, cos) = rotation.to_radians().sin_cos();
-        let pos = [
+        let mut pos = [
             center[0] + ox * cos - oy * sin,
             center[1] + ox * sin + oy * cos,
         ];
@@ -614,6 +613,10 @@ fn draw_slot(
         if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
             return;
         }
+        let align_offset = (0.5 - draw.vert_align) * size[1];
+        let (sin, cos) = (draw.rot[2] + rotation).to_radians().sin_cos();
+        pos[0] -= sin * align_offset;
+        pos[1] += cos * align_offset;
         let tint = std::array::from_fn::<_, 4, _>(|i| color[i] * draw.tint[i]);
         let mut actor = act!(sprite(slot.texture_key_shared()):
             align(0.5, 0.5): xy(pos[0], pos[1]): setsize(size[0], size[1]):
@@ -809,8 +812,8 @@ fn receptor_glow_lift_start(behavior: ReceptorGlowBehavior, press_remaining: f32
     )
 }
 
-// Layer order and z offsets follow the menu icon: target, idle flash, press
-// glow, then the skin's trailing overlays, matching gameplay's draw order.
+// Preserve the receptor's layer order, including field backgrounds and press
+// lights authored beneath the target. Menu icons omit field backgrounds.
 #[allow(clippy::too_many_arguments)]
 fn draw_receptor_layers(
     actors: &mut Vec<Actor>,
@@ -860,6 +863,30 @@ fn draw_receptor_layers(
         let scale = fit * zoom;
         [logical[0] * scale, logical[1] * scale]
     };
+    for layer in skin
+        .receptor_overlays
+        .get(col)
+        .into_iter()
+        .flat_map(|layers| layers.iter())
+        .filter(|layer| !menu && layer.before_target)
+    {
+        let logical = layer.slot.logical_size();
+        draw_receptor_layer(
+            actors,
+            &layer.slot,
+            center,
+            [
+                logical[0] * size / FIELD_UNIT_PX,
+                logical[1] * size / FIELD_UNIT_PX,
+            ],
+            [1.0, 1.0, 1.0, alpha],
+            BlendMode::Alpha,
+            z - 2,
+            time,
+            beat,
+            cache.as_deref_mut(),
+        );
+    }
     if let Some(slot) = skin.receptor_off.get(col) {
         draw_receptor_layer(
             actors,
@@ -891,7 +918,11 @@ fn draw_receptor_layers(
             } else {
                 BlendMode::Alpha
             },
-            z + 1,
+            if skin.receptor_glow_behavior.draw_before_target {
+                z - 1
+            } else {
+                z + 1
+            },
             time,
             beat,
             cache.as_deref_mut(),
@@ -909,7 +940,11 @@ fn draw_receptor_layers(
             } else {
                 BlendMode::Alpha
             },
-            z + 1,
+            if skin.receptor_glow_behavior.draw_before_target {
+                z - 1
+            } else {
+                z + 1
+            },
             time,
             beat,
             cache.as_deref_mut(),
@@ -920,6 +955,7 @@ fn draw_receptor_layers(
         .get(col)
         .into_iter()
         .flat_map(|layers| layers.iter())
+        .filter(|layer| !layer.before_target)
         .enumerate()
     {
         draw_receptor_layer(
@@ -1182,6 +1218,77 @@ mod tests {
             name,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn thin_note_preview_keeps_authored_height_at_field_scale() {
+        let mut skin = (*dance_skin("default")).clone();
+        let mut slot = deadsync_assets::noteskin::test_model_slot();
+        slot.model = None;
+        slot.def.size = [64, 20];
+        slot.source_size = [64, 20];
+        skin.note_layers[0] = Arc::from([slot]);
+        let mut actors = Vec::new();
+        draw_noteskin_note(
+            &mut actors,
+            &skin,
+            NoteAnimPart::Tap,
+            0,
+            0.0,
+            CENTER,
+            25.6,
+            1.0,
+            10,
+            0.0,
+            0.0,
+        );
+        assert_eq!(actors.len(), 1);
+        assert!((sprite_height(&actors[0]) - 8.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn field_receptor_underlay_keeps_alignment_and_stays_out_of_menu_icons() {
+        let mut skin = (*dance_skin("default")).clone();
+        let mut rail = deadsync_assets::noteskin::test_model_slot();
+        rail.model = None;
+        rail.def.size = [64, 1];
+        rail.source_size = [64, 1];
+        rail.model_draw.zoom[1] = 480.0;
+        rail.model_draw.vert_align = 1.0;
+        rail.model_draw.rot[2] = 180.0;
+        skin.receptor_overlays[0] = Arc::from([deadsync_noteskin::runtime::ReceptorOverlay {
+            slot: rail,
+            reverse: Default::default(),
+            before_target: true,
+        }]);
+        let mut actors = Vec::new();
+        draw_receptor(
+            &mut actors,
+            &skin,
+            0,
+            CENTER,
+            32.0,
+            1.0,
+            10,
+            0.0,
+            0.0,
+            None,
+            None,
+        );
+        let Actor::Sprite { offset, z, .. } = &actors[0] else {
+            panic!("receptor underlay")
+        };
+        assert_eq!(*z, 8);
+        assert!((offset[0] - CENTER[0]).abs() < 0.001);
+        assert!((offset[1] - (CENTER[1] + 120.0)).abs() < 0.001);
+        assert!((sprite_height(&actors[0]) - 240.0).abs() < 0.001);
+        actors.clear();
+        draw_receptor_note(&mut actors, &skin, 0, CENTER, 32.0, 1.0, 10, 0.0, 0.0);
+        assert!(!actors.is_empty());
+        assert!(actors.iter().all(|actor| match actor {
+            Actor::Sprite { z, .. } => *z >= 10,
+            _ => false,
+        }));
     }
 
     fn sprite_rotation(actor: &Actor) -> f32 {
