@@ -22,7 +22,7 @@ def main():
     parser.add_argument("--samples", type=int, default=9)
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -55,6 +55,9 @@ def main():
     if args.suite == "sound_paths":
         cases = [("offline_sound_paths", "offline", "crates/deadsync-song-lua/tests/perf/sound_paths.lua"),
                  ("live_sound_paths", "live", "crates/deadsync-song-lua/tests/perf/sound_paths.lua")]
+    if args.suite == "comparison_text":
+        cases = [("offline_comparison_text", "offline", "crates/deadsync-song-lua/tests/perf/comparison_text.lua"),
+                 ("live_comparison_text", "live", "crates/deadsync-song-lua/tests/perf/comparison_text.lua")]
     args.out.mkdir(parents=True, exist_ok=True)
     paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / name for name in sorted({case[2] for case in cases})]
@@ -69,6 +72,8 @@ def main():
                   for name in ["finalization-a 2x6.png", "asset-string.wav"]]
     if args.suite == "sound_paths":
         paths += [root / "crates/deadsync-song-lua/tests/perf/asset-string.wav"]
+    if args.suite == "comparison_text":
+        paths += [root / "crates/deadsync-song-lua/tests/perf/finalization-a 2x6.png"]
     sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []

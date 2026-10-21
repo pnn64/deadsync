@@ -1918,8 +1918,8 @@ fn record_song_lua_sound_path(
         }
     }
     let paths = song_lua_sound_paths_table(lua)?;
-    for existing in paths.sequence_values::<String>() {
-        if existing? == key.as_ref() {
+    for existing in paths.sequence_values::<crate::lua_util::LuaFieldText<256>>() {
+        if existing?.as_str() == key.as_ref() {
             return Ok(());
         }
     }
@@ -3122,3 +3122,7 @@ mod ignored_args_perf;
 #[cfg(test)]
 #[path = "../tests/perf/sound_path.rs"]
 mod sound_path_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/comparison_sound.rs"]
+mod comparison_sound_perf;

@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets", "comparison_text"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -76,6 +76,10 @@ def main():
         for name in ["foreign_assets.rs", "foreign_assets_before.rs", "sound_path.rs", "sound_path_before.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "comparison_text":
+        for name in ["comparison_text.rs", "comparison_text_before.rs", "comparison_sound.rs", "comparison_sound_before.rs", "sound_path.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -118,6 +122,10 @@ def main():
         filters = ["lua_util::foreign_assets_perf::benchmark_foreign_assets", "host::sound_path_perf::benchmark_sound_path"]
         baseline = "494323364"
         expected_names = 16
+    if args.suite == "comparison_text":
+        filters = ["lua_util::comparison_text_perf::benchmark_comparison_text", "host::comparison_sound_perf::benchmark_comparison_sound"]
+        baseline = "142996521"
+        expected_names = 15
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -197,6 +205,8 @@ def main():
         report["timing_scope"] = ("Setter samples prepare fresh Lua states, actor tables and string values outside timing; GC is stopped after one warmup call. Each sample invokes the actual setter 8192 times, including its field writes and texture/video classification. Input/VM destruction is excluded; temporary and result destruction is included. Key scopes convert a prepared empty/ASCII/Unicode/long/lossy Windows path into the production Arc key 8192 times, including key destruction. First of ten samples discarded. Frozen setters are exact baseline bodies and share unchanged downstream helpers.")
     if args.suite == "foreign_assets":
         report["timing_scope"] = ("Setter samples prepare source/target VMs, actor tables and string values outside timing. GC is stopped after one warmup call. Each sample invokes the actual setter 8192 times, including its writes and texture/video classification; temporary/result destruction is included, input/VM destruction excluded. Sound-path samples prepare fresh VMs, capture/log/path tables and 64 arguments outside timing, then execute 64 actual recording calls including filesystem existence/type checks, path resolution, Rust event capture, optional Lua call-log writes and ordered deduplication. Result tables/events and VM destruction are excluded. Sound-path files are created once before measurement. First of ten samples discarded. Frozen helpers match the baseline and share unchanged downstream code.")
+    if args.suite == "comparison_text":
+        report["timing_scope"] = ("Text samples prepare fresh VMs and actor/payload/probe tables outside timing and stop GC. Each sample performs 8192 actual native-texture setter calls or probe classifications, including temporary/result destruction. Sound samples prepare the existing fixture helper runtime at beat 3.25, sound capture, path tables and call arguments outside timing, then perform 64 actual recording calls including filesystem checks, path resolution, capture and ordered duplicate scans. Result tables/events and VM destruction are excluded. Long text/path and numeric-coercion cases retain the normal fallback. First of ten samples discarded. Frozen helper bodies match the baseline; the existing inline reader and unchanged downstream helpers remain shared.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:

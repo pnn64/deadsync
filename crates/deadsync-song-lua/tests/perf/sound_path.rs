@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[path = "sound_path_before.rs"]
 mod before;
 
-fn directory(lossy: bool) -> PathBuf {
+pub(super) fn directory(lossy: bool) -> PathBuf {
     let mut path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/foreign-asset-sounds");
     #[cfg(windows)]
     if lossy {
@@ -41,7 +41,7 @@ fn run(current: bool, lua: &Lua, dir: &Path, args: &MultiValue, capture: bool) -
     }
 }
 
-fn snapshot(value: Value) -> String {
+pub(super) fn snapshot(value: Value) -> String {
     match value {
         Value::String(value) => format!("{:?}", value.as_bytes().as_ref()),
         Value::Table(table) => {
@@ -59,7 +59,7 @@ fn snapshot(value: Value) -> String {
     }
 }
 
-fn prepare(lua: &Lua, dir: &Path, entries: usize, calls: bool) {
+pub(super) fn prepare(lua: &Lua, dir: &Path, entries: usize, calls: bool) {
     install_sound_globals(lua, dir).unwrap();
     let runtime = lua.create_table().unwrap();
     runtime

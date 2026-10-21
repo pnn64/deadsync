@@ -5639,8 +5639,8 @@ pub fn set_actor_texture_from_value(
         // allocation and frame metadata, independently of this actor's size.
         match value {
             Some(Value::Table(texture))
-                if texture.raw_get::<Option<String>>("__songlua_native_type")?.as_deref()
-                    == Some("RageTexture") =>
+                if texture.raw_get::<Option<LuaFieldText<32>>>("__songlua_native_type")?
+                    .is_some_and(|kind| kind.as_str() == "RageTexture") =>
             {
                 actor.raw_set("__songlua_amv_texture_handle", texture.clone())?;
             }
@@ -17938,10 +17938,11 @@ pub fn classify_function_ease_probe(calls: &Table) -> mlua::Result<Option<SongLu
     let mut saw_zoom_x = false;
     let mut saw_zoom_y = false;
     let mut saw_zoom_z = false;
-    for value in calls.sequence_values::<String>() {
+    for value in calls.sequence_values::<LuaFieldText<32>>() {
         let value = value?;
+        let value = value.as_str();
         let (target_kind, method_name) =
-            value.split_once('.').unwrap_or(("player", value.as_str()));
+            value.split_once('.').unwrap_or(("player", value));
         if !matches!(target_kind, "player" | "overlay") {
             return Ok(None);
         }
@@ -24351,3 +24352,7 @@ mod asset_strings_perf;
 #[cfg(test)]
 #[path = "../tests/perf/foreign_assets.rs"]
 mod foreign_assets_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/comparison_text.rs"]
+mod comparison_text_perf;
