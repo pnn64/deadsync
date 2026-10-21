@@ -1703,6 +1703,99 @@ end }
     }
 
     #[test]
+    fn game_aware_loader_resolves_runtime_assets_after_cache_reload() {
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("game-aware");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            include_str!("../../../deadsync-noteskin/tests/fixtures/game-aware/NoteSkin.lua"),
+        )
+        .unwrap();
+        for button in ["Outer", "Inner"] {
+            fs::write(
+                root.join(format!("{button} Tap Note.lua")),
+                format!("return Def.ActorFrame {{\n    Def.Sprite {{\n        Texture=\"_{button}Note\";\n        Frame0000=0;\n        Delay0000=1;\n    }};\n}}\n"),
+            )
+            .unwrap();
+            write_noteskin_png(&root.join(format!("_{button}Note.png")));
+            write_noteskin_png(&root.join(format!("{button} Receptor.png")));
+            for kind in ["Hold", "Roll"] {
+                for part in ["Body", "BottomCap", "TopCap"] {
+                    for state in ["Active", "Inactive"] {
+                        write_noteskin_png(
+                            &root.join(format!("{button} {kind} {part} {state}.png")),
+                        );
+                    }
+                }
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "game-aware".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "")
+            .expect("compile synthetic loader");
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let skin = super::load_itg_sprite_noteskin_parts_compiled(
+            &data,
+            &style,
+            &bundle.loader,
+            &bundle.actors,
+            None,
+        )
+        .expect("load synthetic runtime from cache");
+        for (col, target) in ["Outer", "Inner", "Outer", "Inner"].into_iter().enumerate() {
+            let note = format!("_{target}Note.png");
+            for quant in 0..NUM_QUANTIZATIONS {
+                assert!(
+                    skin.notes[col * NUM_QUANTIZATIONS + quant]
+                        .texture_key()
+                        .ends_with(&note)
+                );
+            }
+            assert!(
+                skin.receptor_off[col]
+                    .texture_key()
+                    .ends_with(&format!("{target} Receptor.png"))
+            );
+            for (is_roll, kind) in [(false, "Hold"), (true, "Roll")] {
+                let visuals = skin.hold_visuals_for_col(col, is_roll);
+                // Heads redirected to Tap Note reuse the quantized arrow slots.
+                assert!(visuals.head_active.is_none());
+                assert!(visuals.head_inactive.is_none());
+                for (state, body, cap) in [
+                    ("Active", &visuals.body_active, &visuals.bottomcap_active),
+                    (
+                        "Inactive",
+                        &visuals.body_inactive,
+                        &visuals.bottomcap_inactive,
+                    ),
+                ] {
+                    for (part, slot) in [("Body", body), ("BottomCap", cap)] {
+                        let expected = format!("{target} {kind} {part} {state}.png");
+                        assert!(
+                            slot.as_ref()
+                                .expect("redirected hold part")
+                                .texture_key()
+                                .ends_with(&expected)
+                        );
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn texture_header_probe_is_reused_before_upload() {
         init_asset_paths();
         let root = temp_noteskin_root("header-cache");

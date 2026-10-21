@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 27;
+const COMPILER_VERSION: u32 = 28;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const PUMP_BUTTONS: [&str; 5] = ["DownLeft", "UpLeft", "Center", "UpRight", "DownRight"];
@@ -343,7 +343,7 @@ pub fn compile_data(
 ) -> Result<CompiledNoteskinBundle, String> {
     let scripts = noteskin_paths(data);
     let lua = Lua::new();
-    install_host(&lua, data, player_options).map_err(|err| err.to_string())?;
+    install_host(&lua, game, data, player_options).map_err(|err| err.to_string())?;
     let (noteskin, color_variants) = load_noteskin_table(&lua, &scripts)?;
     Ok(CompiledNoteskinBundle {
         version: noteskin_compiled::CACHE_SCHEMA_VERSION,
@@ -551,6 +551,7 @@ fn compiled_path_expr(value: Value) -> mlua::Result<Option<String>> {
 
 fn install_host(
     lua: &Lua,
+    game: &str,
     data: &noteskin_itg::NoteskinData,
     player_options: &str,
 ) -> mlua::Result<()> {
@@ -562,6 +563,16 @@ fn install_host(
         lua.create_function(move |_, _: MultiValue| Ok(options.clone()))?,
     )?;
     let state = lua.create_table()?;
+    let current_game = lua.create_table()?;
+    let game_name = game.trim().to_ascii_lowercase();
+    current_game.set(
+        "GetName",
+        lua.create_function(move |_, _: MultiValue| Ok(game_name.clone()))?,
+    )?;
+    state.set(
+        "GetCurrentGame",
+        lua.create_function(move |_, _: MultiValue| Ok(current_game.clone()))?,
+    )?;
     state.set(
         "GetPlayerState",
         lua.create_function(move |_, _: MultiValue| Ok(player.clone()))?,
@@ -643,12 +654,10 @@ fn install_host(
     let var_fn = lua.create_function(|lua, name: String| {
         let globals = lua.globals();
         match name.as_str() {
-            "Button" => Ok(Value::String(
-                lua.create_string(&globals.get::<String>("__itg_button")?)?,
-            )),
-            "Element" => Ok(Value::String(
-                lua.create_string(&globals.get::<String>("__itg_element")?)?,
-            )),
+            // ITGmania installs these thread variables only while requesting an
+            // actor. NoteSkin.lua itself can read them before a request exists.
+            "Button" => globals.get::<Value>("__itg_button"),
+            "Element" => globals.get::<Value>("__itg_element"),
             "Color" => Ok(Value::String(
                 lua.create_string(
                     globals
@@ -1226,6 +1235,47 @@ mod tests {
             path.components()
                 .all(|component| component.as_os_str() != OsStr::new(&version_dir))
         );
+    }
+
+    #[test]
+    fn game_aware_loader_keeps_startup_nil_and_request_redirects_through_cache() {
+        let root = temp_noteskin_dir("game-aware");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            include_str!("../tests/fixtures/game-aware/NoteSkin.lua"),
+        )
+        .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "game-aware".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        for (game, buttons, rotation) in [
+            ("dance", vec![("Left", "Outer"), ("Down", "Inner")], 0),
+            ("pump", vec![("Center", "Outer"), ("UpLeft", "Inner")], 90),
+        ] {
+            let bundle = super::compile_data(game, &data, "fixture", "")
+                .expect("compile synthetic game-aware loader");
+            let path = root.join(format!("{game}.bin"));
+            noteskin_compiled::save_compiled_bundle(&path, &bundle).unwrap();
+            let cached = noteskin_compiled::load_compiled_bundle(&path).unwrap();
+            for loader in [&bundle.loader, &cached.loader] {
+                for (button, target) in &buttons {
+                    for element in ["Tap Note", "Hold Head Active", "Roll Head Inactive"] {
+                        let request = loader.load_request(button, element);
+                        assert!(!request.blank);
+                        assert_eq!(request.load_button, *target);
+                        assert_eq!(request.load_element, "Tap Note");
+                        assert_eq!(request.rotation_z, Some(rotation));
+                    }
+                    for element in ["Hold Tail Active", "Roll Tail Inactive"] {
+                        assert!(loader.load_request(button, element).blank);
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
