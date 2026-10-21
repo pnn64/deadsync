@@ -1,3 +1,4 @@
+use crate::callback_args::IgnoredArgs;
 use crate::tween_pose::TweenPose;
 use crate::native_vector::ActorVectorValue;
 use crate::render_flags::{RenderFlag, RenderFlags};
@@ -1493,7 +1494,7 @@ fn create_loader_function_with_env(
     let resolved = resolve_script_path(lua, song_dir, path)?;
     if basename.eq_ignore_ascii_case("easing.lua") && !resolved.is_file() {
         let ease: Table = lua.globals().get("ease")?;
-        return lua.create_function(move |_, _args: MultiValue| Ok(Value::Table(ease.clone())));
+        return lua.create_function(move |_, _args: IgnoredArgs| Ok(Value::Table(ease.clone())));
     }
     load_script_file_with_env(lua, &resolved, song_dir, environment)
 }
@@ -3685,19 +3686,19 @@ fn create_life_meter_param_table(lua: &Lua) -> mlua::Result<Table> {
     let meter = lua.create_table()?;
     meter.set(
         "GetLife",
-        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_INITIAL_LIFE))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(SONG_LUA_INITIAL_LIFE))?,
     )?;
     meter.set(
         "IsFailing",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     meter.set(
         "IsHot",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     meter.set(
         "IsInDanger",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     Ok(meter)
 }
@@ -3781,27 +3782,27 @@ fn install_tap_note_methods(
         "GetTapNoteResult",
         lua.create_function({
             let result = result.clone();
-            move |lua, _args: MultiValue| lua.registry_value::<Table>(result.as_ref())
+            move |lua, _args: IgnoredArgs| lua.registry_value::<Table>(result.as_ref())
         })?,
     )?;
     note.set(
         "GetHoldNoteResult",
         lua.create_function({
             let result = result;
-            move |lua, _args: MultiValue| lua.registry_value::<Table>(result.as_ref())
+            move |lua, _args: IgnoredArgs| lua.registry_value::<Table>(result.as_ref())
         })?,
     )?;
     note.set(
         "GetHoldDuration",
-        lua.create_function(move |_, _args: MultiValue| Ok(hold_duration))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(hold_duration))?,
     )?;
     note.set(
         "GetAttackDuration",
-        lua.create_function(move |_, _args: MultiValue| Ok(attack_duration))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(attack_duration))?,
     )?;
     note.set(
         "GetKeysoundIndex",
-        lua.create_function(move |_, _args: MultiValue| Ok(keysound))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(keysound))?,
     )?;
     Ok(())
 }
@@ -3859,15 +3860,15 @@ fn install_tap_note_result_methods(
 
     result.set(
         "GetHeld",
-        lua.create_function(move |_, _args: MultiValue| Ok(held))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(held))?,
     )?;
     result.set(
         "GetHidden",
-        lua.create_function(move |_, _args: MultiValue| Ok(hidden))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(hidden))?,
     )?;
     result.set(
         "GetTapNoteOffset",
-        lua.create_function(move |_, _args: MultiValue| Ok(offset))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(offset))?,
     )?;
     set_string_method(lua, result, "GetTapNoteScore", &score)?;
     Ok(())
@@ -5988,7 +5989,7 @@ pub fn install_actor_scale_size_methods(lua: &Lua, actor: &Table) -> mlua::Resul
             name,
             lua.create_function({
                 let actor = actor.clone();
-                move |lua, _args: MultiValue| {
+                move |lua, _args: IgnoredArgs| {
                     scale_background(lua, &actor, center)?;
                     Ok(actor.clone())
                 }
@@ -6173,14 +6174,14 @@ pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "GetWidth",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(actor_base_size(&actor)?.0)
+            move |_, _args: IgnoredArgs| Ok(actor_base_size(&actor)?.0)
         })?,
     )?;
     actor.set(
         "GetZoomedWidth",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let width = actor_base_size(&actor)?.0;
                 Ok(width
                     * actor_zoom_axis(
@@ -6196,21 +6197,21 @@ pub fn install_actor_size_getter_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "GetNumStates",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(i64::from(actor_sprite_frame_count(&actor)?))
+            move |_, _args: IgnoredArgs| Ok(i64::from(actor_sprite_frame_count(&actor)?))
         })?,
     )?;
     actor.set(
         "GetHeight",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| Ok(actor_base_size(&actor)?.1)
+            move |_, _args: IgnoredArgs| Ok(actor_base_size(&actor)?.1)
         })?,
     )?;
     actor.set(
         "GetZoomedHeight",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let height = actor_base_size(&actor)?.1;
                 Ok(height
                     * actor_zoom_axis(
@@ -6431,37 +6432,37 @@ pub fn install_texture_proxy_methods(
     )?;
     texture.set(
         "GetPath",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string(&path)?))
         })?,
     )?;
     texture.set(
         "GetSourceWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(source_width))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(source_width))?,
     )?;
     texture.set(
         "GetSourceHeight",
-        lua.create_function(move |_, _args: MultiValue| Ok(source_height))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(source_height))?,
     )?;
     texture.set(
         "GetTextureWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(texture_width))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(texture_width))?,
     )?;
     texture.set(
         "GetTextureHeight",
-        lua.create_function(move |_, _args: MultiValue| Ok(texture_height))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(texture_height))?,
     )?;
     texture.set(
         "GetImageWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(image_size.0))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(image_size.0))?,
     )?;
     texture.set(
         "GetImageHeight",
-        lua.create_function(move |_, _args: MultiValue| Ok(image_size.1))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(image_size.1))?,
     )?;
     texture.set(
         "GetNumFrames",
-        lua.create_function(move |_, _args: MultiValue| Ok(i64::from(frame_count)))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(i64::from(frame_count)))?,
     )?;
     texture.set(
         "loop",
@@ -6581,7 +6582,7 @@ fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
             // Per-actor metadata lives with the compile-time Lua VM. Probe once on
             // first use (or after load changes File), never on a gameplay frame.
             let cached = std::cell::RefCell::new(None::<(Option<String>, f32)>);
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let file = actor.get::<Option<String>>("File")?;
                 let mut cached = cached.borrow_mut();
                 if let Some((previous, length)) = cached.as_ref() {
@@ -6608,11 +6609,11 @@ fn install_sound_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     // scheduled-SFX path has no mutable reader properties; report that honestly.
     sound.set(
         "SetProperty",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     actor.set(
         "get",
-        lua.create_function(move |_, _args: MultiValue| Ok(sound.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(sound.clone()))?,
     )?;
     Ok(())
 }
@@ -6706,12 +6707,12 @@ fn capture_actor_depth_recursive(lua: &Lua, actor: &Table, field: &str, enabled:
 
 pub fn make_actor_chain_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |_, _args: MultiValue| Ok(actor.clone()))
+    lua.create_function(move |_, _args: IgnoredArgs| Ok(actor.clone()))
 }
 
 pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, _args: MultiValue| {
+    lua.create_function(move |lua, _args: IgnoredArgs| {
         prepare_capture_scope_actor(lua, &actor)?;
         let position = [
             actor_current_position(lua, &actor, 0)?,
@@ -6737,7 +6738,7 @@ pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result
 
 pub fn make_actor_finish_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, _args: MultiValue| {
+    lua.create_function(move |lua, _args: IgnoredArgs| {
         finish_actor_tree_tweening(lua, &actor)?;
         Ok(actor.clone())
     })
@@ -7033,7 +7034,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
             "GetTarget",
             lua.create_function({
                 let actor = actor.clone();
-                move |_, _args: MultiValue| actor.raw_get::<Value>("__songlua_proxy_target_actor")
+                move |_, _args: IgnoredArgs| actor.raw_get::<Value>("__songlua_proxy_target_actor")
             })?,
         )?;
     }
@@ -7104,7 +7105,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "GetTweenTimeLeft",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_tween_time_left(lua, &actor)
+            move |lua, _args: IgnoredArgs| actor_tween_time_left(lua, &actor)
         })?,
     )?;
     actor.set(
@@ -7380,7 +7381,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
         "RemoveAllChildren",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 remove_all_actor_children(lua, &actor)?;
                 invalidate_compile_update_plan(lua);
                 Ok(actor.clone())
@@ -7725,7 +7726,7 @@ end
         "GetScrolling",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<bool>>("__songlua_state_banner_scrolling")?
                     .unwrap_or(false))
@@ -7736,7 +7737,7 @@ end
         "GetPercentScrolling",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_state_banner_scroll_percent")?
                     .unwrap_or(0.0))
@@ -7837,7 +7838,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "GetUpdateRate",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_update_rate")?
                     .unwrap_or(1.0))
@@ -7953,7 +7954,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "Center",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let (center_x, center_y) = song_lua_screen_center(lua)?;
                 capture_block_set_f32(lua, &actor, "x", center_x)?;
                 capture_block_set_f32(lua, &actor, "y", center_y)?;
@@ -7965,7 +7966,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "CenterX",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let (center_x, _) = song_lua_screen_center(lua)?;
                 capture_block_set_f32(lua, &actor, "x", center_x)?;
                 Ok(actor.clone())
@@ -7976,7 +7977,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "CenterY",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let (_, center_y) = song_lua_screen_center(lua)?;
                 capture_block_set_f32(lua, &actor, "y", center_y)?;
                 Ok(actor.clone())
@@ -8003,7 +8004,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "FullScreen",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let (width, height) = song_lua_screen_size(lua)?;
                 capture_block_set_stretch(lua, &actor, [0.0, 0.0, width, height])?;
                 Ok(actor.clone())
@@ -8221,7 +8222,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
         "GetDrawFunction",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<Function>>("__songlua_draw_function")?
                     .map_or(Value::Nil, Value::Function))
@@ -8272,7 +8273,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetStreamWidth",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_stream_width")?
                     .unwrap_or(0.0))
@@ -8283,7 +8284,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "SetFromGameState",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if actor_type_is(&actor, "CourseContentsList")? {
                     actor.set("__songlua_course_contents_from_gamestate", true)?;
                     actor.set("__songlua_scroller_num_items", 1_i64)?;
@@ -8322,7 +8323,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetCurrentItem",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_scroller_current_item")?
                     .unwrap_or(0.0))
@@ -8345,7 +8346,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetDestinationItem",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_scroller_destination_item")?
                     .unwrap_or(0.0))
@@ -8356,7 +8357,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetNumItems",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<i64>>("__songlua_scroller_num_items")?
                     .unwrap_or(1)
@@ -8404,7 +8405,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "PositionItems",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 position_scroller_items(lua, &actor)?;
                 Ok(actor.clone())
             }
@@ -8414,7 +8415,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetSecondsToDestination",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let current = actor
                     .get::<Option<f32>>("__songlua_scroller_current_item")?
                     .unwrap_or(0.0);
@@ -8456,7 +8457,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetLoop",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<bool>>("__songlua_scroller_loop")?
                     .unwrap_or(false))
@@ -8491,7 +8492,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetSecondsPauseBetweenItems",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_scroller_pause_between")?
                     .unwrap_or(0.0))
@@ -8514,7 +8515,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "ScrollThroughAllItems",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let last_item = actor
                     .get::<Option<i64>>("__songlua_scroller_num_items")?
                     .unwrap_or(1)
@@ -8583,7 +8584,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetFullScrollLengthSeconds",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let num_items = actor
                     .get::<Option<i64>>("__songlua_scroller_num_items")?
                     .unwrap_or(1)
@@ -8629,7 +8630,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetDestDrawMode",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor.get::<Option<String>>("__songlua_draw_state_mode")?)
             }
         })?,
@@ -8684,7 +8685,7 @@ pub fn install_actor_display_state_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetNumVertices",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 if let Some(count) = actor.get::<Option<i64>>("__songlua_vertex_count")? {
                     return Ok(count.max(0));
                 }
@@ -8783,7 +8784,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "MaskSource",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 capture_block_set_bool(lua, &actor, "mask_source", true)?;
                 Ok(actor.clone())
             }
@@ -8793,7 +8794,7 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "MaskDest",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 capture_block_set_bool(lua, &actor, "mask_dest", true)?;
                 Ok(actor.clone())
             }
@@ -9089,7 +9090,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetState",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(i64::from(
                     song_lua_valid_sprite_state_index(
                         actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
@@ -9143,7 +9144,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetAnimationLengthSeconds",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 if let Some(value) =
                     actor.get::<Option<f32>>("__songlua_sprite_animation_length_seconds")?
                 {
@@ -9200,7 +9201,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
         "play",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if actor_type_is(&actor, "Sound")? {
                     play_sound_actor(lua, &actor)?;
                 } else {
@@ -9214,7 +9215,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
         "playforplayer",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if actor_type_is(&actor, "Sound")? {
                     play_sound_actor(lua, &actor)?;
                 }
@@ -9226,7 +9227,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
         "pause",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if !actor_type_is(&actor, "Sound")? {
                     capture_block_set_bool(lua, &actor, "sprite_animate", false)?;
                 }
@@ -9334,7 +9335,7 @@ pub fn install_actor_sprite_animation_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetDecodeMovie",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| actor_decode_movie(&actor)
+            move |_, _args: IgnoredArgs| actor_decode_movie(&actor)
         })?,
     )?;
     Ok(())
@@ -9345,7 +9346,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "glowshift",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9363,7 +9364,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "glowblink",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9381,7 +9382,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "diffuseshift",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9399,7 +9400,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "diffuseblink",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9417,7 +9418,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "diffuseramp",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9435,7 +9436,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "glowramp",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9453,7 +9454,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "pulse",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9471,7 +9472,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "bob",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9489,7 +9490,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "bounce",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9507,7 +9508,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "wag",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9525,7 +9526,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "spin",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(
                     lua,
                     &actor,
@@ -9677,7 +9678,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "stopeffect",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_mode(lua, &actor, "none")?;
                 Ok(actor.clone())
             }
@@ -9757,7 +9758,7 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "Draw",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let in_draw_callback = lua
                     .globals()
                     .get::<Option<bool>>(DRAW_CALLBACK_ACTIVE_KEY)?
@@ -9839,7 +9840,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "rainbow",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 set_actor_effect_defaults(lua, &actor, "rainbow", Some(2.0), None, None, None)?;
                 Ok(actor.clone())
             }
@@ -9886,7 +9887,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "undistort",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 capture_block_set_f32(lua, &actor, "text_distortion", 0.0)?;
                 Ok(actor.clone())
             }
@@ -9906,7 +9907,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "ClearAttributes",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 actor.set("__songlua_text_attributes", lua.create_table()?)?;
                 Ok(actor.clone())
             }
@@ -10064,7 +10065,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "getstrokecolor",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let color = read_actor_color_field(&actor, "__songlua_stroke_color")
                     .map_err(mlua::Error::external)?
                     .or_else(|| read_actor_color_field(&actor, "StrokeColor").ok().flatten())
@@ -10094,7 +10095,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "get_mult_attrs_with_diffuse",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<bool>>("__songlua_state_mult_attrs_with_diffuse")?
                     .unwrap_or(false))
@@ -10154,7 +10155,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
             "GetText",
             lua.create_function({
                 let actor = actor.clone();
-                move |_, _args: MultiValue| lua_text_value(actor.get::<Value>("Text")?)
+                move |_, _args: IgnoredArgs| lua_text_value(actor.get::<Value>("Text")?)
             })?,
         )?;
     }
@@ -10177,7 +10178,7 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "GetTargetNumber",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_target_number")?
                     .unwrap_or(0.0))
@@ -10428,7 +10429,7 @@ pub fn install_actor_runtime_child_methods(
         "GetColumnActors",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let is_note_field = actor
                     .get::<Option<String>>("__songlua_player_child_name")?
                     .as_deref()
@@ -10448,7 +10449,7 @@ pub fn install_actor_runtime_child_methods(
         "get_column_actors",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let Value::Function(method) = actor.get::<Value>("GetColumnActors")? else {
                     return Ok(Value::Nil);
                 };
@@ -10483,7 +10484,7 @@ pub fn install_actor_runtime_child_methods(
         "AddWrapperState",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 prepare_capture_scope_actor(lua, &actor)?;
                 let wrapper = create_dummy_actor(lua, "WrapperState")?;
                 copy_dummy_actor_tags(&actor, &wrapper)?;
@@ -10565,7 +10566,7 @@ pub fn install_actor_wrapper_query_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "GetNumWrapperStates",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| Ok(actor_wrappers(lua, &actor)?.raw_len() as i64)
+            move |lua, _args: IgnoredArgs| Ok(actor_wrappers(lua, &actor)?.raw_len() as i64)
         })?,
     )?;
     Ok(())
@@ -10576,14 +10577,14 @@ pub fn install_actor_child_query_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "GetChildren",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_named_children(lua, &actor)
+            move |lua, _args: IgnoredArgs| actor_named_children(lua, &actor)
         })?,
     )?;
     actor.set(
         "GetNumChildren",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 // Native GetNumChildren counts actors, including siblings
                 // with duplicate or empty names, rather than table keys.
                 Ok(actor_direct_children(lua, &actor)?.len() as i64)
@@ -10620,7 +10621,7 @@ pub fn install_actor_basic_getter_methods(lua: &Lua, actor: &Table) -> mlua::Res
         "GetName",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let name = actor_name(&actor)?;
                 Ok(Value::String(lua.create_string(name)?))
             }
@@ -10760,70 +10761,70 @@ pub fn install_actor_transform_getter_methods(lua: &Lua, actor: &Table) -> mlua:
         "GetBaseZoomX",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_x")
+            move |lua, _args: IgnoredArgs| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_x")
         })?,
     )?;
     actor.set(
         "GetBaseZoomY",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_y")
+            move |lua, _args: IgnoredArgs| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_y")
         })?,
     )?;
     actor.set(
         "GetBaseZoomZ",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_z")
+            move |lua, _args: IgnoredArgs| actor_base_zoom_axis(lua, &actor, "__songlua_state_basezoom_z")
         })?,
     )?;
     actor.set(
         "GetAlpha",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| Ok(actor_diffuse(lua, &actor)?[3])
+            move |lua, _args: IgnoredArgs| Ok(actor_diffuse(lua, &actor)?[3])
         })?,
     )?;
     actor.set(
         "GetDiffuse",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| make_color_table(lua, actor_diffuse(lua, &actor)?)
+            move |lua, _args: IgnoredArgs| make_color_table(lua, actor_diffuse(lua, &actor)?)
         })?,
     )?;
     actor.set(
         "GetGlow",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| make_color_table(lua, actor_glow(lua, &actor)?)
+            move |lua, _args: IgnoredArgs| make_color_table(lua, actor_glow(lua, &actor)?)
         })?,
     )?;
     actor.set(
         "GetDiffuseAlpha",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| Ok(actor_diffuse(lua, &actor)?[3])
+            move |lua, _args: IgnoredArgs| Ok(actor_diffuse(lua, &actor)?[3])
         })?,
     )?;
     actor.set(
         "GetHAlign",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_halign(lua, &actor)
+            move |lua, _args: IgnoredArgs| actor_halign(lua, &actor)
         })?,
     )?;
     actor.set(
         "GetVAlign",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| actor_valign(lua, &actor)
+            move |lua, _args: IgnoredArgs| actor_valign(lua, &actor)
         })?,
     )?;
     actor.set(
         "geteffectmagnitude",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let [x, y, z] = actor_effect_magnitude(&actor)?;
                 Ok((x, y, z))
             }
@@ -10837,7 +10838,7 @@ pub fn install_actor_effect_time_getter_methods(lua: &Lua, actor: &Table) -> mlu
         "GetSecsIntoEffect",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if let Some(clock) =
                     actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")?
                 {
@@ -10860,7 +10861,7 @@ pub fn install_actor_effect_time_getter_methods(lua: &Lua, actor: &Table) -> mlu
         "GetEffectDelta",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if let Some(clock) =
                     actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")?
                 {
@@ -10887,7 +10888,7 @@ pub fn install_actor_parent_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
         "GetParent",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| actor.raw_get::<Option<Table>>("__songlua_parent")
+            move |_, _args: IgnoredArgs| actor.raw_get::<Option<Table>>("__songlua_parent")
         })?,
     )?;
     Ok(())
@@ -15138,7 +15139,7 @@ pub fn create_screen_timer_actor(
     let actor = create_dummy_actor(lua, "Timer")?;
     actor.set(
         "GetSeconds",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     Ok(actor)
 }
@@ -15198,7 +15199,7 @@ pub fn create_option_row_table(
     actor_children(lua, &row)?.set("", frame)?;
     row.set(
         "GetChoiceInRowWithFocus",
-        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(1_i64))?,
     )?;
     Ok(row)
 }
@@ -16011,7 +16012,7 @@ pub fn create_life_meter_table(
         "GetLife",
         lua.create_function({
             let actor = actor.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 if let Some(life) = player_index.and_then(|player| crate::live::player_life(lua, player)) {
                     return Ok(life);
                 }
@@ -16025,7 +16026,7 @@ pub fn create_life_meter_table(
         "IsFailing",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_life")?
                     .unwrap_or(SONG_LUA_INITIAL_LIFE)
@@ -16037,7 +16038,7 @@ pub fn create_life_meter_table(
         "IsHot",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_life")?
                     .unwrap_or(SONG_LUA_INITIAL_LIFE)
@@ -16049,7 +16050,7 @@ pub fn create_life_meter_table(
         "IsInDanger",
         lua.create_function({
             let actor = actor.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(actor
                     .get::<Option<f32>>("__songlua_life")?
                     .unwrap_or(SONG_LUA_INITIAL_LIFE)
@@ -16170,7 +16171,7 @@ pub fn create_top_screen_table(
     // ScreenGameplay::GetScreenType returns gameplay; LunaScreen pushes its Lua enum.
     top_screen.set(
         "GetScreenType",
-        lua.create_function(|_, _args: MultiValue| Ok("ScreenType_Gameplay"))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok("ScreenType_Gameplay"))?,
     )?;
     top_screen.set("__songlua_main_title", context.main_title.as_str())?;
     top_screen.set(
@@ -16423,7 +16424,7 @@ pub fn create_top_screen_table(
         "GetNextScreenName",
         lua.create_function({
             let top_screen = top_screen.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 Ok(Value::String(
                     lua.create_string(
                         top_screen
@@ -16438,7 +16439,7 @@ pub fn create_top_screen_table(
         "GetPrevScreenName",
         lua.create_function({
             let top_screen = top_screen.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 Ok(Value::String(
                     lua.create_string(
                         top_screen
@@ -16451,11 +16452,11 @@ pub fn create_top_screen_table(
     )?;
     top_screen.set(
         "GetGoToOptions",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     top_screen.set(
         "GetEditState",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("EditState_Playing")?))
         })?,
     )?;
@@ -16463,7 +16464,7 @@ pub fn create_top_screen_table(
         "GetCurrentRowIndex",
         lua.create_function({
             let top_screen = top_screen.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(top_screen
                     .get::<Option<i64>>("__songlua_current_row_index")?
                     .unwrap_or(0))
@@ -16472,7 +16473,7 @@ pub fn create_top_screen_table(
     )?;
     top_screen.set(
         "GetNumRows",
-        lua.create_function(|_, _args: MultiValue| {
+        lua.create_function(|_, _args: IgnoredArgs| {
             Ok(SONG_LUA_TOP_SCREEN_OPTION_ROWS.len() as i64)
         })?,
     )?;
@@ -16504,7 +16505,7 @@ pub fn create_top_screen_table(
         "RedrawOptions",
         lua.create_function({
             let top_screen = top_screen.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(top_screen.clone())
             }
@@ -16514,7 +16515,7 @@ pub fn create_top_screen_table(
         "IsPaused",
         lua.create_function({
             let top_screen = top_screen.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(top_screen
                     .get::<Option<bool>>("__songlua_paused")?
                     .unwrap_or(false))
@@ -16534,16 +16535,16 @@ pub fn create_top_screen_table(
     )?;
     top_screen.set(
         "AllAreOnLastRow",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     let music_wheel = create_music_wheel_table(lua, current_sort_order)?;
     top_screen.set(
         "GetMusicWheel",
-        lua.create_function(move |_, _args: MultiValue| Ok(music_wheel.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(music_wheel.clone()))?,
     )?;
     top_screen.set(
         "GetNextCourseSong",
-        lua.create_function(move |_, _args: MultiValue| {
+        lua.create_function(move |_, _args: IgnoredArgs| {
             Ok(current_song
                 .raw_get::<Option<Table>>(1)?
                 .map_or(Value::Nil, Value::Table))
@@ -16563,7 +16564,7 @@ pub fn create_top_screen_table(
             name,
             lua.create_function({
                 let top_screen = top_screen.clone();
-                move |lua, _args: MultiValue| {
+                move |lua, _args: IgnoredArgs| {
                     note_song_lua_side_effect(lua)?;
                     Ok(top_screen.clone())
                 }
@@ -16603,15 +16604,15 @@ pub fn create_note_column_actor(
     actor.set("__songlua_zoom_handler", zoom_handler.clone())?;
     actor.set(
         "GetPosHandler",
-        lua.create_function(move |_, _args: MultiValue| Ok(pos_handler.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(pos_handler.clone()))?,
     )?;
     actor.set(
         "GetRotHandler",
-        lua.create_function(move |_, _args: MultiValue| Ok(rot_handler.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(rot_handler.clone()))?,
     )?;
     actor.set(
         "GetZoomHandler",
-        lua.create_function(move |_, _args: MultiValue| Ok(zoom_handler.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(zoom_handler.clone()))?,
     )?;
     for (alias, name) in [
         ("get_pos_handler", "GetPosHandler"),
@@ -16633,7 +16634,7 @@ pub fn create_note_column_spline_handler(lua: &Lua) -> mlua::Result<Table> {
     handler.set("__songlua_beats_per_t", 1.0_f32)?;
     handler.set(
         "GetSpline",
-        lua.create_function(move |_, _args: MultiValue| Ok(spline.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(spline.clone()))?,
     )?;
     handler.set(
         "SetSplineMode",
@@ -16751,7 +16752,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         "GetSize",
         lua.create_function({
             let spline = spline.clone();
-            move |_, _args: MultiValue| spline.get::<i64>("__songlua_spline_size")
+            move |_, _args: IgnoredArgs| spline.get::<i64>("__songlua_spline_size")
         })?,
     )?;
     spline.set(
@@ -16797,7 +16798,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         "Solve",
         lua.create_function({
             let spline = spline.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 solve_spline_table(lua, &spline)?;
                 Ok(spline.clone())
             }
@@ -16807,7 +16808,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         "SetPolygonal",
         lua.create_function({
             let spline = spline.clone();
-            move |_, _args: MultiValue| Ok(spline.clone())
+            move |_, _args: IgnoredArgs| Ok(spline.clone())
         })?,
     )?;
     spline.set(
@@ -16824,7 +16825,7 @@ fn create_cubic_spline_table(lua: &Lua) -> mlua::Result<Table> {
         "get_loop",
         lua.create_function({
             let spline = spline.clone();
-            move |_, _args: MultiValue| spline.get::<bool>("__songlua_spline_loop")
+            move |_, _args: IgnoredArgs| spline.get::<bool>("__songlua_spline_loop")
         })?,
     )?;
     for (alias, name) in [
@@ -23436,19 +23437,19 @@ pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::R
     let wheel = lua.create_table()?;
     wheel.set(
         "IsLocked",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     wheel.set(
         "GetSelectedSection",
-        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+        lua.create_function(|lua, _args: IgnoredArgs| Ok(Value::String(lua.create_string("")?)))?,
     )?;
     wheel.set(
         "GetSelectedSong",
-        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
     )?;
     wheel.set(
         "GetSelectedType",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("WheelItemDataType_Song")?))
         })?,
     )?;
@@ -23456,7 +23457,7 @@ pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::R
         "GetSortOrder",
         lua.create_function({
             let current_sort_order = current_sort_order.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let sort = current_sort_order
                     .raw_get::<Option<String>>(1)?
                     .unwrap_or_else(|| "SortOrder_Group".to_string());
@@ -23482,7 +23483,7 @@ pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::R
         "SetOpenSection",
         lua.create_function({
             let wheel = wheel.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(wheel.clone())
             }
@@ -23492,7 +23493,7 @@ pub fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::R
         "Move",
         lua.create_function({
             let wheel = wheel.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(wheel.clone())
             }
@@ -24313,3 +24314,7 @@ mod vm_reads_perf;
 #[cfg(test)]
 #[path = "../tests/perf/actor_state.rs"]
 mod actor_state_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/ignored_actor.rs"]
+mod ignored_args_perf;

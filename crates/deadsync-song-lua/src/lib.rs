@@ -13,6 +13,7 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 
 mod actions;
 mod actor_classes;
+mod callback_args;
 mod cmd;
 mod compat;
 mod compile;

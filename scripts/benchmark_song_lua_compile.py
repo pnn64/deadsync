@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -48,6 +48,10 @@ def main():
         for name in ["actor_state.rs", "actor_state_before.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "ignored_args":
+        for name in ["ignored_core.rs", "ignored_actor.rs", "ignored_actor_before.rs", "ignored_host.rs", "ignored_host_before.rs", "ignored_tables.rs", "ignored_tables_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -62,6 +66,10 @@ def main():
         filters = ["lua_util::actor_state_perf::benchmark_actor_state_paths"]
         baseline = "0908f3cff"
         expected_names = 4
+    if args.suite == "ignored_args":
+        filters = ["lua_util::ignored_args_perf::benchmark_ignored_actor", "host::ignored_args_perf::benchmark_ignored_host", "tables::ignored_args_perf::benchmark_ignored_tables"]
+        baseline = "1c744eebf"
+        expected_names = 9
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -127,6 +135,8 @@ def main():
         report["timing_scope"] = ("Each sample prepares a fresh Lua state outside timing; first of ten samples discarded. Key cases process 64 actors with 128 bind/assign/lookup operations. Assign/lookup materialize fresh keys from a prepared Lua array inside timing. Registration cases register 128 fresh actors into an initially empty registry, or repeatedly register the last actor in a prepared 1024-entry registry. Upvalue cases query a prepared 32-upvalue function 8192 times. Result/temporary handle destruction is included; VM/input destruction is excluded. GC policy unchanged.")
     if args.suite == "actor_state":
         report["timing_scope"] = ("Each sample prepares a fresh Lua state, a 128-method actor with eight message handlers, deep native fields and wrapper membership, plus 128 non-scalar globals outside timing. Restore cases also prepare 64 scalar snapshots. GC is stopped. Each sample takes 64 actor vector/table snapshots, restores 64 prepared scalar-global snapshots, or scans/collects message-command names 64 times through the actual helper. Selected names move into the current collector; the frozen visitor copies its borrowed name as its original call sites did. Result/temporary drops and consumed scalar snapshot destruction are included; VM/other input destruction is excluded. First of ten samples discarded.")
+    if args.suite == "ignored_args":
+        report["timing_scope"] = ("Each sample prepares a fresh Lua state and actual actor GetWidth, SCREENMAN GetTopScreen or style GetWidth callback outside timing. A prepared Lua closure calls the callback 8192 times with zero, one receiver, or eight mixed unused inputs. One full warmup loop precedes timing and GC is stopped. Result/argument drops are included; VM/input destruction is excluded. First of ten samples discarded. Frozen functions differ only by module location/visibility; unchanged shared helper calls remain shared.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:
