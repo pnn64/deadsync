@@ -1907,23 +1907,23 @@ fn record_song_lua_sound_path(
         return Ok(());
     }
 
-    let key = path.to_string_lossy().into_owned();
+    let key = path.to_string_lossy();
     if capture_call {
         crate::lua_util::capture_runtime_sound(lua, path.clone());
         if let Some(calls) = lua
             .globals()
             .get::<Option<Table>>(SONG_LUA_SOUND_CALLS_KEY)?
         {
-            calls.raw_set(calls.raw_len() + 1, key.clone())?;
+            calls.raw_set(calls.raw_len() + 1, key.as_ref())?;
         }
     }
     let paths = song_lua_sound_paths_table(lua)?;
     for existing in paths.sequence_values::<String>() {
-        if existing? == key {
+        if existing? == key.as_ref() {
             return Ok(());
         }
     }
-    paths.raw_set(paths.raw_len() + 1, key)?;
+    paths.raw_set(paths.raw_len() + 1, key.as_ref())?;
     Ok(())
 }
 
@@ -3118,3 +3118,7 @@ mod tests {
 #[cfg(test)]
 #[path = "../tests/perf/ignored_host.rs"]
 mod ignored_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/sound_path.rs"]
+mod sound_path_perf;

@@ -5657,7 +5657,7 @@ pub fn set_actor_texture_from_value(
                 let _validated = texture.to_str()?;
                 actor.set("Texture", texture)?;
             } else {
-                actor.set("Texture", texture.to_str()?.to_string())?;
+                actor.set("Texture", texture.to_str()?.as_ref())?;
             }
             actor.raw_set("__songlua_default_texture", false)?;
             actor.set("__songlua_aft_capture_name", Value::Nil)?;
@@ -6516,7 +6516,7 @@ pub fn set_actor_sound_file_from_value(
                 let _validated = file.to_str()?;
                 actor.set("File", file)?;
             } else {
-                actor.set("File", file.to_str()?.to_string())?;
+                actor.set("File", file.to_str()?.as_ref())?;
             }
         }
         Some(Value::Nil) | None if clear_on_nil => actor.set("File", Value::Nil)?,
@@ -24347,3 +24347,7 @@ mod metatable_storage_perf;
 #[cfg(test)]
 #[path = "../tests/perf/asset_strings.rs"]
 mod asset_strings_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/foreign_assets.rs"]
+mod foreign_assets_perf;

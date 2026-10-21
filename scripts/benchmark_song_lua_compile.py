@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -72,6 +72,10 @@ def main():
         for name in ["asset_strings.rs", "asset_strings_before.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "foreign_assets":
+        for name in ["foreign_assets.rs", "foreign_assets_before.rs", "sound_path.rs", "sound_path_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -110,6 +114,10 @@ def main():
         filters = ["lua_util::asset_strings_perf::benchmark_asset_strings"]
         baseline = "0c335501b"
         expected_names = 14
+    if args.suite == "foreign_assets":
+        filters = ["lua_util::foreign_assets_perf::benchmark_foreign_assets", "host::sound_path_perf::benchmark_sound_path"]
+        baseline = "494323364"
+        expected_names = 16
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -187,6 +195,8 @@ def main():
         report["timing_scope"] = ("Each sample prepares a fresh Lua state and 16 independent inputs outside timing. Sprite cases finalize captured texture bindings across unique, aliased or absent targets. Judgment cases finalize tracked actors and consume captured sheet changes. Message cases reconcile scheduled actions and runtime broadcasts through the actual helper. Consumed events, temporary groups and tracked-table handle destruction are included; result/VM and other prepared input destruction are excluded. GC is stopped. First of ten samples discarded. Frozen helpers are exact baseline bodies extracted into test-only functions.")
     if args.suite == "asset_strings":
         report["timing_scope"] = ("Setter samples prepare fresh Lua states, actor tables and string values outside timing; GC is stopped after one warmup call. Each sample invokes the actual setter 8192 times, including its field writes and texture/video classification. Input/VM destruction is excluded; temporary and result destruction is included. Key scopes convert a prepared empty/ASCII/Unicode/long/lossy Windows path into the production Arc key 8192 times, including key destruction. First of ten samples discarded. Frozen setters are exact baseline bodies and share unchanged downstream helpers.")
+    if args.suite == "foreign_assets":
+        report["timing_scope"] = ("Setter samples prepare source/target VMs, actor tables and string values outside timing. GC is stopped after one warmup call. Each sample invokes the actual setter 8192 times, including its writes and texture/video classification; temporary/result destruction is included, input/VM destruction excluded. Sound-path samples prepare fresh VMs, capture/log/path tables and 64 arguments outside timing, then execute 64 actual recording calls including filesystem existence/type checks, path resolution, Rust event capture, optional Lua call-log writes and ordered deduplication. Result tables/events and VM destruction are excluded. Sound-path files are created once before measurement. First of ten samples discarded. Frozen helpers match the baseline and share unchanged downstream code.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:
