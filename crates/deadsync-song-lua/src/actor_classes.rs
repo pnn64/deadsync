@@ -1,6 +1,7 @@
 // Native public method tables and instance lookup. Inventories come from the
 // bidirectional compiled ITGmania controls in actor-class-provenance.json.
-use mlua::{Lua, MultiValue, Table, Value};
+use mlua::{IntoLuaMulti, Lua, MultiValue, Table, Value};
+use crate::callback_args::{ForwardArgs, IgnoredArgs as ForwardResults};
 
 pub(crate) const METHODS_KEY: &str = "__songlua_bound_methods";
 
@@ -505,7 +506,7 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
 pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Result<()> {
     class.set(
         name,
-        lua.create_function(move |lua, args: MultiValue| {
+        lua.create_function(move |lua, args: ForwardArgs| {
             let Some(Value::Table(actor)) = args.front() else {
                 return Err(mlua::Error::RuntimeError(format!(
                     "actor method {name} requires an actor"
@@ -529,14 +530,18 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
                 | "SetUpdateFunction" | "SetTarget" | "GetTexture" | "loop" | "rate")
                 && crate::live::active(lua)
                 && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
-            let trace_args = observed.then(|| args.clone());
-            if observed { crate::live::query_phase(lua, true); }
-            let result = method.call::<MultiValue>(args);
-            if let Some(args) = trace_args {
+            if observed {
+                // Trace reporting keeps the complete MultiValue path.
+                let args = args.into_lua_multi(lua)?;
+                let trace_args = args.clone();
+                crate::live::query_phase(lua, true);
+                let result = method.call::<MultiValue>(args);
                 crate::live::query_phase(lua, false);
-                crate::live::trace_bound_method(lua, name, &args, &result);
+                crate::live::trace_bound_method(lua, name, &trace_args, &result);
+                result.map(|values| ForwardResults::Many { _values: values })
+            } else {
+                method.call::<ForwardResults>(args)
             }
-            result
         })?,
     )
 }
@@ -630,6 +635,8 @@ pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         Ok(())
     })?;
     for (key, value) in methods {
+        let key = Value::String(key);
+        let value = Value::Function(value);
         bound.raw_set(&key, value)?;
         actor.raw_set(key, Value::Nil)?;
     }
@@ -775,3 +782,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/forward_values.rs"]
+pub(crate) mod forward_values_perf;

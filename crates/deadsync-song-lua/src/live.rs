@@ -1,4 +1,8 @@
 use mlua::{Function, Lua, MultiValue, Table, Value};
+
+#[cfg(test)]
+#[path = "../tests/perf/forward_trace.rs"]
+mod forward_trace_perf;
 use std::fmt;
 
 use crate::{SongLuaCompileContext, SongLuaOverlayState, SongLuaTrackedActorTarget, LUA_PLAYERS};
