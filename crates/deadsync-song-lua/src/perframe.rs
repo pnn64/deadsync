@@ -1249,6 +1249,7 @@ pub fn push_update_mod_targets(
         to_players,
         baseline_players,
         speeds,
+        None,
         last_windows,
         &mut (0, String::new()),
         SongLuaTimeUnit::Beat,
@@ -1263,6 +1264,7 @@ fn push_update_mod_targets_with_key<S: ModState>(
     to_players: &[S; LUA_PLAYERS],
     baseline_players: &[S; LUA_PLAYERS],
     speeds: &[S; LUA_PLAYERS],
+    next_speeds: Option<&[S; LUA_PLAYERS]>,
     last_windows: &mut BTreeMap<(usize, String), usize>,
     lookup_key: &mut (usize, String),
     unit: SongLuaTimeUnit,
@@ -1277,6 +1279,12 @@ fn push_update_mod_targets_with_key<S: ModState>(
                 continue;
             };
             let speed = speeds[player].get(key).copied();
+            // The first native setter supplies its approach speed at the next
+            // sample. Until then this is still the baseline, not a ramp toward
+            // a future write (which would move Mini before the paired XMod).
+            if speed.is_none() && next_speeds.is_some_and(|next| next[player].get(key).is_some()) {
+                continue;
+            }
             // These switches have no native approach speed, but initial values and
             // later writes are still step targets, never interpolated samples.
             if speed.is_some()
@@ -3141,7 +3149,7 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         };
         let mut eases = Vec::new();
         push_update_mod_targets_with_key(&mut eases, origin, limit.max(origin.next_up()),
-            &states, &states, &states, &speeds, &mut BTreeMap::new(),
+            &states, &states, &states, &speeds, None, &mut BTreeMap::new(),
             &mut (0, String::new()), unit);
         // Column handlers retain startup writes too. A one-knot native
         // rotation spline needs neither Solve nor an update callback.
@@ -3714,6 +3722,7 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
             to_mods,
             &baseline_mods,
             &mod_speed_samples[index],
+            mod_speed_samples.get(index + 1),
             &mut last_mod_windows,
             &mut last_mod_lookup_key,
             // Keep the update clock: narrowing to a beat and converting back

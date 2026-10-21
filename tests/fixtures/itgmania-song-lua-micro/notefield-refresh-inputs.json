@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "native_revision": "704cdd5624155f743b59b8b64fedeb0588dae067",
+  "native_executable_sha256": "b2ccd9e02df706bbfaf23d54011cb1905590c593a47093de0160f59e667ce09e",
+  "archive": "tests/fixtures/full_song_lua/03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d.tar.zst",
+  "archive_sha256": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d",
+  "simfile": "song/7th Gear.ssc",
+  "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+  "fallback_theme": "Harness Simply Love",
+  "player_options": "m730, 60% mini, cel",
+  "fixtures": [
+    {
+      "output": "tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.json.zst",
+      "drawable_from_beat": 121.9,
+      "until_beat": 130.74,
+      "capture_fps": 120,
+      "clock": "native-variable",
+      "replay_test": "gameplay_regression_tests::tests::seventh_saved_mini_reaches_aft_receptors",
+      "replay_status": "deferred-long-song"
+    }
+  ]
+}

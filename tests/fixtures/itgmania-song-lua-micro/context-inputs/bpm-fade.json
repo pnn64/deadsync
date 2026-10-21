@@ -1,0 +1,33 @@
+{
+  "song_dir": "tests/fixtures/song-lua",
+  "title": "BPM Fade",
+  "difficulty": "Challenge",
+  "steps_type": "dance-single",
+  "description": "",
+  "difficulty_code": 4,
+  "steps_type_code": 0,
+  "max_beat": 11.0,
+  "bpm": 666.0,
+  "bpm_segments": [
+    [
+      0.0,
+      333.0
+    ],
+    [
+      5.0,
+      666.0
+    ]
+  ],
+  "beat_step": 0.03125,
+  "max_events": 500000,
+  "random_seed": 1,
+  "entries": [
+    {
+      "path": "tests/fixtures/song-lua/bpm-fade.lua",
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0
+    }
+  ],
+  "simfile": "tests/fixtures/itgmania-song-lua-micro/context-inputs/simfiles/bpm-fade.ssc"
+}

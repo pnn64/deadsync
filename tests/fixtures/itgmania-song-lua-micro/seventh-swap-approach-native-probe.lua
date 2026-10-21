@@ -38,7 +38,15 @@ ITGMANIA_HARNESS_AFTER_SCREEN_DRAW = function()
     done=true
     local file=RageFileUtil:CreateRageFile()
     assert(file:Open('/Save/itgmania-harness/native-swap-130-direct.json',2))
-    file:Write(JsonEncode({frames=frames,strips=strips,version=ProductVersion()}))
+    file:Write(JsonEncode({frames=frames,strips=strips,version=ProductVersion(),
+      native_source=ITGMANIA_HARNESS_NATIVE_SOURCE,
+      input={headless_graphics=ITGMANIA_HARNESS_HEADLESS_GRAPHICS==true,
+        window_visible=ITGMANIA_HARNESS_WINDOW_VISIBLE(),
+        constant_update_delta_seconds=PREFSMAN:GetPreference('ConstantUpdateDeltaSeconds'),
+        global_offset_seconds=PREFSMAN:GetPreference('GlobalOffsetSeconds'),
+        catalog_inputs=ITGMANIA_HARNESS_CATALOG_INPUTS(),
+        player_options=GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptionsString('ModsLevel_Current')},
+      observer_error=ITGMANIA_HARNESS_INTERACTIVE_ERROR}))
     file:Close();file:destroy()
   end
 end

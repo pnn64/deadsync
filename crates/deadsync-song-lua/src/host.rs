@@ -109,6 +109,7 @@ pub(crate) fn replace_gameplay_screen(
     context: &SongLuaCompileContext,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
     crate::song_tables::restart_stage_options(lua)?;
     let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
@@ -126,11 +127,11 @@ pub(crate) fn replace_gameplay_screen(
     // End callbacks still observe the outgoing clock; constructors see the
     // reset SongPosition, including its native 10 BPS before the first update.
     crate::runtime::reset_song_runtime_position(lua)?;
-    crate::lua_util::install_native_gameplay_combo(lua)?;
-    crate::lua_util::install_native_gameplay_underlay(lua, None)?;
-    crate::lua_util::install_native_gameplay_overlay(lua, None, &context)?;
-    crate::lua_util::install_native_gameplay_decorations(lua, None)?;
-    crate::lua_util::install_native_gameplay_transitions(lua, None)?;
+    crate::lua_util::install_native_gameplay_combo(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_underlay(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_overlay(lua, Some(install_actor_methods), &context)?;
+    crate::lua_util::install_native_gameplay_decorations(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_transitions(lua, Some(install_actor_methods))?;
     Ok(())
 }
 
@@ -172,7 +173,7 @@ pub fn install_compile_host(
         install_actor_methods,
     )?;
     install_file_loader_globals(lua, context.song_dir.clone(), create_dummy_actor)?;
-    crate::lua_util::install_native_gameplay_combo(lua)?;
+    crate::lua_util::install_native_gameplay_combo(lua, Some(install_actor_methods))?;
     crate::lua_util::install_native_gameplay_underlay(lua, Some(install_actor_methods))?;
     crate::lua_util::install_native_gameplay_overlay(lua, Some(install_actor_methods), context)?;
     crate::lua_util::install_native_gameplay_decorations(lua, Some(install_actor_methods))?;

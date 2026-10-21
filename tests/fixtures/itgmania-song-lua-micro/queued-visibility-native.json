@@ -24,8 +24,8 @@
   "provenance": {
     "execution": "embedded_native_sources",
     "git_dirty": "false",
-    "git_revision": "1f6ba014d5d25717875754518494ee841e73d718",
-    "source_root": "C:\\GitHub\\rework\\itgmania-harness-rs\\../itgmania"
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
   },
   "random_seed": 1,
   "samples": [
@@ -7802,7 +7802,7 @@
             ]
           },
           "tween_queue": [],
-          "tween_time_left": 0.08333333581686019,
+          "tween_time_left": 0.0833333358168602,
           "view_matrix": [
             [
               1.0,
@@ -9444,7 +9444,7 @@
                   1.0
                 ]
               },
-              "time_left": 0.08333333581686019
+              "time_left": 0.0833333358168602
             },
             {
               "command": "",
@@ -9615,7 +9615,7 @@
               "time_left": 0.0
             }
           ],
-          "tween_time_left": 0.08333333581686019,
+          "tween_time_left": 0.0833333358168602,
           "visible": false
         },
         {
@@ -12594,7 +12594,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.08333333581686019,
+            "seconds": 0.0833333358168602,
             "type": "none"
           },
           "effected": {
@@ -13066,7 +13066,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.08333333581686019,
+            "seconds": 0.0833333358168602,
             "type": "none"
           },
           "kind": "sprite",
@@ -13339,7 +13339,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.08333333581686019,
+            "seconds": 0.0833333358168602,
             "type": "none"
           },
           "kind": "sprite",
@@ -13826,7 +13826,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.08333333581686019,
+            "seconds": 0.0833333358168602,
             "type": "none"
           },
           "effected": {
@@ -14301,7 +14301,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.08333333581686019,
+            "seconds": 0.0833333358168602,
             "type": "none"
           },
           "kind": "sprite",
@@ -14827,7 +14827,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.08333333581686019,
+            "seconds": 0.0833333358168602,
             "type": "none"
           },
           "kind": "sprite",
@@ -14913,11 +14913,11 @@
           "visible": false
         }
       ],
-      "beat": 0.08333333581686019,
+      "beat": 0.0833333358168602,
       "draw_sequence": [
         "QueuedShow"
       ],
-      "time": 0.08333333581686019
+      "time": 0.0833333358168602
     },
     {
       "actors": [
@@ -17775,7 +17775,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.08333333581686019,
+            "delta": 0.0833333358168602,
             "magnitude": [
               0.0,
               0.0,
@@ -18247,7 +18247,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.08333333581686019,
+            "delta": 0.0833333358168602,
             "magnitude": [
               0.0,
               0.0,
@@ -18520,7 +18520,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.08333333581686019,
+            "delta": 0.0833333358168602,
             "magnitude": [
               0.0,
               0.0,
@@ -19007,7 +19007,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.08333333581686019,
+            "delta": 0.0833333358168602,
             "magnitude": [
               0.0,
               0.0,
@@ -19696,7 +19696,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.08333333581686019,
+            "delta": 0.0833333358168602,
             "magnitude": [
               0.0,
               0.0,
@@ -20172,7 +20172,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.08333333581686019,
+            "delta": 0.0833333358168602,
             "magnitude": [
               0.0,
               0.0,

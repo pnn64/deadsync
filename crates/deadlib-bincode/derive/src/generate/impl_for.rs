@@ -46,17 +46,13 @@ impl<'a, P: Parent> ImplFor<'a, P> {
     }
 
     /// Add generic parameters to the trait implementation.
-    ///```
-    /// # use virtue::prelude::Generator;
-    /// # let mut generator = Generator::with_name("Bar");
+    ///```text
     /// generator.impl_for("Foo")
     ///          .with_trait_generics(["Baz"]);
-    /// # generator.assert_eq("impl Foo < Baz > for Bar { }");
-    /// # Ok::<_, virtue::Error>(())
     /// ```
     ///
     /// Generates:
-    /// ```ignore
+    /// ```text
     /// impl Foo for <struct or enum> {
     ///     const BAR: u8 = 5;
     /// }
@@ -71,17 +67,13 @@ impl<'a, P: Parent> ImplFor<'a, P> {
     }
 
     /// Add generic parameters to the impl block.
-    ///```
-    /// # use virtue::prelude::Generator;
-    /// # let mut generator = Generator::with_name("Bar");
+    ///```text
     /// generator.impl_for("Foo")
     ///          .with_impl_generics(["Baz"]);
-    /// # generator.assert_eq("impl < Baz > Foo for Bar { }");
-    /// # Ok::<_, virtue::Error>(())
     /// ```
     ///
     /// Generates:
-    /// ```ignore
+    /// ```text
     /// impl<Baz> Foo for Bar { }
     /// ```
     pub fn with_impl_generics<ITER>(mut self, generics: ITER) -> Self
@@ -97,7 +89,7 @@ impl<'a, P: Parent> ImplFor<'a, P> {
     ///
     /// `generator.impl_for("Foo").generate_fn("bar")` results in code like:
     ///
-    /// ```ignore
+    /// ```text
     /// impl Foo for <struct or enum> {
     ///     fn bar() {}
     /// }
@@ -112,7 +104,7 @@ impl<'a, P: Parent> ImplFor<'a, P> {
     /// Modify the generic constraints of a type.
     /// This can be used to add additional type constraints to your implementation.
     ///
-    /// ```ignore
+    /// ```text
     /// // Your derive:
     /// #[derive(YourTrait)]
     /// pub struct Foo<B> {

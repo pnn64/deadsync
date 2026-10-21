@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 # Native Sprite preparation controls
 
 Harness `0.1.50` executes the pinned ITGmania bitmap loader on ten inputs

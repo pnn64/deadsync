@@ -10208,10 +10208,12 @@ mod tests {
             "a147dd828cd08fc7", // Riddle
             "0ea0735edbc2405f", // flip69
             "e443862891fe809a", // KENPO SAITO
+            "f95bc209c6f2cbfe", // Levels (SM)
+            "b50d0c3916e75b84", // Levels (SH)
+            "f41a24722a37758f", // Levels (SX)
         ] {
             assert!(lua_submit_allowed(true, hash), "{hash}");
         }
-        assert!(!lua_chart_submit_allowed("f95bc209c6f2cbfe")); // Levels (SM)
         assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
         assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
         assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));

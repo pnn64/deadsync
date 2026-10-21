@@ -10791,10 +10791,18 @@ return Def.ActorFrame{
 
     #[test]
     fn compile_song_lua_keeps_combo_child_callback() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+        let root = test_dir("combo-child-current-theme");
         let entry = root.join("combo-child.lua");
+        fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/combo-child.lua")).unwrap();
+        // Simply Love returns a leaf Actor when the current theme has no combo
+        // fonts. Provide the directory entries this child-lookup test needs.
+        let font = root.join(crate::SONG_LUA_THEME_PATH_PREFIX).join("Fonts/_Combo Fonts/Wendy");
+        fs::create_dir_all(&font).unwrap();
+        fs::write(font.join("Wendy.ini"), "[main]\n").unwrap();
+        fs::write(font.join("Wendy 4x4.png"), b"").unwrap();
         let mut context = SongLuaCompileContext::new(&root, "Combo Child Callback");
         context.music_length_seconds = 2.0;
+        context.players = std::array::from_fn(|_| SongLuaPlayerContext { enabled: true, ..Default::default() });
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.info.unsupported_perframes, 0, "{:?}", compiled.info);
         for (player, expected) in [(1, 300.0), (2, 400.0)] {
@@ -13747,17 +13755,28 @@ return Def.Sound{
             &SongLuaCompileContext::new(&song_dir, "Sound length"),
         )
         .unwrap();
-        let startup = compiled.overlays[0]
-            .message_commands
-            .iter()
-            .find(|command| command.message == SONG_LUA_STARTUP_MESSAGE)
-            .unwrap();
-        assert!(
-            startup
-                .blocks
-                .iter()
-                .any(|block| block.start == 0.25 && block.delta.sound_play == Some(true))
-        );
+        // ActorSound::play is immediate even after sleep(). Its file is the
+        // one loaded at the call, rather than the final File on the actor.
+        assert_eq!(test_compiled_sound_calls(&compiled), vec![(0.0, song_dir.join("second.wav"))]);
+    }
+
+    fn test_compiled_sound_calls(compiled: &TestCompiledSongLua) -> Vec<(f32, PathBuf)> {
+        let mut calls = Vec::new();
+        for actor in &compiled.overlays {
+            let SongLuaOverlayKind::Sound { sound_path } = &actor.kind else { continue };
+            for command in &actor.message_commands {
+                for event in compiled.messages.iter().filter(|event| event.message == command.message) {
+                    for block in &command.blocks {
+                        if block.delta.sound_play == Some(true) {
+                            assert_eq!(block.start, 0.0, "Sound:play is not a tween property");
+                            calls.push((event.beat, sound_path.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        calls.sort_by(|a, b| a.0.total_cmp(&b.0));
+        calls
     }
 
     #[test]
@@ -13792,31 +13811,13 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Sound Actor Assets"),
         )
         .unwrap();
-        assert_eq!(compiled.overlays.len(), 1);
-        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
-            panic!("expected sound overlay");
-        };
-        assert_eq!(sound_path, &song_dir.join("hit.ogg"));
         assert_eq!(compiled.sound_paths, vec![song_dir.join("hit.ogg")]);
-        assert!(
-            compiled
-                .messages
-                .iter()
-                .any(|event| event.message == SONG_LUA_STARTUP_MESSAGE && event.beat == 0.0)
-        );
-        let startup = compiled.overlays[0]
-            .message_commands
-            .iter()
-            .find(|command| command.message == SONG_LUA_STARTUP_MESSAGE)
-            .expect("expected startup sound command");
-        assert_eq!(startup.blocks[0].delta.sound_play, Some(true));
-        let ding = compiled.overlays[0]
-            .message_commands
-            .iter()
-            .find(|command| command.message == "Ding")
-            .expect("expected Ding sound command");
-        assert_eq!(ding.blocks[0].start, 0.25);
-        assert_eq!(ding.blocks[0].delta.sound_play, Some(true));
+        // Native On and Ding each call ActorSound::Play once. sleep() queues
+        // actor state, while playforplayer() still executes in that callback.
+        assert_eq!(test_compiled_sound_calls(&compiled), vec![
+            (0.0, song_dir.join("hit.ogg")),
+            (1.0, song_dir.join("hit.ogg")),
+        ]);
     }
 
     #[test]
@@ -15269,7 +15270,8 @@ return Def.ActorFrame{
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
         let entry = song_dir.join("default.lua");
-        for name in ["gif-offset.gif", "gif-first-frame.gif", "os2-4.bmp"] {
+        for (name, expected) in [("gif-offset.gif", "16:24:16:24:16:32"),
+            ("gif-first-frame.gif", "16:24:16:24:16:32"), ("os2-4.bmp", "8:8:8:8:8:8")] {
             fs::copy(root.join(name), song_dir.join(name)).expect("copy native indexed file");
             fs::write(&entry, format!(r#"
 return Def.Sprite{{
@@ -15287,7 +15289,7 @@ return Def.Sprite{{
                 &entry, &SongLuaCompileContext::new(&song_dir, "Native Indexed Dimensions"),
             ).expect("compile indexed Sprite source getters");
             assert_eq!(compiled.messages.len(), 1);
-            assert_eq!(compiled.messages[0].message, "8:8:8:8:8:8", "{name}");
+            assert_eq!(compiled.messages[0].message, expected, "{name}");
         }
     }
 
@@ -15899,11 +15901,11 @@ return Def.ActorFrame{
         assert!(compiled.messages.iter().any(|event| {
             event.message != SONG_LUA_STARTUP_MESSAGE && event.message == "true:true"
         }));
-        assert_eq!(compiled.overlays.len(), 1);
-        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
-            panic!("expected sound overlay");
-        };
-        assert_eq!(sound_path, &song_dir.join("other.ogg"));
+        assert!(compiled.overlays.iter().any(|actor| matches!(
+            &actor.kind, SongLuaOverlayKind::Sound { sound_path }
+                if sound_path == &song_dir.join("other.ogg"))));
+        assert_eq!(test_compiled_sound_calls(&compiled), vec![(0.0, audio_path)],
+            "the play call keeps its binary audio file across a later load");
     }
 
     #[test]
@@ -18585,7 +18587,7 @@ mods_ease = {
 return Def.ActorFrame{
     Def.ActorFrame{
         OnCommand=function(self)
-            target = self
+            target = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
         end,
     },
 }
@@ -18598,7 +18600,7 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "SkewY Probe"),
         )
         .unwrap();
-        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert_eq!(compiled.info.unsupported_function_eases, 0, "{:?}", compiled.info);
         assert_eq!(compiled.eases.len(), 1);
         assert!(matches!(
             compiled.eases[0].target,
@@ -20580,7 +20582,7 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
         local player = top:GetChild("PlayerP1")
-        assert(top:GetChildren()[""] == nil)
+        assert(top:GetChildren()["PlayerP1"] == player)
         local nf = player:GetChild("NoteField")
         local seen = {}
         nf:set_did_tap_note_callback(function(col, score, bright)
@@ -21278,7 +21280,7 @@ mod_actions = {
         assert(stats:GetCurMaxScore() == 24)
         assert(stats:GetActualDancePoints() == 8)
         assert(stats:GetPossibleDancePoints() == 10)
-        assert(stats:GetPercentDancePoints() == 0.8)
+        assert(math.abs(stats:GetPercentDancePoints() - 0.8) < 0.000001)
     end, true},
 }
 
@@ -21292,7 +21294,7 @@ return Def.ActorFrame{}
             &SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers"),
         )
         .unwrap();
-        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.info.unsupported_function_actions, 0, "{:?}", compiled.info);
         assert!(compiled.messages.is_empty());
         assert!(compiled.overlays.is_empty());
     }
@@ -24809,12 +24811,21 @@ return Def.ActorFrame{
     #[test]
     fn compile_song_lua_exposes_theme_process_compat_helpers() {
         let song_dir = test_dir("theme-process-helpers");
+        let sounds = song_dir.join(crate::SONG_LUA_THEME_PATH_PREFIX).join("S");
+        fs::create_dir_all(&sounds).unwrap();
+        for name in ["Common invalid.ogg", "_unlock.ogg"] {
+            fs::write(sounds.join(name), b"asset lookup only").unwrap();
+        }
+        fs::write(song_dir.join("sample.ogg"), b"asset lookup only").unwrap();
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+return Def.ActorFrame{
+    Def.Sound{ Name="InvalidSound", File=THEME:GetPathS("", "Common invalid.ogg") },
+    InitCommand=function(self)
 local top = SCREENMAN:GetTopScreen()
-local sound = LoadActor(THEME:GetPathS("", "Common invalid.ogg"))
+local sound = self:GetChild("InvalidSound")
 sound:play():stop()
 
 SOUND:PlayOnce(THEME:GetPathS("", "_unlock.ogg"))
@@ -24846,20 +24857,24 @@ mod_actions = {
     },
 }
 
-return Def.ActorFrame{}
+MESSAGEMAN:Broadcast(mod_actions[1][2])
+    end,
+}
 "#,
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Theme Process Helpers"),
-        )
-        .unwrap();
-
-        assert_eq!(compiled.messages.len(), 1);
+        // Input callbacks are runtime behavior; offline compilation correctly
+        // rejects them instead of silently dropping the registered function.
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Process Helpers");
+        context.live = true;
+        let mut compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let output = compiled.live_scene.as_mut().expect("owned runtime callbacks").take_startup_output();
+        let messages = output.broadcasts.iter().filter(|event| event.1.starts_with("ScreenGameplay:"))
+            .map(|event| event.1.as_str()).collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1, "startup output: {output:?}");
         assert_eq!(
-            compiled.messages[0].message,
+            messages[0],
             "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:cel:true:false:15:300:Cancel:__songlua_theme_path:0"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);

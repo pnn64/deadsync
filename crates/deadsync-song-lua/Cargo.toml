@@ -39,6 +39,7 @@ inline_always = "allow"
 
 [dev-dependencies]
 zstd = "0.14.0"
+tempfile = "3.27.0"
 deadsync-assets = { path = "../deadsync-assets" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-profile = { path = "../deadsync-profile" }

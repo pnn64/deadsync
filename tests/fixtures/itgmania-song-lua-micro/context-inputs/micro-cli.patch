@@ -1,0 +1,15 @@
+--- harness/src/main.rs
++++ adapter/src/main.rs
+@@ -1,3 +1,4 @@
++mod micro_control;
+ use std::env;
+ use std::fmt;
+ use std::io::Write;
+@@ -72,6 +73,7 @@
+     match command.to_str() {
+         Some("doctor") => doctor(parse_doctor_args(args)?),
+         Some("actor-conformance") => emit_actor_conformance(parse_actor_conformance_args(args)?),
++        Some("song-lua-micro-control") => micro_control::run(args).map_err(CliError::Usage),
+         Some("charts") => emit_charts(parse_chart_args(args, false)?),
+         Some("chart") => emit_charts(parse_chart_args(args, true)?),
+         Some("font") => emit_font(parse_font_args(args)?),

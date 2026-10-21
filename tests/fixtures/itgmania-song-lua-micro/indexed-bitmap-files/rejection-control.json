@@ -1,0 +1,20 @@
+{
+  "name": "native-indexed-bitmap-rejections",
+  "expected_error": "error: ITGmania actor fixture failed: native bitmap header: Unknown file format",
+  "texture_files": [
+    {
+      "name": "misnamed-bmp-model",
+      "file": "misnamed.png",
+      "kind": "model",
+      "color_depth": 32,
+      "max_size": 2048
+    },
+    {
+      "name": "misnamed-bmp-sprite",
+      "file": "misnamed.png",
+      "kind": "sprite",
+      "color_depth": 32,
+      "max_size": 2048
+    }
+  ]
+}

@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 # Native indexed BMP/GIF file controls
 
 Generated input files exercise Windows and OS/2 indexed BMP headers,

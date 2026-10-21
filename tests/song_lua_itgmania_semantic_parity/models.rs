@@ -841,6 +841,11 @@ fn native_model_texture_paths_require_reference_inventory() {
 fn native_model_columns_reject_incomplete_observations() {
     let value = model_trace_value();
     validate_models(&serde_json::from_value(value.clone()).expect("complete control")).unwrap();
+    let mut unbound = value.clone();
+    unbound["model_geometry_tracks"][0]["samples"][0][3][0]
+        .as_object_mut().unwrap().remove("texture");
+    validate_models(&serde_json::from_value(unbound).unwrap())
+        .expect("native Lua omits the texture field when no texture is bound");
     let mut mutations = Vec::new();
     for (path, replacement) in [
         ("/display/width", serde_json::json!(0)),
@@ -930,7 +935,7 @@ fn native_model_columns_reject_incomplete_observations() {
     extra["model_geometry_tracks"][0]["samples"][0][3][0]["vertex_buffers"]["unknown"] =
         serde_json::json!(1);
     mutations.push(("unknown vertex field", extra));
-    for field in ["texture", "texture_filtering", "texture_wrapping", "sphere_environment"] {
+    for field in ["texture_filtering", "texture_wrapping", "sphere_environment"] {
         let mut absent = value.clone();
         absent["model_geometry_tracks"][0]["samples"][0][3][0].as_object_mut().unwrap().remove(field);
         mutations.push((field, absent));
@@ -980,10 +985,10 @@ fn model_trace_value() -> Value {
 }
 
 #[test]
-#[ignore = "requires an explicitly selected complete native Model trace"]
 fn native_model_trace_columns_cover_every_update() {
-    let path = std::env::var_os(TRACE_ENV).expect("selected native trace");
-    let trace = read_trace_file(Path::new(&path));
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-cull-modes/native.json");
+    let trace = read_trace_file(&path);
     validate_models(&trace).expect("complete original Model observations");
     assert!(!trace.model_geometry_tracks.is_empty());
     let samples = trace
@@ -1024,13 +1029,12 @@ fn native_model_elapsed_clock_ignores_simfile_offset() {
 }
 
 #[test]
-#[ignore = "requires an explicitly selected native trace and its original simfile"]
 fn native_model_meshes_match_selected_trace() {
     crate::paths::init();
-    let trace_path = std::env::var_os(TRACE_ENV).expect("selected native trace");
-    let simfile = std::env::var_os(SIMFILE_ENV).expect("selected original simfile");
-    let trace = read_trace_file(Path::new(&trace_path));
-    let (compiled, _, context) = compile_trace_song_at(&trace, Path::new(&simfile));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-cull-modes");
+    let trace = read_trace_file(&root.join("native.json"));
+    let (compiled, _, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
     let mut parity = Parity::default();
     compare_models(&trace, &compiled, &context, &mut parity);
     eprintln!("{}", parity.summary(&trace.title));
@@ -1095,18 +1099,17 @@ fn model_alpha_cutoff() {
 }
 
 #[test]
-#[ignore = "diagnoses each Model's first visible observation in a selected original trace"]
 fn native_model_initial_frames_match_selected_trace() {
     crate::paths::init();
-    let trace_path = std::env::var_os(TRACE_ENV).expect("selected native trace");
-    let simfile = std::env::var_os(SIMFILE_ENV).expect("selected original simfile");
-    let trace = read_trace_file(Path::new(&trace_path));
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/itgmania-song-lua-micro/model-cull-modes");
+    let trace = read_trace_file(&root.join("native.json"));
     validate_models(&trace).expect("complete original Model observations");
     deadlib_present::space::set_current_window_px(
         trace.display.width as u32,
         trace.display.height as u32,
     );
-    let (compiled, _, context) = compile_trace_song_at(&trace, Path::new(&simfile));
+    let (compiled, _, context) = compile_trace_song_at(&trace, &root.join("control.ssc"));
     let map = projected_drawable_map(&trace, &compiled);
     let mut parity = Parity::default();
     parity.section("first visible Model frames");

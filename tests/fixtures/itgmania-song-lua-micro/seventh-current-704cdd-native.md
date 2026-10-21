@@ -6,14 +6,14 @@ Capture with itgmania-harness 0.1.95, after configuring and building the private
 adapter against that revision:
 
 ```powershell
-target/debug/itgmania-harness-rs.exe song-lua-trace 'C:/GitHub/rework/lua-songs/7th Gear/7th Gear.ssc' --itgmania-bin target/native-engine-source/Program/ITGmania-harness-trace.exe --headless --notefield-samples --style single --difficulty Challenge --fallback-theme 'Harness Simply Love' --player-options 'm730, 60% mini, cel' --drawable-from-beat 121.9 --until-beat 130.74 --capture-fps 120 --timeout 180 --max-events 1000000 --out target/seventh-current-704cdd-native.json
+python -B -X utf8 scripts/refresh_native_notefield_fixture.py --harness ../itgmania-harness/target/debug/itgmania-harness-rs.exe --harness-source ../itgmania-harness --native-source ../itgmania-harness/target/native-engine-source --itgmania-bin ../itgmania-harness/target/native-engine-source/Program/ITGmania-harness-trace.exe --output-root target/native-notefield-refresh
 ```
 
-The JSON is compressed losslessly with zstd level 9. Decompressed SHA-256:
-`0547e7882f05e763382f267563e9a0061daa9af62d52692ba788270cbac2c191`.
+The JSON was refreshed from the committed song archive with harness 0.1.95 and is compressed losslessly with zstd level 19. Generation receipts and the exact recipe are in `notefield-capture-manifest.json` and `notefield-refresh-inputs.json`. The long compiled-song replay remains explicitly deferred; generation alone is not a passing parity result. Decompressed SHA-256:
+`605fa2e2c00b8d716321a7ec2ef400d8508ace2d67490dcb47ca278ccb9373ed`.
 Its embedded `input.native_source` identifies the compiled engine revision and
-hashes of `NoteDisplay.cpp` and `CubicSpline.cpp`. The capture contains 21,228
-model draws and 1,420 hold-strip draws, and records `window_visible=false`.
+hashes of `NoteDisplay.cpp` and `CubicSpline.cpp`. The capture contains 21,920
+model draws and 1,546 hold-strip draws, and records `window_visible=false`.
 
 The window includes the reverse hold ending at beat 122.375 and the normal hold
 ending at 130.375, plus the first incoming right arrow at 130.75. Match nonzero
@@ -26,7 +26,7 @@ in the first incoming arrow's size and direction near the moving spline bend.
 These observations define current-reference parity, not a claim that native
 playback is free of those artifacts. No expected vertices were hand-edited.
 
-The compiled-path regression compares consecutive first-arrow poses and motion
+The compiled-path regression, when explicitly run, compares consecutive first-arrow poses and motion
 against this capture, and tail-cap screen bounds in both scroll directions
 within 0.05 design pixels. Curved motion between capture times, discrete point
 writes, and endpoint zoom selection also have focused regressions, because

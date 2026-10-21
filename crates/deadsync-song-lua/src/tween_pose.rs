@@ -128,20 +128,26 @@ mod tests {
         }
     }
 
+    fn comparable_bits(value: f32) -> u32 {
+        // Preserve exact finite values, infinities and signed zero. Arithmetic
+        // can select a different NaN payload without changing its meaning.
+        if value.is_nan() { f32::NAN.to_bits() } else { value.to_bits() }
+    }
+
     fn compare_bits(actual: TweenPose, expected: SongLuaOverlayState) {
         for target in TARGETS {
             let actual = actual.get(target);
             let expected = crate::perframe::overlay_state_update_value(&expected, target);
             match (actual, expected) {
                 (Value::F32(a), Value::F32(b)) => {
-                    assert_eq!(a.to_bits(), b.to_bits(), "{target:?}")
+                    assert_eq!(comparable_bits(a), comparable_bits(b), "{target:?}")
                 }
                 (Value::Vec4(a), Value::Vec4(b)) => {
-                    assert_eq!(a.map(f32::to_bits), b.map(f32::to_bits), "{target:?}")
+                    assert_eq!(a.map(comparable_bits), b.map(comparable_bits), "{target:?}")
                 }
                 (Value::VertexColors(a), Value::VertexColors(b)) => assert_eq!(
-                    a.map(|row| row.map(f32::to_bits)),
-                    b.map(|row| row.map(f32::to_bits))
+                    a.map(|row| row.map(comparable_bits)),
+                    b.map(|row| row.map(comparable_bits))
                 ),
                 (Value::None, Value::None) => {}
                 _ => panic!("mismatched property {target:?}"),

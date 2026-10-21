@@ -6528,14 +6528,27 @@ pub fn set_actor_sound_file_from_value(
 fn play_sound_actor(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if crate::live::active(lua) {
         if let Some(file) = actor.get::<Option<String>>("File")? {
-            let path = resolve_actor_asset_path(actor, &file).map_err(mlua::Error::external)?;
+            let Ok(path) = resolve_actor_asset_path(actor, &file) else {
+                // Native a missing sound has no reader to play; it does not
+                // turn ActorSound::Play into a Lua command error.
+                return Ok(());
+            };
             crate::live::actor_sound(lua, crate::SongLuaActorSound::Play {
                 owner: actor.to_pointer() as u64, path,
             });
         }
         Ok(())
     } else {
-        capture_block_set_bool(lua, actor, "sound_play", true)
+        // LunaActorSound::play calls Play immediately. Actor tween cursors do
+        // not delay it, and a later load must not change the captured file.
+        if let Some(file) = actor.get::<Option<String>>("File")? {
+            let Ok(path) = resolve_actor_asset_path(actor, &file) else { return Ok(()); };
+            capture_runtime_sound(lua, path.clone());
+            if let Some(calls) = lua.globals().get::<Option<Table>>(SONG_LUA_SOUND_CALLS_KEY)? {
+                calls.raw_set(calls.raw_len() + 1, path.to_string_lossy().as_ref())?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -14347,9 +14360,10 @@ fn load_native_combo_milestone(lua: &Lua, thousand: bool) -> mlua::Result<Value>
         .set_name(format!("@theme:/Graphics/{name}/default.lua")).eval()
 }
 
-fn create_native_combo_milestone(lua: &Lua, name: &str, thousand: bool) -> mlua::Result<Table> {
-    let install = lua.app_data_ref::<ActorDefinitionHost>()
-        .map(|host| host.install_methods)
+fn create_native_combo_milestone(lua: &Lua, name: &str, thousand: bool,
+    install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>) -> mlua::Result<Table> {
+    let install = install_methods.or_else(|| lua.app_data_ref::<ActorDefinitionHost>()
+        .map(|host| host.install_methods))
         .ok_or_else(|| mlua::Error::runtime("combo milestone requires its actor host"))?;
     let definition = load_native_combo_milestone(lua, thousand)?;
     let Value::Table(actor) = own_actor_root(lua, definition, install)? else {
@@ -14361,7 +14375,8 @@ fn create_native_combo_milestone(lua: &Lua, name: &str, thousand: bool) -> mlua:
     Ok(actor)
 }
 
-pub(crate) fn install_native_gameplay_combo(lua: &Lua) -> mlua::Result<()> {
+pub(crate) fn install_native_gameplay_combo(lua: &Lua,
+    install_methods: Option<fn(&Lua, &Table) -> mlua::Result<()>>) -> mlua::Result<()> {
     let globals = lua.globals();
     let sl = globals.get::<Table>("SL")?;
     for index in 1..=2 {
@@ -14374,7 +14389,7 @@ pub(crate) fn install_native_gameplay_combo(lua: &Lua) -> mlua::Result<()> {
         let children = actor_children(lua, &combo)?;
         let number = children.get::<Table>("Number")?;
         for (ordinal, name, thousand) in [(1, "OneHundredMilestone", false), (2, "OneThousandMilestone", true)] {
-            let child = create_native_combo_milestone(lua, name, thousand)?;
+            let child = create_native_combo_milestone(lua, name, thousand, install_methods)?;
             child.raw_set("__songlua_parent", combo.clone())?;
             combo.raw_set(ordinal, child.clone())?;
             children.raw_set(name, child)?;
@@ -20095,7 +20110,7 @@ fn actor_overlay_state_with_pose(
 mod actor_state_read_tests {
     use super::*;
 
-    include!("../tests/overlay_state_reads.rs");
+    include!("../tests/unit/overlay_state_reads.rs");
 
     #[test]
     fn native_render_flag_promotion_avoids_authored_reads_and_retains_model_defaults() {

@@ -1,3 +1,4 @@
+-- ActorFrames own updates; observer frames retain their original sibling order.
 local loop, started, stopped
 loop_count = 0
 curaction = 1
@@ -25,10 +26,15 @@ return Def.ActorFrame {
             self:x(loop_count):sleep(0.02):queuecommand("Update")
         end,
     },
-    Def.Quad {
-        Name = "Witness",
-        OnCommand = function(self)
-            self:SetUpdateFunction(function(self) self:x(loop_count) end)
+    Def.ActorFrame {
+        OnCommand = function(frame)
+            local quad = frame:GetChild("Witness")
+            local self = quad
+            local update = function(self) self:x(loop_count) end
+            frame:SetUpdateFunction(function(_, delta) update(quad, delta) end)
         end,
+        Def.Quad {
+            Name = "Witness",
+        }
     },
 }

@@ -24,8 +24,8 @@
   "provenance": {
     "execution": "embedded_native_sources",
     "git_dirty": "false",
-    "git_revision": "93a0897bece9229cb0b416c3051699bcee309cdf",
-    "source_root": "C:\\GitHub\\rework\\itgmania-harness-rs\\../itgmania"
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
   },
   "random_seed": 1,
   "samples": [
@@ -670,6 +670,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -698,7 +699,7 @@
                   ],
                   "screen": [
                     304.0,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -848,7 +849,7 @@
                   ],
                   "screen": [
                     336.0000305175781,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -872,6 +873,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -1351,6 +1356,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -1379,7 +1385,7 @@
                   ],
                   "screen": [
                     304.0,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -1529,7 +1535,7 @@
                   ],
                   "screen": [
                     336.0000305175781,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -1553,6 +1559,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -2032,6 +2042,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 3,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -2060,7 +2071,7 @@
                   ],
                   "screen": [
                     304.0,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -2210,7 +2221,7 @@
                   ],
                   "screen": [
                     336.0000305175781,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -2234,6 +2245,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -2713,6 +2728,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 4,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -2741,7 +2757,7 @@
                   ],
                   "screen": [
                     304.0,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -2891,7 +2907,7 @@
                   ],
                   "screen": [
                     336.0000305175781,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -2915,6 +2931,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -3394,6 +3414,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -3422,7 +3443,7 @@
                   ],
                   "screen": [
                     304.0,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -3572,7 +3593,7 @@
                   ],
                   "screen": [
                     336.0000305175781,
-                    224.00001525878903,
+                    224.00001525878906,
                     0.0
                   ],
                   "transformed_uv": [
@@ -3596,6 +3617,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],

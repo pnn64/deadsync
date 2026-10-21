@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "name": "transform-projection",
+  "screen": {
+    "width": 640.0,
+    "height": 480.0
+  },
+  "samples": [
+    0.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "camera": {
+      "fov": 45.0,
+      "vanish": [
+        280.0,
+        210.0
+      ]
+    },
+    "state": {
+      "position": [
+        320.0,
+        240.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        8.0
+      ],
+      "zoom": [
+        1.1,
+        0.9,
+        1.0
+      ]
+    },
+    "children": [
+      {
+        "kind": "frame",
+        "name": "nested",
+        "state": {
+          "position": [
+            -75.0,
+            40.0,
+            30.0
+          ],
+          "rotation": [
+            12.0,
+            -18.0,
+            22.0
+          ],
+          "zoom": [
+            0.8,
+            1.25,
+            1.0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "projected",
+            "size": [
+              180.0,
+              90.0
+            ],
+            "alignment": [
+              0.0,
+              1.0
+            ],
+            "base": {
+              "rotation": [
+                4.0,
+                7.0,
+                11.0
+              ],
+              "zoom": [
+                1.2,
+                0.7,
+                1.0
+              ],
+              "alpha": 0.8
+            },
+            "state": {
+              "position": [
+                35.0,
+                -20.0,
+                65.0
+              ],
+              "rotation": [
+                13.0,
+                17.0,
+                19.0
+              ],
+              "zoom": [
+                1.1,
+                0.85,
+                1.0
+              ],
+              "skew": [
+                0.18,
+                -0.11
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

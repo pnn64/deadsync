@@ -1,5 +1,10 @@
 # 7th Gear: compiled playback (0.5.1872)
 
+The current primary-revision capture and refresh receipts are documented in
+[the fixture note](../tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.md)
+and [the cleanup verification report](testing/test-cleanup-progress.md). The
+0.1.94 capture and validation milestones below describe the earlier investigation.
+
 ## Independent native rendering reference
 
 The harness needed correcting. Its existing authored-actor drawable channel

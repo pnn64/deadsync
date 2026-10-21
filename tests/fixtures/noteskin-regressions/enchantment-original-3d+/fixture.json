@@ -1,0 +1,186 @@
+{
+  "images": [
+    {
+      "path": "_Down Receptor Go 4x1 (doubleres).png",
+      "width": 512,
+      "height": 128
+    },
+    {
+      "path": "_Down Roll Body active 4x1.png",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "path": "_Down Roll BottomCap active 4x1.png",
+      "width": 256,
+      "height": 32
+    },
+    {
+      "path": "_mine ornate.png",
+      "width": 256,
+      "height": 256
+    },
+    {
+      "path": "_mine tex.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "Down Hold Body Active.png",
+      "width": 64,
+      "height": 256
+    },
+    {
+      "path": "Down Hold Body Inactive.png",
+      "width": 64,
+      "height": 256
+    },
+    {
+      "path": "Down Hold BottomCap active (stretch).png",
+      "width": 64,
+      "height": 34
+    },
+    {
+      "path": "Down Hold BottomCap inactive (stretch).png",
+      "width": 64,
+      "height": 34
+    },
+    {
+      "path": "down hold explosion.png",
+      "width": 86,
+      "height": 86
+    },
+    {
+      "path": "Down Roll Body Inactive.png",
+      "width": 64,
+      "height": 256
+    },
+    {
+      "path": "Down Roll BottomCap Inactive.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Tap Explosion Bright W1.png",
+      "width": 106,
+      "height": 106
+    },
+    {
+      "path": "Down Tap Explosion Dim W1.png",
+      "width": 106,
+      "height": 106
+    },
+    {
+      "path": "Down Tap Explosion Dim W2.png",
+      "width": 106,
+      "height": 106
+    },
+    {
+      "path": "Down Tap Explosion Dim W3.png",
+      "width": 106,
+      "height": 106
+    },
+    {
+      "path": "Down Tap Explosion Dim W4.png",
+      "width": 106,
+      "height": 106
+    },
+    {
+      "path": "Down Tap Explosion Dim W5.png",
+      "width": 106,
+      "height": 106
+    },
+    {
+      "path": "textures/lift_ornate.png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "textures/lift_texcher.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "textures/ornate parts (mipmaps).png",
+      "width": 2048,
+      "height": 256
+    },
+    {
+      "path": "textures/shine_lift.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/Tap Note parts (mipmaps).png",
+      "width": 1024,
+      "height": 128
+    }
+  ],
+  "audio": [],
+  "sources": [
+    {
+      "path": "_down tap lift model.txt",
+      "sha256": "751558078090aa344a2f13b488e7a942cdd9d925994d616eb19a5491a1f461d8"
+    },
+    {
+      "path": "_down tap note model.txt",
+      "sha256": "2ed8a5474fd8bdfe0196bdd3c019da19b3c87d568fc459346b2d5c979e997689"
+    },
+    {
+      "path": "_mine ani tex.ini",
+      "sha256": "2cdec7fe3b5982a5897e03126b8ccfb67d2017a57cd829d863ba6285e0182c6e"
+    },
+    {
+      "path": "_mine model.txt",
+      "sha256": "544a22197d0342ae8b422acf747d46798dcc1810188e7996e7dddd8750eb1399"
+    },
+    {
+      "path": "Down Receptor.lua",
+      "sha256": "01b2e7a7eaab3b3a388e1d7f216adb9428daa6bf88dc1a0271151b0d66d274ac"
+    },
+    {
+      "path": "Down Roll Body active.lua",
+      "sha256": "92c8c68a80fe3e68dc678932c9222d862bb1c7eeb25c48ecee306bb8414f03c2"
+    },
+    {
+      "path": "Down Roll BottomCap active.lua",
+      "sha256": "e4d194c3d7298532ada4b9d6e5fff4ec538c8804b3334fe7ff6e675279cfd5ec"
+    },
+    {
+      "path": "Down Tap Lift.lua",
+      "sha256": "1451f53e0502210459d9682e131f7b22c955b6e293d998552222b02949d623ea"
+    },
+    {
+      "path": "Down Tap Mine.lua",
+      "sha256": "f3a57f0dfdbde60970012facff09620a8b8d6f0efc0adc1da225b19363c14fa7"
+    },
+    {
+      "path": "Down Tap Note.lua",
+      "sha256": "3d0e4402a272db911d454f5c068d82f3356410f41ee16a70f663e101732fdeb4"
+    },
+    {
+      "path": "Fallback Explosion.lua",
+      "sha256": "f02c81759d5d8aba045fdd2c648e1e7e526508c9d6fc102471f6f676c6bd1d9a"
+    },
+    {
+      "path": "metrics.ini",
+      "sha256": "3542c2459f8edceb3e1d2eb58724b3a2027c3e0fa3848ce30e363037634086e6"
+    },
+    {
+      "path": "NoteSkin.lua",
+      "sha256": "d0acb9bc440ad142f093c19ecc6ef4b320223e8658711a25d187660e77850660"
+    },
+    {
+      "path": "textures/Lift Note ani texture.ini",
+      "sha256": "ce2e1e5ff0e83deb0faa097907f4b2774700d30e7552694309038cab80012642"
+    },
+    {
+      "path": "textures/Lift Shine ani texture.ini",
+      "sha256": "90dbe602392c1ad62dd8e2c04cdf89d9112e63a378cdf568528aa424be65c3c0"
+    },
+    {
+      "path": "textures/Tap Note ani texture.ini",
+      "sha256": "bbeeb9417acbe0862ec59af4b25a363ea4076e20c476ab263d532a6b9a0a19fb"
+    }
+  ]
+}

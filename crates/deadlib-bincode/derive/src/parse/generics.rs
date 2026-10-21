@@ -504,7 +504,7 @@ impl GenericConstraints {
 
     /// Push the given constraint onto this stream.
     ///
-    /// ```ignore
+    /// ```text
     /// let mut generic_constraints = GenericConstraints::parse("T: Foo"); // imaginary function
     /// let mut generic = SimpleGeneric::new("U"); // imaginary function
     ///
@@ -536,7 +536,7 @@ impl GenericConstraints {
 
     /// Push the given constraint onto this stream.
     ///
-    /// ```ignore
+    /// ```text
     /// let mut generic_constraints = GenericConstraints::parse("T: Foo"); // imaginary function
     ///
     /// generic_constraints.push_parsed_constraint("u32: SomeTrait");

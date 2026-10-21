@@ -21,6 +21,15 @@ fn main() -> ExitCode {
 
 fn run() -> ExitCode {
     let mut args: Vec<_> = std::env::args_os().skip(1).collect();
+    // Cargo forwards libtest options to custom harnesses too. This replay
+    // already owns one worker and always reports its output.
+    if let Some(index) = args.iter().position(|arg| arg == "--test-threads") {
+        args.drain(index..(index + 2).min(args.len()));
+    }
+    args.retain(|arg| {
+        !arg.to_string_lossy().starts_with("--test-threads=")
+            && arg != "--nocapture" && arg != "--show-output"
+    });
     let production_path = args
         .iter()
         .position(|arg| arg == "--production")

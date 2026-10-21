@@ -75,5 +75,5 @@ fn same_attribute(a: &TextAttribute, b: &TextAttribute) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../tests/text_publication.rs"]
+#[path = "../tests/unit/text_publication.rs"]
 mod tests;

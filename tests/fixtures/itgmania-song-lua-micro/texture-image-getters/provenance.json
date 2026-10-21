@@ -295,7 +295,7 @@
   },
   "native_source_unchanged": true,
   "framebuffer_pixel_parity_proven": false,
-  "scope": "Lua source/image/allocation getters and retained texture handle metadata; Sprite upload preparation and framebuffer output remain open",
+  "scope": "Historical capture metadata. native.json is now refreshed with harness 0.1.95; its current inputs, binary, source revision and output hash are recorded in the current capture receipt.",
   "profile": {
     "color_depth": 32,
     "max_size": 2048,
@@ -307,5 +307,6 @@
     "src/RageBitmapTexture.cpp",
     "src/PrefsManager.cpp",
     "src/StepMania.cpp"
-  ]
+  ],
+  "current_capture_receipt": "../native-capture-manifest.json"
 }

@@ -12,6 +12,9 @@ o:FromString('*inf 25% Mini')
 assert(o:Mini() == 0.25 and select(2, o:Mini()) == 1)
 o:FromString('*-2 25% Mini')
 assert(select(2, o:Mini()) == -2)
+-- Parsing accepts a negative approach; RageUtil::fapproach rejects it on update.
+-- Restore a valid approach after exercising the parser grammar.
+o:Mini(0.25, 1)
 o:FromString('100ms Passmark')
 assert(math.abs(o:Passmark() - 0.1) < 1e-6)
 o:FromString('25* Drunk')

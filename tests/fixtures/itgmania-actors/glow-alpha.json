@@ -22,8 +22,8 @@
   "provenance": {
     "execution": "embedded_native_sources",
     "git_dirty": "false",
-    "git_revision": "5148388e6061a5bf2e6b9aa7d41039d7672e9980",
-    "source_root": "C:\\GitHub\\rework\\itgmania-harness-rs\\../itgmania"
+    "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+    "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
   },
   "random_seed": 1,
   "samples": [
@@ -938,6 +938,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -1140,6 +1141,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -1619,6 +1624,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -1821,6 +1827,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -2300,6 +2310,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -2502,6 +2513,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -3087,7 +3102,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -3095,7 +3110,7 @@
             ],
             "offset": 0.0,
             "period": 1.0,
-            "seconds": 0.012500000186264517,
+            "seconds": 0.012500000186264515,
             "type": "none"
           },
           "effected": {
@@ -3559,7 +3574,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -3567,7 +3582,7 @@
             ],
             "offset": 0.0,
             "period": 0.05000000074505806,
-            "seconds": 0.012500000186264517,
+            "seconds": 0.012500000186264515,
             "type": "glow_shift"
           },
           "kind": "sprite",
@@ -3819,6 +3834,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -4021,12 +4037,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -4229,6 +4250,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -4246,7 +4271,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -4254,7 +4279,7 @@
             ],
             "offset": 0.0,
             "period": 0.05000000074505806,
-            "seconds": 0.012500000186264517,
+            "seconds": 0.012500000186264515,
             "type": "glow_shift"
           },
           "effected": {
@@ -4708,6 +4733,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -4910,12 +4936,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 3,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -5118,6 +5149,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -5135,7 +5170,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -5143,7 +5178,7 @@
             ],
             "offset": 0.0,
             "period": 0.05000000074505806,
-            "seconds": 0.012500000186264517,
+            "seconds": 0.012500000186264515,
             "type": "glow_shift"
           },
           "effected": {
@@ -5597,12 +5632,13 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 4,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
                   "clip": [
                     -1.1099305152893066,
-                    1.1465741395950315,
+                    1.1465741395950317,
                     0.0,
                     1.0
                   ],
@@ -5620,7 +5656,7 @@
                   ],
                   "ndc": [
                     -1.1099305152893066,
-                    1.1465741395950315,
+                    1.1465741395950317,
                     0.0
                   ],
                   "screen": [
@@ -5652,7 +5688,7 @@
                 {
                   "clip": [
                     -1.1099305152893066,
-                    0.8534259200096131,
+                    0.853425920009613,
                     0.0,
                     1.0
                   ],
@@ -5670,7 +5706,7 @@
                   ],
                   "ndc": [
                     -1.1099305152893066,
-                    0.8534259200096131,
+                    0.853425920009613,
                     0.0
                   ],
                   "screen": [
@@ -5701,8 +5737,8 @@
                 },
                 {
                   "clip": [
-                    -0.8900694251060487,
-                    0.8534259200096131,
+                    -0.8900694251060486,
+                    0.853425920009613,
                     0.0,
                     1.0
                   ],
@@ -5719,8 +5755,8 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8900694251060487,
-                    0.8534259200096131,
+                    -0.8900694251060486,
+                    0.853425920009613,
                     0.0
                   ],
                   "screen": [
@@ -5751,8 +5787,8 @@
                 },
                 {
                   "clip": [
-                    -0.8900694251060487,
-                    1.1465741395950315,
+                    -0.8900694251060486,
+                    1.1465741395950317,
                     0.0,
                     1.0
                   ],
@@ -5769,8 +5805,8 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8900694251060487,
-                    1.1465741395950315,
+                    -0.8900694251060486,
+                    1.1465741395950317,
                     0.0
                   ],
                   "screen": [
@@ -5799,18 +5835,23 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 5,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
                   "clip": [
                     -1.1099305152893066,
-                    1.1465741395950315,
+                    1.1465741395950317,
                     0.0,
                     1.0
                   ],
@@ -5828,7 +5869,7 @@
                   ],
                   "ndc": [
                     -1.1099305152893066,
-                    1.1465741395950315,
+                    1.1465741395950317,
                     0.0
                   ],
                   "screen": [
@@ -5860,7 +5901,7 @@
                 {
                   "clip": [
                     -1.1099305152893066,
-                    0.8534259200096131,
+                    0.853425920009613,
                     0.0,
                     1.0
                   ],
@@ -5878,7 +5919,7 @@
                   ],
                   "ndc": [
                     -1.1099305152893066,
-                    0.8534259200096131,
+                    0.853425920009613,
                     0.0
                   ],
                   "screen": [
@@ -5909,8 +5950,8 @@
                 },
                 {
                   "clip": [
-                    -0.8900694251060487,
-                    0.8534259200096131,
+                    -0.8900694251060486,
+                    0.853425920009613,
                     0.0,
                     1.0
                   ],
@@ -5927,8 +5968,8 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8900694251060487,
-                    0.8534259200096131,
+                    -0.8900694251060486,
+                    0.853425920009613,
                     0.0
                   ],
                   "screen": [
@@ -5959,8 +6000,8 @@
                 },
                 {
                   "clip": [
-                    -0.8900694251060487,
-                    1.1465741395950315,
+                    -0.8900694251060486,
+                    1.1465741395950317,
                     0.0,
                     1.0
                   ],
@@ -5977,8 +6018,8 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8900694251060487,
-                    1.1465741395950315,
+                    -0.8900694251060486,
+                    1.1465741395950317,
                     0.0
                   ],
                   "screen": [
@@ -6007,6 +6048,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -6024,7 +6069,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -6032,7 +6077,7 @@
             ],
             "offset": 0.0,
             "period": 0.05000000074505806,
-            "seconds": 0.012500000186264517,
+            "seconds": 0.012500000186264515,
             "type": "glow_shift"
           },
           "effected": {
@@ -6411,7 +6456,7 @@
         "glow_shift_2",
         "tap_fade"
       ],
-      "time": 0.012500000186264517
+      "time": 0.012500000186264515
     },
     {
       "actors": [
@@ -6592,7 +6637,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -7064,7 +7109,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -7324,6 +7369,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -7526,12 +7572,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -7734,6 +7785,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -7751,7 +7806,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -8213,6 +8268,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -8415,12 +8471,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 3,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -8623,6 +8684,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -8640,7 +8705,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -9102,6 +9167,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 4,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -9304,12 +9370,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 5,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -9512,6 +9583,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -9529,7 +9604,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.012500000186264517,
+            "delta": 0.012500000186264515,
             "magnitude": [
               0.0,
               0.0,
@@ -10829,6 +10904,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -11031,6 +11107,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -11510,6 +11590,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -11712,6 +11793,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -12191,6 +12276,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -12246,7 +12332,7 @@
                 {
                   "clip": [
                     -1.108888864517212,
-                    0.8548148274421691,
+                    0.8548148274421692,
                     0.0,
                     1.0
                   ],
@@ -12264,7 +12350,7 @@
                   ],
                   "ndc": [
                     -1.108888864517212,
-                    0.8548148274421691,
+                    0.8548148274421692,
                     0.0
                   ],
                   "screen": [
@@ -12295,8 +12381,8 @@
                 },
                 {
                   "clip": [
-                    -0.8911111354827882,
-                    0.8548148274421691,
+                    -0.8911111354827881,
+                    0.8548148274421692,
                     0.0,
                     1.0
                   ],
@@ -12313,8 +12399,8 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8911111354827882,
-                    0.8548148274421691,
+                    -0.8911111354827881,
+                    0.8548148274421692,
                     0.0
                   ],
                   "screen": [
@@ -12345,7 +12431,7 @@
                 },
                 {
                   "clip": [
-                    -0.8911111354827882,
+                    -0.8911111354827881,
                     1.1451852321624756,
                     0.0,
                     1.0
@@ -12363,7 +12449,7 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8911111354827882,
+                    -0.8911111354827881,
                     1.1451852321624756,
                     0.0
                   ],
@@ -12393,6 +12479,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -13710,6 +13800,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -13912,12 +14003,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -14120,6 +14216,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -14599,6 +14699,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -14801,12 +14902,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 3,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -15009,6 +15115,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -15488,6 +15598,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 4,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -15592,7 +15703,7 @@
                 },
                 {
                   "clip": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     0.8566666841506958,
                     0.0,
                     1.0
@@ -15610,7 +15721,7 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     0.8566666841506958,
                     0.0
                   ],
@@ -15642,7 +15753,7 @@
                 },
                 {
                   "clip": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     1.1433333158493042,
                     0.0,
                     1.0
@@ -15660,7 +15771,7 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     1.1433333158493042,
                     0.0
                   ],
@@ -15690,12 +15801,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 5,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -15800,7 +15916,7 @@
                 },
                 {
                   "clip": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     0.8566666841506958,
                     0.0,
                     1.0
@@ -15818,7 +15934,7 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     0.8566666841506958,
                     0.0
                   ],
@@ -15850,7 +15966,7 @@
                 },
                 {
                   "clip": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     1.1433333158493042,
                     0.0,
                     1.0
@@ -15868,7 +15984,7 @@
                     1.0
                   ],
                   "ndc": [
-                    -0.8924999833106996,
+                    -0.8924999833106995,
                     1.1433333158493042,
                     0.0
                   ],
@@ -15898,6 +16014,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -17215,6 +17335,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -17417,6 +17538,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -17896,6 +18021,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -18098,6 +18224,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -19599,6 +19729,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -19801,12 +19932,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -20009,6 +20145,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -20488,6 +20628,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 2,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -20690,12 +20831,17 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             },
             {
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 3,
+              "render_target": 0,
               "texture_mode": "glow",
               "vertices": [
                 {
@@ -20898,6 +21044,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -21667,7 +21817,7 @@
               1.0,
               1.0
             ],
-            "delta": 0.02500000596046448,
+            "delta": 0.025000005960464478,
             "magnitude": [
               0.0,
               0.0,
@@ -22139,7 +22289,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.02500000596046448,
+            "delta": 0.025000005960464478,
             "magnitude": [
               0.0,
               0.0,
@@ -22399,6 +22549,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -22601,6 +22752,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -22618,7 +22773,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.02500000596046448,
+            "delta": 0.025000005960464478,
             "magnitude": [
               0.0,
               0.0,
@@ -23080,6 +23235,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -23282,6 +23438,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -23299,7 +23459,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.02500000596046448,
+            "delta": 0.025000005960464478,
             "magnitude": [
               0.0,
               0.0,
@@ -23771,7 +23931,7 @@
               1.0,
               0.5
             ],
-            "delta": 0.02500000596046448,
+            "delta": 0.025000005960464478,
             "magnitude": [
               0.0,
               0.0,
@@ -24783,6 +24943,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -24985,6 +25146,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -25464,6 +25629,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -25666,6 +25832,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -27167,6 +27337,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 0,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -27369,6 +27540,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],
@@ -27848,6 +28023,7 @@
               "blend_mode": 0,
               "primitive": "quads",
               "primitive_index": 1,
+              "render_target": 0,
               "texture_mode": "modulate",
               "vertices": [
                 {
@@ -28050,6 +28226,10 @@
                     1.0
                   ]
                 }
+              ],
+              "viewport": [
+                640.0,
+                480.0
               ]
             }
           ],

@@ -1,0 +1,294 @@
+{
+  "schema_version": 1,
+  "hash_encoding": "sha256-lf-text-v1",
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "harness_binary_sha256": "cbd32ce27f8e02d9dca7d9e2148ee7322acd9d90e4348431c9032c06df76b908",
+  "request_manifest_sha256": "73f6aaaa1d248dee3d3726a500e615c33d0946faf9778f427c67ceb9786eb651",
+  "fixtures": [
+    {
+      "input": "tests/fixtures/song-lua/empty-song/chart.sm",
+      "song_root": "tests/fixtures/song-lua/empty-song",
+      "output": "tests/fixtures/itgmania-song-lua-micro/empty-song/native.json",
+      "beat_step": 0.5,
+      "until_beat": 4,
+      "difficulty": "Challenge",
+      "steps_type": "dance-single",
+      "random_seed": 1,
+      "max_events": 500000,
+      "output_sha256": "4f8172601f53f16edbb87d18765f6113d342bd2073888b1196355b2d8377691f",
+      "native_provenance": {
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "git_dirty": "false",
+        "execution": "embedded_bundled_lua",
+        "launches_executable": false
+      },
+      "dependencies": [
+        {
+          "path": "assets/noteskins/common/common/_blank.png",
+          "sha256": "782bb4524d137a62bb6faad20dd7c57ef8db19952f66b60f5719546cf5b86962"
+        },
+        {
+          "path": "assets/noteskins/common/common/_Tap Lead-in Receptor.lua",
+          "sha256": "691cd96b1484876c6e998282672b8a23e9f71be2773928711951eb3789962f03"
+        },
+        {
+          "path": "assets/noteskins/common/common/_Tap Press.lua",
+          "sha256": "0c872e7cc78baec9fbf7d6ad8816d01d41a8edd524c4d0498267210321090168"
+        },
+        {
+          "path": "assets/noteskins/common/common/_Tap Receptor.lua",
+          "sha256": "c4a38e92cff62affc5eb3a884b8ec31e8b61236fb77b8c664cc805ae7e90e565"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback HitMine Explosion.png",
+          "sha256": "c8f96bc9ffb0a05a815d3bf5e77aefc1223684bf115053e75f03454f7bff00ed"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold Body active (doubleres).png",
+          "sha256": "08e21b96fa3c84132ec7446b22b16343cfa0ddff66807d48be4f958f62b08f90"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold Body inactive (doubleres).png",
+          "sha256": "d4e24b7342bda45f6cc3e2cd9b87884f73a9c9399fda242e453467e87da5765e"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold BottomCap active (doubleres).png",
+          "sha256": "06eee66021de55fbb3055ae4e8c6bc52c9bba45315d1f89f2479b6488f66294b"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold BottomCap inactive (doubleres).png",
+          "sha256": "bde03c001e2995b1b40e4f7875005328778db9930195f40e2cd540ef7ef1fdb7"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold Explosion 2x1.png",
+          "sha256": "5651661d7c5d462a76493144d0498a936e927a5c10f061851e1c504e474b4149"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold TopCap Active (doubleres).png",
+          "sha256": "d9e78e00aaf2db9abd5e4b76cc373ecda06daa16f9c1a13dcedb5355cf1de45e"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Hold TopCap Inactive (doubleres).png",
+          "sha256": "65660be5c97cb2d5eb8a72e35d3149be2111e45061b77f3c9ed2de51c82be7c5"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Ready Receptor 3x1.png",
+          "sha256": "699d4a4a722310b48975263966be6809ae8dd34d01880842630afbf157af7050"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Receptor.lua",
+          "sha256": "96623726284f5ae0c5b12e05e0ae841eae40e100341a20042db68c9b80b52c74"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Roll Body active (doubleres).png",
+          "sha256": "aeb837f1469e3b80702cf3a132891ea98207c1fd26b034a99743cbbfed9d46fb"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Roll Body inactive (doubleres).png",
+          "sha256": "dd1b0ccc61410e7665ec38036578afe86b01810f3a9e6e8e8ab1eb866c20bb49"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Roll BottomCap active (doubleres).png",
+          "sha256": "2faff6ce73f2eb2235f6d800feb59b063451028c221e9d2bcb3702da172609ad"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Roll BottomCap inactive (doubleres).png",
+          "sha256": "59ffcd4e37e84efdcc6d97f46f47070a441cc507ea031580f97d317ab2658c79"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Roll TopCap Active (doubleres).png",
+          "sha256": "33d921dbd9a0073d3dbfbd96d3df96cfc625143f8c7f5929299eb0720d184362"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Roll TopCap Inactive (doubleres).png",
+          "sha256": "10695f34c9d1462c03e5a5705d70a7876b1f59aad6ba24fb18ad4c0ccb2bd91d"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Tap Explosion Bright.png",
+          "sha256": "99f9a49e427293618a907e8922ed7ee1ff80ec665b437c22e8586423e15f3ffc"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Tap Explosion Dim.png",
+          "sha256": "5570caf31a279ebcb557387173426507eefa4ef6a830ec1e7daee048be85f4a1"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Tap Fake 4x1.png",
+          "sha256": "27d0e1fda33e79ec36e159973a11950920e67c213432c21b76662a88a29317bc"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Tap Lift 4x1.png",
+          "sha256": "6db682e7a00f9a96285838830c4ef06ab869ecf8ba576b41191bd10210929faf"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Tap Mine.lua",
+          "sha256": "fa37ddb8425e27ac59f8111185b1b3a83489f6d089ddb38da3c5fc15348196dc"
+        },
+        {
+          "path": "assets/noteskins/common/common/Fallback Tap Note 4x1.png",
+          "sha256": "6ccd146ca68ce27cb2130f35637d881cf0e24ab73680812533a0c21e4c553775"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_Down Receptor Go 4x1 (doubleres).png",
+          "sha256": "396ea68bb8b940da562d2a9e37a5d191ad88658fda01a4b2f4add8585b646dd0"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_Down Roll Body active 4x1.png",
+          "sha256": "310e0daae0ee908961c5f6cce656dab36ea6ad7a6a5a3e04b0bc6d42d134cb80"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_Down Roll BottomCap active 4x1.png",
+          "sha256": "2ea75009f7a45de1adf34c10d737391b82051ce14405ccca2bbd103bc47f6906"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_down tap lift model.txt",
+          "sha256": "aad974cea521e2bc5d7f278487a26b543f2ccaf09a1538f0300f0952018b2871"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_down tap note model.txt",
+          "sha256": "a656456344bc7d90a551d888b82483bdbfb44771cd3c972f7bf8081c3d1a0a55"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_mine ani tex.ini",
+          "sha256": "2cdec7fe3b5982a5897e03126b8ccfb67d2017a57cd829d863ba6285e0182c6e"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_mine model.txt",
+          "sha256": "85d9e240ebd0a2e01df37db7e4f1052ba6eb84a243465bbe1ce5c3dd238c6b87"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/_mine tex.png",
+          "sha256": "061b0885eea938b4878d967368fe6a2b9ee044738cfccc96c82b463d9ee09746"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Hold Body Active.png",
+          "sha256": "da548038f1e8bb0fb904deb862a9762b2abf92f9cc5e231d3b06cac4a93918e9"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Hold Body Inactive.png",
+          "sha256": "14f95401202d11e8017ba529811d87fc7adcdefcef6996206d3d3f90a5d9d47f"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Hold BottomCap active.png",
+          "sha256": "0b11c9a96b284e3c8aad371d2677de0e9734dc4d0c4b23466cec41d1a1ee53fb"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Hold BottomCap inactive.png",
+          "sha256": "2ac7279feb1f5a9ea00c1a69cda09efb6219e171689e69e3f3ad25d511ed2c62"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/down hold explosion.png",
+          "sha256": "154660da121050ecf125f8bbaaa8702cdac8f377b168b1b6681f8adfe24cf34c"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Receptor.lua",
+          "sha256": "c38b54622f0d7a4c3c60eba6ce09d8fd6c6466e4c723aa27f19687f0119848e5"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Roll Body active.lua",
+          "sha256": "92c8c68a80fe3e68dc678932c9222d862bb1c7eeb25c48ecee306bb8414f03c2"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Roll Body Inactive.png",
+          "sha256": "c5b76dc336bf034a87b5960f8b21922de0ef74d4bbc6c43e69edd34187c5da64"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Roll BottomCap active.lua",
+          "sha256": "e4d194c3d7298532ada4b9d6e5fff4ec538c8804b3334fe7ff6e675279cfd5ec"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Roll BottomCap Inactive.png",
+          "sha256": "09df18cab889e9d3055464d0f3beaec5771bfc13f2e7c29069bb199ed1192bbe"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Explosion Bright W1.png",
+          "sha256": "ebb2f2e163d12d682593aef6775437deca5e0f3906e9dd74c00f68a41536962a"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Explosion Dim W1.png",
+          "sha256": "54fbf22e17a9f5b57c475de9685b721863194bbd8bdfcef2dd9478a0c205b524"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Explosion Dim W2.png",
+          "sha256": "b965dd41b0e94fc4ca28c9e76c31f40af683542bf66f27311e5f32e37cd45766"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Explosion Dim W3.png",
+          "sha256": "260ab2ae184f14656ac9551debf5875ea48de605e424a8671bd04dd0b5335216"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Explosion Dim W4.png",
+          "sha256": "9fa0b7165bb6688404fb503f7b5ee0ef0b5ef6bf86cd70c56b0bd58ae65c9d8e"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Explosion Dim W5.png",
+          "sha256": "f22821ccf614b72a8633f27668476e042e2b76cbfaa9af7c1b2df59e1bca9750"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Lift.lua",
+          "sha256": "1451f53e0502210459d9682e131f7b22c955b6e293d998552222b02949d623ea"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Mine.lua",
+          "sha256": "f3a57f0dfdbde60970012facff09620a8b8d6f0efc0adc1da225b19363c14fa7"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Down Tap Note.lua",
+          "sha256": "3d0e4402a272db911d454f5c068d82f3356410f41ee16a70f663e101732fdeb4"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/Fallback Explosion.lua",
+          "sha256": "050795fc9dd4f87ffe8d55435ca99e1bc888aec16dc95da44ba97868a9320c5c"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/metrics.ini",
+          "sha256": "bc174f9d3ca111773eeaf06039a60b599cc78363d7f846b59a8437ef545a0316"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/NoteSkin.lua",
+          "sha256": "d0acb9bc440ad142f093c19ecc6ef4b320223e8658711a25d187660e77850660"
+        },
+        {
+          "path": "assets/noteskins/dance/default/_arrow 1x8 (doubleres).png",
+          "sha256": "03f0a7349bdcd149704bcab587559a0a385a5560a00fe5b5ee0de1d1db142002"
+        },
+        {
+          "path": "assets/noteskins/dance/default/_circle (doubleres).png",
+          "sha256": "940441bc1574c4ef8f860aa10331e93548c49b83c52a40ab9193010425f5b4bd"
+        },
+        {
+          "path": "assets/noteskins/dance/default/_glow (doubleres).png",
+          "sha256": "f740d0d2aaf1d7296050425195b3dbfb601769fd57a6eea4458f97a9aa241570"
+        },
+        {
+          "path": "assets/noteskins/dance/default/_receptor (doubleres).png",
+          "sha256": "6125bd8c80408638f3d67c714c4f94fd037ad5f3ff3b815ac94233787b080673"
+        },
+        {
+          "path": "assets/noteskins/dance/default/_rflash (doubleres).png",
+          "sha256": "953674ca75bf518d0ef16ab49c5492614feb48d4f7d5c35f6e4bd77c89fb2c17"
+        },
+        {
+          "path": "assets/noteskins/dance/default/Down Hold TopCap Active (doubleres).png",
+          "sha256": "d9e78e00aaf2db9abd5e4b76cc373ecda06daa16f9c1a13dcedb5355cf1de45e"
+        },
+        {
+          "path": "assets/noteskins/dance/default/Down Hold TopCap Inactive (doubleres).png",
+          "sha256": "65660be5c97cb2d5eb8a72e35d3149be2111e45061b77f3c9ed2de51c82be7c5"
+        },
+        {
+          "path": "assets/noteskins/dance/default/Down Roll TopCap Active (doubleres).png",
+          "sha256": "33d921dbd9a0073d3dbfbd96d3df96cfc625143f8c7f5929299eb0720d184362"
+        },
+        {
+          "path": "assets/noteskins/dance/default/Down Roll TopCap Inactive (doubleres).png",
+          "sha256": "10695f34c9d1462c03e5a5705d70a7876b1f59aad6ba24fb18ad4c0ccb2bd91d"
+        },
+        {
+          "path": "tests/fixtures/song-lua/empty-song/chart.sm",
+          "sha256": "6beec50f2fd7daa3941b75d17cff1bdb5e74769e84c2c8fde343ff6360a9a64d"
+        }
+      ]
+    }
+  ]
+}

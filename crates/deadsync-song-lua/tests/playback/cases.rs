@@ -359,6 +359,10 @@ fn manual_player_compositor_matches_native_geometry() {
         "/../../tests/fixtures/itgmania-song-lua-micro/manual-player-native.json"
     )))
     .expect("local native manual-player geometry");
+    let native_actors = native["samples"][0]["actors"]
+        .as_array()
+        .expect("current native manual-player actor capture");
+    assert_eq!(native["samples"].as_array().unwrap().len(), 1);
     let song = Arc::new(
         deadsync_simfile::app_runtime::parse_song_for_test(
             &workspace_root().join("tests/fixtures/song_lua/manual-player.ssc"),
@@ -492,7 +496,10 @@ fn manual_player_compositor_matches_native_geometry() {
                 let child = ["hud", "field", "judgment"][player_index % 3];
                 format!("{prefix}{}-{child}", player_index / 3)
             };
-            let expected = native["sprites"][&name][0]["vertices"].as_array().unwrap();
+            let expected = native_actors.iter()
+                .find(|actor| actor["name"] == name)
+                .expect("native draw for each compositor actor")["draws"][0]["vertices"]
+                .as_array().unwrap();
             for [x, y] in [[-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5], [0.5, 0.5]] {
                 let clip = cameras[run.camera as usize]
                     * Vector4::new(
@@ -1186,7 +1193,19 @@ fn song_lua_background_fit_and_smooth_match_native_actors() {
             "uncached at {time}"
         );
     }
-    assert_eq!(local[cover].stretch_rect, Some([0.0, 0.0, 854.0, 480.0]));
+    // FullScreen may be represented by native size/zoom and alignment rather
+    // than a deferred stretch rectangle. Compare its resulting bounds.
+    let cover_state = local[cover];
+    let [sx, sy] = song_lua_overlay_axis_scale(cover_state);
+    let [w, h] = cover_state.size.unwrap_or([1.0; 2]);
+    let [w, h] = [w * sx, h * sy];
+    let bounds = [cover_state.x - cover_state.halign * w,
+        cover_state.y - cover_state.valign * h,
+        cover_state.x + (1.0 - cover_state.halign) * w,
+        cover_state.y + (1.0 - cover_state.valign) * h];
+    for (actual, expected) in bounds.into_iter().zip([0.0, 0.0, 854.0, 480.0]) {
+        assert!((actual - expected).abs() < 0.001, "native fullscreen bounds: {bounds:?}");
+    }
     use deadsync_song_lua::playback::actor_conformance as actor;
     let state = composed[fit];
     let [sx, sy] = deadsync_song_lua::overlay_state_axis_scale(state);
@@ -1441,32 +1460,24 @@ fn song_lua_tap_commands_follow_player_grade_and_judgment_time() {
 }
 
 #[test]
-#[ignore = "requires the sibling lua-songs corpus"]
-fn cuphead_cagney_stays_offscreen_during_cala_phase() {
-    let corpus = std::fs::canonicalize(workspace_root())
-        .expect("deadsync workspace should resolve")
-        .parent()
-        .expect("deadsync should have a workspace parent")
-        .join("lua-songs/Cuphead [TaroNuke]");
-    let entries = [
-        corpus.join("bg/default.lua"),
-        corpus.join("lua/default.lua"),
-    ];
-    let entry_paths = entries
-        .iter()
-        .map(std::path::PathBuf::as_path)
-        .collect::<Vec<_>>();
-    let simfile = std::fs::read_to_string(corpus.join("botanic.sm"))
-        .expect("Cuphead simfile should be readable");
-    let bpms = simfile
-        .split_once("#BPMS:")
-        .and_then(|(_, tail)| tail.split_once(';'))
-        .map(|(bpms, _)| bpms)
-        .expect("Cuphead simfile should contain BPMS");
-    let mut context =
-        deadsync_assets::song_lua::SongLuaCompileContext::new(&corpus, "Botanic Panic".to_owned());
-    context.song_timing_bpms = deadsync_assets::song_lua::parse_song_timing_bpms(bpms);
-    context.music_length_seconds = 140.0;
+fn completed_parent_exit_culls_one_sprite_sheet_cell() {
+    crate::tests::init_paths();
+    let fixture = tempfile::tempdir().unwrap();
+    let corpus = fixture.path();
+    std::fs::create_dir_all(corpus.join("bg")).unwrap();
+    std::fs::create_dir_all(corpus.join("lua")).unwrap();
+    std::fs::create_dir_all(corpus.join("cagney")).unwrap();
+    image::RgbaImage::new(1152, 1056)
+        .save(corpus.join("cagney/idle 4x3.png")).unwrap();
+    std::fs::write(corpus.join("bg/default.lua"), "return Def.ActorFrame {}\n").unwrap();
+    std::fs::write(corpus.join("lua/default.lua"),
+        include_str!("../../../../tests/fixtures/song_lua/parent-exit-cell-culling.lua")).unwrap();
+    let entries = [corpus.join("bg/default.lua"), corpus.join("lua/default.lua")];
+    let entry_paths = entries.iter().map(std::path::PathBuf::as_path).collect::<Vec<_>>();
+    let mut context = deadsync_assets::song_lua::SongLuaCompileContext::new(
+        corpus, "Parent exit cell culling".to_owned());
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.music_length_seconds = 2.1;
     context.screen_width = 854.0;
     context.screen_height = 480.0;
     context.players = std::array::from_fn(|_| deadsync_assets::song_lua::SongLuaPlayerContext {
@@ -1474,7 +1485,7 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
         ..Default::default()
     });
     let compiled_layers = compile_song_lua_layers(&entry_paths, 1, &context)
-        .expect("Cuphead background and foreground lua should compile together");
+        .expect("generated background and foreground Lua should compile together");
     let compiled = &compiled_layers[1];
     let idle = compiled
         .overlays
@@ -1486,7 +1497,7 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
                     if texture_path.to_string_lossy().replace('\\', "/").contains("/cagney/idle")
             )
         })
-        .expect("Cuphead should contain Cagney's idle sprite");
+        .expect("fixture should contain the sheet sprite");
     let SongLuaOverlayKind::Sprite {
         texture_key: idle_texture_key,
         ..
@@ -1540,8 +1551,8 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
     let mut caches = Vec::new();
     let mut local = Vec::new();
     let mut composed = Vec::new();
-    const CALA_PHASE_BEAT: u32 = 180;
-    for beat in 0..=CALA_PHASE_BEAT {
+    const AFTER_EXIT_SECOND: u32 = 2;
+    for beat in 0..=AFTER_EXIT_SECOND {
         song_lua_overlay_state_sets_from_into::<SpriteSlot>(
             beat as f32,
             &overlays,
@@ -1567,15 +1578,15 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
         .expect("Cagney idle should retain its ActorFrame parent");
     assert!(
         (local[idle].x - 587.0).abs() <= 0.01,
-        "Cagney's sprite-local position changed during Cala's phase"
+        "sprite-local position must survive the parent exit tween"
     );
     assert!(
         (local[idle_parent].x - 427.0).abs() <= 0.01,
-        "Cagney's parent must hold its completed beat-111 exit tween"
+        "parent must retain its completed exit tween"
     );
     assert!(
         (composed[idle].x - 1_014.0).abs() <= 0.01,
-        "Cagney's beat-111 parent move must persist through Cala's phase"
+        "parent exit pose must persist after its tween"
     );
     let mut asset_manager = AssetManager::new();
     asset_manager.queue_texture_upload(
@@ -1591,7 +1602,7 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
                 .unwrap()
         ),
         Some([288.0, 352.0]),
-        "Cagney culling must use one 4x3 sheet cell, not the whole texture"
+        "culling must use one 4x3 sheet cell, not the whole texture"
     );
     let topology = SongLuaOverlayTopologyIndex::new(&overlays);
     let camera_state = topology.camera_state(&composed, idle);
@@ -1605,12 +1616,12 @@ fn cuphead_cagney_stays_offscreen_during_cala_phase() {
             0,
             854.0,
             480.0,
-            CALA_PHASE_BEAT as f32,
-            CALA_PHASE_BEAT as f32,
-            CALA_PHASE_BEAT as f32,
+            AFTER_EXIT_SECOND as f32,
+            AFTER_EXIT_SECOND as f32,
+            AFTER_EXIT_SECOND as f32,
         )
         .is_none(),
-        "Cagney leaked into Cala's phase despite being fully offscreen"
+        "sprite drew after the completed parent tween moved it fully offscreen"
     );
 }
 
@@ -5590,6 +5601,8 @@ fn song_lua_capture_style_tints_textured_mesh() {
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test: false,
+        depth_write: false,
+        depth_test_on_fail: false,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: deadlib_render_core::CullMode::None,
@@ -7369,6 +7382,7 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
 
     let Actor::TexturedMesh {
         offset,
+        local_transform,
         texture,
         tint,
         vertices,
@@ -7379,7 +7393,14 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
     else {
         panic!("expected textured mesh-backed ActorMultiVertex overlay");
     };
-    assert_eq!(offset, [12.0, 24.0]);
+    // AMV now retains its homogeneous transform for GPU clipping. Translation
+    // can live in that matrix instead of the actor's 2D offset.
+    for (vertex, expected) in vertices.iter().zip([[12.0, 24.0], [28.0, 24.0], [12.0, 40.0]]) {
+        let point = local_transform.transform_point3(Vector3::from_array(vertex.pos));
+        for (actual, expected) in [point.x + offset[0], point.y + offset[1]].into_iter().zip(expected) {
+            assert!((actual - expected).abs() < 0.0001, "native AMV position: {actual} != {expected}");
+        }
+    }
     assert!(
         matches!(texture, deadlib_present::actors::MeshTexture::Key(key) if key.as_ref() == texture_key.as_str())
     );
@@ -7893,14 +7914,39 @@ fn native_model_texture_commands_match_production() {
 }
 
 #[cfg(feature = "test-support")]
+fn native_model_sample_draws<'a>(sample: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+    if let Some(actors) = sample["actors"].as_array() {
+        actors.iter().find(|actor| actor["name"] == name).map(|actor| &actor["draws"])
+    } else {
+        sample["actors"].get(name)
+    }
+}
+
+#[cfg(feature = "test-support")]
+fn native_model_sample_second(sample: &serde_json::Value) -> f32 {
+    sample.get("time").or_else(|| sample.get("second"))
+        .and_then(serde_json::Value::as_f64).expect("native sample time") as f32
+}
+
+#[cfg(feature = "test-support")]
 fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool, expected_draws: usize) {
+    fn model_paths<'a>(actor: &'a serde_json::Value, name: &str) -> Option<&'a [serde_json::Value]> {
+        if actor["name"] == name && actor["kind"] == "model" {
+            return actor["model_paths"].as_array().map(Vec::as_slice);
+        }
+        actor["children"].as_array()?.iter().find_map(|child| model_paths(child, name))
+    }
     crate::tests::init_paths();
     let directory = workspace_root().join("tests/fixtures/itgmania-song-lua-micro").join(name);
     let native: serde_json::Value = serde_json::from_str(native).expect("captured native texture clocks");
+    let control_path = directory.join("control.json");
+    let control: Option<serde_json::Value> = control_path.is_file().then(||
+        serde_json::from_slice(&std::fs::read(&control_path).expect("native actor request"))
+            .expect("native actor request JSON"));
     let samples = native["samples"].as_array().expect("native update samples");
     let mut previous = 0.0_f32;
     let updates = samples.iter().map(|sample| {
-        let second = sample["second"].as_f64().unwrap() as f32;
+        let second = native_model_sample_second(sample);
         let delta = second - previous;
         previous = second;
         (second, delta)
@@ -7926,7 +7972,8 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
             } else {
                 let actor_name = actor.name.as_deref().expect("named native Model");
                 let visible_updates = native["samples"].as_array().unwrap().iter()
-                    .filter(|sample| !sample["actors"][actor_name].as_array().unwrap().is_empty()).count();
+                    .filter(|sample| !native_model_sample_draws(sample, actor_name)
+                        .expect("named native Model sample").as_array().unwrap().is_empty()).count();
                 assert!(layer.texture_samples.len() >= visible_updates,
                     "compiler must retain every visible update for {actor_name}");
                 Arc::clone(&layer.texture_samples)
@@ -7935,13 +7982,20 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
                 "{:?}: missing native material metadata: {layers:?}", actor.name);
             if noteskin {
                 let actor_name = actor.name.as_deref().expect("named native Model");
-                let piece = directory.join(native["model_pieces"][actor_name].as_str()
-                    .unwrap_or_else(|| match actor_name {
-                        "Single" => "single.txt",
-                        "Repeated" => "repeated.txt",
-                        _ => panic!("missing native Model piece for {actor_name}"),
-                    }));
-                let slots = deadsync_assets::noteskin::load_itg_model_slots(&piece, &piece, &piece)
+                let pieces = if let Some(paths) = control.as_ref()
+                    .and_then(|control| model_paths(&control["root"], actor_name)) {
+                    assert_eq!(paths.len(), 3, "native Model input pieces");
+                    std::array::from_fn::<_, 3, _>(|index| directory.join(paths[index].as_str().unwrap()))
+                } else {
+                    let piece = directory.join(native["model_pieces"][actor_name].as_str()
+                        .unwrap_or_else(|| match actor_name {
+                            "Single" => "single.txt",
+                            "Repeated" => "repeated.txt",
+                            _ => panic!("missing native Model piece for {actor_name}"),
+                        }));
+                    [piece.clone(), piece.clone(), piece]
+                };
+                let slots = deadsync_assets::noteskin::load_itg_model_slots(&pieces[0], &pieces[1], &pieces[2])
                     .expect("native animated material slots");
                 actor.kind = SongLuaOverlayKind::NoteskinActor {
                     slots: slots.into(), texture_samples: samples.clone().into(),
@@ -7973,7 +8027,7 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
             );
             for index in 0..overlays.len() {
                 let Some(expected) = overlays[index].name.as_deref()
-                    .and_then(|name| sample["actors"].get(name)) else { continue };
+                    .and_then(|name| native_model_sample_draws(sample, name)) else { continue };
                 // Material clocks keep running during a Model's own sleep.
                 // Their retained history is checked on every native draw;
                 // this control does not compare draw suppression itself.
@@ -8034,8 +8088,9 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
 #[cfg(feature = "test-support")]
 fn native_model_material_passes_match_production() {
     crate::tests::init_paths();
-    let directory =
-        workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-texture-images");
+    let directory = PathBuf::from(deadsync_song_lua::file_path_string(
+        &workspace_root().join("tests/fixtures/itgmania-song-lua-micro/model-texture-images")
+            .canonicalize().unwrap()));
     let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json"
@@ -8076,8 +8131,8 @@ fn native_model_material_passes_match_production() {
             .collect::<Vec<_>>();
         let mut checked = 0;
         for (ordinal, sample) in native["samples"].as_array().unwrap().iter().enumerate() {
-            let expected = sample["actors"]["Animated"].as_array().unwrap();
-            let second = sample["second"].as_f64().unwrap() as f32;
+            let expected = native_model_sample_draws(sample, "Animated").unwrap().as_array().unwrap();
+            let second = native_model_sample_second(sample);
             let frame = composer.render_overlay(
                 &overlays,
                 &states,
@@ -8139,7 +8194,8 @@ fn native_model_material_passes_match_production() {
                     .file_name()
                     .unwrap();
                 let expected_key = deadsync_assets::textures::model_texture_key(
-                    &deadsync_assets::textures::canonical_texture_key(directory.join(image)));
+                    &deadsync_assets::textures::canonical_texture_key(
+                        deadsync_song_lua::file_path_string(&directory.join(image))));
                 assert_eq!(
                     composer.texture_key(run.texture_handle), expected_key,
                     "noteskin={noteskin} update={ordinal} pass={pass}: native image binding"
@@ -10166,7 +10222,10 @@ fn spooky_door_vertices_match_native_tween() {
     )
     .unwrap();
     let mut assets = AssetManager::new();
-    assets.queue_texture_upload("spooky-door.png".into(), image::RgbaImage::new(854, 480));
+    // Quad starts with unit geometry. A unit texture preserves that geometry
+    // when inspecting the sprite draw path; the actor already carries the
+    // native fullscreen zoom and must not be scaled by a full-screen bitmap.
+    assets.queue_texture_upload("spooky-door.png".into(), image::RgbaImage::new(1, 1));
     let mut corners = 0;
     for mut door in compiled
         .overlays
@@ -10206,17 +10265,18 @@ fn spooky_door_vertices_match_native_tween() {
             let [SizeSpec::Px(width), SizeSpec::Px(height)] = size else {
                 panic!("door size");
             };
-            assert_eq!(align, [0.0, 0.0]);
-            let left = (offset[0] + width * cropleft) * 854.0 / screen_width();
-            let right = (offset[0] + width * (1.0 - cropright)) * 854.0 / screen_width();
-            let top = (offset[1] + height * croptop) * 480.0 / screen_height();
-            let bottom = (offset[1] + height * (1.0 - cropbottom)) * 480.0 / screen_height();
+            let left = (offset[0] + width * (cropleft - align[0])) * 854.0 / screen_width();
+            let right = (offset[0] + width * (1.0 - cropright - align[0])) * 854.0 / screen_width();
+            let top = (offset[1] + height * (croptop - align[1])) * 480.0 / screen_height();
+            let bottom = (offset[1] + height * (1.0 - cropbottom - align[1])) * 480.0 / screen_height();
             let oracle = sample["actors"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .find(|a| a["name"].as_str() == door.name.as_deref())
                 .unwrap();
+            assert_eq!(align, [oracle["alignment"][0].as_f64().unwrap() as f32,
+                oracle["alignment"][1].as_f64().unwrap() as f32]);
             for (point, vertex) in [[left, top], [left, bottom], [right, bottom], [right, top]]
                 .iter()
                 .zip(oracle["draws"][0]["vertices"].as_array().unwrap())

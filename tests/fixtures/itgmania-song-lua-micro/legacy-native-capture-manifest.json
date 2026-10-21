@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "hash_encoding": "sha256-lf-text-v1",
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "harness_binary_sha256": "cbd32ce27f8e02d9dca7d9e2148ee7322acd9d90e4348431c9032c06df76b908",
+  "request_manifest_sha256": "606dd6887dd6bda015f9194f16ffaffee1b848e275697553ad53e9f6a9c334d3",
+  "fixtures": [
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/manual-player-draws.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/manual-player-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/manual-player-draws.json",
+      "input_sha256": "5792be54ae87a079cc07b468074f3aab3845f7701c155f186a8681fd608986de",
+      "output_sha256": "a194292132e16e7e2c722b5d9789865cad60cef756adf0edc4c04354b3d82654",
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/default.lua",
+          "sha256": "baa3740b39a77d1d8736bd9e9db7a6536c1d4dc751ea28cbb2a27c36e49f25c8"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.ini",
+          "sha256": "4c684c683e893bf1fa492951d681a76b972a07b3a0de06bfda4003d0bc9adcb3"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.txt",
+          "sha256": "3e907694c007acdbeba4f894f8dc86fecd59de4b4f6fdd4e39e14d62afb05048"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.ini",
+          "sha256": "b14ca339b69c67c2702885ced87ce537900e859ecefb34a068f3f0eab2808d33"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.txt",
+          "sha256": "da39018a574874a99d2a158d22164b1778a7f1880f2194bc105a9adad45f7c41"
+        }
+      ],
+      "input_sha256": "6d3a67fadb2832064e1c49bd12ccd1f27a2feec3c0eea15ff942451fc054ba80",
+      "output_sha256": "697157fe4810168f3364b634991810727a239892ac2ef241093fcba22971ad2a",
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/control-frames.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/native-frames.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/default.lua",
+          "sha256": "baa3740b39a77d1d8736bd9e9db7a6536c1d4dc751ea28cbb2a27c36e49f25c8"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.ini",
+          "sha256": "4c684c683e893bf1fa492951d681a76b972a07b3a0de06bfda4003d0bc9adcb3"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.txt",
+          "sha256": "3e907694c007acdbeba4f894f8dc86fecd59de4b4f6fdd4e39e14d62afb05048"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.ini",
+          "sha256": "b14ca339b69c67c2702885ced87ce537900e859ecefb34a068f3f0eab2808d33"
+        },
+        {
+          "path": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.txt",
+          "sha256": "da39018a574874a99d2a158d22164b1778a7f1880f2194bc105a9adad45f7c41"
+        }
+      ],
+      "input_sha256": "2c992cc507cf75188e5ee928dc504d0bdc68b367cc7889375896187d58e91dc8",
+      "output_sha256": "8f21c93eb736b7c3570a7fa1125e6f591deca43587bf5f25f0f82cb0fea40158",
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    }
+  ]
+}

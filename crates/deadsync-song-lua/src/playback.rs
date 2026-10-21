@@ -59,6 +59,7 @@ pub type GameplayCoreState<P, S> = deadsync_gameplay::GameplayRuntimeState<
 >;
 #[path = "playback/prepare.rs"]
 mod prepare;
+#[path = "playback/native.rs"]
 mod native;
 use deadlib_assets::present_dsl::cover_sprite;
 pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, reload_song_lua, song_lua_sound_paths};

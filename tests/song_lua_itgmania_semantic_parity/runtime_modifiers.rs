@@ -2790,7 +2790,6 @@ fn sampled_mini_and_xmod_pulse_preserves_note_spacing() {
 }
 
 #[test]
-#[ignore = "requires the 7th Gear song files; set ITGMANIA_SONG_LUA_SIMFILE"]
 fn seventh_gear_opening_pulse_keeps_size_and_speed_synchronized() {
     crate::paths::init();
     let mut trace = read_trace_file(
@@ -3379,10 +3378,10 @@ pub(super) fn compare_runtime_modifiers(
 }
 
 #[test]
-#[ignore = "full-song runtime modifier audit; select CO5M1C or Riddle DX with ITGMANIA_SONG_LUA_TRACE"]
+#[ignore = "long full-song runtime modifier audit against the committed CO5M1C capture"]
 fn native_modifier_values_match_deadsync() {
     crate::paths::init();
-    let trace = read_trace();
+    let trace = read_trace_file(&Path::new(env!("CARGO_MANIFEST_DIR")).join(COSMIC_TRACE));
     let (compiled, _, context) = compile_trace_song(&trace);
     let mut parity = Parity::default();
     compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);

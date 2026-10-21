@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "hash_encoding": "sha256-lf-text-v1",
+  "review_status": "accepted",
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "harness_binary_sha256": "cbd32ce27f8e02d9dca7d9e2148ee7322acd9d90e4348431c9032c06df76b908",
+  "native_revision": "704cdd5624155f743b59b8b64fedeb0588dae067",
+  "native_executable_sha256": "b2ccd9e02df706bbfaf23d54011cb1905590c593a47093de0160f59e667ce09e",
+  "request_manifest_sha256": "122b68fc771c5a0e59a2cdc301203edda7537d371dbbe9c6e94594742641870b",
+  "archive": "tests/fixtures/full_song_lua/03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d.tar.zst",
+  "archive_sha256": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d",
+  "fixtures": [
+    {
+      "name": "seventh-swap",
+      "observer": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-native-probe.lua",
+      "raw_result": "Save/itgmania-harness/native-swap-direct.json",
+      "until_beat": 123.25,
+      "minimum_frames": 80,
+      "cap_windows": [
+        [
+          114.05,
+          114.125,
+          3
+        ],
+        [
+          122.05,
+          122.125,
+          0
+        ]
+      ],
+      "output": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-native.json",
+      "cap_vertices": [
+        6,
+        9
+      ],
+      "output_sha256": "7f1402240bdb58fc29d66639cbeabcd4c772604d16cc698206726e54a064d20d",
+      "observer_sha256": "bdc5bd058628b4d4f0b2f87e6c4db950d98fbeef01bb6701e3ab70213b0d9735",
+      "raw_capture_sha256": "9110496b263004a9cd6759122f2b793c0279093b617157cdc93beed86bf12eef",
+      "native_source": {
+        "cubic_spline_sha256": "93f6dcdd083f6da7a311449d89cf2f29be219590718e4e978e70c365f842eac3",
+        "modified_src": false,
+        "note_display_sha256": "5e62afa89932da9d999d69b0e8facccebed05370756dfabcdd8882fdbfb88d2a",
+        "revision": "704cdd5624155f743b59b8b64fedeb0588dae067"
+      }
+    },
+    {
+      "name": "seventh-approach",
+      "observer": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-approach-native-probe.lua",
+      "raw_result": "Save/itgmania-harness/native-swap-130-direct.json",
+      "until_beat": 131.25,
+      "minimum_frames": 40,
+      "window_beats": [
+        129.5,
+        131.1
+      ],
+      "first_note": {
+        "beat": 130.75,
+        "column": 4
+      },
+      "neighbor_note": {
+        "beat": 131,
+        "column": 3
+      },
+      "output": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-approach-native.json",
+      "output_sha256": "d1eb1a3e014990a2bd168e45d299bdf9969d515fa37ba34244158fdf1f1e791c",
+      "observer_sha256": "491aa34c11a1645ffba1fa4bba8ef890f376427cc09aa360f7cf3d32ebc7e078",
+      "raw_capture_sha256": "614dbfaea8c22c3e7719cbbc33fcf1bd616b1f2c4086c3d96aa7109983a288b7",
+      "native_source": {
+        "cubic_spline_sha256": "93f6dcdd083f6da7a311449d89cf2f29be219590718e4e978e70c365f842eac3",
+        "modified_src": false,
+        "note_display_sha256": "5e62afa89932da9d999d69b0e8facccebed05370756dfabcdd8882fdbfb88d2a",
+        "revision": "704cdd5624155f743b59b8b64fedeb0588dae067"
+      }
+    }
+  ],
+  "validation": "All active deadsync-notefield library tests pass against these primary-engine captures."
+}

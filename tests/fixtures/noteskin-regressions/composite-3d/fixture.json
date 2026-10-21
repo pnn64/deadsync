@@ -1,0 +1,342 @@
+{
+  "images": [
+    {
+      "path": "_Center Tap Flash (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Center Tap Receptor (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Down Tap Flash (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Down Tap Receptor (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Left Tap Flash (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Left Tap Receptor (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_mine checkerboard.png",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "_mine tex.png",
+      "width": 32,
+      "height": 16
+    },
+    {
+      "path": "_Right Tap Flash (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Right Tap Receptor (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Up Tap Flash (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "_Up Tap Receptor (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Hold Body Active 8x1 (res 512x64).png",
+      "width": 1024,
+      "height": 128
+    },
+    {
+      "path": "Down Hold Body Inactive (res 64x64).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Hold BottomCap Active 8x1 (res 512x64).png",
+      "width": 1024,
+      "height": 128
+    },
+    {
+      "path": "Down Hold BottomCap Inactive (res 64x64).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Hold TopCap Active 8x1 (res 512x64).png",
+      "width": 1024,
+      "height": 128
+    },
+    {
+      "path": "Down Hold TopCap Inactive (res 64x64).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Roll Body Active 8x1 (res 512x64).png",
+      "width": 1024,
+      "height": 128
+    },
+    {
+      "path": "Down Roll Body Inactive (res 64x64).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Roll BottomCap Active 8x1 (res 512x64).png",
+      "width": 1024,
+      "height": 128
+    },
+    {
+      "path": "Down Roll BottomCap Inactive (res 64x64).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Roll TopCap Active 8x1 (res 512x64).png",
+      "width": 1024,
+      "height": 128
+    },
+    {
+      "path": "Down Roll TopCap Inactive (res 64x64).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "Down Tap Explosion Bright.png",
+      "width": 72,
+      "height": 72
+    },
+    {
+      "path": "Down Tap Explosion Dim.png",
+      "width": 72,
+      "height": 72
+    },
+    {
+      "path": "Down Tap Fake (doubleres).png",
+      "width": 128,
+      "height": 128
+    },
+    {
+      "path": "textures/feet.png",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+      "path": "textures/glow.png",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "path": "textures/lift_texcher_down.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/lift_texcher_left.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/lift_texcher_right.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/lift_texcher_up.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/pixels.png",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/pixels_center.png",
+      "width": 16,
+      "height": 16
+    },
+    {
+      "path": "textures/texcher_down.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/texcher_left.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/texcher_right.png",
+      "width": 64,
+      "height": 128
+    },
+    {
+      "path": "textures/texcher_up.png",
+      "width": 64,
+      "height": 128
+    }
+  ],
+  "audio": [],
+  "sources": [
+    {
+      "path": "_center tap lift model.txt",
+      "sha256": "a0926084754a9e3af251bf1842ad7fd4133ebd45ca3d8eabff5817d350159cda"
+    },
+    {
+      "path": "_center tap note model.txt",
+      "sha256": "f5835935c881b400d0fc6a358a255f2ccd00ce0a47b5d7b3e5353e59caf063c8"
+    },
+    {
+      "path": "_down tap lift model.txt",
+      "sha256": "d8bdf7970bc64fc7cf8f7e3251a97e94ba60c4908effcc50bee2b91af489efdd"
+    },
+    {
+      "path": "_down tap note model.txt",
+      "sha256": "f9098ed6651a5a8cb8d749c8072c41ae220dc801a39bda97449ffa1423e7a714"
+    },
+    {
+      "path": "_left tap lift materials.txt",
+      "sha256": "44bc4ecedefd524b3c6fbd30fee6fb6e10603b63c66cfbe0e0a1fc67f721cbd8"
+    },
+    {
+      "path": "_left tap note materials.txt",
+      "sha256": "6da8e6508c1e5608a0ad8de9f365cff640f811682711c7ad4822441818cb89d9"
+    },
+    {
+      "path": "_mine ani tex.ini",
+      "sha256": "2cdec7fe3b5982a5897e03126b8ccfb67d2017a57cd829d863ba6285e0182c6e"
+    },
+    {
+      "path": "_mine model.txt",
+      "sha256": "27501dc2fe3030a9e36da990423f4d48fd829676e53bb7590add3e59e551e1e7"
+    },
+    {
+      "path": "_right tap lift materials.txt",
+      "sha256": "7fb1322f7d93b3f3c0195b28a28b85f11993afb9054510e9e2bd851d2f1a6ac2"
+    },
+    {
+      "path": "_right tap note materials.txt",
+      "sha256": "1e87414836980322a406a9e3c3ab093604dde59c34325ba49b5933774103004f"
+    },
+    {
+      "path": "_up tap lift materials.txt",
+      "sha256": "d0db552d5149f086a243de246644fee26ebca1922734364f944b4dc56d68f3ce"
+    },
+    {
+      "path": "_up tap note materials.txt",
+      "sha256": "380e27e77fca95d741bb6f2078f679f00b798c09c6d43ef950dea9e7c06820a5"
+    },
+    {
+      "path": "Center Receptor.lua",
+      "sha256": "a6f53c26c19e8378c0f658d5252df65a43a5df0c6469b5f71c9cd825f078b725"
+    },
+    {
+      "path": "Center Tap Lift.lua",
+      "sha256": "a19834e4cff7dd24a811ef1611c1e61e6c1d897a5700591c58230c0ba6a6482e"
+    },
+    {
+      "path": "Center Tap Note.lua",
+      "sha256": "b46bfae3b0c052e52b6c4f0dd1c06f09cacc50aea89d9793c6e2733383418680"
+    },
+    {
+      "path": "Down Receptor.lua",
+      "sha256": "0001d8b9539bb6a4b169efcab68ab983ce206f3d4c912495caf654e41b390aa3"
+    },
+    {
+      "path": "Down Tap Lift.lua",
+      "sha256": "1451f53e0502210459d9682e131f7b22c955b6e293d998552222b02949d623ea"
+    },
+    {
+      "path": "Down Tap Mine.lua",
+      "sha256": "f3a57f0dfdbde60970012facff09620a8b8d6f0efc0adc1da225b19363c14fa7"
+    },
+    {
+      "path": "Down Tap Note.lua",
+      "sha256": "3d0e4402a272db911d454f5c068d82f3356410f41ee16a70f663e101732fdeb4"
+    },
+    {
+      "path": "Left Receptor.lua",
+      "sha256": "a4b0ec7a7539d53b847539d92b0d104929bffa1485aaa6076501c3dd412a8d70"
+    },
+    {
+      "path": "Left Tap Lift.lua",
+      "sha256": "0e00648b5379903ba65643a7f2e094e87ba2221d158194bfa8c8c57db21a6432"
+    },
+    {
+      "path": "Left Tap Note.lua",
+      "sha256": "ff39cb8abc7b896074bbd62aea81a1deb9bd4a895dc1a81d9ba907eea282063a"
+    },
+    {
+      "path": "metrics.ini",
+      "sha256": "18a051821bfab88bf783bb8e9f1d88d4e5a2c9980f9f0a3d2c145d8db18a77c6"
+    },
+    {
+      "path": "NoteSkin.lua",
+      "sha256": "302d04c1019de774a4bb27a6a6536d6988ad599fd63ae3c5c39891f3e4e114d2"
+    },
+    {
+      "path": "Right Receptor.lua",
+      "sha256": "83a78bfd5cc490ea2efecbcc5617905f1ffe742dad84827428426d94fae618de"
+    },
+    {
+      "path": "Right Tap Lift.lua",
+      "sha256": "4e74ffb527b485a718842f2fe64d327e6d25d80466061fe978acc4b9e6a62b15"
+    },
+    {
+      "path": "Right Tap Note.lua",
+      "sha256": "70833755180d556a3f1fcbaa9d1944a6c0c0c305bf0f0684e58b3fe1c765412c"
+    },
+    {
+      "path": "textures/Down Tap Note ani texture.ini",
+      "sha256": "df07766f89165f940d630d6fd34bf859e113279c1a6174b58d4b76f523d39945"
+    },
+    {
+      "path": "textures/glow ani texture.ini",
+      "sha256": "e79ac092d18ef635abaac3216ae6f7d82963152f75f002795eff466ffbca4795"
+    },
+    {
+      "path": "textures/Left Tap Note ani texture.ini",
+      "sha256": "0a6bd2136f1a18f796198a38c1a35cb0a4760b7c32f82c853a5a2f3bb909ae11"
+    },
+    {
+      "path": "textures/Right Tap Note ani texture.ini",
+      "sha256": "df363bfbd5b186fcfd27ded495b36b8da7d374173757e5288cfa15394d74651b"
+    },
+    {
+      "path": "textures/Up Tap Note ani texture.ini",
+      "sha256": "965b35833caaca25acc1751afb4b7cd9ccaa5ab752b9478ababbc963fdf3633c"
+    },
+    {
+      "path": "Up Receptor.lua",
+      "sha256": "01b540e9971c982733746a7673da2faaf07d3d93ac2694becf0c745f618b6dd5"
+    },
+    {
+      "path": "Up Tap Lift.lua",
+      "sha256": "31295bb2f3307a43a5f87a3232338bffcb9d1b0211de3ca78ebb203be1e447cf"
+    },
+    {
+      "path": "Up Tap Note.lua",
+      "sha256": "deeda9cdd72f58e4eae505a20088567b58790f922daba2aa64a7a1a56b0c0395"
+    }
+  ]
+}

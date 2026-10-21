@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 Native Model texture requests and stretch metadata from harness 0.1.43.
 
 The source is a 5x9 RGBA PNG. ModelTypes.cpp requests stretch, mipmaps and

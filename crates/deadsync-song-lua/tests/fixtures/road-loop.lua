@@ -1,4 +1,5 @@
-local road
+-- ActorFrames own updates; observer frames retain their original sibling order.
+local road, witness
 return Def.ActorFrame {
     Def.Quad {
         Name = "Road",
@@ -8,10 +9,13 @@ return Def.ActorFrame {
             self:linear((480/115)/2):y(-1024):sleep(0):y(0):queuecommand("Loop")
         end,
     },
-    Def.Quad {
-        Name = "Witness",
+    Def.ActorFrame {
         OnCommand = function(self)
-            self:SetUpdateFunction(function(self) self:x(road:GetY()) end)
+            self:SetUpdateFunction(function() witness:x(road:GetY()) end)
         end,
+        Def.Quad {
+            Name = "Witness",
+            InitCommand = function(self) witness = self end,
+        },
     },
 }

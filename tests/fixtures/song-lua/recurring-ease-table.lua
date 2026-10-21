@@ -1,3 +1,4 @@
+-- ActorFrames own updates; observer frames retain their original sibling order.
 local globalValues = { amount = 0, calls = 0 }
 mods_ease = {
     {1, 2, 4, 12, function(value)
@@ -25,26 +26,36 @@ local function localReader()
             values.calls = values.calls + 1
         end},
     }
-    return Def.Quad{
-        Name = "LocalEaseTable",
-        InitCommand = function(self)
-            self:zoomto(10, 10)
-            self:SetUpdateFunction(function()
-                updateEntries(mods_ease, values, self)
+    return Def.ActorFrame {
+        OnCommand = function(frame)
+            local quad = frame:GetChild("LocalEaseTable")
+            frame:SetUpdateFunction(function()
+                updateEntries(mods_ease, values, quad)
             end)
         end,
+        Def.Quad{
+            Name = "LocalEaseTable",
+            InitCommand = function(self)
+                self:zoomto(10, 10)
+            end,
+        }
     }
 end
 
 return Def.ActorFrame{
-    Def.Quad{
-        Name = "GlobalEaseTable",
-        InitCommand = function(self)
-            self:zoomto(10, 10)
-            self:SetUpdateFunction(function()
-                updateEntries(mods_ease, globalValues, self)
+    Def.ActorFrame {
+        OnCommand = function(frame)
+            local quad = frame:GetChild("GlobalEaseTable")
+            frame:SetUpdateFunction(function()
+                updateEntries(mods_ease, globalValues, quad)
             end)
         end,
+        Def.Quad{
+            Name = "GlobalEaseTable",
+            InitCommand = function(self)
+                self:zoomto(10, 10)
+            end,
+        }
     },
     localReader(),
 }

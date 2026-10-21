@@ -152,8 +152,10 @@ fn lua_align_matches_native() {
             f32_array::<2>(&native["alignment"]),
             "{name}"
         );
-        let mut actual =
-            crop_fade_vertices(overlay.initial_state, overlay.initial_state.size.unwrap());
+        // The crop/fade adapter accepts drawn size; zoomto scales a unit Quad
+        // without replacing its intrinsic geometry.
+        let size = deadsync_song_lua::overlay_state_axis_scale(overlay.initial_state);
+        let mut actual = crop_fade_vertices(overlay.initial_state, size);
         actual.sort_by(|a, b| {
             a.position[1]
                 .total_cmp(&b.position[1])

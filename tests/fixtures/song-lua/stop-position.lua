@@ -1,3 +1,4 @@
+-- ActorFrames own updates; observer frames retain their original sibling order.
 local target
 local stopped = false
 return Def.ActorFrame{
@@ -22,12 +23,17 @@ return Def.ActorFrame{
                 :linear(.5):x(400):y(500):z(200)
         end,
     },
-    Def.Quad{
-        Name="Witness",
-        OnCommand=function(self)
-            self:SetUpdateFunction(function(self)
+    Def.ActorFrame {
+        OnCommand = function(frame)
+            local quad = frame:GetChild("Witness")
+            local self = quad
+            local update = function(self)
                 self:x(target:GetDestX()):y(target:GetDestY()):z(target:GetDestZ())
-            end)
+            end
+            frame:SetUpdateFunction(function(_, delta) update(quad, delta) end)
         end,
+        Def.Quad{
+            Name="Witness",
+        }
     },
 }

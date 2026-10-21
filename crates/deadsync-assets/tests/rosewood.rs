@@ -1,23 +1,24 @@
-//! Optional validation against the original song, without installing its skin.
+//! Reduced parser fixture with generated artwork, without installing its skin.
+#[path = "support/skin_fixture.rs"]
+mod skin_fixture;
 use deadsync_assets::{init_paths, noteskin, song_lua};
 use deadsync_config::dirs::AppDirs;
 use deadsync_song_lua::SongLuaCompileContext;
 use std::path::PathBuf;
 
 #[test]
-#[ignore = "requires DEADSYNC_ROSEWOOD pointing to the VANITY ANGEL song directory"]
 fn rosewood_loads_skin_and_compiles_chart() {
-    let song = PathBuf::from(std::env::var_os("DEADSYNC_ROSEWOOD").expect("set DEADSYNC_ROSEWOOD"))
-        .canonicalize()
-        .unwrap();
+    let temporary = tempfile::tempdir().unwrap();
+    let song = temporary.path().join("song");
+    skin_fixture::install("rosewood", &song);
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
         .unwrap();
     let dirs = AppDirs {
-        data_dir: workspace.clone(),
+        data_dir: temporary.path().join("data"),
         exe_dir: workspace.clone(),
-        cache_dir: workspace.join("target/rosewood-check"),
+        cache_dir: temporary.path().join("cache"),
         portable: true,
     };
     init_paths(dirs.asset_paths(Some(&workspace))).unwrap();
@@ -117,9 +118,9 @@ fn rosewood_loads_skin_and_compiles_chart() {
     let mut context = SongLuaCompileContext::new(&song, "VANITY ANGEL");
     context.song_music_rate = 1.0;
     context.song_timing_bpms = vec![(0.0, 140.0)];
-    context.music_length_seconds = 96.0;
+    context.music_length_seconds = 2.0;
     let compiled = song_lua::compile_song_lua(&song.join("lua/default.lua"), &context)
-        .expect("original chart compiles");
+        .expect("reduced intro fixture compiles");
     assert_eq!(
         compiled.startup.noteskins,
         [

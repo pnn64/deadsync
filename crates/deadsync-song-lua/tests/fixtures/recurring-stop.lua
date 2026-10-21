@@ -1,3 +1,4 @@
+-- ActorFrames own updates; observer frames retain their original sibling order.
 local pools = {{}, {}}
 local cursor, nextSpawn, calls = 1, 1, 0
 local driver
@@ -43,13 +44,18 @@ return Def.ActorFrame {
         DoneCommand = function(self) self:aux(1000) end,
     },
     trail(2, 1), trail(2, 2), trail(2, 3),
-    Def.Quad {
-        Name = "Witness",
-        InitCommand = function(self) self:zoomto(16, 16) end,
-        OnCommand = function(self)
-            self:SetUpdateFunction(function(actor)
+    Def.ActorFrame {
+        OnCommand = function(frame)
+            local quad = frame:GetChild("Witness")
+            local self = quad
+            local update = function(actor)
                 actor:x(driver:GetX()):y(driver:GetY())
-            end)
+            end
+            frame:SetUpdateFunction(function(_, delta) update(quad, delta) end)
         end,
+        Def.Quad {
+            Name = "Witness",
+            InitCommand = function(self) self:zoomto(16, 16) end,
+        }
     },
 }

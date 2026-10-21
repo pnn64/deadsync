@@ -4,7 +4,7 @@ return Def.ActorFrame {
         self:SetUpdateFunction(function()
             local seconds = GAMESTATE:GetSongPosition():GetMusicSeconds()
             if sent == 0 and seconds >= 1 then
-                sent = 1; MESSAGEMAN:Broadcast('Begin')
+                sent = 1; MESSAGEMAN:Broadcast('StartWrapper')
             elseif sent == 1 and seconds >= 2 then
                 sent = 2; MESSAGEMAN:Broadcast('Fade')
             end
@@ -13,7 +13,7 @@ return Def.ActorFrame {
     Def.Quad {
         Name = 'LateWrapper',
         InitCommand = function(self) self:setsize(40,20):xy(400,240) end,
-        BeginMessageCommand = function(self)
+        StartWrapperMessageCommand = function(self)
             self:AddWrapperState():vibrate():effectmagnitude(10,10,10)
             self:linear(3):y(240)
         end,

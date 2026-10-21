@@ -1,0 +1,476 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "exports": [
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/native.json",
+      "case_index": 0,
+      "case_name": "rgb16-strip",
+      "pointer": "/cases/0/loaded/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/rgb16-strip.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/native.json",
+      "case_index": 1,
+      "case_name": "rgba16-strip",
+      "pointer": "/cases/1/loaded/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/rgba16-strip.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/native.json",
+      "case_index": 2,
+      "case_name": "gray16-strip",
+      "pointer": "/cases/2/loaded/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/gray16-strip.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/native.json",
+      "case_index": 3,
+      "case_name": "gray-alpha16-strip",
+      "pointer": "/cases/3/loaded/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/gray-alpha16-strip.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 0,
+      "case_name": "win1-model",
+      "pointer": "/cases/0/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win1-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 1,
+      "case_name": "win1-sprite",
+      "pointer": "/cases/1/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win1-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 2,
+      "case_name": "os2-1-model",
+      "pointer": "/cases/2/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-1-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 3,
+      "case_name": "os2-1-sprite",
+      "pointer": "/cases/3/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-1-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 4,
+      "case_name": "win4-model",
+      "pointer": "/cases/4/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 5,
+      "case_name": "win4-sprite",
+      "pointer": "/cases/5/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 6,
+      "case_name": "os2-4-model",
+      "pointer": "/cases/6/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-4-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 7,
+      "case_name": "os2-4-sprite",
+      "pointer": "/cases/7/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-4-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 8,
+      "case_name": "win8-model",
+      "pointer": "/cases/8/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 9,
+      "case_name": "win8-sprite",
+      "pointer": "/cases/9/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 10,
+      "case_name": "os2-8-model",
+      "pointer": "/cases/10/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-8-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 11,
+      "case_name": "os2-8-sprite",
+      "pointer": "/cases/11/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-8-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 12,
+      "case_name": "win4-odd-model",
+      "pointer": "/cases/12/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4-odd-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 13,
+      "case_name": "win8-odd-model",
+      "pointer": "/cases/13/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-odd-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 14,
+      "case_name": "win8-unused-entry-model",
+      "pointer": "/cases/14/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-unused-entry-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 15,
+      "case_name": "win8-unused-entry-sprite",
+      "pointer": "/cases/15/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-unused-entry-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 16,
+      "case_name": "win8-both-pinks-model",
+      "pointer": "/cases/16/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-both-pinks-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 17,
+      "case_name": "win8-both-pinks-sprite",
+      "pointer": "/cases/17/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-both-pinks-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 18,
+      "case_name": "gif-global-model",
+      "pointer": "/cases/18/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-global-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 19,
+      "case_name": "gif-global-sprite",
+      "pointer": "/cases/19/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-global-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 20,
+      "case_name": "gif-local-model",
+      "pointer": "/cases/20/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-local-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 21,
+      "case_name": "gif-local-sprite",
+      "pointer": "/cases/21/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-local-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 22,
+      "case_name": "gif-offset-model",
+      "pointer": "/cases/22/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-offset-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 23,
+      "case_name": "gif-offset-sprite",
+      "pointer": "/cases/23/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-offset-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 24,
+      "case_name": "gif-interlaced-model",
+      "pointer": "/cases/24/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-interlaced-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 25,
+      "case_name": "gif-interlaced-sprite",
+      "pointer": "/cases/25/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-interlaced-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 26,
+      "case_name": "gif-first-frame-model",
+      "pointer": "/cases/26/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-first-frame-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 27,
+      "case_name": "gif-first-frame-sprite",
+      "pointer": "/cases/27/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-first-frame-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 28,
+      "case_name": "gif-transparent-pink-model",
+      "pointer": "/cases/28/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-transparent-pink-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 29,
+      "case_name": "gif-transparent-pink-sprite",
+      "pointer": "/cases/29/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-transparent-pink-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 30,
+      "case_name": "gif-both-pinks-model",
+      "pointer": "/cases/30/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-both-pinks-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 31,
+      "case_name": "gif-both-pinks-sprite",
+      "pointer": "/cases/31/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-both-pinks-sprite.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "case_index": 32,
+      "case_name": "gif-odd-model",
+      "pointer": "/cases/32/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-odd-model.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 0,
+      "case_name": "model-pink-npot",
+      "pointer": "/cases/0/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/model-pink-npot.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 1,
+      "case_name": "off-pink-top-edge",
+      "pointer": "/cases/1/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/off-pink-top-edge.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 2,
+      "case_name": "off-pink-side-middle",
+      "pointer": "/cases/2/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/off-pink-side-middle.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 3,
+      "case_name": "partial-alpha-pink",
+      "pointer": "/cases/3/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/partial-alpha-pink.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 4,
+      "case_name": "rgb-key-adds-alpha",
+      "pointer": "/cases/4/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/rgb-key-adds-alpha.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 5,
+      "case_name": "palette-keys-both-pinks",
+      "pointer": "/cases/5/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/palette-keys-both-pinks.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 6,
+      "case_name": "transparent-hidden-rgb",
+      "pointer": "/cases/6/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/transparent-hidden-rgb.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 7,
+      "case_name": "uniform-hidden-rgb",
+      "pointer": "/cases/7/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/uniform-hidden-rgb.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 8,
+      "case_name": "mixed-hidden-rgb",
+      "pointer": "/cases/8/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/mixed-hidden-rgb.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 9,
+      "case_name": "npot-linear-stretch",
+      "pointer": "/cases/9/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/npot-linear-stretch.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 10,
+      "case_name": "iterative-reduction",
+      "pointer": "/cases/10/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/iterative-reduction.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 11,
+      "case_name": "one-pixel-expansion",
+      "pointer": "/cases/11/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/one-pixel-expansion.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 12,
+      "case_name": "palette-duplicates",
+      "pointer": "/cases/12/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/palette-duplicates.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 13,
+      "case_name": "palette-packed-duplicates",
+      "pointer": "/cases/13/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/palette-packed-duplicates.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 14,
+      "case_name": "palette-partial-alpha",
+      "pointer": "/cases/14/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/palette-partial-alpha.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 15,
+      "case_name": "rgba16-strip",
+      "pointer": "/cases/15/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/rgba16-strip.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 16,
+      "case_name": "rgb16-strip",
+      "pointer": "/cases/16/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/rgb16-strip.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 17,
+      "case_name": "gray2-expand",
+      "pointer": "/cases/17/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/gray2-expand.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 18,
+      "case_name": "model-max-size",
+      "pointer": "/cases/18/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/model-max-size.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 19,
+      "case_name": "iterative-odd-reduction",
+      "pointer": "/cases/19/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/iterative-odd-reduction.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "case_index": 20,
+      "case_name": "model-mixed-axis",
+      "pointer": "/cases/20/output_pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/model-mixed-axis.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 0,
+      "case_name": "tiny",
+      "pointer": "/cases/0/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/tiny.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 1,
+      "case_name": "tiny-wide",
+      "pointer": "/cases/1/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/tiny-wide.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 2,
+      "case_name": "tiny-tall",
+      "pointer": "/cases/2/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/tiny-tall.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 3,
+      "case_name": "unit",
+      "pointer": "/cases/3/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/unit.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 4,
+      "case_name": "stretch",
+      "pointer": "/cases/4/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/stretch.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 6,
+      "case_name": "hires-off",
+      "pointer": "/cases/6/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/hires-off.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 7,
+      "case_name": "capped-tiny",
+      "pointer": "/cases/7/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/capped-tiny.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 8,
+      "case_name": "sheet",
+      "pointer": "/cases/8/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/sheet.rgba"
+    },
+    {
+      "capture": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "case_index": 9,
+      "case_name": "resolution",
+      "pointer": "/cases/9/upload/pixels",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/resolution.rgba"
+    }
+  ]
+}

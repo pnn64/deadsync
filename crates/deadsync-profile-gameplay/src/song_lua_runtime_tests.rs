@@ -1435,23 +1435,30 @@ fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
         "no interpolation toward a future swap"
     );
     advance(&mut runtime, swap_at, dt);
+    assert_eq!(runtime.visual[0].invert, Some(0.0), "actor writes follow the native options update");
+    advance(&mut runtime, swap_at + dt, dt);
     assert_eq!(
         runtime.visual[0].invert,
         Some(1.0),
         "1000 units/s swaps within one frame"
     );
     advance(&mut runtime, merge_at - dt, 1.0);
-    for frame in 0..24 {
+    for frame in 0..=24 {
         advance(&mut runtime, merge_at + frame as f32 * dt, dt);
-        // PlayerOptions::Approach uses speed * seconds, in option units.
-        let amount = 10.0 * (frame + 1) as f32 * dt;
+        // PlayerState::Update approaches the prior frame's target before the
+        // recurring actor command writes the new Song options.
+        let amount = 10.0 * frame as f32 * dt;
         assert!((runtime.visual[0].flip.expect("flip") - amount.min(0.5)).abs() < 0.00001);
+        let mini = if frame == 0 { runtime.mini_percent[0].unwrap_or(0.0) }
+            else { runtime.mini_percent[0].expect("mini after target update") };
         assert!(
-            (runtime.mini_percent[0].expect("mini") + amount.min(1.0) * 100.0).abs() < 0.0001,
+            (mini + amount.min(1.0) * 100.0).abs() < 0.0001,
             "frame {frame}: mini={:?}, amount={amount}",
             runtime.mini_percent[0]
         );
-        assert!((runtime.scroll[0].reverse.expect("reverse") - amount.min(0.1)).abs() < 0.00001);
+        let reverse = if frame == 0 { runtime.scroll[0].reverse.unwrap_or(0.0) }
+            else { runtime.scroll[0].reverse.expect("reverse after target update") };
+        assert!((reverse - amount.min(0.1)).abs() < 0.00001);
     }
 }
 

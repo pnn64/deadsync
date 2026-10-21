@@ -62,5 +62,6 @@
   "compared_rgba_bytes": 69776,
   "byte_tolerance": 0,
   "framebuffer_verified": false,
-  "scope": "Compiled ApplyHotPinkColorKey, Zoom and FixHiddenAlpha on explicit decoded surfaces. PNG encodings follow local RageSurface_Load_PNG source. Native PNG loader and full RageBitmapTexture/GPU policy are not executed."
+  "scope": "Historical capture metadata. native.json is now refreshed with harness 0.1.95; its current inputs, binary, source revision and output hash are recorded in the current capture receipt.",
+  "current_capture_receipt": "../native-capture-manifest.json"
 }

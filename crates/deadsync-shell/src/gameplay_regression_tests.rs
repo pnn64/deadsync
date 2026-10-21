@@ -9,6 +9,10 @@ use deadsync_gameplay::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
+#[cfg(test)]
+#[path = "../../../tests/support/song_fixture.rs"]
+mod song_fixture;
+
 use deadsync_profile_gameplay::GameplayProfile;
 
 type State = deadsync_theme_simply_love::screens::gameplay::GameplayCoreState;
@@ -676,6 +680,19 @@ mod tests {
         )
     }
 
+    /// The compiled compositor tests inspect baked tracks before advancing a
+    /// frame. Live playback has a separate integration fixture below; it does
+    /// not expose future note-hide/ease windows or promise flattened actors.
+    fn build_compiled_test_state(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+    ) -> screen_gameplay::State {
+        build_test_state_with_renderer_horizon(simfile, viewport, session, player_profiles,
+            &deadlib_render_core::BackendType::Software.to_string(), Some(32.0))
+    }
+
     fn build_test_state_with_renderer(
         simfile: &Path,
         viewport: GameplayViewport,
@@ -822,6 +839,19 @@ mod tests {
             music_time,
         ));
         refresh_active_attack_masks(&mut state.gameplay, 0.0);
+        if state.song_lua.is_some() {
+            // Foreground::Update dispatches On at the authored starting beat;
+            // changing the simulation clock alone does not activate actors.
+            screen_gameplay::update(state, 0.0, deadsync_gameplay::GameplayAudioSnapshot {
+                stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                    music_nanos: deadsync_core::song_time::song_time_ns_from_seconds(music_time),
+                    has_music_mapping: true, valid_at_host_nanos: 1_000_000,
+                    ..Default::default()
+                }, ..Default::default()
+            }, || 1_000_000, &mut Vec::new());
+            let output = state.take_song_lua_output();
+            assert!(output.errors.is_empty(), "fixture Lua frame failed: {:?}", output.errors);
+        }
     }
 
     fn add_sprite_core_feedback(
@@ -3478,6 +3508,7 @@ M000
 
     fn generated_pipeline_song_lua() -> &'static str {
         r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local player = nil
 local capture = nil
 local local_target = nil
@@ -3706,7 +3737,7 @@ return root
             || {
                 space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
                 space::set_current_window_px(640, 480);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(640.0, 480.0),
                     GameplaySession::default(),
@@ -3744,6 +3775,8 @@ return root
         fs::create_dir_all(&lua_dir).unwrap();
         let lua_entry = lua_dir.join("default.lua");
         fs::write(&lua_entry, generated_pipeline_song_lua()).unwrap();
+        fs::write(simfile.parent().unwrap().join("easing.lua"),
+            include_str!("../../../tests/fixtures/song_lua/easing.lua")).unwrap();
         simfile
     }
 
@@ -3897,7 +3930,7 @@ return root
                 profiles[0].display_name = "PixelSafePlayer".to_string();
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -4187,7 +4220,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -4196,8 +4229,9 @@ return Def.ActorFrame{
                 set_fixture_time(&mut state, 2.5);
                 let visuals = state.gameplay.song_lua_visuals();
                 assert!(visuals.overlays.iter().any(|overlay| {
-                    overlay.parent_index.is_none()
-                        && matches!(
+                    // An ordinary ActorFrame parent does not make this an AFT
+                    // proxy. The direct-segment assertions below verify that.
+                    matches!(
                             overlay.kind,
                             deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
                                 target: deadsync_assets::song_lua::SongLuaProxyTarget::NoteField {
@@ -4300,7 +4334,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new(skin);
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     simfile,
                     GameplayViewport::new(640.0, 480.0),
                     GameplaySession::default(),
@@ -4448,7 +4482,8 @@ return Def.ActorFrame{
                 space::set_current_window_px(1280, 720);
                 let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
-                let mut state = build_test_state(
+                profiles[0].display_name = "OverlayFooter".into();
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -4471,12 +4506,15 @@ return Def.ActorFrame{
                     if time > 0.0 {
                         assert!(actor_tree_has_text(&actors, "."));
                     }
-                    let actual = top_screen_text_draw(&actors, "EVENT", 0, 1.0)
+                    let actual = top_screen_text_draw(&actors, "OverlayFooter", 0, 1.0)
                         .map_or(0.0, |(_, alpha)| alpha);
                     assert!(
                         (actual - alpha).abs() < 0.02,
                         "footer fade at {time}: {actual} != {alpha}"
                     );
+                    // Simply Love's Event label belongs to In, a sibling of
+                    // Overlay. The score proxy must not make Overlay own it.
+                    assert_eq!(top_screen_text_draw(&actors, "EVENT", 0, 1.0).unwrap().1, 1.0);
                 }
             },
         );
@@ -4484,10 +4522,10 @@ return Def.ActorFrame{
 
     #[cfg(target_os = "windows")]
     #[test]
-    #[ignore = "requires the local lua-songs corpus and a GPU with surface readback"]
+    #[ignore = "long song-fixture playback and GPU readback regression"]
     fn lake_hold_bodies_draw_under_lua_player_callback() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc");
+        let fixture = song_fixture::from_source("Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc");
+        let simfile = fixture.simfile.clone();
         use winit::platform::windows::EventLoopBuilderExtWindows;
         let event_loop = winit::event_loop::EventLoop::builder()
             .with_any_thread(true)
@@ -4692,7 +4730,7 @@ return Def.ActorFrame{
                     .unwrap();
                     fs::write(dir.join("bg/default.lua"), "return Def.ActorFrame{}").unwrap();
                     let profiles = std::array::from_fn(|_| profile_data::Profile::default());
-                    let mut state = build_test_state(
+                    let mut state = build_compiled_test_state(
                         &path,
                         GameplayViewport::design(),
                         GameplaySession::default(),
@@ -4861,10 +4899,10 @@ return Def.ActorFrame{
     }
 
     #[test]
-    #[ignore = "requires the local Mawaruchi Surviver source chart"]
+    #[ignore = "long full-song Mawaru transition and GPU readback regression"]
     fn mawaru7_compiled_notefield_transitions() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../rework/lua-songs/mawaru7/mawaru7.sm");
+        let fixture = song_fixture::from_source("mawaru7/mawaru7.sm");
+        let simfile = fixture.simfile.clone();
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -5204,10 +5242,10 @@ return Def.ActorFrame{
     }
 
     #[test]
-    #[ignore = "requires the local 7th Gear source chart"]
+    #[ignore = "long full-song 7th Gear native geometry regression"]
     fn seventh_saved_mini_reaches_aft_receptors() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../rework/lua-songs/7th Gear/7th Gear.ssc");
+        let fixture = song_fixture::from_source("7th Gear/7th Gear.ssc");
+        let simfile = fixture.simfile.clone();
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -5830,10 +5868,10 @@ return Def.ActorFrame{
     }
 
     #[test]
-    #[ignore = "requires the local lua-songs corpus and GPU readback on Windows"]
+    #[ignore = "full-song fixture with GPU readback on Windows"]
     fn bank_account_draws_complete_proxy_stack() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Bank Account/Bank Account.ssc");
+        let fixture = song_fixture::from_source("Bank Account/Bank Account.ssc");
+        let simfile = fixture.simfile.clone();
         with_session(
             profile_data::PlayStyle::Versus,
             profile_data::PlayerSide::P1,
@@ -6028,20 +6066,20 @@ return Def.ActorFrame{
     }
 
     #[test]
-    #[ignore = "requires the local lua-songs reference corpus"]
+    #[ignore = "long full-song compiled render comparison"]
     fn delightful_day_player_proxy_draws_noteskin_instances() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Delightful Day/Delightful Day.ssc");
+        let fixture = song_fixture::from_source("Delightful Day/Delightful Day.ssc");
+        let simfile = fixture.simfile.clone();
         for skin in ["lambda", "cel"] {
             assert_proxy_note_draws(&simfile, skin, 15.0);
         }
     }
 
     #[test]
-    #[ignore = "requires the local lua-songs corpus, ffmpeg/ffprobe and GPU readback on Windows"]
+    #[ignore = "long song-fixture video export and GPU readback regression"]
     fn delightful_day_hides_theme_and_keeps_video() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Delightful Day/Delightful Day.ssc");
+        let fixture = song_fixture::from_source("Delightful Day/Delightful Day.ssc");
+        let simfile = fixture.simfile.clone();
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -6285,7 +6323,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -6353,7 +6391,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -6426,7 +6464,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -6496,7 +6534,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -6506,8 +6544,9 @@ return Def.ActorFrame{
                 add_sprite_core_feedback(&mut state, 0, 0, 100);
                 let visuals = state.gameplay.song_lua_visuals();
                 assert!(visuals.overlays.iter().any(|overlay| {
-                    overlay.parent_index.is_none()
-                        && matches!(
+                    // An ordinary ActorFrame parent does not make this an AFT
+                    // proxy. The direct-segment assertions below verify that.
+                    matches!(
                             overlay.kind,
                             deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
                                 target: deadsync_assets::song_lua::SongLuaProxyTarget::Combo {
@@ -6581,7 +6620,7 @@ return Def.ActorFrame{
                         ];
                         profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                         profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                        let mut state = build_test_state(
+                        let mut state = build_compiled_test_state(
                             &simfile,
                             GameplayViewport::new(1280.0, 720.0),
                             GameplaySession::default(),
@@ -7046,6 +7085,7 @@ return Def.ActorFrame{
 
     fn generated_runtime_mod_lua() -> &'static str {
         r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {0, 9999, "*1000 no beat, *1000 no drunk, *1000 no tipsy, *1000 no invert, *1000 no flip, *1000 no dizzy", "end"},
 }
@@ -7130,6 +7170,8 @@ return Def.ActorFrame{}
         let lua_dir = song_dir.join("lua");
         fs::create_dir_all(&lua_dir).unwrap();
         fs::write(lua_dir.join("default.lua"), generated_runtime_mod_lua()).unwrap();
+        fs::write(song_dir.join("easing.lua"),
+            include_str!("../../../tests/fixtures/song_lua/easing.lua")).unwrap();
         let simfile = song_dir.join("generated_lua_regression.ssc");
         fs::write(&simfile, generated_lua_song_simfile()).unwrap();
         simfile

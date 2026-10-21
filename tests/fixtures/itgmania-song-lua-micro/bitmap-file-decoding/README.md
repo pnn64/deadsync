@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 The committed harness 0.1.46 (`17e23b4`) loaded these four PNG files through
 ITGmania's pinned `RageSurface_Load_PNG.cpp` and libpng. `native.json` contains
 the actual decoded pixels and bitmap upload metadata. Each `.rgba` is an exact

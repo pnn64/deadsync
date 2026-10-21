@@ -164,16 +164,22 @@ fn child_directory_filter_matches_original_and_preserves_errors() {
 }
 
 #[test]
-#[cfg_attr(windows, ignore = "requires Windows symbolic-link privilege")]
-fn child_directory_filter_preserves_symlinks() {
+fn child_directory_filter_preserves_links() {
     let root = directory_fixture("filter-symlinks", 1, 1, 0);
     #[cfg(windows)]
     {
-        std::os::windows::fs::symlink_dir(root.join("Pack 0000"), root.join("linked-pack"))
-            .unwrap();
-        std::os::windows::fs::symlink_file(root.join("chart-0000.ssc"), root.join("linked-file"))
-            .unwrap();
-        std::os::windows::fs::symlink_dir(root.join("missing"), root.join("broken-link")).unwrap();
+        use std::os::windows::process::CommandExt;
+        // Junctions exercise directory reparse points without requiring admin
+        // privileges or Developer Mode. Both targets belong to this fixture.
+        for (target, link) in [("Pack 0000", "linked-pack"), ("missing", "broken-link")] {
+            let output = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(root.join(link)).arg(root.join(target))
+                .creation_flags(0x0800_0000)
+                .output().unwrap();
+            assert!(output.status.success(), "junction fixture: {output:?}");
+        }
+        fs::hard_link(root.join("chart-0000.ssc"), root.join("linked-file")).unwrap();
     }
     #[cfg(unix)]
     {

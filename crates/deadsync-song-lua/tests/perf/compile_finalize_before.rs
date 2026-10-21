@@ -281,7 +281,7 @@ where
         // the process Lua VM. Reinstalling the host would reset GAMESTATE,
         // authored globals, player options and the random generator.
         crate::host::replace_gameplay_screen(&lua, context,
-            create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+            create_dummy_actor, create_named_child_actor, install_actor_methods).map_err(|err| err.to_string())?;
     } else {
         install_compile_host(&lua, context, noteskin_resolver,
             create_dummy_actor, create_named_child_actor, install_actor_methods)
@@ -502,7 +502,7 @@ where
             crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
         }
         crate::host::replace_gameplay_screen(&lua, &scene_context,
-            create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+            create_dummy_actor, create_named_child_actor, install_actor_methods).map_err(|err| err.to_string())?;
         scene_context = crate::host::selected_scene_context(&lua, &scene_context)
             .map_err(|err| err.to_string())?;
         crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
