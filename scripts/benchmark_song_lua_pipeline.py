@@ -22,7 +22,7 @@ def main():
     parser.add_argument("--samples", type=int, default=9)
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -47,12 +47,17 @@ def main():
             ("offline_actor_state", "offline", "crates/deadsync-song-lua/tests/perf/actor_state.lua"),
             ("offline_sampling_buffers", "offline", "tests/fixtures/song_lua/sampling_buffers.lua"),
         ]
+    if args.suite == "finalization_events":
+        cases = [("offline_finalization_events", "offline", "crates/deadsync-song-lua/tests/perf/finalization_events.lua")]
     args.out.mkdir(parents=True, exist_ok=True)
     paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / name for name in sorted({case[2] for case in cases})]
     paths += [root / name for name in ["Cargo.toml", "Cargo.lock", ".cargo/config.toml",
         "crates/deadsync-song-lua/Cargo.toml", "crates/deadsync-song-lua/examples/compile_pipeline.rs",
         "tests/support/song_lua_metrics.rs", "scripts/benchmark_song_lua_pipeline.py"]]
+    if args.suite == "finalization_events":
+        paths += [root / "crates/deadsync-song-lua/tests/perf" / name
+                  for name in ["finalization-a 2x6.png", "finalization-b 2x6.png"]]
     sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []

@@ -1102,18 +1102,7 @@ where
             overlay.actor.kind = SongLuaOverlayKind::AftSprite { capture_name };
         }
     }
-    for overlay in &mut overlays {
-        if let SongLuaOverlayKind::Sprite { textures, .. } = &mut overlay.actor.kind {
-            let pointer = overlay.table.to_pointer() as usize;
-            let mut bindings = sprite_textures
-                .iter()
-                .filter(|(actor, _)| *actor == pointer)
-                .map(|(_, texture)| texture.clone())
-                .collect::<Vec<_>>();
-            bindings.sort_by(|a, b| a.second.total_cmp(&b.second));
-            *textures = bindings.into();
-        }
-    }
+    finalize_sprite_textures(&mut overlays, sprite_textures);
     let startup_seconds = 1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS;
     let startup_time = context.song_timing.as_ref().map_or_else(
         || crate::song_beat_at_elapsed_seconds(startup_seconds, context),
@@ -1287,38 +1276,7 @@ where
         });
         overlay_layers.push(primary_index);
     }
-    for tracked in tracked_actors {
-        match tracked.target {
-            TrackedCompileActorTarget::Player(player) => out.player_actors[player] = tracked.actor,
-            TrackedCompileActorTarget::PlayerJudgment(player) => {
-                out.player_actors[player].judgment = SongLuaCapturedChildActor {
-                    initial_state: tracked.actor.initial_state,
-                    message_commands: tracked.actor.message_commands,
-                    textures: {
-                        let mut textures = judgment_textures
-                            .iter()
-                            .filter(|(index, _)| *index == player)
-                            .map(|(_, texture)| texture.clone())
-                            .collect::<Vec<_>>();
-                        textures.sort_by(|a, b| a.second.total_cmp(&b.second));
-                        textures.dedup_by(|a, b| a.path == b.path);
-                        textures
-                    },
-                };
-            }
-            TrackedCompileActorTarget::PlayerCombo(player) => {
-                out.player_actors[player].combo = SongLuaCapturedChildActor {
-                    initial_state: tracked.actor.initial_state,
-                    message_commands: tracked.actor.message_commands,
-                    ..SongLuaCapturedChildActor::default()
-                };
-            }
-            TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
-            TrackedCompileActorTarget::ScreenLayer(index) => {
-                out.screen_layers[index] = tracked.actor
-            }
-        }
-    }
+    finalize_tracked_actors(&mut out, tracked_actors, judgment_textures);
     out.hidden_players = hidden_players;
 
     sort_compiled_song_lua(&mut out);
@@ -1335,7 +1293,159 @@ where
     split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
 }
 
+// Earlier aliases receive independent lists; the final destination takes ownership.
+fn take_final_events<T: Clone>(events: &mut Vec<T>, remaining: &mut usize) -> Vec<T> {
+    if events.is_empty() {
+        return Vec::new();
+    }
+    *remaining -= 1;
+    if *remaining == 0 {
+        std::mem::take(events)
+    } else {
+        events.clone()
+    }
+}
+
+fn finalize_sprite_textures<NoteskinSlot, ModelVertex>(
+    overlays: &mut [crate::SongLuaOverlayCompileActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+    sprite_textures: Vec<(usize, crate::SongLuaSpriteTexture)>,
+) {
+    let mut groups =
+        rustc_hash::FxHashMap::<usize, (Vec<crate::SongLuaSpriteTexture>, usize)>::default();
+    if !sprite_textures.is_empty() {
+        for overlay in overlays.iter() {
+            if matches!(overlay.actor.kind, SongLuaOverlayKind::Sprite { .. }) {
+                groups
+                    .entry(overlay.table.to_pointer() as usize)
+                    .or_default()
+                    .1 += 1;
+            }
+        }
+        for (pointer, texture) in sprite_textures {
+            if let Some((events, _)) = groups.get_mut(&pointer) {
+                events.push(texture);
+            }
+        }
+        for (events, _) in groups.values_mut() {
+            events.sort_by(|a, b| a.second.total_cmp(&b.second));
+        }
+    }
+    for overlay in overlays {
+        if let SongLuaOverlayKind::Sprite { textures, .. } = &mut overlay.actor.kind {
+            *textures = if groups.is_empty() {
+                Vec::new()
+            } else {
+                let (events, remaining) = groups
+                    .get_mut(&(overlay.table.to_pointer() as usize))
+                    .unwrap();
+                take_final_events(events, remaining)
+            }
+            .into();
+        }
+    }
+}
+
+fn finalize_tracked_actors<NoteskinSlot, ModelVertex>(
+    out: &mut DefaultCompiledSongLua<NoteskinSlot, ModelVertex>,
+    tracked_actors: Vec<crate::SongLuaTrackedActor>,
+    judgment_textures: Vec<(usize, crate::SongLuaJudgmentTexture)>,
+) {
+    let mut groups: [(Vec<crate::SongLuaJudgmentTexture>, usize); crate::LUA_PLAYERS] =
+        std::array::from_fn(|_| (Vec::new(), 0));
+    if !judgment_textures.is_empty() {
+        for tracked in &tracked_actors {
+            if let TrackedCompileActorTarget::PlayerJudgment(player) = tracked.target {
+                groups[player].1 += 1;
+            }
+        }
+        for (player, texture) in judgment_textures {
+            if let Some((events, remaining)) = groups.get_mut(player) {
+                if *remaining != 0 {
+                    events.push(texture);
+                }
+            }
+        }
+        for (events, _) in &mut groups {
+            events.sort_by(|a, b| a.second.total_cmp(&b.second));
+            events.dedup_by(|a, b| a.path == b.path);
+        }
+    }
+    for tracked in tracked_actors {
+        match tracked.target {
+            TrackedCompileActorTarget::Player(player) => out.player_actors[player] = tracked.actor,
+            TrackedCompileActorTarget::PlayerJudgment(player) => {
+                out.player_actors[player].judgment = SongLuaCapturedChildActor {
+                    initial_state: tracked.actor.initial_state,
+                    message_commands: tracked.actor.message_commands,
+                    textures: {
+                        let (events, remaining) = &mut groups[player];
+                        take_final_events(events, remaining)
+                    },
+                };
+            }
+            TrackedCompileActorTarget::PlayerCombo(player) => {
+                out.player_actors[player].combo = SongLuaCapturedChildActor {
+                    initial_state: tracked.actor.initial_state,
+                    message_commands: tracked.actor.message_commands,
+                    ..SongLuaCapturedChildActor::default()
+                };
+            }
+            TrackedCompileActorTarget::SongForeground => out.song_foreground = tracked.actor,
+            TrackedCompileActorTarget::ScreenLayer(index) => {
+                out.screen_layers[index] = tracked.actor
+            }
+        }
+    }
+}
+
 fn merge_runtime_messages(
+    messages: &mut Vec<SongLuaMessageEvent>,
+    action_start: usize,
+    runtime_broadcasts: &[(f32, String, bool)],
+) {
+    if runtime_broadcasts.is_empty() {
+        return;
+    }
+    let action_end = messages.len();
+    if action_end - action_start < 32 || runtime_broadcasts.len() < 16 {
+        return merge_runtime_messages_linear(messages, action_start, runtime_broadcasts);
+    }
+    let mut by_name = rustc_hash::FxHashMap::<&str, Vec<&mut f32>>::default();
+    for event in &mut messages[action_start..action_end] {
+        if !event.message.starts_with("__songlua_overlay_fn_action_") && !event.beat.is_nan() {
+            by_name
+                .entry(event.message.as_str())
+                .or_default()
+                .push(&mut event.beat);
+        }
+    }
+    for beats in by_name.values_mut() {
+        // Stable sorting leaves the last original index last when beats tie.
+        beats.sort_by(|a, b| (**a).total_cmp(&**b));
+    }
+    let mut missing = Vec::new();
+    for (beat, name, _) in runtime_broadcasts {
+        if let Some(beats) = by_name.get_mut(name.as_str()) {
+            let end = beats.partition_point(|scheduled| **scheduled <= *beat + f32::EPSILON);
+            if end != 0 {
+                *beats.remove(end - 1) = *beat;
+                continue;
+            }
+        }
+        missing.push(SongLuaMessageEvent {
+            beat: *beat,
+            message: name.clone(),
+            persists: false,
+        });
+    }
+    // Appended events never participate in the original action window.
+    drop(by_name);
+    messages.extend(missing);
+}
+
+fn merge_runtime_messages_linear(
     messages: &mut Vec<SongLuaMessageEvent>,
     action_start: usize,
     runtime_broadcasts: &[(f32, String, bool)],
@@ -1792,3 +1902,7 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
 #[cfg(test)]
 #[path = "../tests/perf/compile_finalize.rs"]
 mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/finalization_events.rs"]
+mod finalization_events_perf;
