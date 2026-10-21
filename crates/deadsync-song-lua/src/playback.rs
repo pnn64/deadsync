@@ -59,6 +59,7 @@ pub type GameplayCoreState<P, S> = deadsync_gameplay::GameplayRuntimeState<
 >;
 #[path = "playback/prepare.rs"]
 mod prepare;
+mod native;
 use deadlib_assets::present_dsl::cover_sprite;
 pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, reload_song_lua, song_lua_sound_paths};
 use prepare::{SongLuaOverlayEaseWindowRuntime, SongLuaSoundEvent};
@@ -13082,6 +13083,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
 /// frame's emitted HUD. All retained backing is freed at the song transition.
 #[derive(Default)]
 pub struct FrameScratch {
+    song_lua_enabled: bool,
     render_targets: Vec<deadlib_present::actors::RenderTarget>,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -13131,10 +13133,16 @@ pub struct FrameScratch {
 }
 
 impl FrameScratch {
+    #[cfg(any(test, feature = "test-support"))]
+    pub const fn uses_song_lua_compositor(&self) -> bool {
+        self.song_lua_enabled
+    }
+
     /// Screen-entry-only warmup for a native program or diagnostic live scene. Every prepared actor
     /// may mutate, including ancestors, draw order and camera scope. The exact
     /// lists are allocated once and reused; frames do not rebuild this plan.
     pub fn enable_dynamic_scene(&mut self) {
+        self.song_lua_enabled = true;
         // A foreground can bind or retarget a proxy after screen preparation.
         // Reserve the largest direct source (whole Player: three runs) for
         // every root proxy before any of those live callbacks execute.
@@ -13183,6 +13191,22 @@ impl FrameScratch {
         let notefield_underlay_draws =
             player_scratch(active_players, NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY);
         let song_lua_visuals = gameplay.song_lua_visuals();
+        if gameplay.song().background_lua_changes.is_empty()
+            && gameplay.song().foreground_lua_changes.is_empty()
+            && song_lua_visuals.overlays.is_empty()
+            && song_lua_visuals.background_visual_layers.is_empty()
+            && song_lua_visuals.foreground_visual_layers.is_empty()
+        {
+            return Self {
+                notefield_actor_scratch,
+                notefield_flat_draw_scratch,
+                notefield_hud_actor_scratch,
+                notefield_hud_flat_draw_scratch,
+                notefield_underlay_actors,
+                notefield_underlay_draws,
+                ..Self::default()
+            };
+        }
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
             &song_lua_visuals.overlays,
             &song_lua_visuals.overlay_eases,
@@ -13379,6 +13403,7 @@ impl FrameScratch {
             })
             .sum();
         let frame_scratch = Self {
+            song_lua_enabled: true,
             render_targets: Vec::with_capacity(target_capacity),
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
@@ -13695,7 +13720,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         &mut Vec<FlatDraw>,
     ) -> deadsync_notefield::BuiltNotefield,
 ) -> GameplayActorSegments {
+    if !frame_scratch.song_lua_enabled {
+        return native::compose_frame(actors, state, media, frame_scratch, view, draw_layer, draw_field);
+    }
     let FrameScratch {
+        song_lua_enabled: _,
         render_targets,
         song_lua_overlay_order,
         song_lua_background_visual_layer_orders,
@@ -14088,54 +14117,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         song_lua_proxy_actor_scratch.as_mut(),
         screen_layers[2].draw_visible(),
     );
-    let cover_alpha = |player_idx: usize| -> f32 {
-        if player_idx >= state.num_players() {
-            return 0.0;
-        }
-        let profile_cover = f32::from(view.hide_song_bg[player_idx]);
-        let attack_cover = if apply_attacks {
-            state
-                .effective_visibility_effects_for_player(player_idx)
-                .cover
-        } else {
-            0.0
-        };
-        profile_cover.max(attack_cover).clamp(0.0, 1.0)
-    };
-    let left_cover = cover_alpha(0);
-    let right_cover = if state.num_players() > 1 {
-        cover_alpha(1)
-    } else {
-        left_cover
-    };
-    let sw = screen_width();
-    let sh = screen_height();
-    let cx = screen_center_x();
-    if left_cover > 0.0 || right_cover > 0.0 {
-        if (left_cover - right_cover).abs() <= 0.001 {
-            actors.push(deadlib_present::__act_from_builder!((
-                align(0.0, 0.0): xy(0.0, 0.0):
-                zoomto(sw, sh):
-                diffuse(0.0, 0.0, 0.0, left_cover.max(right_cover)):
-                z(-99)
-            ) deadlib_assets::SpriteBuilder::solid()));
-        } else {
-            actors.push(deadlib_present::__act_from_builder!((
-                align(0.0, 0.0): xy(0.0, 0.0):
-                zoomto(cx, sh):
-                faderight(0.1):
-                diffuse(0.0, 0.0, 0.0, left_cover):
-                z(-99)
-            ) deadlib_assets::SpriteBuilder::solid()));
-            actors.push(deadlib_present::__act_from_builder!((
-                align(0.0, 0.0): xy(cx, 0.0):
-                zoomto(sw - cx, sh):
-                fadeleft(0.1):
-                diffuse(0.0, 0.0, 0.0, right_cover):
-                z(-99)
-            ) deadlib_assets::SpriteBuilder::solid()));
-        }
-    }
+    native::push_background_cover(actors, state, view);
 
     // Native exit prompts participate in the Overlay capture target.
     if !hide_overlay_hud {

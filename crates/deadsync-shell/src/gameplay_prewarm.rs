@@ -82,7 +82,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
 ) {
     let mut seen = FastHashSet::<String>::with_capacity(256);
     let mut seen_model_textures = FastHashSet::<String>::with_capacity(64);
-    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::with_capacity(8);
+    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::default();
     for noteskin in noteskin_sets
         .into_iter()
         .flat_map(|set| set.iter().flatten())

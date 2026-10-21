@@ -1004,9 +1004,27 @@ mod tests {
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
     ) -> deadlib_render_core::RenderFrame {
-        assert_repeatable_composition(compose_scratch, |scratch| {
+        let expected = assert_repeatable_composition(compose_scratch, |scratch| {
             compose_fixture_frame(state, assets, metrics, actors, text_cache, scratch)
-        })
+        });
+        if !state.song_frame().uses_song_lua_compositor() {
+            assert!(state.song_lua.is_none(), "ordinary charts must not own a Lua VM");
+            assert!(state.song_frame().render_targets().is_empty());
+            // The existing scripted compositor is the behavior oracle for the
+            // same immutable simulation, native chart attacks and theme HUD.
+            let native = state.song_scratch.take().unwrap();
+            let mut scripted = deadsync_song_lua::playback::FrameScratch::new(&state.gameplay);
+            scripted.enable_dynamic_scene();
+            state.song_scratch = Some(Box::new(scripted));
+            let mut actual = compose_fixture_frame(
+                state, assets, metrics, actors, text_cache, compose_scratch,
+            );
+            assert_eq!(compare_render_frames(&expected, &actual), Ok(()),
+                "native no-Lua composition must preserve the existing frame");
+            compose_scratch.recycle_frame(&mut actual);
+            state.song_scratch = Some(native);
+        }
+        expected
     }
 
     fn assert_repeatable_composition(
@@ -1381,6 +1399,179 @@ return Def.ActorFrame { Name = 'Foreground',
                     assert!(duration > 0.0);
                     assert_eq!(hidden_duration, duration);
                 }
+            },
+        );
+    }
+
+    #[test]
+    fn ordinary_song_modes_and_views_match_existing_composition() {
+        use deadsync_gameplay::{GameplayInputPlayStyle as G, GameplayInputPlayerSide as S};
+        use profile_data::PlayStyle as P;
+        for (style, runtime_style) in [
+            (P::Single, G::Single),
+            (P::Double, G::Double),
+            (P::Versus, G::Versus),
+            (P::PumpSingle, G::PumpSingle),
+            (P::PumpDouble, G::PumpDouble),
+            (P::PumpVersus, G::PumpVersus),
+        ] {
+            let cols = style.cols_per_player();
+            let row = format!("1{}", "0".repeat(cols - 1));
+            let notes = vec![row; 16].join("\n");
+            let text = format!(
+                "#TITLE:Native modes;\n#BPMS:0=120;\n#FGCHANGES:0=foreground.png;\n\
+                #NOTEDATA:;\n#STEPSTYPE:{};\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:{notes};",
+                style.chart_type()
+            );
+            let simfile = write_fixture(&format!("native-mode-{runtime_style:?}"), &text);
+            image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 255, 255, 255]))
+                .save(simfile.parent().unwrap().join("foreground.png"))
+                .unwrap();
+            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+                let versus = style.player_count() == 2;
+                with_session(
+                    style,
+                    side,
+                    versus || side == profile_data::PlayerSide::P1,
+                    versus || side == profile_data::PlayerSide::P2,
+                    || {
+                        let metrics = space::Metrics::centered(854.0, 480.0);
+                        space::set_current_metrics(metrics);
+                        space::set_current_window_px(1280, 720);
+                        let profiles = std::array::from_fn(|p| profile_data::Profile {
+                            noteskin: profile_data::NoteSkin::new("lambda"),
+                            hide_song_bg: p == 0,
+                            ..Default::default()
+                        });
+                        let session = GameplaySession {
+                            play_style: runtime_style,
+                            player_side: if side == profile_data::PlayerSide::P2 {
+                                S::P2
+                            } else {
+                                S::P1
+                            },
+                            ..Default::default()
+                        };
+                        let mut state = build_test_state(
+                            &simfile,
+                            GameplayViewport::new(1280.0, 720.0),
+                            session,
+                            profiles,
+                        );
+                        set_fixture_time(&mut state, 1.0);
+                        assert!(state.song_media.refresh_foreground(&state.gameplay),
+                            "native foreground media must actually activate");
+                        assert!(!state.song_frame().uses_song_lua_compositor());
+                        let assets = fixture_assets();
+                        let mut actors = Vec::new();
+                        let mut text_cache = compose::TextLayoutCache::default();
+                        let mut scratch = compose::ComposeScratch::default();
+                        for (hide_gameplay_hud, show_song_visuals, apply_attacks) in [
+                            (false, true, true),
+                            (true, true, true),
+                            (false, false, false),
+                            (true, false, false),
+                        ] {
+                            let view = screen_gameplay::ActorViewOverride {
+                                hide_gameplay_hud,
+                                show_song_visuals,
+                                apply_attacks,
+                                ..Default::default()
+                            };
+                            let mut expected = compose_fixture_frame_with_view(
+                                &mut state,
+                                &assets,
+                                &metrics,
+                                &mut actors,
+                                &mut text_cache,
+                                &mut scratch,
+                                view,
+                                &FIXTURE_TEXTURES,
+                            );
+                            let native = state.song_scratch.take().unwrap();
+                            let mut full =
+                                deadsync_song_lua::playback::FrameScratch::new(&state.gameplay);
+                            full.enable_dynamic_scene();
+                            state.song_scratch = Some(Box::new(full));
+                            let mut actual = compose_fixture_frame_with_view(
+                                &mut state,
+                                &assets,
+                                &metrics,
+                                &mut actors,
+                                &mut text_cache,
+                                &mut scratch,
+                                view,
+                                &FIXTURE_TEXTURES,
+                            );
+                            assert_eq!(
+                                compare_render_frames(&expected, &actual),
+                                Ok(()),
+                                "{style:?}/{side:?}, hidden HUD={hide_gameplay_hud}, visuals={show_song_visuals}"
+                            );
+                            scratch.recycle_frame(&mut expected);
+                            scratch.recycle_frame(&mut actual);
+                            state.song_scratch = Some(native);
+                        }
+                    },
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_song_keeps_lua_runtime_and_input_idle() {
+        let simfile = write_fixture("no-song-lua", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let (mut state, _, _) = sprite_core_fixture(&simfile);
+                assert!(state.song_lua.is_none());
+                assert!(!state.song_frame().uses_song_lua_compositor());
+                assert!(state.note_field_tap_callback.is_none());
+                assert!(state.step_callback.is_none());
+                assert!(state.tap_row_judgment_callback.is_none());
+                assert!(state.hold_judgment_callback.is_none());
+                assert!(state.avoided_mine_judgment_callback.is_none());
+                state.queue_song_lua_inputs(std::iter::from_fn(|| {
+                    panic!("ordinary gameplay must not consume Lua input events")
+                }));
+                let mut input_phases = 0;
+                let mut effects = Vec::new();
+                for tick in 0..60 {
+                    screen_gameplay::update_with_input(
+                        &mut state,
+                        1.0 / 60.0,
+                        deadsync_gameplay::GameplayAudioSnapshot {
+                            stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                                music_nanos: 1_000_000_000 + tick * 16_666_667,
+                                has_music_mapping: true,
+                                valid_at_host_nanos: 1_000_000,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                        || 1_000_000,
+                        &mut effects,
+                        |_| input_phases += 1,
+                    );
+                    let output = state.take_song_lua_output();
+                    assert!(
+                        output.errors.is_empty()
+                            && output.sounds.is_empty()
+                            && output.actor_sounds.is_empty()
+                            && output.broadcasts.is_empty()
+                            && output.draw_frames.is_empty()
+                            && output.request.is_none()
+                    );
+                }
+                assert_eq!(
+                    input_phases, 60,
+                    "native input still runs once after every update"
+                );
+                assert!(state.song_lua.is_none());
             },
         );
     }
@@ -3229,7 +3420,8 @@ M000
                 };
                 state.gameplay.mods.attacks.mask_windows[0] =
                     deadsync_gameplay::build_attack_mask_windows(std::slice::from_ref(&attack));
-                refresh_active_attack_masks(&mut state.gameplay, 0.0);
+                // Native attacks approach their targets over elapsed time.
+                refresh_active_attack_masks(&mut state.gameplay, 1.0);
                 state.refresh_live_notefield_options(120.0);
                 assert_eq!(
                     deadsync_gameplay::effective_visual_effects_for_player(&state.gameplay, 0)

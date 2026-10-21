@@ -415,6 +415,9 @@ impl<S> PreparedNotefield<'_, S> {
 
     pub(crate) fn spline_position(&self, col: usize, beat: f32, base: [f32; 3]) -> [f32; 3] {
         let spline = self.column_position_splines[col];
+        if !spline.enabled && self.column_position_blends[col].is_none() {
+            return base;
+        }
         if spline.enabled && spline.absolute {
             let position = self.spline_sample(col, beat).0;
             [
@@ -436,6 +439,9 @@ impl<S> PreparedNotefield<'_, S> {
         base: [f32; 3],
     ) -> ([f32; 3], [f32; 3]) {
         let spline = self.column_position_splines[col];
+        if !spline.enabled && self.column_position_blends[col].is_none() {
+            return (base, [0.0; 3]);
+        }
         if spline.enabled && spline.absolute {
             let (position, derivative) = self.spline_sample(col, beat);
             (
@@ -483,6 +489,9 @@ impl<S> PreparedNotefield<'_, S> {
     }
 
     pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
+        if !self.column_position_splines[col].enabled && self.column_position_blends[col].is_none() {
+            return ([0.0; 3], [0.0; 3]);
+        }
         let (position, derivative) = self.spline_sample(col, beat);
         let receptor = self.column_spline_receptors[col];
         (
@@ -635,6 +644,9 @@ pub fn prepare_notefield<'a, S>(
     let mut column_spline_receptors = [[0.0; 3]; MAX_COLS];
     for col in 0..frame_plan.num_cols {
         let spline = column_position_splines[col];
+        if !spline.enabled {
+            continue;
+        }
         let receptor = spline.receptor(request.chart.visible_beat);
         column_spline_receptors[col] = receptor;
         if !column_position_splines[col].absolute {

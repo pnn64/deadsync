@@ -2754,7 +2754,9 @@ pub fn update_with_input(
         state.song_lua_output.errors.push(error.to_string());
     }
     let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
-    let uptime_seconds = (host_nanos != 0).then_some(host_nanos as f64 / 1_000_000_000.0);
+    let uptime_seconds = if state.song_lua.is_some() && host_nanos != 0 {
+        Some(host_nanos as f64 / 1_000_000_000.0)
+    } else { None };
     let action = if let Some(scene) = &mut state.song_lua {
         let errors = &mut state.song_lua_output.errors;
         deadsync_gameplay::update_core_with_pre_player(&mut state.gameplay, delta_time, audio_snapshot,
@@ -2795,6 +2797,10 @@ pub fn update_with_input(
             }
         }
         action => effects.push(map_gameplay_action(action)),
+    }
+    if state.song_lua.is_none() {
+        after_update_input(state);
+        return;
     }
     let mut pending_inputs = std::mem::take(&mut state.song_lua_pending_inputs);
     for (event, physical) in pending_inputs.drain(..) {
