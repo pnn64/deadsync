@@ -659,7 +659,7 @@ impl Budget {
     /// Take `cost` requests' worth, or nothing when that much is not left.
     fn reserve(&self, cost: u32) -> bool {
         self.left
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |left| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |left| {
                 left.checked_sub(cost)
             })
             .is_ok()
