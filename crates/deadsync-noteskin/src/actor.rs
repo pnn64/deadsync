@@ -1134,7 +1134,13 @@ fn parse_sprite_block(
             continue;
         }
         if let Some(idx) = parse_numbered_actor_key(key, b"frame") {
-            if let Ok(parsed) = value.parse::<usize>() {
+            if let Ok(parsed) = value
+                .split(';')
+                .next()
+                .unwrap_or(value)
+                .trim()
+                .parse::<usize>()
+            {
                 frame_seen = true;
                 frame_state_max = frame_state_max.max(idx);
                 if idx == 0 {

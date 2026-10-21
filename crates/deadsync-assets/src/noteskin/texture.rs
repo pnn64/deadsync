@@ -1139,6 +1139,13 @@ pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<Sprite
     .map(slot_from_plan)
 }
 
+pub(super) fn itg_apply_actor_frame_override(slot: &mut SpriteSlot, frame: usize) {
+    // A wrapper's Frames={{Frame=n}} replaces the state table with one state.
+    // Unlike Sprite:setstate, it does not keep cycling the original sheet.
+    itg_apply_frame_override(slot, frame);
+    freeze_sprite_animation(slot);
+}
+
 pub(super) fn itg_note_animation_source(
     slot: &SpriteSlot,
     animation: NotePartAnimation,

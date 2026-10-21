@@ -145,6 +145,8 @@ pub struct ExplosionAnimation {
     pub glow: Option<GlowEffect>,
     pub blend_add: bool,
     pub animation_seconds: Option<f32>,
+    /// Sprite states advance with the screen unless a hit explicitly seeks them.
+    pub animation_uses_screen_clock: bool,
     pub parents: Vec<ExplosionAnimation>,
 }
 
@@ -174,6 +176,7 @@ impl Default for ExplosionAnimation {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            animation_uses_screen_clock: false,
             parents: Vec::new(),
         }
     }
@@ -452,12 +455,23 @@ pub(crate) fn parse_explosion_animation_with_init(
 fn parse_explosion_animation_parts<'a>(
     scripts: impl IntoIterator<Item = &'a str>,
 ) -> ExplosionAnimation {
+    parse_explosion_animation_parts_with_clock(
+        scripts.into_iter().map(|script| (script, true)),
+        false,
+    )
+}
+
+fn parse_explosion_animation_parts_with_clock<'a>(
+    scripts: impl IntoIterator<Item = (&'a str, bool)>,
+    screen_clock: bool,
+) -> ExplosionAnimation {
     let mut animation = ExplosionAnimation {
         initial: ExplosionState::default(),
         segments: Vec::new(),
         glow: None,
         blend_add: false,
         animation_seconds: None,
+        animation_uses_screen_clock: screen_clock,
         parents: Vec::new(),
     };
 
@@ -480,7 +494,10 @@ fn parse_explosion_animation_parts<'a>(
         }
     };
 
-    for raw_token in scripts.into_iter().flat_map(|script| script.split(';')) {
+    for (raw_token, hit_event) in scripts
+        .into_iter()
+        .flat_map(|(script, hit)| script.split(';').map(move |token| (token, hit)))
+    {
         let token = raw_token.trim();
         if token.is_empty() {
             continue;
@@ -501,7 +518,10 @@ fn parse_explosion_animation_parts<'a>(
         if command == ScriptCommand::SetSecondsIntoAnimation {
             if let Some(seconds) = args.first().and_then(|arg| parse_script_number(arg)) {
                 // This setter executes immediately, even after linear/sleep.
-                animation.animation_seconds = Some(seconds);
+                if hit_event {
+                    animation.animation_seconds = Some(seconds);
+                    animation.animation_uses_screen_clock = false;
+                }
                 recognized_command = true;
             }
             continue;
@@ -556,6 +576,9 @@ fn parse_explosion_animation_parts<'a>(
         }
         if let Some(control) = parse_script_control(command) {
             recognized_command = true;
+            if control == ScriptControl::SetState && hit_event {
+                animation.animation_uses_screen_clock = false;
+            }
             match control {
                 ScriptControl::FinishTweening => {
                     finish_pending(&mut pending, &mut animation, &mut current_state, false);
@@ -999,49 +1022,48 @@ fn parse_itg_tap_explosion_actor_commands(
     mode: ItgTapExplosionMode,
     command: &str,
 ) -> ExplosionAnimation {
-    let mut sequence = [""; 4];
-    let mut len = 0;
-    for command in [
-        commands.get("initcommand"),
-        commands.get("judgmentcommand"),
-        commands.get(mode.command_key()),
-    ]
-    .into_iter()
-    .flatten()
-    .map(|command| command.trim())
-    .filter(|command| !command.is_empty())
-    {
-        sequence[len] = command;
-        len += 1;
-    }
-    sequence[len] = command.trim();
-    len += 1;
-
-    if sequence[..len].iter().any(|command| {
-        command
-            .as_bytes()
-            .windows(11)
-            .any(|word| word.eq_ignore_ascii_case(b"playcommand"))
+    let sequence = [
+        (
+            commands.get("initcommand").map_or("", String::as_str),
+            false,
+        ),
+        (
+            commands.get("judgmentcommand").map_or("", String::as_str),
+            true,
+        ),
+        (
+            commands.get(mode.command_key()).map_or("", String::as_str),
+            true,
+        ),
+        (command, true),
+    ];
+    if sequence.iter().all(|(script, _)| {
+        !script.contains("self:")
+            && !script
+                .as_bytes()
+                .windows(11)
+                .any(|word| word.eq_ignore_ascii_case(b"playcommand"))
     }) {
-        let mut expanded = String::new();
-        let mut stack = ArrayVec::new();
-        let mut remaining = 4096;
-        for command in &sequence[..len] {
-            if !expand_explosion_cmd(commands, command, &mut stack, &mut remaining, &mut expanded) {
-                break;
-            }
-        }
-        return parse_explosion_animation_parts([expanded.as_str()]);
+        return parse_explosion_animation_parts_with_clock(sequence, true);
     }
 
-    if sequence[..len]
-        .iter()
-        .all(|command| !command.contains("self:"))
-    {
-        parse_explosion_animation_parts(sequence[..len].iter().copied())
-    } else {
-        parse_explosion_animation(&sequence[..len].join(";"))
+    // Keep Init separate from hit events: its initial state offset persists
+    // across hits, while a seek in Wn/Judgment/Bright/Dim restarts the states.
+    let mut expanded: [String; 4] = std::array::from_fn(|_| String::new());
+    let mut stack = ArrayVec::new();
+    let mut remaining = 4096;
+    for ((script, _), output) in sequence.iter().zip(&mut expanded) {
+        if !expand_explosion_cmd(commands, script, &mut stack, &mut remaining, output) {
+            break;
+        }
     }
+    parse_explosion_animation_parts_with_clock(
+        expanded
+            .iter()
+            .zip(sequence)
+            .map(|(script, (_, hit))| (script.as_str(), hit)),
+        true,
+    )
 }
 
 // Actor::playcommand runs the target immediately on the same actor. Inline its
@@ -2124,6 +2146,36 @@ mod tests {
                     .diffuse[3],
                 sample["alpha"].as_f64().unwrap() as f32
             );
+        }
+    }
+
+    #[test]
+    fn sprite_clock_only_restarts_for_hit_animation_seeks() {
+        let commands = HashMap::from([
+            ("initcommand".into(), "SetSecondsIntoAnimation,1".into()),
+            ("resetcommand".into(), "setstate,0".into()),
+        ]);
+        for (command, screen_clock, seconds) in [
+            ("diffusealpha,1;linear,0.22;diffusealpha,0", true, None),
+            ("setstate,0;diffusealpha,1", false, None),
+            ("playcommand,'Reset';diffusealpha,1", false, None),
+            (
+                "SetSecondsIntoAnimation,0.15;diffusealpha,1",
+                false,
+                Some(0.15),
+            ),
+        ] {
+            let animation = parse_itg_tap_explosion_animation_commands(
+                &commands,
+                ItgTapExplosionMode::Dim,
+                "w1command",
+                command,
+            );
+            assert_eq!(
+                animation.animation_uses_screen_clock, screen_clock,
+                "{command}"
+            );
+            assert_eq!(animation.animation_seconds, seconds, "{command}");
         }
     }
 }

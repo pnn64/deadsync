@@ -1398,6 +1398,7 @@ pub fn itg_load_sprite_decl_slot<T>(
         Option<&[f32]>,
         bool,
     ) -> Option<T>,
+    mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
 ) -> Option<T> {
     let texture_path = itg::resolve_texture_expr(data, &sprite.texture_expr, arg0_path)?;
     let anim_is_beat = crate::script::sprite_animation_is_beat_based(
@@ -1415,6 +1416,13 @@ pub fn itg_load_sprite_decl_slot<T>(
         )
         .or_else(|| load_frame(&texture_path, sprite.frame0))
         .or_else(|| load_texture(&texture_path))
+    } else if sprite.frame0 == 0 && sprite.frame_indices.is_none() && sprite.frame_delays.is_none()
+    {
+        // Sprite::LoadStatesFromTexture creates sequential 0.1-second states
+        // when the actor does not supply its own Frames/FrameNNNN table.
+        load_all_frames(&texture_path, Some(0.1), false)
+            .or_else(|| load_frame(&texture_path, 0))
+            .or_else(|| load_texture(&texture_path))
     } else {
         load_frame(&texture_path, sprite.frame0).or_else(|| load_texture(&texture_path))
     }
@@ -1430,6 +1438,7 @@ pub fn itg_resolve_sprite_decl<T>(
     load_texture: impl FnMut(&Path) -> Option<T>,
     load_frame: impl FnMut(&Path, usize) -> Option<T>,
     load_animated: impl FnMut(&Path, usize, usize, Option<&[usize]>, Option<&[f32]>, bool) -> Option<T>,
+    load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
     mut apply_rotation: impl FnMut(&mut T, i32),
     mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
 ) -> Option<ItgResolvedSprite<T>> {
@@ -1441,6 +1450,7 @@ pub fn itg_resolve_sprite_decl<T>(
         load_texture,
         load_frame,
         load_animated,
+        load_all_frames,
     )?;
     let frame_rotation = sprite
         .commands
@@ -1650,6 +1660,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
         Option<&[f32]>,
         bool,
     ) -> Option<T>,
+    mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
     mut apply_model: impl FnMut(&mut T, model::ItgModelSlotPlan),
     mut apply_xy_rotation: impl FnMut(&mut T, Option<i32>, Option<i32>),
     mut apply_rotation: impl FnMut(&mut T, i32),
@@ -1671,7 +1682,10 @@ pub fn itg_resolve_actor_file_compiled<T>(
     }
 
     if !actor::is_lua_path(path) {
-        let Some(mut slot) = load_frame(path, 0).or_else(|| load_texture(path)) else {
+        let Some(mut slot) = load_all_frames(path, Some(0.1), false)
+            .or_else(|| load_frame(path, 0))
+            .or_else(|| load_texture(path))
+        else {
             return Vec::new();
         };
         apply_xy_rotation(&mut slot, rotation_x, rotation_y);
@@ -1725,6 +1739,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
             &mut load_texture,
             &mut load_frame,
             &mut load_animated,
+            &mut load_all_frames,
             &mut apply_rotation,
             &mut apply_state,
         ) {
@@ -1792,9 +1807,10 @@ pub fn itg_first_actor_sprite_slot<T>(
         Option<&[f32]>,
         bool,
     ) -> Option<T>,
+    mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
 ) -> Option<T> {
     if !actor::is_lua_path(path) {
-        return load_texture(path);
+        return load_all_frames(path, Some(0.1), false).or_else(|| load_texture(path));
     }
 
     let decl = compiled_actors.decl_for_path_ref(&data.search_dirs, path)?;
@@ -1808,6 +1824,7 @@ pub fn itg_first_actor_sprite_slot<T>(
             &mut load_texture,
             &mut load_frame,
             &mut load_animated,
+            &mut load_all_frames,
         );
         if let Some(slot) = slot {
             return Some(slot);
@@ -1830,6 +1847,7 @@ pub fn itg_first_actor_sprite_slot_with_ops<T>(
         ops.load_texture,
         ops.load_frame,
         ops.load_animated,
+        ops.load_all_frames,
     )
 }
 
@@ -2023,6 +2041,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
         ops.load_texture,
         ops.load_frame,
         ops.load_animated,
+        ops.load_all_frames,
         ops.apply_model,
         ops.apply_xy_rotation,
         ops.apply_rotation,
@@ -3738,6 +3757,7 @@ mod tests {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            animation_uses_screen_clock: false,
             parents: Vec::new(),
         };
         let long = ExplosionAnimation {
@@ -3754,6 +3774,7 @@ mod tests {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            animation_uses_screen_clock: false,
             parents: Vec::new(),
         };
         let explosion = TapExplosion::from_inline_layers(SmallVec::from_vec(vec![
@@ -5002,6 +5023,7 @@ mod tests {
             |path| Some(format!("texture:{}", path.display())),
             |_, _| panic!("frame loader should not run"),
             |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |_, _, _| None,
         );
 
         assert_eq!(slot.as_deref(), Some("texture:Tap Note.png"));
@@ -5040,6 +5062,12 @@ mod tests {
                 Some(5)
             },
             |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |path, delay, beat_based| {
+                assert_eq!(path, std::path::Path::new("Tap Note.png"));
+                assert_eq!(delay, Some(0.1));
+                assert!(!beat_based);
+                None
+            },
             |_, _| panic!("model plan should not apply"),
             |_, _, _| {},
             |slot, rotation_z| *slot += rotation_z / 10,
@@ -5118,6 +5146,7 @@ mod tests {
                 Some(5)
             },
             |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |_, _, _| panic!("explicit frame should not load default states"),
             |_, _| panic!("model plan should not apply"),
             |_, _, _| {},
             |slot, rotation_z| *slot += rotation_z / 10,
@@ -5204,6 +5233,7 @@ mod tests {
                     beat_based,
                 })
             },
+            |_, _, _| panic!("explicit frames should not load default states"),
         );
 
         assert_eq!(
@@ -5251,6 +5281,7 @@ mod tests {
             |_| Some("texture".to_string()),
             |path, frame| Some(format!("frame:{frame}:{}", path.display())),
             |_, _, _, _, _, _| None,
+            |_, _, _| panic!("explicit frames should not load default states"),
         );
 
         assert_eq!(slot, Some(format!("frame:2:{}", texture_path.display())));
@@ -5295,6 +5326,7 @@ mod tests {
             |_| Some(1),
             |_, _| Some(5),
             |_, _, _, _, _, _| panic!("single-frame sprite should not use animation loader"),
+            |_, _, _| None,
             |slot, rotation_z| {
                 calls
                     .borrow_mut()

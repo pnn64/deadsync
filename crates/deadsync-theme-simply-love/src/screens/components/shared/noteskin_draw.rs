@@ -1144,6 +1144,7 @@ fn draw_explosion_layers(
         );
         let slot = &layer.slot;
         let (frame_time, frame_beat) = match layer.animation.animation_seconds {
+            _ if layer.animation.animation_uses_screen_clock => (clock.uv_time, clock.frame_beat),
             Some(seconds) if clock.seek => {
                 let seconds = seconds - slot.animation_start_time();
                 (clock.age + seconds, clock.age + seconds)

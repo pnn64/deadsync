@@ -5,7 +5,7 @@ pub use self::texture::{
     SpriteSlot, SpriteSource, build_model_geometry, load_itg_model_slots, test_model_slot,
 };
 use self::texture::{
-    apply_model_slot_plan, itg_apply_frame_override, itg_apply_state_properties_from_commands,
+    apply_model_slot_plan, itg_apply_actor_frame_override, itg_apply_state_properties_from_commands,
     itg_note_animation_source, itg_slot_from_path, itg_slot_from_path_all_frames,
     itg_slot_from_path_animated, itg_slot_from_path_with_frame, mine_fill_slots,
 };
@@ -464,7 +464,7 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         apply_receptor_init: itg_apply_receptor_init,
         apply_xy_rotation: itg_apply_xy_rotation,
         apply_rotation: itg_apply_rotation,
-        apply_frame: itg_apply_frame_override,
+        apply_frame: itg_apply_actor_frame_override,
         apply_state: itg_apply_state_properties_from_commands,
         apply_masks: mask::apply_sprite_masks,
         apply_loader_command: itg_apply_loader_command,
@@ -720,6 +720,105 @@ return Def.ActorFrame { children = {
                 assert!(layers[1].texture_key().ends_with("gloss 2x1.png"));
                 assert!(layers[1].model_draw.blend_add);
                 assert!(layers[2].texture_key().ends_with("frame 2x1.png"));
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn implicit_explosion_sheets_animate_without_overriding_explicit_states() {
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("implicit-animation");
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/implicit-animation");
+        for name in [
+            "NoteSkin.lua",
+            "Fallback Explosion.lua",
+            "Down Tap Explosion 2x1.png",
+        ] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "implicit-animation".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::default(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for bundle in [&bundle, &cached] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                None,
+            )
+            .unwrap();
+            for col in 0..4 {
+                for bright in [false, true] {
+                    for window in ["W1", "W2", "W3", "W4", "W5"] {
+                        let explosion = skin
+                            .tap_explosion_for_col_with_bright(col, window, bright)
+                            .unwrap();
+                        let visible = explosion
+                            .layers
+                            .iter()
+                            .filter(|layer| {
+                                let state = layer.animation.state_at(0.05);
+                                state.visible && state.diffuse[3] > 0.0
+                            })
+                            .collect::<Vec<_>>();
+                        assert_eq!(
+                            visible.len(),
+                            1,
+                            "{window} {bright}: only the selected judgment flashes"
+                        );
+                        let slot = &visible[0].slot;
+                        assert_eq!(
+                            visible[0].animation.animation_uses_screen_clock,
+                            window != "W5"
+                        );
+                        assert!((explosion.duration() - 0.22).abs() < 1e-6);
+                        if matches!(window, "W3" | "W4") {
+                            assert_eq!(slot.source.frame_count(), 1);
+                            assert_eq!(slot.def.src, [64, 0]);
+                            let uv = slot.uv_for_frame_at(0, 0.0);
+                            for seconds in [0.0, 0.05, 0.15, 0.35] {
+                                assert_eq!(
+                                    slot.uv_for_frame_at(slot.frame_index(seconds, 99.0), seconds),
+                                    uv
+                                );
+                            }
+                        } else {
+                            assert_eq!(
+                                slot.source.frame_count(),
+                                2,
+                                "{window}: retain both texture frames"
+                            );
+                            for (seconds, frame) in [
+                                (0.0, 0),
+                                (0.05, 0),
+                                (0.1, 1),
+                                (0.15, 1),
+                                (0.2, 0),
+                                (0.35, 1),
+                            ] {
+                                assert_eq!(
+                                    slot.frame_index(seconds, 99.0),
+                                    frame,
+                                    "{window}: native frame at {seconds}s"
+                                );
+                            }
+                        }
+                    }
+                }
             }
         }
         fs::remove_dir_all(root).unwrap();
