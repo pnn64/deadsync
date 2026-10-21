@@ -488,12 +488,12 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
         ("ActorProxy", Some("Actor"), &["SetTarget", "GetTarget"][..]),
         ("BitmapText", Some("Actor"), BITMAP),
     ] {
-        let class = lua.create_table()?;
+        let class = lua.create_table_with_capacity(0, methods.len())?;
         for method in methods {
             forward(lua, &class, method)?;
         }
         if let Some(base) = base {
-            let mt = lua.create_table()?;
+            let mt = lua.create_table_with_capacity(0, 1)?;
             mt.set("__index", globals.get::<Table>(base)?)?;
             class.set_metatable(Some(mt))?;
         }
@@ -621,10 +621,10 @@ pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     };
     let mut methods = Vec::new();
     actor.for_each::<Value, Value>(|key, value| {
-        if let (Value::String(name), Value::Function(function)) = (&key, &value) {
-            let (native, _) = method_name_flags(lua, name)?;
+        if let (Value::String(name), Value::Function(function)) = (key, value) {
+            let (native, _) = method_name_flags(lua, &name)?;
             if native && function.environment().is_none() {
-                methods.push((key, value));
+                methods.push((name, function));
             }
         }
         Ok(())
@@ -679,6 +679,10 @@ mod native_function_perf;
 #[cfg(test)]
 #[path = "../tests/perf/vm_reads_actor.rs"]
 mod vm_reads_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/method_storage.rs"]
+mod method_storage_perf;
 
 #[cfg(test)]
 mod tests {

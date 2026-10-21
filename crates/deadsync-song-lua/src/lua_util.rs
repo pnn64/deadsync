@@ -4353,7 +4353,7 @@ pub fn install_actor_metatable(
     install_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
     crate::actor_classes::bind(lua, actor)?;
-    let mt = lua.create_table()?;
+    let mt = lua.create_table_with_capacity(0, 4)?;
     mt.set("__index", lua.create_function(crate::actor_classes::lookup)?)?;
     mt.set("__newindex", lua.create_function(crate::actor_classes::assign)?)?;
     mt.set(
@@ -24322,3 +24322,7 @@ mod ignored_args_perf;
 #[cfg(test)]
 #[path = "../tests/perf/prefix_args.rs"]
 mod prefix_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/metatable_storage.rs"]
+mod metatable_storage_perf;
