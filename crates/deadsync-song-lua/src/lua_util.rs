@@ -1,4 +1,4 @@
-use crate::callback_args::IgnoredArgs;
+use crate::callback_args::{CheckedPrefix, IgnoredArgs, NumericArgs};
 use crate::tween_pose::TweenPose;
 use crate::native_vector::ActorVectorValue;
 use crate::render_flags::{RenderFlag, RenderFlags};
@@ -6781,8 +6781,9 @@ fn clear_actor_queue(lua: &Lua, actor: &Table) -> mlua::Result<()> {
 
 pub fn make_actor_wrap_width_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, args: MultiValue| {
-        let Some(value) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+    lua.create_function(move |lua, CheckedPrefix((first, second, _third, _rest)): NumericArgs| {
+        let value = if matches!(first, Value::Table(_)) { &second } else { &first };
+        let Some(value) = read_f32(value.clone()) else {
             return Ok(actor.clone());
         };
         let wrap = value as i32;
@@ -6795,11 +6796,16 @@ pub fn make_actor_wrap_width_method(lua: &Lua, actor: &Table) -> mlua::Result<Fu
 
 pub fn make_actor_set_size_method(lua: &Lua, actor: &Table) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, args: MultiValue| {
-        let Some(width) = method_arg(&args, 0).cloned().and_then(read_f32) else {
+    lua.create_function(move |lua, CheckedPrefix((first, second, third, _rest)): NumericArgs| {
+        let (width, height) = if matches!(first, Value::Table(_)) {
+            (&second, &third)
+        } else {
+            (&first, &second)
+        };
+        let Some(width) = read_f32(width.clone()) else {
             return Ok(actor.clone());
         };
-        let Some(height) = method_arg(&args, 1).cloned().and_then(read_f32) else {
+        let Some(height) = read_f32(height.clone()) else {
             return Ok(actor.clone());
         };
         capture_block_set_size(lua, &actor, [width, height])?;
@@ -6859,17 +6865,11 @@ pub fn make_actor_tween_method(
     easing: Option<&'static str>,
 ) -> mlua::Result<Function> {
     let actor = actor.clone();
-    lua.create_function(move |lua, args: MultiValue| {
-        let duration = args
-            .get(1)
-            .cloned()
-            .and_then(read_f32)
+    lua.create_function(move |lua, CheckedPrefix((_first, value, _third, _rest)): NumericArgs| {
+        let duration = read_f32(value.clone())
             .unwrap_or(0.0)
             .max(0.0);
-        let exact_duration = args
-            .get(1)
-            .cloned()
-            .and_then(read_f64)
+        let exact_duration = read_f64(value.clone())
             .unwrap_or(0.0)
             .max(0.0);
         begin_actor_tween(lua, &actor, duration, exact_duration, easing)
@@ -24318,3 +24318,7 @@ mod actor_state_perf;
 #[cfg(test)]
 #[path = "../tests/perf/ignored_actor.rs"]
 mod ignored_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/prefix_args.rs"]
+mod prefix_args_perf;

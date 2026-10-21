@@ -2,6 +2,24 @@
 use mlua::{FromLua, FromLuaMulti, Lua, MultiValue, Value};
 use std::os::raw::c_int;
 
+/// Tuple decoding with MultiValue's original unwrapped stack-error policy.
+/// Numeric callbacks retain the consumed prefix inline and check every extra
+/// input through the tuple's final MultiValue field.
+pub(crate) struct CheckedPrefix<T>(pub(crate) T);
+
+pub(crate) type NumericArgs = CheckedPrefix<(Value, Value, Value, MultiValue)>;
+
+impl<T: FromLuaMulti> FromLuaMulti for CheckedPrefix<T> {
+    fn from_lua_multi(values: MultiValue, lua: &Lua) -> mlua::Result<Self> {
+        T::from_lua_multi(values, lua).map(Self)
+    }
+
+    unsafe fn from_stack_multi(nvals: c_int, lua: &mlua::state::RawLua) -> mlua::Result<Self> {
+        // SAFETY: forward the unchanged live argument range to mlua's decoder.
+        unsafe { T::from_stack_multi(nvals, lua).map(Self) }
+    }
+}
+
 pub(crate) enum IgnoredArgs {
     Empty,
     One { _value: Value },

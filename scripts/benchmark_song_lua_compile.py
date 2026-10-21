@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -52,6 +52,10 @@ def main():
         for name in ["ignored_core.rs", "ignored_actor.rs", "ignored_actor_before.rs", "ignored_host.rs", "ignored_host_before.rs", "ignored_tables.rs", "ignored_tables_before.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "prefix_args":
+        for name in ["prefix_args.rs", "prefix_args_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -70,6 +74,10 @@ def main():
         filters = ["lua_util::ignored_args_perf::benchmark_ignored_actor", "host::ignored_args_perf::benchmark_ignored_host", "tables::ignored_args_perf::benchmark_ignored_tables"]
         baseline = "1c744eebf"
         expected_names = 9
+    if args.suite == "prefix_args":
+        filters = ["lua_util::prefix_args_perf::benchmark_numeric_factories"]
+        baseline = "d95fdfe52"
+        expected_names = 12
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
     for index in range(args.rounds):
@@ -137,6 +145,8 @@ def main():
         report["timing_scope"] = ("Each sample prepares a fresh Lua state, a 128-method actor with eight message handlers, deep native fields and wrapper membership, plus 128 non-scalar globals outside timing. Restore cases also prepare 64 scalar snapshots. GC is stopped. Each sample takes 64 actor vector/table snapshots, restores 64 prepared scalar-global snapshots, or scans/collects message-command names 64 times through the actual helper. Selected names move into the current collector; the frozen visitor copies its borrowed name as its original call sites did. Result/temporary drops and consumed scalar snapshot destruction are included; VM/other input destruction is excluded. First of ten samples discarded.")
     if args.suite == "ignored_args":
         report["timing_scope"] = ("Each sample prepares a fresh Lua state and actual actor GetWidth, SCREENMAN GetTopScreen or style GetWidth callback outside timing. A prepared Lua closure calls the callback 8192 times with zero, one receiver, or eight mixed unused inputs. One full warmup loop precedes timing and GC is stopped. Result/argument drops are included; VM/input destruction is excluded. First of ten samples discarded. Frozen functions differ only by module location/visibility; unchanged shared helper calls remain shared.")
+    if args.suite == "prefix_args":
+        report["timing_scope"] = ("Each sample prepares a fresh Lua state and actual actor wrap-width, size or linear-tween factory outside timing. A prepared Lua closure calls the callback 8192 times with zero, two, three or eight inputs. Tween duration is zero to keep queues bounded. One full warmup loop precedes timing and GC is stopped. Result/argument drops and setter effects are included; VM/input destruction is excluded. First of ten samples discarded. Frozen factories share unchanged downstream helpers.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:
