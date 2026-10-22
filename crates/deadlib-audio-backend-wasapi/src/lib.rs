@@ -2,7 +2,10 @@
 
 //! Event-driven WASAPI output with Windows 10 low-period shared streams and Windows 7 fallback.
 
+mod clock;
 mod init;
+
+use clock::PlaybackClock;
 
 use deadlib_audio_core::{
     AudioOutputMode, CallbackClockSource, CallbackInfo, OutputBackendReady, OutputBufferMut,
@@ -457,6 +460,7 @@ fn render_thread_inner(
             .GetService::<Audio::IAudioClock>()
             .map_err(|e| format!("failed to acquire WASAPI audio clock: {e}"))?
     };
+    let mut playback_clock = PlaybackClock::new(audio_clock, prep.sample_rate_hz)?;
     let stream_latency_ns = match query_stream_latency_ns(&audio_client) {
         Ok(latency_ns) => latency_ns,
         Err(err) => {
@@ -503,13 +507,12 @@ fn render_thread_inner(
 
     let playback_delay_ns = prep.frame_time.convert(max_frames_in_buffer);
     write_frames(
-        &audio_clock,
+        &mut playback_clock,
         &render_client,
         render,
         sfx_receiver,
         prep,
         max_frames_in_buffer,
-        playback_delay_ns,
     )?;
     publish_output_timing(
         prep.sample_rate_hz,
@@ -561,7 +564,7 @@ fn render_thread_inner(
             // Probe liveness without treating a timeout as a buffer-ready event.
             // In particular, exclusive streams may only submit complete packets
             // after the driver signals that a buffer is available.
-            playback_anchor_nanos_after_delay(&audio_clock, 0)?;
+            playback_clock.read()?;
             continue;
         }
         let (frames_available, padding) = match prep.mode {
@@ -590,32 +593,30 @@ fn render_thread_inner(
             continue;
         }
         write_frames(
-            &audio_clock,
+            &mut playback_clock,
             &render_client,
             render,
             sfx_receiver,
             prep,
             frames_available,
-            playback_delay_ns,
         )?;
     }
 }
 
 fn write_frames(
-    audio_clock: &Audio::IAudioClock,
+    playback_clock: &mut PlaybackClock,
     render_client: &Audio::IAudioRenderClient,
     render: &mut RenderState,
     sfx_receiver: &mut SfxReceiver,
     prep: &WasapiOutputPrep,
     frames_available: u32,
-    playback_delay_ns: u64,
 ) -> Result<(), String> {
     if frames_available == 0 {
         return Ok(());
     }
     // Query the clock before acquiring the packet so a clock failure cannot
     // leave a successful GetBuffer without its matching ReleaseBuffer.
-    let anchor_nanos = playback_anchor_nanos_after_delay(audio_clock, playback_delay_ns)?;
+    let anchor_nanos = playback_clock.next_packet_anchor()?;
     // SAFETY: `render_client` owns the buffer returned by `GetBuffer` for exactly
     // `frames_available` frames. We reinterpret that memory according to the
     // negotiated sample format and release the same frame count before returning.
@@ -623,6 +624,15 @@ fn write_frames(
         let buffer = render_client
             .GetBuffer(frames_available)
             .map_err(|e| format!("failed to get WASAPI output buffer: {e}"))?;
+        let Some(anchor_nanos) = anchor_nanos else {
+            // GetPosition can remain zero until the first samples reach the
+            // device. Do not consume music or publish a guessed clock meanwhile.
+            render_client
+                .ReleaseBuffer(frames_available, Audio::AUDCLNT_BUFFERFLAGS_SILENT.0 as u32)
+                .map_err(|e| format!("failed to release WASAPI silent buffer: {e}"))?;
+            playback_clock.submitted(frames_available);
+            return Ok(());
+        };
         let samples = samples_for_frames(frames_available, prep.samples_per_frame);
         match prep.sample_format {
             WasapiSampleFormat::I16 => {
@@ -662,27 +672,8 @@ fn write_frames(
             .ReleaseBuffer(frames_available, 0)
             .map_err(|e| format!("failed to release WASAPI output buffer: {e}"))?;
     }
+    playback_clock.submitted(frames_available);
     Ok(())
-}
-
-#[inline(always)]
-fn playback_anchor_nanos_after_delay(
-    audio_clock: &Audio::IAudioClock,
-    playback_delay_ns: u64,
-) -> Result<u64, String> {
-    let mut _position = 0u64;
-    let mut qpc_position = 0u64;
-    // SAFETY: `audio_clock` is a live WASAPI clock interface, and both out
-    // pointers reference writable stack locals for the duration of the call.
-    unsafe {
-        audio_clock
-            .GetPosition(&mut _position, Some(&mut qpc_position))
-            .map_err(|e| format!("failed to query WASAPI audio clock position: {e}"))?;
-    }
-    Ok(qpc_position
-        .saturating_mul(100)
-        .saturating_add(playback_delay_ns)
-        .min(u64::MAX - 1))
 }
 
 #[inline(always)]

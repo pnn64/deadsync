@@ -29,6 +29,26 @@ buffer-ready event submits a complete buffer. Health-check timeouts probe the
 clock without submitting a packet. Shutdown stops the stream and releases COM
 interfaces before closing their event handle.
 
+## Playback clock
+
+Each packet is timestamped from the correlated device position and QPC reading
+returned by `IAudioClock::GetPosition`. Its first native stream frame is tracked
+across successful buffer submissions, including startup silence. The timestamp
+in seconds is `qpc + submitted_frames / sample_rate - position / clock_frequency`.
+`GetFrequency` supplies the position's units; shared and exclusive clocks need
+not report positions in sample frames.
+
+Before the device position advances, the backend submits silence without
+consuming music or publishing a guessed playback timestamp. Opening or recovering
+a client creates a new native frame counter while preserving the mixer's frame
+timeline. Buffer padding controls how much can be written; it is not used as the
+playback clock. Reported stream latency remains diagnostic information.
+
+This removes a launch-dependent bias in the former padding-based clock. Existing
+global offsets may need one recalibration after upgrading. Measurements describe
+software timing relative to reported device playback. Acoustic timing also
+depends on the driver and downstream hardware.
+
 ## Microsoft guidance
 
 Microsoft generally favors AudioGraph for new applications, and identifies
@@ -59,6 +79,15 @@ size, and period. Timing telemetry reports the negotiated shared period or the
 actual exclusive buffer period, including driver alignment. A period is a buffer
 servicing interval, not a measurement of total speaker latency.
 
+Clock regression tests cover launch phase, delayed callbacks, device frequency
+units, startup silence, stream reopening, and long-running counters. The opt-in
+native clock tests compare the published mixer timeline against an independent
+device reading on the following callback, including the normal clock
+interpolation/extrapolation. They print each session's median, mean, and 5th/95th
+percentile error in milliseconds for modern shared, legacy shared, and exclusive
+output. Run endpoint tests serially so exclusive ownership does not interrupt
+another probe.
+
 All new negotiation, format allocation, and diagnostic formatting occurs while
 opening/recovering the endpoint. Steady-state rendering uses event waits, the
 existing reusable mixer storage, and direct writes to WASAPI buffers. There is no
@@ -86,6 +115,14 @@ a 128-frame (2.667 ms) modern shared period and a 128-frame exclusive buffer. Th
 forced legacy shared test reported a 480-frame (10 ms) default period. Sustained
 shared/exclusive/shared playback, advancing clocks, and prompt shutdown passed.
 These results cover this endpoint, not every Windows driver or end-to-end latency.
+
+The device-position clock was additionally checked across 16 fresh test processes
+with two modern shared stream openings each (48 kHz, 280-frame buffer, 128-frame
+period). Across those 32 sessions, median errors against subsequent device-clock
+readings ranged from -0.004006 to +0.002229 ms, a 0.006235 ms spread. Per-session
+5th/95th percentiles stayed within approximately -0.044 to +0.046 ms. Legacy shared
+and exclusive clock checks also passed. These are device-clock comparisons, not
+acoustic loopback measurements.
 
 The Windows 7 x64 target can be checked with the same standard-library build used
 by the release workflow:
