@@ -3,7 +3,8 @@
 The fuzzer generates bounded song folders and compares ITGmania observations
 with deadsync's **compiled** song Lua. Lua runs during song loading; the resulting
 tracks and draw data are evaluated without a retained Lua VM. The native mode
-uses production `gameplay_entry::prepare_song_lua`. The runner rejects any layer
+uses the production context builder and `playback::prepare_song_lua`, with the
+capture's external clocks supplied to the offline compiler. The runner rejects any layer
 that retains a VM. There is no live replay option in this fuzzer.
 
 ## Run
@@ -92,6 +93,16 @@ are compared separately. Colors use native RGBA8 quantization without widening
 geometry tolerances. Texture identities resolve Windows path spellings. An offscreen native draw can match a culled compiled
 draw when all its vertices lie outside one clip plane. Extra or missing visible
 passes fail. Missing captures and runtime/compile errors never count as passes.
+
+The native music clock and screen update delta are separate inputs:
+`--fixed-update-fps` fixes the latter only. ITGmania's `Foreground::Update` uses
+music time since the layer's start beat, then successive music-time differences.
+The diagnostic `test-support` context supplies those clocks to compilation. Draw
+results and actor states are never compiler inputs. Raw music time is converted
+to elapsed song time for command playback, while rendering retains raw music
+time. Normal production compilation still uses its 60 Hz reference schedule;
+this comparison establishes equality for the recorded input schedule, not
+independence from update rate or arbitrary runtime clock jitter.
 
 The native check does not yet cover framebuffer pixels, cross-actor draw order,
 blend/cull state, or native modifier/notefield output. Use the semantic mode for

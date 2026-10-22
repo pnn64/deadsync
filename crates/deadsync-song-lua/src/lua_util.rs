@@ -4681,14 +4681,19 @@ fn actor_immediate_capture_block(lua: &Lua, actor: &Table) -> mlua::Result<Table
     block.set("opt2", Value::Nil)?;
     block.set("__songlua_has_changes", false)?;
     let blocks: Table = actor.get("__songlua_capture_blocks")?;
-    // A direct effect setter must be evaluated before an in-flight tween that
-    // starts at the same time or overlay_state_after_blocks would return first.
+    // Keep earlier direct writes in order, but evaluate this setter before an
+    // in-flight tween at the same time or overlay_state_after_blocks returns first.
     let insert_at = (1..=blocks.raw_len())
         .find(|&index| {
             blocks
                 .raw_get::<Table>(index)
-                .and_then(|existing| existing.get::<f32>("start"))
-                .is_ok_and(|existing_start| existing_start >= start)
+                .and_then(|existing| {
+                    let existing_start = existing.get::<f32>("start")?;
+                    Ok(existing_start > start || (existing_start == start
+                        && (existing.get::<Option<usize>>("__songlua_tween_step")?.unwrap_or(0) > 0
+                            || existing.get::<Option<f32>>("duration")?.unwrap_or(0.0) > 0.0)))
+                })
+                .unwrap_or(false)
         })
         .unwrap_or_else(|| blocks.raw_len() + 1);
     for index in (insert_at..=blocks.raw_len()).rev() {
@@ -6752,9 +6757,26 @@ pub fn make_actor_stop_tweening_method(lua: &Lua, actor: &Table) -> mlua::Result
         clear_spin_queue(&actor, false)?;
         clear_replay_tweens(lua, &actor, false)?;
         flush_actor_capture(&actor)?;
+        // Actor::StopTweening deletes m_Tweens, not m_current. Keep writes
+        // made directly to the current state (including InitCommand), while
+        // discarding destinations even for zero-duration queued tweens.
+        let mut immediate = Vec::new();
+        if let Some(blocks) = actor.get::<Option<Table>>("__songlua_capture_blocks")? {
+            for block in blocks.sequence_values::<Table>() {
+                let block = block?;
+                if block.get::<Option<usize>>("__songlua_tween_step")?.unwrap_or(0) == 0
+                    && block.get::<Option<f32>>("duration")?.unwrap_or(0.0) == 0.0
+                {
+                    immediate.push(block);
+                }
+            }
+        }
         clear_actor_queue(lua, &actor)?;
         stop_pending_tweens(lua, &actor, position);
         reset_actor_capture(lua, &actor)?;
+        if !immediate.is_empty() {
+            actor.set("__songlua_capture_blocks", lua.create_sequence_from(immediate)?)?;
+        }
         // StopTweening removes the back state; relative setters now start at
         // the current position, including a later child's pre-update pose.
         if !live_actor_playback(lua) || !has_tween_replay(lua, &actor) {
@@ -7912,7 +7934,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).and_then(song_lua_halign_value) {
-                    capture_block_set_f32(lua, &actor, "halign", value)?;
+                    capture_immediate_f32(lua, &actor, "halign", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -7924,7 +7946,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).and_then(song_lua_valign_value) {
-                    capture_block_set_f32(lua, &actor, "valign", value)?;
+                    capture_immediate_f32(lua, &actor, "valign", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -7936,10 +7958,10 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).and_then(song_lua_halign_value) {
-                    capture_block_set_f32(lua, &actor, "halign", value)?;
+                    capture_immediate_f32(lua, &actor, "halign", value)?;
                 }
                 if let Some(value) = method_arg(&args, 1).and_then(song_lua_valign_value) {
-                    capture_block_set_f32(lua, &actor, "valign", value)?;
+                    capture_immediate_f32(lua, &actor, "valign", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -11214,6 +11236,12 @@ impl SongLuaCompileFrames {
     }
 }
 
+pub(crate) fn set_compile_actor_frames(lua: &Lua, inputs: Option<Vec<[f32; 2]>>) {
+    if let Some(mut frames) = lua.app_data_mut::<SongLuaCompileFrames>() {
+        frames.actor_frames = inputs;
+    }
+}
+
 pub(crate) fn set_compile_frames(
     lua: &Lua,
     frames: impl Iterator<Item = (f64, f64)>,
@@ -12424,7 +12452,7 @@ fn startup_clock_path(actor: &Table) -> mlua::Result<Vec<[f32; 2]>> {
     Ok(path)
 }
 
-fn startup_clock_frames(times: &[f64], path: &[[f32; 2]]) -> Vec<[f32; 2]> {
+fn startup_clock_frames(times: &[f64], path: &[[f32; 2]], inputs: Option<&[[f32; 2]]>) -> Vec<[f32; 2]> {
     let mut path = path.to_vec();
     times
         .iter()
@@ -12436,6 +12464,9 @@ fn startup_clock_frames(times: &[f64], path: &[[f32; 2]]) -> Vec<[f32; 2]> {
                 time as f32 - times[frame - 1] as f32
             };
             let mut span = delta;
+            if let Some(input) = inputs.and_then(|inputs| inputs.get(frame)) {
+                [delta, span] = *input;
+            }
             for [hibernate, rate] in &mut path {
                 if *hibernate > 0.0 {
                     *hibernate -= delta;
@@ -12461,6 +12492,7 @@ fn startup_clock_frames(times: &[f64], path: &[[f32; 2]]) -> Vec<[f32; 2]> {
 pub(crate) fn bake_startup_tweens<'a>(
     states: impl Iterator<Item = &'a mut SongLuaStartupState>,
     replay: impl Iterator<Item = (f64, f64)>,
+    actor_frames: Option<&[[f32; 2]]>,
 ) {
     let mut seconds = 0.0;
     let times = replay
@@ -12484,11 +12516,11 @@ pub(crate) fn bake_startup_tweens<'a>(
         if state.steps.is_empty() {
             continue;
         }
-        frames.actor_frames = state
+        frames.actor_frames = (actor_frames.is_some() || state
             .clock_path
             .iter()
-            .any(|[sleep, rate]| *sleep > 0.0 || *rate != 1.0)
-            .then(|| startup_clock_frames(&frames.times, &state.clock_path));
+            .any(|[sleep, rate]| *sleep > 0.0 || *rate != 1.0))
+            .then(|| startup_clock_frames(&frames.times, &state.clock_path, actor_frames));
         let mut clock = SongLuaQueueClock {
             progress: None,
             epoch: 0,
@@ -12735,6 +12767,17 @@ pub(crate) struct SongLuaStartupCapture {
     pub broadcasts: Vec<(f32, String, bool)>,
 }
 
+#[cfg(feature = "test-support")]
+fn set_reference_start_clock(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
+    if let Some(&[music, beat, _]) = context.compile_clock_inputs.first() {
+        let origin = context.song_timing.as_ref()
+            .map_or(0.0, |timing| f64::from(timing.get_time_for_beat_exact(0.0)));
+        crate::set_compile_song_runtime_values(lua, beat as f32,
+            ((music - origin) / f64::from(song_music_rate(context))) as f32)?;
+    }
+    Ok(())
+}
+
 fn capture_initial_update(
     lua: &Lua,
     root: &Table,
@@ -12762,6 +12805,8 @@ fn capture_initial_update(
         0.0,
     )?;
     lua.set_app_data(SongLuaZeroUpdate);
+    #[cfg(feature = "test-support")]
+    set_reference_start_clock(lua, context)?;
     crate::song_tables::advance_option_levels(lua, 0.0)?;
     let result = run_actor_update_functions_with_delta(lua, &root, 0.0);
     lua.remove_app_data::<SongLuaZeroUpdate>();
@@ -12810,6 +12855,8 @@ pub(crate) fn run_actor_startup_commands(
         start_actor_transition(lua, &transition)?;
     }
     // LoadDelayedScreen broadcasts after activation, before Update(0) sends On.
+    #[cfg(feature = "test-support")]
+    set_reference_start_clock(lua, context)?;
     crate::record_song_lua_broadcast(lua, "ScreenChanged", false)?;
     broadcast_song_lua_message(lua, "ScreenChanged", None)?;
     run_actor_startup_commands_for_table(lua, root)?;

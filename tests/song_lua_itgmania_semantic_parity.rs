@@ -9171,6 +9171,70 @@ fn delayed_actor_pool_is_ready_for_queued_updates() {
 }
 
 #[test]
+fn compiled_song_lua_uses_external_clock_inputs() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.ActorFrame {
+        OnCommand=function(self)
+            self:linear(1):x(100)
+            self:SetUpdateFunction(function(self)
+                self:aux(GAMESTATE:GetSongBeat())
+            end)
+        end,
+    }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Separate clocks");
+    context.music_length_seconds = 2.0;
+    context.compile_clock_inputs = vec![
+        [0.0, 0.0, 0.0], [0.2, 0.2, 0.05], [0.6, 0.6, 0.1], [1.0, 1.0, 0.05],
+    ];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    assert!(compiled.live_scene.is_none());
+    for (time, expected_x) in [(0.2, 5.0), (0.6, 15.0), (1.0, 20.0)] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[0];
+        assert!((state.x - expected_x).abs() < 0.0001, "at {time}: {state:?}");
+    }
+}
+
+#[test]
+fn compile_song_lua_stoptweening_preserves_startup_current_state() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let song_dir = temp.path();
+    let entry = song_dir.join("default.lua");
+    fs::write(&entry, r#"
+return Def.Quad{
+Name="Panel",
+InitCommand=function(self)
+    self:xy(12,34):z(16):zoom(1.5):rotationz(30):diffuse(1,0,0,0.5):halign(1)
+end,
+OnCommand=function(self)
+    self:linear(0):xy(90,80):zoom(3):diffuse(0,1,0,1)
+    self:linear(1):y(70):rotationz(60)
+    self:halign(0):stoptweening():accelerate(0.125):x(8)
+end,
+}
+"#).unwrap();
+    let compiled = compile_song_lua_layers(
+        &[entry.as_path()], 0, &SongLuaCompileContext::new(song_dir, "Startup Current"),
+    ).unwrap().remove(0);
+    let actor = &compiled.overlays[0];
+    let initial = actor.initial_state;
+    assert_eq!([initial.x, initial.y, initial.z], [12.0, 34.0, 16.0]);
+    assert_eq!(initial.zoom, 1.5);
+    assert_eq!(initial.rot_z_deg, 30.0);
+    assert_eq!(initial.diffuse, [1.0, 0.0, 0.0, 0.5]);
+    assert_eq!(initial.halign, 0.0);
+    let startup = actor.message_commands.iter()
+        .find(|command| command.message == "__songlua_actor_startup").unwrap();
+    let final_state = overlay_state_after_blocks(initial, &startup.blocks, 1.0);
+    assert_eq!([final_state.x, final_state.y, final_state.z], [8.0, 34.0, 16.0]);
+    assert_eq!(final_state.zoom, 1.5);
+    assert_eq!(final_state.rot_z_deg, 30.0);
+    assert_eq!(final_state.diffuse, initial.diffuse);
+}
+
+#[test]
 fn queued_startup_preserves_initial_overlay_state() {
     crate::paths::init();
     let temp = tempfile::tempdir().expect("create song directory");

@@ -26,6 +26,16 @@ use crate::{
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 8192;
 pub(crate) const SONG_LUA_UPDATE_REFERENCE_FPS: f32 = 60.0;
 
+pub(crate) fn first_update_seconds(_context: &SongLuaCompileContext) -> f32 {
+    #[cfg(feature = "test-support")]
+    if let Some(frame) = _context.compile_clock_inputs.get(1) {
+        let origin = _context.song_timing.as_ref()
+            .map_or(0.0, |timing| f64::from(timing.get_time_for_beat_exact(0.0)));
+        return ((frame[0] - origin) / f64::from(song_music_rate(_context))) as f32;
+    }
+    1.0 / SONG_LUA_UPDATE_REFERENCE_FPS
+}
+
 pub(crate) fn apply_startup_states<Kind>(
     context: &SongLuaCompileContext,
     overlays: &mut [SongLuaOverlayCompileActor<Kind>],
@@ -33,7 +43,7 @@ pub(crate) fn apply_startup_states<Kind>(
     messages: &mut Vec<SongLuaMessageEvent>,
 ) {
     const MESSAGE: &str = "__songlua_queued_startup";
-    let beat = song_beat_at_elapsed_seconds(1.0 / SONG_LUA_UPDATE_REFERENCE_FPS, context);
+    let beat = song_beat_at_elapsed_seconds(first_update_seconds(context), context);
     let mut changed = false;
     for overlay in overlays.iter_mut() {
         let Some(startup) = states.get(&(overlay.table.to_pointer() as usize)) else {
@@ -843,6 +853,19 @@ pub(crate) fn update_function_replay_beats(
     start: f32,
     end: f32,
 ) -> Vec<(f64, f64)> {
+    #[cfg(feature = "test-support")]
+    if !context.compile_clock_inputs.is_empty() {
+        let origin = context.song_timing.as_ref()
+            .map_or(0.0, |timing| f64::from(timing.get_time_for_beat_exact(0.0)));
+        let rate = f64::from(song_music_rate(context));
+        let mut previous = 0.0;
+        return context.compile_clock_inputs.iter().map(|&[music, beat, _]| {
+            let seconds = (music - origin) / rate;
+            let delta = seconds - previous;
+            previous = seconds;
+            (beat, delta)
+        }).collect();
+    }
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
     let end_seconds = f64::from(if end == update_function_end_beat(context) {
         // Keep the supplied horizon. Converting its rounded beat back to
@@ -928,6 +951,20 @@ pub(crate) fn update_function_replay_beats(
         out.push((beat, delta));
     }
     out
+}
+
+pub(crate) fn reference_actor_frames(_context: &SongLuaCompileContext) -> Option<Vec<[f32; 2]>> {
+    #[cfg(feature = "test-support")]
+    if !_context.compile_clock_inputs.is_empty() {
+        let rate = f64::from(song_music_rate(_context));
+        return Some(_context.compile_clock_inputs.iter().enumerate().map(|(index, &[music, _, delta])| {
+            let span = if index == 0 { 0.0 } else {
+                (music - _context.compile_clock_inputs[index - 1][0]) / rate
+            };
+            [delta as f32, span as f32]
+        }).collect());
+    }
+    None
 }
 
 #[must_use]
@@ -3128,6 +3165,8 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut spline_capture = ColumnSplineCapture::default();
     spline_capture.capture(lua, 0.0)?;
     let start = song_beat_at_elapsed_seconds(0.0, context);
+    #[cfg(feature = "test-support")]
+    let start = context.compile_clock_inputs.first().map_or(start, |frame| frame[1] as f32);
     let end = update_function_end_beat(context);
     if (!actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
         && !crate::model_texture::active(lua)) || end <= start
@@ -3340,6 +3379,8 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
     let mut current_overlays = replay_overlays.clone();
     crate::lua_util::set_compile_frames(lua, replay.iter().copied())
         .map_err(|err| err.to_string())?;
+    let actor_frames = reference_actor_frames(context);
+    crate::lua_util::set_compile_actor_frames(lua, actor_frames.clone());
     let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
     capture_update_overlay_samples(
         lua,
@@ -3418,6 +3459,7 @@ pub fn compile_update_functions<Slot, Vertex, Attribute>(
         );
         crate::lua_util::set_prior_positions(lua, &current_overlays);
         let actor_delta = f64::from(seconds as f32 - (seconds - delta_seconds) as f32);
+        let actor_delta = actor_frames.as_ref().map_or(actor_delta, |frames| f64::from(frames[frame_count][0]));
         call_update_functions_at(lua, root, exact_beat, seconds, delta_beats, actor_delta)?;
         crate::model_texture::sample(lua, seconds as f32);
         crate::lua_util::append_wrapper_actors(lua, &mut capture_actors, &mut [

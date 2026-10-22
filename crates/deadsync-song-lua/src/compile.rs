@@ -620,6 +620,7 @@ where
             crate::perframe::update_function_end_beat(context),
         )
         .into_iter(),
+        crate::perframe::reference_actor_frames(context).as_deref(),
     );
     compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
@@ -632,7 +633,7 @@ where
     // Actor::UpdateTweening needs positive delta. Match the first-frame clock
     // used when restoring the state before queued startup commands.
     let startup_beat = crate::song_beat_at_elapsed_seconds(
-        1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS,
+        crate::perframe::first_update_seconds(context),
         context,
     );
     for (beat, _, _) in &mut startup_broadcasts {
@@ -1103,7 +1104,7 @@ where
         }
     }
     finalize_sprite_textures(&mut overlays, sprite_textures);
-    let startup_seconds = 1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS;
+    let startup_seconds = crate::perframe::first_update_seconds(context);
     let startup_time = context.song_timing.as_ref().map_or_else(
         || crate::song_beat_at_elapsed_seconds(startup_seconds, context),
         |timing| {

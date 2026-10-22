@@ -11,19 +11,6 @@ use std::{collections::BTreeMap, path::Path};
 pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Result<Value, String> {
     let (prepared, context) = native_gameplay::compile_generated(trace, trace_path, simfile)?;
     let compiled: Vec<_> = prepared.compiled_layers().collect();
-    if std::env::var_os("DEADSYNC_FUZZ_DEBUG").is_some() {
-        for layer in &compiled {
-            eprintln!("MESSAGES {:?}", layer.messages);
-            for (index, actor) in layer.overlays.iter().enumerate() {
-                if actor.name.as_deref().is_some_and(|name| name.starts_with("Fuzz")) {
-                    eprintln!("OVERLAY {index}: {actor:?}");
-                    for track in layer.overlay_updates.iter().filter(|track| track.overlay_index == index) {
-                        eprintln!("TRACK {:?}: first {:?}, last {:?}", track.target, track.samples.first(), track.samples.last());
-                    }
-                }
-            }
-        }
-    }
     let mut compile_checks = Parity::default();
     for layer in &compiled {
         compare_compile_info(std::slice::from_ref(*layer), &mut compile_checks);
@@ -110,6 +97,11 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
         }
         let second = frame["seconds"].as_f64().ok_or("missing frame seconds")? as f32;
         let beat = frame["beat"].as_f64().ok_or("missing frame beat")? as f32;
+        // Native records raw music time; command playback uses elapsed time
+        // from beat zero. Composition still receives the raw music clock.
+        let elapsed = (second - context.song_timing.as_ref()
+            .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0)))
+            / deadsync_song_lua::song_music_rate(&context);
         let end = boundary["samples"]
             .as_u64()
             .ok_or("missing sample boundary")? as usize;
@@ -131,11 +123,11 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
         }
         let states: Vec<_> = compiled
             .iter()
-            .map(|l| compiled_overlay_states_at(l, &context, beat, second))
+            .map(|l| compiled_overlay_states_at(l, &context, beat, elapsed))
             .collect();
         let locals: Vec<_> = compiled
             .iter()
-            .map(|l| compiled_local_states_at(l, &context, beat, second))
+            .map(|l| compiled_local_states_at(l, &context, beat, elapsed))
             .collect();
         for (id, &(l, i)) in &bindings {
             let layer = &compiled[l];

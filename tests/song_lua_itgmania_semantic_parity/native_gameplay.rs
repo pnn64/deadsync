@@ -5013,11 +5013,30 @@ pub(super) fn compile_generated(
     )?;
 
     context.live = false;
-    let compiled = deadsync_shell::gameplay_entry::prepare_song_lua(
-        &song, &charts, std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll,
-        1.0, viewport, (context.display_width as u32, context.display_height as u32),
-        context.display_aspect_ratio, f32::from(autoplay), &session, &config,
-        &context.video_renderers, context.random_seed,
+    // Foreground::Update ignores the screen's fixed delta. It uses music time
+    // since the layer's start beat, then successive music-time differences.
+    // Keep the beat-zero initial state and replay every captured active frame.
+    let origin = context.song_timing.as_ref()
+        .map_or(0.0, |timing| f64::from(timing.get_time_for_beat_exact(0.0)));
+    context.compile_clock_inputs.push([origin, 0.0, 0.0]);
+    for frame in trace["update_frames"].as_array().ok_or("missing clock inputs")? {
+        let beat = number(frame, "beat")?;
+        if beat < 0.0 { continue; }
+        let music = number(frame, "seconds")?;
+        let previous = context.compile_clock_inputs.last().unwrap()[0];
+        let delta = f64::from((music as f32 - previous as f32)
+            / deadsync_song_lua::song_music_rate(&context));
+        if !music.is_finite() || !beat.is_finite() || !delta.is_finite() || delta < 0.0
+            || context.compile_clock_inputs.last().is_some_and(|previous| previous[0] >= music)
+        {
+            return Err("invalid generated compiler clock inputs".into());
+        }
+        context.compile_clock_inputs.push([music, beat, delta]);
+    }
+    if context.compile_clock_inputs.len() < 2 { return Err("missing active song clock inputs".into()); }
+    let compiled = deadsync_song_lua::playback::prepare_song_lua(
+        &song, &context, deadsync_assets::song_lua::compile_song_lua,
+        deadsync_assets::song_lua::compile_song_lua_layers,
     );
     if compiled.compiled_layers().next().is_none() || compiled.compiled_layers().any(|layer| layer.live_scene.is_some()) {
         return Err("expected compiled layers with no retained Lua VM".into());

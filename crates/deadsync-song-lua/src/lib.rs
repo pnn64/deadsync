@@ -1553,6 +1553,10 @@ pub struct SongLuaCompileContext {
     /// External clock reads for diagnostic replay, never actor/query results.
     #[cfg(feature = "test-support")]
     pub host_clock_inputs: Vec<SongLuaHostClockInput>,
+    /// Diagnostic compiler inputs: raw music seconds, song beat, actor delta.
+    /// These are external clocks, never expected actor states or draw results.
+    #[cfg(feature = "test-support")]
+    pub compile_clock_inputs: Vec<[f64; 3]>,
     pub music_length_seconds: f32,
     /// Whole-song note bounds resolved at catalog load, independently of
     /// audio duration. Note times include the load offset; hints stay absolute.
@@ -1622,6 +1626,8 @@ impl SongLuaCompileContext {
             capture_overlay_probe: false,
             #[cfg(feature = "test-support")]
             host_clock_inputs: Vec::new(),
+            #[cfg(feature = "test-support")]
+            compile_clock_inputs: Vec::new(),
             music_length_seconds: 0.0,
             song_note_bounds: None,
             style_name: "single".to_string(),
