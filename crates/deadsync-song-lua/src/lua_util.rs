@@ -4856,6 +4856,9 @@ fn capture_immediate_vec5(
 
 fn capture_immediate_string(lua: &Lua, actor: &Table, key: &str, value: &str) -> mlua::Result<()> {
     let update = capture_target_for_key(key).and_then(|target| match target {
+        SongLuaOverlayUpdateTarget::TextAlign => {
+            parse_overlay_text_align(value).map(SongLuaOverlayUpdateValue::TextAlign)
+        }
         SongLuaOverlayUpdateTarget::EffectClock => {
             parse_overlay_effect_clock(value).map(SongLuaOverlayUpdateValue::EffectClock)
         }
@@ -4885,7 +4888,11 @@ pub fn capture_block_set_f32(lua: &Lua, actor: &Table, key: &str, value: f32) ->
         .position(|axis| *axis == key)
     {
         prepare_capture_scope_actor(lua, actor)?;
-        if let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? {
+        // The unified tween replay owns both current and destination rotation.
+        // Its queued writes must not leak into the current spin snapshot.
+        if !has_tween_replay(lua, actor)
+            && let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")?
+        {
             let tail: usize = pose.get("tail")?;
             let rotation: Table = if tail == 0 {
                 pose.get("rotation")?
@@ -7985,7 +7992,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = method_arg(&args, 0).and_then(song_lua_valign_value) {
-                    capture_block_set_f32(lua, &actor, "valign", value)?;
+                    capture_immediate_f32(lua, &actor, "valign", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -8000,10 +8007,10 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
                     return Ok(actor.clone());
                 };
                 if let Some(value) = song_lua_halign_value(raw) {
-                    capture_block_set_f32(lua, &actor, "halign", value)?;
+                    capture_immediate_f32(lua, &actor, "halign", value)?;
                 }
                 if let Some(value) = song_lua_text_align_value(raw) {
-                    capture_block_set_string(
+                    capture_immediate_string(
                         lua,
                         &actor,
                         "text_align",
@@ -11826,8 +11833,8 @@ fn live_destination_scalar(lua: &Lua, actor: &Table, key: &str) -> Option<f32> {
         "faderight" => dest.faderight,
         "fadetop" => dest.fadetop,
         "fadebottom" => dest.fadebottom,
-        // Spin still owns a separate rotation queue. Keep its table-backed
-        // getter synchronization until that queue shares the native pose.
+        // Rotation setters also publish table-backed destination getters and
+        // synchronize the current spin snapshot through record_tween_write.
         _ => return None,
     })).flatten()
 }

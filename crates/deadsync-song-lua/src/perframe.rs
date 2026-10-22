@@ -4079,6 +4079,7 @@ fn apply_perframe_active_message<Kind>(
         Target::Hibernating,
         Target::HAlign,
         Target::VAlign,
+        Target::TextAlign,
         Target::Size,
         Target::BaseAlpha,
         Target::Vibrate,

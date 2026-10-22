@@ -147,20 +147,21 @@ The generated Rust test is ignored unless explicitly invoked by the Python
 runner with trace, simfile, oracle and report environment variables. Its pass
 requires `execution_path=compiled-song-lua` and `retained_lua_vm=false`.
 
-Validation of this revision: seed-42 native cases 0 through 9 all pass against
-saved captures and a fresh native run, with zero draw mismatches and no retained
-Lua VM. All 11 Python
-tests and 22 targeted Rust regressions passed, including queued stop/finish,
-quaternion interpolation and parent composition, same-frame spin writes,
-`beatnooffset` startup, inherited colors, and comparator rejection controls.
+Validation of this revision: seed-42 native cases 0 through 24 pass against
+saved captures; cases 13, 16, and 23 also pass fresh native execution. All runs
+use compiled playback with zero draw mismatches and no retained Lua VM. The 19
+targeted Rust regressions pass, including named/text alignment inside queued
+tweens, queued rotation writes with active or stopped spin, and immediate
+same-frame callback writes.
 
 The fixes follow native `Actor.cpp`, `Actor.h`, `RageMath.cpp`, and `Sprite.cpp`:
 size/alignment/basealpha setters bypass tween destinations; heading/pitch/roll
 accumulate a separate quaternion; offset-free beat clocks exclude global offset;
-glow replaces vertex colors; and fade quads may be batched without discarding
-geometry. The comparator still rejects changed vertices, missing/duplicate quads,
+glow replaces vertex colors; queued rotations change the destination without
+overwriting the current spin snapshot; and fade quads may be batched without
+discarding geometry. The comparator still rejects changed vertices, missing/duplicate quads,
 and batching across different native render states.
 
 An earlier 1,000-case generation run authored 113 method names and all 3,239
 catalog pairs. This was generation, not a 1,000-case engine parity run. Passing
-these ten native cases does not establish complete Lua API or pixel coverage.
+these 25 native cases does not establish complete Lua API or pixel coverage.

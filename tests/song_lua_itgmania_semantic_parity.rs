@@ -9247,6 +9247,131 @@ fn compiled_song_lua_heading_accumulates_and_tweens_quaternions() {
 }
 
 #[test]
+fn compiled_song_lua_named_alignment_bypasses_queued_tweens() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"return Def.ActorFrame{
+        OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+        Def.Quad{Name='Panel', InitCommand=function(self)
+            self:horizalign('left'):vertalign('bottom')
+        end,
+        OnCommand=function(self) self:sleep(1/60):queuecommand('Move') end,
+        MoveCommand=function(self)
+            self:bounceend(0.25):x(100):horizalign('right'):vertalign('top')
+            self:hurrytweening(0.5)
+        end},
+    }"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Named alignment");
+    context.music_length_seconds = 1.0;
+    context.compile_clock_inputs = vec![
+        [0.0, 0.0, 0.0],
+        [0.02, 0.02, 0.02],
+        [0.04, 0.04, 0.02],
+        [0.2, 0.2, 0.16],
+    ];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert!(compiled.live_scene.is_none());
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Panel"))
+        .unwrap();
+    for time in [0.0, 0.02, 0.04, 0.2] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        assert_eq!(
+            [state.halign, state.valign],
+            if time == 0.0 { [0.0, 1.0] } else { [1.0, 0.0] },
+            "at {time}"
+        );
+        assert_eq!(
+            state.text_align,
+            if time == 0.0 {
+                deadlib_present::actors::TextAlign::Left
+            } else {
+                deadlib_present::actors::TextAlign::Right
+            },
+            "text alignment at {time}"
+        );
+    }
+}
+
+#[test]
+fn compiled_song_lua_queued_rotations_do_not_leak_into_spin_snapshot() {
+    crate::paths::init();
+    for stopped in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let entry = temp.path().join("default.lua");
+        let source = r#"local panel
+            local fired=false
+            return Def.ActorFrame{
+                OnCommand=function(self) self:SetUpdateFunction(function()
+                    if GAMESTATE:GetSongBeat() >= 0.5 and not fired then
+                        fired=true
+                        panel:rotationx(40):rotationy(50):rotationz(60)
+                    end
+                end) end,
+                Def.Quad{Name='Panel', InitCommand=function(self)
+                    panel=self
+                    self:rotationx(10):rotationy(20):rotationz(30)
+                    self:spin():effectmagnitude(0,0,30):effectclock('beat')
+                    STOP_EFFECT
+                end,
+                OnCommand=function(self) self:linear(1):x(100):linear(1):y(100) end},
+            }"#;
+        fs::write(
+            &entry,
+            source.replace(
+                "STOP_EFFECT",
+                if stopped { "self:stopeffect()" } else { "" },
+            ),
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(temp.path(), "Queued rotation snapshot");
+        context.music_length_seconds = 3.0;
+        context.compile_clock_inputs = (0..=8)
+            .map(|i| {
+                let time = f64::from(i) * 0.25;
+                [time, time, if i == 0 { 0.0 } else { 0.25 }]
+            })
+            .collect();
+        let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+            .unwrap()
+            .remove(0);
+        assert!(compiled.live_scene.is_none());
+        let index = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Panel"))
+            .unwrap();
+        // Actor::DestTweenState changes the last queued destination. Spin only
+        // changes m_current before UpdateTweening captures/interpolates m_start.
+        for (time, expected) in [
+            (0.5, [10.0, 20.0, if stopped { 30.0 } else { 33.75 }]),
+            (0.75, [10.0, 20.0, if stopped { 30.0 } else { 31.875 }]),
+            (1.5, [25.0, 35.0, if stopped { 45.0 } else { 48.75 }]),
+            (2.0, [40.0, 50.0, 60.0]),
+        ] {
+            let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+            let actual = [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg];
+            assert!(
+                actual
+                    .iter()
+                    .zip(expected)
+                    .all(|(a, b)| (a - b).abs() < 0.0001),
+                "stopped={stopped}, at {time}: {actual:?}, expected {expected:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn compiled_song_lua_parent_callback_overrides_spin_in_same_frame() {
     crate::paths::init();
     let temp = tempfile::tempdir().unwrap();
