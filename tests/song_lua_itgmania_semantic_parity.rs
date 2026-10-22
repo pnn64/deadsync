@@ -9247,6 +9247,194 @@ fn compiled_song_lua_heading_accumulates_and_tweens_quaternions() {
 }
 
 #[test]
+fn compiled_song_lua_basezoom_bypasses_queued_tweens() {
+    crate::paths::init();
+    for queued in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let entry = temp.path().join("default.lua");
+        let source = r#"return Def.ActorFrame{
+            OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+            Def.Quad{Name='Panel', InitCommand=function(self)
+                self:basezoom(0.8):basezoomx(0.75):basezoomy(1.25):basezoomz(0.5)
+            end,
+            OnCommand=function(self) START end,
+            MoveCommand=function(self)
+                self:linear(0.25):x(100):basezoom(2)
+                    :basezoomx(0.9375):basezoomy(1.5625):basezoomz(0.625)
+                self:hurrytweening(0.5)
+            end},
+        }"#;
+        fs::write(
+            &entry,
+            source.replace(
+                "START",
+                if queued {
+                    "self:sleep(1/60):queuecommand('Move')"
+                } else {
+                    "self:playcommand('Move')"
+                },
+            ),
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(temp.path(), "Immediate base zoom");
+        context.music_length_seconds = 1.0;
+        context.compile_clock_inputs = vec![
+            [0.0, 0.0, 0.0],
+            [0.02, 0.02, 0.02],
+            [0.04, 0.04, 0.02],
+            [0.2, 0.2, 0.16],
+        ];
+        let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+            .unwrap()
+            .remove(0);
+        assert!(compiled.live_scene.is_none());
+        let index = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Panel"))
+            .unwrap();
+        for time in [0.0, 0.02, 0.04, 0.2] {
+            let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+            let expected = if queued && time == 0.0 {
+                [0.8, 0.75, 1.25, 0.5]
+            } else {
+                [2.0, 0.9375, 1.5625, 0.625]
+            };
+            assert_eq!(
+                [
+                    state.basezoom,
+                    state.basezoom_x,
+                    state.basezoom_y,
+                    state.basezoom_z
+                ],
+                expected,
+                "queued={queued}, at {time}"
+            );
+            if time == 0.04 {
+                assert!(
+                    state.x > 0.0 && state.x < 100.0,
+                    "position must still tween"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn compiled_song_lua_child_commands_follow_stable_draw_order() {
+    crate::paths::init();
+    for resort in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let entry = temp.path().join("default.lua");
+        let source = r#"local init, mark, on, tick = 0,0,0,0
+            local root=Def.ActorFrame{
+                InitCommand=function(self)
+                    self:playcommand('Mark')
+                    self:GetChild('Child1'):draworder(2)
+                    RESORT
+                end,
+                OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+            }
+            for i=1,5 do
+                root[i]=Def.Quad{Name='Child'..i,
+                    InitCommand=function(self)
+                        init=init+1; self:x(init):draworder((i+1)%2)
+                    end,
+                    MarkCommand=function(self) mark=mark+1; self:y(mark) end,
+                    OnCommand=function(self)
+                        on=on+1; self:z(on):queuecommand('Tick')
+                    end,
+                    TickCommand=function(self) tick=tick+1; self:rotationx(tick) end,
+                }
+            end
+            return root"#;
+        fs::write(
+            &entry,
+            source.replace("RESORT", if resort { "self:SortByDrawOrder()" } else { "" }),
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(temp.path(), "Stable child command order");
+        context.music_length_seconds = 1.0;
+        context.compile_clock_inputs =
+            vec![[0.0, 0.0, 0.0], [0.02, 0.02, 0.02], [0.04, 0.04, 0.02]];
+        let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+            .unwrap()
+            .remove(0);
+        assert!(compiled.live_scene.is_none());
+        let initial_order = [1.0, 4.0, 2.0, 5.0, 3.0];
+        let command_order = if resort {
+            [5.0, 3.0, 1.0, 4.0, 2.0]
+        } else {
+            initial_order
+        };
+        for i in 1..=5 {
+            let name = format!("Child{i}");
+            let index = compiled
+                .overlays
+                .iter()
+                .position(|actor| actor.name.as_deref() == Some(name.as_str()))
+                .unwrap();
+            let state = compiled_local_states_at(&compiled, &context, 0.04, 0.04)[index];
+            // Init follows creation order; parent Init sees sorted children.
+            // A draworder write only changes iteration after an explicit sort.
+            assert_eq!(
+                [state.x, state.y, state.z, state.rot_x_deg],
+                [
+                    i as f32,
+                    initial_order[i - 1],
+                    command_order[i - 1],
+                    command_order[i - 1]
+                ],
+                "resort={resort}, {name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn sprite_fade_inner_edges_preserve_native_color_bytes() {
+    use deadsync_song_lua::playback::actor_conformance::crop_fade_vertices;
+    let colors = [
+        [1.0, 0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0, 0.5],
+        [0.0, 0.0, 1.0, 0.75],
+        [1.0, 1.0, 0.0, 1.0],
+    ];
+    for step in 0..=64 {
+        let factor = step as f32 / 64.0;
+        let state = SongLuaOverlayState {
+            vertex_colors: Some(colors),
+            fadeleft: 0.1 + factor * 0.025,
+            faderight: 0.2 + factor * 0.05,
+            fadetop: 0.15 + factor * 0.0375,
+            fadebottom: 0.05 + factor * 0.0125,
+            ..Default::default()
+        };
+        let vertices = crop_fade_vertices(state, [32.0, 32.0]);
+        assert_eq!(vertices.len(), 30, "center plus four fade quads");
+        for vertex in vertices {
+            let corner = colors
+                .iter()
+                .find(|color| color[..3] == vertex.color[..3])
+                .unwrap();
+            // Sprite::DrawPrimitives keeps the original corner alpha on the
+            // inside and explicitly sets zero on the outside of each fade.
+            let alpha = if vertex.uv.iter().any(|&t| t == 0.0 || t == 1.0) {
+                0.0
+            } else {
+                corner[3]
+            };
+            let native_byte = |value: f32| (value * 256.0).clamp(0.0, 255.0) as u8;
+            assert_eq!(
+                native_byte(vertex.color[3]),
+                native_byte(alpha),
+                "step {step}: {vertex:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn compiled_song_lua_named_alignment_bypasses_queued_tweens() {
     crate::paths::init();
     let temp = tempfile::tempdir().unwrap();

@@ -8132,15 +8132,10 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
-                    capture_block_set_f32(lua, &actor, "basezoom", value)?;
-                    capture_block_set_zoom_axes(
-                        lua,
-                        &actor,
-                        value,
-                        "basezoom_x",
-                        "basezoom_y",
-                        "basezoom_z",
-                    )?;
+                    // Actor::SetBaseZoom writes m_baseScale, outside TweenState.
+                    for key in ["basezoom", "basezoom_x", "basezoom_y", "basezoom_z"] {
+                        capture_immediate_f32(lua, &actor, key, value)?;
+                    }
                 }
                 Ok(actor.clone())
             }
@@ -8152,7 +8147,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
-                    capture_block_set_f32(lua, &actor, "basezoom_x", value)?;
+                    capture_immediate_f32(lua, &actor, "basezoom_x", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -8164,7 +8159,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
-                    capture_block_set_f32(lua, &actor, "basezoom_y", value)?;
+                    capture_immediate_f32(lua, &actor, "basezoom_y", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -8176,7 +8171,7 @@ pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 if let Some(value) = args.get(1).cloned().and_then(read_f32) {
-                    capture_block_set_f32(lua, &actor, "basezoom_z", value)?;
+                    capture_immediate_f32(lua, &actor, "basezoom_z", value)?;
                 }
                 Ok(actor.clone())
             }
@@ -9806,7 +9801,6 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
         "SetDiffuseLightColor",
         "SetLightDirection",
         "SetSpecularLightColor",
-        "SortByDrawOrder",
         "fardistz",
         "StartTransitioningScreen",
         "stop",
@@ -9814,6 +9808,10 @@ pub fn install_actor_render_compat_methods(lua: &Lua, actor: &Table) -> mlua::Re
     ] {
         actor.set(name, make_actor_chain_method(lua, actor)?)?;
     }
+    actor.set("SortByDrawOrder", lua.create_function(|_, actor: Table| {
+        sort_actor_children_by_draw_order(&actor)?;
+        Ok(actor)
+    })?)?;
     if actor_type_is(actor, "ActorFrameTexture")? {
         actor.set(
             "Create",
@@ -11030,6 +11028,16 @@ fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+fn sort_actor_children_by_draw_order(actor: &Table) -> mlua::Result<()> {
+    let mut children = actor.sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>()?;
+    // ActorFrame::SortByDrawOrder is stable: ties retain the current child order.
+    children.sort_by_key(|child| child.raw_get::<i32>("__songlua_state_draw_order").unwrap_or(0));
+    for (index, child) in children.into_iter().enumerate() {
+        actor.raw_set(index + 1, child)?;
+    }
+    Ok(())
+}
+
 pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     if actor
         .get::<Option<bool>>("__songlua_init_commands_ran")?
@@ -11062,6 +11070,10 @@ pub fn run_actor_init_commands_for_table(lua: &Lua, actor: &Table) -> mlua::Resu
         let _ = index;
         run_actor_init_commands_for_table(lua, &child)?;
     }
+    // ActorFrame::LoadChildrenFromNode sorts after loading/initializing every
+    // child, before the parent's Init. Command propagation and updates then use
+    // this order too (including shared Lua state and random-number consumption).
+    sort_actor_children_by_draw_order(actor)?;
     if !matches!(name, Value::Nil) {
         actor.raw_set("__songlua_native_name", name.clone())?;
         actor.raw_set("Name", name)?;

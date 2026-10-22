@@ -147,21 +147,26 @@ The generated Rust test is ignored unless explicitly invoked by the Python
 runner with trace, simfile, oracle and report environment variables. Its pass
 requires `execution_path=compiled-song-lua` and `retained_lua_vm=false`.
 
-Validation of this revision: seed-42 native cases 0 through 24 pass against
-saved captures; cases 13, 16, and 23 also pass fresh native execution. All runs
-use compiled playback with zero draw mismatches and no retained Lua VM. The 19
-targeted Rust regressions pass, including named/text alignment inside queued
-tweens, queued rotation writes with active or stopped spin, and immediate
-same-frame callback writes.
+Validation of this revision: seed-41 and seed-42 native cases 0 through 24 pass
+against saved captures (50 cases). Seed-41 cases 0, 9, and 12 also pass fresh
+native execution. All runs use compiled playback with zero draw mismatches and
+no retained Lua VM. The 22 targeted Rust regressions pass, including immediate
+base zoom inside direct and queued commands, stable child command/update order,
+fade color bytes, named/text alignment inside queued tweens, and queued
+rotation writes with active or stopped spin.
 
-The fixes follow native `Actor.cpp`, `Actor.h`, `RageMath.cpp`, and `Sprite.cpp`:
-size/alignment/basealpha setters bypass tween destinations; heading/pitch/roll
-accumulate a separate quaternion; offset-free beat clocks exclude global offset;
+The fixes follow native `Actor.cpp`, `Actor.h`, `ActorFrame.cpp`, `RageMath.cpp`,
+and `Sprite.cpp`: size/alignment/basealpha/basezoom setters bypass tween
+destinations; heading/pitch/roll accumulate a separate quaternion;
+offset-free beat clocks exclude global offset;
 glow replaces vertex colors; queued rotations change the destination without
-overwriting the current spin snapshot; and fade quads may be batched without
-discarding geometry. The comparator still rejects changed vertices, missing/duplicate quads,
+overwriting the current spin snapshot; child commands and updates follow the
+stable draw order established after child Init, including random-number
+consumption; and fade interiors retain their original alpha at slice boundaries.
+Fade quads may be batched without discarding geometry. The comparator still
+rejects changed vertices, missing/duplicate quads,
 and batching across different native render states.
 
 An earlier 1,000-case generation run authored 113 method names and all 3,239
 catalog pairs. This was generation, not a 1,000-case engine parity run. Passing
-these 25 native cases does not establish complete Lua API or pixel coverage.
+these 50 native cases does not establish complete Lua API or pixel coverage.

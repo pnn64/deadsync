@@ -9382,10 +9382,13 @@ fn song_lua_overlay_uvs(
 fn song_lua_projected_edge_factor(t: f32, feather_l: f32, feather_r: f32) -> f32 {
     let mut left = 1.0;
     let mut right = 1.0;
-    if feather_l > f32::EPSILON {
-        left = ((t - 0.0) / feather_l).clamp(0.0, 1.0);
+    if feather_l > f32::EPSILON && t < feather_l {
+        left = (t / feather_l).clamp(0.0, 1.0);
     }
-    if feather_r > f32::EPSILON {
+    // Sprite::DrawPrimitives preserves diffuse alpha at each inner fade edge.
+    // Recomputing (1 - (1 - feather_r)) / feather_r can round below one and
+    // change the native color byte, even when the fade is not cropped.
+    if feather_r > f32::EPSILON && t > 1.0 - feather_r {
         right = ((1.0 - t) / feather_r).clamp(0.0, 1.0);
     }
     left.min(right)
