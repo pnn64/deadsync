@@ -93,7 +93,9 @@ samples the compiled actor tracks at recorded frame clocks and uses the shared
 renderer to compare per-actor submissions: pass/vertex counts, clip coordinates,
 UVs, colors, texture identity, sampler and depth state. Diffuse/glow submissions
 are compared separately. Identical-state native fade quads may match one batched
-mesh, with every quad matched once and all vertices still checked. Colors use native RGBA8 quantization without widening
+mesh. Paired diffuse/glow fade submissions may match two meshes when the cells
+are disjoint and both passes have identical geometry at each cell. Each quad is
+matched once and all vertices are still checked. Colors use native RGBA8 quantization without widening
 geometry tolerances. Texture identities resolve Windows path spellings. An offscreen native draw can match a culled compiled
 draw when all its vertices lie outside one clip plane. Extra or missing visible
 passes fail. Missing captures and runtime/compile errors never count as passes.
@@ -147,29 +149,34 @@ The generated Rust test is ignored unless explicitly invoked by the Python
 runner with trace, simfile, oracle and report environment variables. Its pass
 requires `execution_path=compiled-song-lua` and `retained_lua_vm=false`.
 
-Validation of this revision: all 100 seed-666 native cases and seed-41/seed-42
-cases 0 through 24 pass against saved captures (150 cases). Seed-666 cases 21,
-24, 42, and 47 also pass fresh native execution. All runs use compiled playback
-with zero draw mismatches and no retained Lua VM. The 28 targeted Rust regressions
-pass, including startup and queued timer resets with irregular frame intervals
+Validation of this revision: all 100 seed-1 and 100 seed-666 native cases and
+seed-41/seed-42 cases 0 through 24 pass against saved captures (250 cases).
+Seed-1 cases 9 and 28 also pass fresh native execution. All runs use compiled
+playback with zero draw mismatches and no retained Lua VM. The 34 targeted Rust
+integration regressions and two timing unit tests pass, including offset-free
+rainbow color bytes after a stop, paired diffuse/glow batching rejection cases,
+startup and queued timer resets with irregular frame intervals
 and period wrapping, native motion/effect captures, immediate base zoom, stable
 child command/update order, fade color bytes, named/text alignment inside queued
 tweens, and queued rotation writes with active or stopped spin.
 
 The fixes follow native `Actor.cpp`, `Actor.h`, `ActorFrame.cpp`, `RageMath.cpp`,
-and `Sprite.cpp`: size/alignment/basealpha/basezoom setters bypass tween
+`TimingData.cpp`, and `Sprite.cpp`: size/alignment/basealpha/basezoom setters bypass tween
 destinations; heading/pitch/roll accumulate a separate quaternion;
-offset-free beat clocks exclude global offset;
+offset-free beat clocks exclude global offset and preserve native float
+operation order, applying song/group offsets to the input timestamp instead of
+accumulating them with segment durations;
 glow replaces vertex colors; queued rotations change the destination without
 overwriting the current spin snapshot; child commands and updates follow the
 stable draw order established after child Init, including random-number
 consumption; fade interiors retain their original alpha at slice boundaries;
 and Init/On motion resets preserve the first positive timer delta, while queued
 effect commands still reset after that frame's timer advance.
-Fade quads may be batched without discarding geometry. The comparator still
-rejects changed vertices, missing/duplicate quads,
+Fade quads may be batched without discarding geometry, including paired diffuse
+and glow passes over disjoint fade cells. The comparator still rejects changed
+vertices, missing/duplicate quads, overlapping paired cells, shifted glow,
 and batching across different native render states.
 
 An earlier 1,000-case generation run authored 113 method names and all 3,239
 catalog pairs. This was generation, not a 1,000-case engine parity run. Passing
-these 150 native cases does not establish complete Lua API or pixel coverage.
+these 250 native cases does not establish complete Lua API or pixel coverage.

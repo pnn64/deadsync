@@ -959,6 +959,18 @@ impl TimingData {
         self.get_song_position_with_rate(seconds, 1.0)
     }
 
+    /// Native beatnooffset effect clock. ITGmania's offset-independent lookup
+    /// accumulates segment times from zero, then adds the song/group offset to
+    /// the input timestamp. Applying that offset to each segment instead can
+    /// change a beat by one float ULP and cross an effect's color-byte boundary.
+    #[must_use]
+    pub fn get_song_position_no_offset(&self, seconds: f32) -> BeatInfo {
+        let mut cache = SongPositionCache::new(self);
+        cache.time = 0.0;
+        let seconds = seconds + (self.native_song_offset_sec + self.native_group_offset_sec);
+        self.song_position_from_elapsed_time(seconds, &mut cache)
+    }
+
     /// Native TimingData applies the current music rate to the global offset,
     /// even though the supplied timestamp is already in music seconds.
     #[must_use]
@@ -991,6 +1003,14 @@ impl TimingData {
             cache.reset(self);
         }
         cache.last_seconds = seconds;
+        self.song_position_from_elapsed_time(seconds, cache)
+    }
+
+    fn song_position_from_elapsed_time(
+        &self,
+        seconds: f32,
+        cache: &mut SongPositionCache,
+    ) -> BeatInfo {
         let mut start = cache.start;
         let mut time = cache.time;
         let mut bpm = self.bpm_at_start(&start);

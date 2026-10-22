@@ -9742,6 +9742,88 @@ fn compiled_song_lua_quaternion_parent_and_child_rotate_about_world_origin() {
 }
 
 #[test]
+fn compiled_song_lua_beatnooffset_preserves_rainbow_color_bytes_after_stop() {
+    use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
+    use deadsync_song_lua::playback::actor_conformance::effect_sample;
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"return Def.ActorFrame{
+        Def.Quad{Name='Panel', InitCommand=function(self)
+            self:rainbow():effectclock('beatnooffset'):effectperiod(0.5):effectoffset(0.125)
+        end},
+    }"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Unshifted rainbow clock");
+    context.music_length_seconds = 3.0;
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    let mut timing = TimingData::from_segments(
+        0.0,
+        -0.008,
+        &TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            stops: vec![StopSegment {
+                beat: 2.0,
+                duration: 0.125,
+            }],
+            ..Default::default()
+        },
+        &[],
+    );
+    timing.shift_group_offset_seconds(-0.009);
+    let origin = timing.get_time_for_beat_exact(0.0);
+    context.song_timing = Some(timing);
+    // Seed 1, case 9: both timestamps cross a byte boundary if the beat is
+    // rounded through integer timing or the offset is accumulated with stops.
+    let samples = [
+        (
+            2.6462812423706055_f32,
+            5.0085625648498535_f32,
+            5.024562358856201_f32,
+            [53, 74, 255, 255],
+        ),
+        (
+            2.676870822906494_f32,
+            5.069741725921631_f32,
+            5.0857415199279785_f32,
+            [247, 27, 109, 255],
+        ),
+    ];
+    context
+        .compile_clock_inputs
+        .push([f64::from(origin), 0.0, 0.0]);
+    let mut previous = origin;
+    for &(raw, beat, _, _) in &samples {
+        context.compile_clock_inputs.push([
+            f64::from(raw),
+            f64::from(beat),
+            f64::from(raw - previous),
+        ]);
+        previous = raw;
+    }
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert!(compiled.live_scene.is_none());
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|a| a.name.as_deref() == Some("Panel"))
+        .unwrap();
+    for (raw, beat, native_clock, native_bytes) in samples {
+        let state = compiled_local_states_at(&compiled, &context, beat, raw - origin)[index];
+        let [at, units] = state.effect_time.expect("compiled beat clock");
+        assert_eq!((units + (beat - at)).to_bits(), native_clock.to_bits());
+        let rgba = effect_sample(state, raw, beat).tint;
+        let bytes = rgba.map(|v| (v * 256.0).trunc().clamp(0.0, 255.0) as u8);
+        assert_eq!(bytes, native_bytes, "rainbow at {raw}: {rgba:?}");
+    }
+}
+
+#[test]
 fn compiled_song_lua_beatnooffset_keeps_global_clock_after_startup_bounce() {
     crate::paths::init();
     let temp = tempfile::tempdir().unwrap();

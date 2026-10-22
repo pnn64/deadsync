@@ -13504,7 +13504,7 @@ fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::R
             let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
             let seconds = f32::from_lua(crate::runtime::song_music_seconds(lua, &runtime)?, lua)?;
             lua.app_data_ref::<crate::runtime::SongLuaNoOffsetClock>()
-                .map(|clock| clock.0.get_beat_for_time(seconds))
+                .map(|clock| clock.0.get_song_position_no_offset(seconds).beat)
                 .unwrap_or(compile_song_runtime_values(lua)?.0)
         } else if kind.as_deref() == Some("beat") {
             compile_song_runtime_values(lua)?.0

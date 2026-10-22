@@ -157,19 +157,8 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
                 continue;
             }
             let ops = std::mem::take(&mut submitted.ops);
-            // Sprite::DrawPrimitives submits its center and edge fades as
-            // separate quads. Production may batch those same quads into one
-            // mesh; retain every vertex and require identical render state.
-            let batched = (ops.len() == 1 && expected.len() > 1
-                && expected.iter().all(|sample| sample["primitive"] == "Quads"
-                    && sample["state"] == expected[0]["state"]))
-                .then(|| {
-                    let mut sample = expected[0].clone();
-                    sample["vertices"] = Value::Array(expected.iter().flat_map(|sample|
-                        sample["vertices"].as_array().unwrap().iter().cloned()).collect());
-                    sample
-                });
-            let batched_refs = batched.as_ref().map(|sample| vec![sample]);
+            let batched = batch_native_quad_passes(expected, ops.len());
+            let batched_refs = batched.as_ref().map(|samples| samples.iter().collect::<Vec<_>>());
             let expected = batched_refs.as_deref().unwrap_or(expected);
             if ops.len() != expected.len() {
                 failures += 1;
@@ -217,6 +206,103 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
         "pending_coverage":["framebuffer pixels","native modifier and notefield output (use semantic oracle for compiled track checks)",
             "cross-actor draw ordering and blend/cull state",
             "command/query call ordering (compiled playback has no runtime Lua calls)"]}),
+    )
+}
+
+fn batch_native_quad_passes(expected: &[&Value], passes: usize) -> Option<Vec<Value>> {
+    if !matches!(passes, 1 | 2) || expected.len() <= passes || expected.len() % passes != 0 {
+        return None;
+    }
+    if !expected.iter().enumerate().all(|(i, sample)| {
+        sample["primitive"] == "Quads"
+            && sample["state"] == expected[i % passes]["state"]
+            && sample["vertices"].as_array().is_some_and(|v| v.len() == 4)
+    }) {
+        return None;
+    }
+    // Sprite::DrawPrimitives calls DrawTexture (diffuse, then glow) for the
+    // center and each fade edge. Production batches the diffuse cells and the
+    // glow cells separately. Only reorder disjoint cells, keeping both passes
+    // at each cell in order. Overlapping geometry, shadows, missing passes and
+    // render-state changes must still fail the normal pass-count comparison.
+    if passes == 2 {
+        let mut cells: Vec<[f64; 5]> = Vec::new();
+        for pair in expected.chunks_exact(2) {
+            let rows = pair[0]["vertices"].as_array()?;
+            let other = pair[1]["vertices"].as_array()?;
+            if !rows
+                .iter()
+                .zip(other)
+                .all(|(a, b)| (0..9).all(|i| a[i] == b[i]))
+            {
+                return None;
+            }
+            let mut bounds = [
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                rows[0][2].as_f64()?,
+            ];
+            for row in rows {
+                let x = row[0].as_f64()?;
+                let y = row[1].as_f64()?;
+                if !x.is_finite() || !y.is_finite() || row[2].as_f64()? != bounds[4] {
+                    return None;
+                }
+                bounds[0] = bounds[0].min(x);
+                bounds[1] = bounds[1].max(x);
+                bounds[2] = bounds[2].min(y);
+                bounds[3] = bounds[3].max(y);
+            }
+            if bounds[0] >= bounds[1] || bounds[2] >= bounds[3] {
+                return None;
+            }
+            for x in &bounds[..2] {
+                for y in &bounds[2..4] {
+                    if rows
+                        .iter()
+                        .filter(|r| r[0].as_f64() == Some(*x) && r[1].as_f64() == Some(*y))
+                        .count()
+                        != 1
+                    {
+                        return None;
+                    }
+                }
+            }
+            for previous in &cells {
+                // Native computes shared fade edges via different float
+                // expressions. Allow only their rounding seam here; vertex
+                // comparison below retains its original tolerances.
+                let scale = bounds[..4]
+                    .iter()
+                    .chain(&previous[..4])
+                    .fold(1.0_f64, |s, v| s.max(v.abs()));
+                let seam = scale * f64::from(f32::EPSILON) * 2.0;
+                let overlap_x = bounds[1].min(previous[1]) - bounds[0].max(previous[0]);
+                let overlap_y = bounds[3].min(previous[3]) - bounds[2].max(previous[2]);
+                if bounds[4] != previous[4] || (overlap_x > seam && overlap_y > seam) {
+                    return None;
+                }
+            }
+            cells.push(bounds);
+        }
+    }
+    Some(
+        (0..passes)
+            .map(|pass| {
+                let mut sample = expected[pass].clone();
+                sample["vertices"] = Value::Array(
+                    expected
+                        .iter()
+                        .skip(pass)
+                        .step_by(passes)
+                        .flat_map(|s| s["vertices"].as_array().unwrap().iter().cloned())
+                        .collect(),
+                );
+                sample
+            })
+            .collect(),
     )
 }
 
@@ -336,6 +422,57 @@ fn compiled_row_matches(
         }
     }
     native_gameplay::row_matches(&submitted, expected, uv, untextured, depth)
+}
+
+#[test]
+fn batched_diffuse_glow_requires_disjoint_paired_cells_and_matching_state() {
+    let quad = |left: f32, right: f32, color: f32| {
+        json!({
+            "primitive": "Quads", "state": {"texture": "song:/texture.png", "blend": 0},
+            "vertices": [[left,0,0,left,0,0,1,0,0,color,0,0,1],
+                         [left,1,0,left,1,0,1,0,1,color,0,0,1],
+                         [right,1,0,right,1,0,1,1,1,color,0,0,1],
+                         [right,0,0,right,0,0,1,1,0,color,0,0,1]]
+        })
+    };
+    let input = vec![
+        quad(0.0, 1.0, 0.25),
+        quad(0.0, 1.0, 0.75),
+        quad(1.0, 2.0, 0.25),
+        quad(1.0, 2.0, 0.75),
+    ];
+    let batch = |input: &[Value]| batch_native_quad_passes(&input.iter().collect::<Vec<_>>(), 2);
+    let merged = batch(&input).unwrap();
+    assert_eq!(merged.len(), 2);
+    for pass in 0..2 {
+        let expected: Vec<_> = input
+            .iter()
+            .skip(pass)
+            .step_by(2)
+            .flat_map(|v| v["vertices"].as_array().unwrap().iter().cloned())
+            .collect();
+        assert_eq!(merged[pass]["vertices"], json!(expected));
+    }
+    assert!(batch(&input[..3]).is_none(), "missing glow pass");
+    let mut changed = input.clone();
+    changed[2]["state"]["blend"] = json!(1);
+    assert!(batch(&changed).is_none(), "different render state");
+    changed = input.clone();
+    changed[1]["vertices"][0][3] = json!(0.5);
+    assert!(batch(&changed).is_none(), "shadow or shifted glow");
+    changed = input.clone();
+    changed[2] = quad(0.5, 1.5, 0.25);
+    changed[3] = quad(0.5, 1.5, 0.75);
+    assert!(
+        batch(&changed).is_none(),
+        "overlapping cells cannot commute"
+    );
+    changed[2] = input[0].clone();
+    changed[3] = input[1].clone();
+    assert!(batch(&changed).is_none(), "duplicate cell");
+    changed = input.clone();
+    changed.swap(1, 2);
+    assert!(batch(&changed).is_none(), "unpaired passes");
 }
 
 #[test]
