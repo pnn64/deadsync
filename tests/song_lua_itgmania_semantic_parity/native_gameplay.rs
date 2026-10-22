@@ -4939,3 +4939,90 @@ pub(super) fn archive_passes(scope: Scope, report: &Value) -> bool {
         && report["mismatches"].as_array().is_some_and(Vec::is_empty)
         && report["errors"].as_array().is_some_and(Vec::is_empty)
 }
+
+
+/// Uses the same context builder as production, with compilation on the load worker.
+/// Native results are never imported into compiled actor tracks.
+pub(super) fn compile_generated(
+    trace: &Value, trace_path: &Path, simfile: &Path,
+) -> Result<(deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>, deadsync_song_lua::SongLuaCompileContext), String> {
+    source_identity::verify(trace_path, simfile)?;
+    validate_capture(trace)?;
+    let autoplay = native_autoplay(trace)?;
+    let session = native_gameplay_session(trace)?;
+    let difficulty = trace["input"]["requested_difficulty"].as_str();
+    let preferences = &trace["input"]["preferences"];
+    let sync = match preferences["default_sync_offset"].as_str() {
+        Some("SyncOffset_NULL") => deadsync_chart::SyncPref::Null,
+        Some("SyncOffset_ITG") => deadsync_chart::SyncPref::Itg,
+        _ => return Err("native default sync setting is missing or unknown".into()),
+    };
+    let config = GameplayConfig {
+        default_fail_type: native_fail_type(&trace)?,
+        global_offset_seconds: number(preferences, "global_offset_seconds")? as f32,
+        visual_delay_seconds: number(preferences, "visual_delay_seconds")? as f32,
+        machine_default_sync_pref: sync,
+        machine_pack_ini_offsets: true,
+        ..Default::default()
+    };
+    paths::init();
+    let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
+        simfile,
+        config.global_offset_seconds,
+    )?);
+    let initial = native_starting_chart(&song, &session, difficulty)?;
+    let first = Arc::new(song.charts[initial].clone());
+    let charts = [first.clone(), first];
+    let initial_payload = Arc::new(
+        deadsync_simfile::app_runtime::load_gameplay_charts(
+            &song,
+            &[initial],
+            config.global_offset_seconds,
+        )?
+        .remove(0),
+    );
+    let payloads = [initial_payload.clone(), initial_payload];
+    let profiles = native_profile_inputs(&trace)?;
+    let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+    let viewport = GameplayViewport::new(
+        number(&trace["display"], "logical_width")? as f32,
+        number(&trace["display"], "logical_height")? as f32,
+    );
+    let mut context = deadsync_shell::gameplay_entry::song_lua_context(
+        &song,
+        &charts,
+        std::array::from_fn(|p| &payloads[p].timing),
+        &profiles,
+        &scroll,
+        1.0,
+        viewport,
+        (
+            number(&trace["display"], "width")? as u32,
+            number(&trace["display"], "height")? as u32,
+        ),
+        // Older captures use the pinned harness's fresh PrefsManager default;
+        // its Preferences.ini sets dimensions but never overrides this value.
+        preferences.get("display_aspect_ratio").and_then(Value::as_f64)
+            .map_or(16.0 / 9.0, |value| value as f32),
+        f32::from(autoplay),
+        &session,
+        &config,
+        trace["display"]["video_renderers"].as_str().unwrap_or("null"),
+        native_random_seed(trace)?,
+        false,
+    )?;
+
+    context.live = false;
+    let compiled = deadsync_shell::gameplay_entry::prepare_song_lua(
+        &song, &charts, std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll,
+        1.0, viewport, (context.display_width as u32, context.display_height as u32),
+        context.display_aspect_ratio, f32::from(autoplay), &session, &config,
+        &context.video_renderers, context.random_seed,
+    );
+    if compiled.compiled_layers().next().is_none() || compiled.compiled_layers().any(|layer| layer.live_scene.is_some()) {
+        return Err("expected compiled layers with no retained Lua VM".into());
+    }
+    Ok((compiled, context))
+}
+
+pub(super) use interactive::{submitted_rows, row_matches, fully_clipped, native_depth_range};

@@ -55,6 +55,9 @@ mod corpora;
 #[path = "song_lua_itgmania_semantic_parity/models.rs"]
 mod models;
 
+#[path = "song_lua_itgmania_semantic_parity/compiled_fuzz.rs"]
+mod compiled_fuzz;
+
 #[derive(Deserialize)]
 struct NativeTrace {
     #[serde(default)]
@@ -7009,6 +7012,53 @@ fn native_song_lua_semantics_match_deadsync() {
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     eprintln!("{}", parity.summary(&trace.title));
     parity.assert_complete("song Lua semantic");
+}
+
+/// Explicit inputs keep generated campaigns independent of the committed corpus.
+#[test]
+#[ignore = "requires a generated trace, simfile and report from scripts/fuzz_song_lua.py"]
+fn generated_song_lua_compiled_matches_itgmania() {
+    crate::paths::init();
+    let input = |name| PathBuf::from(std::env::var_os(name).expect(name));
+    if std::env::var("DEADSYNC_FUZZ_ORACLE").as_deref() == Ok("native") {
+        let trace_path = input("DEADSYNC_FUZZ_TRACE");
+        let trace: Value = serde_json::from_slice(&fs::read(&trace_path).unwrap()).unwrap();
+        let report = compiled_fuzz::compare(&trace, &trace_path, &input("DEADSYNC_FUZZ_SIMFILE"))
+            .unwrap_or_else(|error| serde_json::json!({"compiled_checks_passed":false,"error":error}));
+        fs::write(input("DEADSYNC_FUZZ_REPORT"), serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+        assert_eq!(report["compiled_checks_passed"], true, "{report}");
+        return;
+    }
+    let trace = read_trace_file(&input("DEADSYNC_FUZZ_TRACE"));
+    assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
+    assert!(trace.runtime_errors.is_empty(), "incomplete oracle: runtime errors");
+    assert_eq!(trace.dropped_events, 0, "incomplete oracle: dropped events");
+    let (compiled, primary, context) =
+        compile_trace_song_at(&trace, &input("DEADSYNC_FUZZ_SIMFILE"));
+    assert!(!context.live && compiled.iter().all(|layer| layer.live_scene.is_none()),
+        "fuzzing must compare compiled playback without a retained Lua VM");
+    let mut parity = compare_semantics(&trace, &compiled, primary, &context);
+    runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
+    let report = serde_json::json!({
+        "oracle": trace.oracle,
+        "checks": parity.checks(),
+        "passed": parity.passed(),
+        "semantic_checks_passed": parity.checks() > 0 && parity.is_complete(),
+        "compiled_checks_passed": parity.checks() > 0 && parity.is_complete(),
+        "execution_path": "compiled-song-lua",
+        "retained_lua_vm": false,
+        "sections": parity.sections.iter().map(|section| serde_json::json!({
+            "name": section.name, "checks": section.checks, "failed": section.failed,
+        })).collect::<Vec<_>>(),
+        "gaps": parity.gaps,
+        "pixel_parity_proven": false,
+        "pending_coverage": ["native engine actor execution", "framebuffer pixels"],
+    });
+    fs::write(input("DEADSYNC_FUZZ_REPORT"), serde_json::to_vec_pretty(&report).unwrap())
+        .expect("write generated semantic report");
+    eprintln!("{}", parity.summary(&trace.title));
+    assert!(parity.checks() > 0, "generated case made no comparisons");
+    parity.assert_complete("generated song Lua semantic");
 }
 
 #[test]

@@ -508,7 +508,7 @@ impl DrawChecks {
     }
 }
 
-fn native_depth_range(state: &Value) -> [f32; 2] {
+pub(crate) fn native_depth_range(state: &Value) -> [f32; 2] {
     if state["z_test"] == 0 && state["z_write"] != true { return [1.0, 0.0]; }
     // The native hook records projection coordinates BEFORE glDepthRange.
     // DeadSync represents that range in its submitted homogeneous matrix.
@@ -521,7 +521,7 @@ fn native_depth_range(state: &Value) -> [f32; 2] {
     [far - near, far + near - 1.0]
 }
 
-fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2], untextured: bool, depth_range: [f32;2]) -> bool {
+pub(crate) fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2], untextured: bool, depth_range: [f32;2]) -> bool {
     actual.iter().enumerate().all(|(axis,&actual)| {
         if untextured && (4..6).contains(&axis) { return true; }
         let mut expected = native_number(&row[axis+3]);
@@ -554,7 +554,7 @@ fn native_depth_comparison_keeps_bias_and_homogeneous_w() {
 
 // Reject a missing production draw only when native geometry can contribute
 // pixels. All corners outside one homogeneous clip plane prove a safe cull.
-fn fully_clipped(rows: &[Value]) -> bool {
+pub(crate) fn fully_clipped(rows: &[Value]) -> bool {
     if rows.is_empty() || rows.iter().any(|r| (3..7).any(|i| !native_number(&r[i]).is_finite())) { return false; }
     (0..3).any(|axis| rows.iter().all(|r| native_number(&r[axis+3]) > native_number(&r[6])+0.0001)
         || rows.iter().all(|r| native_number(&r[axis+3]) < -native_number(&r[6])-0.0001))
@@ -575,7 +575,7 @@ fn close(a: f32, b: f32) -> bool {
         || a.is_finite() && b.is_finite() && (a - b).abs() <= 0.002 + b.abs() * 0.00002
 }
 
-pub(super) fn submitted_rows(frame: &RenderFrame) -> Vec<[f32; 10]> {
+pub(crate) fn submitted_rows(frame: &RenderFrame) -> Vec<[f32; 10]> {
     let mut rows = Vec::new();
     for op in &frame.ops {
         match op {
