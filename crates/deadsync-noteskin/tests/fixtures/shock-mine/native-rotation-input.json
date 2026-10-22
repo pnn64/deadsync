@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "name": "horizontal shock sparks through rotated ActorFrames",
+  "samples": [
+    0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "frame",
+        "name": "Left",
+        "base": {
+          "rotation": [
+            0,
+            0,
+            90
+          ]
+        },
+        "state": {
+          "position": [
+            80,
+            240,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Left Spark",
+            "size": [
+              12,
+              4
+            ],
+            "state": {
+              "rotation": [
+                0,
+                0,
+                90
+              ],
+              "zoom": [
+                1.2,
+                1.2,
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "Down",
+        "base": {
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        },
+        "state": {
+          "position": [
+            220,
+            240,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Down Spark",
+            "size": [
+              12,
+              4
+            ],
+            "state": {
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "zoom": [
+                1.2,
+                1.2,
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "Up",
+        "base": {
+          "rotation": [
+            0,
+            0,
+            180
+          ]
+        },
+        "state": {
+          "position": [
+            360,
+            240,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Up Spark",
+            "size": [
+              12,
+              4
+            ],
+            "state": {
+              "rotation": [
+                0,
+                0,
+                180
+              ],
+              "zoom": [
+                1.2,
+                1.2,
+                1
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "Right",
+        "base": {
+          "rotation": [
+            0,
+            0,
+            -90
+          ]
+        },
+        "state": {
+          "position": [
+            500,
+            240,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "Right Spark",
+            "size": [
+              12,
+              4
+            ],
+            "state": {
+              "rotation": [
+                0,
+                0,
+                90
+              ],
+              "zoom": [
+                1.2,
+                1.2,
+                1
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

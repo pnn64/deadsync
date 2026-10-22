@@ -310,7 +310,21 @@ mod tests {
     fn continuous_sprite_clock_does_not_restart_with_the_hit_fade() {
         let mut layers = [layer(true, false)];
         layers[0].slot.beat_based = false;
-        layers[0].animation.animation_uses_screen_clock = true;
+        layers[0].animation = deadsync_noteskin::runtime::itg_hit_mine_explosion_from_slot(
+            (),
+            Some(&std::collections::HashMap::from([
+                (
+                    "initcommand".into(),
+                    "diffusealpha,0;SetAllStateDelays,0.05".into(),
+                ),
+                (
+                    "hitminecommand".into(),
+                    "finishtweening;diffusealpha,1;sleep,0.3;linear,0.3;diffusealpha,0".into(),
+                ),
+            ])),
+            None,
+        )
+        .animation;
         for age in [0.01, 0.15] {
             let mut draws = Vec::new();
             compose_explosion_layers(

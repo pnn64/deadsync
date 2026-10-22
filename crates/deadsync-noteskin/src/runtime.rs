@@ -1,9 +1,9 @@
 use crate::explosion::{
     ItgTapExplosionMode, ItgTapExplosionSource, ItgTapExplosionSourceRef,
     itg_direct_tap_explosion_layers, itg_has_hit_mine_command, itg_has_tap_explosion_command,
-    itg_hit_mine_command_with_init, itg_hit_mine_explosion_slot, itg_hold_explosion_slot,
+    itg_hit_mine_explosion_slot, itg_hold_explosion_slot,
     itg_is_hit_mine_explosion_element, itg_mine_explosion_command_refs,
-    itg_partition_tap_explosion_sources, itg_tap_explosion_key, parse_explosion_animation,
+    itg_partition_tap_explosion_sources, itg_tap_explosion_key,
     parse_explosion_animation_with_init, parse_itg_tap_explosion_animation_commands,
 };
 use crate::script::{model_draw_program, model_draw_program_from_scripts};
@@ -856,12 +856,25 @@ pub fn itg_hit_mine_explosion_from_slot<T: Clone>(
     commands: Option<&HashMap<String, String>>,
     metric_command: Option<String>,
 ) -> TapExplosion<T> {
-    let command = itg_hit_mine_command_with_init(commands, metric_command);
+    let empty = HashMap::new();
+    let commands = commands.unwrap_or(&empty);
+    let command = commands
+        .get("hitminecommand")
+        .map(String::as_str)
+        .or(metric_command.as_deref());
     TapExplosion::from_single(
         slot,
         command
-            .as_deref()
-            .map(parse_explosion_animation)
+            .map(|command| {
+                // GhostArrowRow sends Judgment, Dim and HitMine to the loaded
+                // actor. Init runs only at load; a fade does not seek its Sprite.
+                parse_itg_tap_explosion_animation_commands(
+                    commands,
+                    ItgTapExplosionMode::Dim,
+                    "hitminecommand",
+                    command,
+                )
+            })
             .unwrap_or_default(),
     )
 }
@@ -5925,6 +5938,7 @@ Meshes: 2
 
         assert_eq!(explosion.slot, Slot(3));
         assert_eq!(explosion.animation.initial.zoom, 0.5);
+        assert!(explosion.animation.animation_uses_screen_clock);
         assert!((explosion.duration() - 0.2).abs() <= f32::EPSILON);
 
         let metric = itg_hit_mine_explosion_from_slot(
@@ -5933,7 +5947,40 @@ Meshes: 2
             Some("linear,0.4;diffusealpha,0".to_string()),
         );
         assert_eq!(metric.slot, Slot(4));
+        assert!(metric.animation.animation_uses_screen_clock);
         assert!((metric.duration() - 0.4).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn mine_hit_clock_only_restarts_for_hit_animation_seeks() {
+        for (hit, continuous, seconds) in [
+            (
+                "finishtweening;diffusealpha,1;sleep,0.3;linear,0.3;diffusealpha,0",
+                true,
+                None,
+            ),
+            ("playcommand,'Reset';diffusealpha,1", false, None),
+            (
+                "SetSecondsIntoAnimation,0.15;diffusealpha,1",
+                false,
+                Some(0.15),
+            ),
+        ] {
+            let commands = HashMap::from([
+                (
+                    "initcommand".into(),
+                    "SetSecondsIntoAnimation,0.3;diffusealpha,0".into(),
+                ),
+                ("hitminecommand".into(), hit.into()),
+                ("resetcommand".into(), "setstate,0".into()),
+            ]);
+            let explosion = itg_hit_mine_explosion_from_slot(Slot(1), Some(&commands), None);
+            assert_eq!(
+                explosion.animation.animation_uses_screen_clock, continuous,
+                "{hit}"
+            );
+            assert_eq!(explosion.animation.animation_seconds, seconds, "{hit}");
+        }
     }
 
     #[test]

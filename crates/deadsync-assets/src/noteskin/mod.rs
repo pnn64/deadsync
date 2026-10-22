@@ -721,6 +721,113 @@ mod tests {
     }
 
     #[test]
+    fn shock_mines_preserve_horizontal_sparks_and_continuous_hit_animation() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/shock-mine");
+        let cases: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("cases.json")).unwrap()).unwrap();
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-rotation-output.json")).unwrap())
+                .unwrap();
+        let root = temp_noteskin_root("shock-mine");
+        for file in fs::read_dir(&fixture).unwrap().flatten() {
+            let path = file.path();
+            if matches!(
+                path.extension().and_then(|ext| ext.to_str()),
+                Some("lua" | "ini" | "png")
+            ) {
+                fs::copy(&path, root.join(file.file_name())).unwrap();
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "shock-mine-fixture".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for (bundle, parts) in [&bundle, &cached].into_iter().flat_map(|bundle| {
+            [None, Some(SkinParts::default().with(SkinPart::Mines))].map(|parts| (bundle, parts))
+        }) {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for (col, case) in cases.as_array().unwrap().iter().enumerate() {
+                let layers = &skin.mine_layers[col];
+                assert_eq!(layers.len(), 2);
+                let spark = &layers[1];
+                assert!(spark.actor_frame_child && !spark.animation_is_beat_based());
+                assert_eq!(spark.frame_count(), 16);
+                let draw = spark.model_draw_at(0.0, 0.0);
+                assert_eq!(
+                    spark.def.rotation_deg,
+                    case["base_rotation"].as_i64().unwrap() as i32
+                );
+                assert_eq!(draw.rot[2], case["spark_rotation"].as_f64().unwrap() as f32);
+                let (sin, cos) = (spark.def.rotation_deg as f32 + draw.rot[2])
+                    .to_radians()
+                    .sin_cos();
+                for (corner, vertex) in [[-6.0, -2.0], [-6.0, 2.0], [6.0, 2.0], [6.0, -2.0]]
+                    .into_iter()
+                    .zip(native["cases"][col]["vertices"].as_array().unwrap())
+                {
+                    let point = [
+                        (corner[0] * cos - corner[1] * sin) * draw.zoom[0],
+                        (corner[0] * sin + corner[1] * cos) * draw.zoom[1],
+                    ];
+                    for axis in 0..2 {
+                        assert!(
+                            (point[axis] - vertex[axis].as_f64().unwrap() as f32).abs() < 1e-4,
+                            "{}: {point:?} != {vertex}",
+                            case["button"]
+                        );
+                    }
+                }
+                for (time, step) in [(0.001, 0), (0.101, 2), (0.251, 5)] {
+                    assert_eq!(
+                        spark.frame_index(time, 999.0),
+                        (case["start_state"].as_u64().unwrap() as usize + step) % 16
+                    );
+                }
+            }
+            if parts.is_some() {
+                assert!(skin.mine_hit_explosion.is_none());
+                continue;
+            }
+            let explosion = skin.mine_hit_explosion.as_ref().unwrap();
+            assert_eq!(explosion.layers.len(), 1);
+            let layer = &explosion.layers[0];
+            assert_eq!(layer.slot.frame_count(), 16);
+            assert!(
+                layer.animation.animation_uses_screen_clock,
+                "HitMine fades must not restart Sprite frames"
+            );
+            assert!((explosion.duration() - 0.6).abs() < 1e-6);
+            for frame in 0..16 {
+                assert_eq!(
+                    layer.slot.frame_index((frame as f32 + 0.5) * 0.05, 999.0),
+                    frame
+                );
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn nested_sprite_cutouts_keep_fill_clock_and_quant_uvs() {
         use deadsync_noteskin::runtime::{SkinPart, SkinParts};
         use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
