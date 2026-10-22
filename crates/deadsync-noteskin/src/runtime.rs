@@ -3758,6 +3758,7 @@ mod tests {
             blend_add: false,
             animation_seconds: None,
             animation_uses_screen_clock: false,
+            draw_order: 0,
             parents: Vec::new(),
         };
         let long = ExplosionAnimation {
@@ -3775,6 +3776,7 @@ mod tests {
             blend_add: false,
             animation_seconds: None,
             animation_uses_screen_clock: false,
+            draw_order: 0,
             parents: Vec::new(),
         };
         let explosion = TapExplosion::from_inline_layers(SmallVec::from_vec(vec![

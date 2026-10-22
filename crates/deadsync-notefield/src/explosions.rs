@@ -264,6 +264,7 @@ mod tests {
                 blend_add,
                 animation_seconds: None,
                 animation_uses_screen_clock: false,
+                draw_order: 0,
             },
         }
     }
@@ -333,6 +334,48 @@ mod tests {
                 &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
             );
             assert_eq!(layers[0].slot.sampled_clock.get(), [3.0, 99.0]);
+        }
+    }
+
+    #[test]
+    fn hit_draw_order_metadata_keeps_authored_layer_order_and_depth() {
+        let mut layers = [layer(true, false), layer(true, false), layer(true, false)];
+        for ((layer, name), order) in layers
+            .iter_mut()
+            .zip(["first", "second", "third"])
+            .zip([90, -90, 90])
+        {
+            layer.slot.texture = Arc::from(name);
+            layer.animation.draw_order = order;
+        }
+        let mut draws = Vec::new();
+        compose_explosion_layers(
+            &mut draws,
+            ExplosionComposeRequest {
+                layers: &layers,
+                hit_seed: 0,
+                elapsed_s: 0.0,
+                effect_elapsed_s: 0.0,
+                current_frame_beat: 0.0,
+                relative_frame_beat: None,
+                uv_elapsed_s: 0.0,
+                center: [0.0; 2],
+                field_zoom: 1.0,
+                effect_zoom: 1.0,
+                rotation_x_deg: 0.0,
+                rotation_y_deg: 0.0,
+                rotation: ExplosionRotation::Mine,
+                z: 145,
+            },
+            &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
+        );
+        assert_eq!(draws.len(), 3);
+        for (draw, name) in draws.iter().zip(["first", "second", "third"]) {
+            let FlatDraw::Sprite(sprite) = draw else {
+                panic!("sprite")
+            };
+            assert_eq!(sprite.source.texture_key(), Some(name));
+            assert_eq!(sprite.z, 145);
         }
     }
 

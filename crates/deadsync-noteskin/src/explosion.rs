@@ -147,6 +147,9 @@ pub struct ExplosionAnimation {
     pub animation_seconds: Option<f32>,
     /// Sprite states advance with the screen unless a hit explicitly seeks them.
     pub animation_uses_screen_clock: bool,
+    /// Immediate Actor metadata, independent of tweens and render depth.
+    /// ITGmania only reorders siblings when their ActorFrame explicitly sorts.
+    pub draw_order: i32,
     pub parents: Vec<ExplosionAnimation>,
 }
 
@@ -177,6 +180,7 @@ impl Default for ExplosionAnimation {
             blend_add: false,
             animation_seconds: None,
             animation_uses_screen_clock: false,
+            draw_order: 0,
             parents: Vec::new(),
         }
     }
@@ -472,6 +476,7 @@ fn parse_explosion_animation_parts_with_clock<'a>(
         blend_add: false,
         animation_seconds: None,
         animation_uses_screen_clock: screen_clock,
+        draw_order: 0,
         parents: Vec::new(),
     };
 
@@ -513,6 +518,16 @@ fn parse_explosion_animation_parts_with_clock<'a>(
         // sprite-sheet state delays are unaffected, including pending tweens.
         if command == ScriptCommand::Rate {
             recognized_command = true;
+            continue;
+        }
+        if command == ScriptCommand::DrawOrder {
+            if let Some(order) = args.first().and_then(|arg| parse_script_number(arg)) {
+                // Actor::SetDrawOrder writes an integer immediately, even
+                // after linear/sleep. It does not flush or join the tween,
+                // change Z, or automatically sort the enclosing ActorFrame.
+                animation.draw_order = order as i32;
+                recognized_command = true;
+            }
             continue;
         }
         if command == ScriptCommand::SetSecondsIntoAnimation {
@@ -2177,6 +2192,30 @@ mod tests {
             );
             assert_eq!(animation.animation_seconds, seconds, "{command}");
         }
+    }
+
+    #[test]
+    fn draw_order_is_immediate_metadata_and_preserves_native_tweens() {
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/fixtures/draw-order/cases.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let script = case["script"].as_str().unwrap();
+            let animation = parse_explosion_animation(script);
+            assert_eq!(
+                animation.draw_order,
+                case["order"].as_i64().unwrap() as i32,
+                "{script}"
+            );
+            assert!((animation.duration() - case["duration"].as_f64().unwrap() as f32).abs() < 1e-6);
+            for sample in case["samples"].as_array().unwrap() {
+                let state = animation.state_at(sample[0].as_f64().unwrap() as f32);
+                assert!(
+                    (state.diffuse[3] - sample[1].as_f64().unwrap() as f32).abs() < 1e-6,
+                    "{script}: {sample}"
+                );
+            }
+        }
+        assert_eq!(parse_explosion_animation("draworder,90").duration(), 0.0);
     }
 }
 

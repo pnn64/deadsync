@@ -101,6 +101,7 @@ pub enum ScriptCommand<'a> {
     SetTextureFiltering,
     SetSecondsIntoAnimation,
     Rate,
+    DrawOrder,
     ZTest,
     ZWrite,
     ClearZBuffer,
@@ -176,6 +177,7 @@ impl<'a> ScriptCommand<'a> {
             Self::SetTextureFiltering => "settexturefiltering",
             Self::SetSecondsIntoAnimation => "SetSecondsIntoAnimation",
             Self::Rate => "rate",
+            Self::DrawOrder => "draworder",
             Self::ZTest => "ztest",
             Self::ZWrite => "zwrite",
             Self::ClearZBuffer => "clearzbuffer",
@@ -288,6 +290,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("fadeleft", FadeLeft);
             }
             9 => {
+                command!("draworder", DrawOrder);
                 command!("basezoomx", BaseZoomX);
                 command!("basezoomy", BaseZoomY);
                 command!("basezoomz", BaseZoomZ);
@@ -1563,9 +1566,8 @@ pub(crate) fn model_draw_program_from_scripts(
             if apply_base_zoom(&mut base_zoom, command, args) {
                 continue;
             }
-            // Sprite UV state and static depth masks are applied by the asset
-            // loader. They are not model transforms and must not split a tween
-            // group or be reported as unsupported on this second pass.
+            // Sprite state, depth masks, and actor draw order are handled
+            // outside the transform program and must not split a tween group.
             if matches!(
                 command,
                 ScriptCommand::ZTest
@@ -1575,6 +1577,7 @@ pub(crate) fn model_draw_program_from_scripts(
                     | ScriptCommand::TexCoordVelocity
                     | ScriptCommand::SetSecondsIntoAnimation
                     | ScriptCommand::Rate
+                    | ScriptCommand::DrawOrder
             ) {
                 continue;
             }
@@ -1848,6 +1851,10 @@ mod tests {
         assert_eq!(mixed.args(), ["0.1", "0.2", "0.3", "0.4", "0.5"]);
         assert_eq!(unknown.command(), ScriptCommand::Unknown("FutureCommand"));
         assert_eq!(unknown.command().as_str(), "FutureCommand");
+        assert_eq!(
+            split_script_token("dRaWoRdEr,90").unwrap().command(),
+            ScriptCommand::DrawOrder
+        );
     }
 
     #[test]
@@ -2209,7 +2216,7 @@ mod tests {
             "initcommand".to_string(),
             "linear,0.5;x,8;ZTest,true;ZWrite,1;ClearZBuffer,true;\
              CustomTextureRect,0,1,0.5,1;TexCoordVelocity,0,-1;rate,2;SetSecondsIntoAnimation,0;\
-             basezoomx,0.8;basezoomy,0.8;y,4"
+             basezoomx,0.8;basezoomy,0.8;draworder,90;y,4"
                 .to_string(),
         )]);
         let (draw, timeline, _) = model_draw_program(&commands);
@@ -2228,9 +2235,12 @@ mod tests {
         resolve_screen_args(&mut screen, 854.0, 480.0);
         assert_eq!(model_draw_program(&screen).0.zoom, [1.0, 480.0, 1.0]);
         let animation = crate::explosion::parse_explosion_animation(
-            "SetSecondsIntoAnimation,0;rate,2;linear,0.15;rotationz,90;rate,0.5;diffusealpha,0",
+            "SetSecondsIntoAnimation,0;rate,2;linear,0.15;rotationz,90;draworder,90;rate,0.5;diffusealpha,0",
         );
         assert_eq!(animation.animation_seconds, Some(0.0));
+        assert_eq!(animation.draw_order, 90);
+        assert_eq!(animation.segments.len(), 1);
+        assert_eq!(animation.duration(), 0.15);
         WARNINGS
             .with_borrow(|warnings| assert!(warnings.as_ref().unwrap().is_empty(), "{warnings:?}"));
 

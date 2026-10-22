@@ -782,6 +782,10 @@ return Def.ActorFrame { children = {
                         );
                         let slot = &visible[0].slot;
                         assert_eq!(
+                            visible[0].animation.draw_order,
+                            if window == "W1" { 90 } else { 0 }
+                        );
+                        assert_eq!(
                             visible[0].animation.animation_uses_screen_clock,
                             window != "W5"
                         );

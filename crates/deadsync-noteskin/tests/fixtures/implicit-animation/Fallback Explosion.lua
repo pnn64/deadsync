@@ -2,7 +2,7 @@ return Def.ActorFrame {
     -- An image actor inherits Sprite::LoadStatesFromTexture's default states.
     LoadActor(NOTESKIN:GetPath("Down", "Tap Explosion")) .. {
         InitCommand=cmd(diffusealpha,0);
-        W1Command=cmd(diffusealpha,1;zoom,0.65;linear,0.22;zoom,1.4;diffusealpha,0);
+        W1Command=cmd(draworder,90;diffusealpha,1;zoom,0.65;linear,0.22;zoom,1.4;diffusealpha,0);
     };
     -- The equivalent implicit Def.Sprite must animate the same way.
     Def.Sprite {
