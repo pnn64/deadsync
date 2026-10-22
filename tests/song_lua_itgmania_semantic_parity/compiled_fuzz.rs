@@ -157,6 +157,20 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
                 continue;
             }
             let ops = std::mem::take(&mut submitted.ops);
+            // Sprite::DrawPrimitives submits its center and edge fades as
+            // separate quads. Production may batch those same quads into one
+            // mesh; retain every vertex and require identical render state.
+            let batched = (ops.len() == 1 && expected.len() > 1
+                && expected.iter().all(|sample| sample["primitive"] == "Quads"
+                    && sample["state"] == expected[0]["state"]))
+                .then(|| {
+                    let mut sample = expected[0].clone();
+                    sample["vertices"] = Value::Array(expected.iter().flat_map(|sample|
+                        sample["vertices"].as_array().unwrap().iter().cloned()).collect());
+                    sample
+                });
+            let batched_refs = batched.as_ref().map(|sample| vec![sample]);
+            let expected = batched_refs.as_deref().unwrap_or(expected);
             if ops.len() != expected.len() {
                 failures += 1;
                 if mismatches.len() < 100 {
@@ -174,9 +188,15 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
                     if mismatches.len() < 100 {
                         mismatches.push(json!({"field":field,"actor":id,
                         "frame":sequence,"beat":beat,"seconds":second,
+                        "compiled_pose": {"position":[locals[l][i].x,locals[l][i].y,locals[l][i].z],
+                            "rotation":[locals[l][i].rot_x_deg,locals[l][i].rot_y_deg,locals[l][i].rot_z_deg],
+                            "quaternion":locals[l][i].quaternion,
+                            "alignment":[locals[l][i].halign,locals[l][i].valign]},
                         "native_texture":sample["state"]["texture"],
                         "compiled_texture":match op { DrawOp::Sprite(r) => Some(composer.texture_key(r.texture_handle)),
                             DrawOp::TexturedMesh(r) => Some(composer.texture_key(r.texture_handle)), _ => None },
+                        "actual_vertices":(mismatches.is_empty()).then(|| native_gameplay::submitted_rows(&submitted)),
+                        "native_vertices":(mismatches.is_empty()).then(|| sample["vertices"].clone()),
                         "first_actual":native_gameplay::submitted_rows(&submitted).first(),
                         "first_native":sample["vertices"][0]}));
                     }
@@ -265,42 +285,38 @@ fn compare_pass(
         };
         state[a].as_f64().unwrap_or(1.0) as f32 / state[b].as_f64().unwrap_or(1.0) as f32
     });
-    let matches = |actual: &[f32; 10], expected: &Value| {
-        compiled_row_matches(
-            actual,
-            expected,
-            uv,
-            expected_texture.is_empty(),
-            native_gameplay::native_depth_range(state),
-        )
-    };
-    let equal = if quads {
-        rows.chunks_exact(6)
-            .zip(native.chunks_exact(4))
-            .all(|(a, b)| {
-                let triangle = |actual: &[[f32; 10]], indices: [usize; 3]| {
-                    [
-                        [0, 1, 2],
-                        [0, 2, 1],
-                        [1, 0, 2],
-                        [1, 2, 0],
-                        [2, 0, 1],
-                        [2, 1, 0],
-                    ]
-                    .iter()
-                    .any(|p| (0..3).all(|i| matches(&actual[p[i]], &b[indices[i]])))
-                };
-                [([0, 1, 2], [0, 2, 3]), ([0, 1, 3], [1, 2, 3])]
-                    .iter()
-                    .any(|&(x, y)| {
-                        triangle(&a[..3], x) && triangle(&a[3..], y)
-                            || triangle(&a[..3], y) && triangle(&a[3..], x)
-                    })
-            })
-    } else {
-        rows.iter().zip(native).all(|(a, b)| matches(a, b))
-    };
+    let equal = geometry_matches(&rows, native, quads, |actual, expected| {
+        compiled_row_matches(actual, expected, uv, expected_texture.is_empty(),
+            native_gameplay::native_depth_range(state))
+    });
     Ok((!equal).then_some("clip_uv_color_or_topology"))
+}
+
+fn geometry_matches(
+    rows: &[[f32; 10]],
+    native: &[Value],
+    quads: bool,
+    matches: impl Fn(&[f32; 10], &Value) -> bool,
+) -> bool {
+    if !quads {
+        return rows.len() == native.len() && rows.iter().zip(native).all(|(a,b)| matches(a,b));
+    }
+    if native.len() % 4 != 0 || rows.len() != native.len() / 4 * 6 { return false; }
+    let mut used = vec![false; native.len() / 4];
+    rows.chunks_exact(6).all(|a| {
+        native.chunks_exact(4).enumerate().any(|(index, b)| {
+            if used[index] { return false; }
+            let triangle = |actual: &[[f32; 10]], indices: [usize; 3]| {
+                [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]]
+                    .iter().any(|p| (0..3).all(|i| matches(&actual[p[i]], &b[indices[i]])))
+            };
+            let equal = [([0,1,2], [0,2,3]), ([0,1,3], [1,2,3])].iter().any(|&(x,y)|
+                triangle(&a[..3], x) && triangle(&a[3..], y)
+                || triangle(&a[..3], y) && triangle(&a[3..], x));
+            used[index] = equal;
+            equal
+        })
+    })
 }
 
 fn compiled_row_matches(
@@ -373,4 +389,18 @@ fn native_color_quantization_does_not_hide_geometry_or_color_changes() {
         false,
         [1.0, 0.0]
     ));
+}
+
+#[test]
+fn batched_quads_require_every_native_vertex_once() {
+    let native: Vec<_> = (0..8).map(|i| json!(i)).collect();
+    let row = |i: usize| { let mut row = [0.0; 10]; row[0] = i as f32; row };
+    let mut actual: Vec<_> = [4,5,6,4,6,7,0,1,2,0,2,3].into_iter().map(row).collect();
+    let matches = |a: &[f32;10], b: &Value| a[0] == b.as_f64().unwrap() as f32;
+    assert!(geometry_matches(&actual, &native, true, matches));
+    assert!(!geometry_matches(&actual[..6], &native, true, matches));
+    actual[6..].copy_from_slice(&[row(4),row(5),row(6),row(4),row(6),row(7)]);
+    assert!(!geometry_matches(&actual, &native, true, matches), "duplicate quad must not replace the missing quad");
+    actual[6..].copy_from_slice(&[row(0),row(1),row(2),row(0),row(2),row(7)]);
+    assert!(!geometry_matches(&actual, &native, true, matches), "changed corner must fail");
 }

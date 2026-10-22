@@ -44,8 +44,11 @@ Use a new output directory for every run; existing results are never overwritten
 
 A generation seed reproduces inputs; different seeds explore different programs.
 One fixed seed is useful for regression testing, but is not sufficient exploration.
-A separate saved Lua seed controls randomized Lua branches. Sharing that seed
-does not align native vibration's random draw stream with deadsync's hashed
+A separate saved Lua seed controls randomized Lua branches. Native broadcasts
+visit subscribers in pointer order, so native comparison also supplies the
+capture's neutral actor creation identities to reproduce subscriber order.
+A seed alone cannot determine which subscriber receives each random value.
+Sharing that seed does not align native vibration's random draw stream with deadsync's hashed
 vibration. New strict-equality cases exclude vibration and list it as a coverage
 gap requiring a bounded-motion or statistical oracle. Other effects remain enabled.
 
@@ -89,7 +92,8 @@ Native mode validates the capture, compiles via production preparation, then
 samples the compiled actor tracks at recorded frame clocks and uses the shared
 renderer to compare per-actor submissions: pass/vertex counts, clip coordinates,
 UVs, colors, texture identity, sampler and depth state. Diffuse/glow submissions
-are compared separately. Colors use native RGBA8 quantization without widening
+are compared separately. Identical-state native fade quads may match one batched
+mesh, with every quad matched once and all vertices still checked. Colors use native RGBA8 quantization without widening
 geometry tolerances. Texture identities resolve Windows path spellings. An offscreen native draw can match a culled compiled
 draw when all its vertices lie outside one clip plane. Extra or missing visible
 passes fail. Missing captures and runtime/compile errors never count as passes.
@@ -97,8 +101,8 @@ passes fail. Missing captures and runtime/compile errors never count as passes.
 The native music clock and screen update delta are separate inputs:
 `--fixed-update-fps` fixes the latter only. ITGmania's `Foreground::Update` uses
 music time since the layer's start beat, then successive music-time differences.
-The diagnostic `test-support` context supplies those clocks to compilation. Draw
-results and actor states are never compiler inputs. Raw music time is converted
+The diagnostic `test-support` context supplies those clocks and neutral actor
+identities to compilation. Draw results and actor states are never compiler inputs. Raw music time is converted
 to elapsed song time for command playback, while rendering retains raw music
 time. Normal production compilation still uses its 60 Hz reference schedule;
 this comparison establishes equality for the recorded input schedule, not
@@ -143,12 +147,20 @@ The generated Rust test is ignored unless explicitly invoked by the Python
 runner with trace, simfile, oracle and report environment variables. Its pass
 requires `execution_path=compiled-song-lua` and `retained_lua_vm=false`.
 
-Validation of this revision: all 11 Python tests and the native color-quantization
-regression passed. Native static-sprite and diffuse-plus-glow controls passed
-(71 and 142 observed submissions respectively); deliberately changed colors,
-missing/extra passes, and an empty capture were rejected. A 1,000-case generation
-run authored 113 method names and all 3,239 catalog pairs. This was generation,
-not a 1,000-case engine parity run. The 32-case semantic execution across two
-shards produced 8 passes, 14 mismatches, and 10 compiler errors, including missing
-basealpha/heading implementations and a tween-replay index panic. Both random
-native seed-42 cases still reported compiled rendering differences.
+Validation of this revision: seed-42 native cases 0 through 9 all pass against
+saved captures and a fresh native run, with zero draw mismatches and no retained
+Lua VM. All 11 Python
+tests and 22 targeted Rust regressions passed, including queued stop/finish,
+quaternion interpolation and parent composition, same-frame spin writes,
+`beatnooffset` startup, inherited colors, and comparator rejection controls.
+
+The fixes follow native `Actor.cpp`, `Actor.h`, `RageMath.cpp`, and `Sprite.cpp`:
+size/alignment/basealpha setters bypass tween destinations; heading/pitch/roll
+accumulate a separate quaternion; offset-free beat clocks exclude global offset;
+glow replaces vertex colors; and fade quads may be batched without discarding
+geometry. The comparator still rejects changed vertices, missing/duplicate quads,
+and batching across different native render states.
+
+An earlier 1,000-case generation run authored 113 method names and all 3,239
+catalog pairs. This was generation, not a 1,000-case engine parity run. Passing
+these ten native cases does not establish complete Lua API or pixel coverage.

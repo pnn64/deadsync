@@ -9171,6 +9171,157 @@ fn delayed_actor_pool_is_ready_for_queued_updates() {
 }
 
 #[test]
+fn compiled_song_lua_finish_then_tween_restarts_from_destination() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.ActorFrame{
+        OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+        Def.Quad{Name='Panel', InitCommand=function(self) self:x(12):y(34) end,
+            OnCommand=function(self)
+                self:linear(1):x(120):linear(1):y(16):sleep(1):linear(1):zoom(0.75)
+                self:finishtweening():linear(1):x(-8)
+            end},
+    }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Finish queue");
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    let index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Panel")).unwrap();
+    assert!(compiled.live_scene.is_none());
+    for (time, expected_x) in [(0.0, 120.0), (0.5, 56.0), (1.25, -8.0)] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        assert!((state.x - expected_x).abs() < 0.001, "at {time}: {state:?}");
+        assert_eq!(state.y, 16.0);
+        assert_eq!(state.zoom, 0.75);
+    }
+}
+
+#[test]
+fn compiled_song_lua_immediate_properties_survive_queued_stop() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.ActorFrame{
+        OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+        Def.Quad{Name='Panel', InitCommand=function(self) self:setsize(24,32):halign(0.25):basealpha(0.5) end,
+            OnCommand=function(self) self:sleep(0.05):queuecommand('Move') end,
+            MoveCommand=function(self)
+                self:linear(1):x(120):halign(0.75):valign(0.9):setsize(40,30):basealpha(0.25)
+                self:stoptweening():linear(1):x(8)
+            end},
+    }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Immediate properties");
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    let index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Panel")).unwrap();
+    for time in [0.1, 0.5, 1.5] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        assert_eq!([state.halign, state.valign], [0.75, 0.9], "at {time}");
+        assert_eq!(state.size, Some([40.0, 30.0]));
+        assert_eq!(state.base_alpha, 0.25);
+    }
+}
+
+#[test]
+fn compiled_song_lua_heading_accumulates_and_tweens_quaternions() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.ActorFrame{
+        OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+        Def.Quad{Name='Panel', InitCommand=function(self) self:heading(30):heading(60):rotationz(15) end,
+            OnCommand=function(self) self:linear(1):heading(90) end},
+    }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Quaternion tween");
+    context.music_length_seconds = 2.0;
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    let index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Panel")).unwrap();
+    assert!(compiled.live_scene.is_none());
+    for (time, degrees) in [(0.0, 90.0_f32), (0.5, 135.0), (1.25, 180.0)] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        let half = -degrees.to_radians() / 2.0;
+        let expected = [0.0, half.sin(), 0.0, half.cos()];
+        assert!(state.quaternion.iter().zip(expected).all(|(a,b)| (a-b).abs()<0.0001), "at {time}: {:?}",state.quaternion);
+        assert_eq!(state.rot_z_deg, 15.0);
+    }
+}
+
+#[test]
+fn compiled_song_lua_parent_callback_overrides_spin_in_same_frame() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"local panel
+        return Def.ActorFrame{
+            OnCommand=function(self) self:SetUpdateFunction(function()
+                if GAMESTATE:GetSongBeat() >= 0.5 then panel:rotationz(30) end
+            end) end,
+            Def.Quad{Name='Panel', InitCommand=function(self)
+                panel=self; self:spin():effectmagnitude(0,0,30):effectclock('beat')
+            end},
+        }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Spin callback");
+    context.music_length_seconds = 1.0;
+    context.compile_clock_inputs = vec![[0.0,0.0,0.0], [0.25,0.25,0.25], [0.5,0.5,0.25], [0.75,0.75,0.25]];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    let index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Panel")).unwrap();
+    for (time, expected) in [(0.25,7.5), (0.5,30.0), (0.75,30.0)] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        assert!((state.rot_z_deg-expected).abs()<0.0001, "at {time}: {state:?}");
+    }
+}
+
+#[test]
+fn compiled_song_lua_quaternion_parent_and_child_rotate_about_world_origin() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.ActorFrame{
+        InitCommand=function(self) self:x(10):heading(90) end,
+        Def.Quad{Name='Panel', InitCommand=function(self) self:y(20):pitch(90):setsize(2,2) end},
+    }"#).unwrap();
+    let context = SongLuaCompileContext::new(temp.path(), "Quaternion hierarchy");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    let index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Panel")).unwrap();
+    let state = compiled_overlay_states_at(&compiled, &context, 0.0, 0.0)[index];
+    let actual = compiled_world_vertices(state, [2.0,2.0]);
+    // Actor::BeginDraw: pitch * heading * parent translation * child translation.
+    // Heading(-90 Y) maps (x,y,0) -> (0,y,x); pitch(-90 X) -> (0,x,-y).
+    for (got, expected) in actual.iter().zip([[0.0,9.0,-19.0,1.0], [0.0,11.0,-19.0,1.0],
+        [0.0,11.0,-21.0,1.0], [0.0,9.0,-21.0,1.0]]) {
+        assert!(got.iter().zip(expected).all(|(a,b)| (a-b).abs()<0.0001), "{actual:?}");
+    }
+}
+
+#[test]
+fn compiled_song_lua_beatnooffset_keeps_global_clock_after_startup_bounce() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.ActorFrame{
+        OnCommand=function(self) self:SetUpdateFunction(function() end) end,
+        Def.Quad{Name='Panel', InitCommand=function(self)
+            self:bounce():effectclock('beatnooffset')
+        end},
+    }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Unshifted beat clock");
+    context.music_length_seconds = 1.0;
+    context.song_timing_bpms = vec![(0.0,60.0)];
+    let mut timing = deadsync_rules::timing::TimingData::from_segments(0.0, 0.0,
+        &deadsync_rules::timing::TimingSegments { bpms: context.song_timing_bpms.clone(), ..Default::default() }, &[]);
+    timing.set_global_offset_seconds(-0.1);
+    context.song_timing = Some(timing);
+    context.compile_clock_inputs = vec![[0.1,0.0,0.0], [0.2,0.1,0.1], [0.3,0.2,0.1]];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context).unwrap().remove(0);
+    let index = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Panel")).unwrap();
+    for time in [0.1,0.2] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        let [at, units] = state.effect_time.expect("compiled effect clock");
+        assert!((units + time - at - (time+0.1)).abs()<0.0001, "at {time}: {state:?}");
+    }
+}
+
+#[test]
 fn compiled_song_lua_uses_external_clock_inputs() {
     crate::paths::init();
     let temp = tempfile::tempdir().unwrap();

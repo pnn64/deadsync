@@ -558,7 +558,8 @@ impl SongLuaProjectedMeshScratch {
             &mut self.replacements,
             |out| {
                 out.extend(vertices.iter().copied().map(|mut vertex| {
-                    vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
+                    // Native Sprite/ActorMultiVertex glow replaces diffuse RGBA.
+                    vertex.color = [1.0; 4];
                     vertex
                 }));
             },
@@ -650,7 +651,8 @@ fn song_lua_static_glow_vertices(vertices: &[TexturedMeshVertex]) -> Arc<[Textur
             .iter()
             .copied()
             .map(|mut vertex| {
-                vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
+                // Native Sprite/ActorMultiVertex glow replaces diffuse RGBA.
+                vertex.color = [1.0; 4];
                 vertex
             })
             .collect::<Vec<_>>()
@@ -1804,6 +1806,11 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
 ) -> SongLuaOverlayState {
     let parent = song_lua_pulse_parent(song_lua_pre_draw_state(parent, clock), clock);
     child = song_lua_pre_draw_state(child, clock);
+    // Actor::BeginDraw post-multiplies quaternions about the world origin.
+    // They therefore collect outside the normal parent/child transforms.
+    if parent.quaternion != crate::actor_quaternion::IDENTITY {
+        child.quaternion = crate::actor_quaternion::multiply(child.quaternion, parent.quaternion);
+    }
     let local_rotation = [child.rot_x_deg, child.rot_y_deg, child.rot_z_deg];
     let [parent_scale_x, parent_scale_y] = song_lua_overlay_axis_scale(parent);
     let local_z = child.z;
@@ -1950,7 +1957,10 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
         || parent.scale_factors.is_some()
     {
         let matrix = song_lua_overlay_sprite_matrix(
-            parent,
+            SongLuaOverlayState {
+                quaternion: crate::actor_quaternion::IDENTITY,
+                ..parent
+            },
             [0.0; 2],
             [parent.x, parent.y, parent.z],
             [parent.rot_x_deg, parent.rot_y_deg, parent.rot_z_deg],
@@ -6496,6 +6506,8 @@ pub fn apply_overlay_update(
     set_value!(RotationY, F32, rot_y_deg);
     set_value!(RotationZ, F32, rot_z_deg);
     set_value!(BaseRotation, Vec3, base_rotation);
+    set_value!(Quaternion, Quaternion, quaternion);
+    set_value!(BaseAlpha, F32, base_alpha);
     set_value!(SkewX, F32, skew_x);
     set_value!(SkewY, F32, skew_y);
     set_value!(Blend, Blend, blend);
@@ -6503,6 +6515,7 @@ pub fn apply_overlay_update(
     set_value!(EffectMagnitude, Vec3, effect_magnitude);
     set_value!(EffectClock, EffectClock, effect_clock);
     set_value!(EffectTimer, Bool, effect_timer);
+    set_value!(EffectNoOffset, Bool, effect_no_offset);
     set_value!(EffectMode, EffectMode, effect_mode);
     set_value!(EffectColor1, Vec4, effect_color1);
     set_value!(EffectColor2, Vec4, effect_color2);
@@ -6579,6 +6592,7 @@ fn apply_song_lua_overlay_runtime_updates_for(
             track.target,
             crate::SongLuaOverlayUpdateTarget::EffectTime
                 | crate::SongLuaOverlayUpdateTarget::BaseRotation
+                | crate::SongLuaOverlayUpdateTarget::BaseAlpha
         ) {
             from.value.clone()
         } else {
@@ -7372,6 +7386,9 @@ fn song_lua_pre_draw_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> S
         state.effect_mode = EffectMode::None;
         state.rainbow = false;
     }
+    // Actor::PreDraw applies base alpha after local color effects.
+    state.diffuse[3] *= state.base_alpha;
+    state.base_alpha = 1.0;
     if !matches!(
         state.effect_mode,
         EffectMode::Bob | EffectMode::Bounce | EffectMode::Wag
@@ -9558,7 +9575,8 @@ fn song_lua_overlay_sprite_matrix(
     let linear = Matrix4::from_scale(Vector3::from(ancestor))
         * song_lua_overlay_local_transform(rotation, 0.0, 0.0)
         * Matrix4::from_scale(Vector3::from(local));
-    Matrix4::from_translation(Vector3::from(position))
+    Matrix4::from_cols_array(&crate::actor_quaternion::matrix(state.quaternion))
+        * Matrix4::from_translation(Vector3::from(position))
         * linear
         * Matrix4::from_translation(Vector3::new(
             (0.5 - state.halign) * size[0],
@@ -10247,7 +10265,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             .or_else(|| {
                 let rotated_anchor = (state.halign != 0.5 || state.valign != 0.5)
                     && state.rot_z_deg.abs() > f32::EPSILON;
-                let native_matrix = state.z != 0.0
+                let native_matrix = state.quaternion != crate::actor_quaternion::IDENTITY
+                    || state.z != 0.0
                     || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor
@@ -11574,7 +11593,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             } else {
                 let mut glow_vertices = vertices.as_ref().to_vec();
                 for vertex in &mut glow_vertices {
-                    vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
+                    // Native Sprite/ActorMultiVertex glow replaces diffuse RGBA.
+                    vertex.color = [1.0; 4];
                 }
                 Actor::TexturedMesh {
                     environment: environment
@@ -11639,7 +11659,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 || {
                     let mut out = Vec::with_capacity(vertices.len());
                     out.extend(vertices.iter().copied().map(|mut vertex| {
-                        vertex.color = [1.0, 1.0, 1.0, vertex.color[3]];
+                        // Native Sprite/ActorMultiVertex glow replaces diffuse RGBA.
+                        vertex.color = [1.0; 4];
                         vertex
                     }));
                     Arc::new(out)

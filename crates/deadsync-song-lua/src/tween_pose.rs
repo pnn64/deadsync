@@ -11,10 +11,11 @@ macro_rules! tween_pose {
             pub diffuse: [f32; 4],
             pub vertex_colors: Option<[[f32; 4]; 4]>,
             pub glow: [f32; 4],
+            pub quaternion: [f32; 4],
         }
 
-        pub(crate) const TARGETS: [Target; 24] = [
-            $(Target::$target,)* Target::Diffuse, Target::VertexColors, Target::Glow,
+        pub(crate) const TARGETS: [Target; 25] = [
+            $(Target::$target,)* Target::Diffuse, Target::VertexColors, Target::Glow, Target::Quaternion,
         ];
 
         impl From<SongLuaOverlayState> for TweenPose {
@@ -24,6 +25,7 @@ macro_rules! tween_pose {
                     diffuse: state.diffuse,
                     vertex_colors: state.vertex_colors,
                     glow: state.glow,
+                    quaternion: state.quaternion,
                 }
             }
         }
@@ -37,12 +39,14 @@ macro_rules! tween_pose {
                 state.diffuse = self.diffuse;
                 state.vertex_colors = self.vertex_colors;
                 state.glow = self.glow;
+                state.quaternion = self.quaternion;
             }
 
             pub fn set(&mut self, target: Target, value: &Value) {
                 match (target, value) {
                     $((Target::$target, Value::F32(value)) => self.$field = *value,)*
                     (Target::Diffuse, Value::Vec4(value)) => self.diffuse = *value,
+                    (Target::Quaternion, Value::Quaternion(value)) => self.quaternion = *value,
                     (Target::Glow, Value::Vec4(value)) => self.glow = *value,
                     (Target::VertexColors, Value::VertexColors(value)) => self.vertex_colors = Some(**value),
                     (Target::VertexColors, Value::None) => self.vertex_colors = None,
@@ -55,6 +59,7 @@ macro_rules! tween_pose {
                     $(Target::$target => Value::F32(self.$field),)*
                     Target::Diffuse => Value::Vec4(self.diffuse),
                     Target::Glow => Value::Vec4(self.glow),
+                    Target::Quaternion => Value::Quaternion(self.quaternion),
                     Target::VertexColors => self.vertex_colors.map_or(Value::None,
                         |colors| Value::VertexColors(std::sync::Arc::new(colors))),
                     _ => unreachable!("non-tween property requested from a tween pose"),
@@ -65,6 +70,7 @@ macro_rules! tween_pose {
                 // Keep Actor::TweenState's subtract/multiply/add order and
                 // unclamped easing, including overshoot and nonfinite values.
                 $(self.$field = crate::actor_lerp(self.$field, to.$field, factor);)*
+                self.quaternion = crate::actor_quaternion::slerp(self.quaternion, to.quaternion, factor);
                 for (value, to) in self.diffuse.iter_mut().zip(to.diffuse) {
                     *value = crate::actor_lerp(*value, to, factor);
                 }
@@ -124,6 +130,7 @@ mod tests {
             diffuse: Some(state.diffuse),
             vertex_colors: state.vertex_colors,
             glow: Some(state.glow),
+            quaternion: Some(state.quaternion),
             ..Default::default()
         }
     }
@@ -142,7 +149,7 @@ mod tests {
                 (Value::F32(a), Value::F32(b)) => {
                     assert_eq!(comparable_bits(a), comparable_bits(b), "{target:?}")
                 }
-                (Value::Vec4(a), Value::Vec4(b)) => {
+                (Value::Vec4(a), Value::Vec4(b)) | (Value::Quaternion(a), Value::Quaternion(b)) => {
                     assert_eq!(a.map(comparable_bits), b.map(comparable_bits), "{target:?}")
                 }
                 (Value::VertexColors(a), Value::VertexColors(b)) => assert_eq!(
@@ -178,6 +185,8 @@ mod tests {
                     let mut to = SongLuaOverlayState::default();
                     for target in TARGETS {
                         let values = match target {
+                            Target::Quaternion => (Value::Quaternion(crate::actor_quaternion::IDENTITY),
+                                Value::Quaternion(crate::actor_quaternion::rotate(crate::actor_quaternion::IDENTITY, 1, 45.0))),
                             Target::Diffuse | Target::Glow => {
                                 (Value::Vec4([start; 4]), Value::Vec4([end; 4]))
                             }

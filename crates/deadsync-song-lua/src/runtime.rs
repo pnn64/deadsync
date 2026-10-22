@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub(crate) struct SongLuaClock(pub deadsync_rules::timing::TimingData);
+pub(crate) struct SongLuaNoOffsetClock(pub deadsync_rules::timing::TimingData);
 pub(crate) const PLAYER_SONG_POSITIONS_KEY: &str = "__songlua_player_positions";
 
 pub fn create_song_runtime_table(
@@ -16,8 +17,12 @@ pub fn create_song_runtime_table(
 ) -> mlua::Result<Table> {
     if let Some(timing) = &context.song_timing {
         lua.set_app_data(SongLuaClock(timing.clone()));
+        let mut no_offset = timing.clone();
+        no_offset.set_global_offset_seconds(0.0);
+        lua.set_app_data(SongLuaNoOffsetClock(no_offset));
     } else {
         lua.remove_app_data::<SongLuaClock>();
+        lua.remove_app_data::<SongLuaNoOffsetClock>();
     }
     let table = lua.create_table()?;
     table.set(SONG_LUA_RUNTIME_BEAT_KEY, 0_i64)?;

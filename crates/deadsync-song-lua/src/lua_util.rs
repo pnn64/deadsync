@@ -882,11 +882,14 @@ fn stop_pending_tweens(lua: &Lua, actor: &Table, position: [f32; 3]) {
     capture.tween_resets[index] = true;
     let targets = capture.scheduled[index]
         .iter()
+        .filter(|update| TWEEN_POSE_TARGETS.contains(&update.target))
         .fold(0_u128, |mask, update| {
             mask | (1_u128 << update.target as usize)
         });
     capture.final_values[index].retain(|(target, _)| targets & (1_u128 << *target as usize) == 0);
-    capture.scheduled[index].clear();
+    // Immediate setters in a queued command have scheduled publication times,
+    // but are not tween destinations. StopTweening must not cancel them.
+    capture.scheduled[index].retain(|update| !TWEEN_POSE_TARGETS.contains(&update.target));
     capture.pending_tweens[index].clear();
     for (target, value) in [
         SongLuaOverlayUpdateTarget::X,
@@ -1117,6 +1120,8 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "rot_y_deg" => Target::RotationY,
         "rot_z_deg" => Target::RotationZ,
         "base_rotation" => Target::BaseRotation,
+        "quaternion" => Target::Quaternion,
+        "base_alpha" => Target::BaseAlpha,
         "skew_x" => Target::SkewX,
         "skew_y" => Target::SkewY,
         "blend" => Target::Blend,
@@ -1124,6 +1129,7 @@ fn capture_target_for_key(key: &str) -> Option<SongLuaOverlayUpdateTarget> {
         "effect_magnitude" => Target::EffectMagnitude,
         "effect_clock" => Target::EffectClock,
         "effect_timer" => Target::EffectTimer,
+        "effect_no_offset" => Target::EffectNoOffset,
         "effect_mode" => Target::EffectMode,
         "effect_color1" => Target::EffectColor1,
         "effect_color2" => Target::EffectColor2,
@@ -5027,6 +5033,8 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "basezoom_y" => "__songlua_state_basezoom_y",
         "basezoom_z" => "__songlua_state_basezoom_z",
         "base_rotation" => "__songlua_state_base_rotation",
+        "quaternion" => "__songlua_state_quaternion",
+        "base_alpha" => "__songlua_state_base_alpha",
         "rot_x_deg" => "__songlua_state_rot_x_deg",
         "rot_y_deg" => "__songlua_state_rot_y_deg",
         "rot_z_deg" => "__songlua_state_rot_z_deg",
@@ -5058,6 +5066,7 @@ fn actor_capture_state_key(key: &str) -> std::borrow::Cow<'static, str> {
         "diffuse" => "__songlua_state_diffuse",
         "effect_clock" => "__songlua_state_effect_clock",
         "effect_timer" => "__songlua_state_effect_timer",
+        "effect_no_offset" => "__songlua_state_effect_no_offset",
         "effect_color1" => "__songlua_state_effect_color1",
         "effect_color2" => "__songlua_state_effect_color2",
         "effect_magnitude" => "__songlua_state_effect_magnitude",
@@ -5219,8 +5228,10 @@ pub fn capture_block_set_vec4(
     key: &str,
     value4: [f32; 4],
 ) -> mlua::Result<()> {
-    if key == "glow" && live_actor_playback(lua) && has_tween_replay(lua, actor) {
-        record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec4(value4));
+    let update = if key == "quaternion" { SongLuaOverlayUpdateValue::Quaternion(value4) }
+        else { SongLuaOverlayUpdateValue::Vec4(value4) };
+    if matches!(key, "glow" | "quaternion") && live_actor_playback(lua) && has_tween_replay(lua, actor) {
+        record_overlay_update_capture(lua, actor, key, update);
         return Ok(());
     }
     let value = lua.create_table_with_capacity(4, 0)?;
@@ -5228,7 +5239,7 @@ pub fn capture_block_set_vec4(
     value.raw_set(2, value4[1])?;
     value.raw_set(3, value4[2])?;
     value.raw_set(4, value4[3])?;
-    if !record_overlay_update_capture(lua, actor, key, SongLuaOverlayUpdateValue::Vec4(value4)) {
+    if !record_overlay_update_capture(lua, actor, key, update) {
         let block = actor_current_capture_block(lua, actor)?;
         block.set(key, value.clone())?;
         block.set("__songlua_has_changes", true)?;
@@ -5366,8 +5377,9 @@ pub fn capture_block_set_size(lua: &Lua, actor: &Table, size: [f32; 2]) -> mlua:
     let value = lua.create_table_with_capacity(2, 0)?;
     value.raw_set(1, size[0])?;
     value.raw_set(2, size[1])?;
-    if !record_overlay_update_capture(lua, actor, "size", SongLuaOverlayUpdateValue::Vec2(size)) {
-        let block = actor_current_capture_block(lua, actor)?;
+    // Actor::SetWidth/SetHeight update m_size, outside DestTweenState().
+    if !record_overlay_update_capture_immediate(lua, actor, "size", SongLuaOverlayUpdateValue::Vec2(size)) {
+        let block = actor_immediate_capture_block(lua, actor)?;
         block.set("size", value.clone())?;
         block.set("__songlua_has_changes", true)?;
     }
@@ -8864,6 +8876,32 @@ pub fn install_actor_crop_shadow_methods(lua: &Lua, actor: &Table) -> mlua::Resu
         "rotationz",
         make_actor_capture_f32_method(lua, actor, "rot_z_deg", Some("rotationz"))?,
     )?;
+    actor.set("basealpha", lua.create_function({
+        let actor = actor.clone();
+        move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+            if let Some(value) = value.and_then(read_actor_scalar_f32) {
+                capture_immediate_f32(lua, &actor, "base_alpha", value)?;
+            }
+            Ok(actor.clone())
+        }
+    })?)?;
+    for (method, axis) in [("heading", 1), ("pitch", 0), ("roll", 2)] {
+        actor.set(method, lua.create_function({
+            let actor = actor.clone();
+            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+                if let Some(degrees) = value.and_then(read_actor_scalar_f32) {
+                    prepare_capture_scope_actor(lua, &actor)?;
+                    let destination = live_destination_value(lua, &actor, |pose| pose.quaternion)
+                        .or(actor.raw_get::<Option<ActorVectorValue<4>>>("__songlua_state_quaternion")?
+                            .and_then(|value| value.0))
+                        .unwrap_or(crate::actor_quaternion::IDENTITY);
+                    capture_block_set_vec4(lua, &actor, "quaternion",
+                        crate::actor_quaternion::rotate(destination, axis, degrees))?;
+                }
+                Ok(actor.clone())
+            }
+        })?)?;
+    }
     for (axis, method) in ["baserotationx", "baserotationy", "baserotationz"]
         .into_iter()
         .enumerate()
@@ -9705,6 +9743,7 @@ pub fn install_actor_effect_methods(lua: &Lua, actor: &Table) -> mlua::Result<()
                     return Ok(actor.clone());
                 };
                 capture_immediate_string(lua, &actor, "effect_clock", effect_clock_label(clock))?;
+                capture_immediate_bool(lua, &actor, "effect_no_offset", raw.eq_ignore_ascii_case("beatnooffset"))?;
                 capture_immediate_bool(
                     lua,
                     &actor,
@@ -9968,12 +10007,12 @@ pub fn install_actor_visual_text_methods(lua: &Lua, actor: &Table) -> mlua::Resu
     for (name, corner_mask) in [
         ("diffuseupperleft", 1 << 0),
         ("diffuseupperright", 1 << 1),
-        ("diffuselowerright", 1 << 2),
-        ("diffuselowerleft", 1 << 3),
+        ("diffuselowerright", 1 << 3),
+        ("diffuselowerleft", 1 << 2),
         ("diffusetopedge", (1 << 0) | (1 << 1)),
-        ("diffuserightedge", (1 << 1) | (1 << 2)),
+        ("diffuserightedge", (1 << 1) | (1 << 3)),
         ("diffusebottomedge", (1 << 2) | (1 << 3)),
-        ("diffuseleftedge", (1 << 0) | (1 << 3)),
+        ("diffuseleftedge", (1 << 0) | (1 << 2)),
     ] {
         actor.set(
             name,
@@ -11071,7 +11110,7 @@ pub(crate) fn init_actor_native_state(lua: &Lua, actor: &Table) -> mlua::Result<
         let native_state = name.strip_prefix("__songlua_state_").is_some_and(|name|
             matches!(name, "aux" | "x" | "y" | "z" | "z_bias" | "draw_order"
                 | "halign" | "valign" | "visible" | "zoom" | "zoom_x" | "zoom_y" | "zoom_z"
-                | "basezoom" | "basezoom_x" | "basezoom_y" | "basezoom_z" | "base_rotation"
+                | "basezoom" | "basezoom_x" | "basezoom_y" | "basezoom_z" | "base_rotation" | "base_alpha" | "quaternion"
                 | "rot_x_deg" | "rot_y_deg" | "rot_z_deg" | "skew_x" | "skew_y"
                 | "cropleft" | "cropright" | "croptop" | "cropbottom"
                 | "fadeleft" | "faderight" | "fadetop" | "fadebottom" | "stretch_rect"
@@ -12000,6 +12039,12 @@ fn record_tween_write(
         .map_or(&mut replay.current, |step| &mut step.to);
     dest.set(target, value);
     drop(replays);
+    if !queued && matches!(target, SongLuaOverlayUpdateTarget::RotationX
+        | SongLuaOverlayUpdateTarget::RotationY | SongLuaOverlayUpdateTarget::RotationZ) {
+        // ActorFrame callbacks run after child updates. Publish their direct
+        // writes to the spin snapshot before this frame is captured.
+        sync_replay_spin_pose(lua, actor).ok()?;
+    }
     // Pose replay owns the queue, but message provenance must retain its
     // actual delay. Static command blocks cannot describe an existing tail.
     let broadcast = lua
@@ -12076,9 +12121,10 @@ fn observe_tween_write(
 }
 
 fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    sync_replay_spin_pose(lua, actor)?;
     if live_actor_playback(lua) {
-        // Rotation remains shared with the spin queue. Other tween properties
-        // are native-owned and exported only at explicit snapshot boundaries.
+        // Rotation also feeds the spin snapshot. Other tween properties are
+        // native-owned and exported only at explicit snapshot boundaries.
         if let Some(rotation) = live_destination_value(lua, actor,
             |dest| [dest.rot_x_deg, dest.rot_y_deg, dest.rot_z_deg]) {
             for (key, value) in ["rot_x_deg", "rot_y_deg", "rot_z_deg"].into_iter().zip(rotation) {
@@ -12129,6 +12175,7 @@ fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         make_color_table(lua, dest.diffuse)?,
     )?;
     actor.raw_set("__songlua_state_glow", make_color_table(lua, dest.glow)?)?;
+    actor.raw_set("__songlua_state_quaternion", lua.create_sequence_from(dest.quaternion)?)?;
     actor.raw_set(
         "__songlua_state_vertex_colors",
         dest.vertex_colors
@@ -12141,6 +12188,21 @@ fn sync_tween_getters(lua: &Lua, actor: &Table) -> mlua::Result<()> {
         .zip([current.x, current.y, current.z])
     {
         actor.raw_set(key, value)?;
+    }
+    Ok(())
+}
+
+fn sync_replay_spin_pose(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? else {
+        return Ok(());
+    };
+    let current = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays|
+        replays.0.get(&(actor.to_pointer() as usize)).map(|replay| replay.current));
+    if let Some(current) = current {
+        let rotation: Table = pose.get("rotation")?;
+        for (index, value) in [current.rot_x_deg, current.rot_y_deg, current.rot_z_deg].into_iter().enumerate() {
+            rotation.raw_set(index + 1, value)?;
+        }
     }
     Ok(())
 }
@@ -12317,6 +12379,7 @@ fn advance_tween_replay(lua: &Lua, actor: &Table, delta: f64, span: f32) -> mlua
         // same data back to Lua (including fresh color tables every tick).
         // Queue replacement and InitState still synchronize destinations.
         if !crate::live::active(lua) { sync_tween_getters(lua, actor)?; }
+        else { sync_replay_spin_pose(lua, actor)?; }
         if let Some(command) = command {
             dispatched += 1;
             if dispatched > 10000 {
@@ -13345,6 +13408,7 @@ fn queue_spin_tween(
     duration: f64,
     easing: Option<&str>,
 ) -> mlua::Result<()> {
+    if has_tween_replay(lua, actor) { return Ok(()); }
     let Some(pose) = actor.raw_get::<Option<Table>>("__songlua_state_spin")? else {
         return Ok(());
     };
@@ -13415,11 +13479,15 @@ fn advance_motion_clock(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::R
         }
         (units, delta)
     } else {
-        let units = if actor
-            .raw_get::<Option<String>>("__songlua_state_effect_clock")?
-            .as_deref()
-            == Some("beat")
-        {
+        let kind = actor.raw_get::<Option<String>>("__songlua_state_effect_clock")?;
+        let units = if kind.as_deref() == Some("beat")
+            && actor.raw_get::<Option<bool>>("__songlua_state_effect_no_offset")?.unwrap_or(false) {
+            let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+            let seconds = f32::from_lua(crate::runtime::song_music_seconds(lua, &runtime)?, lua)?;
+            lua.app_data_ref::<crate::runtime::SongLuaNoOffsetClock>()
+                .map(|clock| clock.0.get_beat_for_time(seconds))
+                .unwrap_or(compile_song_runtime_values(lua)?.0)
+        } else if kind.as_deref() == Some("beat") {
             compile_song_runtime_values(lua)?.0
         } else {
             let runtime = lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
@@ -13495,7 +13563,7 @@ pub(crate) fn effect_render_time(
     let units = if actor
         .raw_get::<Option<String>>("__songlua_state_effect_clock")?
         .as_deref()
-        == Some("beat")
+        .is_some_and(|clock| matches!(clock, "beat" | "beatnooffset"))
     {
         frame_clock[1]
     } else {
@@ -13508,6 +13576,11 @@ pub(crate) fn effect_render_time(
 }
 
 pub(crate) fn sync_motion_restart(actor: &Table, epoch: f32, seconds: f32) -> mlua::Result<()> {
+    // Global clocks replace the timer on every update. A startup effect reset
+    // must not overwrite that frame's beat/music clock with elapsed seconds.
+    if !actor.raw_get::<Option<bool>>("__songlua_state_effect_timer")?.unwrap_or(true) {
+        return Ok(());
+    }
     let Some(clock) = actor.raw_get::<Option<Table>>("__songlua_state_motion_clock")? else {
         return Ok(());
     };
@@ -13530,6 +13603,27 @@ fn advance_spin_pose(lua: &Lua, actor: &Table, delta_seconds: f64) -> mlua::Resu
     // Reuse the already advanced clock, including music origins and resets.
     let clock = actor.raw_get::<Table>("__songlua_state_motion_clock")?;
     let elapsed = clock.get::<f32>("delta")?;
+    if has_tween_replay(lua, actor) {
+        // Spin modifies m_current before UpdateTweening. Use the same current
+        // pose and queue as queued commands, including their frame remainder.
+        // A second rotation queue would start command-created tweens a frame late.
+        let queue: Table = pose.get("queue")?;
+        queue.clear()?;
+        pose.set("head", 1usize)?;
+        pose.set("tail", 0usize)?;
+        if actor.raw_get::<Option<String>>("__songlua_state_effect_mode")?.as_deref() == Some("spin") {
+            let magnitude = actor_effect_magnitude(actor)?;
+            let mut replays = lua.app_data_mut::<ActorTweenReplays>().unwrap();
+            let current = &mut replays.0.get_mut(&(actor.to_pointer() as usize)).unwrap().current;
+            for (angle, speed) in [&mut current.rot_x_deg, &mut current.rot_y_deg, &mut current.rot_z_deg]
+                .into_iter().zip(magnitude) {
+                *angle = (*angle + elapsed * speed).rem_euclid(360.0);
+            }
+        }
+        sync_replay_spin_pose(lua, actor)?;
+        pose.set("baked", true)?;
+        return Ok(());
+    }
     if actor
         .raw_get::<Option<String>>("__songlua_state_effect_mode")?
         .as_deref()
@@ -19522,6 +19616,7 @@ fn is_capture_block_meta_key(key: &str) -> bool {
             | "opt2"
             | "__songlua_has_changes"
             | "__songlua_queued_block"
+            | "__songlua_tween_step"
     )
 }
 
@@ -19766,6 +19861,9 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                 rot_z_deg: block
                     .get::<Option<f32>>("rot_z_deg")
                     .map_err(|err| err.to_string())?,
+                base_alpha: block.get::<Option<f32>>("base_alpha").map_err(|err| err.to_string())?,
+                quaternion: block.get::<Option<Table>>("quaternion").map_err(|err| err.to_string())?
+                    .and_then(|value| table_vec4(&value)),
                 base_rotation: block
                     .get::<Option<Table>>("base_rotation")
                     .map_err(|err| err.to_string())?
@@ -19795,6 +19893,9 @@ pub fn read_actor_capture_blocks(actor: &Table) -> Result<Vec<SongLuaOverlayComm
                     .and_then(parse_overlay_effect_clock),
                 effect_timer: block
                     .get::<Option<bool>>("effect_timer")
+                    .map_err(|err| err.to_string())?,
+                effect_no_offset: block
+                    .get::<Option<bool>>("effect_no_offset")
                     .map_err(|err| err.to_string())?,
                 effect_mode: block
                     .get::<Option<String>>("effect_mode")
@@ -19953,6 +20054,7 @@ actor_scalar_fields!(ActorNumberField {
     BasezoomX => "__songlua_state_basezoom_x",
     BasezoomY => "__songlua_state_basezoom_y",
     BasezoomZ => "__songlua_state_basezoom_z",
+    BaseAlpha => "__songlua_state_base_alpha",
     RotXDeg => "__songlua_state_rot_x_deg",
     RotYDeg => "__songlua_state_rot_y_deg",
     RotZDeg => "__songlua_state_rot_z_deg",
@@ -19982,6 +20084,7 @@ actor_scalar_fields!(ActorFlagField {
     DepthTestOnFail => "__songlua_state_depth_test_on_fail",
     Vibrate => "__songlua_state_vibrate",
     EffectTimer => "__songlua_state_effect_timer",
+    EffectNoOffset => "__songlua_state_effect_no_offset",
     Rainbow => "__songlua_state_rainbow",
     RainbowScroll => "__songlua_state_rainbow_scroll",
     TextJitter => "__songlua_state_text_jitter",
@@ -20745,6 +20848,13 @@ fn read_actor_overlay_state(
     if let Some(value) = number(ActorNumberField::BasezoomZ).map_err(|err| err.to_string())? {
         state.basezoom_z = value;
     }
+    if let Some(value) = number(ActorNumberField::BaseAlpha).map_err(|err| err.to_string())? {
+        state.base_alpha = value;
+    }
+    if let Some(value) = actor.raw_get::<Option<ActorVectorValue<4>>>("__songlua_state_quaternion")
+        .map_err(|err| err.to_string())?.and_then(|value| value.0) {
+        state.quaternion = value;
+    }
     if let Some(value) = number(ActorNumberField::RotXDeg).map_err(|err| err.to_string())? {
         state.rot_x_deg = value;
     }
@@ -20789,6 +20899,9 @@ fn read_actor_overlay_state(
     state.effect_timer = flag(ActorFlagField::EffectTimer)
         .map_err(|err| err.to_string())?
         .unwrap_or(true);
+    state.effect_no_offset = flag(ActorFlagField::EffectNoOffset)
+        .map_err(|err| err.to_string())?
+        .unwrap_or(false);
     if let Some(value) = actor
         .raw_get::<Option<ActorVectorValue<4>>>("__songlua_state_effect_color1")
         .map_err(|err| err.to_string())?
@@ -21012,6 +21125,8 @@ pub fn set_actor_overlay_getter_state(
     if !set_live_base_field(lua, actor, "basezoom_z", state.basezoom_z) {
         set!("__songlua_state_basezoom_z", state.basezoom_z);
     }
+    set!("__songlua_state_base_alpha", state.base_alpha);
+    set!("__songlua_state_quaternion", lua.create_sequence_from(state.quaternion).map_err(|err| err.to_string())?);
     set!("__songlua_state_rot_x_deg", state.rot_x_deg);
     set!("__songlua_state_rot_y_deg", state.rot_y_deg);
     set!("__songlua_state_rot_z_deg", state.rot_z_deg);
@@ -21035,6 +21150,7 @@ pub fn set_actor_overlay_getter_state(
         effect_clock_label(state.effect_clock)
     );
     set!("__songlua_state_effect_timer", state.effect_timer);
+    set!("__songlua_state_effect_no_offset", state.effect_no_offset);
     set!("__songlua_state_effect_period", state.effect_period);
     let diffuse = make_color_table(lua, state.diffuse).map_err(|err| err.to_string())?;
     set!("__songlua_state_diffuse", diffuse.clone());
@@ -21116,6 +21232,8 @@ pub fn set_actor_overlay_update_getter_value(
         Target::RotationY => "rot_y_deg",
         Target::RotationZ => "rot_z_deg",
         Target::BaseRotation => "base_rotation",
+        Target::Quaternion => "quaternion",
+        Target::BaseAlpha => "base_alpha",
         Target::SkewX => "skew_x",
         Target::SkewY => "skew_y",
         Target::CropLeft => "cropleft",
@@ -21157,6 +21275,8 @@ pub fn set_actor_overlay_update_getter_value(
                 .map_err(|err| err.to_string())?;
             set_actor_capture_state(actor, "visible", *value).map_err(|err| err.to_string())
         }
+        UpdateValue::Quaternion(value) => actor.raw_set("__songlua_state_quaternion",
+            lua.create_sequence_from(*value).map_err(|err| err.to_string())?).map_err(|err| err.to_string()),
         UpdateValue::Vec4(value) if target == Target::Diffuse => {
             let diffuse = make_color_table(lua, *value).map_err(|err| err.to_string())?;
             actor

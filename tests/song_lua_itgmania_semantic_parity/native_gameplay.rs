@@ -5018,6 +5018,9 @@ pub(super) fn compile_generated(
     // Keep the beat-zero initial state and replay every captured active frame.
     let origin = context.song_timing.as_ref()
         .map_or(0.0, |timing| f64::from(timing.get_time_for_beat_exact(0.0)));
+    // Native broadcasts visit subscribers in pointer order. Neutral creation
+    // identities reproduce that order without importing command results.
+    context.message_actor_order = native_creation_order(trace)?;
     context.compile_clock_inputs.push([origin, 0.0, 0.0]);
     for frame in trace["update_frames"].as_array().ok_or("missing clock inputs")? {
         let beat = number(frame, "beat")?;

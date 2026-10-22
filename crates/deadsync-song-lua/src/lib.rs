@@ -1,3 +1,4 @@
+mod actor_quaternion;
 pub mod gameplay;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;
@@ -3025,6 +3026,9 @@ pub struct SongLuaOverlayState {
     pub rot_y_deg: f32,
     pub rot_z_deg: f32,
     pub base_rotation: [f32; 3],
+    /// Actor::TweenState quaternion, accumulated by heading/pitch/roll.
+    pub quaternion: [f32; 4],
+    pub base_alpha: f32,
     pub skew_x: f32,
     pub skew_y: f32,
     pub blend: SongLuaOverlayBlendMode,
@@ -3034,6 +3038,7 @@ pub struct SongLuaOverlayState {
     pub inherited_vibrate: [f32; 3],
     pub effect_clock: EffectClock,
     pub effect_timer: bool,
+    pub effect_no_offset: bool,
     pub effect_mode: EffectMode,
     pub effect_color1: [f32; 4],
     pub effect_color2: [f32; 4],
@@ -3134,6 +3139,8 @@ impl Default for SongLuaOverlayState {
             rot_y_deg: 0.0,
             rot_z_deg: 0.0,
             base_rotation: [0.0; 3],
+            quaternion: [0.0, 0.0, 0.0, 1.0],
+            base_alpha: 1.0,
             skew_x: 0.0,
             skew_y: 0.0,
             blend: SongLuaOverlayBlendMode::Alpha,
@@ -3142,6 +3149,7 @@ impl Default for SongLuaOverlayState {
             inherited_vibrate: [0.0, 0.0, 0.0],
             effect_clock: EffectClock::Time,
             effect_timer: true,
+            effect_no_offset: false,
             effect_mode: EffectMode::None,
             effect_color1: [1.0, 1.0, 1.0, 1.0],
             effect_color2: [1.0, 1.0, 1.0, 1.0],
@@ -3289,6 +3297,8 @@ pub struct SongLuaOverlayStateDelta {
     pub rot_y_deg: Option<f32>,
     pub rot_z_deg: Option<f32>,
     pub base_rotation: Option<[f32; 3]>,
+    pub quaternion: Option<[f32; 4]>,
+    pub base_alpha: Option<f32>,
     pub skew_x: Option<f32>,
     pub skew_y: Option<f32>,
     pub blend: Option<SongLuaOverlayBlendMode>,
@@ -3296,6 +3306,7 @@ pub struct SongLuaOverlayStateDelta {
     pub effect_magnitude: Option<[f32; 3]>,
     pub effect_clock: Option<EffectClock>,
     pub effect_timer: Option<bool>,
+    pub effect_no_offset: Option<bool>,
     pub effect_mode: Option<EffectMode>,
     pub effect_color1: Option<[f32; 4]>,
     pub effect_color2: Option<[f32; 4]>,
@@ -3384,6 +3395,8 @@ impl SongLuaOverlayStateDelta {
             Target::RotationY => self.rot_y_deg.is_some(),
             Target::RotationZ => self.rot_z_deg.is_some(),
             Target::BaseRotation => self.base_rotation.is_some(),
+            Target::Quaternion => self.quaternion.is_some(),
+            Target::BaseAlpha => self.base_alpha.is_some(),
             Target::SkewX => self.skew_x.is_some(),
             Target::SkewY => self.skew_y.is_some(),
             Target::Blend => self.blend.is_some(),
@@ -3391,6 +3404,7 @@ impl SongLuaOverlayStateDelta {
             Target::EffectMagnitude => self.effect_magnitude.is_some(),
             Target::EffectClock => self.effect_clock.is_some(),
             Target::EffectTimer => self.effect_timer.is_some(),
+            Target::EffectNoOffset => self.effect_no_offset.is_some(),
             Target::EffectMode => self.effect_mode.is_some(),
             Target::EffectColor1 => self.effect_color1.is_some(),
             Target::EffectColor2 => self.effect_color2.is_some(),
@@ -3812,6 +3826,8 @@ pub const fn apply_overlay_delta(
     if let Some(value) = delta.rot_z_deg {
         state.rot_z_deg = value;
     }
+    if let Some(value) = delta.quaternion { state.quaternion = value; }
+    if let Some(value) = delta.base_alpha { state.base_alpha = value; }
     if let Some(value) = delta.base_rotation {
         state.base_rotation = value;
     }
@@ -3835,6 +3851,9 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.effect_timer {
         state.effect_timer = value;
+    }
+    if let Some(value) = delta.effect_no_offset {
+        state.effect_no_offset = value;
     }
     if let Some(value) = delta.effect_mode {
         state.effect_mode = value;
@@ -4112,6 +4131,8 @@ pub fn overlay_state_lerp(
     if let Some(to) = delta.rot_z_deg {
         from.rot_z_deg = actor_lerp(from.rot_z_deg, to, t);
     }
+    if let Some(to) = delta.quaternion { from.quaternion = crate::actor_quaternion::slerp(from.quaternion, to, t); }
+    if let Some(to) = delta.base_alpha { from.base_alpha = to; }
     if let Some(to) = delta.base_rotation {
         from.base_rotation = to;
     }
@@ -4258,6 +4279,11 @@ pub fn overlay_state_lerp(
     {
         from.effect_timer = to;
     }
+    if let Some(to) = delta.effect_no_offset
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.effect_no_offset = to;
+    }
     if let Some(to) = delta.effect_mode
         && t >= 1.0 - f32::EPSILON
     {
@@ -4384,6 +4410,8 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.rot_x_deg.is_none()
         && delta.rot_y_deg.is_none()
         && delta.rot_z_deg.is_none()
+        && delta.quaternion.is_none()
+        && delta.base_alpha.is_none()
         && delta.base_rotation.is_none()
         && delta.skew_x.is_none()
         && delta.skew_y.is_none()
@@ -4392,6 +4420,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.effect_magnitude.is_none()
         && delta.effect_clock.is_none()
         && delta.effect_timer.is_none()
+        && delta.effect_no_offset.is_none()
         && delta.effect_mode.is_none()
         && delta.effect_color1.is_none()
         && delta.effect_color2.is_none()
@@ -4587,6 +4616,8 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     if from.rot_z_deg.is_some() {
         into.rot_z_deg = from.rot_z_deg;
     }
+    if from.quaternion.is_some() { into.quaternion = from.quaternion; }
+    if from.base_alpha.is_some() { into.base_alpha = from.base_alpha; }
     if from.base_rotation.is_some() {
         into.base_rotation = from.base_rotation;
     }
@@ -4610,6 +4641,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.effect_timer.is_some() {
         into.effect_timer = from.effect_timer;
+    }
+    if from.effect_no_offset.is_some() {
+        into.effect_no_offset = from.effect_no_offset;
     }
     if from.effect_mode.is_some() {
         into.effect_mode = from.effect_mode;
@@ -4786,6 +4820,8 @@ pub fn overlay_delta_intersection(
     copy_pair!(rot_y_deg);
     copy_pair!(rot_z_deg);
     copy_pair!(base_rotation);
+    copy_pair!(quaternion);
+    copy_pair!(base_alpha);
     copy_pair!(skew_x);
     copy_pair!(skew_y);
     copy_pair!(blend);
@@ -4793,6 +4829,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(effect_magnitude);
     copy_pair!(effect_clock);
     copy_pair!(effect_timer);
+    copy_pair!(effect_no_offset);
     copy_pair!(effect_mode);
     copy_pair!(effect_color1);
     copy_pair!(effect_color2);
@@ -5174,6 +5211,8 @@ pub enum SongLuaOverlayUpdateTarget {
     RotationY,
     RotationZ,
     BaseRotation,
+    Quaternion,
+    BaseAlpha,
     SkewX,
     SkewY,
     Blend,
@@ -5181,6 +5220,7 @@ pub enum SongLuaOverlayUpdateTarget {
     EffectMagnitude,
     EffectClock,
     EffectTimer,
+    EffectNoOffset,
     EffectMode,
     EffectColor1,
     EffectColor2,
@@ -5232,6 +5272,7 @@ pub enum SongLuaOverlayUpdateValue {
     Vec2([f32; 2]),
     Vec3([f32; 3]),
     Vec4([f32; 4]),
+    Quaternion([f32; 4]),
     Vec5([f32; 5]),
     VertexColors(Arc<[[f32; 4]; 4]>),
     TextAlign(TextAlign),
@@ -5264,6 +5305,7 @@ impl SongLuaOverlayUpdateValue {
             (Self::Vec3(from), Self::Vec3(to)) => {
                 Self::Vec3(std::array::from_fn(|i| mix(from[i], to[i])))
             }
+            (Self::Quaternion(from), Self::Quaternion(to)) => Self::Quaternion(crate::actor_quaternion::slerp(*from, *to, t)),
             (Self::Vec4(from), Self::Vec4(to)) => {
                 Self::Vec4(std::array::from_fn(|i| mix(from[i], to[i])))
             }

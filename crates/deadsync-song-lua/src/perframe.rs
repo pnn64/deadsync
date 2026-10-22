@@ -1675,6 +1675,8 @@ pub(crate) fn overlay_state_update_value(
         Target::RotationY => value!(F32, rot_y_deg),
         Target::RotationZ => value!(F32, rot_z_deg),
         Target::BaseRotation => value!(Vec3, base_rotation),
+        Target::Quaternion => value!(Quaternion, quaternion),
+        Target::BaseAlpha => value!(F32, base_alpha),
         Target::SkewX => value!(F32, skew_x),
         Target::SkewY => value!(F32, skew_y),
         Target::Blend => value!(Blend, blend),
@@ -1682,6 +1684,7 @@ pub(crate) fn overlay_state_update_value(
         Target::EffectMagnitude => value!(Vec3, effect_magnitude),
         Target::EffectClock => value!(EffectClock, effect_clock),
         Target::EffectTimer => value!(Bool, effect_timer),
+        Target::EffectNoOffset => value!(Bool, effect_no_offset),
         Target::EffectMode => value!(EffectMode, effect_mode),
         Target::EffectColor1 => value!(Vec4, effect_color1),
         Target::EffectColor2 => value!(Vec4, effect_color2),
@@ -1820,6 +1823,8 @@ pub(crate) fn set_overlay_state_update_value(
     set_value!(RotationY, F32, rot_y_deg);
     set_value!(RotationZ, F32, rot_z_deg);
     set_value!(BaseRotation, Vec3, base_rotation);
+    set_value!(Quaternion, Quaternion, quaternion);
+    set_value!(BaseAlpha, F32, base_alpha);
     set_value!(SkewX, F32, skew_x);
     set_value!(SkewY, F32, skew_y);
     set_value!(Blend, Blend, blend);
@@ -1827,6 +1832,7 @@ pub(crate) fn set_overlay_state_update_value(
     set_value!(EffectMagnitude, Vec3, effect_magnitude);
     set_value!(EffectClock, EffectClock, effect_clock);
     set_value!(EffectTimer, Bool, effect_timer);
+    set_value!(EffectNoOffset, Bool, effect_no_offset);
     set_value!(EffectMode, EffectMode, effect_mode);
     set_value!(EffectColor1, Vec4, effect_color1);
     set_value!(EffectColor2, Vec4, effect_color2);
@@ -2428,6 +2434,7 @@ fn lerp_scheduled_value(
             lerp(from[1], to[1]),
             lerp(from[2], to[2]),
         ]),
+        (Value::Quaternion(from), Value::Quaternion(to)) => Value::Quaternion(crate::actor_quaternion::slerp(*from, *to, factor)),
         (Value::Vec4(from), Value::Vec4(to)) => Value::Vec4([
             lerp(from[0], to[0]),
             lerp(from[1], to[1]),
@@ -4070,10 +4077,15 @@ fn apply_perframe_active_message<Kind>(
     use SongLuaOverlayUpdateTarget as Target;
     for target in [
         Target::Hibernating,
+        Target::HAlign,
+        Target::VAlign,
+        Target::Size,
+        Target::BaseAlpha,
         Target::Vibrate,
         Target::EffectMagnitude,
         Target::EffectClock,
         Target::EffectTimer,
+        Target::EffectNoOffset,
         Target::EffectMode,
         Target::EffectColor1,
         Target::EffectColor2,
