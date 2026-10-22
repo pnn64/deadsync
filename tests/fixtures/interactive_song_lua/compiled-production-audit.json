@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "song": "Fof Guys",
+  "checked_commit": "4ef420dbf",
+  "production_parity_proven": false,
+  "fixed": false,
+  "scope": "Single/Challenge, focused Fof Guys audit; no all-fixture sweep",
+  "production": {
+    "execution_path": "normal compiled gameplay, no retained Lua VM",
+    "chart_hash": "29216cf8f382a21d",
+    "compiled_preparation_ms": 93430.413,
+    "compiled_overlays": 77,
+    "compiled_update_tracks": 94,
+    "course_meshes": 64,
+    "course_vertices": 3114,
+    "ball": {
+      "index": 66,
+      "texture": "C:/GitHub/rework/lua-songs/fof_guys/fof/img/ball.png",
+      "initial_visible": false,
+      "initial_x": 0.0,
+      "initial_y": 0.0,
+      "tracks": [
+        {
+          "target": "X",
+          "samples": 1,
+          "first": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: F32(0.0) })",
+          "last": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: F32(0.0) })"
+        },
+        {
+          "target": "Y",
+          "samples": 10741,
+          "first": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: F32(-14.0983305) })",
+          "last": "Some(SongLuaOverlayUpdateSample { time: 179.01352, value: F32(82.40871) })"
+        },
+        {
+          "target": "Z",
+          "samples": 10741,
+          "first": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: F32(-23.379223) })",
+          "last": "Some(SongLuaOverlayUpdateSample { time: 179.01352, value: F32(-51.809196) })"
+        },
+        {
+          "target": "ZoomX",
+          "samples": 10741,
+          "first": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: F32(1.737654) })",
+          "last": "Some(SongLuaOverlayUpdateSample { time: 179.01352, value: F32(0.7841272) })"
+        },
+        {
+          "target": "ZoomY",
+          "samples": 10741,
+          "first": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: F32(1.737654) })",
+          "last": "Some(SongLuaOverlayUpdateSample { time: 179.01352, value: F32(0.7841272) })"
+        },
+        {
+          "target": "Visible",
+          "samples": 1,
+          "first": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: Bool(true) })",
+          "last": "Some(SongLuaOverlayUpdateSample { time: 0.024666667, value: Bool(true) })"
+        }
+      ],
+      "can_become_visible": true
+    },
+    "screenshot": {
+      "local_path": "target/fof-seventh-regression/data/save/screenshots/2026/10-October/2026-10-19_002009__1__Fof_Guys.png",
+      "sha256": "8cd03b7e3abc26b2b5b07df2126e2bb4bd1ec446d9dd66a6a614c0ea5e14049a",
+      "observed": "Course is rendered at a different camera pose and the ball is absent; countdown is 1:59.",
+      "retained_path": "tests/fixtures/interactive_song_lua/compiled-missing-ball.png"
+    },
+    "application_case": {
+      "warmup_frames": 120,
+      "measured_frames": 120,
+      "renderer": "Vulkan (wgpu)",
+      "visual_reproduction_completed": true,
+      "performance_case_passed": false,
+      "case_failure": "Isolated saved configuration migrated during execution, changing its SHA-256. This run is visual evidence, not a passed performance case."
+    }
+  },
+  "confirmed_gaps": [
+    "Normal preparation has context.live=false; native replay sets it true.",
+    "Compiled ActorMultiVertex retains one vertex snapshot. Fof updates mesh vertices on every ECS tick together with the projected ball and camera.",
+    "Input callbacks are screen-owned Lua closures. The compiled program contains no input callback representation."
+  ],
+  "missing_ball_mechanism": {
+    "status": "not isolated to a single pixel/depth operation",
+    "working_explanation": "The depth-tested ball follows baked camera/physics poses while the course retains one mesh snapshot. Native rendering keeps both synchronized."
+  },
+  "historical_full_replay": {
+    "result": "passed its implemented comparisons",
+    "frames": 7378,
+    "stage_fields": 1419,
+    "covered_ball_and_course_drawables": false,
+    "covered_input_callbacks": false,
+    "valid_as_production_parity_evidence": false
+  },
+  "historical_interactive_replay": {
+    "execution_path": "diagnostic live Lua",
+    "frames": 448,
+    "vertices": 699774,
+    "valid_as_compiled_production_parity_evidence": false
+  },
+  "all_fixtures_run": false,
+  "normal_application_rebuilt": true,
+  "production_gameplay_source_changed": false,
+  "fresh_interactive_replay": {
+    "execution_path": "diagnostic-live-lua",
+    "production_preparation_exercised": false,
+    "production_parity_proven": false,
+    "native_frames": 448,
+    "replayed_frames": 448,
+    "interactive": {
+      "input_events_replayed": 59,
+      "draw_samples_compared": 15387,
+      "submitted_vertices_compared": 699774,
+      "live_text_samples_compared": 223,
+      "draw_mismatches": 0,
+      "equivalent_offscreen_culls": 0,
+      "uncompared_owned_immediate_draws": 0,
+      "last_draw_mismatch": null,
+      "pixel_parity_proven": false
+    },
+    "interactive_checks_passed": true,
+    "archive_accepted": false,
+    "whole_song_parity_proven": false,
+    "mismatches": 0,
+    "callback_errors": 0,
+    "report": "target/test-audit/fof-live-current.json"
+  },
+  "inspection_example_build_exit_code": 0
+}

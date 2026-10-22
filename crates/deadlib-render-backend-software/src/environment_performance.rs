@@ -228,6 +228,7 @@ fn environment_pixels_depth_and_counts_match_original() {
                                 &mut DepthRows {
                                     pixels: &mut depth,
                                     unorm16: depth_mode == 2,
+                                    mode: deadlib_render_core::DepthMode::TestWrite,
                                 },
                             );
                             results.push((
@@ -287,6 +288,7 @@ fn benchmark_environment_geometry() {
                 &mut DepthRows {
                     pixels: &mut [],
                     unorm16: false,
+                    mode: deadlib_render_core::DepthMode::TestWrite,
                 },
             );
             black_box((count, &pixels));

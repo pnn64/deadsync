@@ -1,0 +1,29 @@
+{
+  "song_dir": "crates/deadsync-song-lua/tests/fixtures",
+  "title": "Recurring Stop",
+  "difficulty": "Challenge",
+  "steps_type": "dance-single",
+  "description": "",
+  "difficulty_code": 4,
+  "steps_type_code": 0,
+  "max_beat": 11.0,
+  "bpm": 60.0,
+  "bpm_segments": [
+    [
+      0.0,
+      60.0
+    ]
+  ],
+  "beat_step": 0.125,
+  "max_events": 500000,
+  "random_seed": 1,
+  "entries": [
+    {
+      "path": "crates/deadsync-song-lua/tests/fixtures/recurring-stop.lua",
+      "layer": "background1",
+      "index": 0,
+      "start_beat": 0
+    }
+  ],
+  "simfile": "crates/deadsync-song-lua/tests/fixtures/recurring-stop.sm"
+}

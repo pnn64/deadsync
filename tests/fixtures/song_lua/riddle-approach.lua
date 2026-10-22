@@ -5,15 +5,15 @@ return Def.Actor {
     UpdateCommand=function(self)
         local beat = GAMESTATE:GetSongBeat()
         if beat < 0.25 then
-            options:Flip(0, 1000):Invert(0, 1000)
+            options:Flip(0, 1000, true):Invert(0, 1000)
         elseif beat < 0.5 then
             options:Invert(1, 1000)
         elseif beat < 1 then
-            options:Flip(1, 1000):Invert(0, 1000)
+            options:Flip(1, 1000, true):Invert(0, 1000)
         elseif beat < 2 then
             options:Flip(0, 1000)
         else
-            options:Flip(0.5, 10):Mini(-1, 10):Reverse(0.1, 10)
+            options:Flip(0.5, 10, true):Mini(-1, 10, true):Reverse(0.1, 10)
         end
         self:sleep(1/60):queuecommand('Update')
     end,

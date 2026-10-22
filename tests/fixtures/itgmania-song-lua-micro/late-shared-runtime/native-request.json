@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "late Mawaru foreground shared player and visibility setters",
+  "option_control": true,
+  "lua_assertions": "local function po(level, name, ...)\n    return _ITG_OPTIONS_AT(0, 'ModsLevel_' .. level, name, ...)\nend\nnative_target:x(213.5)\nassert(native_target:GetX() == 213.5)\nnative_target:x(-9999)\nassert(native_target:GetX() == -9999)\npo('Song', 'Stealth', 1, 10000)\n_ITG_OPTIONS_ADVANCE(0.016)\nassert(po('Current', 'Stealth') == 1)\nnative_target:x(854 * .25)\npo('Song', 'Stealth', 0, 10000)\n_ITG_OPTIONS_ADVANCE(0.032)\nassert(native_target:GetX() == 213.5)\nassert(po('Current', 'Stealth') == 0)\nassert(native_target:blend(\"BlendMode_NoEffect\"):zwrite(1):ztest(1) == native_target)\n"
+}

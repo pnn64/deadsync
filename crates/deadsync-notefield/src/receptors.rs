@@ -139,6 +139,24 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         1.0
     };
     if targets_visible {
+        for overlay in request
+            .overlays
+            .iter()
+            .filter(|overlay| overlay.before_target)
+        {
+            compose_receptor_overlay(
+                draws,
+                model_cache,
+                &request,
+                &overlay.slot,
+                overlay.reverse,
+                1.0,
+                1.0,
+                false,
+                crate::style::RECEPTOR_Z - 2,
+                sprite_source,
+            );
+        }
         let slot = request
             .target_slot
             .expect("visible receptor target must have a noteskin slot");
@@ -167,7 +185,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 slot,
                 sprite_source,
                 ReceptorSpriteDraw {
-                    align: [0.5, reverse.vert_align()],
+                    align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                     center,
                     size,
                     zoom: mirrored_zoom(
@@ -204,6 +222,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             request.idle_glow_alpha,
             idle_press_zoom,
             request.idle_glow_shares_press && request.press_behavior.blend_add,
+            crate::style::RECEPTOR_GLOW_Z,
             sprite_source,
         );
     }
@@ -314,7 +333,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                     slot,
                     sprite_source,
                     ReceptorSpriteDraw {
-                        align: [0.5, reverse.vert_align()],
+                        align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                         center,
                         size,
                         zoom: mirrored_zoom(slot, request.bop_zoom * request.effect_zoom.signum()),
@@ -333,14 +352,22 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                         } else {
                             BlendMode::Alpha
                         },
-                        z: crate::style::RECEPTOR_GLOW_Z,
+                        z: if request.press_behavior.draw_before_target {
+                            crate::style::RECEPTOR_Z - 1
+                        } else {
+                            crate::style::RECEPTOR_GLOW_Z
+                        },
                     },
                 );
             }
         }
     }
     if targets_visible {
-        for overlay in request.overlays {
+        for overlay in request
+            .overlays
+            .iter()
+            .filter(|overlay| !overlay.before_target)
+        {
             compose_receptor_overlay(
                 draws,
                 model_cache,
@@ -350,6 +377,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 1.0,
                 1.0,
                 false,
+                crate::style::RECEPTOR_GLOW_Z,
                 sprite_source,
             );
         }
@@ -365,6 +393,7 @@ fn compose_receptor_overlay<S, F>(
     opacity: f32,
     press_zoom: f32,
     force_add: bool,
+    z: i16,
     sprite_source: &F,
 ) where
     S: NoteskinSlot,
@@ -390,7 +419,7 @@ fn compose_receptor_overlay<S, F>(
             slot,
             sprite_source,
             ReceptorSpriteDraw {
-                align: [0.5, reverse.vert_align()],
+                align: [0.5, reverse.vert_align.unwrap_or(draw.vert_align)],
                 center,
                 size,
                 zoom: mirrored_zoom(
@@ -407,7 +436,7 @@ fn compose_receptor_overlay<S, F>(
                 } else {
                     BlendMode::Alpha
                 },
-                z: crate::style::RECEPTOR_GLOW_Z,
+                z,
             },
         );
     }
@@ -463,10 +492,15 @@ fn append_receptor_sprite<S, F>(
         draw.size[0] * draw.zoom[0].abs(),
         draw.size[1] * draw.zoom[1].abs(),
     ];
+    let offset = [
+        (0.5 - draw.align[0]) * size[0],
+        (0.5 - draw.align[1]) * size[1],
+    ];
+    let (sin, cos) = draw.rotation_z_deg.to_radians().sin_cos();
     draws.push(FlatDraw::Sprite(FlatSprite {
         center: [
-            (0.5 - draw.align[0]).mul_add(size[0], draw.center[0]),
-            (0.5 - draw.align[1]).mul_add(size[1], draw.center[1]),
+            draw.center[0] + cos * offset[0] - sin * offset[1],
+            draw.center[1] + sin * offset[0] + cos * offset[1],
         ],
         world_z: 0.0,
         size,
@@ -801,6 +835,57 @@ mod tests {
     }
 
     #[test]
+    fn receptor_underlay_and_press_light_stay_below_visible_target() {
+        let target = TestSlot::sprite("target");
+        let press = TestSlot::sprite("press");
+        let mut rail = TestSlot::sprite("rail");
+        rail.logical_size = [64.0, 1.0];
+        rail.draw.zoom = [1.0, 480.0, 1.0];
+        rail.draw.vert_align = 1.0;
+        rail.draw.rot[2] = 180.0;
+        let overlays = [ReceptorOverlay {
+            slot: rail,
+            reverse: Default::default(),
+            before_target: true,
+        }];
+        let pulse = pulse();
+        for pressed in [false, true] {
+            let mut request = request(Some(&target), None, &pulse);
+            request.overlays = &overlays;
+            request.press_behavior.draw_before_target = true;
+            let mut draws = Vec::new();
+            compose_receptor_draws(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                || {
+                    pressed.then_some(ReceptorPress {
+                        slot: &press,
+                        reverse: None,
+                        visual: (1.0, 1.0),
+                    })
+                },
+                &texture_source,
+            );
+            assert_eq!(draws.len(), if pressed { 3 } else { 2 });
+            assert_sprite(&draws[0], "rail", 98, BlendMode::Alpha);
+            assert_sprite(&draws[1], "target", 100, BlendMode::Alpha);
+            if pressed {
+                assert_sprite(&draws[2], "press", 99, BlendMode::Add);
+            }
+            let FlatDraw::Sprite(rail) = &draws[0] else {
+                panic!("rail sprite")
+            };
+            assert_eq!(rail.size, [64.0, 480.0]);
+            assert!((rail.center[0] - 10.0).abs() < 0.001);
+            assert!(
+                (rail.center[1] - 260.0).abs() < 0.001,
+                "bottom alignment must rotate around the receptor pivot"
+            );
+        }
+    }
+
+    #[test]
     fn trailing_receptor_overlays_preserve_order_rotation_and_visibility() {
         let target = TestSlot::sprite("target");
         let idle = TestSlot::sprite("idle");
@@ -813,6 +898,7 @@ mod tests {
         hidden.draw.visible = false;
         let overlays = [
             ReceptorOverlay {
+                before_target: false,
                 slot: sparkle,
                 reverse: ReceptorReverseBehavior {
                     reverse_on: ReceptorReverseState {
@@ -823,6 +909,7 @@ mod tests {
                 },
             },
             ReceptorOverlay {
+                before_target: false,
                 slot: hidden,
                 reverse: Default::default(),
             },
@@ -884,6 +971,7 @@ mod tests {
             let mut overlay = TestSlot::sprite("overlay");
             overlay.def.rotation_deg = rotation;
             let overlays = [ReceptorOverlay {
+                before_target: false,
                 slot: overlay,
                 reverse: Default::default(),
             }];
@@ -964,7 +1052,9 @@ mod tests {
         else {
             panic!("expected target sprite");
         };
-        assert_eq!(*center, [12.0, 13.0]);
+        // Alignment is applied in the actor's rotated local coordinates.
+        assert!((center[0] - 15.25568).abs() < 0.0001);
+        assert!((center[1] - 32.455185).abs() < 0.0001);
         assert_eq!(*size, [120.0, 20.0]);
         assert!(*flip_x && *flip_y);
         assert_eq!(*rot_y_deg, 12.0);
@@ -1030,7 +1120,8 @@ mod tests {
         else {
             panic!("expected press sprite");
         };
-        assert_eq!(*center, [22.0, 44.0]);
+        assert!((center[0] - 51.34443).abs() < 0.0001);
+        assert!((center[1] - 7.7626514).abs() < 0.0001);
         assert_eq!(*size, [15.0, 120.0]);
         assert!(matches!(
             source,

@@ -955,12 +955,7 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
-    #[cfg(not(feature = "test-support"))]
-    pub fn attach_song_lua(&mut self, _scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
-        Err("gameplay requires compiled song data; live Lua is a test-support diagnostic".into())
-    }
-
-    #[cfg(feature = "test-support")]
+    /// Transfer authored callbacks from the loading worker to the gameplay screen.
     pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
         // Simply Love's Player metric is -1; Player.cpp compares it unsigned.
@@ -970,7 +965,7 @@ impl State {
         scene.install_step_callback(&mut self.gameplay);
         scene.install_hold_judgment_callback(&mut self.gameplay);
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
-        if let Some(scratch) = &mut self.song_scratch { scratch.enable_live_scene(); }
+        if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
         scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
         self.song_lua = Some(scene);
@@ -1015,8 +1010,14 @@ impl State {
         scene.apply_pending_player_writes(&mut self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
         frame.uptime_seconds = uptime_seconds;
+        let outro_before_actors = frame.gameplay_outro;
         let output = scene.update(frame).map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
+        // Native ScreenGameplay checks failure after updating its actor tree.
+        // Lua can drain life during this update, after the core's earlier check.
+        if !outro_before_actors && self.gameplay.finish_gameplay_if_ready(false).is_some() {
+            scene.note_gameplay_outro_after_actors();
+        }
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
             && self.song_lua_out.is_none()
@@ -1033,7 +1034,11 @@ impl State {
         // exactly once. The shell drains this buffer every frame.
         self.song_lua_output.append(output);
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
-        if self.song_lua_out.is_none() && scene.outro_off_dispatched() {
+        // ScreenGameplay owns a separate Failed transition. Its completion
+        // can pop the screen while an authored Out transition is still active.
+        let failed_out = scene.outro_off_dispatched() && scene.failed_outro()
+            && self.song_lua_out.as_ref().is_some_and(|out| out.phase != 2);
+        if scene.outro_off_dispatched() && (self.song_lua_out.is_none() || failed_out) {
             // ScreenGameplay handles LeaveGameplay after its actor Update.
             // The newly started Transition receives its first delta next frame.
             self.song_lua_out = Some(if scene.failed_outro() {
@@ -2748,7 +2753,21 @@ pub fn update_with_input(
         && let Err(error) = scene.prepare_gameplay_player_options(&mut state.gameplay) {
         state.song_lua_output.errors.push(error.to_string());
     }
-    let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
+    let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
+    let uptime_seconds = if state.song_lua.is_some() && host_nanos != 0 {
+        Some(host_nanos as f64 / 1_000_000_000.0)
+    } else { None };
+    let action = if let Some(scene) = &mut state.song_lua {
+        let errors = &mut state.song_lua_output.errors;
+        deadsync_gameplay::update_core_with_pre_player(&mut state.gameplay, delta_time, audio_snapshot,
+            fallback_host_nanos, |game| {
+                let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(game, delta_time);
+                frame.uptime_seconds = uptime_seconds;
+                if let Err(error) = scene.prepare_gameplay_frame(frame) { errors.push(error.to_string()); }
+                scene.apply_pending_player_writes(game);
+                if let Err(error) = scene.prepare_gameplay_player_options(game) { errors.push(error.to_string()); }
+            })
+    } else { update_core(state, delta_time, audio_snapshot, fallback_host_nanos) };
     if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
         // A screen without an owned Lua outro hands off immediately.
@@ -2758,8 +2777,7 @@ pub fn update_with_input(
         let count = state.gameplay.num_players().min(MAX_PLAYERS);
         fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
     }
-    let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
-    let uptime_seconds = (host_nanos != 0).then_some(host_nanos as f64 / 1_000_000_000.0);
+
     if let Err(error) = state.advance_song_lua(delta_time, uptime_seconds, effects) {
         state.song_lua_output.errors.push(error);
     }
@@ -2779,6 +2797,10 @@ pub fn update_with_input(
             }
         }
         action => effects.push(map_gameplay_action(action)),
+    }
+    if state.song_lua.is_none() {
+        after_update_input(state);
+        return;
     }
     let mut pending_inputs = std::mem::take(&mut state.song_lua_pending_inputs);
     for (event, physical) in pending_inputs.drain(..) {

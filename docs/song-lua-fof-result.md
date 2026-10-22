@@ -1,5 +1,16 @@
 # Fof Guys full replay result
 
+## Current production status (2026-10-19)
+
+Production now retains the shared Lua scene and executes the authored physics,
+input, timers, sounds and scene transitions. The source-specific Rust FOF
+adapter has been removed. The historical compiled reports describe that removed
+adapter; use the headless harness's `--production` mode for current gameplay.
+The historical replay below covers fewer behaviors and remains separate.
+
+Full-song completion and framebuffer pixel parity remain unverified. See
+[the execution audit and historical evidence](song-lua-fof-production-audit.md).
+
 `fof_guys/fof.ssc` **passed** the existing full replay on 2026-10-16:
 7,378/7,378 native frames, 129 stage samples, 1,419 stage fields, zero
 mismatches, zero callback errors, and exit code 0. Acceptance is the full

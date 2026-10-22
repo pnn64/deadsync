@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "command": "actor-conformance",
+  "receipt": "tests/fixtures/itgmania-song-lua-micro/native-capture-manifest.json",
+  "fixtures": [
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/affine-skew.request.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/affine-skew-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/aft-boundary.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/aft-boundary-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/aft-boundary.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/ancestor-scale.request.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/ancestor-scale-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/native.json",
+      "oracle": "itgmania_native_bitmap_loader",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/gray-alpha16-strip.png",
+        "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/gray16-strip.png",
+        "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/rgb16-strip.png",
+        "tests/fixtures/itgmania-song-lua-micro/bitmap-file-decoding/rgba16-strip.png"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/bpm-fade.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/bpm-fade-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/bpm-fade.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/collapsed-transform-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/collapsed-transform-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/color-inheritance-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/color-inheritance-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/deferred-effects-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/deferred-effects-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/effect-switch.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/effect-switch-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/effect-switch.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/fade-clock-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/fade-clock-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/positive-control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native.json",
+      "oracle": "itgmania_native_bitmap_loader",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-both-pinks.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-first-frame.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-global.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-interlaced.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-local.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-odd.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-offset.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/gif-transparent-pink.gif",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-1.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-4.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-8.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win1.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4-odd.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-both-pinks.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-odd.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-unused-entry.bmp",
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8.bmp"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/late-colors-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/late-colors-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/late-pulse.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/late-pulse-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/late-pulse.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/message-alpha-tail/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/message-alpha-tail/independent-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-alpha-cutoff/actor-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-alpha-cutoff/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/model-alpha-cutoff/model.txt"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-clock-offset/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-clock-offset/independent-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "assets/noteskins/dance/cyber/_down tap note model.txt",
+        "assets/noteskins/dance/cyber/textures/Tap Note ani texture.ini",
+        "assets/noteskins/dance/cyber/textures/Tap Note parts (mipmaps).png"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-images/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/alpha-green.png",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/alpha-white.png",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/alpha.ini",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/diffuse.ini",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/frame-blue.png",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/frame-red.png",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-images/model.txt"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-order/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-order/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-order/frame.png",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-order/model.txt",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-order/texture.ini"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-preparation/native.json",
+      "oracle": "itgmania_native_surface_utils",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-request/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-request/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-request/model.txt",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-request/npot.png"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/motion-body-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/motion-body-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/near-camera-clock-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/near-camera-clock-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/near-camera-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/near-camera-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/parent-rotation.request.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/parent-rotation-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/perspective-float.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/perspective-float-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/perspective-float.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/position-spline-looped.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/position-spline-looped-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/position-spline-looped.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/position-spline.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/position-spline-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/position-spline.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-request.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/pulse-body-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/pulse-body-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/queued-broadcasts-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/queued-broadcasts-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/queued-reset-clock-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/queued-reset-clock-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/queued-visibility.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/queued-visibility-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/queued-visibility.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/runtime-size-zoom.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/runtime-size-zoom-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/runtime-size-zoom.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/scheduled-fade-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/scheduled-fade-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/short-glow-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/short-glow-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/spin-tween.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/spin-tween-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/spin-tween.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/startup-self-queue/actor-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/startup-self-queue/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/native.json",
+      "oracle": "itgmania_native_bitmap_loader",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/capped-tiny.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/capped.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/hires (doubleres).png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/padded.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/panel (stretch).png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/sheet 2x1.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/source (res 53x12).png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/tiny-tall.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/tiny-wide.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-image-getters/tiny.png"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/native.json",
+      "oracle": "itgmania_native_bitmap_loader",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/capped.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/hires (doubleres).png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/padded.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/panel (stretch).png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/sheet 2x1.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/source (res 53x12).png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/tiny-tall.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/tiny-wide.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/tiny.png",
+        "tests/fixtures/itgmania-song-lua-micro/texture-sprite-preparation/bitmap-sprite-preparation/unit.png"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/texture-surface/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/texture-surface/native.json",
+      "oracle": "itgmania_native_surface_utils",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/unnamed-broadcast-native.json.zst",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/vibration-restart-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/vibration-restart-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/waltz-base-zoom.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/waltz-base-zoom-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/waltz-base-zoom.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/wrapper-transform-input.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/wrapper-transform-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/zoom-axis-fit.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/zoom-axis-fit-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/zoom-axis-fit.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/zoom-clock-request.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/zoom-clock-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": []
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/rejection-control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/native-rejections.json",
+      "capture_kind": "rejections",
+      "oracle": "itgmania_native_actor_rejection",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/misnamed.png"
+      ]
+    }
+  ]
+}

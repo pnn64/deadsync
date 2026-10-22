@@ -476,6 +476,8 @@ mod tests {
             uv_offset: [0.15, 0.25],
             uv_tex_shift: [0.35, 0.45],
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::Back,
@@ -499,6 +501,8 @@ mod tests {
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             cull_mode,
             visible,
             blend,
@@ -525,6 +529,8 @@ mod tests {
         assert_eq!(uv_offset, [0.15, 0.25]);
         assert_eq!(uv_tex_shift, [0.35, 0.45]);
         assert!(depth_test);
+        assert!(depth_write);
+        assert!(!depth_test_on_fail);
         assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
         assert!(!visible);
         assert_eq!(blend, BlendMode::Multiply);

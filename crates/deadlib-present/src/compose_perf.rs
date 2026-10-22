@@ -99,6 +99,8 @@ fn scene(count: usize, mixed: bool) -> (FrameBuilder, Vec<renderer::SpriteInstan
                     vertices: renderer::TexturedMeshVertices::Shared(vertices.clone()),
                     geom_cache_key: index as u64 + 1,
                     depth_test: true,
+                    depth_write: true,
+                    depth_test_on_fail: false,
                     clear_depth: index % 2 == 0,
                     clear_depth_after: true,
                     sampler,

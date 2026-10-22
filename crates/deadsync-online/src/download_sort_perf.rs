@@ -1,10 +1,7 @@
 use super::download_sort_original as original;
 use super::*;
-use crate::perf::measure;
+use crate::{paired_bench, perf::measure};
 use std::hint::black_box;
-
-#[path = "../../../tests/support/paired_bench.rs"]
-mod paired_bench;
 
 fn check(paths: &[PathBuf]) {
     let mut expected = paths.to_vec();

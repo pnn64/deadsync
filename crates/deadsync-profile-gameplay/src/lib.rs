@@ -536,6 +536,9 @@ pub fn song_lua_compile_context(
         } else {
             deadsync_song_lua::SongLuaSpeedMod::default()
         },
+        mini: if player < num_players {
+            player_profiles[player].mini_percent as f32 / 100.0
+        } else { 0.0 },
         noteskin_name: if player < num_players {
             player_profiles[player].noteskin.to_string()
         } else {

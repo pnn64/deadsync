@@ -1,0 +1,25 @@
+[package]
+name = "lua-src"
+version = "551.0.2"
+authors = ["Aleksandr Orlenko <zxteam@protonmail.com>"]
+edition = "2024"
+repository = "https://github.com/mlua-rs/lua-src-rs"
+keywords = ["lua", "lua51", "lua54", "lua55"] # Max 5 keywords
+readme = "README.md"
+license = "MIT"
+description = """
+Sources of Lua 5.1-5.5 and logic to build them.
+"""
+
+[features]
+ucid = [] # accept UniCode IDentifiers
+
+[workspace]
+members = ["testcrate"]
+
+[dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+target-lexicon = "0.13"
+tempfile = "3.0"

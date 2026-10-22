@@ -1,0 +1,908 @@
+{
+  "baseline_commit": "e2abe0e2c319dcceab9cbb444ffb2d8561b92605",
+  "prior_review": "eighth-ten-2026-10-18-source-review.json",
+  "repairs": [
+    {
+      "fix_commit": "3f3bcf572c78381d6939c561b063b98d5b3f4b4f",
+      "native_source": "../itgmania-harness/target/native-engine-source/src/ScreenDimensions.cpp:GetScreenAspectRatio; ScreenGameplay.cpp:Init; ActorFrame.cpp:PushChildrenTable",
+      "cause": "Hallways uses the physical display preference rather than the ratio of rounded logical dimensions. Separately, native Versus gameplay adopts both Player actors before either OniGameOver actor, while owned construction interleaved those groups. Lesson retains four traversal mismatches after correcting the group order; a later private control isolates Footer replacement sorting.",
+      "fix": "Read the current owned DisplayAspectRatio preference and preserve native Player/Oni construction groups. No song source, acceptance comparator, or tolerance changes.",
+      "checks": [
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-contracts-screen_aspect_uses_preference.log",
+          "sha256": "8592764c53aa260cd6444498a76b9c097e8dfaff090ec04db19604c7210226be",
+          "passed": 1,
+          "failed": 0,
+          "scope": "screen_aspect_uses_preference"
+        },
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-contracts-display_preference_ignores_mode_size.log",
+          "sha256": "4991284a2ef64055957c4721a39190b8e8eed1139fb70dc4e317c7bba2ba5e70",
+          "passed": 1,
+          "failed": 0,
+          "scope": "display_preference_ignores_mode_size"
+        },
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-contracts-compile_song_lua_exposes_fallback_theme_utility_helpers.log",
+          "sha256": "0558c60ce9d100e039c0723487e2a4fb52b0af4d7f87772eaa53ce473cbb74f9",
+          "passed": 1,
+          "failed": 0,
+          "scope": "compile_song_lua_exposes_fallback_theme_utility_helpers"
+        },
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-contracts-live_versus_children_retain_native_player_construction_groups.log",
+          "sha256": "43791035ba714898c176de8eb0c05594048bce1a197a4383fef800b0f0ee4b4e",
+          "passed": 1,
+          "failed": 0,
+          "scope": "live_versus_children_retain_native_player_construction_groups"
+        },
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-contracts-live_gameplay_children_retain_native_owned_inventory.log",
+          "sha256": "4f1e74312d96cf4ae14a8fe78f6c60b482ba9fa21ac93584ab1a5224c623904a",
+          "passed": 1,
+          "failed": 0,
+          "scope": "live_gameplay_children_retain_native_owned_inventory"
+        },
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-contracts-native-tests.log",
+          "sha256": "d3c7308a36f5e2b60b9a40a3e5319596ab1870d67d78d987631652de50727c9f",
+          "passed": 68,
+          "failed": 0,
+          "scope": "Complete native gameplay suite; comparators unchanged"
+        }
+      ],
+      "negative_regression": {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\screen-aspect-red.log",
+        "sha256": "affbd17c3d39c4692c5020532c9051a44b8ea1f9f28b5bfeac2c6433bf361cf9",
+        "outcome": "Unchanged host returns logical width/height rather than physical display preference."
+      },
+      "full_replay_negative": {
+        "report": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\chart-278-attempt-1\\report.json",
+        "sha256": "242184281b204ee1aadacc1acc30c00443424d63caa83f7d7ae3e364b6e455de",
+        "mismatches": 4
+      }
+    },
+    {
+      "fix_commit": "1a545bd375860296633165c1bb9f50c1f8dd4c7a",
+      "native_source": "../itgmania-harness/target/native-engine-source/Themes/Harness Simply Love/Graphics/_footer.lua; src/Attack.h,PlayerState.cpp,GameLoop.cpp; src/Actor.cpp:BeginDraw",
+      "cause": "Native footer Init sets draw order90, but replacing its zero-order placeholder did not rerun the native stable sort; the private Versus child control records48 traversal mismatches. Intro Outro uses native ATTACK_STARTS_NOW=-10000 and relies on GameState evaluating attacks from the previous screen position. AFT sprites bake nonuniform zoom into rectangle size but apply unadjusted shear afterward, changing the native scale-before-skew matrix in7th Gear.",
+      "fix": "Sort the screen after replacing decorations and running their real Init commands; anchor start-now option windows and use prior player position for activation; conjugate AFT sprite shear by baked axis scale. Comparators, song files and tolerances stay unchanged.",
+      "checks": [
+        {
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-phases-native-tests.log",
+          "sha256": "797b7e3a9e168302ab578dfc403b8a070ad9aa1d9d44681ed42a3de59ecc0199",
+          "passed": 69,
+          "failed": 0,
+          "scope": "Native gameplay suite including start-now attack and prior-position phase regression"
+        },
+        {
+          "binary": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\playback-native-phases-check.exe",
+          "binary_sha256": "fe4c85e3da6c78a5e1b96b6470754b1f68cd1cd0a75001f9884d362ad9e74ba3",
+          "sources": {
+            "crates/deadsync-song-lua/src/playback.rs": "565b6cfeb2de187eb8d30ced2aed2e24c78812443e6c4d4aa673a0636f24cb3c",
+            "crates/deadsync-song-lua/tests/playback/cases.rs": "315e16071c9fd7653c8ab7b5670141abb680aa3e251c71794563db0863b9f36f"
+          },
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-phases-aft-tests.log",
+          "sha256": "c02f97eeaf4a5343ce9e8cbe6c20ed5d9cec4133df87c4f4e5bc0cc623832353",
+          "passed": 2,
+          "failed": 0,
+          "scope": "Isolated AFT sprite matrix regressions; reuse only while their production and test sources are unchanged."
+        }
+      ],
+      "native_control": {
+        "control_only_not_a_catalog_fixture": true,
+        "archive_accepted": true,
+        "native_frames": 530,
+        "replayed_frames": 530,
+        "candidate_sha256": "88053ede9c441291333ac1957a14ea18fb58d0420cc05655009ee7b45c342772",
+        "report_sha256": "c74f109d670f1f7ce637f0a51daa707346af0637d1cfea31425168572f578737"
+      },
+      "full_replay_negatives": [
+        {
+          "position": 248,
+          "mismatches": 2284,
+          "report_sha256": "752b18b976c86ed59221b759a984ea5b020807f1e5f81d4e022aff44d795f9d4"
+        },
+        {
+          "position": 27,
+          "draw_mismatches": 1156,
+          "report_sha256": "78c793c0d2c874a4267393412a754bbc42d1b85d9ed697c557e9bce21df0cbfa"
+        }
+      ],
+      "capped_chart": "Lesson by DJ remains pending after two full replays; no third replay this sweep."
+    },
+    {
+      "fix_commit": "ec016b9cb241a7407bd46554c7c2ecc6b788db23",
+      "native_source": "ScreenGameplay.cpp: after-ActorFrame life checks, SM_BeginFailed; Transition.cpp UpdateInternal; Actor.cpp BeginTweening >50 guard",
+      "cause": "Hello Gordon full replay matched source calls but did not navigate at185.0286407470703. The independent376-frame native control also fails: actor-callback life changes reached the failure check one frame late, and an authored Out timer suppressed the independent Failed transition. Dongo Bongo also accumulated25.5 seconds of tweens where native Actor::BeginTweening finishes queues above50 states. The independent311-frame overflow control records native x51 and time-left0.5 versus owned x0 and time-left26.",
+      "fix": "Run the native completion check after applying actor callbacks; retain the queued lifecycle phase and let Failed finish independently of Out. Before each appended native tween state, finish an overflowing queue; Sleep uses its two native BeginTweening calls. No acceptance comparator, tolerance, source song or runtime Lua enablement changes.",
+      "checks": [
+        {
+          "scope": "Native gameplay suite including concurrent authored Out and native Failed transitions",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-queues-native-tests.log",
+          "sha256": "41a0bfb8f7df679058a22280e33c3d18fd930885d4c79dec62f9c0726a8bcd3e",
+          "passed": 70,
+          "failed": 0
+        }
+      ],
+      "native_controls": [
+        {
+          "name": "failed-out-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 376,
+          "replayed_frames": 376,
+          "candidate_sha256": "708ad7bcb65a6eead3603c39367880a1500972497c94b1f6e9b4ec3e5750ba1f",
+          "report_sha256": "b4e522946be683146cdf3d04150a7a98ead0d03195560e1792ff547b7ca78e62"
+        },
+        {
+          "name": "tween-overflow-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 311,
+          "replayed_frames": 311,
+          "candidate_sha256": "2d3e6d44c7074cdf65c9809795daebb75acdb934159aeb99914aabec3699734f",
+          "report_sha256": "e1d01b9c842902210f9fdd831495e8285f7f45df2e97ceb215e47840ba4a8615"
+        }
+      ]
+    },
+    {
+      "fix_commit": "b2186d861cbd9e0e324366b15112e616639833c4",
+      "cause": "HOPE hashes powers into huge sine arguments. Native MSVC /MT pow(63,9) is15633814156853822; the DLL CRT returns15633814156853824. An isolated Rust static-runtime/serde-derive build reproduces the native result.",
+      "fix": "Use a consistent static MSVC runtime for the Windows application, Lua VM and Rust math. No mixed CRT bridge, DLL replacement, expected actor values, comparator or tolerance changes.",
+      "checks": [
+        {
+          "scope": "72 native gameplay tests including native JSON integer bounds and Windows static-CRT math",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-crt-inputs-native-tests.log",
+          "sha256": "f3cbdc0c028cf6620940d586ab921c620a2e737f4afa51a110c78017774e3678",
+          "passed": 72,
+          "failed": 0
+        }
+      ],
+      "native_controls": [
+        {
+          "name": "failed-out-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 376,
+          "replayed_frames": 376,
+          "candidate_sha256": "708ad7bcb65a6eead3603c39367880a1500972497c94b1f6e9b4ec3e5750ba1f",
+          "report_sha256": "6df96727207236f27b33ccc8341c186d4f0338e575bffd7b99fa6cd245e37192"
+        },
+        {
+          "name": "tween-overflow-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 311,
+          "replayed_frames": 311,
+          "candidate_sha256": "2d3e6d44c7074cdf65c9809795daebb75acdb934159aeb99914aabec3699734f",
+          "report_sha256": "ad34c1cc996c8fd12baa1f078fed648a6c8254aa7ccc26bf4b22ee5aecb8729f"
+        },
+        {
+          "name": "native-math-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 321,
+          "replayed_frames": 321,
+          "candidate_sha256": "2b92a85f39f85cb52fc71a95d16ca8889e416563cafa482056e0a6e57da6d904",
+          "report_sha256": "680a260fc0ab0ecc4c5498bbbf1c0e7bb815561103b650f1ff6a4ea9bf0f1628"
+        },
+        {
+          "name": "gc-profile-control-2",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 314,
+          "replayed_frames": 314,
+          "candidate_sha256": "c38f4fa395fb85420bcaa2985f3da6e3b6e8a1b3d857a3d035076b7b077737d0",
+          "report_sha256": "80d345b77f6723df89b308b4f6c994f8fc6db13ba0a72996c1a9bc3ac08398f6"
+        }
+      ],
+      "platform_scope": "Static CRT and shaderc source build: Windows MSVC only. Initial collector input: test-support only; default automatic. JSON broadcast encoding follows native 32-bit integer bounds.",
+      "json_encoding_fix": "RageUtil.cpp LuaFunc_JsonEncode preserves integral doubles outside Json::UInt/Int32 as floats; source broadcasts now preserve this scalar kind without comparator changes.",
+      "initial_vm_input": "Diagnostic trace input.lua_gc_mode is applied once to a new VM. Explicit authored collect/restart remains available. Negative weak-value native control distinguishes omitted input; complete repaired control passes."
+    }
+  ],
+  "input_repairs": [
+    {
+      "position": 220,
+      "source_simfile": "Hallways/hallways.ssc",
+      "simfile_sha256": "2f1099184b916460d6d31762b49cac0098a2e26e4a0f57e00a3a2bd8cdafb6bf",
+      "capture_exit": 0,
+      "capture_seconds": 31.473848499997985,
+      "native_engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57",
+      "harness_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+      "harness_fix_commit": "eb349e4c397df20c76fe634bf0c1699dcbbe3c28",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "Prior full replay has actual constructor/per-call uptime, calendar, or catalog-load preference mismatches. Retain the prior complete tape unchanged and capture the missing raw external inputs; no expected query values or actor state are supplied to replay.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-8684-1792322687199989100-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675"
+      },
+      "captured_observer_script_sha256": "ab5fab3c2bf64c535a4312c6243c988b3335277f95675332cc8a64be9328cf19",
+      "candidate_sha256": "54930a40507dc27022f381129d6329b8bbc8d52ad5e16b917cdf45c29b5811cc",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-220\\candidates\\54930a40507dc27022f381129d6329b8bbc8d52ad5e16b917cdf45c29b5811cc.tar",
+      "trace_sha256": "34c6927674b1a90021eaf8e8b8322d24632474704a1fa5c0319b8271ff29bba5",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-8684-1792322687199989100-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.85",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 278,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "simfile_sha256": "f7d7ca10969dc5d84afa14cd001fba4d3f090778176ebf56cafac937c1c666e2",
+      "capture_exit": 0,
+      "capture_seconds": 107.91485580001608,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-4652-1792334029094296200-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "fc7810ad8883d6db70b72cd24b6c79215d038324b4811f1f54cd77c8a0fdf1cb",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-278\\candidates\\fc7810ad8883d6db70b72cd24b6c79215d038324b4811f1f54cd77c8a0fdf1cb.tar",
+      "trace_sha256": "111bd63cbe28f9b14feec64bbb5dc1d837f4551c35925255c5cea5a2c675f7c1",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-4652-1792334029094296200-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 248,
+      "source_simfile": "Intro Outro/intro.ssc",
+      "simfile_sha256": "8214dcbee76704e940f10dbedc814c541fb615f0f1fdfcbccc230b750a82649d",
+      "capture_exit": 0,
+      "capture_seconds": 123.341588100011,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-37488-1792334539875104600-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-248\\candidates\\8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970.tar",
+      "trace_sha256": "c18758227fed75ceae36eb9e1e4e2a84aed46e48c1bd66a9d0b5100ba00905c5",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-37488-1792334539875104600-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 248,
+      "source_simfile": "Intro Outro/intro.ssc",
+      "simfile_sha256": "8214dcbee76704e940f10dbedc814c541fb615f0f1fdfcbccc230b750a82649d",
+      "capture_exit": 0,
+      "capture_seconds": 123.341588100011,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-37488-1792334539875104600-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-248\\candidates\\8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970.tar",
+      "trace_sha256": "c18758227fed75ceae36eb9e1e4e2a84aed46e48c1bd66a9d0b5100ba00905c5",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-37488-1792334539875104600-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 460,
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "simfile_sha256": "a38146c07ea9483591ae94748621822e163c8ad283e60fe1273048a229f94514",
+      "capture_exit": 0,
+      "capture_seconds": 144.98707760000252,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-35760-1792334225403297900-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "0d8e67fda8f1e86ee7c13851449c2ef9b918360311089732bc0b4e6eaad380b0",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-460\\candidates\\0d8e67fda8f1e86ee7c13851449c2ef9b918360311089732bc0b4e6eaad380b0.tar",
+      "trace_sha256": "b4e3439098a5fe013a1c0fabf156df78fa750111510058d1cb5ae177e9954310",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-35760-1792334225403297900-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 227,
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "simfile_sha256": "24202fda58b5285d06b8fed5aab5db33014eae5bfa043ac9ca630f9f671198c7",
+      "capture_exit": 0,
+      "capture_seconds": 192.48042519998853,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-57016-1792334539876572800-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "65f267a623cfebda3a83d4fe956f0ff3adc0fa68994690d7adf552354e857d30",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-227\\candidates\\65f267a623cfebda3a83d4fe956f0ff3adc0fa68994690d7adf552354e857d30.tar",
+      "trace_sha256": "b3c2f0bf031e1a1195b88593cc1ffc2591adde1422d54f9664f6cf2623a6175f",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-57016-1792334539876572800-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 474,
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "simfile_sha256": "26433a3ef9255d76659f20b47b4e1e63afabea0ecea9b128a8ee2904433cf2fe",
+      "capture_exit": 0,
+      "capture_seconds": 196.10379799999646,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-11440-1792334881751894500-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "8096066726cdd113f349e916ab9c9c4283b3aa44255e2d0a470957453d5f672d",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-474\\candidates\\8096066726cdd113f349e916ab9c9c4283b3aa44255e2d0a470957453d5f672d.tar",
+      "trace_sha256": "491c3d2073ae57fde2480b071504466eb3d8b69e5e21dd396fcff734cb763bb2",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-11440-1792334881751894500-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 236,
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "simfile_sha256": "30720d33bd4a2f6746f910b4ac601b4b8bdda7c49c8c04cc9d1914482db12631",
+      "capture_exit": 0,
+      "capture_seconds": 203.54911540000467,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart explicitly requires two players on Challenge. Prior Single capture crashes in its unsupported one-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45116-1792334013042518200-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "124efd0e00d6564c08124aed66ec7b152fc01e03d3d2915db759cf17ae6a8a54",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-236-versus\\candidates\\124efd0e00d6564c08124aed66ec7b152fc01e03d3d2915db759cf17ae6a8a54.tar",
+      "trace_sha256": "7afb961b4c2941cb5152addbc49408417653fe327e111031ab997d71722fae69",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45116-1792334013042518200-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+      "capture_exit": 0,
+      "capture_seconds": 170.39010369998869,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The retained full Metronogik replay fails at the song-end phase. Its older native capture lacks catalog-load preferences and raw host-clock inputs now required to independently reproduce that boundary. Retain the old tape and capture these raw inputs; no expected query values are supplied.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54344-1792334264892010300-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "c899aa3ac42aef157aaa04ebcc372c5f7b0665b577258ef2b96b60cd2127632e",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-496-clock-inputs\\candidates\\c899aa3ac42aef157aaa04ebcc372c5f7b0665b577258ef2b96b60cd2127632e.tar",
+      "trace_sha256": "c24ff821aec76182d425fb147f646e5bad0bd490dac99101f0affe620f41d7e2",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54344-1792334264892010300-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 490,
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "simfile_sha256": "b0057ebbdf4f8465cc34fda1fe7327d1a4edbf2978ed04b7c98eef0fe43f4dd0",
+      "capture_exit": 0,
+      "capture_seconds": 276.65660979997483,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-43944-1792337078558230600-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "f537b455407d794e2f35913af9420314dabae2d6b8501da4be35e5dead7343b3",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-490\\candidates\\f537b455407d794e2f35913af9420314dabae2d6b8501da4be35e5dead7343b3.tar",
+      "trace_sha256": "d1dbd46b3c5c753e98cfa5a7cd0387d85d05cc1c00f5d730358497ba329e7510",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-43944-1792337078558230600-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": false
+    },
+    {
+      "position": 27,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+      "capture_exit": 0,
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-sweep-20261016\\seventh\\candidates\\305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0.tar",
+      "candidate_sha256": "305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0",
+      "native_capture_reused": true,
+      "harness_version": "0.1.80",
+      "reason": "Reuse complete retained native 4404-frame capture; all original song archive members match current input files. Prior actual failure is immediate-draw comparator nil-target proxy handling.",
+      "verified_source_members": [
+        "song/7th Gear.ogg",
+        "song/7th Gear.ssc",
+        "song/7th background.png",
+        "song/7th_banner.png",
+        "song/lua/default.lua",
+        "song/lua/easing.lua",
+        "song/lua/modhelpers.lua",
+        "song/lua/mods.lua"
+      ],
+      "archive_version": "0.1.80",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 229,
+      "source_simfile": "HOPE/HOPE.ssc",
+      "simfile_sha256": "40320b6ae63e366213e7fbb060fc36beadd09fa2bb33be032bc9177e8a7b023d",
+      "capture_exit": 0,
+      "capture_seconds": 195.4964883000066,
+      "native_engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57",
+      "harness_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+      "harness_fix_commit": "eb349e4c397df20c76fe634bf0c1699dcbbe3c28",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "Prior full replay has actual constructor/per-call uptime, calendar, or catalog-load preference mismatches. Retain the prior complete tape unchanged and capture the missing raw external inputs; no expected query values or actor state are supplied to replay.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-19188-1792322697333786100-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675"
+      },
+      "captured_observer_script_sha256": "ab5fab3c2bf64c535a4312c6243c988b3335277f95675332cc8a64be9328cf19",
+      "candidate_sha256": "1468a3058c167da153ae3bb0a3ec4295a6f49a885361cb62f657210932df0f56",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-229\\candidates\\1468a3058c167da153ae3bb0a3ec4295a6f49a885361cb62f657210932df0f56.tar",
+      "trace_sha256": "8713fb6ddd5d077a4d1fc153c06dd778680e63decc3300ad5c29722978fcc1ec",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-19188-1792322697333786100-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.85",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 460,
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "simfile_sha256": "a38146c07ea9483591ae94748621822e163c8ad283e60fe1273048a229f94514",
+      "capture_exit": 0,
+      "capture_seconds": 141.69950200000312,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "ae91ca9f7b74383764ec09e76d1734b99be86fa0eb5ab9841f9edf34bcca71b4",
+      "harness_fix_commit": "e1ffe0b0994552af3dbc77e464b96bda87a713c1",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The prior full Velvet replay fails on pairs iteration order with automatic Lua collection. This capture declares an initially stopped collector in both native and owned VMs, retaining all authored source, native frames and events. Explicit authored collect/restart still works; default automatic-collector coverage is recorded separately. No native query results or expected actor state enter the VM.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "requested_fixed_update_fps": null,
+      "max_events": 10000000,
+      "timeout_seconds": 900,
+      "requested_initial_lua_gc_mode": "stopped",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54140-1792343503553157500-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "ae91ca9f7b74383764ec09e76d1734b99be86fa0eb5ab9841f9edf34bcca71b4"
+      },
+      "captured_observer_script_sha256": "01021758ca6321f5e0720f6037a79f91316a48b04aeee0657cf70303b4174fa3",
+      "candidate_sha256": "6f4d4553fcb0dc721397b8641065e1f63b69e9ab987c5b0695949a9cb9f208fb",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-460-gc-input\\candidates\\6f4d4553fcb0dc721397b8641065e1f63b69e9ab987c5b0695949a9cb9f208fb.tar",
+      "trace_sha256": "7d3c8db2afc2e32a9e4fc90e442947547460c2c7b2d9adc1f4925b1e068ac3cb",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54140-1792343503553157500-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.90",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+      "capture_exit": 0,
+      "capture_seconds": 167.4854592999909,
+      "native_engine_sha256": "5a2388f1a3f6f372498e22d2da5b7dcecf3eefdc2c907fb12932813607a614cd",
+      "harness_binary_sha256": "baca1f4054db756c22684987a49ce21497975c779b03ff62ec7bf4e4939e7106",
+      "harness_fix_commit": "5a9a0e56da76624114a179805c34cbd95c9a6896",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12824-1792315798693609900-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "baca1f4054db756c22684987a49ce21497975c779b03ff62ec7bf4e4939e7106"
+      },
+      "captured_observer_script_sha256": "2b2c79d93d5879a826bbe9ce5411667d577c45df333091bbfb3c0b8827fda278",
+      "candidate_sha256": "49d512f87c8fae469f90eafcaf6988608f7c92613de376508844c2df8466c71d",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-seventh-ten-20261018\\local-capture-496\\candidates\\49d512f87c8fae469f90eafcaf6988608f7c92613de376508844c2df8466c71d.tar",
+      "trace_sha256": "442465dd0b4accd60e35aa2ff4e139bb95c7e5ffdde209b3a9b14d5d7f8156eb",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-12824-1792315798693609900-0\\Themes\\itgmania-harness"
+    },
+    {
+      "position": 236,
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "simfile_sha256": "30720d33bd4a2f6746f910b4ac601b4b8bdda7c49c8c04cc9d1914482db12631",
+      "capture_exit": 1,
+      "capture_seconds": 5.446843899990199,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania crashed before writing a semantic trace; crash report C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46620-1792333929103887700-0\\crashinfo.txt; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46620-1792333929103887700-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-46620-1792333929103887700-0\n"
+    },
+    {
+      "position": 491,
+      "source_simfile": "james/james.sm",
+      "simfile_sha256": "90aa95cea1b414042d77e510e78aa77392ffb72cad525a7116df2f17b7b31aaa",
+      "capture_exit": 1,
+      "capture_seconds": 904.6350461999828,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania did not write a semantic trace within 900.0 seconds; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-6216-1792334881776506100-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-6216-1792334881776506100-0\n"
+    },
+    {
+      "position": 497,
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "simfile_sha256": "e2262781ebdd5afd187dbdb5ce568db701ed7a4b6f8b856dbeb4f471c17b27c3",
+      "capture_exit": 0,
+      "capture_seconds": 270.0954888999986,
+      "native_engine_sha256": "b393ff94305b497996d0b3ac81d94aff71fd9143de7f7225d93349e41170ac57",
+      "harness_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675",
+      "harness_fix_commit": "eb349e4c397df20c76fe634bf0c1699dcbbe3c28",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-56268-1792323159604689100-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "ab4fb06308c416af8edb91474ae4a88767bfaa5e7cffa49b4dada66127d7a675"
+      },
+      "captured_observer_script_sha256": "ab5fab3c2bf64c535a4312c6243c988b3335277f95675332cc8a64be9328cf19",
+      "candidate_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\local-capture-497\\candidates\\d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b.tar",
+      "trace_sha256": "707913b0ff86409c46e85d7e256481cbebbd28f5d42aa9ab9bc722a298d69827",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-56268-1792323159604689100-0\\Themes\\itgmania-harness"
+    },
+    {
+      "position": 492,
+      "source_simfile": "james/james.ssc",
+      "simfile_sha256": "9c675cd26cc1f0b2c00956c7901ef13957d68ade067469fbfc8abd58dfdecdda",
+      "capture_exit": 1,
+      "capture_seconds": 404.48250189999817,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "3ded83030465c212b61cee42bbc8617c33d7a9f03b1451799b01113e951d7bc5",
+      "harness_fix_commit": "190e72f9fcd9626951c6c9ecdf241c2ef08ca243",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The earlier native variable-delta capture timed out with high memory use. The bounded-memory observer now uses the stock, explicitly declared ConstantUpdateDeltaSeconds=1/60 profile to keep observer overhead from feeding back into recurring Lua timer catch-up. The original source is unchanged; every actual native frame and event is retained. Variable-delta coverage remains separate.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "requested_fixed_update_fps": "60",
+      "max_events": 20000000,
+      "timeout_seconds": 900,
+      "failure_text": "error: ITGmania song Lua semantic trace failed: ITGmania exited with exit code: 0xffffffff before writing a semantic trace; inspect C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-8320-1792340588698101300-0\\Logs/log.txt; retained run directory C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-8320-1792340588698101300-0\n"
+    }
+  ],
+  "reused_fixes": [
+    {
+      "fix_commit": "39307cba0499519d0e6d41fa32dca9b83baf2d36",
+      "binary_sha256": "e228f3b4c830fb13de60ea3a8bd49a80a06e3ba14dc5eff8efc0f85734421e31",
+      "source_hashes_verified": 385
+    }
+  ],
+  "pending_diagnoses": [
+    {
+      "position": 278,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "attempts": 2,
+      "remaining_failure": "Four startup child-iteration tween mismatches in both complete5721-frame replays. The Footer Init draworder repair is now committed and independently validated. No third Lesson replay was run because the chart reached its two-attempt sweep limit."
+    },
+    {
+      "position": 491,
+      "source_simfile": "james/james.sm",
+      "attempts": 1,
+      "remaining_failure": "Native headless Single capture did not write a complete semantic trace within900 seconds. The native process was observed at about20GB resident memory. No fixture accepted; recorder performance needs investigation.",
+      "hypothesis_not_a_proven_cause": "The authored10ms recurring command updates480 quads; observer overhead, large-delta catch-up and trace growth may explain the timeout. No timing preferences or acceptance criteria were changed."
+    }
+  ],
+  "additional_validation": {
+    "native_phases_live_units": {
+      "sources": {
+        "crates/deadsync-song-lua/src/live.rs": "c7f37fd7068e0fa421de1ab7c3d22c54593f4dcf1d0baaa196d61dc94ad3ffd8",
+        "crates/deadsync-song-lua/src/lua_util.rs": "1917b978e146fe24d88cc90a8725d7b92549d95f6182c35eac3ad0721db464e1"
+      },
+      "checks": [
+        {
+          "scope": "live_gameplay_children_retain_native_owned_inventory",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-phases-live-live_gameplay_children_retain_native_owned_inventory.log",
+          "sha256": "96eeb5f7fc701407efba1483f644fe6e0afd3f01fd4a2dd13821c518d855603c",
+          "exit": 0
+        },
+        {
+          "scope": "live_versus_children_retain_native_player_construction_groups",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-phases-live-live_versus_children_retain_native_player_construction_groups.log",
+          "sha256": "5acba522ef45b70a1ea6efa3eb1fd84a355230f0789638ffe5c5b4f95d1f3e7e",
+          "exit": 0
+        },
+        {
+          "scope": "live_chart_attacks_use_strict_boundaries",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-phases-live-live_chart_attacks_use_strict_boundaries.log",
+          "sha256": "41cedf54ce55713cbc8cd8c1c226a33e25189416a71e60d83b069e2ed1626ce5",
+          "exit": 0
+        }
+      ],
+      "all_passed": true
+    },
+    "event_spool": {
+      "native_control": "event-spool-control-2",
+      "native_frames": 311,
+      "replayed_frames": 311,
+      "event_count": 5004,
+      "ordered_actor_writes": 5000,
+      "archive_accepted": true,
+      "candidate_sha256": "56636fcd788f29dd99ea8217fd44d3d981ae33cb3c73bf8497f66514d73419c0",
+      "report_sha256": "1ee692c4d6e5f85a7faf9a0e96bb05133c6dec62fa00f3348a6480701ea53ca9",
+      "binary": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\itgmania-harness-capture-v0.1.87-events.exe",
+      "binary_sha256": "b33f03925169317828a33b19ed7197f16e3ae4043ca99a7d030f1a3786322f09",
+      "source_hashes": {
+        "Cargo.toml": "057539e258db0f6f12888a5ab2ae6996754da876b365e8059c4a8fe65b22d85d",
+        "Cargo.lock": "b3a60a98c0acb4a75fc8746792f5c3d8efba00efc5730a665820a49587f76b9a",
+        "probe_theme/SongLuaTrace.lua": "4b263ab3c852ca72a4f0c3ac99261d1ac8f09dd0758f55ebd57550c40e305f29"
+      },
+      "no_native_engine_or_song_source_changes": true
+    },
+    "event_spool_commit": "6ec66f66a95792922604dc1e7b4d05e3a8572777",
+    "event_spool_unit_tests": {
+      "passed": 205,
+      "failed": 0,
+      "ignored": 2,
+      "log": "target\\song-lua-ninth-ten-20261018\\harness-events-tests.log"
+    }
+  },
+  "recorder_repairs": [
+    {
+      "commit": "6ec66f66a95792922604dc1e7b4d05e3a8572777",
+      "fix": "Spool completed native events at screen-update boundaries and stream the final event array, retaining sequence and details.",
+      "control": {
+        "native_control": "event-spool-control-2",
+        "native_frames": 311,
+        "replayed_frames": 311,
+        "event_count": 5004,
+        "ordered_actor_writes": 5000,
+        "archive_accepted": true,
+        "candidate_sha256": "56636fcd788f29dd99ea8217fd44d3d981ae33cb3c73bf8497f66514d73419c0",
+        "report_sha256": "1ee692c4d6e5f85a7faf9a0e96bb05133c6dec62fa00f3348a6480701ea53ca9",
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\itgmania-harness-capture-v0.1.87-events.exe",
+        "binary_sha256": "b33f03925169317828a33b19ed7197f16e3ae4043ca99a7d030f1a3786322f09",
+        "source_hashes": {
+          "Cargo.toml": "057539e258db0f6f12888a5ab2ae6996754da876b365e8059c4a8fe65b22d85d",
+          "Cargo.lock": "b3a60a98c0acb4a75fc8746792f5c3d8efba00efc5730a665820a49587f76b9a",
+          "probe_theme/SongLuaTrace.lua": "4b263ab3c852ca72a4f0c3ac99261d1ac8f09dd0758f55ebd57550c40e305f29"
+        },
+        "no_native_engine_or_song_source_changes": true
+      }
+    },
+    {
+      "commit": "190e72f9fcd9626951c6c9ecdf241c2ef08ca243",
+      "fix": "Expose the stock ConstantUpdateDeltaSeconds preference as an explicit optional capture input.",
+      "outcome": "The private control passes, but this profile does not prevent foreground catch-up: Foreground.cpp computes its own music-position delta. The incomplete492 capture was stopped and recorded pending; no catalog fixture was accepted using this profile."
+    },
+    {
+      "commit": "8561cd88f40a20f66f7786d23ea877adb2371391",
+      "fix": "Recorder position() calls the saved, unwrapped native GameState clock bindings instead of recursively entering both trace hooks and scanning their debug stacks for every event.",
+      "checks": {
+        "log": "target\\song-lua-ninth-ten-20261018\\harness-fast-clock-tests.log",
+        "sha256": "da308ed663388df244cc0763b55324baa2fd5795b22927abc36833db43a37ea9",
+        "passed": 205,
+        "failed": 0,
+        "ignored": 2
+      },
+      "control": {
+        "run": "dense-timer-control",
+        "native_frames": 226,
+        "replayed_frames": 226,
+        "archive_accepted": true,
+        "trace_sha256": "03e859eb1b0600021ffd664d3a87a9022fe9607da88881c6307dfd7abe1c1c03",
+        "report_sha256": "ea3e2100a38f6c86cf7be62c2423bf9e166e5c7b9e8b3109504376c651fb763c",
+        "source": "480-Quad recurring10ms timer; no fixed-update profile"
+      },
+      "remaining_limit": "Dense control data is509837120 bytes for2.248526096343994 song seconds. The large James traces still need a storage/comparison strategy that handles their actual volume; do not discard events or weaken full replay acceptance."
+    },
+    {
+      "harness_fix_commit": "e1ffe0b0994552af3dbc77e464b96bda87a713c1",
+      "version": "0.1.90",
+      "fix": "Optional declared initial Lua collector input; default automatic collection remains unchanged. Explicit authored collect/restart retains native Lua semantics.",
+      "checks": {
+        "passed": 205,
+        "failed": 0,
+        "ignored": 2,
+        "log_sha256": "9db38ada9d344352a856c9c1eabf2a38931e6285124a1421a803ac376610c1f7"
+      },
+      "native_control": {
+        "name": "gc-profile-control-2",
+        "control_only_not_a_catalog_fixture": true,
+        "archive_accepted": true,
+        "native_frames": 314,
+        "replayed_frames": 314,
+        "candidate_sha256": "c38f4fa395fb85420bcaa2985f3da6e3b6e8a1b3d857a3d035076b7b077737d0",
+        "report_sha256": "80d345b77f6723df89b308b4f6c994f8fc6db13ba0a72996c1a9bc3ac08398f6"
+      },
+      "negative_control": "Omitting the stopped input loses a weak value under allocation pressure; native true, owned false. Explicit collection clears the weak value in both VMs."
+    }
+  ],
+  "native_build_contract": {
+    "source": "..\\itgmania-harness\\target\\native-engine-source\\StepmaniaCore.cmake",
+    "sha256": "c09cb49af4c30cc1a93253a359c797281bcba2ff16ab5fb595727208f97394fd",
+    "line": 56,
+    "declaration": "set(CMAKE_MSVC_RUNTIME_LIBRARY \"MultiThreaded$<$<CONFIG:Debug>:Debug>\")",
+    "private_c_control": "target\\song-lua-ninth-ten-20261018\\pow-crt-control\\probe.c",
+    "private_rust_control": "target\\song-lua-ninth-ten-20261018\\crt-config-control\\src\\main.rs",
+    "native_lua_control": "target\\song-lua-ninth-ten-20261018\\native-math-control\\native.json",
+    "pe_import_audit": [
+      {
+        "binary": "target\\release\\deadsync.exe",
+        "imports": [
+          "kernel32.dll",
+          "bcryptprimitives.dll",
+          "user32.dll",
+          "api-ms-win-core-synch-l1-2-0.dll",
+          "combase.dll",
+          "avrt.dll",
+          "ole32.dll",
+          "shell32.dll",
+          "gdi32.dll",
+          "setupapi.dll",
+          "hid.dll",
+          "cfgmgr32.dll",
+          "api-ms-win-core-winrt-l1-1-0.dll",
+          "dxgi.dll",
+          "opengl32.dll",
+          "winmm.dll",
+          "oleaut32.dll",
+          "api-ms-win-core-winrt-error-l1-1-0.dll",
+          "KERNEL32.dll",
+          "bcrypt.dll",
+          "ADVAPI32.dll",
+          "vulkan-1.dll",
+          "ws2_32.dll",
+          "imm32.dll",
+          "dwmapi.dll",
+          "uxtheme.dll",
+          "ntdll.dll"
+        ],
+        "dynamic_crt_imports": [],
+        "sha256": "c828ca9d19b3c41e130cd50a38f6cbc36cd6466b620e937b79f8b20cab9b67e1"
+      },
+      {
+        "binary": "target\\release\\deps\\full_song_lua-45859225f832764b.exe",
+        "imports": [
+          "bcryptprimitives.dll",
+          "kernel32.dll",
+          "api-ms-win-core-synch-l1-2-0.dll",
+          "KERNEL32.dll",
+          "ntdll.dll"
+        ],
+        "dynamic_crt_imports": [],
+        "sha256": "15c1ed2e639309db1ec22f63937ade92651badf9b6931370f5581dff12678a32"
+      }
+    ],
+    "linker_warning_note": "Opus C objects request DLL import aliases; the linker binds them to the static CRT and reports LNK4217/LNK4286. PE import audits of the gameplay application and replay executable confirm there is no dynamic CRT imported. No warning is suppressed.",
+    "current_replay_pe_audit": {
+      "proof": "target\\song-lua-ninth-ten-20261018\\native-crt-inputs-pe-imports.json",
+      "binary_sha256": "4a43c3288afccd48204a836edf83cbe18243c8a1578e9c21b81e9d172de380e3",
+      "dynamic_crt_imports": []
+    }
+  },
+  "resolved_diagnoses": [
+    {
+      "position": 229,
+      "source_simfile": "HOPE/HOPE.ssc",
+      "attempts": 0,
+      "remaining_failure": "Prior566 cloud rotation mismatches are traced to Windows C runtime pow implementations. Local MSVC probes with the exact native /MT option return63^9=15633814156853822, while /MD (owned build) returns15633814156853824, changing the huge sine argument. No chart replay attempted this sweep yet.",
+      "evidence": {
+        "source_sha256": "73d6b8fa60e5f6a7b0dabce62f53202d61b41f76c6ee7e71240932377a56caa9",
+        "native_c_runtime": "MSVC14.44 /MT",
+        "owned_c_runtime": "MSVC /MD",
+        "cpp_vs_c_control": "Both C and C++ show the same MT/MD difference."
+      },
+      "resolution": {
+        "fix_commit": "b2186d861cbd9e0e324366b15112e616639833c4",
+        "fixture_commit": "a54eead4d",
+        "native_frames": 6381,
+        "replayed_frames": 6381,
+        "mismatches": 0,
+        "callback_errors": []
+      }
+    }
+  ],
+  "coverage_diagnoses": [
+    {
+      "position": 460,
+      "actual_failure": "The first complete7427-frame replay has9286 command/query mismatches. The first is at12.21532917022705s: native calls the white3 diffuse setter before white2; the owned order is reversed. Counts and individual values are equal at that boundary, but these calls share one actor so their order changes its final state.",
+      "source_review": "The authored template/template.lua:1053 iterates pairs(mods[pn]) before calling dependent nodes. Native and owned Lua5.1 ltable.c/lstring.c implementations are identical. Native/owned lgc.c removes nil-valued string keys by marking them LUA_TDEADKEY during collection. Different host allocation/collection schedules may change insertion history; this remains a hypothesis, not a proved repair.",
+      "current_attempts": 1,
+      "disposition": "Keep the concrete failure pending; do not change the comparator or supply expected iteration/query order.",
+      "fixture_result": {
+        "fixture_commit": "0b9249d18",
+        "native_frames": 7316,
+        "replayed_frames": 7316,
+        "mismatches": 0,
+        "callback_errors": [],
+        "declared_initial_lua_gc_mode": "stopped",
+        "default_automatic_collector_parity": "Remains open as separate coverage; not established by this fixture."
+      }
+    }
+  ],
+  "verification": {
+    "accepted_complete_uncompressed_replays": 10,
+    "saved_archives_and_decoded_hashes_verified": 10,
+    "full_reports_verified": 10,
+    "current_source_hashes_verified": 388,
+    "oversized_fixtures_gitignored": 44,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "targeted_checks": [
+      {
+        "scope": "72 native gameplay tests including native JSON integer bounds and Windows static-CRT math",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-crt-inputs-native-tests.log",
+        "sha256": "f3cbdc0c028cf6620940d586ab921c620a2e737f4afa51a110c78017774e3678",
+        "passed": 72,
+        "failed": 0
+      }
+    ],
+    "known_baseline_failure": {
+      "test": "compile_song_lua_supports_named_player_tap_note_shim",
+      "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+      "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+      "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+      "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+      "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+    },
+    "utc": "2026-10-18T17:17:11Z"
+  }
+}

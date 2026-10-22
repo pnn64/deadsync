@@ -322,8 +322,9 @@ pub fn song_lua_context(
     Ok(context)
 }
 
-/// Compile song Lua on the load worker into Rust playback data. Normal gameplay
-/// never retains the compiler VM; live scenes are reserved for diagnostic tools.
+/// Prepare song actors and assets on the load worker, then transfer their Lua
+/// scene to gameplay. All authored callbacks execute in that shared scene;
+/// arbitrary future input registration must not be guessed from source names.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -345,7 +346,7 @@ pub fn prepare_song_lua(
     }
     let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
         music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
-        config, video_renderer, random_seed, false) {
+        config, video_renderer, random_seed, true) {
         Ok(context) => context,
         Err(error) => {
             warn!("Cannot load Lua chart timing for '{}': {error}", song.title);

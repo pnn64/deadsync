@@ -34,13 +34,13 @@ fn independent_encoder_state_survives_pipeline_changes() {
     assert!(!cache.pipeline_changed(DrawKind::Sprite, 0, true));
     assert!(cache.texture_changed(41));
     assert!(cache.sampler_changed(100));
-    assert!(cache.depth_changed(false));
+    assert!(cache.depth_changed(deadlib_render_core::DepthMode::Off));
     assert!(cache.cull_changed(CullMode::Back));
 
     assert!(cache.pipeline_changed(DrawKind::Mesh, 0, false));
     assert!(!cache.texture_changed(41));
     assert!(!cache.sampler_changed(100));
-    assert!(!cache.depth_changed(false));
+    assert!(!cache.depth_changed(deadlib_render_core::DepthMode::Off));
     assert!(!cache.cull_changed(CullMode::Back));
     assert!(cache.cull_changed(CullMode::None));
 
@@ -81,13 +81,13 @@ fn mixed_draw_trace_preserves_effective_state() {
     assert!(cache.camera_changed(0, 7));
     assert!(cache.texture_changed(11));
     assert!(cache.sampler_changed(21));
-    assert!(cache.depth_changed(false));
+    assert!(cache.depth_changed(deadlib_render_core::DepthMode::Off));
     assert!(cache.cull_changed(CullMode::Back));
 
     assert!(cache.kind_changed(DrawKind::Mesh));
     assert!(cache.pipeline_changed(DrawKind::Mesh, 1, false));
     assert!(!cache.camera_changed(0, 7));
-    assert!(!cache.depth_changed(false));
+    assert!(!cache.depth_changed(deadlib_render_core::DepthMode::Off));
     assert!(cache.cull_changed(CullMode::None));
 
     assert_eq!(
@@ -96,7 +96,7 @@ fn mixed_draw_trace_preserves_effective_state() {
     );
     assert!(cache.pipeline_changed(DrawKind::TexturedMesh, 1, false));
     assert!(cache.camera_changed(1, 7));
-    assert!(cache.depth_changed(true));
+    assert!(cache.depth_changed(deadlib_render_core::DepthMode::TestWrite));
     assert!(cache.cull_changed(CullMode::Back));
     assert!(!cache.texture_changed(11));
     assert!(!cache.sampler_changed(21));

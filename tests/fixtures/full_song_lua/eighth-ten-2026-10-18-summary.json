@@ -1,0 +1,171 @@
+{
+  "complete": true,
+  "objective": "Ten additional accepted fixtures beyond470, starting with faster pending charts",
+  "baseline_passed": 470,
+  "baseline_pending": 30,
+  "counts": {
+    "new_passing_fixtures": 10,
+    "passed_fixtures": 480,
+    "pending_charts": 20,
+    "ignored_charts": 1
+  },
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "new_passing_fixtures": [
+    {
+      "position": 272,
+      "source_simfile": "Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc",
+      "archive": "59e43b8df3f34ef787f576165c96da828e6125b84e54d1256a643be1e3adfb4e.tar.zst",
+      "archive_sha256": "59e43b8df3f34ef787f576165c96da828e6125b84e54d1256a643be1e3adfb4e",
+      "candidate_sha256": "97c434bdf07e37119db157444305be0b6a1468ca1de17f600383ef88565c1f1e",
+      "native_frames": 4254,
+      "replayed_frames": 4254,
+      "repair_attempts": 1,
+      "compressed_bytes": 115182946,
+      "report_sha256": "28bfdc1e66611f3807872160177d47347de52e14f6635c994d9329cb6e540639"
+    },
+    {
+      "position": 265,
+      "source_simfile": "kaboooooom!/KABOOOOOM!!!!.ssc",
+      "archive": "ddfc899ec3e0253d797b85fe8f1c7c0d62b0eeecce508b83b456b25bba605162.tar.zst",
+      "archive_sha256": "ddfc899ec3e0253d797b85fe8f1c7c0d62b0eeecce508b83b456b25bba605162",
+      "candidate_sha256": "4111e7d3881c7f4b74244c3d1721e282982dcc4a6c006dbf2cc676971a3669eb",
+      "native_frames": 11335,
+      "replayed_frames": 11335,
+      "repair_attempts": 1,
+      "compressed_bytes": 163250513,
+      "report_sha256": "68929dfe7ed14bf0c1c8d74cb774acf244d9989387406256841895033a495cdf"
+    },
+    {
+      "position": 313,
+      "source_simfile": "Megalovania SM5 [TaroNuke]/megalovania.ssc",
+      "archive": "259893ffac177a629fef8cb0c89cf8109ee4cce4cb81d5e355959269278f10e8.tar.zst",
+      "archive_sha256": "259893ffac177a629fef8cb0c89cf8109ee4cce4cb81d5e355959269278f10e8",
+      "candidate_sha256": "955e9c948ec46a18172dbab9cfac8061d38c12dda68bd5f0555aab21378a419f",
+      "native_frames": 11847,
+      "replayed_frames": 11847,
+      "repair_attempts": 1,
+      "compressed_bytes": 112161353,
+      "report_sha256": "34457301f86c4a88e9072fb432696e287c2d4f2cdb97cd3aa79697fb61861d07"
+    },
+    {
+      "position": 233,
+      "source_simfile": "I Really Like You [dbk2]/I Really Like You.ssc",
+      "archive": "cb175339c45d775f16a6595ae2443b54405e7441e9ff331163d782d84032adfb.tar.zst",
+      "archive_sha256": "cb175339c45d775f16a6595ae2443b54405e7441e9ff331163d782d84032adfb",
+      "candidate_sha256": "b2357083568334bbedb064a12c783573d5fdd5c4d929e90efbc66235d6bc8378",
+      "native_frames": 13115,
+      "replayed_frames": 13115,
+      "repair_attempts": 1,
+      "compressed_bytes": 110668178,
+      "report_sha256": "7ede7a18f683f1ff80810c881b382bf52b7f23c8ed107c223d64f99dd1bf5469"
+    },
+    {
+      "position": 340,
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.sm",
+      "archive": "e4942b8b777e9f2b992747ad194cd073c09f60011b0778345685ea95b767e6cb.tar.zst",
+      "archive_sha256": "e4942b8b777e9f2b992747ad194cd073c09f60011b0778345685ea95b767e6cb",
+      "candidate_sha256": "5413b1f144b67821783d2f6a0c29a1bd110df60f9d169aedf153d9869a761bad",
+      "native_frames": 4649,
+      "replayed_frames": 4649,
+      "repair_attempts": 1,
+      "compressed_bytes": 186011326,
+      "report_sha256": "f2bf57000f7624d6884f148c6a5c35080672d03d1c6653279c02f8157ee4b978"
+    },
+    {
+      "position": 341,
+      "source_simfile": "Paint the Town Red/PaintTheTownRed.ssc",
+      "archive": "e8b81a5779d5234a7439926e1824649382332656ba1eedc293203454c6ba52fb.tar.zst",
+      "archive_sha256": "e8b81a5779d5234a7439926e1824649382332656ba1eedc293203454c6ba52fb",
+      "candidate_sha256": "373ec4bb40fa266f5e357d13ed152d347affa1ccd938f1a787efb616e9393b71",
+      "native_frames": 5280,
+      "replayed_frames": 5280,
+      "repair_attempts": 1,
+      "compressed_bytes": 192532448,
+      "report_sha256": "e018a945fafe322c8acbd33f0c5a733eeba2fc3b9818a92e4a6efa948c3150ab"
+    },
+    {
+      "position": 240,
+      "source_simfile": "Igaku/Igaku.ssc",
+      "archive": "79c9d90cdb8d850537bb02338e187b4becdc954959e4355f74f2b0f3744dcee2.tar.zst",
+      "archive_sha256": "79c9d90cdb8d850537bb02338e187b4becdc954959e4355f74f2b0f3744dcee2",
+      "candidate_sha256": "ae9f48179f77a2983e1c5ac2bbf899a42d73906fb2339f774854b1b1fce855b9",
+      "native_frames": 3941,
+      "replayed_frames": 3941,
+      "repair_attempts": 1,
+      "compressed_bytes": 123738584,
+      "report_sha256": "1f8ac39d6d1dc60678a3711c769339373578f107972d1c77396467a6ac030f21"
+    },
+    {
+      "position": 191,
+      "source_simfile": "Flowers [Cringle Desolation]/Flowers.ssc",
+      "archive": "f6e718c465993ad5e64cdb071206e1aa727893aca5f9497a67ad9cb150e36f04.tar.zst",
+      "archive_sha256": "f6e718c465993ad5e64cdb071206e1aa727893aca5f9497a67ad9cb150e36f04",
+      "candidate_sha256": "0281b724aa4ae2677216c26a7869243c595bea3eb12717efbdb6fee0ab0c909b",
+      "native_frames": 6501,
+      "replayed_frames": 6501,
+      "repair_attempts": 1,
+      "compressed_bytes": 152598343,
+      "report_sha256": "a3a7bc5fc5ee92b6f6e8e28f09c50e7dbdc2fd1c816912961459e2491cd85f56"
+    },
+    {
+      "position": 239,
+      "source_simfile": "Igaku/Igaku.sm",
+      "archive": "17450d1eb6fd1d3b23ca248e6c9c5a5a2c097ed86da9ae6a9d7ac978b016f1ab.tar.zst",
+      "archive_sha256": "17450d1eb6fd1d3b23ca248e6c9c5a5a2c097ed86da9ae6a9d7ac978b016f1ab",
+      "candidate_sha256": "ceb919fdeb219df56ccc4a84f52a4a055ebe5383145e9a8f0dafa63f18c1be72",
+      "native_frames": 3931,
+      "replayed_frames": 3931,
+      "repair_attempts": 2,
+      "compressed_bytes": 123738222,
+      "report_sha256": "0a4e65d7ccdc692f849c90da038ef023870655a691fb66a848a82b71f2250c4f"
+    },
+    {
+      "position": 215,
+      "source_simfile": "Godspeed [TaroNuke]/godspeed.sm",
+      "archive": "e0e5941b20b3b84030bfc70c16f8480f1ea510545b519c2a618e3b0d0157ca90.tar.zst",
+      "archive_sha256": "e0e5941b20b3b84030bfc70c16f8480f1ea510545b519c2a618e3b0d0157ca90",
+      "candidate_sha256": "ed47d6932f274728919d972b0fe4ed385495ea91416a4371be26f543e3a93f9c",
+      "native_frames": 6162,
+      "replayed_frames": 6162,
+      "repair_attempts": 2,
+      "compressed_bytes": 119854140,
+      "report_sha256": "29cbf4938d03446c6672ba47836978100b67600bb0f900a21518a1b844151132"
+    }
+  ],
+  "details": "eighth-ten-2026-10-18-state.json",
+  "concrete_failures": "eighth-ten-2026-10-18-pending.json",
+  "missing_coverage": "eighth-ten-2026-10-18-coverage.json",
+  "source_review": "eighth-ten-2026-10-18-source-review.json",
+  "prior_status": "seventh-ten-2026-10-18-summary.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "accepted_complete_uncompressed_replays": 10,
+    "saved_archives_and_decoded_hashes_verified": 10,
+    "full_reports_verified": 10,
+    "current_source_hashes_verified": 385,
+    "oversized_fixtures_gitignored": 35,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "targeted_checks": [
+      {
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-eighth-ten-20261018\\initial-screen-delta-native-tests.log",
+        "sha256": "d734b57d8623b6ea48bbd16a982d910763256ddaab9caafa85a12439b5ded7f5",
+        "passed": 68,
+        "failed": 0,
+        "ignored": 0,
+        "scope": "Complete native gameplay suite; acceptance comparators unchanged."
+      }
+    ],
+    "known_baseline_failure": {
+      "test": "compile_song_lua_supports_named_player_tap_note_shim",
+      "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+      "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+      "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+      "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+      "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+    },
+    "utc": "2026-10-18T13:16:46Z"
+  },
+  "updated_utc": "2026-10-18T13:16:46Z"
+}

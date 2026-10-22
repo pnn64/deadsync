@@ -77,6 +77,7 @@ mod tests {
             restart_slot: None,
             pan: crate::SfxPan::Center,
             target_stream_frame: frame,
+            voice: None,
         }
     }
 

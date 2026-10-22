@@ -1,3 +1,4 @@
+-- ActorFrames own updates; observer frames retain their original sibling order.
 local fired = false
 controlling = false
 curaction = 1
@@ -22,10 +23,11 @@ return Def.ActorFrame {
             end,
         },
     },
-    Def.Quad {
-        Name = "ClockWitness",
-        OnCommand = function(self)
-            self:SetUpdateFunction(function(self)
+    Def.ActorFrame {
+        OnCommand = function(frame)
+            local quad = frame:GetChild("ClockWitness")
+            local self = quad
+            local update = function(self)
                 local beat = GAMESTATE:GetSongBeat()
                 if beat < 1.75 then
                     assert(not controlling, "queued Lua state changed before dispatch")
@@ -33,8 +35,12 @@ return Def.ActorFrame {
                     assert(controlling, "queued Lua state was never dispatched")
                 end
                 self:x(controlling and 100 or 0)
-            end)
+            end
+            frame:SetUpdateFunction(function(_, delta) update(quad, delta) end)
         end,
-        BodyRotateBuildingsMessageCommand = function(self) self:y(23) end,
+        Def.Quad {
+            Name = "ClockWitness",
+            BodyRotateBuildingsMessageCommand = function(self) self:y(23) end,
+        }
     },
 }

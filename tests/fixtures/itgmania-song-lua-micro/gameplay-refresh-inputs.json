@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "native_revision": "704cdd5624155f743b59b8b64fedeb0588dae067",
+  "native_executable_sha256": "b2ccd9e02df706bbfaf23d54011cb1905590c593a47093de0160f59e667ce09e",
+  "archive": "tests/fixtures/full_song_lua/03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d.tar.zst",
+  "archive_sha256": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d",
+  "simfile": "song/7th Gear.ssc",
+  "simfile_sha256": "cfd14505555c22a91da6042d964526c2636ed9cc35ea8420b4326bc3b7c58fbd",
+  "lua": "song/lua/default.lua",
+  "fallback_theme": "Harness Simply Love",
+  "player_options": "m730, 60% mini, cel",
+  "inputs": {
+    "chart": "7th Gear.ssc",
+    "difficulty": "Challenge",
+    "style": "single",
+    "noteskin": "cel",
+    "m_mod": 730,
+    "mini": 0.6,
+    "rate": 1,
+    "global_offset": -0.008,
+    "default_sync_offset": "ITG",
+    "capture_pacing_hz": 120,
+    "fixed_update_hz": 120,
+    "fixed_update_delta_seconds": 0.008333
+  },
+  "fixtures": [
+    {
+      "name": "seventh-swap",
+      "observer": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-native-probe.lua",
+      "raw_result": "Save/itgmania-harness/native-swap-direct.json",
+      "until_beat": 123.25,
+      "minimum_frames": 80,
+      "cap_windows": [
+        [
+          114.05,
+          114.125,
+          3
+        ],
+        [
+          122.05,
+          122.125,
+          0
+        ]
+      ],
+      "output": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-native.json",
+      "cap_vertices": [
+        6,
+        9
+      ]
+    },
+    {
+      "name": "seventh-approach",
+      "observer": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-approach-native-probe.lua",
+      "raw_result": "Save/itgmania-harness/native-swap-130-direct.json",
+      "until_beat": 131.25,
+      "minimum_frames": 40,
+      "window_beats": [
+        129.5,
+        131.1
+      ],
+      "first_note": {
+        "beat": 130.75,
+        "column": 4
+      },
+      "neighbor_note": {
+        "beat": 131,
+        "column": 3
+      },
+      "output": "tests/fixtures/itgmania-song-lua-micro/seventh-swap-approach-native.json"
+    }
+  ],
+  "lua_sha256": "e72d3d99c5577081e8b75523734cae2e05dde347a8a3b74989c53a21fc26cb0f",
+  "native_source_sha256": {
+    "note_display_sha256": "5e62afa89932da9d999d69b0e8facccebed05370756dfabcdd8882fdbfb88d2a",
+    "cubic_spline_sha256": "93f6dcdd083f6da7a311449d89cf2f29be219590718e4e978e70c365f842eac3"
+  }
+}

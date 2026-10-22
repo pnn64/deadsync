@@ -43,20 +43,44 @@ struct MaterialClock {
     frames: Arc<[SongLuaModelTextureFrame]>,
     velocity: [f32; 2],
     cycle: f32,
+    frame_starts: Box<[f32]>,
     frame: usize,
     seconds: f32,
 }
 
 impl MaterialClock {
+    #[inline]
     fn new(frames: Arc<[SongLuaModelTextureFrame]>, velocity: [f32; 2]) -> Self {
+        let (cycle, frame_starts) = if frames.len() > 1 {
+            let mut starts = Vec::with_capacity(frames.len());
+            let mut cycle = 0.0_f32;
+            for frame in frames.iter() {
+                starts.push(cycle);
+                cycle += frame.delay;
+            }
+            (cycle, starts.into_boxed_slice())
+        } else {
+            (frames.iter().fold(0.0_f32, |total, frame| total + frame.delay), Box::default())
+        };
         Self {
             velocity,
-            cycle: frames
-                .iter()
-                .fold(0.0_f32, |total, frame| total + frame.delay),
+            cycle,
+            frame_starts,
             frame: 0,
             seconds: 0.0,
             frames,
+        }
+    }
+
+    #[inline]
+    fn state_only(frames: Arc<[SongLuaModelTextureFrame]>) -> Self {
+        Self {
+            cycle: frames.iter().fold(0.0_f32, |total, frame| total + frame.delay),
+            frames,
+            velocity: [0.0; 2],
+            frame_starts: Box::default(),
+            frame: 0,
+            seconds: 0.0,
         }
     }
 
@@ -70,11 +94,18 @@ impl MaterialClock {
         }
     }
 
+    #[inline]
     fn uv(&self) -> (SongLuaModelTextureUv, SongLuaModelTextureUv) {
-        let mut seconds = 0.0_f32;
-        for frame in &self.frames[..self.frame] {
-            seconds += frame.delay;
-        }
+        // Preserve the original f32 accumulation order, including +0 at frame
+        // zero. State-only additive clocks need no cache; keep the same UV
+        // semantics if one is sampled directly.
+        let mut seconds = if self.frame_starts.is_empty() {
+            self.frames[..self.frame]
+                .iter()
+                .fold(0.0_f32, |total, frame| total + frame.delay)
+        } else {
+            self.frame_starts[self.frame]
+        };
         seconds += self.seconds;
         let frame = &self.frames[self.frame];
         let mut diffuse = frame.diffuse;
@@ -128,7 +159,7 @@ impl Clock {
         let mut clock = Self {
             diffuse: MaterialClock::new(frames, layer.uv_velocity),
             additive: (!layer.additive_frames.is_empty())
-                .then(|| MaterialClock::new(Arc::clone(&layer.additive_frames), [0.0; 2])),
+                .then(|| MaterialClock::state_only(Arc::clone(&layer.additive_frames))),
             delta: None,
             samples: Vec::new(),
         };
@@ -173,6 +204,11 @@ impl Clock {
     pub(crate) fn finish(self) -> Arc<[SongLuaTextureSample]> {
         self.samples.into()
     }
+}
+
+#[cfg(test)]
+mod perf {
+    include!("../tests/perf/material_clock.rs");
 }
 
 struct Capture(FxHashMap<usize, Vec<Option<Clock>>>);

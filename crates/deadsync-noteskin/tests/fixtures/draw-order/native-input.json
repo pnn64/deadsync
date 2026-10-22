@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "name": "native immediate draworder command",
+  "lua_assertions": "for _, order in ipairs({90, -45, -12.9, 180/2}) do\n local self=native_sprite\n self:finishtweening():z(7):zoom(1):diffusealpha(1):linear(0.22)\n local duration=self:GetTweenTimeLeft()\n assert(math.abs(duration-0.22)<0.000001)\n assert(self:draworder(order)==self, \"draworder returns self\")\n assert(self:GetTweenTimeLeft()==duration, \"draworder does not interrupt pending tween\")\n assert(self:GetZ()==7, \"draworder is independent of render depth\")\n self:diffusealpha(0):draworder(90)\n assert(self:GetTweenTimeLeft()==duration, \"later draworder keeps queued duration\")\nend\nnative_sprite:finishtweening():sleep(0.1):draworder(90):diffusealpha(0)\nassert(math.abs(native_sprite:GetTweenTimeLeft()-0.1)<0.000001, \"draworder preserves sleep\")\n"
+}

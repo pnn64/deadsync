@@ -618,9 +618,13 @@ pub fn apply_display_aspect_ratio(
     if !aspect_ratio.is_finite() || aspect_ratio <= 0.0 {
         return;
     }
+    let aspect_changed = shell.display_aspect_ratio != aspect_ratio;
     shell.display_aspect_ratio = aspect_ratio;
     shell.metrics = metrics_for_aspect(aspect_ratio);
     space::set_current_metrics(shell.metrics);
+    if aspect_changed {
+        deadsync_assets::noteskin::clear_itg_runtime_caches();
+    }
     if let Some(backend) = backend {
         backend.set_default_projection(shell.metrics.projection());
     }

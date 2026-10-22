@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "name": "glow-alpha",
+  "samples": [
+    0.0,
+    0.0125,
+    0.025,
+    0.05,
+    0.075,
+    0.15,
+    0.175,
+    0.2,
+    0.5,
+    1.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "glow_shift_0",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "glow_shift",
+          "period": 0.05,
+          "color1": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "color2": [
+            1,
+            1,
+            1,
+            0.5
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "glow_shift_1",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.25
+          ]
+        },
+        "effect": {
+          "type": "glow_shift",
+          "period": 0.05,
+          "color1": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "color2": [
+            1,
+            1,
+            1,
+            0.5
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "glow_shift_2",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "diffuse": [
+            1,
+            1,
+            1,
+            1.0
+          ]
+        },
+        "effect": {
+          "type": "glow_shift",
+          "period": 0.05,
+          "color1": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "color2": [
+            1,
+            1,
+            1,
+            0.5
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "tap_fade",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "diffuse": [
+            1,
+            1,
+            1,
+            1.2
+          ],
+          "zoom": [
+            1.1,
+            1.1,
+            1.1
+          ]
+        },
+        "effect": {
+          "type": "glow_shift",
+          "period": 0.05,
+          "color1": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "color2": [
+            1,
+            1,
+            1,
+            0.5
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 0.15,
+            "curve": "accelerate",
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                0
+              ],
+              "zoom": [
+                1,
+                1,
+                1
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

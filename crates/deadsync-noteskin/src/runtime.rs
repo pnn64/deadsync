@@ -1,9 +1,9 @@
 use crate::explosion::{
     ItgTapExplosionMode, ItgTapExplosionSource, ItgTapExplosionSourceRef,
     itg_direct_tap_explosion_layers, itg_has_hit_mine_command, itg_has_tap_explosion_command,
-    itg_hit_mine_command_with_init, itg_hit_mine_explosion_slot, itg_hold_explosion_slot,
+    itg_hit_mine_explosion_slot, itg_hold_explosion_slot,
     itg_is_hit_mine_explosion_element, itg_mine_explosion_command_refs,
-    itg_partition_tap_explosion_sources, itg_tap_explosion_key, parse_explosion_animation,
+    itg_partition_tap_explosion_sources, itg_tap_explosion_key,
     parse_explosion_animation_with_init, parse_itg_tap_explosion_animation_commands,
 };
 use crate::script::{model_draw_program, model_draw_program_from_scripts};
@@ -374,6 +374,7 @@ pub struct ItgReceptorColumn<T> {
 pub struct ReceptorOverlay<T> {
     pub slot: T,
     pub reverse: ReceptorReverseBehavior,
+    pub before_target: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -855,12 +856,25 @@ pub fn itg_hit_mine_explosion_from_slot<T: Clone>(
     commands: Option<&HashMap<String, String>>,
     metric_command: Option<String>,
 ) -> TapExplosion<T> {
-    let command = itg_hit_mine_command_with_init(commands, metric_command);
+    let empty = HashMap::new();
+    let commands = commands.unwrap_or(&empty);
+    let command = commands
+        .get("hitminecommand")
+        .map(String::as_str)
+        .or(metric_command.as_deref());
     TapExplosion::from_single(
         slot,
         command
-            .as_deref()
-            .map(parse_explosion_animation)
+            .map(|command| {
+                // GhostArrowRow sends Judgment, Dim and HitMine to the loaded
+                // actor. Init runs only at load; a fade does not seek its Sprite.
+                parse_itg_tap_explosion_animation_commands(
+                    commands,
+                    ItgTapExplosionMode::Dim,
+                    "hitminecommand",
+                    command,
+                )
+            })
             .unwrap_or_default(),
     )
 }
@@ -1028,6 +1042,7 @@ fn itg_tap_explosion_map_from_source_refs<T: Clone, S: TapSource<T>>(
                     animation: parse_itg_tap_explosion_animation_commands(
                         source.commands,
                         mode,
+                        key,
                         command,
                     ),
                 });
@@ -1318,9 +1333,36 @@ pub fn itg_apply_child_actor_commands<T>(
         if let Some(frame) = frame_override {
             apply_frame(&mut sprite.slot, frame);
         }
-        for commands in command_sets {
-            for (key, value) in *commands {
-                sprite.commands.insert(key.clone(), value.clone());
+        if sprite.commands.contains_key(actor::ITG_ACTOR_FRAME_CHILD)
+            && itg_has_tap_explosion_command(&sprite.commands)
+        {
+            // A wrapper on an ActorFrame changes the frame's commands, not
+            // the commands of its Sprite children. Both receive Judgment/Wn.
+            let mut parents: Vec<HashMap<String, String>> = sprite
+                .commands
+                .get(actor::ITG_PARENT_COMMANDS)
+                .and_then(|value| serde_json::from_str(value).ok())
+                .unwrap_or_default();
+            let mut parent = HashMap::new();
+            for commands in command_sets {
+                parent.extend(
+                    commands
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone())),
+                );
+            }
+            if !parent.is_empty() {
+                parents.push(parent);
+                sprite.commands.insert(
+                    actor::ITG_PARENT_COMMANDS.into(),
+                    serde_json::to_string(&parents).expect("actor commands serialize"),
+                );
+            }
+        } else {
+            for commands in command_sets {
+                for (key, value) in *commands {
+                    sprite.commands.insert(key.clone(), value.clone());
+                }
             }
         }
         apply_state(&mut sprite.slot, &sprite.commands);
@@ -1369,6 +1411,7 @@ pub fn itg_load_sprite_decl_slot<T>(
         Option<&[f32]>,
         bool,
     ) -> Option<T>,
+    mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
 ) -> Option<T> {
     let texture_path = itg::resolve_texture_expr(data, &sprite.texture_expr, arg0_path)?;
     let anim_is_beat = crate::script::sprite_animation_is_beat_based(
@@ -1386,6 +1429,13 @@ pub fn itg_load_sprite_decl_slot<T>(
         )
         .or_else(|| load_frame(&texture_path, sprite.frame0))
         .or_else(|| load_texture(&texture_path))
+    } else if sprite.frame0 == 0 && sprite.frame_indices.is_none() && sprite.frame_delays.is_none()
+    {
+        // Sprite::LoadStatesFromTexture creates sequential 0.1-second states
+        // when the actor does not supply its own Frames/FrameNNNN table.
+        load_all_frames(&texture_path, Some(0.1), false)
+            .or_else(|| load_frame(&texture_path, 0))
+            .or_else(|| load_texture(&texture_path))
     } else {
         load_frame(&texture_path, sprite.frame0).or_else(|| load_texture(&texture_path))
     }
@@ -1401,6 +1451,7 @@ pub fn itg_resolve_sprite_decl<T>(
     load_texture: impl FnMut(&Path) -> Option<T>,
     load_frame: impl FnMut(&Path, usize) -> Option<T>,
     load_animated: impl FnMut(&Path, usize, usize, Option<&[usize]>, Option<&[f32]>, bool) -> Option<T>,
+    load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
     mut apply_rotation: impl FnMut(&mut T, i32),
     mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
 ) -> Option<ItgResolvedSprite<T>> {
@@ -1412,6 +1463,7 @@ pub fn itg_resolve_sprite_decl<T>(
         load_texture,
         load_frame,
         load_animated,
+        load_all_frames,
     )?;
     let frame_rotation = sprite
         .commands
@@ -1621,6 +1673,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
         Option<&[f32]>,
         bool,
     ) -> Option<T>,
+    mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
     mut apply_model: impl FnMut(&mut T, model::ItgModelSlotPlan),
     mut apply_xy_rotation: impl FnMut(&mut T, Option<i32>, Option<i32>),
     mut apply_rotation: impl FnMut(&mut T, i32),
@@ -1642,13 +1695,16 @@ pub fn itg_resolve_actor_file_compiled<T>(
     }
 
     if !actor::is_lua_path(path) {
-        let Some(mut slot) = load_frame(path, 0).or_else(|| load_texture(path)) else {
+        let Some(mut slot) = load_all_frames(path, Some(0.1), false)
+            .or_else(|| load_frame(path, 0))
+            .or_else(|| load_texture(path))
+        else {
             return Vec::new();
         };
-        apply_xy_rotation(&mut slot, rotation_x, rotation_y);
         if let Some(rotation_z) = rotation_z {
             apply_rotation(&mut slot, rotation_z);
         }
+        apply_xy_rotation(&mut slot, rotation_x, rotation_y);
         return vec![ItgResolvedSprite {
             element: element.to_string(),
             slot,
@@ -1696,6 +1752,7 @@ pub fn itg_resolve_actor_file_compiled<T>(
             &mut load_texture,
             &mut load_frame,
             &mut load_animated,
+            &mut load_all_frames,
             &mut apply_rotation,
             &mut apply_state,
         ) {
@@ -1763,9 +1820,10 @@ pub fn itg_first_actor_sprite_slot<T>(
         Option<&[f32]>,
         bool,
     ) -> Option<T>,
+    mut load_all_frames: impl FnMut(&Path, Option<f32>, bool) -> Option<T>,
 ) -> Option<T> {
     if !actor::is_lua_path(path) {
-        return load_texture(path);
+        return load_all_frames(path, Some(0.1), false).or_else(|| load_texture(path));
     }
 
     let decl = compiled_actors.decl_for_path_ref(&data.search_dirs, path)?;
@@ -1779,6 +1837,7 @@ pub fn itg_first_actor_sprite_slot<T>(
             &mut load_texture,
             &mut load_frame,
             &mut load_animated,
+            &mut load_all_frames,
         );
         if let Some(slot) = slot {
             return Some(slot);
@@ -1801,6 +1860,7 @@ pub fn itg_first_actor_sprite_slot_with_ops<T>(
         ops.load_texture,
         ops.load_frame,
         ops.load_animated,
+        ops.load_all_frames,
     )
 }
 
@@ -1994,6 +2054,7 @@ fn itg_resolve_actor_file_with_ops_inner<T>(
         ops.load_texture,
         ops.load_frame,
         ops.load_animated,
+        ops.load_all_frames,
         ops.apply_model,
         ops.apply_xy_rotation,
         ops.apply_rotation,
@@ -2135,17 +2196,21 @@ pub fn itg_receptor_column<T: Clone>(
         off,
         glow: visuals.glow,
         idle_glow_layer,
-        overlays: itg_receptor_effect_start(layers)
-            .map(|start| {
-                layers[start + 3..]
-                    .iter()
-                    .map(|layer| ReceptorOverlay {
-                        slot: layer.slot.clone(),
-                        reverse: receptor::receptor_reverse_behavior(&layer.commands),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        overlays: {
+            let (off, glow, idle) = receptor_layer_indices(layers);
+            layers
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| {
+                    Some(*index) != off && Some(*index) != glow && Some(*index) != idle
+                })
+                .map(|(index, layer)| ReceptorOverlay {
+                    slot: layer.slot.clone(),
+                    reverse: receptor::receptor_reverse_behavior(&layer.commands),
+                    before_target: off.is_some_and(|off| index < off),
+                })
+                .collect()
+        },
         off_reverse,
         glow_reverse,
         idle_glow_reverse,
@@ -2166,7 +2231,9 @@ fn itg_receptor_layer_refs<'a, T>(
     if let Some([off, _, glow]) = actor_effect_layers {
         visual_layers.extend([off, glow]);
     } else {
-        visual_layers.extend(itg_receptor_visual_layers(layers));
+        let (off, glow, _) = receptor_layer_indices(layers);
+        visual_layers.extend(off.map(|index| &layers[index]));
+        visual_layers.extend(glow.map(|index| &layers[index]));
     }
     visual_layers
 }
@@ -2213,17 +2280,44 @@ fn itg_receptor_effect_start<T>(layers: &[ItgResolvedSprite<T>]) -> Option<usize
                 .get(key)
                 .is_some_and(|command| !command.trim().is_empty())
         });
-        let has_press_glow =
-            glow.commands.contains_key("presscommand") || glow.commands.contains_key("liftcommand");
+        let has_press_glow = has_receptor_press_commands(&glow.commands);
         has_idle_command && has_press_glow
     })
 }
 
-fn itg_receptor_visual_layers<T>(layers: &[ItgResolvedSprite<T>]) -> &[ItgResolvedSprite<T>] {
-    if layers.len() > 2 {
-        &layers[layers.len() - 2..]
-    } else {
-        layers
+fn has_receptor_press_commands(commands: &HashMap<String, String>) -> bool {
+    ["presscommand", "liftcommand"].iter().any(|key| {
+        commands
+            .get(*key)
+            .is_some_and(|command| !command.trim().is_empty())
+    })
+}
+
+fn receptor_layer_indices<T>(
+    layers: &[ItgResolvedSprite<T>],
+) -> (Option<usize>, Option<usize>, Option<usize>) {
+    let len = layers.len();
+    // Some skins put a press light below a foreground receptor. Empty metric
+    // commands on the foreground do not turn it into a press-only glow.
+    if len >= 3
+        && has_receptor_press_commands(&layers[len - 2].commands)
+        && !has_receptor_press_commands(&layers[len - 1].commands)
+        && ["nonecommand", "w1command"].iter().any(|key| {
+            layers[len - 1]
+                .commands
+                .get(*key)
+                .is_some_and(|command| !command.trim().is_empty())
+        })
+    {
+        return (Some(len - 1), Some(len - 2), None);
+    }
+    if let Some(start) = itg_receptor_effect_start(layers) {
+        return (Some(start), Some(start + 2), Some(start + 1));
+    }
+    match len {
+        0 => (None, None, None),
+        1 => (Some(0), None, None),
+        _ => (Some(len - 2), Some(len - 1), None),
     }
 }
 
@@ -2231,8 +2325,15 @@ pub fn itg_receptor_glow_behavior_from_layers<T>(
     layers: &[ItgResolvedSprite<T>],
     metric_command: impl FnMut(&str) -> Option<String>,
 ) -> ReceptorGlowBehavior {
+    let (off, glow, _) = receptor_layer_indices(layers);
+    let draw_before_target = matches!((off, glow), (Some(off), Some(glow)) if glow < off);
     let layers = itg_receptor_layer_refs(layers, itg_receptor_actor_effect_layers(layers));
-    receptor::receptor_glow_behavior(layers.get(1).map(|sprite| &sprite.commands), metric_command)
+    let mut behavior = receptor::receptor_glow_behavior(
+        layers.get(1).map(|sprite| &sprite.commands),
+        metric_command,
+    );
+    behavior.draw_before_target = draw_before_target;
+    behavior
 }
 
 pub fn itg_receptor_pulse_from_command(command: Option<&str>) -> ReceptorPulse {
@@ -2938,12 +3039,13 @@ fn itg_noteskin_runtime_with_ops_selected<T: Clone>(
             ops,
         );
         (ops.apply_masks)(&mut sprites);
-        if element.eq_ignore_ascii_case("Receptor")
-            && let Some(start) = itg_receptor_effect_start(&sprites)
-        {
+        if element.eq_ignore_ascii_case("Receptor") {
+            let (off, glow, _) = receptor_layer_indices(&sprites);
             // Independent overlays run Init/On once at load, then retain their
             // animation programs for allocation-free frame sampling.
-            for index in std::iter::once(start + 1).chain(start + 3..sprites.len()) {
+            for index in
+                (0..sprites.len()).filter(|index| Some(*index) != off && Some(*index) != glow)
+            {
                 let sprite = &mut sprites[index];
                 sprite.slot = (ops.apply_active_cmd)(&sprite.slot, &sprite.commands, "oncommand");
             }
@@ -3668,6 +3770,9 @@ mod tests {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            animation_uses_screen_clock: false,
+            draw_order: 0,
+            parents: Vec::new(),
         };
         let long = ExplosionAnimation {
             initial: ExplosionState::default(),
@@ -3683,6 +3788,9 @@ mod tests {
             glow: None,
             blend_add: false,
             animation_seconds: None,
+            animation_uses_screen_clock: false,
+            draw_order: 0,
+            parents: Vec::new(),
         };
         let explosion = TapExplosion::from_inline_layers(SmallVec::from_vec(vec![
             TapExplosionLayer {
@@ -4930,6 +5038,7 @@ mod tests {
             |path| Some(format!("texture:{}", path.display())),
             |_, _| panic!("frame loader should not run"),
             |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |_, _, _| None,
         );
 
         assert_eq!(slot.as_deref(), Some("texture:Tap Note.png"));
@@ -4968,6 +5077,12 @@ mod tests {
                 Some(5)
             },
             |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |path, delay, beat_based| {
+                assert_eq!(path, std::path::Path::new("Tap Note.png"));
+                assert_eq!(delay, Some(0.1));
+                assert!(!beat_based);
+                None
+            },
             |_, _| panic!("model plan should not apply"),
             |_, _, _| {},
             |slot, rotation_z| *slot += rotation_z / 10,
@@ -5046,6 +5161,7 @@ mod tests {
                 Some(5)
             },
             |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |_, _, _| panic!("explicit frame should not load default states"),
             |_, _| panic!("model plan should not apply"),
             |_, _, _| {},
             |slot, rotation_z| *slot += rotation_z / 10,
@@ -5132,6 +5248,7 @@ mod tests {
                     beat_based,
                 })
             },
+            |_, _, _| panic!("explicit frames should not load default states"),
         );
 
         assert_eq!(
@@ -5179,6 +5296,7 @@ mod tests {
             |_| Some("texture".to_string()),
             |path, frame| Some(format!("frame:{frame}:{}", path.display())),
             |_, _, _, _, _, _| None,
+            |_, _, _| panic!("explicit frames should not load default states"),
         );
 
         assert_eq!(slot, Some(format!("frame:2:{}", texture_path.display())));
@@ -5223,6 +5341,7 @@ mod tests {
             |_| Some(1),
             |_, _| Some(5),
             |_, _, _, _, _, _| panic!("single-frame sprite should not use animation loader"),
+            |_, _, _| None,
             |slot, rotation_z| {
                 calls
                     .borrow_mut()
@@ -5819,6 +5938,7 @@ Meshes: 2
 
         assert_eq!(explosion.slot, Slot(3));
         assert_eq!(explosion.animation.initial.zoom, 0.5);
+        assert!(explosion.animation.animation_uses_screen_clock);
         assert!((explosion.duration() - 0.2).abs() <= f32::EPSILON);
 
         let metric = itg_hit_mine_explosion_from_slot(
@@ -5827,7 +5947,40 @@ Meshes: 2
             Some("linear,0.4;diffusealpha,0".to_string()),
         );
         assert_eq!(metric.slot, Slot(4));
+        assert!(metric.animation.animation_uses_screen_clock);
         assert!((metric.duration() - 0.4).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn mine_hit_clock_only_restarts_for_hit_animation_seeks() {
+        for (hit, continuous, seconds) in [
+            (
+                "finishtweening;diffusealpha,1;sleep,0.3;linear,0.3;diffusealpha,0",
+                true,
+                None,
+            ),
+            ("playcommand,'Reset';diffusealpha,1", false, None),
+            (
+                "SetSecondsIntoAnimation,0.15;diffusealpha,1",
+                false,
+                Some(0.15),
+            ),
+        ] {
+            let commands = HashMap::from([
+                (
+                    "initcommand".into(),
+                    "SetSecondsIntoAnimation,0.3;diffusealpha,0".into(),
+                ),
+                ("hitminecommand".into(), hit.into()),
+                ("resetcommand".into(), "setstate,0".into()),
+            ]);
+            let explosion = itg_hit_mine_explosion_from_slot(Slot(1), Some(&commands), None);
+            assert_eq!(
+                explosion.animation.animation_uses_screen_clock, continuous,
+                "{hit}"
+            );
+            assert_eq!(explosion.animation.animation_seconds, seconds, "{hit}");
+        }
     }
 
     #[test]

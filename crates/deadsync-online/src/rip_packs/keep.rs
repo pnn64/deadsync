@@ -5,17 +5,28 @@
 //! the history before anything is downloaded, so a pack whose songs all fail
 //! has still used it and the next pack never takes it again. Then the songs
 //! come one at a time, in card order, each its folder's own counted request
-//! with the pack's `Pack.ini` riding along. Every song is null-synced as it
+//! with the pack's `Pack.ini` riding along -- and one more for a song whose
+//! simfile takes its banner from its pack (`../banner.png`), which brings
+//! that image into the folder, since on its own the folder would show none.
+//! Every song is null-synced as it
 //! lands: one whose pack declares ITG, or declares nothing (taken as ITG),
 //! has its offsets moved 9 ms, so the booster plays right whatever the
 //! machine's `Pack.ini` settings, as the singles group does.
 //!
+//! Once the songs are in, the pack asks itgcontent.net for a banner of its
+//! own -- its wrapper torn open on a wall of the cards that landed, the
+//! hardest in gold, drawn from what the pack is: its number and day, what it
+//! was ripped with, and SMO's pictures and Expert meters of its songs -- and
+//! its `Pack.ini` names it. It comes last, as ITGmania's does, and a banner
+//! that cannot be had costs the pack only its banner.
+//!
 //! The pack is built where the song scanner cannot see it, in a `._` staging
 //! folder under Songs, and appears in one rename once the last song is in: a
 //! rescan that happens meanwhile never finds half a pack. Each song is
-//! fetched into a scratch folder first and moved in under its own name, so
-//! two songs from two packs that share a folder name land side by side as
-//! `Name` and `Name (2)` rather than one on top of the other.
+//! fetched into a scratch folder of its own first and moved in under its own
+//! name, one song at a time, so two songs from two packs that share a folder
+//! name land side by side as `Name` and `Name (2)` rather than one on top of
+//! the other.
 //!
 //! The rules are the single-song install's (`smo_songs`): the archive
 //! checks, staging the scanner skips, a sweep of what a closed run left
@@ -23,7 +34,8 @@
 //! Songs folder, the cache's downloads folder and the history file is
 //! touched.
 
-use super::{DeclaredSync, HeldSong, RipSong, SongState};
+use super::share::era_key;
+use super::{DeclaredSync, HeldSong, RipOptions, RipSong, SongState};
 use crate::pack_archive::{self, ArchiveError, PackIndex};
 use crate::smo_songs::{self, PackCache};
 use crate::stepmaniaonline::{self, PackInfo, StepManiaOnlineError};
@@ -35,21 +47,46 @@ use std::fmt::Write as _;
 use std::fs::{self, File};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::thread;
+use std::time::Duration;
 
 /// A song's download, under the cache's downloads folder.
 const DOWNLOAD_PREFIX: &str = ".deadsync-booster-";
 /// The pack being filled, under Songs. "._" because the song scanner skips
 /// that prefix, as it does the single-song install's staging.
 const STAGING_PREFIX: &str = "._deadsync-booster-";
-/// Where each song is fetched inside the staging folder before it is moved
-/// in under its own name. Emptied after every song; scanner-skipped too,
+/// Where a song is fetched inside the staging folder before it is moved in
+/// under its own name: `._song-<card>.part`, one for each card, since songs
+/// come a few at a time. Emptied after every song; scanner-skipped too,
 /// should one ever be left behind.
-const SCRATCH_DIR: &str = "._song.part";
+const SCRATCH_PREFIX: &str = "._song-";
+/// Songs fetched at once. However many run together, each is its folder's
+/// own counted request, so this changes only how soon a pack is in: a few
+/// keep busy a line that one leaves idle between requests, and get past
+/// what one connection is given, while asking far less of the site at once
+/// than a browser does.
+const SONGS_AT_ONCE: usize = 3;
 /// A `Pack.ini` is a handful of lines. The relay left anything larger unread,
 /// and so does this.
 const MAX_PACK_INI_BYTES: usize = 64 * 1024;
 const NONE_KEPT: &str = "none of the songs could be downloaded";
+
+/// Where the pack's banner is drawn: the site the booster lists come from
+/// ([`super::lists`]).
+const BANNER_URL: &str = "https://itgcontent.net/api/boosterbanner";
+/// The banner in the pack, as its `Pack.ini` names it.
+const BANNER_FILE: &str = "banner.jpg";
+/// The picture is some 60 KB, but one the site has not drawn before takes it
+/// a few seconds; the pack waits for it, so it is not waited on for long.
+const BANNER_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const BANNER_TIMEOUT: Duration = Duration::from_secs(20);
+const MAX_BANNER_BYTES: usize = 2 * 1024 * 1024;
+/// SMO's pictures of songs -- a card's art -- each named for its hash. The
+/// site draws the wall from them, told only the name.
+const SMO_SONG_ART: &str = "https://stepmaniaonline.net/media/images/songs/";
+const ART_HASH_LEN: usize = 40;
 
 /// What a booster says about itself: ITGmania's text in DeadSync's words.
 /// The `#` line and one line per song follow it.
@@ -70,6 +107,8 @@ pub(super) struct KeepJob {
     pub songs: Vec<RipSong>,
     /// What each card was found in, card for card.
     pub held: Vec<Arc<HeldSong>>,
+    /// What the rip was asked for, for its banner.
+    pub options: RipOptions,
     pub songs_root: PathBuf,
     pub cache_dir: PathBuf,
     /// The count of kept boosters: `count N`.
@@ -120,7 +159,8 @@ fn keep(job: &KeepJob) -> Result<PathBuf, String> {
     // all fail has still used it. Unsaved, it is still unique on disk once
     // the pack lands, so a history that cannot be written does not stop it.
     let number = next_number(read_history(&job.history), &job.songs_root);
-    let folder = booster_folder_name(number, Local::now().date_naive());
+    let day = Local::now().date_naive();
+    let folder = booster_folder_name(number, day);
     if let Err(error) = write_history(&job.history, number) {
         log::warn!("Could not save the booster count: {error}");
     }
@@ -135,32 +175,48 @@ fn keep(job: &KeepJob) -> Result<PathBuf, String> {
         smo_songs::describe_song_error(&smo_songs::io("create the pack's staging folder", error))
     })?;
 
-    let mut fill = Fill {
+    let fill = Fill {
         agent: network::get_streaming_agent(),
         catalogue: Arc::clone(&stepmaniaonline::runtime_snapshot().catalog),
-        fresh: HashMap::new(),
-        scratch: staging.join(SCRATCH_DIR),
+        fresh: Mutex::new(HashMap::new()),
+        landing: Mutex::new(()),
         staging,
     };
-    let mut kept = Vec::with_capacity(job.songs.len());
-    let mut finished_bytes = 0u64;
-    for (at, song) in job.songs.iter().enumerate() {
+    // Each card's bytes so far, held to what the card said the song weighs,
+    // so the bar never runs past the pack's total; a card that is done counts
+    // whole, however it went.
+    let fetched: Vec<AtomicU64> = job.songs.iter().map(|_| AtomicU64::new(0)).collect();
+    // Summed and told one at a time, so a later sum is never told first.
+    let reporting = Mutex::new(());
+    let report = || {
+        let _reporting = lock(&reporting);
+        let done = fetched
+            .iter()
+            .map(|bytes| bytes.load(Ordering::Relaxed))
+            .sum();
+        super::keep_bytes(set, done);
+    };
+    let landed = each_card(job.songs.len(), SONGS_AT_ONCE, |at| {
+        let song = &job.songs[at];
         super::keep_song_state(set, at, SongState::Downloading);
         let temp = downloads.join(format!("{DOWNLOAD_PREFIX}{number}-{at}.part"));
+        let scratch = scratch_dir(&fill.staging, at);
         let weight = song.bytes;
         let mut next_report = 0u64;
-        let progress = move |done: u64, total: u64| {
+        let progress = |done: u64, total: u64| {
             let finished = total > 0 && done >= total;
             if done >= next_report || finished {
                 next_report = done.saturating_add(smo_songs::PROGRESS_STEP_BYTES);
-                // Held to what the card said the song weighs, so the bar
-                // never runs past the pack's total.
-                super::keep_bytes(set, finished_bytes.saturating_add(done.min(weight)));
+                fetched[at].store(done.min(weight), Ordering::Relaxed);
+                report();
             }
             true
         };
-        let outcome = fill.song(song, job.held.get(at).map(Arc::as_ref), &temp, progress);
-        fill.clear_song(&temp);
+        let held = job.held.get(at).map(Arc::as_ref);
+        let outcome = fill.song(song, held, &temp, &scratch, progress);
+        fill.clear_song(&temp, &scratch);
+        fetched[at].store(weight, Ordering::Relaxed);
+        report();
         match outcome {
             Ok(landed) => {
                 log::info!(
@@ -169,8 +225,8 @@ fn keep(job: &KeepJob) -> Result<PathBuf, String> {
                     song.pack_id,
                     landed.folder
                 );
-                kept.push(landed);
                 super::keep_song_state(set, at, SongState::Done);
+                Some(landed)
             }
             Err(message) => {
                 log::warn!(
@@ -179,10 +235,19 @@ fn keep(job: &KeepJob) -> Result<PathBuf, String> {
                     song.pack_id
                 );
                 super::keep_song_state(set, at, SongState::Failed);
+                None
             }
         }
-        finished_bytes = finished_bytes.saturating_add(weight);
-        super::keep_bytes(set, finished_bytes);
+    });
+    // In card order, whichever came in first: the Pack.ini's lines, and the
+    // cards that landed, for the banner.
+    let mut kept = Vec::with_capacity(job.songs.len());
+    let mut landed_cards = Vec::with_capacity(job.songs.len());
+    for (song, landed) in job.songs.iter().zip(landed) {
+        if let Some(landed) = landed {
+            kept.push(landed);
+            landed_cards.push(song);
+        }
     }
 
     let staging = fill.staging;
@@ -191,7 +256,11 @@ fn keep(job: &KeepJob) -> Result<PathBuf, String> {
         log::warn!("Kept nothing for '{folder}': {NONE_KEPT}.");
         return Err(NONE_KEPT.to_owned());
     }
-    match commit_booster(&staging, &job.songs_root, &folder, &kept) {
+    let banner = write_banner(
+        &staging,
+        &banner_url(number, day, &job.options, &landed_cards),
+    );
+    match commit_booster(&staging, &job.songs_root, &folder, &kept, banner) {
         Ok(group_dir) => {
             stepmaniaonline::queue_ready_song_dir(group_dir.clone(), &job.songs_root);
             log::info!(
@@ -215,6 +284,54 @@ fn remove_staging(staging: &Path) {
     if let Err(error) = stepmaniaonline::remove_temp_path(staging) {
         log::warn!("Could not remove a booster staging folder: {error}");
     }
+}
+
+/// Card `at`'s scratch folder in the pack's staging folder.
+fn scratch_dir(staging: &Path, at: usize) -> PathBuf {
+    staging.join(format!("{SCRATCH_PREFIX}{at}.part"))
+}
+
+/// `work` for every card from the first to `cards`, on `at_once` threads at
+/// most: each takes the next card as it comes free, so the cards still start
+/// in order. What each card came to, in card order. Should no thread start,
+/// this one does every card itself.
+fn each_card<T: Default + Send>(
+    cards: usize,
+    at_once: usize,
+    work: impl Fn(usize) -> T + Sync,
+) -> Vec<T> {
+    let next = AtomicUsize::new(0);
+    let out: Mutex<Vec<T>> = Mutex::new((0..cards).map(|_| T::default()).collect());
+    let run = || {
+        loop {
+            let at = next.fetch_add(1, Ordering::Relaxed);
+            if at >= cards {
+                break;
+            }
+            let done = work(at);
+            lock(&out)[at] = done;
+        }
+    };
+    thread::scope(|scope| {
+        let mut started = 0;
+        for n in 0..at_once.min(cards) {
+            let spawned = thread::Builder::new()
+                .name(format!("rip-keep-{n}"))
+                .spawn_scoped(scope, run);
+            match spawned {
+                Ok(_) => started += 1,
+                Err(error) => log::warn!("Could not start a booster download: {error}"),
+            }
+        }
+        if started == 0 {
+            run();
+        }
+    });
+    out.into_inner().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 // ------------------------------------------------------------------ history
@@ -397,35 +514,40 @@ struct KeptSong {
     moved: Option<f32>,
 }
 
-/// What every song of one keep is fetched with.
+/// What every song of one keep is fetched with, by every thread fetching.
 struct Fill {
     agent: network::HttpAgent,
     catalogue: Arc<[PackInfo]>,
     /// Indexes fetched again during this keep because their pack changed on
-    /// the site: a later card from the same pack reads the new one rather than
-    /// paying for it again.
-    fresh: HashMap<u64, Arc<PackCache>>,
+    /// the site: another card from the same pack reads the new one rather than
+    /// paying for it again. Held while one is fetched, so two cards from one
+    /// changed pack never both pay for it.
+    fresh: Mutex<HashMap<u64, Arc<PackCache>>>,
+    /// Held while a song is moved into the pack, so two never take one name.
+    landing: Mutex<()>,
     staging: PathBuf,
-    scratch: PathBuf,
 }
 
 impl Fill {
-    /// One card's song, fetched, null-synced and moved into the pack.
+    /// One card's song, fetched into `scratch`, null-synced and moved into
+    /// the pack.
     fn song(
-        &mut self,
+        &self,
         song: &RipSong,
         held: Option<&HeldSong>,
         temp: &Path,
+        scratch: &Path,
         progress: impl FnMut(u64, u64) -> bool,
     ) -> Result<KeptSong, String> {
         let held = held.ok_or("the rip lost track of where the song is")?;
-        let (written, pack_ini) = self.fetch(held, temp, progress)?;
+        let (written, pack_ini) = self.fetch(held, temp, scratch, progress)?;
         let sync = source_sync(
             pack_ini.as_deref(),
             catalogue_sync(&self.catalogue, song.pack_id),
         );
+        let _landing = lock(&self.landing);
         land_song(
-            &self.scratch.join(&written),
+            &scratch.join(&written),
             &written,
             &self.staging,
             &song.pack_name,
@@ -434,16 +556,19 @@ impl Fill {
     }
 
     /// The song's folder into the scratch folder, `.oldsync` backups left
-    /// out and its pack's `Pack.ini` read in the same request. Returns the
-    /// folder's written name and the `Pack.ini`, if it could be read.
+    /// out and its pack's `Pack.ini` read in the same request, then the
+    /// banner it borrows from its pack, if its simfile takes one from there
+    /// (`pack_archive::fetch_borrowed_banner`). Returns the folder's written
+    /// name and the `Pack.ini`, if it could be read.
     ///
     /// A pack replaced on the site since its index was read has its index
     /// fetched again, once -- a counted request -- and the song looked for in
     /// it by its folder's name.
     fn fetch(
-        &mut self,
+        &self,
         held: &HeldSong,
         temp: &Path,
+        scratch: &Path,
         mut progress: impl FnMut(u64, u64) -> bool,
     ) -> Result<(String, Option<Vec<u8>>), String> {
         let pack_id = held.cache.index.pack_id;
@@ -454,18 +579,22 @@ impl Fill {
             .get(held.folder)
             .map(|folder| folder.name.clone())
             .ok_or("the song is not in its pack's index")?;
-        let (mut cache, mut folder, mut refetched) = match self.fresh.get(&pack_id) {
-            Some(cache) => (Arc::clone(cache), find_folder(&cache.index, &name)?, true),
+        let fresh = lock(&self.fresh).get(&pack_id).cloned();
+        let (mut cache, mut folder, mut refetched) = match fresh {
+            Some(cache) => {
+                let folder = find_folder(&cache.index, &name)?;
+                (cache, folder, true)
+            }
             None => (Arc::clone(&held.cache), held.folder, false),
         };
         loop {
-            self.clear_song(temp);
+            self.clear_song(temp, scratch);
             let fetched = pack_archive::fetch_folder_skipping(
                 &self.agent,
                 &cache.index,
                 folder,
                 temp,
-                &self.scratch,
+                scratch,
                 smo_songs::MAX_SONG_BYTES,
                 &pack_archive::is_resync_backup,
                 pack_archive::pack_ini_entry(&cache.index),
@@ -474,29 +603,51 @@ impl Fill {
             match fetched {
                 Err(ArchiveError::Changed) if !refetched => {
                     refetched = true;
-                    log::info!(
-                        "Pack {pack_id} changed on StepManiaOnline; reading its index again."
-                    );
-                    let song_count = self
-                        .catalogue
-                        .iter()
-                        .find(|pack| pack.id == pack_id)
-                        .map_or(0, |pack| pack.song_count);
-                    let index = pack_archive::fetch_index(&self.agent, pack_id, song_count)
-                        .map_err(|error| error.to_string())?;
-                    cache = smo_songs::adopt_index(index);
-                    self.fresh.insert(pack_id, Arc::clone(&cache));
+                    cache = self.read_again(pack_id, &cache)?;
                     folder = find_folder(&cache.index, &name)?;
                 }
-                fetched => return fetched.map_err(|error| error.to_string()),
+                Ok((written, pack_ini)) => {
+                    pack_archive::fetch_borrowed_banner(
+                        &self.agent,
+                        &cache.index,
+                        folder,
+                        &self.scratch.join(&written),
+                    );
+                    return Ok((written, pack_ini));
+                }
+                Err(error) => return Err(error.to_string()),
             }
         }
     }
 
-    /// A song's leftovers: its download and whatever is in the scratch
+    /// The new index of a pack that changed on the site since `stale` was
+    /// read: the one another card already fetched, else fetched now -- a
+    /// counted request -- with the others waiting on it, so the pack is paid
+    /// for once.
+    fn read_again(&self, pack_id: u64, stale: &Arc<PackCache>) -> Result<Arc<PackCache>, String> {
+        let mut fresh = lock(&self.fresh);
+        if let Some(cache) = fresh.get(&pack_id)
+            && !Arc::ptr_eq(cache, stale)
+        {
+            return Ok(Arc::clone(cache));
+        }
+        log::info!("Pack {pack_id} changed on StepManiaOnline; reading its index again.");
+        let song_count = self
+            .catalogue
+            .iter()
+            .find(|pack| pack.id == pack_id)
+            .map_or(0, |pack| pack.song_count);
+        let index = pack_archive::fetch_index(&self.agent, pack_id, song_count)
+            .map_err(|error| error.to_string())?;
+        let cache = smo_songs::adopt_index(index);
+        fresh.insert(pack_id, Arc::clone(&cache));
+        Ok(cache)
+    }
+
+    /// A song's leftovers: its download and whatever is in its scratch
     /// folder. Before every fetch, and after every song however it went.
-    fn clear_song(&self, temp: &Path) {
-        for path in [temp, self.scratch.as_path()] {
+    fn clear_song(&self, temp: &Path, scratch: &Path) {
+        for path in [temp, scratch] {
             if let Err(error) = stepmaniaonline::remove_temp_path(path) {
                 log::warn!("Could not remove a booster song's temporary files: {error}");
             }
@@ -553,10 +704,10 @@ fn land_song(
 
 /// `base`, or the first of `base (2)`, `base (3)`... that nothing in `dir`
 /// has, case aside: two packs' `Vertex` are two songs, never one merged
-/// folder. `Pack.ini` counts as taken, so no song stands where the pack's own
-/// file goes.
+/// folder. `Pack.ini` and the banner count as taken, so no song stands where
+/// the pack's own files go.
 fn free_name(dir: &Path, base: &str) -> Result<String, StepManiaOnlineError> {
-    let mut taken = vec!["Pack.ini".to_owned()];
+    let mut taken = vec!["Pack.ini".to_owned(), BANNER_FILE.to_owned()];
     let entries =
         fs::read_dir(dir).map_err(|error| smo_songs::io("look inside the pack", error))?;
     for entry in entries {
@@ -583,11 +734,14 @@ fn free_name(dir: &Path, base: &str) -> Result<String, StepManiaOnlineError> {
 
 // --------------------------------------------------------------------- pack
 
-/// The booster's `Pack.ini`: NULL, and where every song came from, in card
-/// order. The songs come from packs that disagree, so the folder alone cannot
-/// tell anyone what was done to them.
-fn pack_ini_text(kept: &[KeptSong]) -> String {
+/// The booster's `Pack.ini`: NULL, its banner when it has one, and where
+/// every song came from, in card order. The songs come from packs that
+/// disagree, so the folder alone cannot tell anyone what was done to them.
+fn pack_ini_text(kept: &[KeptSong], banner: bool) -> String {
     let mut text = String::from(PACK_INI_HEAD);
+    if banner {
+        let _ = writeln!(text, "Banner={BANNER_FILE}");
+    }
     text.push_str("#\n");
     for song in kept {
         let pack = if song.pack.trim().is_empty() {
@@ -609,9 +763,10 @@ fn pack_ini_text(kept: &[KeptSong]) -> String {
     text
 }
 
-/// File the filled pack: its `Pack.ini` into the staging folder, then the
-/// staging folder into Songs under the pack's name -- `(2)` and on when that
-/// is somehow taken -- in one rename. Returns the pack's folder.
+/// File the filled pack: its `Pack.ini` into the staging folder, naming the
+/// banner when `banner` says it is there, then the staging folder into Songs
+/// under the pack's name -- `(2)` and on when that is somehow taken -- in one
+/// rename. Returns the pack's folder.
 ///
 /// A `Pack.ini` that cannot be written is logged rather than refused, as the
 /// singles group's is: the songs are null-synced either way, and only a
@@ -621,8 +776,9 @@ fn commit_booster(
     songs_root: &Path,
     folder: &str,
     kept: &[KeptSong],
+    banner: bool,
 ) -> Result<PathBuf, StepManiaOnlineError> {
-    if let Err(error) = fs::write(staging.join("Pack.ini"), pack_ini_text(kept)) {
+    if let Err(error) = fs::write(staging.join("Pack.ini"), pack_ini_text(kept, banner)) {
         log::warn!("Could not write the booster's Pack.ini: {error}");
     }
     let name = free_name(songs_root, folder)?;
@@ -632,8 +788,77 @@ fn commit_booster(
     Ok(group_dir)
 }
 
+// ------------------------------------------------------------------- banner
+
+/// The banner's address: everything the picture shows, each part held to
+/// what the site takes -- the pack's number and day, its eras and Expert
+/// range, and for each card that landed its picture's name (`-` for none)
+/// and its meter.
+fn banner_url(number: u32, day: NaiveDate, options: &RipOptions, landed: &[&RipSong]) -> String {
+    let eras: Vec<&str> = options.limiting_eras().into_iter().map(era_key).collect();
+    let art: Vec<&str> = landed
+        .iter()
+        .map(|song| song.art_url.as_deref().and_then(art_name).unwrap_or("-"))
+        .collect();
+    let meters: Vec<String> = landed.iter().map(|song| song.meter.to_string()).collect();
+    format!(
+        "{BANNER_URL}?n={number}&d={}&e={}&lo={}&hi={}&a={}&m={}",
+        day.format("%Y-%m-%d"),
+        eras.join(","),
+        options.lo,
+        options.hi,
+        art.join(","),
+        meters.join(","),
+    )
+}
+
+/// The name of SMO's picture of a song -- 40 hex digits and `.png` -- from
+/// its address; `None` for any other.
+fn art_name(url: &str) -> Option<&str> {
+    let name = url.strip_prefix(SMO_SONG_ART)?;
+    let hash = name.strip_suffix(".png")?;
+    let hex = hash.len() == ART_HASH_LEN
+        && hash
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    hex.then_some(name)
+}
+
+/// The pack's banner into the staging folder, from `url`. Whether it is
+/// there: anything that goes wrong costs the pack its banner and nothing
+/// else.
+fn write_banner(staging: &Path, url: &str) -> bool {
+    let written = fetch_banner(url).and_then(|jpeg| {
+        fs::write(staging.join(BANNER_FILE), jpeg).map_err(|error| error.to_string())
+    });
+    if let Err(error) = &written {
+        log::warn!("Could not get the booster's banner: {error}");
+    }
+    written.is_ok()
+}
+
+fn fetch_banner(url: &str) -> Result<Box<[u8]>, String> {
+    let agent = network::build_agent_with_connect(
+        network::AgentConfig {
+            timeout: BANNER_TIMEOUT,
+        },
+        BANNER_CONNECT_TIMEOUT,
+    );
+    let response = agent
+        .get(url)
+        .call()
+        .map_err(|error| network::error_from_ureq(error).to_string())?;
+    let jpeg = network::read_bytes_body_bounded(response, MAX_BANNER_BYTES)
+        .map_err(|error| error.to_string())?;
+    if !jpeg.starts_with(&[0xff, 0xd8, 0xff]) {
+        return Err("the answer was not a JPEG".to_owned());
+    }
+    Ok(jpeg)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::super::Era;
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -863,17 +1088,20 @@ mod tests {
 
     #[test]
     fn the_pack_ini_says_null_and_where_every_song_came_from() {
-        let text = pack_ini_text(&[
-            kept(
-                "Vertex",
-                "Pack A",
-                Some(DeclaredSync::Itg),
-                Some(ITG_SYNC_OFFSET_SECONDS),
-            ),
-            kept("Vertex (2)", "Pack B", Some(DeclaredSync::Null), None),
-            kept("Quiet", " ", None, Some(ITG_SYNC_OFFSET_SECONDS)),
-            kept("Nested", "Pack D", Some(DeclaredSync::Itg), None),
-        ]);
+        let text = pack_ini_text(
+            &[
+                kept(
+                    "Vertex",
+                    "Pack A",
+                    Some(DeclaredSync::Itg),
+                    Some(ITG_SYNC_OFFSET_SECONDS),
+                ),
+                kept("Vertex (2)", "Pack B", Some(DeclaredSync::Null), None),
+                kept("Quiet", " ", None, Some(ITG_SYNC_OFFSET_SECONDS)),
+                kept("Nested", "Pack D", Some(DeclaredSync::Itg), None),
+            ],
+            false,
+        );
         assert_eq!(
             text,
             concat!(
@@ -894,13 +1122,137 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_pack_with_a_banner_names_it() {
+        let text = pack_ini_text(&[kept("Song", "Pack", None, None)], true);
+        assert_eq!(
+            text.strip_prefix(PACK_INI_HEAD),
+            Some(concat!(
+                "Banner=banner.jpg\n",
+                "#\n",
+                "# Song -- from Pack, synced (not stated); offsets as they were\n",
+            ))
+        );
+    }
+
+    fn card(meter: u32, art_url: Option<&str>) -> RipSong {
+        RipSong {
+            key: "1:2".to_owned(),
+            pack_id: 1,
+            pack_name: "Pack".to_owned(),
+            song_id: 2,
+            title: "Song".to_owned(),
+            artist: String::new(),
+            credit: String::new(),
+            meter,
+            year: None,
+            bpm: super::super::CardBpm::default(),
+            art_url: art_url.map(str::to_owned),
+            folder: "Song".to_owned(),
+            bytes: 1,
+        }
+    }
+
+    #[test]
+    fn the_banner_is_asked_for_by_what_the_pack_is() {
+        let hash = "f4c1e4e2a8d98179cf74dfc164e09de1655af8a8";
+        let art = format!("{SMO_SONG_ART}{hash}.png");
+        let cards = [
+            card(12, Some(&art)),
+            card(9, None),
+            card(
+                14,
+                Some("https://stepmaniaonline.net/media/images/songs/12.png"),
+            ),
+        ];
+        let landed: Vec<&RipSong> = cards.iter().collect();
+        let two_eras = RipOptions {
+            eras: vec![Era::Vintage, Era::Modern],
+            lo: 9,
+            hi: 14,
+            ..RipOptions::default()
+        };
+        assert_eq!(
+            banner_url(7, day(2026, 10, 19), &two_eras, &landed),
+            format!(
+                "https://itgcontent.net/api/boosterbanner?n=7&d=2026-10-19&e=modern,vintage\
+                 &lo=9&hi=14&a={hash}.png,-,-&m=12,9,14"
+            ),
+            "the eras in the picker's order; a card without SMO's own picture has none"
+        );
+        let every_era = RipOptions {
+            eras: Era::ALL.to_vec(),
+            ..RipOptions::default()
+        };
+        assert_eq!(
+            banner_url(12, day(2026, 1, 2), &every_era, &landed[..1]),
+            format!(
+                "https://itgcontent.net/api/boosterbanner?n=12&d=2026-01-02&e=\
+                 &lo=8&hi=14&a={hash}.png&m=12"
+            ),
+            "every era is any era"
+        );
+    }
+
+    #[test]
+    fn only_smos_own_song_pictures_are_named() {
+        let hash = "369b07d2e5031d92474e30909215890c6302a2da";
+        let name = format!("{hash}.png");
+        assert_eq!(
+            art_name(&format!("{SMO_SONG_ART}{name}")),
+            Some(name.as_str())
+        );
+        for url in [
+            format!("{SMO_SONG_ART}{}.png", hash.to_uppercase()),
+            format!("{SMO_SONG_ART}{hash}.jpg"),
+            format!("{SMO_SONG_ART}{hash}0.png"),
+            format!("{SMO_SONG_ART}../{hash}.png"),
+            format!("https://example.test/media/images/songs/{name}"),
+            format!("{SMO_SONG_ART}{name}?x=1"),
+        ] {
+            assert_eq!(art_name(&url), None, "{url}");
+        }
+    }
+
+    /// Every card is done once, three at a time at most, and what each came
+    /// to is answered in card order whatever order they finished in.
+    #[test]
+    fn every_card_is_done_once_a_few_at_a_time_and_answered_in_order() {
+        let running = AtomicUsize::new(0);
+        let most = AtomicUsize::new(0);
+        // the first three wait for one another, so three surely run at once
+        let first = std::sync::Barrier::new(3);
+        let started = Mutex::new(Vec::new());
+        let out = each_card(10, 3, |at| {
+            lock(&started).push(at);
+            let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+            most.fetch_max(now, Ordering::SeqCst);
+            if at < 3 {
+                first.wait();
+            }
+            // later cards finish first
+            thread::sleep(Duration::from_millis(5 * (10 - at as u64)));
+            running.fetch_sub(1, Ordering::SeqCst);
+            at * 10
+        });
+        assert_eq!(out, (0..10).map(|at| at * 10).collect::<Vec<_>>());
+        let mut started = started.into_inner().unwrap();
+        started.sort_unstable();
+        assert_eq!(started, (0..10).collect::<Vec<_>>(), "each once");
+        assert_eq!(most.load(Ordering::SeqCst), 3, "three at once, never more");
+
+        assert!(each_card(0, 3, |at| at).is_empty());
+        assert_eq!(each_card(2, 3, |at| at + 1), vec![1, 2]);
+        assert_eq!(each_card(4, 1, |at| at), vec![0, 1, 2, 3], "one at a time");
+    }
+
     /// An ITG song's offsets move as it lands and a NULL one's do not; songs
     /// that share a folder name, case aside, land side by side.
     #[test]
     fn songs_that_share_a_folder_name_land_side_by_side() {
         let root = TempDir::new("land");
         let staging = root.0.join("._deadsync-booster-1.part");
-        let scratch = staging.join(SCRATCH_DIR);
+        let scratch = scratch_dir(&staging, 0);
 
         let staged = fetched(&scratch, "Vertex", b"#OFFSET:0.100;");
         let first = land_song(
@@ -967,13 +1319,24 @@ mod tests {
             odd.folder, "pack.ini (2)",
             "never where the pack's own file goes"
         );
+
+        let staged = fetched(&scratch, "Banner.jpg", b"#OFFSET:0;");
+        let odder = land_song(
+            &staged,
+            "Banner.jpg",
+            &staging,
+            "Pack F",
+            Some(DeclaredSync::Null),
+        )
+        .expect("a song called banner.jpg");
+        assert_eq!(odder.folder, "Banner.jpg (2)", "nor where its banner goes");
     }
 
     #[test]
     fn a_song_whose_offsets_cannot_move_is_not_kept() {
         let root = TempDir::new("badshift");
         let staging = root.0.join("._deadsync-booster-1.part");
-        let scratch = staging.join(SCRATCH_DIR);
+        let scratch = scratch_dir(&staging, 0);
         let staged = fetched(&scratch, "Broken", b"#OFFSET:-0.1\n#BPMS:0=120;");
         let error =
             land_song(&staged, "Broken", &staging, "Pack", Some(DeclaredSync::Itg)).unwrap_err();
@@ -1006,18 +1369,18 @@ mod tests {
         fs::write(taken.join("keep.txt"), b"the player's").unwrap();
 
         let staging = songs.join("._deadsync-booster-2.part");
-        let scratch = staging.join(SCRATCH_DIR);
+        let scratch = scratch_dir(&staging, 0);
         let staged = fetched(&scratch, "Song", b"#OFFSET:0.000;");
         let song = land_song(&staged, "Song", &staging, "Pack", Some(DeclaredSync::Itg)).unwrap();
         fs::remove_dir_all(&scratch).unwrap();
         let landed = [song];
 
-        let group_dir = commit_booster(&staging, &songs, folder, &landed).expect("commit");
+        let group_dir = commit_booster(&staging, &songs, folder, &landed, true).expect("commit");
         assert_eq!(group_dir, songs.join(format!("{folder} (2)")));
         assert!(!staging.exists(), "the staging folder became the pack");
         assert_eq!(
             fs::read_to_string(group_dir.join("Pack.ini")).unwrap(),
-            pack_ini_text(&landed)
+            pack_ini_text(&landed, true)
         );
         assert_eq!(
             fs::read(group_dir.join("Song/song.ssc")).unwrap(),

@@ -1,0 +1,9 @@
+[
+  {
+    "title": "Mawaru9",
+    "source_simfile": "mawaru9/mawaru9.sm",
+    "archive": "../song-inputs/mawaru9.tar.zst",
+    "sha256": "912b57d259d6326a0279f69f81193c4715f1dbc3e107b2968297990c16c32d31",
+    "files": 656
+  }
+]

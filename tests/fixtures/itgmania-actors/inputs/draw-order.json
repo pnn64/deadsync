@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "name": "draw-order",
+  "samples": [
+    0.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "sort_by_draw_order": true,
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "overlay_late_input",
+        "draw_order": 100,
+        "size": [
+          32.0,
+          32.0
+        ],
+        "state": {
+          "position": [
+            320.0,
+            240.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "underlay",
+        "draw_order": -100,
+        "size": [
+          32.0,
+          32.0
+        ],
+        "state": {
+          "position": [
+            320.0,
+            240.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "overlay_equal_a",
+        "draw_order": 100,
+        "size": [
+          32.0,
+          32.0
+        ],
+        "state": {
+          "position": [
+            320.0,
+            240.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "overlay_equal_b",
+        "draw_order": 100,
+        "size": [
+          32.0,
+          32.0
+        ],
+        "state": {
+          "position": [
+            320.0,
+            240.0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "decoration",
+        "draw_order": 0,
+        "size": [
+          32.0,
+          32.0
+        ],
+        "state": {
+          "position": [
+            320.0,
+            240.0,
+            0.0
+          ]
+        }
+      }
+    ]
+  }
+}

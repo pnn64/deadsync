@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "command": "actor-conformance",
+  "fixtures": [
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/background-fit-smooth.json",
+      "output": "tests/fixtures/itgmania-actors/background-fit-smooth.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/crop-fade-color.json",
+      "output": "tests/fixtures/itgmania-actors/crop-fade-color.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/cyber-multitap-texture.json",
+      "output": "tests/fixtures/itgmania-actors/cyber-multitap-texture.json",
+      "oracle": "itgmania_native_animated_texture",
+      "dependencies": [
+        "assets/noteskins/dance/cyber/textures/Tap Note ani texture.ini",
+        "assets/noteskins/dance/cyber/textures/Tap Note parts (mipmaps).png"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/cyber-tap-repeat.json",
+      "output": "tests/fixtures/itgmania-actors/cyber-tap-repeat.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/draw-order.json",
+      "output": "tests/fixtures/itgmania-actors/draw-order.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/effects-vibration.json",
+      "output": "tests/fixtures/itgmania-actors/effects-vibration.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/fallback-tweens.json",
+      "output": "tests/fixtures/itgmania-actors/fallback-tweens.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/glow-alpha.json",
+      "output": "tests/fixtures/itgmania-actors/glow-alpha.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/kenpo-capture.json",
+      "output": "tests/fixtures/itgmania-actors/kenpo-capture.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/kenpo-motion.json",
+      "output": "tests/fixtures/itgmania-actors/kenpo-motion.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/layout-alignment.json",
+      "output": "tests/fixtures/itgmania-actors/layout-alignment.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/note-zoom-spline-high.json",
+      "output": "tests/fixtures/itgmania-actors/note-zoom-spline-high.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/note-zoom-spline.json",
+      "output": "tests/fixtures/itgmania-actors/note-zoom-spline.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/riddle-rotation.json",
+      "output": "tests/fixtures/itgmania-actors/riddle-rotation.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/spooky-doors.json",
+      "output": "tests/fixtures/itgmania-actors/spooky-doors.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/transform-projection.json",
+      "output": "tests/fixtures/itgmania-actors/transform-projection.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/tween-curves.json",
+      "output": "tests/fixtures/itgmania-actors/tween-curves.json",
+      "oracle": "itgmania_native_actor_conformance"
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/tween-queue.json",
+      "output": "tests/fixtures/itgmania-actors/tween-queue.json",
+      "oracle": "itgmania_native_actor_conformance"
+    }
+  ]
+}

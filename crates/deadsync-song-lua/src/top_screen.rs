@@ -131,15 +131,19 @@ pub fn top_screen_option_row_name_at(index: i32) -> Option<&'static str> {
 
 #[must_use]
 pub fn option_row_default_text(name: &str) -> String {
-    let lower = name.to_ascii_lowercase();
-    match lower.as_str() {
-        "speedmodtype" => "X".to_string(),
-        "speedmod" => "1".to_string(),
-        "mini" => "0%".to_string(),
-        "perspective" => "Overhead".to_string(),
-        "noteskin" | "noteskinvariant" => "default".to_string(),
-        "musicrate" => "1".to_string(),
-        _ => custom_option_default_text(name).unwrap_or_default(),
+    if name.eq_ignore_ascii_case("speedmodtype") {
+        "X".to_string()
+    } else if name.eq_ignore_ascii_case("speedmod") || name.eq_ignore_ascii_case("musicrate") {
+        "1".to_string()
+    } else if name.eq_ignore_ascii_case("mini") {
+        "0%".to_string()
+    } else if name.eq_ignore_ascii_case("perspective") {
+        "Overhead".to_string()
+    } else if name.eq_ignore_ascii_case("noteskin") || name.eq_ignore_ascii_case("noteskinvariant")
+    {
+        "default".to_string()
+    } else {
+        custom_option_default_text(name).unwrap_or_default()
     }
 }
 

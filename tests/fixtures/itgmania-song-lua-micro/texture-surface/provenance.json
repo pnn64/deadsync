@@ -21,7 +21,8 @@
     "uniform-hidden-rgb",
     "mixed-hidden-rgb"
   ],
-  "scope": "Compiled native CPU surface routines, with explicit decoded input representation and resize dimensions. No RageBitmapTexture file loading, effective GPU mip storage or native framebuffer proof.",
+  "scope": "Historical capture metadata. native.json is now refreshed with harness 0.1.95; its current inputs, binary, source revision and output hash are recorded in the current capture receipt.",
   "framebuffer_verified": false,
-  "control_line_endings": "LF, enforced by fixture .gitattributes"
+  "control_line_endings": "LF, enforced by fixture .gitattributes",
+  "current_capture_receipt": "../native-capture-manifest.json"
 }

@@ -124,5 +124,7 @@
   "native_json_sha256": "447a5597f34bc0962d242c4beca64904e864a2c77de60d2727b479f3510c40b0",
   "control_json_sha256": "b32926b0295bceaaa67669facef5a8e12cd5bcf653de2cb6b55b4bccf8773676",
   "compared_png_rgba_bytes": 560,
-  "sprite_upload_pixels_captured": false
+  "sprite_upload_pixels_captured": false,
+  "scope": "Historical capture metadata. native.json is now refreshed with harness 0.1.95; its current inputs, binary, source revision and output hash are recorded in the current capture receipt.",
+  "current_capture_receipt": "../native-capture-manifest.json"
 }

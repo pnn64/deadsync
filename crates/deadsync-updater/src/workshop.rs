@@ -136,6 +136,15 @@ fn check_cancel() -> Result<(), UpdaterError> {
 }
 
 fn install(target: &Path) -> Result<(), UpdaterError> {
+    let asset = ReleaseAsset {
+        name: "workshop.zip".into(), browser_download_url: URL.into(),
+        size: ARCHIVE_BYTES, digest: None,
+    };
+    let expected = download::parse_hex32(SHA256).expect("pinned workshop SHA-256 is valid");
+    install_from(target, &asset, &expected)
+}
+
+fn install_from(target: &Path, asset: &ReleaseAsset, expected: &[u8; 32]) -> Result<(), UpdaterError> {
     let root = target
         .parent()
         .ok_or_else(|| UpdaterError::Io("workshop destination has no parent".into()))?;
@@ -150,13 +159,6 @@ fn install(target: &Path) -> Result<(), UpdaterError> {
     }
     let stage = create_stage(root)?;
     let archive = stage.0.join("source.zip");
-    let asset = ReleaseAsset {
-        name: "workshop.zip".into(),
-        browser_download_url: URL.into(),
-        size: ARCHIVE_BYTES,
-        digest: None,
-    };
-    let expected = download::parse_hex32(SHA256).expect("pinned workshop SHA-256 is valid");
     let mut last = Instant::now();
     let oversized = AtomicBool::new(false);
     let agent: ureq::Agent = ureq::Agent::config_builder()
@@ -169,15 +171,15 @@ fn install(target: &Path) -> Result<(), UpdaterError> {
         .into();
     download::download_to_file(
         &agent,
-        &asset,
-        &expected,
+        asset,
+        expected,
         &archive,
         |written, _| {
-            oversized.store(written > ARCHIVE_BYTES, Ordering::Relaxed);
-            if last.elapsed() >= Duration::from_millis(100) || written == ARCHIVE_BYTES {
+            oversized.store(written > asset.size, Ordering::Relaxed);
+            if last.elapsed() >= Duration::from_millis(100) || written == asset.size {
                 publish(Phase::Downloading {
                     written,
-                    total: ARCHIVE_BYTES,
+                    total: asset.size,
                 });
                 last = Instant::now();
             }
@@ -584,28 +586,44 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "downloads the pinned 426 MiB upstream archive over HTTPS"]
-    fn live_download_installs_and_reinstalls_workshop() {
+    fn generated_download_installs_and_reinstalls_workshop() {
+        use sha2::{Digest, Sha256};
         let stage = create_stage(&std::env::temp_dir()).unwrap();
-        let root = stage.0.clone();
-        request_install(root.join("hurg"), |path| {
-            InstalledPack::load(path)
-                .map(|_| ())
-                .map_err(|e| e.to_string())
-        });
-        let start = Instant::now();
-        loop {
-            match current() {
-                Phase::Installed => break,
-                Phase::Error { detail } => panic!("{detail}"),
-                _ => assert!(
-                    start.elapsed() < Duration::from_secs(900),
-                    "download timed out"
-                ),
+        let png: &[u8] = include_bytes!("../../../assets/noteskins/dance/cel/_mine tex.png");
+        let source = archive(&stage, &[
+            ("Cel - Workshop/NoteSkin.lua", b"return {}"),
+            ("Cel - Workshop/metrics.ini", b"[Global]\nFallbackNoteSkin=common\n"),
+            ("Cel - Workshop/Down Tap Note.png", png),
+            ("Metal - Workshop/NoteSkin.lua", b"return {}"),
+            ("Metal - Workshop/metrics.ini", b"[Global]\nFallbackNoteSkin=common\n"),
+            ("Metal - Workshop/Down Tap Note.png", png),
+            ("Customizations/Arrows/Cel - Generated/Down Tap Note.png", png),
+            ("Customizations/Arrows/Metal - Generated/Down Tap Note.png", png),
+            ("LICENSE", b"generated fixture"), ("README.md", b"generated fixture"),
+        ]);
+        let bytes = fs::read(source).unwrap();
+        let expected: [u8; 32] = Sha256::digest(&bytes).into();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let asset = ReleaseAsset { name: "workshop.zip".into(),
+            browser_download_url: format!("http://{}/source.zip", listener.local_addr().unwrap()),
+            size: bytes.len() as u64, digest: None };
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+            let mut request = Vec::new(); let mut byte = [0];
+            while !request.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut byte).unwrap(); request.push(byte[0]);
+                assert!(request.len() < 8192);
             }
-            std::thread::sleep(Duration::from_millis(100));
-        }
+            assert!(request.starts_with(b"GET /source.zip HTTP/1.1\r\n"));
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", bytes.len()).unwrap();
+            stream.write_all(&bytes).unwrap();
+        });
+        let root = stage.0.join("install-root");
+        fs::create_dir(&root).unwrap();
         let target = root.join("hurg");
+        install_from(&target, &asset, &expected).unwrap();
+        server.join().unwrap();
         let pack = InstalledPack::load(&target).unwrap();
         assert_eq!(
             pack.manifest
@@ -613,7 +631,7 @@ mod tests {
                 .iter()
                 .map(|s| s.options.len())
                 .sum::<usize>(),
-            1049
+            4
         );
         assert!(target.join("LICENSE").is_file());
         assert!(target.join("README.md").is_file());

@@ -81,7 +81,26 @@ impl PerfControl {
 pub struct Measurement {
     started: Instant,
     control: Option<PerfControl>,
+    cycles: Option<u64>,
 }
+
+#[cfg(windows)]
+fn thread_cycles() -> Option<u64> {
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentThread() -> *mut std::ffi::c_void;
+        fn QueryThreadCycleTime(thread: *mut std::ffi::c_void, cycles: *mut u64) -> i32;
+    }
+    let mut cycles = 0;
+    // SAFETY: the pseudo-handle identifies this live thread and the output
+    // pointer is valid for the synchronous call.
+    assert_ne!(unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut cycles) }, 0);
+    Some(cycles)
+}
+
+#[cfg(not(windows))]
+fn thread_cycles() -> Option<u64> { None }
+
 impl Measurement {
     pub fn start() -> Self {
         let mut control = PerfControl::open();
@@ -90,13 +109,15 @@ impl Measurement {
         ALLOCS.store(0, Relaxed);
         REALLOCS.store(0, Relaxed);
         BYTES.store(0, Relaxed);
-        Self { started: Instant::now(), control }
+        Self { cycles: thread_cycles(), started: Instant::now(), control }
     }
     pub fn finish(mut self) -> serde_json::Value {
         let elapsed = self.started.elapsed();
+        let cycles = self.cycles.zip(thread_cycles()).map(|(start, end)| end - start);
         ENABLED.store(false, Relaxed);
         if let Some(control) = &mut self.control { control.command(b"disable\n"); }
         serde_json::json!({"wall_seconds":elapsed.as_secs_f64(),
+            "thread_cpu_cycles":cycles,
             "allocations":ALLOCS.load(Relaxed),"reallocations":REALLOCS.load(Relaxed),
             "allocated_bytes":BYTES.load(Relaxed),
             "allocation_scope":"current process, all threads; Rust GlobalAlloc including mlua; native malloc excluded"})

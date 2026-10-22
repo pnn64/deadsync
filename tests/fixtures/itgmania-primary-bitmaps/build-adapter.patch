@@ -1,0 +1,79 @@
+--- harness/build.rs
++++ adapter/build.rs
+@@ -170,6 +170,9 @@
+         .map(PathBuf::from)
+         .unwrap_or_else(|| manifest.join("vendor/itgmania"));
+     let root = manifest.join(root);
++    println!("cargo:rerun-if-env-changed=ITGMANIA_CODEC_ROOT");
++    let codec_root = env::var_os("ITGMANIA_CODEC_ROOT").map(PathBuf::from)
++        .unwrap_or_else(|| root.clone());
+     require_tree(&root);
+     watch_git_metadata(&root);
+     println!("cargo:rustc-env=ITGMANIA_BUILD_ROOT={}", root.display());
+@@ -220,7 +223,7 @@
+     write_screen_lifecycle(&root, &out);
+     write_lua_binding(&root, &out);
+     prepare_texture_sources(&root, &out);
+-    compile_image_deps(&root, &out, &target_os);
++    compile_image_deps(&codec_root, &out, &target_os);
+     write_compat_headers(&out, &target_os);
+     if target_os == "windows" {
+         prepare_pcre(&root, &out);
+@@ -275,20 +278,31 @@
+     }
+ 
+     for relative in ITG_SOURCES {
+-        build.file(root.join(relative));
++        let image_loader = matches!(*relative, "src/RageSurface_Load_PNG.cpp" |
++            "src/RageSurface_Load_GIF.cpp" | "src/RageSurface_Load_BMP.cpp" | "src/RageSurface_Load_JPEG.cpp");
++        build.file(if image_loader { codec_root.join(relative) } else { root.join(relative) });
++    }
++    if codec_root.join("src/RageSurface_Load_STB.cpp").is_file() {
++        build.include(codec_root.join("extern"))
++            .include(codec_root.join("extern/stb"))
++            .file(codec_root.join("src/RageSurface_Load_STB.cpp"));
+     }
+     build.compile("itgmania_oracle");
+     println!("cargo:rustc-link-search=native={}", out.display());
+-    println!("cargo:rustc-link-lib=static=itgmania_png");
+-    println!("cargo:rustc-link-lib=static=itgmania_zlib");
+-    println!(
+-        "cargo:rustc-link-lib=static={}",
+-        if target_os == "windows" {
+-            "jpeg-static"
+-        } else {
+-            "jpeg"
+-        }
+-    );
++    if codec_root.join("src/RageSurface_Load_STB.cpp").is_file() {
++        println!("cargo:rustc-link-lib=static=itgmania_stb");
++    } else {
++        println!("cargo:rustc-link-lib=static=itgmania_png");
++        println!("cargo:rustc-link-lib=static=itgmania_zlib");
++        println!(
++            "cargo:rustc-link-lib=static={}",
++            if target_os == "windows" {
++                "jpeg-static"
++            } else {
++                "jpeg"
++            }
++        );
++    }
+ 
+     compile_audio_deps(&root, &out);
+     compile_bundled_lua(&root, &target_os);
+@@ -307,6 +321,14 @@
+ // Use the pinned codec sources and native methods. Zlib's CMake build renames
+ // a source header, so compile it directly to keep the reference tree untouched.
+ fn compile_image_deps(root: &Path, out: &Path, target_os: &str) {
++    if root.join("src/RageSurface_Load_STB.cpp").is_file() {
++        cc::Build::new().cargo_metadata(false).warnings(false)
++            .include(root.join("extern"))
++            .include(root.join("extern/stb"))
++            .file(root.join("extern/stb_image.c"))
++            .compile("itgmania_stb");
++        return;
++    }
+     let png = root.join("extern/libpng");
+     let zlib = root.join("extern/zlib");
+     let jpeg = root.join("extern/libjpeg-turbo");

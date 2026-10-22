@@ -18,11 +18,16 @@ use std::{
 #[path = "interactive.rs"]
 mod interactive;
 
+#[path = "../support/song_lua_source_identity.rs"]
+mod source_identity;
+
 fn native_host_clock_inputs(trace: &Value) -> Result<Vec<deadsync_song_lua::SongLuaHostClockInput>, String> {
     let Some(inputs) = trace.get("host_clock_inputs") else { return Ok(Vec::new()); };
     inputs.as_array().ok_or("native host clock inputs must be an array")?.iter().map(|input| {
         let clock = input["clock"].as_str().ok_or("host clock domain is missing")?;
-        if !matches!(clock, "GetTimeSinceStart" | "Year" | "MonthOfYear" | "DayOfMonth" | "DayOfYear" | "Hour" | "Minute" | "Second") {
+        if !matches!(clock, "GetTimeSinceStart" | "Year" | "MonthOfYear" | "DayOfMonth" | "DayOfYear" | "Hour" | "Minute" | "Second"
+            | "ArrowEffects.GetXPos" | "ArrowEffects.GetYPos" | "ArrowEffects.GetZPos" | "ArrowEffects.GetAlpha" | "ArrowEffects.GetGlow"
+            | "ArrowEffects.GetRotationX" | "ArrowEffects.GetRotationY" | "ArrowEffects.GetRotationZ" | "ArrowEffects.GetZoom" | "ArrowEffects.GetYOffset") {
             return Err(format!("unsupported external host clock {clock}"));
         }
         let value = number(input, "value")?;
@@ -956,7 +961,10 @@ return Def.Actor { OnCommand=function()
     local children = header:GetChildren()
     assert(children[''] and children.HeaderText)
     assert(children.HeaderText:GetX() == 10 and children.HeaderText:GetY() == 15)
+    assert(children.HeaderText:GetText() == '', 'missing native HeaderText remains empty')
     assert(math.abs(children.HeaderText:GetTweenTimeLeft() - 0.43) < 0.00001)
+    assert(screen:GetChild('PlayerOptionsP1'):GetText():find('Overhead', 1, true),
+        'hidden engine options text is initialized before authored actors')
     assert(header:GetTweenTimeLeft() == math.huge)
     -- Quad inherits Sprite's Lua binding in ITGmania.
     assert(tostring(footer):match('Sprite') and footer:GetY() == 32,
@@ -1613,7 +1621,7 @@ end }}
         let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
         let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
         let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
-            GameplayViewport::default(), GameplaySession::default(), GameplayConfig { machine_pack_ini_offsets: pack_offsets, machine_default_sync_pref: sync, ..Default::default() },
+            GameplayViewport::default(), GameplaySession::default(), GameplayConfig { global_offset_seconds: 0.0, machine_pack_ini_offsets: pack_offsets, machine_default_sync_pref: sync, ..Default::default() },
             5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"),
             None, None, None, None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2],
             false, None, None, [0; 2], Default::default(), Default::default());
@@ -1660,7 +1668,7 @@ end }}
             let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
             let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
             let mut state = gameplay::init(song, [chart.clone(), chart], [payload.clone(), payload],
-                GameplayViewport::default(), GameplaySession::default(), GameplayConfig::default(),
+                GameplayViewport::default(), GameplaySession::default(), GameplayConfig { global_offset_seconds: 0.0, ..Default::default() },
                 5, 1.0, scroll, profiles, None, None, None, Arc::from("EVENT"), None, None, None,
                 None, None, [deadsync_gameplay::CourseLifeConfig::Bar; 2], false, None, None,
                 [0; 2], Default::default(), Default::default());
@@ -1949,6 +1957,33 @@ return Def.ActorFrame {{
     }
 
     #[test]
+    fn gameplay_attack_start_now_uses_prior_player_position() {
+        let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 24).collect::<Vec<_>>().join(",\n");
+        let mut state = owned_judgment_control_with_attacks("attack-start-now", &notes, r#"
+local wrote=false
+return Def.ActorFrame { OnCommand=function(self)
+ self:sleep(9999) -- keep the foreground alive across the attack boundary
+ self:SetUpdateFunction(function()
+  local ps=GAMESTATE:GetPlayerState(PLAYER_1)
+  if GAMESTATE:GetCurMusicSeconds() >= 0 and not wrote then
+   ps:SetPlayerOptions('ModsLevel_Song','1.5x')
+   wrote=true
+  elseif wrote then
+   assert(math.abs(ps:GetPlayerOptions('ModsLevel_Song'):XMod()-1.8) < 1e-6,
+    'start-now attack activates after the first positive-position Song write')
+   MESSAGEMAN:Broadcast('StartNowAttackRebuilt')
+  end
+ end)
+end }
+"#, 0.0, "TIME=-10000:LEN=10000:MODS=*1000 1.8x");
+        assert_eq!(state.gameplay.mods.attacks.option_windows[0][0].start_second, 0.0);
+        update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
+        update_judgment_control(&mut state, 20_000_000, 1_020_000_000);
+        let output = update_judgment_control(&mut state, 40_000_000, 1_040_000_000);
+        assert!(output.source_broadcasts.iter().any(|event| event.name == "StartNowAttackRebuilt"));
+    }
+
+    #[test]
     fn gameplay_chart_attack_rebuilds_song_options() {
         let notes = std::iter::repeat_n("1000\n0000\n0000\n0000\n", 24).collect::<Vec<_>>().join(",\n");
         let mut state = owned_judgment_control_with_attacks("attack-option-levels", &notes, r#"
@@ -1965,7 +2000,7 @@ return Def.ActorFrame {
             local seconds = GAMESTATE:GetCurMusicSeconds()
             assert(p1:GetPlayerOptions('ModsLevel_Song') == song, 'option object is retained')
             assert(p2:GetPlayerOptions('ModsLevel_Song'):Drunk() == 0.5, 'disabled P2 has no attack')
-            if seconds > 2.81 then
+            if seconds > 3.5 then
                 assert(song:Drunk() == 0 and song:Tornado() == 0 and song:Tipsy() == 0,
                     'chart attack boundary rebuilds Song from Stage')
                 assert(song:Dark() == 0.25, 'Stage options survive the rebuild')
@@ -1984,7 +2019,10 @@ return Def.ActorFrame {
         update_judgment_control(&mut state, 2_000_000_000, 3_000_000_000);
         assert!(!state.gameplay.mods.attacks.cleared_for_outro,
             "control ended before attack: last={}", state.gameplay.source.song.precise_last_second());
-        for seconds in [3_i64, 4] {
+        let before = update_judgment_control(&mut state, 3_000_000_000, 4_000_000_000);
+        assert!(!before.source_broadcasts.iter().any(|event| event.name == "AttackOptionsRebuilt"),
+            "native GameState attack update still sees the prior two-second position");
+        for seconds in [4_i64, 5] {
             let output = update_judgment_control(&mut state, seconds * 1_000_000_000, (seconds as u64 + 1) * 1_000_000_000);
             assert!(output.source_broadcasts.iter().any(|event| event.name == "AttackOptionsRebuilt"),
                 "music={} output={output:?}", state.gameplay.clock.song_position.current_music_time_ns);
@@ -1992,14 +2030,89 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn source_broadcast_numbers_use_native_json_integer_ranges() {
+        let mut state = owned_judgment_control("json-number-ranges", "0000\n1000\n0000\n1000\n", r#"
+return Def.Actor {
+    OnCommand=function(self)
+        MESSAGEMAN:Broadcast('NumberRanges', {
+            uint_max=4294967295, beyond_uint=4294967296,
+            int_min=-2147483648, below_int=-2147483649,
+            power=63^9, fractional=0.5
+        })
+        self:sleep(9999)
+    end,
+}
+"#, 0.0);
+        let output = update_judgment_control(&mut state, 0, 1_000_000_000);
+        let event = output.source_broadcasts.iter().find(|event| event.name == "NumberRanges")
+            .expect("authored number broadcast");
+        let params = event.params.as_ref().unwrap().as_ref().unwrap();
+        assert_eq!(params["uint_max"].as_u64(), Some(u32::MAX as u64));
+        assert_eq!(params["int_min"].as_i64(), Some(i32::MIN as i64));
+        for key in ["beyond_uint", "below_int", "power", "fractional"] {
+            assert!(params[key].is_f64(), "{key}: {}", params[key]);
+        }
+    }
+
+    #[cfg(all(target_os = "windows", target_env = "msvc"))]
+    #[test]
+    fn windows_lua_and_rust_math_match_native_static_crt() {
+        // Native ITGmania and a /MT C control produce this one-ulp result.
+        // The OS DLL CRT produces 15633814156853824 instead; a huge sine
+        // argument in authored hashes amplifies that difference into rotations.
+        let base = std::hint::black_box(63.0_f64);
+        let exponent = std::hint::black_box(9.0_f64);
+        let native = 15633814156853822.0_f64;
+        assert_eq!(base.powf(exponent), native);
+        let mut state = owned_judgment_control("static-crt-math", "0000\n1000\n0000\n1000\n", r#"
+return Def.Actor {
+    OnCommand=function(self)
+        local base, exponent = 63, 9
+        local native = 15633814156853822
+        assert(base ^ exponent == native, 'Lua power opcode must use the reference CRT')
+        assert(math.pow(base, exponent) == native, 'Lua math.pow must use the same CRT')
+        assert(math.abs(math.sin(native * native * 99999) - 0.57016524653281098) < 1e-15)
+        self:sleep(9999)
+    end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, 0, 1_000_000_000);
+    }
+
+    #[test]
+    fn gameplay_tween_overflow_finishes_native_queue_and_discards_commands() {
+        let mut state = owned_judgment_control("tween-overflow", "0000\n1000\n0000\n1000\n", r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        for i=1,51 do self:linear(0.5):x(i) end
+        assert(self:GetTweenTimeLeft() == 25.5 and self:GetX() == 0)
+        self:linear(0.5)
+        assert(self:GetTweenTimeLeft() == 0.5 and self:GetX() == 51)
+        self:x(52):finishtweening()
+        for i=1,50 do self:linear(0.5):x(i) end
+        self:queuecommand('Discarded')
+        self:queuecommand('Done')
+        assert(self:GetTweenTimeLeft() == 0 and self:GetX() == 50)
+    end,
+    DiscardedCommand=function() error('overflow must discard prior commands') end,
+    DoneCommand=function(self) self:sleep(9999) end,
+}
+"#, 0.0);
+        update_judgment_control(&mut state, 0, 1_000_000_000);
+        update_judgment_control(&mut state, 1_000_000, 1_001_000_000);
+    }
+
+    #[test]
     fn gameplay_immediate_failure_draws_until_native_blank_transition_finishes() {
         use deadsync_theme_simply_love::SimplyLoveEffect as Effect;
         use deadsync_theme_simply_love::screens::SimplyLoveScreen;
-        let mut state = owned_judgment_control("immediate-failure-draw", "0000\n1000\n0000\n1000\n", r#"
+        for authored_out in [false, true] {
+        let script = r#"
 local player = SCREENMAN:GetTopScreen():GetChild('PlayerP1')
 return Def.ActorFrame {
     OnCommand=function(self)
         self:sleep(9999)
+        -- authored out
         self:SetDrawFunction(function() MESSAGEMAN:Broadcast('FailureDraw') end)
         self:addcommand('JudgmentMessage', function(_, params)
             if params.TapNoteScore == 'TapNoteScore_W1' then
@@ -2011,7 +2124,10 @@ return Def.ActorFrame {
     OffCommand=function() MESSAGEMAN:Broadcast('FailureOff') end,
     EndCommand=function() MESSAGEMAN:Broadcast('FailureEnd') end,
 }
-"#, 0.0);
+"#.replace("-- authored out", if authored_out {
+            "SCREENMAN:GetTopScreen():StartTransitioningScreen('SM_DoNextScreen')"
+        } else { "" });
+        let mut state = owned_judgment_control("immediate-failure-draw", "0000\n1000\n0000\n1000\n", &script, 0.0);
         state.gameplay.setup.config.default_fail_type = deadsync_gameplay::GameplayFailType::Immediate;
         update_judgment_control(&mut state, -250_000_000, 1_000_000_000);
         let time = state.gameplay.chart_runtime.note_time_cache_ns[0] + 1_000_000;
@@ -2036,6 +2152,7 @@ return Def.ActorFrame {
             } else {
                 assert!(matches!(effects.as_slice(), [Effect::NavigateNoFade(SimplyLoveScreen::Evaluation)]));
             }
+        }
         }
     }
 
@@ -4073,6 +4190,40 @@ pub(crate) fn replay_with_command_observer(
     last_seen_video_driver: Option<&str>,
     dynamic_commands: bool,
     scope: Scope,
+    progress: impl FnMut(usize, usize),
+) -> Result<Value, String> {
+    replay_mode(
+        trace,
+        trace_path,
+        simfile,
+        last_seen_video_driver,
+        dynamic_commands,
+        false,
+        scope,
+        progress,
+    )
+}
+
+pub(crate) fn replay_production(
+    trace: &Value,
+    trace_path: &Path,
+    simfile: &Path,
+    scope: Scope,
+    progress: impl FnMut(usize, usize),
+) -> Result<Value, String> {
+    replay_mode(
+        trace, trace_path, simfile, None, false, true, scope, progress,
+    )
+}
+
+fn replay_mode(
+    trace: &Value,
+    trace_path: &Path,
+    simfile: &Path,
+    last_seen_video_driver: Option<&str>,
+    dynamic_commands: bool,
+    production_path: bool,
+    scope: Scope,
     mut progress: impl FnMut(usize, usize),
 ) -> Result<Value, String> {
     // Production resolves song media from an absolute root. Use that same
@@ -4080,6 +4231,7 @@ pub(crate) fn replay_with_command_observer(
     // receives a relative simfile path.
     let absolute_simfile = std::path::absolute(simfile).map_err(|error| error.to_string())?;
     let simfile = absolute_simfile.as_path();
+    let source_identity = source_identity::verify(trace_path, simfile)?;
     validate_capture(&trace)?;
     let autoplay = native_autoplay(&trace)?;
     let session = native_gameplay_session(trace)?;
@@ -4237,6 +4389,9 @@ pub(crate) fn replay_with_command_observer(
     // This is a capture-tool observation contract, not a gameplay input.
     // No native command events, query results or expected values enter the VM.
     context.trace_dynamic_commands = dynamic_commands;
+    // Initial VM configuration is an input; event/query observations remain expectations.
+    context.initial_lua_gc_stopped = trace.pointer("/input/lua_gc_mode")
+        .and_then(Value::as_str) == Some("stopped");
     context.capture_overlay_probe = trace["update_frame_phase"].as_str() == Some("gameplay-overlay-probe");
     let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
         trace, 1, song.background_lua_changes.len())?;
@@ -4244,11 +4399,32 @@ pub(crate) fn replay_with_command_observer(
     // Native ScreenGameplay updates song position before its first Update(0).
     // Defer preparation's placeholder update and run every recorded frame,
     // including zero-delta inputs, through the actual gameplay entry point.
-    assert!(context.defer_initial_live_update, "production preparation must wait for the screen clock");
-    let prepared = deadsync_song_lua::playback::prepare_song_lua(
-        &song, &context, deadsync_assets::song_lua::compile_song_lua,
-        deadsync_assets::song_lua::compile_song_lua_layers,
-    );
+    assert!(context.defer_initial_live_update);
+    let prepared = if production_path {
+        deadsync_shell::gameplay_entry::prepare_song_lua(
+            &song,
+            &charts,
+            std::array::from_fn(|p| &payloads[p].timing),
+            &profiles,
+            &scroll,
+            1.0,
+            viewport,
+            (context.display_width as u32, context.display_height as u32),
+            context.display_aspect_ratio,
+            f32::from(autoplay),
+            &session,
+            &config,
+            &context.video_renderers,
+            context.random_seed,
+        )
+    } else {
+        deadsync_song_lua::playback::prepare_song_lua(
+            &song,
+            &context,
+            deadsync_assets::song_lua::compile_song_lua,
+            deadsync_assets::song_lua::compile_song_lua_layers,
+        )
+    };
     let observe_overlay = trace["update_frame_phase"].as_str() == Some("gameplay-overlay-probe");
     let init_scene = |prepared: deadsync_song_lua::playback::PreparedGameplaySongLua<
         deadsync_assets::noteskin::SpriteSlot,
@@ -4318,10 +4494,10 @@ pub(crate) fn replay_with_command_observer(
 
     let startup = state.take_song_lua_output();
     let startup_scenes = startup
-        .broadcasts
-        .iter()
-        .filter(|(_, name, _)| name == "ScreenChanged")
-        .count();
+            .broadcasts
+            .iter()
+            .filter(|(_, name, _)| name == "ScreenChanged")
+            .count();
     let mut mismatches = Vec::new();
     let mut scene_count = startup_scenes as u64;
     let mut pending_reload = false;
@@ -4352,19 +4528,25 @@ pub(crate) fn replay_with_command_observer(
             return Err("native frame sequence is incomplete".into());
         }
         if pending_reload {
-            let mut scene = state
-                .song_lua
-                .take()
-                .ok_or("reload has no retained Lua scene")?;
-            let (creation_order, factory_coverage) = native_creation_order_with_coverage_for_entries(
-                trace, scene_count + 1, scene.context().background_layer_count)?;
-            runtime_coverage.extend(factory_coverage);
-            scene.set_message_actor_order(creation_order);
-            let prepared = deadsync_song_lua::playback::reload_song_lua(
-                &song,
-                scene,
-                deadsync_assets::song_lua::reload_song_lua,
-            )?;
+            let prepared = {
+                let mut scene = state
+                    .song_lua
+                    .take()
+                    .ok_or("reload has no retained Lua scene")?;
+                let (creation_order, factory_coverage) =
+                    native_creation_order_with_coverage_for_entries(
+                        trace,
+                        scene_count + 1,
+                        scene.context().background_layer_count,
+                    )?;
+                runtime_coverage.extend(factory_coverage);
+                if !production_path { scene.set_message_actor_order(creation_order); }
+                deadsync_song_lua::playback::reload_song_lua(
+                    &song,
+                    scene,
+                    deadsync_assets::song_lua::reload_song_lua,
+                )?
+            };
             state = init_scene(prepared)?;
             let startup = state.take_song_lua_output();
             errors.extend(startup.errors);
@@ -4389,9 +4571,14 @@ pub(crate) fn replay_with_command_observer(
             ));
         }
         let seconds = number(frame, "seconds")?;
-        let delta = number(frame, "delta")?;
+        let captured_delta = number(frame, "delta")?;
+        // The observer records BeforeScreenUpdate at ScreenManager::Update's
+        // entry, before ZeroNextUpdate is consumed. ScreenGameplay also forces
+        // its first actor update to zero after LoadNextSong. Retain the raw
+        // input for validation, but replay the engine's actual screen delta.
+        let delta = if starting_scene { 0.0 } else { captured_delta };
         let wall = number(frame, "wall_seconds")?;
-        if delta < 0.0 || previous_wall.is_some_and(|previous| wall < previous) {
+        if captured_delta < 0.0 || previous_wall.is_some_and(|previous| wall < previous) {
             return Err("invalid native input-clock order".into());
         }
         previous_wall = Some(wall);
@@ -4442,6 +4629,11 @@ pub(crate) fn replay_with_command_observer(
                     .ok_or("missing native option timer input")? as f32;
             }
             if let Some(scene) = state.song_lua.as_mut() { scene.set_option_clock_deltas(deltas); }
+        }
+        if let Some(clocks) = frame.get("arrow_clock_inputs") {
+            let tipsy = std::array::from_fn(|player| clocks["players"][player]["tipsy_seconds"].as_f64());
+            let tan_tipsy = std::array::from_fn(|player| clocks["players"][player]["tan_tipsy_seconds"].as_f64());
+            if let Some(scene) = state.song_lua.as_mut() { scene.set_arrow_clock_inputs(tipsy, tan_tipsy); }
         }
         gameplay::update_with_input(&mut state, delta as f32, snapshot, || host, &mut effects, |state| {
         while let Some(event) = input_events.get(input_cursor) {
@@ -4558,6 +4750,40 @@ pub(crate) fn replay_with_command_observer(
                 scene_count, &mut mismatches, &mut observations)?;
         }
     }
+    if production_path {
+        let interactive = draw_checks.report(input_cursor);
+        let expected_samples = samples
+            .iter()
+            .filter(|s| {
+                matches!(
+                    s["phase"].as_str(),
+                    Some("screen-active" | "progress" | "screen-end" | "gameplay-exit")
+                )
+            })
+            .count();
+        let passed = scope == Scope::Full
+            && used_frames == frames.len()
+            && scene_count == last_scene
+            && checked_samples == expected_samples
+            && input_cursor == input_events.len()
+            && draw_cursor == draw_samples.len()
+            && !draw_samples.is_empty()
+            && mismatches.is_empty()
+            && errors.is_empty()
+            && interactive["draw_mismatches"] == 0;
+        return Ok(
+            json!({"execution_path":"production-live-lua","production_preparation_exercised":true,
+            "source_identity":source_identity,
+            "application_build_exercised":false,"test_support_enabled":true,
+            "retained_lua_vm":true,"production_gameplay_checks_passed":passed,
+            "production_parity_proven":false,"whole_song_parity_proven":false,"pixel_parity_proven":false,
+            "archive_accepted":false,"native_frames":frames.len(),"replayed_frames":used_frames,
+            "replayed_scenes":scene_count,"checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
+            "interactive":interactive,"mismatches":mismatches,"errors":errors,
+            "pending_coverage":["application build without test-support (run song_lua_execution)",
+                "full-song completion","sampled framebuffer pixels","production command/query instrumentation"]}),
+        );
+    }
     if scope != Scope::Full {
         let calls = compare_calls(
             &trace,
@@ -4571,10 +4797,11 @@ pub(crate) fn replay_with_command_observer(
         coverage["pending"].as_array_mut().unwrap()
             .extend(runtime_coverage.iter().map(|gap| json!(gap)));
         let mut report = json!({"diagnostic_only":true,"whole_song_parity_proven":false,"archive_accepted":false,
+            "execution_path":"diagnostic-live-lua","production_preparation_exercised":false,"production_parity_proven":false,
             "scope":match scope { Scope::Entry => "entry", Scope::FirstQuery => "first-point-query",
                 Scope::ThroughSecond(_) => "through-second", Scope::Full => "full" },
             "through_second":match scope { Scope::ThroughSecond(at) => Some(at), _ => None },
-            "native_trace":trace_path,"source_simfile":simfile,
+            "native_trace":trace_path,"source_simfile":simfile,"source_identity":source_identity,
             "native_frames":frames.len(),"replayed_frames":used_frames,"replayed_scenes":scene_count,
             "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
             "mismatches":mismatches,"errors":errors,"lua_requests":requests,
@@ -4665,7 +4892,8 @@ pub(crate) fn replay_with_command_observer(
     coverage["pending"].as_array_mut().unwrap()
         .extend(runtime_coverage.iter().map(|gap| json!(gap)));
     let mut report = json!({"diagnostic_only":false,"whole_song_parity_proven":false,"archive_accepted":false,
-        "source_simfile":simfile,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
+        "execution_path":"diagnostic-live-lua","production_preparation_exercised":false,"production_parity_proven":false,
+        "source_simfile":simfile,"source_identity":source_identity,"native_trace":trace_path,"native_frames":frames.len(),"replayed_frames":used_frames,
         "startup_scenes":startup_scenes,"replayed_scenes":scene_count,"selected_description":state.source.charts[0].description,
         "checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,"mismatches":mismatches,
         "errors":errors,"lua_requests":requests,"native_transition_requests":native_requests,

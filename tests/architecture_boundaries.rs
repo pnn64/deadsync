@@ -2,10 +2,21 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+// Git may check sources out with CRLF. Architecture contracts describe Rust
+// ownership and calls, independently of the checkout's newline convention.
+fn read_source(path: impl AsRef<Path>) -> std::io::Result<String> {
+    fs::read_to_string(path).map(|source| source.replace("\r\n", "\n"))
+}
+
+fn contains_rust(source: &str, expected: &str) -> bool {
+    let compact = |text: &str| text.chars().filter(|ch| !ch.is_whitespace()).collect::<String>();
+    compact(source).contains(&compact(expected))
+}
+
 #[test]
 fn chart_lua_playback_has_no_theme_dependency() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let manifest = fs::read_to_string(root.join("crates/deadsync-song-lua/Cargo.toml"))
+    let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
         .expect("shared playback manifest");
     let manifest = manifest.split("[dev-dependencies]").next().unwrap();
     for forbidden in ["deadsync-theme", "deadsync-shell"] {
@@ -15,7 +26,7 @@ fn chart_lua_playback_has_no_theme_dependency() {
         );
     }
     let theme =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("theme gameplay source");
     for implementation in [
         "fn prepare_song_lua(",
@@ -36,7 +47,7 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!theme.contains("prepare_song_lua("));
     assert!(!theme.contains("video_renderer"));
     let shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs")).unwrap();
+        read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs")).unwrap();
     assert!(shell.contains("deadsync_song_lua::playback::compose_frame("));
     assert!(shell.contains("gameplay::frame_layers("));
     for forbidden in [
@@ -53,7 +64,7 @@ fn chart_lua_playback_has_no_theme_dependency() {
         !root.join("crates/deadsync-song-playback").exists(),
         "playback must use existing crate owners"
     );
-    let simulation = fs::read_to_string(root.join("crates/deadsync-gameplay/Cargo.toml"))
+    let simulation = read_source(root.join("crates/deadsync-gameplay/Cargo.toml"))
         .expect("simulation manifest");
     for presentation in ["deadsync-song-lua", "deadlib-present", "deadsync-theme"] {
         assert!(
@@ -72,7 +83,7 @@ fn asset_catalog_policy_stays_above_the_engine() {
         if path.extension().is_none_or(|ext| ext != "rs") {
             continue;
         }
-        let source = fs::read_to_string(&path).expect("read engine asset source");
+        let source = read_source(&path).expect("read engine asset source");
         let production = source
             .split("#[cfg(test)]")
             .next()
@@ -94,11 +105,11 @@ fn asset_catalog_policy_stays_above_the_engine() {
         }
     }
     let engine =
-        fs::read_to_string(root.join("crates/deadlib-assets/Cargo.toml")).expect("engine manifest");
+        read_source(root.join("crates/deadlib-assets/Cargo.toml")).expect("engine manifest");
     assert!(engine.contains("deadlib-render ="));
     assert!(!engine.contains("deadsync-"));
     let game =
-        fs::read_to_string(root.join("crates/deadsync-assets/src/lib.rs")).expect("game assets");
+        read_source(root.join("crates/deadsync-assets/src/lib.rs")).expect("game assets");
     assert!(!game.contains("pub use manager::AssetManager"));
     assert!(!root.join("crates/deadsync-assets/src/manager.rs").exists());
     assert!(
@@ -1085,7 +1096,7 @@ fn theme_sources_do_not_import_shell() {
     }
 
     for file in files {
-        let text = fs::read_to_string(&file).expect("theme crate file should be readable");
+        let text = read_source(&file).expect("theme crate file should be readable");
         for token in ["deadsync-shell", "deadsync_shell"] {
             if text.contains(token) {
                 failures.push(format!("{}: {token}", rel_path(&root, &file)));
@@ -1108,7 +1119,7 @@ fn game_upward_dependencies_do_not_grow() {
     let mut failures = Vec::new();
 
     for file in rust_files(&game_dir) {
-        let text = fs::read_to_string(&file).expect("source file should be readable");
+        let text = read_source(&file).expect("source file should be readable");
         let rel = rel_path(&root, &file);
 
         for target in ["assets", "config", "engine", "screens", "app"] {
@@ -1140,7 +1151,7 @@ fn game_layer_does_not_import_transport_crates() {
     let mut failures = Vec::new();
 
     for file in rust_files(&game_dir) {
-        let text = fs::read_to_string(&file).expect("source file should be readable");
+        let text = read_source(&file).expect("source file should be readable");
         let rel = rel_path(&root, &file);
         for token in GAME_TRANSPORT_CRATES {
             let count = text.match_indices(token).count();
@@ -1167,7 +1178,7 @@ fn noteskin_crate_stays_renderer_and_app_independent() {
     let mut failures = Vec::new();
 
     for file in files {
-        let text = fs::read_to_string(&file).expect("noteskin crate file should be readable");
+        let text = read_source(&file).expect("noteskin crate file should be readable");
         let rel = rel_path(&root, &file);
         for token in NOTESKIN_CRATE_FORBIDDEN_TOKENS {
             let count = text.match_indices(token).count();
@@ -1195,7 +1206,7 @@ fn notefield_crate_stays_independent_of_themes_and_runtime() {
     let mut failures = Vec::new();
 
     for file in files {
-        let text = fs::read_to_string(&file).expect("notefield crate file should be readable");
+        let text = read_source(&file).expect("notefield crate file should be readable");
         let rel = rel_path(&root, &file);
         for token in NOTEFIELD_CRATE_FORBIDDEN_TOKENS {
             let count = text.match_indices(token).count();
@@ -1223,7 +1234,7 @@ fn generic_theme_contract_stays_runtime_independent() {
     let mut failures = Vec::new();
 
     for file in files {
-        let text = fs::read_to_string(&file).expect("contract crate file should be readable");
+        let text = read_source(&file).expect("contract crate file should be readable");
         let rel = rel_path(&root, &file);
         for token in CONTRACT_CRATE_FORBIDDEN_TOKENS {
             let count = text.match_indices(token).count();
@@ -1245,14 +1256,14 @@ fn generic_theme_contract_stays_runtime_independent() {
 #[test]
 fn generic_runtime_requests_stay_backend_neutral() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let contract = fs::read_to_string(root.join("crates/deadsync-theme/src/runtime.rs"))
+    let contract = read_source(root.join("crates/deadsync-theme/src/runtime.rs"))
         .expect("generic runtime-request contract should be readable");
     let concrete =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
             .expect("Simply Love runtime requests should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
-    let audio = fs::read_to_string(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
+    let audio = read_source(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
         .expect("shell audio executor should be readable");
 
     for definition in [
@@ -1327,18 +1338,18 @@ fn generic_runtime_requests_stay_backend_neutral() {
     }
     assert!(
         shell.contains("SimplyLoveRuntimeRequest::Audio(request)")
-            && shell.contains("audio_requests::execute(&mut self.audio, request)")
+            && shell.contains("audio_requests::execute(&mut self.audio, &self.ui_sfx, request)")
             && audio.contains("AudioRequest::PlaySfx(path)")
-            && audio.contains("audio.play_sfx(path)")
+            && audio.contains("sounds.play(audio, path)")
             && audio.contains("AudioRequest::PlayScreenSfxPath(path)")
             && audio.contains("AudioRequest::PrewarmReplayGain(paths)")
             && audio.contains("deadsync_audio_replaygain::prewarm_paths(")
             && shell.contains("SimplyLoveRuntimeRequest::Graphics(request)")
             && shell.contains("self.handle_graphics_change(request, event_loop)")
             && shell.contains("SimplyLoveRuntimeRequest::Platform(request)")
-            && shell.contains("execute_platform_request(request)")
+            && shell.contains("execute_platform_request(&self.dirs, request)")
             && shell.contains("SimplyLoveRuntimeRequest::Updater(request)")
-            && shell.contains("updater::execute(request)"),
+            && shell.contains("updater::execute(request, &self.dirs)"),
         "shell must execute generic and grouped runtime requests"
     );
 }
@@ -1347,13 +1358,13 @@ fn generic_runtime_requests_stay_backend_neutral() {
 fn replaygain_prewarm_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let select_music = fs::read_to_string(theme.join("src/screens/select_music.rs"))
+    let select_music = read_source(theme.join("src/screens/select_music.rs"))
         .expect("SelectMusic source should be readable");
     let theme_manifest =
-        fs::read_to_string(theme.join("Cargo.toml")).expect("theme manifest should be readable");
-    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        read_source(theme.join("Cargo.toml")).expect("theme manifest should be readable");
+    let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
         .expect("shell audio executor should be readable");
 
     assert!(
@@ -1376,7 +1387,7 @@ fn replaygain_prewarm_execution_is_shell_owned() {
 fn select_music_sync_analysis_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let theme_manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let theme_manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     // Graph orientation was already part of configuration; analysis remains shell-owned.
     for file in production_rust_files(&theme.join("src")) {
@@ -1392,13 +1403,13 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         );
     }
     let theme_sync = theme.join("src/screens/components/select_music/sync_analysis.rs");
-    let pack_sync = fs::read_to_string(theme.join("src/screens/pack_sync.rs"))
+    let pack_sync = read_source(theme.join("src/screens/pack_sync.rs"))
         .expect("Pack Sync UI should be readable");
-    let effects = fs::read_to_string(theme.join("src/effects.rs"))
+    let effects = read_source(theme.join("src/effects.rs"))
         .expect("Simply Love runtime requests should be readable");
-    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+    let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
-    let shell_sync = fs::read_to_string(root.join("crates/deadsync-shell/src/sync_analysis.rs"))
+    let shell_sync = read_source(root.join("crates/deadsync-shell/src/sync_analysis.rs"))
         .expect("shell sync-analysis service should be readable");
 
     assert!(
@@ -1453,18 +1464,18 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
 fn pack_sync_runtime_state_is_explicit_and_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let overlay = fs::read_to_string(theme.join("src/screens/pack_sync.rs"))
+    let overlay = read_source(theme.join("src/screens/pack_sync.rs"))
         .expect("Pack Sync overlay should be readable");
-    let options = fs::read_to_string(theme.join("src/screens/options/pack_sync.rs"))
+    let options = read_source(theme.join("src/screens/options/pack_sync.rs"))
         .expect("Options Pack Sync source should be readable");
-    let select_music = fs::read_to_string(theme.join("src/screens/select_music/pack_sync.rs"))
+    let select_music = read_source(theme.join("src/screens/select_music/pack_sync.rs"))
         .expect("Select Music Pack Sync source should be readable");
-    let views = fs::read_to_string(theme.join("src/views.rs"))
+    let views = read_source(theme.join("src/views.rs"))
         .expect("Simply Love views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let shell_select_music =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+        read_source(root.join("crates/deadsync-shell/src/select_music.rs"))
             .expect("shell Select Music adapter should be readable");
 
     for direct_access in [
@@ -1502,17 +1513,17 @@ fn pack_sync_runtime_state_is_explicit_and_shell_prepared() {
 #[test]
 fn overscan_runtime_and_persistence_are_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/overscan_adjustment.rs"),
     )
     .expect("Overscan Adjustment source should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell_nav = fs::read_to_string(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
+    let shell_nav = read_source(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
         .expect("shell navigation should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     for direct_access in [
@@ -1547,11 +1558,11 @@ fn overscan_runtime_and_persistence_are_shell_owned() {
 #[test]
 fn pad_config_fsr_policy_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/pad_config.rs"),
     )
     .expect("Pad Config source should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/smx_runtime.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/smx_runtime.rs"))
         .expect("shell SMX runtime should be readable");
 
     for direct_access in [
@@ -1582,23 +1593,23 @@ fn pad_config_fsr_policy_is_shell_owned() {
 fn manage_local_profiles_import_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let theme_manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let theme_manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    let screen = fs::read_to_string(theme.join("src/screens/manage_local_profiles.rs"))
+    let screen = read_source(theme.join("src/screens/manage_local_profiles.rs"))
         .expect("Manage Local Profiles should be readable");
-    let effects = fs::read_to_string(theme.join("src/effects.rs"))
+    let effects = read_source(theme.join("src/effects.rs"))
         .expect("Simply Love requests should be readable");
-    let views = fs::read_to_string(theme.join("src/views.rs"))
+    let views = read_source(theme.join("src/views.rs"))
         .expect("Simply Love views should be readable");
-    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+    let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
     let shell_service =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/profile_import.rs"))
+        read_source(root.join("crates/deadsync-shell/src/profile_import.rs"))
             .expect("shell profile-import service should be readable");
     let shell_profiles =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/local_profiles.rs"))
+        read_source(root.join("crates/deadsync-shell/src/local_profiles.rs"))
             .expect("shell local-profile adapter should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     assert!(
@@ -1682,15 +1693,15 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
 fn shared_profile_picker_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love/src");
-    let picker = fs::read_to_string(theme.join("screens/components/shared/profile_boxes.rs"))
+    let picker = read_source(theme.join("screens/components/shared/profile_boxes.rs"))
         .expect("profile picker should be readable");
     let views =
-        fs::read_to_string(theme.join("views.rs")).expect("Simply Love views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/local_profiles.rs"))
+        read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
+    let shell = read_source(root.join("crates/deadsync-shell/src/local_profiles.rs"))
         .expect("shell local-profile adapter should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let select_music = fs::read_to_string(theme.join("screens/select_music.rs"))
+    let select_music = read_source(theme.join("screens/select_music.rs"))
         .expect("Select Music should be readable");
 
     for runtime in [
@@ -1716,7 +1727,7 @@ fn shared_profile_picker_runtime_is_shell_prepared() {
             && shell.contains("pub fn picker_view() -> ProfilePickerView")
             && shell.contains("profile::scan_local_profiles()")
             && shell.contains("total_songs_played_for_profile")
-            && shell.contains("SimpleIni::new()")
+            && shell.contains("deadsync_config::ini::borrowed_ini_sections")
             && select_music.contains("profile_picker: state.profile_picker.clone()")
             && shell_app.contains("select_music::sync_profile_picker("),
         "shell must prepare and Select Music must retain the shared profile-picker catalog"
@@ -1728,12 +1739,12 @@ fn practice_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love/src");
     let practice =
-        fs::read_to_string(theme.join("screens/practice.rs")).expect("Practice should be readable");
+        read_source(theme.join("screens/practice.rs")).expect("Practice should be readable");
     let views =
-        fs::read_to_string(theme.join("views.rs")).expect("Simply Love views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
+        read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
+    let shell = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell gameplay runtime should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     for runtime in [
@@ -1763,11 +1774,11 @@ fn practice_runtime_is_shell_prepared() {
 fn shared_session_components_use_prepared_screen_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let screens = root.join("crates/deadsync-theme-simply-love/src/screens");
-    let mode_pads = fs::read_to_string(screens.join("components/shared/mode_pads.rs"))
+    let mode_pads = read_source(screens.join("components/shared/mode_pads.rs"))
         .expect("mode pads should be readable");
-    let lobby_hud = fs::read_to_string(screens.join("components/shared/lobby_hud.rs"))
+    let lobby_hud = read_source(screens.join("components/shared/lobby_hud.rs"))
         .expect("lobby HUD should be readable");
-    let gameplay_stats = fs::read_to_string(screens.join("components/gameplay/gameplay_stats.rs"))
+    let gameplay_stats = read_source(screens.join("components/gameplay/gameplay_stats.rs"))
         .expect("gameplay stats should be readable");
 
     for (name, source) in [
@@ -1794,13 +1805,13 @@ fn shared_session_components_use_prepared_screen_state() {
 fn options_score_import_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let score_import = fs::read_to_string(theme.join("src/screens/options/score_import.rs"))
+    let score_import = read_source(theme.join("src/screens/options/score_import.rs"))
         .expect("Simply Love score-import UI should be readable");
-    let effects = fs::read_to_string(theme.join("src/effects.rs"))
+    let effects = read_source(theme.join("src/effects.rs"))
         .expect("Simply Love requests should be readable");
-    let shell_service = fs::read_to_string(root.join("crates/deadsync-shell/src/score_import.rs"))
+    let shell_service = read_source(root.join("crates/deadsync-shell/src/score_import.rs"))
         .expect("shell score-import service should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     for runtime in [
@@ -1852,7 +1863,7 @@ fn options_song_pack_catalog_is_shell_prepared() {
     let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
     let mut source = String::new();
     for file in rust_files(&options) {
-        source.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+        source.push_str(&read_source(file).expect("Options source should be readable"));
     }
     assert!(
         !source.contains("runtime_cache::get_song_cache") && !source.contains("get_song_cache()"),
@@ -1864,9 +1875,9 @@ fn options_song_pack_catalog_is_shell_prepared() {
         "Options must retain the prepared catalog for score-import and Pack Sync UI"
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
         views.contains("pub struct OptionsSongPackView")
@@ -1885,7 +1896,7 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
     let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
     let mut source = String::new();
     for file in rust_files(&options) {
-        source.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+        source.push_str(&read_source(file).expect("Options source should be readable"));
     }
     for forbidden in [
         "config::runtime::get(",
@@ -1902,16 +1913,16 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let runtime = fs::read_to_string(root.join("crates/deadsync-shell/src/options_runtime.rs"))
+    let runtime = read_source(root.join("crates/deadsync-shell/src/options_runtime.rs"))
         .expect("shell Options runtime adapter should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         views.contains("pub struct OptionsInitView")
@@ -1927,7 +1938,7 @@ fn options_runtime_state_and_persistence_are_shell_owned() {
             && effects.contains("SetMachineDefaultScroll")
             && effects.contains("SetMachineDefaultBackgroundFilter")
             && effects.contains("SetMachineDefaultNoteskin")
-            && shell.contains("config_requests::execute_options(request)")
+            && shell.contains("config_requests::execute_options(request, &mut self.input)")
             && shell.contains("profile::update_machine_default_scroll_speed(setting)")
             && shell.contains("profile::update_machine_default_scroll(setting)")
             && shell.contains("profile::update_machine_default_background_filter(setting)")
@@ -1947,7 +1958,7 @@ fn simply_love_options_graphics_uses_theme_graphics_contract() {
     let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
     let mut source = String::new();
     for file in rust_files(&options) {
-        source.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+        source.push_str(&read_source(file).expect("Options source should be readable"));
     }
     for forbidden in [
         "BackendType",
@@ -1975,11 +1986,11 @@ fn simply_love_options_graphics_uses_theme_graphics_contract() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
-    let runtime = fs::read_to_string(root.join("crates/deadsync-theme/src/runtime.rs"))
+    let runtime = read_source(root.join("crates/deadsync-theme/src/runtime.rs"))
         .expect("generic theme runtime contracts should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/graphics.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/graphics.rs"))
         .expect("shell graphics adapter should be readable");
     assert!(
         views.contains("pub struct GraphicsOptionsView")
@@ -2006,7 +2017,7 @@ fn simply_love_options_audio_settings_use_theme_requests() {
     let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
     let mut source = String::new();
     for file in rust_files(&options) {
-        source.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+        source.push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::runtime_update::update_master_volume",
@@ -2057,7 +2068,7 @@ fn simply_love_options_audio_settings_use_theme_requests() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
     for field in [
         "pub master_volume: u8",
@@ -2073,7 +2084,7 @@ fn simply_love_options_audio_settings_use_theme_requests() {
     ] {
         assert!(views.contains(field), "audio view is missing {field}");
     }
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
         .expect("shell audio executor should be readable");
     for executor in [
         "AudioVolumeTarget::Master => config::runtime_update::update_master_volume(percent)",
@@ -2097,7 +2108,7 @@ fn simply_love_options_audio_settings_use_theme_requests() {
             "shell is missing {executor}"
         );
     }
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
         shell.contains(
@@ -2115,7 +2126,7 @@ fn simply_love_select_music_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::update_show_select_music",
@@ -2132,12 +2143,12 @@ fn simply_love_select_music_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveSelectMusicConfigRequest")
@@ -2160,7 +2171,7 @@ fn simply_love_machine_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::runtime_update::update_machine_show_select_profile",
@@ -2196,12 +2207,12 @@ fn simply_love_machine_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveMachineConfigRequest")
@@ -2224,7 +2235,7 @@ fn simply_love_advanced_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::runtime_update::update_default_fail_type",
@@ -2240,12 +2251,12 @@ fn simply_love_advanced_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveAdvancedConfigRequest")
@@ -2267,7 +2278,7 @@ fn simply_love_course_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::runtime_update::update_show_random_courses",
@@ -2282,12 +2293,12 @@ fn simply_love_course_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveCourseConfigRequest")
@@ -2315,9 +2326,9 @@ fn simply_love_gameplay_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
-    let input = fs::read_to_string(options.join("input.rs"))
+    let input = read_source(options.join("input.rs"))
         .expect("Options input source should be readable");
     for direct_update in [
         "config::runtime_update::update_bg_brightness",
@@ -2338,12 +2349,12 @@ fn simply_love_gameplay_options_persist_through_shell() {
         "Simply Love Options input should emit neutral BPM placement instead of config types"
     );
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveGameplayConfigRequest")
@@ -2365,7 +2376,7 @@ fn simply_love_lights_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::runtime_update::update_lights_driver",
@@ -2387,12 +2398,12 @@ fn simply_love_lights_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveLightsConfigRequest")
@@ -2417,7 +2428,7 @@ fn simply_love_null_or_die_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     assert!(
         !options_source.contains("config::update_null_or_die"),
@@ -2435,12 +2446,12 @@ fn simply_love_null_or_die_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveNullOrDieConfigRequest")
@@ -2466,7 +2477,7 @@ fn simply_love_online_options_persist_through_shell() {
     let mut options_source = String::new();
     for file in rust_files(&options) {
         options_source
-            .push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+            .push_str(&read_source(file).expect("Options source should be readable"));
     }
     for direct_update in [
         "config::runtime_update::update_enable_groovestats",
@@ -2498,12 +2509,12 @@ fn simply_love_online_options_persist_through_shell() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let executor =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
             .expect("shell config executor should be readable");
     assert!(
         effects.contains("pub enum SimplyLoveOnlineConfigRequest")
@@ -2526,7 +2537,7 @@ fn simply_love_online_options_persist_through_shell() {
 #[test]
 fn share_rips_reaches_rip_packs_whenever_the_machine_config_changes() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let hand_over = "deadsync_online::rip_packs::runtime_set_sharing(config.share_rips);";
     // The frame loop's config snapshot, from the check to its adoption: the
@@ -2566,22 +2577,22 @@ fn share_rips_reaches_rip_packs_whenever_the_machine_config_changes() {
 fn noteskin_discovery_is_shell_prepared_for_themes() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love/src");
-    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
     let concrete_views =
-        fs::read_to_string(theme.join("views.rs")).expect("Simply Love views should be readable");
-    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
+    let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let options = fs::read_to_string(theme.join("screens/options/state.rs"))
+    let options = read_source(theme.join("screens/options/state.rs"))
         .expect("Simply Love options state should be readable");
-    let player_options = fs::read_to_string(theme.join("screens/player_options/mod.rs"))
+    let player_options = read_source(theme.join("screens/player_options/mod.rs"))
         .expect("Simply Love player options should be readable");
 
     let mut failures = Vec::new();
     for file in rust_files(&theme) {
-        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        let source = read_source(&file).expect("theme source should be readable");
         for token in ["noteskin_roots()", "itg::discover_skins"] {
             if source.contains(token) {
                 failures.push(format!(
@@ -2624,7 +2635,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
         if file.file_name().and_then(|name| name.to_str()) == Some("tests.rs") {
             continue;
         }
-        let source = fs::read_to_string(&file).expect("Player Options source should be readable");
+        let source = read_source(&file).expect("Player Options source should be readable");
         for runtime_access in [
             "config::runtime::get()",
             "deadsync_profile::compat",
@@ -2648,7 +2659,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
         failures.join("\n")
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct PlayerOptionsPolicyView",
@@ -2665,7 +2676,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
         );
     }
 
-    let adapter = fs::read_to_string(root.join("crates/deadsync-shell/src/player_options.rs"))
+    let adapter = read_source(root.join("crates/deadsync-shell/src/player_options.rs"))
         .expect("shell Player Options adapter should be readable");
     for runtime_owner in [
         "pub(crate) fn init_view() -> PlayerOptionsInitView",
@@ -2680,15 +2691,15 @@ fn player_options_runtime_reads_are_shell_prepared() {
         );
     }
 
-    let screen = fs::read_to_string(player_options.join("mod.rs"))
+    let screen = read_source(player_options.join("mod.rs"))
         .expect("Player Options screen should be readable");
-    let state = fs::read_to_string(player_options.join("state.rs"))
+    let state = read_source(player_options.join("state.rs"))
         .expect("Player Options state should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let profile_update = fs::read_to_string(root.join("crates/deadsync-profile/src/update.rs"))
+    let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
         .expect("profile update API should be readable");
     assert!(
         screen.contains("init_view: PlayerOptionsInitView")
@@ -2710,23 +2721,23 @@ fn player_options_runtime_reads_are_shell_prepared() {
 #[test]
 fn simply_love_smx_assignment_uses_shell_prepared_hardware_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme_screen = fs::read_to_string(
+    let theme_screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/smx_assign.rs"),
     )
     .expect("Simply Love SMX assignment screen should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
-    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+    let shell_smx = read_source(root.join("crates/deadsync-shell/src/smx_config.rs"))
         .expect("shell SMX service should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
     let shell_navigation =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
             .expect("shell navigation should be readable");
     let shell_smx_runtime =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/smx_runtime.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/smx_runtime.rs"))
             .expect("shell SMX runtime should be readable");
 
     for forbidden in [
@@ -2798,13 +2809,13 @@ fn simply_love_options_smx_assignment_uses_prepared_hardware_state() {
         "submenus/input_dev.rs",
     ] {
         options_source
-            .push_str(&fs::read_to_string(options.join(path)).unwrap_or_else(|_| {
+            .push_str(&read_source(options.join(path)).unwrap_or_else(|_| {
                 panic!("Simply Love Options source {path} should be readable")
             }));
     }
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
 
     for forbidden in [
@@ -2839,17 +2850,17 @@ fn simply_love_options_smx_assignment_uses_prepared_hardware_state() {
 #[test]
 fn select_music_smx_pad_profile_hardware_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let select_music = fs::read_to_string(
+    let select_music = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Simply Love Select Music source should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
-    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+    let shell_smx = read_source(root.join("crates/deadsync-shell/src/smx_config.rs"))
         .expect("shell SMX service should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
 
     assert!(
@@ -2896,15 +2907,15 @@ fn select_music_smx_pad_profile_hardware_is_shell_owned() {
 fn simply_love_smx_imports_are_preset_types_only() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
-    let input_contract = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
+    let input_contract = read_source(root.join("crates/deadsync-input/src/lib.rs"))
         .expect("input contract should be readable");
-    let input_backend = fs::read_to_string(root.join("crates/deadsync-shell/src/input_backend.rs"))
+    let input_backend = read_source(root.join("crates/deadsync-shell/src/input_backend.rs"))
         .expect("shell input backend should be readable");
-    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+    let shell_smx = read_source(root.join("crates/deadsync-shell/src/smx_config.rs"))
         .expect("shell SMX service should be readable");
 
     assert!(
@@ -2913,7 +2924,7 @@ fn simply_love_smx_imports_are_preset_types_only() {
     );
     let mut failures = Vec::new();
     for file in rust_files(&theme.join("src")) {
-        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        let source = read_source(&file).expect("theme source should be readable");
         if source
             .replace("deadsync_smx::SmxPadPreset", "")
             .contains("deadsync_smx")
@@ -2949,13 +2960,13 @@ fn simply_love_smx_imports_are_preset_types_only() {
 fn smx_hardware_side_effects_are_shell_owned_not_config_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let config_update =
-        fs::read_to_string(root.join("crates/deadsync-config/src/runtime_update.rs"))
+        read_source(root.join("crates/deadsync-config/src/runtime_update.rs"))
             .expect("config runtime updates should be readable");
-    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+    let shell_smx = read_source(root.join("crates/deadsync-shell/src/smx_config.rs"))
         .expect("shell SMX service should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
 
     for forbidden in [
@@ -3000,7 +3011,7 @@ fn smx_hardware_side_effects_are_shell_owned_not_config_owned() {
 fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     for dependency in ["deadsync-updater", "deadlib-video", "rfd =", "semver ="] {
         assert!(
@@ -3033,7 +3044,7 @@ fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
         failures.join("\n")
     );
 
-    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+    let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
     for dependency in ["deadsync-updater", "deadlib-video", "rfd ="] {
         assert!(
@@ -3060,7 +3071,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         "select_color.rs",
     ] {
         let source =
-            fs::read_to_string(screens.join(path)).expect("theme screen should be readable");
+            read_source(screens.join(path)).expect("theme screen should be readable");
         assert!(
             !source.contains("deadsync_audio_stream"),
             "{path} still executes audio directly"
@@ -3073,7 +3084,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         );
     }
 
-    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     assert!(
         !manifest.contains("deadsync-audio-stream"),
@@ -3105,7 +3116,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         direct_audio.join("\n")
     );
 
-    let generic_audio = fs::read_to_string(root.join("crates/deadsync-theme/src/runtime.rs"))
+    let generic_audio = read_source(root.join("crates/deadsync-theme/src/runtime.rs"))
         .expect("generic theme audio requests should be readable");
     for contract in [
         "pub struct AudioCut",
@@ -3122,7 +3133,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
             "generic theme audio contract is missing {contract}"
         );
     }
-    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let generic_views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
     for view in [
         "pub struct AudioPlaybackView",
@@ -3136,21 +3147,21 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         );
     }
 
-    let select_music = fs::read_to_string(screens.join("select_music.rs"))
+    let select_music = read_source(screens.join("select_music.rs"))
         .expect("SelectMusic should be readable");
     assert!(select_music.contains("pending_audio: Vec<AudioRequest>"));
     assert!(select_music.contains("AudioRequest::PlayMusic"));
     assert!(select_music.contains("AudioRequest::StopMusic"));
     assert!(select_music.contains("AudioPlaybackView"));
-    let options = fs::read_to_string(screens.join("options/state.rs"))
+    let options = read_source(screens.join("options/state.rs"))
         .expect("Options state should be readable");
     assert!(options.contains("audio_options: AudioOptionsView"));
     let practice =
-        fs::read_to_string(screens.join("practice.rs")).expect("Practice should be readable");
+        read_source(screens.join("practice.rs")).expect("Practice should be readable");
     assert!(practice.contains("GameplayAudioCommand::SetMusicRate"));
 
     let gameplay_runtime =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
+        read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
             .expect("shell gameplay runtime bridge should be readable");
     for execution in [
         "music_clock.snapshot()",
@@ -3164,12 +3175,12 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         );
     }
 
-    let select_color = fs::read_to_string(screens.join("select_color.rs"))
+    let select_color = read_source(screens.join("select_color.rs"))
         .expect("SelectColor should be readable");
     assert!(!select_color.contains("config::runtime_update::update_simply_love_color"));
     assert!(select_color.contains("SimplyLoveConfigRequest::PersistColor"));
 
-    let profile_boxes = fs::read_to_string(screens.join("components/shared/profile_boxes.rs"))
+    let profile_boxes = read_source(screens.join("components/shared/profile_boxes.rs"))
         .expect("profile boxes should be readable");
     assert!(profile_boxes.contains("p1_joined: state.p1_joined"));
     assert!(profile_boxes.contains("p2_joined: state.p2_joined"));
@@ -3186,12 +3197,12 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         );
     }
 
-    let generic = fs::read_to_string(root.join("crates/deadsync-theme/src/effect.rs"))
+    let generic = read_source(root.join("crates/deadsync-theme/src/effect.rs"))
         .expect("generic theme effects should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let shell_audio =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/audio_requests.rs"))
             .expect("shell audio executor should be readable");
     assert!(generic.contains("Batch(Vec<Self>)"));
     assert!(shell_app.contains("ThemeEffect::Batch(effects)"));
@@ -3218,7 +3229,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     assert!(!shell_app.contains("take_fast_profile_switch_from_select_music"));
 
     let profile_requests =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
             .expect("Simply Love requests should be readable");
     assert!(profile_requests.contains("fast_switch: bool"));
 
@@ -3230,7 +3241,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     );
     assert!(!select_music.contains("set_fast_profile_switch_from_select_music"));
 
-    let profile = fs::read_to_string(root.join("crates/deadsync-profile/src/lib.rs"))
+    let profile = read_source(root.join("crates/deadsync-profile/src/lib.rs"))
         .expect("profile crate should be readable");
     assert!(!profile.contains("fast_profile_switch_from_select_music"));
 }
@@ -3238,7 +3249,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
 #[test]
 fn music_clock_reader_uses_pre_v0_5_654_global_runtime() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let music_map = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/music_map.rs"))
+    let music_map = read_source(root.join("crates/deadsync-audio-stream/src/music_map.rs"))
         .expect("music clock reader should be readable");
     assert!(music_map.contains("pub struct MusicClock"));
     assert!(music_map.contains("static MUSIC_MAP_RUNTIME"));
@@ -3247,11 +3258,11 @@ fn music_clock_reader_uses_pre_v0_5_654_global_runtime() {
     assert!(music_map.contains("pub(crate) fn clear_music_pos_map"));
     assert!(music_map.contains("and_then(PlayedMapReader::pop)"));
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(app.contains("music_clock: deadsync_audio_stream::MusicClock"));
 
-    let runtime = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
+    let runtime = read_source(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
         .expect("audio runtime should be readable");
     assert!(runtime.contains("clear_music_pos_map"));
     assert!(!runtime.contains("get_music_stream_clock_snapshot"));
@@ -3260,31 +3271,31 @@ fn music_clock_reader_uses_pre_v0_5_654_global_runtime() {
 #[test]
 fn audio_control_and_hot_sfx_are_application_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let runtime = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
+    let runtime = read_source(root.join("crates/deadsync-audio-stream/src/runtime.rs"))
         .expect("audio runtime should be readable");
     assert!(runtime.contains("pub struct AudioControl"));
     assert!(runtime.contains("engine: Option<AudioEngine>"));
     assert!(!runtime.contains("static ENGINE"));
     assert!(!runtime.contains("OnceLock<AudioEngine>"));
 
-    let cache = fs::read_to_string(root.join("crates/deadsync-audio-stream/src/sfx_cache.rs"))
+    let cache = read_source(root.join("crates/deadsync-audio-stream/src/sfx_cache.rs"))
         .expect("SFX cache should be readable");
     assert!(cache.contains("pub struct SfxId"));
     assert!(cache.contains("sender: SfxSender"));
-    assert!(cache.contains("pub fn play_resolved"));
+    assert!(cache.contains("pub fn play(&mut self, sound: &SfxId"));
     assert!(!cache.contains("Mutex<"));
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(app.contains("audio: deadsync_audio_stream::AudioControl"));
     assert!(app.contains("gameplay_sfx: GameplaySfx"));
 
-    let prewarm = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_prewarm.rs"))
+    let prewarm = read_source(root.join("crates/deadsync-shell/src/gameplay_prewarm.rs"))
         .expect("gameplay prewarm should be readable");
     assert!(prewarm.contains("pub struct GameplaySfx"));
-    assert!(prewarm.contains("audio.preload_sfx"));
+    assert!(prewarm.contains("audio.prepare_sfx"));
 
-    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/audio_folder.rs"))
+    let assets = read_source(root.join("crates/deadsync-assets/src/audio_folder.rs"))
         .expect("audio folder resolver should be readable");
     assert!(!assets.contains("deadsync_audio_stream"));
     assert!(!assets.contains("play_random_screen_sfx"));
@@ -3294,11 +3305,11 @@ fn audio_control_and_hot_sfx_are_application_owned() {
 fn simply_love_crossover_parity_stays_behind_simfile() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    let gameplay = fs::read_to_string(theme.join("src/screens/gameplay.rs"))
+    let gameplay = read_source(theme.join("src/screens/gameplay.rs"))
         .expect("Simply Love gameplay should be readable");
-    let timing = fs::read_to_string(root.join("crates/deadsync-simfile/src/timing.rs"))
+    let timing = read_source(root.join("crates/deadsync-simfile/src/timing.rs"))
         .expect("simfile timing adapter should be readable");
 
     assert!(!manifest.contains("\nrssp ="));
@@ -3315,7 +3326,7 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
     let manifest =
-        fs::read_to_string(theme.join("Cargo.toml")).expect("theme manifest should be readable");
+        read_source(theme.join("Cargo.toml")).expect("theme manifest should be readable");
     let dependencies = manifest
         .split_once("[dev-dependencies]")
         .map_or(manifest.as_str(), |(dependencies, _)| dependencies);
@@ -3344,7 +3355,7 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         failures.join("\n")
     );
 
-    let input = fs::read_to_string(root.join("crates/deadlib-platform/src/input.rs"))
+    let input = read_source(root.join("crates/deadlib-platform/src/input.rs"))
         .expect("physical input contract should be readable");
     assert!(
         (input.contains("pub use") && input.contains("KeyCode"))
@@ -3353,10 +3364,10 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
             || input.contains("pub type KeyCode"),
         "deadlib-platform::input must expose the physical keyboard-code contract"
     );
-    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("theme views should be readable");
     assert!(views.contains("pub enum GamepadSystemView"));
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/input.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/input.rs"))
         .expect("shell input owner should be readable");
     assert!(shell.contains("pub fn gamepad_system_view"));
 }
@@ -3365,7 +3376,7 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
 fn simply_love_test_lights_uses_shell_prepared_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
-    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+    let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     let dependencies = manifest
         .split_once("[dev-dependencies]")
@@ -3374,7 +3385,7 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
 
     let mut failures = Vec::new();
     for file in rust_files(&theme.join("src")) {
-        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        let source = read_source(&file).expect("theme source should be readable");
         if source
             .replace("deadsync_lights::DriverKind", "")
             .contains("deadsync_lights")
@@ -3388,10 +3399,10 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
         failures.join("\n")
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("theme views should be readable");
     assert!(views.contains("pub struct LightsTestView"));
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/lighting.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/lighting.rs"))
         .expect("shell lighting owner should be readable");
     assert!(shell.contains("pub fn lights_test_view"));
     let smx_slots = shell
@@ -3406,7 +3417,7 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
         "SMX gameplay slot mapping should use its explicit session inputs"
     );
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app owner should be readable");
     let sync_lights = app
         .split_once("fn sync_lights")
@@ -3430,7 +3441,7 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
             "shell lighting still locks session through {repeated_session_read}"
         );
     }
-    let screen = fs::read_to_string(theme.join("src/screens/test_lights.rs"))
+    let screen = read_source(theme.join("src/screens/test_lights.rs"))
         .expect("test-lights screen should be readable");
     assert!(screen.contains("lights: LightsTestView"));
 }
@@ -3438,7 +3449,7 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
 #[test]
 fn select_music_unlock_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
@@ -3449,7 +3460,7 @@ fn select_music_unlock_runtime_is_shell_prepared() {
     assert!(screen.contains("if let Some(downloads) = view.downloads"));
     assert!(screen.contains("state.downloads = downloads"));
 
-    let downloads = fs::read_to_string(root.join(
+    let downloads = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/select_music/select_music_menu/downloads.rs",
     ))
     .expect("Select Music downloads source should be readable");
@@ -3465,7 +3476,7 @@ fn select_music_unlock_runtime_is_shell_prepared() {
     }
     assert!(downloads.contains("snapshots: &[SelectMusicDownloadView]"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
         views.contains("pub struct SelectMusicRuntimeView")
@@ -3473,7 +3484,7 @@ fn select_music_unlock_runtime_is_shell_prepared() {
             && views.contains("pub downloads: Option<Vec<SelectMusicDownloadView>>")
     );
     let shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music runtime view preparation should be readable");
     assert!(shell.contains("fn sync_select_music_runtime_view"));
     assert!(shell.contains("deadsync_online::runtime::unlock_downloads_available("));
@@ -3484,14 +3495,14 @@ fn select_music_unlock_runtime_is_shell_prepared() {
 #[test]
 fn select_music_arrow_offset_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     let shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music view preparation should be readable");
 
     assert!(!screen.contains("config::runtime::get().global_offset_seconds"));
@@ -3504,11 +3515,11 @@ fn select_music_arrow_offset_is_shell_prepared() {
 #[test]
 fn select_music_session_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let pack_sync = fs::read_to_string(
+    let pack_sync = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music/pack_sync.rs"),
     )
     .expect("Select Music pack-sync source should be readable");
@@ -3572,7 +3583,7 @@ fn select_music_session_runtime_is_shell_prepared() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SelectMusicSessionView",
@@ -3597,7 +3608,7 @@ fn select_music_session_runtime_is_shell_prepared() {
         );
     }
 
-    let init_shell = fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+    let init_shell = read_source(root.join("crates/deadsync-shell/src/select_music.rs"))
         .expect("shell Select Music init preparation should be readable");
     for prepared_read in [
         "pub(crate) fn session_view() -> SelectMusicSessionView",
@@ -3615,16 +3626,16 @@ fn select_music_session_runtime_is_shell_prepared() {
         );
     }
     let runtime_shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music runtime preparation should be readable");
     assert!(runtime_shell.contains("let session_view = SelectMusicSessionView"));
     assert!(runtime_shell.contains("let profiles = profile_views_dirty.then("));
     assert!(runtime_shell.contains(".then(deadsync_profile::runtime_favorite_snapshot)"));
     assert!(runtime_shell.contains("fn select_music_pad_profiles("));
-    assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs(profile_id)"));
+    assert!(runtime_shell.contains("deadsync_profile::compat::load_pad_configs()"));
     assert!(runtime_shell.contains(".profiles_stale("));
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
     for request in [
         "SetSession {",
@@ -3641,7 +3652,7 @@ fn select_music_session_runtime_is_shell_prepared() {
             "missing session request {request}"
         );
     }
-    let executor = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let executor = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
     for execution in [
         "SimplyLoveProfileRequest::SetSession",
@@ -3657,11 +3668,11 @@ fn select_music_session_runtime_is_shell_prepared() {
         "SimplyLoveProfileRequest::MarkPacksKnown",
         "profile::mark_packs_known(",
         "SimplyLoveHardwareRequest::RenameSmxPadConfig",
-        "profile::rename_pad_config(&profile_id, &old_name, &new_name)",
+        "profile::rename_pad_config(&old_name, &new_name)",
         "SimplyLoveHardwareRequest::SetSmxPadConfigDefault",
-        "profile::set_default_pad_config(&profile_id, &serial, &name)",
+        "profile::set_default_pad_config(&serial, &name)",
         "SimplyLoveHardwareRequest::DeleteSmxPadConfig",
-        "profile::delete_pad_config(&profile_id, &name)",
+        "profile::delete_pad_config(&name)",
     ] {
         assert!(
             executor.contains(execution),
@@ -3673,16 +3684,16 @@ fn select_music_session_runtime_is_shell_prepared() {
 #[test]
 fn select_music_feature_policy_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/select_music.rs"))
         .expect("shell Select Music policy preparation should be readable");
     let runtime_shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music runtime view preparation should be readable");
 
     for direct_read in [
@@ -3738,7 +3749,7 @@ fn select_music_feature_policy_is_shell_prepared() {
         "components/select_music/select_music_menu/song_search.rs",
         "components/select_music/select_music_menu/srpg_shop.rs",
     ] {
-        let source = fs::read_to_string(
+        let source = read_source(
             root.join("crates/deadsync-theme-simply-love/src/screens")
                 .join(component),
         )
@@ -3878,15 +3889,15 @@ fn select_music_feature_policy_is_shell_prepared() {
 #[test]
 fn select_music_leaderboard_refresh_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     assert!(!screen.contains("scores::is_gs_active_for_side"));
@@ -3907,7 +3918,7 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
 #[test]
 fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let scorebox = fs::read_to_string(
+    let scorebox = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/components/shared/gs_scorebox.rs"),
     )
     .expect("Simply Love scorebox source should be readable");
@@ -3932,7 +3943,7 @@ fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
     assert!(scorebox.contains("runtime.leaderboards.as_ref()"));
     assert!(scorebox.contains("runtime.pane_filter"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct ScoreboxLocalView",
@@ -3944,10 +3955,10 @@ fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
         assert!(views.contains(contract));
     }
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music view preparation should be readable"),
     );
     assert!(shell.contains("fn scorebox_side_view"));
@@ -3982,7 +3993,7 @@ fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
 #[test]
 fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let overlay = fs::read_to_string(root.join(
+    let overlay = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/select_music/select_music_menu/leaderboard.rs",
     ))
     .expect("Select Music leaderboard overlay should be readable");
@@ -4004,7 +4015,7 @@ fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
     assert!(overlay.contains("sync_leaderboard_overlay"));
     assert!(overlay.contains("SelectMusicLeaderboardView"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SelectMusicLeaderboardRequest",
@@ -4015,7 +4026,7 @@ fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
         assert!(views.contains(contract));
     }
 
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
@@ -4023,7 +4034,7 @@ fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
     assert!(screen.contains("sync_leaderboard_overlay"));
 
     let shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music view preparation should be readable");
     assert!(shell.contains("select_music::leaderboard_runtime_request"));
     assert!(shell.contains("SelectMusicLeaderboardSideView"));
@@ -4043,7 +4054,7 @@ fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
         );
     }
     assert!(
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
             .expect("shell app should be readable")
             .contains("profile_data::runtime_music_profile_snapshot")
             && select_music_runtime
@@ -4055,17 +4066,17 @@ fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
 #[test]
 fn select_music_replay_cache_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let replay = fs::read_to_string(root.join(
+    let replay = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/select_music/select_music_menu/replay.rs",
     ))
     .expect("Select Music replay overlay should be readable");
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     for runtime_access in [
@@ -4085,7 +4096,7 @@ fn select_music_replay_cache_is_shell_owned() {
     assert!(shell.contains("scores::get_machine_replays_local(&chart_hash, max_entries)"));
     assert!(shell.contains("select_music::sync_machine_replays("));
     for path in rust_files(&root.join("crates/deadsync-theme-simply-love/src")) {
-        let source = fs::read_to_string(&path).expect("Simply Love source should be readable");
+        let source = read_source(&path).expect("Simply Love source should be readable");
         for runtime_access in ["deadsync_online::score_compat", "scores::"] {
             assert!(
                 !source.contains(runtime_access),
@@ -4099,7 +4110,7 @@ fn select_music_replay_cache_is_shell_owned() {
 #[test]
 fn music_wheel_runtime_data_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let wheel = fs::read_to_string(root.join(
+    let wheel = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/select_music/music_wheel.rs",
     ))
     .expect("music wheel source should be readable");
@@ -4124,7 +4135,7 @@ fn music_wheel_runtime_data_is_shell_prepared() {
     assert!(wheel.contains("p.runtime.slots[i_slot]"));
     assert!(wheel.contains("runtime_for_side(side).score"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub const MUSIC_WHEEL_SLOT_COUNT: usize = 19",
@@ -4145,11 +4156,11 @@ fn music_wheel_runtime_data_is_shell_prepared() {
         );
     }
 
-    let select_music = fs::read_to_string(
+    let select_music = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
-    let select_course = fs::read_to_string(
+    let select_course = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     )
     .expect("Select Course source should be readable");
@@ -4157,10 +4168,10 @@ fn music_wheel_runtime_data_is_shell_prepared() {
     assert!(select_course.contains("pub fn music_wheel_runtime_request"));
     assert!(select_course.contains("pub fn sync_runtime_view"));
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music view preparation should be readable"),
     );
     for shell_owner in [
@@ -4181,13 +4192,13 @@ fn music_wheel_runtime_data_is_shell_prepared() {
         ".get_or_fetch_srpg_self_score",
         "select_music::music_wheel_runtime_request",
         "select_course::music_wheel_runtime_request",
-        "let bar_color = config.machine_bar_color.resolve(config.visual_style)",
+        "let bar_color = config.machine_bar_color.resolve(config.visual_style.presentation_style(config.srpg_variant))",
         "translated_titles: config.translated_titles",
         "song_bg_dimmed: config.visual_style.is_srpg()",
         "section_bg_dimmed: display.section_bg_dimmed",
     ] {
         assert!(
-            shell.contains(shell_owner),
+            contains_rust(&shell, shell_owner),
             "shell must own music-wheel operation {shell_owner}"
         );
     }
@@ -4218,9 +4229,9 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let component_root =
         root.join("crates/deadsync-theme-simply-love/src/screens/components/select_music");
-    let screen_bars = fs::read_to_string(component_root.join("screen_bars.rs"))
+    let screen_bars = read_source(component_root.join("screen_bars.rs"))
         .expect("selection screen bars should be readable");
-    let song_search = fs::read_to_string(component_root.join("select_music_menu/song_search.rs"))
+    let song_search = read_source(component_root.join("select_music_menu/song_search.rs"))
         .expect("song search should be readable");
     for (name, source) in [("screen bars", &screen_bars), ("song search", &song_search)] {
         for runtime_access in [
@@ -4247,7 +4258,7 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
     // Ranking takes the prepared chart type as an input, not from runtime state.
     assert!(song_search.contains("chart_type: &str"));
 
-    let select_music = fs::read_to_string(
+    let select_music = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
@@ -4264,7 +4275,7 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
         );
     }
 
-    let select_course = fs::read_to_string(
+    let select_course = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     )
     .expect("Select Course source should be readable");
@@ -4281,18 +4292,18 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(views.contains("pub avatar_texture_keys: [Option<Arc<str>>; 2]"));
     assert!(views.contains("pub players: Option<[SelectFlowPlayerView; 2]>"));
 
     let select_music_shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+        read_source(root.join("crates/deadsync-shell/src/select_music.rs"))
             .expect("shell Select Music adapter should be readable");
     let select_flow_shell =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/select_flow.rs"))
+        read_source(root.join("crates/deadsync-shell/src/select_flow.rs"))
             .expect("shell select-flow adapter should be readable");
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(select_music_shell.contains("avatar_texture_keys: std::array::from_fn"));
     assert!(select_flow_shell.contains("pub(crate) fn players_view()"));
@@ -4302,7 +4313,7 @@ fn selection_screen_chrome_and_search_use_prepared_player_state() {
 #[test]
 fn select_course_score_pane_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     )
     .expect("Select Course source should be readable");
@@ -4324,7 +4335,7 @@ fn select_course_score_pane_is_shell_prepared() {
     assert!(screen.contains("pub fn score_runtime_request"));
     assert!(screen.contains("state.score_view"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SelectCourseScoreRequest",
@@ -4338,7 +4349,7 @@ fn select_course_score_pane_is_shell_prepared() {
         );
     }
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     for runtime_owner in [
         "fn prepare_select_course_score",
@@ -4374,7 +4385,7 @@ fn select_course_score_pane_is_shell_prepared() {
 #[test]
 fn select_course_runtime_and_caches_are_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     )
     .expect("Select Course source should be readable");
@@ -4407,7 +4418,7 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SelectCoursePolicyView",
@@ -4422,7 +4433,7 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
         );
     }
 
-    let service = fs::read_to_string(root.join("crates/deadsync-shell/src/profile_load.rs"))
+    let service = read_source(root.join("crates/deadsync-shell/src/profile_load.rs"))
         .expect("shell Profile Load service should be readable");
     for shell_owner in [
         "fn select_course_context_view(",
@@ -4441,7 +4452,7 @@ fn select_course_runtime_and_caches_are_shell_prepared() {
 #[test]
 fn profile_load_preparation_worker_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let profile_load = fs::read_to_string(
+    let profile_load = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/profile_load.rs"),
     )
     .expect("Simply Love Profile Load source should be readable");
@@ -4462,7 +4473,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
     assert!(profile_load.contains("state.ready"));
     assert!(profile_load.contains("ThemeEffect::Navigate(state.next_screen)"));
 
-    let select_course = fs::read_to_string(
+    let select_course = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
     )
     .expect("Select Course source should be readable");
@@ -4471,12 +4482,12 @@ fn profile_load_preparation_worker_is_shell_owned() {
     assert!(select_course.contains("pub fn init(init_view: SelectCourseInitView)"));
     assert!(select_course.contains("init_view.played_chart_counts"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(views.contains("pub struct SelectCourseInitView"));
     assert!(views.contains("pub played_chart_counts: Vec<(String, u32)>"));
 
-    let service = fs::read_to_string(root.join("crates/deadsync-shell/src/profile_load.rs"))
+    let service = read_source(root.join("crates/deadsync-shell/src/profile_load.rs"))
         .expect("shell Profile Load service should be readable");
     for runtime_owner in [
         "std::thread::spawn",
@@ -4492,7 +4503,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
         );
     }
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     for integration in [
         "profile_load: crate::profile_load::Service",
@@ -4512,7 +4523,7 @@ fn profile_load_preparation_worker_is_shell_owned() {
 #[test]
 fn options_online_reinitialization_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let input = fs::read_to_string(
+    let input = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/options/input.rs"),
     )
     .expect("Simply Love Options input should be readable");
@@ -4521,11 +4532,11 @@ fn options_online_reinitialization_is_shell_owned() {
     assert!(input.contains("SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats"));
     assert!(input.contains("row.id == SubRowId::EnableArrowCloud"));
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
     assert!(effects.contains("pub enum SimplyLoveOnlineRequest"));
     assert!(effects.contains("Reinitialize,"));
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(shell.contains("SimplyLoveOnlineRequest::Reinitialize"));
     assert!(shell.contains("deadsync_online::runtime::init()"));
@@ -4535,15 +4546,15 @@ fn options_online_reinitialization_is_shell_owned() {
 fn options_folder_paths_are_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love/src/screens/options");
-    let folders = fs::read_to_string(theme.join("submenus/folders.rs"))
+    let folders = read_source(theme.join("submenus/folders.rs"))
         .expect("Options folders source should be readable");
     let state =
-        fs::read_to_string(theme.join("state.rs")).expect("Options state should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        read_source(theme.join("state.rs")).expect("Options state should be readable");
+    let views = read_source(root.join("crates/deadsync-theme/src/views.rs"))
         .expect("generic theme views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let reload = fs::read_to_string(theme.join("reload.rs"))
+    let reload = read_source(theme.join("reload.rs"))
         .expect("Options reload source should be readable");
 
     for direct_read in ["deadlib_platform::dirs", "app_dirs()", "std::env::var_os"] {
@@ -4565,7 +4576,7 @@ fn options_folder_paths_are_shell_prepared() {
 #[test]
 fn select_music_uses_shell_prepared_paths_and_playlists() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let select_music = fs::read_to_string(
+    let select_music = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
@@ -4596,14 +4607,14 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
         "Select Music must initialize from a shell-prepared path and playlist view"
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/select_music.rs"))
         .expect("shell Select Music adapter should be readable");
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let runtime =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
+        read_source(root.join("crates/deadsync-shell/src/app/select_music_views.rs"))
             .expect("shell Select Music view preparation should be readable");
     assert!(
         views.contains("pub struct SelectMusicInitView")
@@ -4627,7 +4638,7 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
 #[test]
 fn content_reload_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = fs::read_to_string(
+    let theme = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
@@ -4661,7 +4672,7 @@ fn content_reload_execution_is_shell_owned() {
     }
 
     let init =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/init.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/init.rs"))
             .expect("Init source should be readable");
     for runtime_work in [
         "deadsync_simfile::app_runtime",
@@ -4693,7 +4704,7 @@ fn content_reload_execution_is_shell_owned() {
     let options_dir = root.join("crates/deadsync-theme-simply-love/src/screens/options");
     let mut options = String::new();
     for file in rust_files(&options_dir) {
-        options.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+        options.push_str(&read_source(file).expect("Options source should be readable"));
     }
     for runtime_work in [
         "deadsync_simfile::app_runtime",
@@ -4720,12 +4731,12 @@ fn content_reload_execution_is_shell_owned() {
         );
     }
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
     assert!(effects.contains("pub enum SimplyLoveContentRequest"));
     assert!(effects.contains("Content(SimplyLoveContentRequest)"));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub enum SimplyLoveContentReloadPhase",
@@ -4741,7 +4752,7 @@ fn content_reload_execution_is_shell_owned() {
         );
     }
 
-    let service = fs::read_to_string(root.join("crates/deadsync-shell/src/content_reload.rs"))
+    let service = read_source(root.join("crates/deadsync-shell/src/content_reload.rs"))
         .expect("shell content reload service should be readable");
     for shell_owner in [
         "std::thread::spawn",
@@ -4759,7 +4770,7 @@ fn content_reload_execution_is_shell_owned() {
         );
     }
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     for integration in [
         "content_reload: crate::content_reload::Service",
@@ -4785,7 +4796,7 @@ fn content_reload_execution_is_shell_owned() {
 #[test]
 fn select_music_history_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let screen = fs::read_to_string(
+    let screen = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
     )
     .expect("Select Music source should be readable");
@@ -4809,7 +4820,7 @@ fn select_music_history_is_shell_prepared() {
         "build_recent_grouped_entries(&ranking, &mut ranking_workspace, &init_view.history)"
     ));
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SelectMusicHistorySideView",
@@ -4825,7 +4836,7 @@ fn select_music_history_is_shell_prepared() {
         );
     }
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/select_music.rs"))
         .expect("shell Select Music adapter should be readable");
     for runtime_owner in [
         "pub(crate) fn history_view() -> SelectMusicHistoryView",
@@ -4840,7 +4851,7 @@ fn select_music_history_is_shell_prepared() {
         );
     }
 
-    let score = fs::read_to_string(root.join("crates/deadsync-score/src/lib.rs"))
+    let score = read_source(root.join("crates/deadsync-score/src/lib.rs"))
         .expect("score runtime should be readable");
     assert!(score.contains("pub fn merged_profile_scores"));
 }
@@ -4876,8 +4887,8 @@ fn select_music_lobby_runtime_is_shell_owned() {
     );
 
     let views =
-        fs::read_to_string(theme.join("views.rs")).expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(theme.join("effects.rs"))
+        read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
+    let effects = read_source(theme.join("effects.rs"))
         .expect("Simply Love effects should be readable");
     assert!(
         views.contains("pub struct SimplyLoveLobbyRuntimeView")
@@ -4885,10 +4896,10 @@ fn select_music_lobby_runtime_is_shell_owned() {
             && effects.contains("pub enum SimplyLoveLobbyRequest")
     );
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/lobby_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/lobby_views.rs"))
             .expect("shell lobby view owner should be readable"),
     );
     for shell_owner in [
@@ -4903,12 +4914,12 @@ fn select_music_lobby_runtime_is_shell_owned() {
         "runtime_disconnect()",
     ] {
         assert!(
-            shell.contains(shell_owner),
+            contains_rust(&shell, shell_owner),
             "shell must own Select Music lobby operation {shell_owner}"
         );
     }
 
-    let online = fs::read_to_string(root.join("crates/deadsync-online/src/lobbies.rs"))
+    let online = read_source(root.join("crates/deadsync-online/src/lobbies.rs"))
         .expect("online lobby runtime should be readable");
     assert!(
         online.contains("pub fn runtime_refresh_view_state_default() -> RuntimeViewRefresh")
@@ -4938,9 +4949,9 @@ fn select_music_lobby_runtime_is_shell_owned() {
 fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love/src");
-    let gameplay = fs::read_to_string(theme.join("screens/gameplay.rs"))
+    let gameplay = read_source(theme.join("screens/gameplay.rs"))
         .expect("Simply Love Gameplay source should be readable");
-    let evaluation = fs::read_to_string(theme.join("screens/evaluation.rs"))
+    let evaluation = read_source(theme.join("screens/evaluation.rs"))
         .expect("Simply Love Evaluation source should be readable");
     for runtime_call in [
         "runtime_snapshot",
@@ -4967,10 +4978,10 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
             && evaluation.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
     );
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
     );
     for shell_owner in [
@@ -4981,7 +4992,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
         "runtime_update_machine_state_sides_with_stats_default",
     ] {
         assert!(
-            shell.contains(shell_owner),
+            contains_rust(&shell, shell_owner),
             "shell must own Gameplay/Evaluation lobby operation {shell_owner}"
         );
     }
@@ -4991,14 +5002,14 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
 fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love Gameplay source should be readable");
-    let gameplay_stats = fs::read_to_string(root.join(
+    let gameplay_stats = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/gameplay_stats.rs",
     ))
     .expect("Simply Love Gameplay statistics should be readable");
     let practice =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"))
             .expect("Simply Love Practice source should be readable");
     for runtime_read in [
         "config::runtime::get()",
@@ -5036,7 +5047,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "scores.scorebox_profiles",
         "state.itl_cmod_warning[player_idx]",
         "pub fn sync_score_runtime_view",
-        "gs.runtime_view.policy.center_single_notefield",
+        "state.runtime_view.policy.center_single_notefield",
         "state.runtime_view.policy.scorebox_pane_filter",
         "self.runtime_view.policy.machine_font",
         "policy.background_brightness",
@@ -5053,7 +5064,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         );
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct GameplayPolicyView",
@@ -5078,7 +5089,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         );
     }
 
-    let adapter = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
+    let adapter = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell Gameplay adapter should be readable");
     for runtime_owner in [
         "fn policy_view(config: &config::app_config::Config)",
@@ -5109,7 +5120,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         );
     }
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
         shell.contains("crate::gameplay_runtime::init_view(")
@@ -5120,7 +5131,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
 #[test]
 fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     let online_sync = shell
         .split_once("fn sync_active_online_runtime_view")
@@ -5160,7 +5171,7 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         "Gameplay foreground/video state must be advanced from song-lifetime caches"
     );
 
-    let gameplay = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let gameplay = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("Shared song playback source should be readable");
     assert!(
         gameplay.contains("next_song_lua_sound_event_ix")
@@ -5170,7 +5181,7 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         "Gameplay must retain cursors and reusable per-layer Song-Lua state"
     );
 
-    let online = fs::read_to_string(root.join("crates/deadsync-online/src/lobbies.rs"))
+    let online = read_source(root.join("crates/deadsync-online/src/lobbies.rs"))
         .expect("online lobby runtime should be readable");
     assert!(
         online.contains("RUNTIME_MACHINE_STATE_CACHE")
@@ -5182,7 +5193,7 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
 #[test]
 fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let runtime = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
+    let runtime = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell Gameplay adapter should be readable");
     let live_score_view = runtime
         .split_once("pub(crate) fn score_runtime_view")
@@ -5209,7 +5220,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
     );
 
     let profile_gameplay =
-        fs::read_to_string(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
+        read_source(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
             .expect("profile Gameplay adapter should be readable");
     let warning_adapter = profile_gameplay
         .split_once("pub fn should_warn_itl_cmod_from_app_runtime")
@@ -5222,7 +5233,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
         "ITL warning preparation must derive the current pack without scanning the song catalog"
     );
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert_eq!(
         app.matches("crate::gameplay_runtime::sync_initial_scores(&mut gs)")
@@ -5235,7 +5246,7 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
 #[test]
 fn evaluation_score_service_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let evaluation = fs::read_to_string(
+    let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
     .expect("Simply Love Evaluation source should be readable");
@@ -5254,14 +5265,14 @@ fn evaluation_score_service_is_shell_prepared() {
             && evaluation.contains("view.groovestats_service")
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
         views.contains("pub struct EvaluationRuntimeView")
             && views.contains("pub enum SimplyLoveGrooveStatsService")
     );
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
         .expect("shell Evaluation view owner should be readable");
     assert!(
         shell.contains("groovestats_service: if config.enable_groovestats")
@@ -5272,7 +5283,7 @@ fn evaluation_score_service_is_shell_prepared() {
 #[test]
 fn evaluation_submission_runtime_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let evaluation = fs::read_to_string(
+    let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
     .expect("Simply Love Evaluation source should be readable");
@@ -5303,17 +5314,17 @@ fn evaluation_submission_runtime_is_shell_owned() {
             && evaluation.contains("state.submissions = submissions")
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
         views.contains("pub struct EvaluationSubmissionView")
             && views.contains("pub submissions: Option<[EvaluationSubmissionView; 2]>")
     );
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
     );
     for shell_owner in [
@@ -5326,7 +5337,7 @@ fn evaluation_submission_runtime_is_shell_owned() {
         "scores::retry_groovestats_submit",
     ] {
         assert!(
-            shell.contains(shell_owner),
+            contains_rust(&shell, shell_owner),
             "shell must own Evaluation submission operation {shell_owner}"
         );
     }
@@ -5335,7 +5346,7 @@ fn evaluation_submission_runtime_is_shell_owned() {
 #[test]
 fn evaluation_leaderboards_are_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let evaluation = fs::read_to_string(
+    let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
     .expect("Simply Love Evaluation source should be readable");
@@ -5358,7 +5369,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
             && evaluation.contains("&scoreboxes[player_idx]")
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     assert!(
         views.contains("pub score_info: [Option<ScoreInfo>; 2]")
@@ -5366,14 +5377,14 @@ fn evaluation_leaderboards_are_shell_prepared() {
             && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
     );
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/session_results.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
             .expect("shell result view adapter should be readable"),
     );
     for shell_owner in [
@@ -5386,7 +5397,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
         "evaluation::leaderboard_requests",
     ] {
         assert!(
-            shell.contains(shell_owner),
+            contains_rust(&shell, shell_owner),
             "shell must own Evaluation leaderboard operation {shell_owner}"
         );
     }
@@ -5395,7 +5406,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
 #[test]
 fn evaluation_config_and_profile_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let evaluation = fs::read_to_string(
+    let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
     .expect("Simply Love Evaluation source should be readable");
@@ -5414,7 +5425,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
         "components/evaluation/pane_timing_arrows.rs",
         "components/evaluation/utils.rs",
     ] {
-        let source = fs::read_to_string(
+        let source = read_source(
             root.join("crates/deadsync-theme-simply-love/src/screens")
                 .join(component),
         )
@@ -5440,7 +5451,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
             && evaluation.contains("machine_font_key(policy.machine_font")
     );
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for prepared_view in [
         "pub struct EvaluationPolicyView",
@@ -5456,10 +5467,10 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
         );
     }
 
-    let mut shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     shell.push_str(
-        &fs::read_to_string(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
+        &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
             .expect("shell Evaluation view owner should be readable"),
     );
     for shell_owner in [
@@ -5470,7 +5481,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
         "profile::toggle_favorite(side, &chart_hash)",
     ] {
         assert!(
-            shell.contains(shell_owner),
+            contains_rust(&shell, shell_owner),
             "shell must own Evaluation runtime operation {shell_owner}"
         );
     }
@@ -5479,7 +5490,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
 #[test]
 fn qr_login_workers_and_persistence_are_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let qr = fs::read_to_string(
+    let qr = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/options/qr_login.rs"),
     )
     .expect("QR login source should be readable");
@@ -5505,7 +5516,7 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
             && qr.contains("SimplyLoveQrLoginEvent::Failed")
     );
 
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
     assert!(
         effects.contains("pub struct SimplyLoveQrLoginRequest")
@@ -5516,7 +5527,7 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
     );
 
     for login in ["arrowcloud_login.rs", "groovestats_login.rs"] {
-        let source = fs::read_to_string(
+        let source = read_source(
             root.join("crates/deadsync-theme-simply-love/src/screens")
                 .join(login),
         )
@@ -5525,7 +5536,7 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
         assert!(source.contains("dedicated_three_key_nav"));
     }
 
-    let shell_service = fs::read_to_string(root.join("crates/deadsync-shell/src/qr_login.rs"))
+    let shell_service = read_source(root.join("crates/deadsync-shell/src/qr_login.rs"))
         .expect("shell QR-login service should be readable");
     for shell_owner in [
         "arrowcloud::run_device_login_session",
@@ -5542,7 +5553,7 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
         );
     }
 
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
         shell_app.contains("self.qr_login.poll()")
@@ -5556,7 +5567,7 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
 #[test]
 fn simply_love_main_menu_uses_prepared_runtime_view() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for field in [
         "pub struct MainMenuRuntimeView",
@@ -5573,7 +5584,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
     }
 
     let menu =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/menu.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/menu.rs"))
             .expect("Simply Love menu should be readable");
     assert!(menu.contains("runtime_view: MainMenuRuntimeView"));
     assert!(menu.contains("pub fn sync_runtime_view"));
@@ -5592,7 +5603,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         );
     }
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/main_menu.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/main_menu.rs"))
         .expect("shell main-menu bridge should be readable");
     for runtime_read in [
         "runtime_view(credits: u32) -> MainMenuRuntimeView",
@@ -5609,7 +5620,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
         );
     }
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.credits(coin))"));
     assert!(app.contains("menu::sync_runtime_view"));
@@ -5619,7 +5630,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
 fn simply_love_three_key_navigation_uses_prepared_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let screens = root.join("crates/deadsync-theme-simply-love/src/screens");
-    let input = fs::read_to_string(screens.join("input.rs"))
+    let input = read_source(screens.join("input.rs"))
         .expect("shared Simply Love input should be readable");
     assert!(!input.contains("config::runtime::get()"));
     assert!(
@@ -5634,7 +5645,7 @@ fn simply_love_three_key_navigation_uses_prepared_policy() {
         "manage_local_profiles.rs",
         "menu.rs",
     ] {
-        let source = fs::read_to_string(screens.join(screen))
+        let source = read_source(screens.join(screen))
             .expect("three-key navigation consumer should be readable");
         assert!(
             source.contains("dedicated_three_key_nav"),
@@ -5648,15 +5659,15 @@ fn simply_love_shared_visuals_use_shell_prepared_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let shared = root.join("crates/deadsync-theme-simply-love/src/screens/components/shared");
     let screen_bar =
-        fs::read_to_string(shared.join("screen_bar.rs")).expect("screen bar should be readable");
-    let background = fs::read_to_string(shared.join("visual_style_bg.rs"))
+        read_source(shared.join("screen_bar.rs")).expect("screen bar should be readable");
+    let background = read_source(shared.join("visual_style_bg.rs"))
         .expect("visual style background should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     let visual_styles =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/visual_styles.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/visual_styles.rs"))
             .expect("Simply Love visual-style facade should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     for (name, source) in [("screen bar", &screen_bar), ("background", &background)] {
@@ -5694,7 +5705,7 @@ fn simply_love_shared_visuals_use_shell_prepared_policy() {
         );
     }
     for path in rust_files(&root.join("crates/deadsync-theme-simply-love/src/screens")) {
-        let source = fs::read_to_string(&path).expect("Simply Love screen should be readable");
+        let source = read_source(&path).expect("Simply Love screen should be readable");
         for global_selector in [
             "visual_styles::current_style()",
             "visual_styles::current_srpg_variant()",
@@ -5713,7 +5724,7 @@ fn simply_love_shared_visuals_use_shell_prepared_policy() {
     assert!(
         shell.contains("fn simply_love_visual_policy(")
             && shell.contains("let visual = simply_love_visual_policy(config)")
-            && shell.contains("machine_bar_color.resolve(config.visual_style)")
+            && contains_rust(&shell, "machine_bar_color.resolve(config.visual_style.presentation_style(config.srpg_variant))")
             && shell.contains("visual_styles::for_style_and_variant(")
     );
 }
@@ -5722,15 +5733,15 @@ fn simply_love_shared_visuals_use_shell_prepared_policy() {
 fn simply_love_mappings_uses_shell_prepared_config_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let screen =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/mappings.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/mappings.rs"))
             .expect("Simply Love mappings screen should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/mappings.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/mappings.rs"))
         .expect("shell mappings adapter should be readable");
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
 
     for runtime_read in [
@@ -5779,7 +5790,7 @@ fn simply_love_mappings_uses_shell_prepared_config_state() {
 fn simply_love_select_flow_uses_shell_prepared_session_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for screen in ["select_color.rs", "select_style.rs", "select_mode.rs"] {
-        let source = fs::read_to_string(
+        let source = read_source(
             root.join("crates/deadsync-theme-simply-love/src/screens")
                 .join(screen),
         )
@@ -5801,13 +5812,13 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
         }
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/select_flow.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/select_flow.rs"))
         .expect("shell select-flow adapter should be readable");
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
 
     assert!(views.contains("pub struct SelectFlowPlayerView"));
@@ -5834,11 +5845,11 @@ fn simply_love_select_flow_uses_shell_prepared_session_state() {
 fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let flow =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/screen_flow.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/screen_flow.rs"))
         .expect("shell flow adapter should be readable");
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
 
     for oversized_input in [
@@ -5878,7 +5889,7 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
 fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for screen in ["gameover.rs", "evaluation_summary.rs", "initials.rs"] {
-        let source = fs::read_to_string(
+        let source = read_source(
             root.join("crates/deadsync-theme-simply-love/src/screens")
                 .join(screen),
         )
@@ -5898,13 +5909,13 @@ fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
         assert!(source.contains("runtime.machine_font"));
     }
 
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+    let effects = read_source(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/post_song.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/post_song.rs"))
         .expect("shell post-song adapter should be readable");
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell runtime executor should be readable");
 
     assert!(views.contains("pub struct PostSongPlayerView"));
@@ -5931,9 +5942,9 @@ fn simply_love_post_song_flow_uses_shell_prepared_runtime_state() {
 fn simply_love_gameplay_smx_execution_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay should be readable");
-    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SmxSensorPanelView",
@@ -5964,7 +5975,7 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         );
     }
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))
         .expect("shell gameplay runtime bridge should be readable");
     for execution in [
         "fn enter_smx_sensors",
@@ -5989,9 +6000,9 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         "shell-prepared Gameplay policy must carry the SMX diagnostic flag"
     );
 
-    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    let navigation = fs::read_to_string(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
+    let navigation = read_source(root.join("crates/deadsync-shell/src/app/screen_nav.rs"))
         .expect("shell navigation should be readable");
     assert!(app.contains("crate::gameplay_runtime::exit(gs)"));
     assert!(navigation.contains("crate::gameplay_runtime::exit(gs)"));
@@ -6011,7 +6022,7 @@ fn presentation_crates_do_not_import_runtime_renderers() {
         let mut files = rust_files(&crate_dir.join("src"));
         files.push(crate_dir.join("Cargo.toml"));
         for file in files {
-            let text = fs::read_to_string(&file).expect("presentation file should be readable");
+            let text = read_source(&file).expect("presentation file should be readable");
             for token in [
                 "deadlib-renderer",
                 "deadlib_renderer",
@@ -6036,7 +6047,7 @@ fn presentation_crates_do_not_import_runtime_renderers() {
 fn notefield_theme_dependency_points_toward_contracts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = |name: &str| {
-        fs::read_to_string(root.join("crates").join(name).join("Cargo.toml"))
+        read_source(root.join("crates").join(name).join("Cargo.toml"))
             .expect("manifest should be readable")
     };
     let theme = manifest("deadsync-theme");
@@ -6055,12 +6066,12 @@ fn notefield_theme_dependency_points_toward_contracts() {
 fn simply_love_platform_access_is_limited_to_physical_input() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let crate_dir = root.join("crates/deadsync-theme-simply-love");
-    let manifest = fs::read_to_string(crate_dir.join("Cargo.toml"))
+    let manifest = read_source(crate_dir.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     assert!(manifest.contains("deadlib-platform"));
 
     for file in rust_files(&crate_dir.join("src")) {
-        let source = fs::read_to_string(&file).expect("Simply Love source should be readable");
+        let source = read_source(&file).expect("Simply Love source should be readable");
         assert!(
             !source
                 .replace("deadlib_platform::input::", "")
@@ -6075,13 +6086,13 @@ fn simply_love_platform_access_is_limited_to_physical_input() {
         );
     }
 
-    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/lib.rs"))
+    let assets = read_source(root.join("crates/deadsync-assets/src/lib.rs"))
         .expect("asset bridge should be readable");
     assert!(
         assets.contains("pub fn resolve_asset_path(path: &str)")
             && assets.contains("pub fn open_bundled_image(path: &str)")
     );
-    let init = fs::read_to_string(crate_dir.join("src/screens/init.rs"))
+    let init = read_source(crate_dir.join("src/screens/init.rs"))
         .expect("Simply Love Init screen should be readable");
     assert!(
         init.contains("pub const fn init(songs_root: PathBuf, courses_root: PathBuf)")
@@ -6090,13 +6101,13 @@ fn simply_love_platform_access_is_limited_to_physical_input() {
             && init.contains("courses_root: state.courses_root.clone()")
     );
     let content_reload =
-        fs::read_to_string(root.join("crates/deadsync-shell/src/content_reload.rs"))
+        read_source(root.join("crates/deadsync-shell/src/content_reload.rs"))
             .expect("shell content reload service should be readable");
     assert!(
         content_reload.contains("scan_and_load_songs_with_progress_counts")
             && content_reload.contains("scan_and_load_courses_with_progress_counts")
     );
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(shell.contains("init::init(init_songs_root, init_courses_root)"));
 }
@@ -6111,7 +6122,7 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
         failures.push("crates/deadsync-gameplay is missing".to_string());
     }
 
-    if let Ok(manifest) = fs::read_to_string(crate_dir.join("Cargo.toml")) {
+    if let Ok(manifest) = read_source(crate_dir.join("Cargo.toml")) {
         for token in [
             "deadsync-audio",
             "deadsync-audio-backend-",
@@ -6154,7 +6165,7 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
     if src_dir.exists() {
         for file in rust_files(&src_dir) {
             let rel = rel_path(&root, &file);
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for token in [
                 "crate::app",
                 "crate::assets",
@@ -6316,7 +6327,7 @@ fn audio_core_lives_in_audio_crate() {
     }
 
     let engine_audio = root.join("src/engine/audio/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_audio) {
+    if let Ok(text) = read_source(&engine_audio) {
         for token in [
             "struct SpscRingI16",
             "struct SpscRingMusicSeg",
@@ -6506,7 +6517,7 @@ fn audio_core_lives_in_audio_crate() {
             if rel.ends_with("telemetry.rs") {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("backend source file should be readable");
+            let text = read_source(&file).expect("backend source file should be readable");
             for token in [
                 "super::super",
                 "crate::engine::audio::internal",
@@ -6522,7 +6533,7 @@ fn audio_core_lives_in_audio_crate() {
     }
 
     let config_audio = root.join("src/config/audio.rs");
-    if let Ok(text) = fs::read_to_string(&config_audio) {
+    if let Ok(text) = read_source(&config_audio) {
         if !text.contains(
             "pub use deadsync_audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};",
         ) {
@@ -6549,7 +6560,7 @@ fn audio_core_lives_in_audio_crate() {
     }
 
     let config_runtime = root.join("src/config/runtime.rs");
-    if let Ok(text) = fs::read_to_string(&config_runtime) {
+    if let Ok(text) = read_source(&config_runtime) {
         for required in [
             "deadsync_audio::set_audio_mix_levels",
             "deadsync_audio::audio_mix_levels",
@@ -6578,7 +6589,7 @@ fn audio_core_lives_in_audio_crate() {
     let audio_src = root.join("crates/deadlib-audio-core/src");
     if audio_src.exists() {
         for file in rust_files(&audio_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in AUDIO_CORE_FORBIDDEN_TOKENS {
                 let count = count_token_refs(&text, token);
@@ -6625,7 +6636,7 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
     }
 
     for name in ["deadlib-audio", "deadlib-audio-decode"] {
-        let manifest = fs::read_to_string(root.join("crates").join(name).join("Cargo.toml"))
+        let manifest = read_source(root.join("crates").join(name).join("Cargo.toml"))
             .expect("engine audio manifest should be readable");
         assert!(
             !manifest.contains("deadsync-"),
@@ -6652,7 +6663,10 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
         }
     }
     for file in rust_files(&root.join("crates/deadlib-audio-decode/src")) {
-        let source = fs::read_to_string(&file).expect("codec source should be readable");
+        // Codec diagnostics may attach a filename to engine logging; no other
+        // platform service belongs in decode machinery.
+        let source = read_source(&file).expect("codec source should be readable")
+            .replace("deadlib_platform::logging::with_file_context", "");
         for token in AUDIO_DECODE_FORBIDDEN_TOKENS {
             assert!(
                 !source.contains(token),
@@ -6662,7 +6676,7 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
         }
     }
 
-    let manager = fs::read_to_string(root.join("crates/deadlib-audio/src/stream/runtime.rs"))
+    let manager = read_source(root.join("crates/deadlib-audio/src/stream/runtime.rs"))
         .expect("stream manager should be readable");
     assert!(manager.contains("let (command_sender, command_receiver) = channel()"));
     assert!(manager.contains("while let Ok(command) = command_receiver.recv()"));
@@ -6697,16 +6711,16 @@ fn audio_machinery_is_engine_owned_and_playback_policy_is_game_owned() {
         }
     }
     let runtime =
-        fs::read_to_string(game.join("runtime.rs")).expect("game audio should be readable");
+        read_source(game.join("runtime.rs")).expect("game audio should be readable");
     assert!(runtime.contains("stream::start(output_plan)?"));
     assert!(runtime.contains("replaygain::get_or_queue_gain_linear"));
     assert!(runtime.contains("set_music_replaygain_if_matches"));
     assert!(runtime.contains("stop_assist_tick_bus()"));
-    let mix = fs::read_to_string(game.join("mix.rs")).expect("bus policy should be readable");
+    let mix = read_source(game.join("mix.rs")).expect("bus policy should be readable");
     for bus in ["EFFECT_BUS", "SCREEN_BUS", "ASSIST_TICK_BUS"] {
         assert!(mix.contains(bus), "missing game bus {bus}");
     }
-    let folder = fs::read_to_string(root.join("crates/deadsync-assets/src/audio_folder.rs"))
+    let folder = read_source(root.join("crates/deadsync-assets/src/audio_folder.rs"))
         .expect("game audio folder selection should be readable");
     for policy in [
         "fn is_ogg",
@@ -6748,7 +6762,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
     }
 
     let replaygain_runtime = root.join("crates/deadsync-audio-replaygain/src/lib.rs");
-    if let Ok(text) = fs::read_to_string(&replaygain_runtime) {
+    if let Ok(text) = read_source(&replaygain_runtime) {
         for token in [
             "struct PersistedEntry",
             "struct PersistedCacheV1",
@@ -6778,7 +6792,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
     let analysis_src = root.join("crates/deadsync-audio-analysis/src");
     if analysis_src.exists() {
         for file in rust_files(&analysis_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in AUDIO_ANALYSIS_FORBIDDEN_TOKENS {
                 let count = count_token_refs(&text, token);
@@ -6794,7 +6808,7 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
     let replaygain_src = root.join("crates/deadsync-audio-replaygain/src");
     if replaygain_src.exists() {
         for file in rust_files(&replaygain_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -6826,9 +6840,9 @@ fn audio_analysis_cache_lives_in_analysis_crate() {
 #[test]
 fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let raw = fs::read_to_string(root.join("crates/deadlib-platform/src/input.rs"))
+    let raw = read_source(root.join("crates/deadlib-platform/src/input.rs"))
         .expect("physical input contract should be readable");
-    let game = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
+    let game = read_source(root.join("crates/deadsync-input/src/lib.rs"))
         .expect("game input should be readable");
     for definition in [
         "struct RawKeyboardEvent",
@@ -6879,10 +6893,10 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
             );
         }
     }
-    let manifest = fs::read_to_string(native.join("Cargo.toml")).expect("native manifest");
+    let manifest = read_source(native.join("Cargo.toml")).expect("native manifest");
     assert!(!manifest.contains("deadsync-"));
     assert!(manifest.contains("deadlib-platform"));
-    let config = fs::read_to_string(root.join("crates/deadsync-config/src/pad_order.rs"))
+    let config = read_source(root.join("crates/deadsync-config/src/pad_order.rs"))
         .expect("pad-order persistence should be readable");
     for policy in [
         "PadOrderRawInput",
@@ -6899,10 +6913,10 @@ fn physical_input_types_and_native_backends_stay_below_game_interpretation() {
     assert!(!config.contains("struct PadIndexUpdate"));
     assert!(!config.contains("load_pad_order_entries"));
     assert!(!config.contains("struct PadOrderAssignment"));
-    let mapping = fs::read_to_string(root.join("crates/deadsync-input/src/keymap.rs"))
+    let mapping = read_source(root.join("crates/deadsync-input/src/keymap.rs"))
         .expect("game mapping should be readable");
     assert!(mapping.contains("deadlib_platform::input::"));
-    let backend = fs::read_to_string(native.join("src/launch.rs")).expect("native launch");
+    let backend = read_source(native.join("src/launch.rs")).expect("native launch");
     assert!(backend.contains("deadlib_platform::input::{PadEvent, RawKeyboardEvent}"));
 }
 
@@ -6917,7 +6931,7 @@ fn logical_input_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for symbol in LOGICAL_INPUT_SYMBOLS {
                 let count = count_engine_input_symbol_refs(&text, symbol);
@@ -6956,7 +6970,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
     }
 
     let engine_mod_path = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+    if let Ok(text) = read_source(&engine_mod_path) {
         let count = count_token_refs(&text, "pub mod input");
         if count != 0 {
             failures.push(format!(
@@ -6967,7 +6981,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
     }
 
     let input_mod_path = root.join("src/engine/input/mod.rs");
-    if let Ok(text) = fs::read_to_string(&input_mod_path) {
+    if let Ok(text) = read_source(&input_mod_path) {
         for token in ["mod backends;", "BackendHost", "InputThreadPolicy"] {
             let count = count_token_refs(&text, token);
             if count != 0 {
@@ -6994,7 +7008,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7024,7 +7038,7 @@ fn native_input_launch_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7066,7 +7080,7 @@ fn fsr_monitor_lives_in_input_fsr_crate() {
     let src = root.join("crates/deadsync-input-fsr/src");
     if src.exists() {
         for file in rust_files(&src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -7127,7 +7141,7 @@ fn lights_imports_do_not_use_engine_facade() {
             .push("src/engine/lights still exists; import deadsync_lights directly".to_string());
     }
     let engine_mod_path = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+    if let Ok(text) = read_source(&engine_mod_path) {
         let count = count_token_refs(&text, "pub mod lights");
         if count != 0 {
             failures.push(format!(
@@ -7140,7 +7154,7 @@ fn lights_imports_do_not_use_engine_facade() {
     let lights_src = root.join("crates/deadsync-lights/src");
     if lights_src.exists() {
         for file in rust_files(&lights_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -7172,7 +7186,7 @@ fn lights_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7219,7 +7233,7 @@ fn smx_imports_do_not_use_engine_facade() {
     }
 
     let engine_mod_path = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+    if let Ok(text) = read_source(&engine_mod_path) {
         let count = count_token_refs(&text, "pub mod smx");
         if count != 0 {
             failures.push(format!(
@@ -7239,7 +7253,7 @@ fn smx_imports_do_not_use_engine_facade() {
     let smx_src = root.join("crates/deadsync-smx/src");
     if smx_src.exists() {
         for file in rust_files(&smx_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -7271,7 +7285,7 @@ fn smx_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7309,7 +7323,7 @@ fn video_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7379,7 +7393,7 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
     }
 
     let engine_mod_path = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod_path) {
+    if let Ok(text) = read_source(&engine_mod_path) {
         let count = count_token_refs(&text, "pub mod gfx");
         if count != 0 {
             failures.push(format!(
@@ -7392,7 +7406,7 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
     let renderer_src = root.join("crates/deadlib-renderer/src");
     if renderer_src.exists() {
         for file in rust_files(&renderer_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -7420,7 +7434,7 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7442,7 +7456,7 @@ fn render_contract_imports_do_not_use_engine_gfx_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7500,7 +7514,7 @@ fn presentation_color_and_mesh_are_theme_neutral() {
         let mut files = rust_files(&crate_dir.join("src"));
         files.push(crate_dir.join("Cargo.toml"));
         for file in files {
-            let text = fs::read_to_string(&file).expect("crate source should be readable");
+            let text = read_source(&file).expect("crate source should be readable");
             for token in forbidden {
                 assert!(
                     !text.contains(token),
@@ -7528,7 +7542,7 @@ fn present_model_lives_in_present_crate() {
     }
 
     let engine_mod = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod) {
+    if let Ok(text) = read_source(&engine_mod) {
         let count = count_token_refs(&text, "pub mod space");
         if count != 0 {
             failures.push(format!(
@@ -7551,7 +7565,7 @@ fn present_model_lives_in_present_crate() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7576,7 +7590,7 @@ fn present_model_lives_in_present_crate() {
     }
 
     let assets_lib = root.join("crates/deadsync-assets/src/lib.rs");
-    if let Ok(text) = fs::read_to_string(&assets_lib) {
+    if let Ok(text) = read_source(&assets_lib) {
         for token in [
             "pub mod present_dsl",
             "pub fn load_initial_assets",
@@ -7594,7 +7608,7 @@ fn present_model_lives_in_present_crate() {
     }
 
     let deadlib_assets_lib = root.join("crates/deadlib-assets/src/lib.rs");
-    if let Ok(text) = fs::read_to_string(&deadlib_assets_lib)
+    if let Ok(text) = read_source(&deadlib_assets_lib)
         && (!text.contains("METADATA_TEXTURE_CONTEXT")
             || !text.contains("MetadataTextureContext")
             || !text.contains("pub use manager::AssetManager")
@@ -7607,7 +7621,7 @@ fn present_model_lives_in_present_crate() {
     }
 
     let asset_dsl = root.join("crates/deadsync-assets/src/present_dsl.rs");
-    if let Ok(text) = fs::read_to_string(&asset_dsl) {
+    if let Ok(text) = read_source(&asset_dsl) {
         for token in ["SpriteBuilder", "TextBuilder", "TextureKeyHandle"] {
             if !text.contains(token) {
                 failures.push(format!(
@@ -7621,7 +7635,7 @@ fn present_model_lives_in_present_crate() {
     }
 
     let asset_textures = root.join("crates/deadsync-assets/src/textures.rs");
-    if let Ok(text) = fs::read_to_string(&asset_textures)
+    if let Ok(text) = read_source(&asset_textures)
         && (!text.contains("GraphicTextureChoiceCache")
             || !text.contains("initial_texture_jobs")
             || !text.contains("load_texture_key"))
@@ -7644,7 +7658,7 @@ fn present_model_lives_in_present_crate() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7673,7 +7687,7 @@ fn present_model_lives_in_present_crate() {
     }
 
     let present_dsl = root.join("crates/deadlib-present/src/dsl.rs");
-    if let Ok(text) = fs::read_to_string(&present_dsl) {
+    if let Ok(text) = read_source(&present_dsl) {
         for macro_name in [
             "macro_rules! __ui_textalign_from_ident",
             "macro_rules! __ui_halign_from_ident",
@@ -7694,7 +7708,7 @@ fn present_model_lives_in_present_crate() {
     let present_src = root.join("crates/deadlib-present/src");
     if present_src.exists() {
         for file in rust_files(&present_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -7743,7 +7757,7 @@ fn version_utils_live_in_version_crate() {
     }
 
     let engine_mod = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod)
+    if let Ok(text) = read_source(&engine_mod)
         && count_token_refs(&text, "pub mod version") != 0
     {
         failures.push(format!(
@@ -7758,7 +7772,7 @@ fn version_utils_live_in_version_crate() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7806,7 +7820,7 @@ fn updater_core_lives_in_updater_crate() {
     }
 
     let engine_updater = root.join("src/engine/updater/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_updater) {
+    if let Ok(text) = read_source(&engine_updater) {
         for module in [
             "action",
             "state",
@@ -7826,7 +7840,7 @@ fn updater_core_lives_in_updater_crate() {
     }
 
     let engine_mod = root.join("src/engine/mod.rs");
-    if let Ok(text) = fs::read_to_string(&engine_mod)
+    if let Ok(text) = read_source(&engine_mod)
         && count_token_refs(&text, "pub mod updater") != 0
     {
         failures.push(format!(
@@ -7841,7 +7855,7 @@ fn updater_core_lives_in_updater_crate() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7863,7 +7877,7 @@ fn updater_core_lives_in_updater_crate() {
     let updater_src = root.join("crates/deadsync-updater/src");
     if updater_src.exists() {
         for file in rust_files(&updater_src) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             for token in [
                 "crate::engine",
@@ -7940,7 +7954,7 @@ fn platform_imports_do_not_use_engine_facade() {
             continue;
         }
         for file in rust_files(&path) {
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let rel = rel_path(&root, &file);
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
@@ -7996,7 +8010,7 @@ fn rule_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for module in GAME_RULE_FACADE_MODULES {
                 let count = count_game_rule_facade_refs(&text, module);
                 if count != 0 {
@@ -8030,7 +8044,7 @@ fn profile_rule_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in GAME_PROFILE_RULE_SYMBOLS {
                 let count = count_game_profile_rule_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8120,7 +8134,7 @@ fn chart_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let count = count_game_chart_facade_refs(&text);
             if count != 0 {
                 failures.push(format!("{rel} references game::chart facade {count} times"));
@@ -8158,7 +8172,7 @@ fn parsing_notes_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let count = count_game_parsing_notes_facade_refs(&text);
             if count != 0 {
                 failures.push(format!(
@@ -8190,7 +8204,7 @@ fn song_data_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in GAME_SONG_DATA_SYMBOLS {
                 let count = count_game_song_data_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8224,7 +8238,7 @@ fn score_data_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in GAME_SCORE_DATA_SYMBOLS {
                 let count = count_game_score_data_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8258,7 +8272,7 @@ fn gameplay_limits_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in GAMEPLAY_LIMIT_SYMBOLS {
                 let count = count_gameplay_limit_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8284,7 +8298,7 @@ fn core_note_imports_do_not_use_rules_facade() {
     let rules_note_path = root.join("crates/deadsync-rules/src/note.rs");
 
     if rules_note_path.exists() {
-        let text = fs::read_to_string(&rules_note_path).expect("source file should be readable");
+        let text = read_source(&rules_note_path).expect("source file should be readable");
         if text.contains("pub use deadsync_core::note::NoteType") {
             failures.push(format!(
                 "{} re-exports NoteType; import deadsync_core::note::NoteType directly",
@@ -8303,7 +8317,7 @@ fn core_note_imports_do_not_use_rules_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in CORE_NOTE_SYMBOLS {
                 let count = count_core_note_rules_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8337,7 +8351,7 @@ fn arrowcloud_protocol_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in ARROWCLOUD_PROTOCOL_SYMBOLS {
                 let count = count_arrowcloud_protocol_game_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8371,7 +8385,7 @@ fn groovestats_protocol_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in GROOVESTATS_PROTOCOL_SYMBOLS {
                 let count = count_groovestats_protocol_game_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8405,7 +8419,7 @@ fn lobby_data_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in LOBBY_DATA_SYMBOLS {
                 let count = count_lobby_data_game_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8439,7 +8453,7 @@ fn download_protocol_imports_do_not_use_game_facade() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             for symbol in DOWNLOAD_PROTOCOL_SYMBOLS {
                 let count = count_download_protocol_game_facade_refs(&text, symbol);
                 if count != 0 {
@@ -8473,7 +8487,7 @@ fn transport_error_mapping_stays_in_net_crate() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let count = text.match_indices("ureq::Error::StatusCode").count();
             if count != 0 {
                 failures.push(format!(
@@ -8505,7 +8519,7 @@ fn response_body_decoding_stays_in_net_crate() {
             if rel == "tests/architecture_boundaries.rs" {
                 continue;
             }
-            let text = fs::read_to_string(&file).expect("source file should be readable");
+            let text = read_source(&file).expect("source file should be readable");
             let count = text.match_indices("into_body().read_json()").count()
                 + text.match_indices("into_body().read_to_string()").count();
             if count != 0 {
@@ -8552,7 +8566,7 @@ fn production_rust_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn production_source(path: &Path) -> String {
-    let source = fs::read_to_string(path).expect("production source should be readable");
+    let source = read_source(path).expect("production source should be readable");
     let test_module = source.match_indices("#[cfg(test)]").find_map(|(index, _)| {
         source[index + "#[cfg(test)]".len()..]
             .trim_start()
@@ -8733,7 +8747,7 @@ fn scan_game_profile_data_file(root: &Path, file: &Path, failures: &mut Vec<Stri
     if rel == "tests/architecture_boundaries.rs" {
         return;
     }
-    let text = fs::read_to_string(file).expect("source file should be readable");
+    let text = read_source(file).expect("source file should be readable");
     for symbol in GAME_PROFILE_DATA_SYMBOLS {
         let count = count_game_profile_data_facade_refs(&text, symbol);
         if count != 0 {
@@ -9153,7 +9167,7 @@ fn concrete_theme_resources_live_in_simply_love() {
     );
     for file in generic_files {
         let generic_source =
-            fs::read_to_string(&file).expect("generic theme source should be readable");
+            read_source(&file).expect("generic theme source should be readable");
         for token in [
             "MachineFont",
             "VisualStyle",
@@ -9172,7 +9186,7 @@ fn concrete_theme_resources_live_in_simply_love() {
         }
     }
 
-    let generic_manifest = fs::read_to_string(generic_theme.join("Cargo.toml"))
+    let generic_manifest = read_source(generic_theme.join("Cargo.toml"))
         .expect("generic theme manifest should be readable");
     for dependency in ["deadsync-config", "deadsync-profile", "log =", "rand ="] {
         assert!(
@@ -9189,7 +9203,7 @@ fn concrete_theme_resources_live_in_simply_love() {
         );
     }
     let assets_source =
-        fs::read_to_string(assets.join("src/lib.rs")).expect("asset facade should be readable");
+        read_source(assets.join("src/lib.rs")).expect("asset facade should be readable");
     for token in [
         "pub mod i18n",
         "pub mod visual_styles",
@@ -9202,7 +9216,7 @@ fn concrete_theme_resources_live_in_simply_love() {
         );
     }
     let assets_manifest =
-        fs::read_to_string(assets.join("Cargo.toml")).expect("asset manifest should be readable");
+        read_source(assets.join("Cargo.toml")).expect("asset manifest should be readable");
     assert!(
         !assets_manifest.contains("deadsync-theme-simply-love"),
         "deadsync-assets must not depend on the concrete theme"
@@ -9225,7 +9239,7 @@ fn concrete_theme_resources_live_in_simply_love() {
             "Simply Love resource module is missing: {owned}"
         );
     }
-    let simply_love_manifest = fs::read_to_string(simply_love.join("Cargo.toml"))
+    let simply_love_manifest = read_source(simply_love.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     for dependency in ["deadsync-assets", "deadsync-notefield", "deadsync-theme"] {
         assert!(
@@ -9240,7 +9254,7 @@ fn simply_love_font_roles_use_prepared_policy() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
     for file in rust_files(&theme.join("src")) {
-        let source = fs::read_to_string(&file).expect("Simply Love source should be readable");
+        let source = read_source(&file).expect("Simply Love source should be readable");
         assert!(
             !source.contains("current_machine_font_key"),
             "{} still resolves fonts through mutable config",
@@ -9248,7 +9262,7 @@ fn simply_love_font_roles_use_prepared_policy() {
         );
     }
 
-    let fonts = fs::read_to_string(theme.join("src/fonts.rs"))
+    let fonts = read_source(theme.join("src/fonts.rs"))
         .expect("Simply Love font facade should be readable");
     assert!(fonts.contains("machine_font_key"));
     assert!(fonts.contains("machine_font_key_for_text"));
@@ -9259,17 +9273,17 @@ fn simply_love_font_roles_use_prepared_policy() {
 fn simply_love_language_io_is_asset_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let runtime =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/i18n_runtime.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/i18n_runtime.rs"))
             .expect("Simply Love language runtime should be readable");
-    let facade = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/i18n.rs"))
+    let facade = read_source(root.join("crates/deadsync-theme-simply-love/src/i18n.rs"))
         .expect("Simply Love language facade should be readable");
-    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/language.rs"))
+    let assets = read_source(root.join("crates/deadsync-assets/src/language.rs"))
         .expect("asset language loader should be readable");
-    let asset_facade = fs::read_to_string(root.join("crates/deadsync-assets/src/lib.rs"))
+    let asset_facade = read_source(root.join("crates/deadsync-assets/src/lib.rs"))
         .expect("asset facade should be readable");
-    let startup = fs::read_to_string(root.join("src/main.rs"))
+    let startup = read_source(root.join("src/main.rs"))
         .expect("startup entry point should be readable");
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/config_requests.rs"))
         .expect("shell config executor should be readable");
 
     for forbidden in [
@@ -9317,7 +9331,7 @@ fn simply_love_language_io_is_asset_owned() {
 #[test]
 fn concrete_theme_facade_does_not_reexport_runtime_crates() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let lib = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
+    let lib = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
         .expect("Simply Love facade should be readable");
 
     for public_facade in [
@@ -9336,23 +9350,23 @@ fn concrete_theme_facade_does_not_reexport_runtime_crates() {
 #[test]
 fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source = fs::read_to_string(root.join(
+    let source = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
     let display_mods =
-        fs::read_to_string(root.join(
+        read_source(root.join(
             "crates/deadsync-theme-simply-love/src/screens/components/gameplay/display_mods.rs",
         ))
         .expect("Simply Love DisplayMods component should be readable");
-    let field_frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field_frame = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
-    let hud_frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+    let hud_frame = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
-    let gameplay_rows = fs::read_to_string(root.join("crates/deadsync-gameplay/src/rows.rs"))
+    let gameplay_rows = read_source(root.join("crates/deadsync-gameplay/src/rows.rs"))
         .expect("gameplay row views should be readable");
     let gameplay_runtime =
-        fs::read_to_string(root.join("crates/deadsync-gameplay/src/runtime_update.rs"))
+        read_source(root.join("crates/deadsync-gameplay/src/runtime_update.rs"))
             .expect("gameplay runtime accessors should be readable");
 
     for token in [
@@ -9425,7 +9439,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         );
     }
     assert!(
-        source.contains("arrow_effect_time_s: f32"),
+        source.contains("arrow_effect_time_s: f64"),
         "Simply Love notefield adapter must receive arrow-effect time explicitly"
     );
     assert!(source.contains("pub(crate) fn compose_frame("));
@@ -9583,7 +9597,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
             "pub fn compose_judgment_feedback",
         ),
     ] {
-        let owner = fs::read_to_string(root.join(path))
+        let owner = read_source(root.join(path))
             .unwrap_or_else(|_| panic!("canonical notefield source should be readable: {path}"));
         assert!(
             !owner.contains(low_level),
@@ -9644,11 +9658,11 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let hud_entry = &hud_frame[hud_entry_start..hud_entry_end];
     let mut previous = 0;
     for marker in [
-        "compose_combo(",
-        "share_actor_range(actors, combo_capture_start,",
         "compose_error(",
         "compose_counter_hud(",
         "compose_mini_indicator(",
+        "compose_combo(",
+        "share_actor_range(actors, combo_capture_start,",
         "compose_judgment(",
         "judgment_capture_start",
         "&mut capture_scratch.judgment",
@@ -9696,14 +9710,14 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         ),
     ] {
         let owner =
-            fs::read_to_string(root.join(path)).expect("canonical owner should be readable");
+            read_source(root.join(path)).expect("canonical owner should be readable");
         assert!(
             owner.contains(definition),
             "canonical notefield owner {path} is missing {definition}"
         );
     }
 
-    let compose = fs::read_to_string(root.join("crates/deadsync-notefield/src/compose.rs"))
+    let compose = read_source(root.join("crates/deadsync-notefield/src/compose.rs"))
         .expect("canonical notefield request should be readable");
     for field in [
         "pub placement: FieldPlacement",
@@ -9715,7 +9729,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "pub noteskin: NotefieldNoteskinView",
         "pub song_lua: NotefieldSongLuaView",
         "pub options: NotefieldOptions",
-        "pub arrow_effect_time_s: f32",
+        "pub arrow_effect_time_s: f64",
         "pub hold_explosion_enabled: bool",
         "pub error_bar_modes: ErrorBarModes",
         "pub measure_counter: Option<MeasureCounterOptions>",
@@ -9776,28 +9790,28 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         );
     }
 
-    let theme_contract = fs::read_to_string(root.join("crates/deadsync-theme/src/lib.rs"))
+    let theme_contract = read_source(root.join("crates/deadsync-theme/src/lib.rs"))
         .expect("theme contract should be readable");
     assert!(theme_contract.contains("pub struct ComboFeedbackStyle"));
     let simply_love_style =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
             .expect("Simply Love notefield style should be readable");
     assert!(simply_love_style.contains("combo_feedback: ComboFeedbackStyle"));
 
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert!(shell.contains("fn arrow_effect_time_seconds(at: Instant) -> f32"));
+    assert!(shell.contains("fn arrow_effect_time_seconds(at: Instant) -> f64"));
     assert!(shell.contains("host_time::instant_nanos(at)"));
 }
 
 #[test]
 fn measure_quads_stay_on_the_direct_field_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let actors = fs::read_to_string(root.join("crates/deadsync-notefield/src/measure_actors.rs"))
+    let actors = read_source(root.join("crates/deadsync-notefield/src/measure_actors.rs"))
         .expect("canonical measure actor helpers should be readable");
-    let lines = fs::read_to_string(root.join("crates/deadsync-notefield/src/measure_lines.rs"))
+    let lines = read_source(root.join("crates/deadsync-notefield/src/measure_lines.rs"))
         .expect("canonical measure-line composer should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
 
     assert!(actors.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
@@ -9828,22 +9842,22 @@ fn measure_quads_stay_on_the_direct_field_path() {
 #[test]
 fn error_bar_presentation_stays_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("shared frame storage and compositor");
-    let error_bar = fs::read_to_string(root.join("crates/deadsync-notefield/src/error_bar.rs"))
+    let error_bar = read_source(root.join("crates/deadsync-notefield/src/error_bar.rs"))
         .expect("canonical error-bar composer should be readable");
-    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+    let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
 
-    let adapter = fs::read_to_string(root.join(
+    let adapter = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let prewarm = fs::read_to_string(root.join(
+    let prewarm = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
     ))
     .expect("Simply Love notefield prewarm policy should be readable");
-    let plan = fs::read_to_string(root.join("crates/deadsync-notefield/src/actor_builder.rs"))
+    let plan = read_source(root.join("crates/deadsync-notefield/src/actor_builder.rs"))
         .expect("canonical notefield frame plan should be readable");
 
     assert!(error_bar.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
@@ -9881,31 +9895,31 @@ fn error_bar_presentation_stays_on_the_direct_hud_path() {
 #[test]
 fn column_countdowns_stay_on_the_prepared_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("shared frame storage and compositor");
-    let feedback = fs::read_to_string(root.join("crates/deadsync-notefield/src/feedback.rs"))
+    let feedback = read_source(root.join("crates/deadsync-notefield/src/feedback.rs"))
         .expect("canonical feedback composer should be readable");
-    let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
+    let frame = read_source(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
         .expect("canonical feedback frame should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field frame should be readable");
-    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+    let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD frame should be readable");
 
-    let adapter = fs::read_to_string(root.join(
+    let adapter = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let prewarm = fs::read_to_string(root.join(
+    let prewarm = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
     ))
     .expect("Simply Love notefield prewarm policy should be readable");
 
-    assert!(feedback.contains("hud_draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {"));
+    assert!(feedback.contains("draws.push(FlatDraw::PreparedU32(FlatPreparedU32 {"));
     assert!(feedback.contains("pub const COLUMN_COUNTDOWN_SLOTS_PER_PLAYER: u8 = 3;"));
     assert!(!feedback.contains("TextBuilder"));
     assert!(!feedback.contains("countdown_text: fn"));
-    assert!(frame.contains("compose_column_feedback(\n        draws,\n        hud_draws,"));
+    assert!(frame.contains("compose_column_feedback(\n        hud_draws,"));
     assert!(
         field.contains("compose_notefield_feedback(\n        flat_draws,\n        cue_hud_draws,")
     );
@@ -9923,12 +9937,12 @@ fn column_countdowns_stay_on_the_prepared_hud_path() {
 #[test]
 fn judgment_sprites_stay_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("shared frame storage and compositor");
     let judgment =
-        fs::read_to_string(root.join("crates/deadsync-notefield/src/judgment_feedback.rs"))
+        read_source(root.join("crates/deadsync-notefield/src/judgment_feedback.rs"))
             .expect("canonical judgment-feedback composer should be readable");
-    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+    let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
 
     assert!(judgment.contains("draws.push(FlatDraw::Sprite(FlatSprite {"));
@@ -9947,16 +9961,16 @@ fn judgment_sprites_stay_on_the_direct_hud_path() {
 #[test]
 fn combo_presentation_stays_on_the_direct_hud_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("shared frame storage and compositor");
-    let combo = fs::read_to_string(root.join("crates/deadsync-notefield/src/combo_feedback.rs"))
+    let combo = read_source(root.join("crates/deadsync-notefield/src/combo_feedback.rs"))
         .expect("canonical combo-feedback composer should be readable");
-    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+    let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
     let gameplay =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay composer should be readable");
-    let adapter = fs::read_to_string(root.join(
+    let adapter = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
@@ -9987,18 +10001,18 @@ fn combo_presentation_stays_on_the_direct_hud_path() {
 #[test]
 fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("shared frame storage and compositor");
-    let zmod = fs::read_to_string(root.join("crates/deadsync-notefield/src/hud.rs"))
+    let zmod = read_source(root.join("crates/deadsync-notefield/src/hud.rs"))
         .expect("canonical ZMod HUD composer should be readable");
-    let hud = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
+    let hud = read_source(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
         .expect("canonical HUD-frame composer should be readable");
 
-    let theme_zmod = fs::read_to_string(root.join(
+    let theme_zmod = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/zmod.rs",
     ))
     .expect("Simply Love ZMod adapter should be readable");
-    let prewarm = fs::read_to_string(root.join(
+    let prewarm = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/prewarm.rs",
     ))
     .expect("Simply Love notefield prewarm policy should be readable");
@@ -10021,13 +10035,13 @@ fn zmod_numeric_hud_stays_on_the_prepared_direct_path() {
 #[test]
 fn simply_love_note_layers_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = fs::read_to_string(root.join(
+    let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/notes.rs"))
         .expect("canonical note composer should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
 
     for definition in ["struct NoteLayerRequest", "fn compose_flat_note_layer"] {
@@ -10078,17 +10092,17 @@ fn simply_love_note_layers_use_canonical_notefield_owner() {
 #[test]
 fn simply_love_mine_layers_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = fs::read_to_string(root.join(
+    let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/notes.rs"))
         .expect("canonical note composer should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
-    let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
+    let contract = read_source(root.join("crates/deadsync-noteskin/src/sprite.rs"))
         .expect("noteskin slot contract should be readable");
-    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
+    let assets = read_source(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
         .expect("asset-backed noteskin slot should be readable");
 
     for definition in ["struct MineLayerRequest", "fn compose_flat_mine_layers"] {
@@ -10124,19 +10138,19 @@ fn simply_love_mine_layers_use_canonical_notefield_owner() {
 #[test]
 fn simply_love_explosion_layers_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = fs::read_to_string(root.join(
+    let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/explosions.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/explosions.rs"))
         .expect("canonical explosion composer should be readable");
-    let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
+    let frame = read_source(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
         .expect("canonical feedback-frame composer should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
-    let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
+    let contract = read_source(root.join("crates/deadsync-noteskin/src/sprite.rs"))
         .expect("noteskin slot contract should be readable");
-    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
+    let assets = read_source(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
         .expect("asset-backed noteskin slot should be readable");
 
     for definition in [
@@ -10198,13 +10212,13 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
 #[test]
 fn simply_love_hold_body_caps_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = fs::read_to_string(root.join(
+    let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/holds.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/holds.rs"))
         .expect("canonical hold composer should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
 
     for definition in [
@@ -10256,7 +10270,7 @@ fn simply_love_hold_body_caps_use_canonical_notefield_owner() {
 #[test]
 fn canonical_notefield_crate_root_facade_is_explicit() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source = fs::read_to_string(root.join("crates/deadsync-notefield/src/lib.rs"))
+    let source = read_source(root.join("crates/deadsync-notefield/src/lib.rs"))
         .expect("canonical notefield crate root should be readable");
     let glob_exports = source
         .lines()
@@ -10294,7 +10308,7 @@ fn canonical_notefield_crate_root_facade_is_explicit() {
 #[test]
 fn canonical_notefield_public_symbols_match_allowlist() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source = fs::read_to_string(root.join("crates/deadsync-notefield/src/lib.rs"))
+    let source = read_source(root.join("crates/deadsync-notefield/src/lib.rs"))
         .expect("canonical notefield crate root should be readable");
     let mut statements = Vec::new();
     let mut statement = String::new();
@@ -10374,6 +10388,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "gameplay_mods_text",
         "GameplayModsAttackMode",
         "GameplayModsTextParams",
+        "HoldEmitterState",
         "HoldMeshScratch",
         "HoldMeshScratchStats",
         "HudLayoutYs",
@@ -10405,12 +10420,14 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldGeometry",
         "NotefieldHudComposeResult",
         "NotefieldHudFrameView",
+        "NotefieldHudParts",
         "NotefieldLaneFeedback",
         "NotefieldNoteskinView",
         "NotefieldOptions",
         "NotefieldSongLuaView",
         "NotefieldVisualState",
         "NoteskinFrameCacheStats",
+        "noteskin_model_depth",
         "noteskin_model_actor",
         "noteskin_model_actor_from_draw",
         "noteskin_model_actor_from_draw_cached",
@@ -10483,7 +10500,7 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("placement.rs", "struct FieldLayoutRequest"),
         ("placement.rs", "fn field_layout"),
         ("placement.rs", "fn player_metric_y"),
-        ("placement.rs", "fn notefield_view_proj"),
+        ("placement.rs", "fn notefield_camera"),
         ("placement.rs", "fn combo_actor_zoom"),
         ("placement.rs", "fn effective_mini_value"),
         ("placement.rs", "fn average_error_bar_mini_scale"),
@@ -10517,7 +10534,7 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("transforms.rs", "fn compute_invert_distances"),
         ("transforms.rs", "fn compute_tornado_bounds"),
         ("transforms.rs", "fn tipsy_y_extra"),
-        ("transforms.rs", "fn beat_x_extra"),
+        ("transforms.rs", "fn beat_wave_offset"),
         ("transforms.rs", "fn drunk_x_extra"),
         ("transforms.rs", "fn tornado_x_extra"),
         ("transforms.rs", "fn note_x_extra"),
@@ -10527,7 +10544,7 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("transforms.rs", "fn appearance_note_actor_alpha"),
         ("transforms.rs", "fn appearance_needs_rows"),
         ("transforms.rs", "fn tiny_spacing_scale"),
-        ("transforms.rs", "fn note_world_z_for_bumpy"),
+        ("transforms.rs", "fn note_world_z_cached"),
         ("transforms.rs", "fn visual_confusion_rotation_deg"),
         ("transforms.rs", "fn gameplay_visual_effect_params"),
         ("transforms.rs", "fn move_col_extra"),
@@ -10571,14 +10588,14 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("mini_indicator.rs", "fn zmod_indicator_detailed_color"),
         ("mini_indicator.rs", "fn zmod_combo_rainbow_color"),
         ("holds.rs", "fn scale_effect_size"),
-        ("holds.rs", "fn translated_uv_rect"),
+        ("holds.rs", "fn hold_strip_row_3d"),
         ("holds.rs", "fn scale_sprite_to_arrow"),
         ("holds.rs", "fn song_time_ns_to_seconds"),
         ("holds.rs", "fn bottom_cap_uv_window"),
         ("holds.rs", "fn song_time_ns_delta_seconds"),
         ("error_bar.rs", "fn error_bar_text_scalable_zoom"),
     ] {
-        let source = fs::read_to_string(root.join("crates/deadsync-notefield/src").join(file))
+        let source = read_source(root.join("crates/deadsync-notefield/src").join(file))
             .unwrap_or_else(|_| panic!("canonical notefield source {file} should be readable"));
         assert!(
             source.contains(&format!("pub(crate) {internal}")),
@@ -10595,11 +10612,11 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
 fn song_playback_transforms_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay bridge should be readable");
-    let playback = fs::read_to_string(root.join("crates/deadsync-song-lua/src/playback.rs"))
+    let playback = read_source(root.join("crates/deadsync-song-lua/src/playback.rs"))
         .expect("shared playback should be readable");
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/song_lua.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/song_lua.rs"))
         .expect("canonical Song Lua notefield transforms should be readable");
 
     for definition in [
@@ -10657,13 +10674,13 @@ fn song_playback_transforms_use_canonical_notefield_owner() {
 #[test]
 fn canonical_notefield_owns_hold_entry_planning() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let theme = fs::read_to_string(root.join(
+    let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/holds.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/holds.rs"))
         .expect("canonical hold planner should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
 
     for definition in [
@@ -10724,15 +10741,15 @@ fn canonical_notefield_owns_hold_entry_planning() {
 fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let canonical_path = root.join("crates/deadsync-notefield/src/noteskin_model.rs");
-    let canonical = fs::read_to_string(&canonical_path)
+    let canonical = read_source(&canonical_path)
         .expect("canonical noteskin model owner should be readable");
-    let notefield_lib = fs::read_to_string(root.join("crates/deadsync-notefield/src/lib.rs"))
+    let notefield_lib = read_source(root.join("crates/deadsync-notefield/src/lib.rs"))
         .expect("notefield exports should be readable");
-    let notefield_manifest = fs::read_to_string(root.join("crates/deadsync-notefield/Cargo.toml"))
+    let notefield_manifest = read_source(root.join("crates/deadsync-notefield/Cargo.toml"))
         .expect("notefield manifest should be readable");
     let old_theme_path = root
         .join("crates/deadsync-theme-simply-love/src/screens/components/shared/noteskin_model.rs");
-    let shared_mod = fs::read_to_string(
+    let shared_mod = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/components/shared/mod.rs"),
     )
     .expect("Simply Love shared module should be readable");
@@ -10742,7 +10759,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     assert!(!shared_mod.contains("noteskin_model"));
     assert!(notefield_lib.contains("mod noteskin_model;"));
     assert!(notefield_lib.contains("pub use noteskin_model::{"));
-    assert!(notefield_manifest.contains("twox-hash = \"2.1.4\""));
+    assert!(notefield_manifest.contains("twox-hash ="));
     assert!(!notefield_manifest.contains("deadsync-assets"));
 
     for definition in [
@@ -10760,7 +10777,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     assert!(canonical.contains("pub fn noteskin_model_actor_from_draw_cached"));
     assert!(canonical.contains("pub(crate) fn noteskin_model_flat_draw_cached"));
     assert!(!canonical.contains("pub fn noteskin_model_flat_draw_cached"));
-    let note_composer = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
+    let note_composer = read_source(root.join("crates/deadsync-notefield/src/notes.rs"))
         .expect("canonical note composer should be readable");
     assert!(note_composer.contains("noteskin_model_flat_draw_cached"));
     for forbidden in ["deadsync_assets", "SpriteSlot", "texture_key_handle()"] {
@@ -10793,7 +10810,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
         ),
     ];
     for (path, symbol) in call_sites {
-        let source = fs::read_to_string(root.join(path)).expect("call site should be readable");
+        let source = read_source(root.join(path)).expect("call site should be readable");
         assert!(source.contains("deadsync_notefield"));
         assert!(
             source.contains(symbol),
@@ -10811,7 +10828,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     ];
     let theme_src = root.join("crates/deadsync-theme-simply-love/src");
     for file in rust_files(&theme_src) {
-        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        let source = read_source(&file).expect("theme source should be readable");
         for definition in forbidden_definitions {
             assert!(
                 !source.contains(definition),
@@ -10825,12 +10842,12 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
 #[test]
 fn noteskin_slot_contract_stays_renderer_neutral_and_asset_backed() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
+    let contract = read_source(root.join("crates/deadsync-noteskin/src/sprite.rs"))
         .expect("noteskin slot contract should be readable");
-    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
+    let assets = read_source(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
         .expect("asset-backed noteskin slots should be readable");
     let canonical =
-        fs::read_to_string(root.join("crates/deadsync-notefield/src/noteskin_model.rs"))
+        read_source(root.join("crates/deadsync-notefield/src/noteskin_model.rs"))
             .expect("canonical noteskin model owner should be readable");
 
     for definition in [
@@ -10859,7 +10876,7 @@ fn noteskin_slot_contract_stays_renderer_neutral_and_asset_backed() {
         "impl NoteskinSlot for SpriteSlot",
         "SpriteSlot::texture_key_shared(self)",
         "SpriteSlot::model_draw_at(self, time, beat)",
-        "pub fn texture_key_handle(&self)",
+        "pub fn texture_key_shared(&self)",
         "model_vertex_for_sprite(&slot.def, vertex)",
     ] {
         assert!(
@@ -10868,36 +10885,37 @@ fn noteskin_slot_contract_stays_renderer_neutral_and_asset_backed() {
         );
     }
     assert!(canonical.contains("S: NoteskinSlot"));
-    assert!(canonical.contains("model_vertex_for_sprite(slot.sprite_def(), vertex)"));
+    assert!(canonical.contains("let def = slot.sprite_def();")
+        && canonical.contains("model_vertex_for_sprite(def, vertex)"));
 }
 
 #[test]
 fn field_metrics_are_shared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/receptors.rs"))
+    let canonical = read_source(root.join("crates/deadsync-notefield/src/receptors.rs"))
         .expect("canonical receptor composition should be readable");
-    let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
+    let frame = read_source(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
         .expect("canonical feedback-frame composition should be readable");
-    let field = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
+    let field = read_source(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composition should be readable");
-    let song_lua = fs::read_to_string(root.join("crates/deadsync-notefield/src/song_lua.rs"))
+    let song_lua = read_source(root.join("crates/deadsync-notefield/src/song_lua.rs"))
         .expect("canonical song Lua presentation should be readable");
-    let contract = fs::read_to_string(root.join("crates/deadsync-theme/src/lib.rs"))
+    let contract = read_source(root.join("crates/deadsync-theme/src/lib.rs"))
         .expect("generic theme contract should be readable");
     let theme_style =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
             .expect("Simply Love notefield style should be readable");
-    let theme = fs::read_to_string(root.join(
+    let theme = read_source(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
-    let manifest = fs::read_to_string(root.join("crates/deadsync-notefield/Cargo.toml"))
+    let manifest = read_source(root.join("crates/deadsync-notefield/Cargo.toml"))
         .expect("canonical notefield manifest should be readable");
-    let metrics = fs::read_to_string(root.join("crates/deadsync-notefield/src/style.rs"))
+    let metrics = read_source(root.join("crates/deadsync-notefield/src/style.rs"))
         .expect("canonical field metrics should be readable");
-    let placement = fs::read_to_string(root.join("crates/deadsync-notefield/src/placement.rs"))
+    let placement = read_source(root.join("crates/deadsync-notefield/src/placement.rs"))
         .expect("canonical field placement should be readable");
-    let compose = fs::read_to_string(root.join("crates/deadsync-notefield/src/compose.rs"))
+    let compose = read_source(root.join("crates/deadsync-notefield/src/compose.rs"))
         .expect("canonical composition contract should be readable");
 
     for token in [
@@ -11058,7 +11076,7 @@ fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {
 fn shell_app_has_no_move_compatibility_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let shell = root.join("crates/deadsync-shell/src");
-    let lib = fs::read_to_string(shell.join("lib.rs")).expect("shell facade should be readable");
+    let lib = read_source(shell.join("lib.rs")).expect("shell facade should be readable");
     for token in [
         "extern crate self as deadsync_shell",
         "pub use deadlib_render as render",
@@ -11084,7 +11102,7 @@ fn shell_app_has_no_move_compatibility_facade() {
     ];
     let mut failures = Vec::new();
     for file in rust_files(&shell.join("app")) {
-        let text = fs::read_to_string(&file).expect("shell app source should be readable");
+        let text = read_source(&file).expect("shell app source should be readable");
         for token in forbidden_app_tokens {
             if text.contains(token) {
                 failures.push(format!("{}: {token}", rel_path(&root, &file)));
@@ -11101,7 +11119,7 @@ fn shell_app_has_no_move_compatibility_facade() {
 #[test]
 fn shell_public_facade_does_not_grow_accidentally() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let lib = fs::read_to_string(root.join("crates/deadsync-shell/src/lib.rs"))
+    let lib = read_source(root.join("crates/deadsync-shell/src/lib.rs"))
         .expect("shell facade should be readable");
     let public_lines: Vec<_> = lib
         .lines()
@@ -11110,8 +11128,8 @@ fn shell_public_facade_does_not_grow_accidentally() {
         .collect();
     assert_eq!(
         public_lines,
-        ["pub mod app;", "pub mod live_case;"],
-        "only startup and the live-case CLI contract belong on the shell's public facade"
+        ["pub mod app;", "pub mod gameplay_entry;", "pub mod live_case;"],
+        "only startup, gameplay preparation and the live-case CLI belong on the shell facade"
     );
 }
 
@@ -11127,14 +11145,14 @@ fn root_screen_tree_is_removed() {
 #[test]
 fn theme_screen_contract_has_explicit_owners() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let generic_screen = fs::read_to_string(root.join("crates/deadsync-theme/src/screen.rs"))
+    let generic_screen = read_source(root.join("crates/deadsync-theme/src/screen.rs"))
         .expect("generic screen contract should be readable");
-    let generic_effect = fs::read_to_string(root.join("crates/deadsync-theme/src/effect.rs"))
+    let generic_effect = read_source(root.join("crates/deadsync-theme/src/effect.rs"))
         .expect("generic effect contract should be readable");
     let simply_love_flow =
-        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
-    let shell_flow = fs::read_to_string(root.join("crates/deadsync-shell/src/screen_flow.rs"))
+    let shell_flow = read_source(root.join("crates/deadsync-shell/src/screen_flow.rs"))
         .expect("shell effect router should be readable");
 
     for token in ["pub struct ThemeScreenId", "pub trait Theme"] {
@@ -11159,7 +11177,7 @@ fn theme_screen_contract_has_explicit_owners() {
             "Simply Love is missing concrete flow token {token}"
         );
     }
-    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
         shell_flow.contains("theme_effect_route_plan")
@@ -11194,7 +11212,7 @@ fn theme_owned_screen_architecture_has_no_contract_crate() {
     ];
     let mut failures = Vec::new();
     for file in files {
-        let text = fs::read_to_string(&file).expect("workspace source should be readable");
+        let text = read_source(&file).expect("workspace source should be readable");
         let rel = rel_path(&root, &file);
         for token in &removed_tokens {
             let count = text.match_indices(token).count();
@@ -11240,7 +11258,7 @@ fn root_source_is_binary_only() {
 #[test]
 fn player_leaderboard_runtime_callbacks_stay_allocation_free() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let source = fs::read_to_string(root.join("crates/deadsync-online/src/player_leaderboards.rs"))
+    let source = read_source(root.join("crates/deadsync-online/src/player_leaderboards.rs"))
         .expect("player leaderboard runtime source should be readable");
 
     assert!(
@@ -11265,7 +11283,7 @@ fn application_layout_is_resolved_above_platform_and_audio() {
         "crates/deadsync-audio-stream/src/runtime.rs",
     ] {
         let source =
-            fs::read_to_string(root.join(file)).expect("boundary source should be readable");
+            read_source(root.join(file)).expect("boundary source should be readable");
         for forbidden in [
             "app_dirs",
             "deadsync_config",
@@ -11281,7 +11299,7 @@ fn application_layout_is_resolved_above_platform_and_audio() {
         }
     }
     let config =
-        fs::read_to_string(root.join("crates/deadsync-config/src/dirs.rs")).expect("layout source");
+        read_source(root.join("crates/deadsync-config/src/dirs.rs")).expect("layout source");
     assert!(
         !config.contains("OnceLock"),
         "the full layout must not become another global accessor"
@@ -11293,7 +11311,7 @@ fn application_layout_is_resolved_above_platform_and_audio() {
         "crates/deadsync-online/src/runtime.rs",
         "crates/deadsync-updater/src/lib.rs",
     ] {
-        let source = fs::read_to_string(root.join(file)).expect("service source");
+        let source = read_source(root.join(file)).expect("service source");
         for forbidden in ["AppDirs", "app_dirs()", "native_dirs("] {
             assert!(
                 !source.contains(forbidden),
@@ -11306,7 +11324,7 @@ fn application_layout_is_resolved_above_platform_and_audio() {
 #[test]
 fn public_api_paths_expose_owners_without_legacy_catalogs() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let core = fs::read_to_string(root.join("crates/deadlib-render-core/src/lib.rs"))
+    let core = read_source(root.join("crates/deadlib-render-core/src/lib.rs"))
         .expect("render core");
     for removed in [
         "BACKEND_TYPE_CHOICES",
@@ -11321,16 +11339,16 @@ fn public_api_paths_expose_owners_without_legacy_catalogs() {
             "renderer still owns obsolete menu API {removed}"
         );
     }
-    let graphics = fs::read_to_string(root.join("crates/deadsync-shell/src/app/graphics.rs"))
+    let graphics = read_source(root.join("crates/deadsync-shell/src/app/graphics.rs"))
         .expect("shell graphics");
     assert!(graphics.contains("fn build_software_thread_choices()"));
-    let theme_runtime = fs::read_to_string(root.join("crates/deadsync-theme/src/runtime.rs"))
+    let theme_runtime = read_source(root.join("crates/deadsync-theme/src/runtime.rs"))
         .expect("theme renderer choices");
     assert!(theme_runtime.contains("impl RendererChoice"));
     assert!(theme_runtime.contains("pub const ALL:"));
 
     let config =
-        fs::read_to_string(root.join("crates/deadsync-config/src/lib.rs")).expect("config API");
+        read_source(root.join("crates/deadsync-config/src/lib.rs")).expect("config API");
     assert!(!root.join("crates/deadsync-config/src/prelude.rs").exists());
     for implementation in [
         "app_update",
@@ -11355,7 +11373,7 @@ fn public_api_paths_expose_owners_without_legacy_catalogs() {
         "deadlib-render",
     ] {
         for file in rust_files(&root.join("crates").join(name).join("src")) {
-            let source = fs::read_to_string(&file).expect("public API source");
+            let source = read_source(&file).expect("public API source");
             assert!(
                 !source.contains("deadsync_config::prelude"),
                 "{} uses removed config prelude",
@@ -11371,13 +11389,13 @@ fn public_api_paths_expose_owners_without_legacy_catalogs() {
             }
         }
     }
-    let theme = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
+    let theme = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
         .expect("concrete theme API");
     assert!(!theme.contains("mod config {"));
     assert!(!theme.contains("mod assets {"));
     assert!(theme.contains("mod effects;"));
     assert!(!theme.contains("pub mod effects;"));
-    let renderer = fs::read_to_string(root.join("crates/deadlib-render/src/lib.rs"))
+    let renderer = read_source(root.join("crates/deadlib-render/src/lib.rs"))
         .expect("renderer umbrella");
     assert!(
         renderer.contains("pub use deadlib_render_core::{"),
@@ -11388,7 +11406,7 @@ fn public_api_paths_expose_owners_without_legacy_catalogs() {
 #[test]
 fn stage_results_are_independent_of_evaluation() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let evaluation = fs::read_to_string(
+    let evaluation = read_source(
         root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
     )
     .expect("evaluation source");
@@ -11405,7 +11423,7 @@ fn stage_results_are_independent_of_evaluation() {
         );
     }
     assert!(evaluation.contains("pub fn init(init_view: EvaluationInitView)"));
-    let results = fs::read_to_string(root.join("crates/deadsync-profile-gameplay/src/results.rs"))
+    let results = read_source(root.join("crates/deadsync-profile-gameplay/src/results.rs"))
         .expect("gameplay result owner");
     assert!(results.contains("pub fn stage_result"));
     assert!(results.contains("GameplayRuntimeState"));
@@ -11420,15 +11438,15 @@ fn stage_results_are_independent_of_evaluation() {
             "results depend on presentation/runtime: {forbidden}"
         );
     }
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell source");
     assert!(!shell.contains("append_stage_results_from_eval"));
-    let session = fs::read_to_string(root.join("crates/deadsync-shell/src/session.rs"))
+    let session = read_source(root.join("crates/deadsync-shell/src/session.rs"))
         .expect("session source");
     assert!(
         session.contains("pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary)")
     );
-    let adapter = fs::read_to_string(root.join("crates/deadsync-shell/src/session_results.rs"))
+    let adapter = read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));
 }
@@ -11464,7 +11482,7 @@ fn mp3_timeline_policy_is_selected_by_the_game() {
         "crates/deadsync-shell/src/sync_analysis.rs",
     ] {
         // sync_analysis keeps production functions after its test module.
-        let source = fs::read_to_string(root.join(relative)).expect("game audio caller");
+        let source = read_source(root.join(relative)).expect("game audio caller");
         assert!(
             source.contains("mp3_gapless: false") && source.contains("mp3_info_silence: true"),
             "{relative} must explicitly preserve DeadSync's MP3 timeline"

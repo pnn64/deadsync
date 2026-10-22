@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ReceptorGlowBehavior {
+    pub draw_before_target: bool,
     pub press_duration: f32,
     pub press_alpha_start: f32,
     pub press_alpha_end: f32,
@@ -72,6 +73,7 @@ impl ReceptorGlowBehavior {
 impl Default for ReceptorGlowBehavior {
     fn default() -> Self {
         Self {
+            draw_before_target: false,
             press_duration: 0.0,
             press_alpha_start: 1.0,
             press_alpha_end: 1.0,

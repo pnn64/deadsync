@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "queued-visibility",
+  "screen": {"width": 854, "height": 480},
+  "bpm": 60,
+  "samples": [0, 0, 0.016666666666666666, 0.03333333333333333, 0.08333333333333333, 0.11666666666666667, 0.2],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {"kind": "sprite", "name": "QueuedHide", "commands": {"Hide": false}, "tweens": [{"queuecommand": "Hide"}]},
+      {"kind": "sprite", "name": "QueuedBuilder", "commands": {"Hide": false}, "tweens": [{"queuecommand": "Hide"}]},
+      {"kind": "sprite", "name": "QueuedShow", "visible": false, "commands": {"Show": true}, "tweens": [{"queuecommand": "Show"}]},
+      {"kind": "sprite", "name": "DelayedRestore", "commands": {"Hide": false, "Show": true}, "tweens": [{"queuecommand": "Hide"}, {"curve": "sleep", "duration": 0.1}, {"queuecommand": "Show"}]},
+      {"kind": "sprite", "name": "ImmediateHide", "visible": false}
+    ]
+  }
+}

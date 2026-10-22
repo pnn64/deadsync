@@ -46,12 +46,26 @@ struct Callbacks {
     removals: Vec<usize>,
 }
 
+// Sticky across callback removal and screen replacement: an offline sample
+// cannot represent external input, even if its discovery probe later removes it.
+#[derive(Default)]
+struct RequiresRuntime;
+
+pub(crate) fn require_offline_compatible(lua: &Lua) -> Result<(), String> {
+    if lua.app_data_ref::<RequiresRuntime>().is_some() {
+        Err("song Lua registers input callbacks and requires runtime Lua (context.live = true)".into())
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) fn install(lua: &Lua, screen: &Table) -> mlua::Result<()> {
     // A gameplay reload retains the VM but replaces Screen's callback map.
     lua.set_app_data(Callbacks::default());
     screen.set(
         "AddInputCallback",
         lua.create_function(|lua, (screen, callback): (Table, Function)| {
+            lua.set_app_data(RequiresRuntime);
             lua.app_data_mut::<Callbacks>()
                 .expect("screen callback registry")
                 .functions

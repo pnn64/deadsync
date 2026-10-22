@@ -25,6 +25,45 @@ pub const SL_FA_PLUS_COLORS: &[&str] = &[
     "#21CCE8", "#ffffff", "#e29c18", "#66c955", "#b45cff", "#ff3030", "#ff00cc",
 ];
 
+
+const fn fixed_hex_digit(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+const fn fixed_hex_pair(first: u8, second: u8) -> Option<u8> {
+    let Some(low) = fixed_hex_digit(second) else {
+        return None;
+    };
+    if first == b'+' {
+        return Some(low);
+    }
+    let Some(high) = fixed_hex_digit(first) else {
+        return None;
+    };
+    Some((high << 4) | low)
+}
+
+// These literals are decoded during compilation; runtime parsing stays unchanged.
+const fn fixed_color(text: &str) -> [f32; 4] {
+    let bytes = text.as_bytes();
+    assert!(bytes.len() == 7 && bytes[0] == b'#');
+    let Some(r) = fixed_hex_pair(bytes[1], bytes[2]) else {
+        panic!("invalid fixed red");
+    };
+    let Some(g) = fixed_hex_pair(bytes[3], bytes[4]) else {
+        panic!("invalid fixed green");
+    };
+    let Some(b) = fixed_hex_pair(bytes[5], bytes[6]) else {
+        panic!("invalid fixed blue");
+    };
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
+
 pub fn parse_color_text(text: &str) -> Option<[f32; 4]> {
     let text = text.trim();
     if text.is_empty() {
@@ -105,8 +144,8 @@ pub fn song_lua_player_score_color(player: usize) -> [f32; 4] {
 #[must_use]
 pub fn song_lua_player_dark_color(player: usize) -> [f32; 4] {
     match player {
-        0 => parse_color_text("#da4453").unwrap_or([1.0, 1.0, 1.0, 1.0]),
-        1 => parse_color_text("#4a89dc").unwrap_or([1.0, 1.0, 1.0, 1.0]),
+        0 => const { fixed_color("#da4453") },
+        1 => const { fixed_color("#4a89dc") },
         _ => [1.0, 1.0, 1.0, 1.0],
     }
 }
@@ -127,7 +166,7 @@ pub fn song_lua_difficulty_index(name: &str) -> Option<i64> {
 #[must_use]
 pub fn song_lua_difficulty_color(difficulty: i64, decorative: bool) -> [f32; 4] {
     if difficulty == 5 {
-        return parse_color_text("#B4B7BA").unwrap_or([1.0; 4]);
+        return const { fixed_color("#B4B7BA") };
     }
     palette_color(
         SONG_LUA_ACTIVE_COLOR_INDEX + difficulty - 4,
@@ -137,52 +176,54 @@ pub fn song_lua_difficulty_color(difficulty: i64, decorative: bool) -> [f32; 4] 
 
 #[must_use]
 pub fn custom_difficulty_color(name: &str) -> Option<[f32; 4]> {
-    let hex = match name {
-        "Beginner" | "Difficulty_Beginner" => "#ff32f8",
-        "Easy" | "Difficulty_Easy" | "Freestyle" => "#2cff00",
-        "Medium" | "Difficulty_Medium" | "HalfDouble" => "#fee600",
-        "Hard" | "Difficulty_Hard" | "Crazy" => "#ff2f39",
-        "Challenge" | "Difficulty_Challenge" | "Nightmare" => "#1cd8ff",
-        "Edit" | "Difficulty_Edit" => "#cccccc",
-        "Couple" | "Difficulty_Couple" => "#ed0972",
-        "Routine" | "Difficulty_Routine" => "#ff9a00",
+    let color = match name {
+        "Beginner" | "Difficulty_Beginner" => const { fixed_color("#ff32f8") },
+        "Easy" | "Difficulty_Easy" | "Freestyle" => const { fixed_color("#2cff00") },
+        "Medium" | "Difficulty_Medium" | "HalfDouble" => const { fixed_color("#fee600") },
+        "Hard" | "Difficulty_Hard" | "Crazy" => const { fixed_color("#ff2f39") },
+        "Challenge" | "Difficulty_Challenge" | "Nightmare" => const { fixed_color("#1cd8ff") },
+        "Edit" | "Difficulty_Edit" => const { fixed_color("#cccccc") },
+        "Couple" | "Difficulty_Couple" => const { fixed_color("#ed0972") },
+        "Routine" | "Difficulty_Routine" => const { fixed_color("#ff9a00") },
         _ => return None,
     };
-    parse_color_text(hex)
+    Some(color)
 }
 
 #[must_use]
 pub fn stage_color(name: &str) -> Option<[f32; 4]> {
-    let hex = match name {
-        "Stage_1st" => "#00ffc7",
-        "Stage_2nd" => "#58ff00",
-        "Stage_3rd" => "#f400ff",
-        "Stage_4th" => "#00ffda",
-        "Stage_5th" => "#ed00ff",
-        "Stage_6th" => "#73ff00",
-        "Stage_Next" => "#73ff00",
-        "Stage_Final" | "Stage_Extra2" => "#ff0707",
-        "Stage_Extra1" => "#fafa00",
-        "Stage_Nonstop" | "Stage_Oni" | "Stage_Endless" | "Stage_Event" | "Stage_Demo" => "#ffffff",
+    let color = match name {
+        "Stage_1st" => const { fixed_color("#00ffc7") },
+        "Stage_2nd" => const { fixed_color("#58ff00") },
+        "Stage_3rd" => const { fixed_color("#f400ff") },
+        "Stage_4th" => const { fixed_color("#00ffda") },
+        "Stage_5th" => const { fixed_color("#ed00ff") },
+        "Stage_6th" => const { fixed_color("#73ff00") },
+        "Stage_Next" => const { fixed_color("#73ff00") },
+        "Stage_Final" | "Stage_Extra2" => const { fixed_color("#ff0707") },
+        "Stage_Extra1" => const { fixed_color("#fafa00") },
+        "Stage_Nonstop" | "Stage_Oni" | "Stage_Endless" | "Stage_Event" | "Stage_Demo" => {
+            const { fixed_color("#ffffff") }
+        }
         _ => return None,
     };
-    parse_color_text(hex)
+    Some(color)
 }
 
 #[must_use]
 pub fn judgment_line_color(name: &str) -> Option<[f32; 4]> {
-    let hex = match name {
-        "JudgmentLine_W1" => "#bfeaff",
-        "JudgmentLine_W2" => "#fff568",
-        "JudgmentLine_W3" => "#a4ff00",
-        "JudgmentLine_W4" => "#34bfff",
-        "JudgmentLine_W5" => "#e44dff",
-        "JudgmentLine_Held" => "#ffffff",
-        "JudgmentLine_Miss" => "#ff3c3c",
-        "JudgmentLine_MaxCombo" => "#ffc600",
+    let color = match name {
+        "JudgmentLine_W1" => const { fixed_color("#bfeaff") },
+        "JudgmentLine_W2" => const { fixed_color("#fff568") },
+        "JudgmentLine_W3" => const { fixed_color("#a4ff00") },
+        "JudgmentLine_W4" => const { fixed_color("#34bfff") },
+        "JudgmentLine_W5" => const { fixed_color("#e44dff") },
+        "JudgmentLine_Held" => const { fixed_color("#ffffff") },
+        "JudgmentLine_Miss" => const { fixed_color("#ff3c3c") },
+        "JudgmentLine_MaxCombo" => const { fixed_color("#ffc600") },
         _ => return None,
     };
-    parse_color_text(hex)
+    Some(color)
 }
 
 #[must_use]
@@ -218,13 +259,14 @@ pub const fn blend_color(first: [f32; 4], second: [f32; 4]) -> [f32; 4] {
 #[must_use]
 pub fn color_to_hex(color: [f32; 4]) -> String {
     let component = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
-    format!(
-        "{:02X}{:02X}{:02X}{:02X}",
-        component(color[0]),
-        component(color[1]),
-        component(color[2]),
-        component(color[3])
-    )
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut bytes = [0; 8];
+    for (output, value) in bytes.chunks_exact_mut(2).zip(color) {
+        let value = component(value);
+        output[0] = HEX[(value >> 4) as usize];
+        output[1] = HEX[(value & 0x0f) as usize];
+    }
+    String::from_utf8(bytes.to_vec()).expect("hexadecimal lookup table contains only ASCII")
 }
 
 pub fn install_theme_color_helpers(lua: &Lua, globals: &Table) -> mlua::Result<()> {
@@ -917,7 +959,10 @@ fn difficulty_index_from_value(value: Value) -> Option<i64> {
 }
 
 fn custom_difficulty_color_value(value: Value) -> Option<[f32; 4]> {
-    custom_difficulty_color(&read_string(value)?)
+    let Value::String(text) = value else {
+        return None;
+    };
+    custom_difficulty_color(text.to_str().ok()?.as_ref())
 }
 
 fn steps_or_trail_color(value: Value) -> Option<[f32; 4]> {
@@ -934,11 +979,17 @@ fn steps_or_trail_color(value: Value) -> Option<[f32; 4]> {
 }
 
 fn stage_color_value(value: Value) -> Option<[f32; 4]> {
-    stage_color(&read_string(value)?)
+    let Value::String(text) = value else {
+        return None;
+    };
+    stage_color(text.to_str().ok()?.as_ref())
 }
 
 fn judgment_line_color_value(value: Value) -> Option<[f32; 4]> {
-    judgment_line_color(&read_string(value)?)
+    let Value::String(text) = value else {
+        return None;
+    };
+    judgment_line_color(text.to_str().ok()?.as_ref())
 }
 
 #[cfg(test)]
@@ -956,3 +1007,7 @@ mod tests {
         assert_eq!(parse_color_text("1,bad,0.25,1"), None);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/color_inputs.rs"]
+mod input_perf;

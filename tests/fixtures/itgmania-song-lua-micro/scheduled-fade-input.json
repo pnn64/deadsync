@@ -339,11 +339,11 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           }
         ],
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "tweens": [
               {
                 "duration": 1.2,
@@ -417,11 +417,11 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           }
         ],
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "tweens": [
               {
                 "duration": 3,
@@ -471,11 +471,11 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           }
         ],
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "tweens": [
               {
                 "duration": 0.3,
@@ -523,11 +523,11 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           }
         ],
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "tweens": [
               {
                 "duration": 0.2,

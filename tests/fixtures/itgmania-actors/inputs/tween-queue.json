@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "name": "tween-queue",
+  "samples": [
+    0.0,
+    0.25,
+    0.5,
+    1.0,
+    1.25,
+    1.75,
+    2.25
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "subject",
+        "size": [
+          96.0,
+          48.0
+        ],
+        "state": {
+          "position": [
+            100.0,
+            80.0,
+            0.0
+          ],
+          "zoom": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "diffuse": [
+            1.0,
+            0.5,
+            0.25,
+            1.0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0,
+            "curve": "linear",
+            "state": {
+              "position": [
+                300.0,
+                160.0,
+                10.0
+              ],
+              "rotation": [
+                15.0,
+                25.0,
+                35.0
+              ],
+              "zoom": [
+                1.5,
+                0.75,
+                1.0
+              ]
+            }
+          },
+          {
+            "duration": 0.25,
+            "curve": "sleep"
+          },
+          {
+            "duration": 1.0,
+            "curve": "spring",
+            "state": {
+              "position": [
+                420.0,
+                300.0,
+                -20.0
+              ],
+              "skew": [
+                0.2,
+                -0.15
+              ],
+              "crop": [
+                0.1,
+                0.05,
+                0.2,
+                0.1
+              ],
+              "fade": [
+                0.08,
+                0.04,
+                0.12,
+                0.06
+              ],
+              "glow": [
+                0.2,
+                0.7,
+                1.0,
+                0.6
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

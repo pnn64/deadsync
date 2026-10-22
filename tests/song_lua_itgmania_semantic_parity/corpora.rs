@@ -17,10 +17,6 @@ use std::io::Write as _;
 
 struct Corpus {
     fixtures: &'static str,
-    songs: &'static str,
-    /// The corpus holds exactly the tested songs; otherwise it only has to
-    /// contain them.
-    exclusive: bool,
     tests: &'static [&'static str],
 }
 
@@ -29,8 +25,6 @@ macro_rules! corpus_tests {
      $($name:ident => $simfile:literal,)+) => {
         const $corpus: Corpus = Corpus {
             fixtures: $fixtures,
-            songs: $songs,
-            exclusive: $exclusive,
             tests: &[$($simfile),+],
         };
         $(
@@ -78,7 +72,7 @@ mod lua_songs {
         );
         assert_eq!(trace.steps_type, "dance-double");
         assert_eq!(trace.difficulty, "Difficulty_Challenge");
-        let song = parse_song(&corpus_root(&CORPUS).join(simfile));
+        let song = parse_song(&song_fixture::cached(simfile));
         assert!(
             song.charts.iter().any(|chart| {
                 chart.chart_type == trace.steps_type
@@ -191,34 +185,12 @@ fn fixture_root(corpus: &Corpus) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(corpus.fixtures)
 }
 
-fn corpus_root(corpus: &Corpus) -> PathBuf {
-    workspace_root().join(corpus.songs)
-}
 
 fn read_manifest(corpus: &Corpus) -> SemanticManifest {
     let path = fixture_root(corpus).join(SEMANTIC_MANIFEST);
     whole_song_archives::reference_json(&path)
 }
 
-fn collect_simfiles(directory: &Path, root: &Path, out: &mut Vec<String>) {
-    for entry in fs::read_dir(directory)
-        .unwrap_or_else(|error| panic!("failed to scan {}: {error}", directory.display()))
-    {
-        let path = entry.expect("failed to read corpus entry").path();
-        if path.is_dir() {
-            collect_simfiles(&path, root, out);
-        } else if path.extension().is_some_and(|extension| {
-            ["sm", "sma", "ssc", "ats"]
-                .iter()
-                .any(|simfile| extension.eq_ignore_ascii_case(simfile))
-        }) {
-            let relative = path
-                .strip_prefix(root)
-                .expect("corpus entries stay in root");
-            out.push(relative.to_string_lossy().replace('\\', "/"));
-        }
-    }
-}
 
 fn assert_song_parity(corpus: &Corpus, simfile: &str) {
     crate::paths::init();
@@ -233,7 +205,7 @@ fn assert_song_parity(corpus: &Corpus, simfile: &str) {
     assert_trace_parity(corpus, simfile, &trace);
 }
 
-fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
+fn assert_trace_parity(_corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
     assert_eq!(trace.oracle, "itgmania_song_lua_headless_semantic_trace");
     let pinned_chart = match simfile {
         "Apollo/Apollo.ssc" => Some(("450ff4f0585fdae3", 1, "dance-double", "Challenge")),
@@ -269,7 +241,7 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
         assert_eq!(trace.random_seed, Some(seed));
         assert_eq!(trace.steps_type, steps_type);
         assert_eq!(trace.difficulty, format!("Difficulty_{difficulty}"));
-        let song = parse_song(&corpus_root(corpus).join(simfile));
+        let song = parse_song(&song_fixture::cached(simfile));
         assert!(
             song.charts.iter().any(|chart| {
                 chart.chart_type == steps_type
@@ -281,7 +253,7 @@ fn assert_trace_parity(corpus: &Corpus, simfile: &str, trace: &NativeTrace) {
         );
     }
     let (compiled, primary_index, context) =
-        compile_trace_song_at(trace, &corpus_root(corpus).join(simfile));
+        compile_trace_song_at(trace, &song_fixture::cached(simfile));
     let mut parity = compare_semantics(trace, &compiled, primary_index, &context);
     runtime_modifiers::compare_runtime_modifiers(trace, &compiled, &context, &mut parity);
     // Written past libtest's output capture so passing songs report their
@@ -310,23 +282,20 @@ fn assert_corpus_coverage(corpus: &Corpus) {
         "every {} fixture needs its own test",
         corpus.fixtures
     );
-    let root = corpus_root(corpus);
-    if corpus.exclusive {
-        let mut songs = Vec::new();
-        collect_simfiles(&root, &root, &mut songs);
-        songs.sort();
-        assert_eq!(
-            fixtures, songs,
-            "regenerate {} after changing the {} corpus",
-            corpus.fixtures, corpus.songs
-        );
-    }
     for entry in &manifest.simfiles {
         assert!(
-            root.join(&entry.simfile).is_file(),
+            song_fixture::index().iter().any(|archive| archive["source_simfile"] == entry.simfile),
             "missing song {}",
             entry.simfile
         );
+        if entry.simfile == "mawaru9/mawaru9.sm" {
+            // The long replay is deferred, but its hermetic input must remain
+            // available and retain the exact native chart.
+            let input = song_fixture::from_source(&entry.simfile);
+            let song = parse_song(&input.simfile);
+            assert!(song.charts.iter().any(|chart| chart.short_hash == "824199e7dfc44ef6"),
+                "Mawaru9 input bundle lost its pinned native chart");
+        }
         assert_eq!(entry.status, "ok", "incomplete fixture: {}", entry.simfile);
         assert_eq!(entry.runtime_errors, 0, "runtime errors: {}", entry.simfile);
         assert_eq!(entry.dropped_events, 0, "dropped events: {}", entry.simfile);

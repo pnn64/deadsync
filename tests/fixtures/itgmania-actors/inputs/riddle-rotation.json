@@ -1,0 +1,498 @@
+{
+  "schema_version": 1,
+  "name": "riddle-rotation",
+  "screen": {
+    "width": 640,
+    "height": 480
+  },
+  "bpm": 128,
+  "samples": [
+    0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "case_0_receptor",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            45.83662361046586
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_0_hold",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            45.83662361046586
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_0_flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            45.83662361046586
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_0_note",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            45.83662361046586
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_1_receptor",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -22.91831180523293
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_1_hold",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -22.91831180523293
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_1_flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -22.91831180523293
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_1_note",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -22.91831180523293
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_2_receptor",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            90.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_2_hold",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            90.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_2_flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            90.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_2_note",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            90.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_3_receptor",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_3_hold",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_3_flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_3_note",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_4_receptor",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_4_hold",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_4_flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_4_note",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            277.88453063844923
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_5_receptor",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_5_hold",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_5_flash",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "case_5_note",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "position": [
+            320,
+            240,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            -57.29577951308232
+          ]
+        }
+      }
+    ]
+  }
+}

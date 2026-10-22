@@ -4,10 +4,9 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    assert_eq!(
-        args.len(),
-        2,
-        "seventh_compiled <7th Gear.ssc> <result.json>"
+    assert!(
+        args.len() == 2 || args.len() == 4,
+        "seventh_compiled <7th Gear.ssc> <result.json> [m-mod mini-percent]"
     );
     let simfile = PathBuf::from(&args[0]).canonicalize().unwrap();
     let bundle = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -45,6 +44,10 @@ fn main() {
     ];
     profiles[0].noteskin = deadsync_profile::NoteSkin::new("cel");
     profiles[0].scroll_speed = deadsync_rules::scroll::ScrollSpeedSetting::XMod(2.0);
+    if args.len() == 4 {
+        profiles[0].scroll_speed = deadsync_rules::scroll::ScrollSpeedSetting::MMod(args[2].parse().unwrap());
+        profiles[0].mini_percent = args[3].parse().unwrap();
+    }
     let scroll = [profiles[0].scroll_speed, profiles[1].scroll_speed];
     let start = Instant::now();
     let mut prepared = deadsync_shell::gameplay_entry::prepare_song_lua(
@@ -54,7 +57,7 @@ fn main() {
         &profiles,
         &scroll,
         1.0,
-        deadsync_gameplay::GameplayViewport::new(1280.0, 720.0),
+        deadsync_gameplay::GameplayViewport::design(),
         (1280, 720),
         16.0 / 9.0,
         1.0,
@@ -99,6 +102,7 @@ fn main() {
         "selected Single chart must carry all four lanes"
     );
     let mut observations = Vec::new();
+    let mini_scale = 1.0 - profiles[0].mini_percent as f32 / 200.0;
     for (beat, direction) in [
         (112.0, Some(1.0)),
         (115.0, Some(-1.0)),
@@ -121,7 +125,16 @@ fn main() {
                     track.column
                 );
                 assert!(frame.zoom.is_some(), "lost authored zoom spline");
-                observations.push(serde_json::json!({"beat":beat,"column":track.column,"y0":y0,"y1":y1,"position":true,"zoom":true}));
+                assert!((y0 * mini_scale + 135.0 * direction).abs() < 0.001,
+                    "constructor Mini disagrees with the gameplay profile at beat {beat}: y0={y0}, Mini={}",
+                    profiles[0].mini_percent);
+                let samples = [0.0, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0].map(|ahead| {
+                    let (position, _) = position.view().sample(beat, beat + ahead);
+                    serde_json::json!({"ahead":ahead,"position":position})
+                });
+                observations.push(serde_json::json!({"beat":beat,"column":track.column,"y0":y0,"y1":y1,"position":true,"zoom":true,
+                    "points":position.coefficients.len(),"last_point":position.coefficients.last().map(|axes| axes.map(|axis| axis[0])),"samples":samples,
+                    "receptor_y":240.0+y0*mini_scale,"endpoint_y":240.0+position.view().sample(beat,beat+8.0).0[1]*mini_scale}));
             } else {
                 assert!(
                     frame.position.is_none() && frame.zoom.is_none(),
@@ -169,12 +182,34 @@ fn main() {
             second,
             (second - previous).max(0.0),
             deadsync_gameplay::AppearanceEffects::default(),
-            deadsync_gameplay::AttackBaseEffects::default,
+            || deadsync_gameplay::AttackBaseEffects {
+                mini_percent: profiles[0].mini_percent as f32,
+                ..Default::default()
+            },
             transform,
         ) {
             transform = next;
         }
         previous = second;
+        if [13440, 13800, 14760].contains(&tick) {
+            let mini = attacks.mini_percent[0].unwrap_or(profiles[0].mini_percent as f32);
+            let zoom = 1.0 - mini / 200.0;
+            let spline = tracks[0].at_second(second).unwrap().position.as_ref().unwrap().view();
+            let receptor_y = 240.0 + spline.receptor(beat)[1] * zoom;
+            let endpoint_y = 240.0 + spline.sample(beat, beat + 8.0).0[1] * zoom;
+            println!("Runtime at beat {beat}: Mini={mini}, zoom={zoom}, receptor_y={receptor_y}, endpoint_y={endpoint_y}");
+            // The final authored pulse sample precedes its endpoint at 60 Hz
+            // (59.986% for saved Mini 60); allow less than 0.05 design pixels.
+            assert!((mini - profiles[0].mini_percent as f32).abs() < 0.05,
+                "song Mini must replace saved Mini at beat {beat}");
+            let expected_y = if beat == 115.0 { 375.0 } else { 105.0 };
+            assert!((receptor_y - expected_y).abs() < 0.05,
+                "runtime receptor moved from its authored position at beat {beat}");
+            assert!(endpoint_y < -20.0 || endpoint_y > 500.0,
+                "future notes stack at a visible spline endpoint at beat {beat}: {endpoint_y}");
+            reverse_samples.push(serde_json::json!({"beat":beat,"mini_percent":mini,
+                "field_zoom":zoom,"receptor_y":receptor_y,"endpoint_y":endpoint_y}));
+        }
         let expected = match tick {
             24780 => Some(0.0),
             24900 => Some(0.75),
@@ -193,6 +228,7 @@ fn main() {
     }
     let checks = observations.len() + reverse_samples.len();
     let result = serde_json::json!({"song":song.title,"chart_hash":charts[0].short_hash,"retained_lua_vm":false,"aft_stages":afts,
+        "mini_percent":profiles[0].mini_percent,"scroll_speed":format!("{:?}", profiles[0].scroll_speed),
         "compile_ms":compile_ms,"reversal_checks_passed":checks,"observations":observations,"reverse_modifier_samples":reverse_samples,
         "whole_song_parity_proven":false,"pixel_parity_proven":false});
     std::fs::write(&args[1], serde_json::to_vec_pretty(&result).unwrap()).unwrap();

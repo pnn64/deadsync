@@ -66,20 +66,21 @@ fn font_page_discovery_preserves_filtering_sorting_and_errors() {
 }
 
 #[test]
-#[cfg_attr(windows, ignore = "requires Windows symlink privilege")]
-fn font_page_discovery_follows_file_symlinks() {
+fn font_page_discovery_follows_file_links() {
     let dir = Directory::new();
     dir.file("target.bin");
     fs::create_dir(dir.0.join("target-dir")).unwrap();
     #[cfg(windows)]
-    let link = std::os::windows::fs::symlink_file;
+    let link = fs::hard_link;
     #[cfg(unix)]
     let link = std::os::unix::fs::symlink;
     link(dir.0.join("target.bin"), dir.0.join("font-link.png")).unwrap();
+    // Unix also exercises dangling and directory symlinks. Windows hard links
+    // exercise linked file discovery without requiring Developer Mode/admin.
+    #[cfg(unix)]
     link(dir.0.join("missing"), dir.0.join("font-broken.png")).unwrap();
     #[cfg(windows)]
-    std::os::windows::fs::symlink_dir(dir.0.join("target-dir"), dir.0.join("font-directory.png"))
-        .unwrap();
+    fs::create_dir(dir.0.join("font-directory.png")).unwrap();
     #[cfg(unix)]
     link(dir.0.join("target-dir"), dir.0.join("font-directory.png")).unwrap();
     let actual = list_texture_pages(&dir.0, "font").unwrap();

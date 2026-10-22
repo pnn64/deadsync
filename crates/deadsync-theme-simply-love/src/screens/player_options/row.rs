@@ -608,7 +608,7 @@ pub(crate) use index_binding;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// const INSERT: BitmaskBinding = simple_bitmask_binding!(
 ///     mask = InsertMask,
 ///     bits = u8,
@@ -673,7 +673,7 @@ pub(crate) use simple_bitmask_binding;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// const HIDE: BitmaskBinding = fanout_bitmask_binding!(
 ///     mask = HideMask,
 ///     bits = u8,

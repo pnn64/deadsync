@@ -1,0 +1,1 @@
+Just replace the old textures with this one one the previous folder (make sure to make a backup if you want to go back to default)

@@ -31,5 +31,7 @@
       "compiled_vendor_sha256": "f1f1e78b1400d38ec5836678946fe1914716cf26249d0a37699fbad5b6305081",
       "identical": true
     }
-  }
+  },
+  "scope": "Historical capture metadata. native.json is now refreshed with harness 0.1.95; its current inputs, binary, source revision and output hash are recorded in the current capture receipt.",
+  "current_capture_receipt": "../native-capture-manifest.json"
 }

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "waltz-base-zoom",
+  "screen": {"width": 854, "height": 480},
+  "bpm": 60,
+  "samples": [0, 0.5, 1, 1.5, 2, 2.5, 3],
+  "root": {
+    "kind": "frame", "name": "Root",
+    "children": [{
+      "kind": "frame", "name": "Base",
+      "state": {"position": [100, 120, 0]},
+      "base": {"zoom": [0.75, 0.5, 1]},
+      "children": [{
+        "kind": "sprite", "name": "Sprite", "size": [64, 32],
+        "base": {"zoom": [0.8, 0.8, 0.8]},
+        "state": {"zoom": [1.5, 2, 1]}
+      }]
+    }]
+  }
+}

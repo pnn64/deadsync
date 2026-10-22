@@ -2439,6 +2439,53 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn catalog_note_end_keeps_the_cabinet_offset_at_initial_load() {
+        let mut song = regression_song();
+        song.last_second_hint = 0.0;
+        song.precise_note_last_second_seconds = Some(75.25);
+        song.precise_last_second_seconds = 75.25;
+        song.total_length_seconds = 75;
+        let chart = Arc::new(song.charts[0].clone());
+        let payload = Arc::new(regression_payload_with_segments(
+            TimingSegments::default(),
+            96,
+        ));
+        let mut state = init_gameplay_runtime(
+            Arc::new(song),
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::default(),
+            GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: -0.008, machine_pack_ini_offsets: true,
+                machine_default_sync_pref: SyncPref::Itg, ..Default::default() },
+            SyncPref::Itg,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        );
+        let native_last = (75.25_f32 - (-0.009)) - (-0.008);
+        assert_eq!(state.clock.end_timing.song_last_second_ns(), song_time_ns_from_seconds(native_last),
+            "native catalog note timing includes the cabinet offset before the late-step window");
+        state.clock.song_position.current_music_time_ns = state.music_end_time_ns() - 1;
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+    }
+
+    #[test]
     fn last_second_hint_survives_timing_changes() {
         let mut song = regression_song();
         song.last_second_hint = 75.25;
@@ -2499,7 +2546,9 @@ mod runtime_regression_tests {
 
     #[test]
     fn set_music_rate_rebuilds_judgment_and_end_times() {
-        let mut state = regression_state();
+        // Isolate rate scaling from cabinet calibration, covered separately above.
+        let mut state = regression_state_with_session_and_config(GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: 0.0, ..Default::default() });
         let baseline_great_ns = state.timing_runtime.player_judgment_timing[0]
             .profile_music_ns
             .windows_ns[2];
@@ -5334,7 +5383,7 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn song_lua_constant_mini_layers_on_profile_mini() {
+    fn song_lua_constant_mini_replaces_profile_mini() {
         let mut state = regression_state_with_profiles(std::array::from_fn(|player| TestProfile {
             mini_percent: if player == 0 { 50.0 } else { 0.0 },
             ..TestProfile::default()
@@ -5361,11 +5410,11 @@ mod runtime_regression_tests {
         state.clock.visible_timing.current_music_time[0] = 1.016;
         refresh_active_attack_masks(&mut state, 1.0);
         let mini = effective_mini_percent_for_player(&state, 0);
-        assert!((mini + 50.0).abs() <= 0.000_1);
+        assert!((mini + 100.0).abs() <= 0.000_1);
     }
 
     #[test]
-    fn song_lua_eased_mini_layers_on_profile_mini() {
+    fn song_lua_eased_mini_replaces_profile_mini() {
         let mut state = regression_state_with_profiles(std::array::from_fn(|player| TestProfile {
             mini_percent: if player == 0 { 50.0 } else { 0.0 },
             ..TestProfile::default()
@@ -5388,7 +5437,7 @@ mod runtime_regression_tests {
         refresh_active_attack_masks(&mut state, 0.0);
 
         let mini = effective_mini_percent_for_player(&state, 0);
-        assert!(mini.abs() <= 0.000_1);
+        assert!((mini + 50.0).abs() <= 0.000_1);
     }
 
     #[test]

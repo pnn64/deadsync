@@ -662,6 +662,7 @@ mod tests {
             restart_slot: None,
             pan: crate::SfxPan::Center,
             target_stream_frame: total_before + MIX_CHUNK_FRAMES as u64 + 5,
+            voice: None,
         };
         let mut output = vec![f32::NAN; input.len()];
 

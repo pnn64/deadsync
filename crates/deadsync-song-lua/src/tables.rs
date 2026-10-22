@@ -1,3 +1,4 @@
+use crate::callback_args::IgnoredArgs;
 use std::path::Path;
 
 use mlua::{Function, Lua, MultiValue, Table, Value};
@@ -55,7 +56,7 @@ pub fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
         "GetValue",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     Ok(table)
 }
@@ -64,7 +65,7 @@ pub fn create_song_group_table(lua: &Lua) -> mlua::Result<Table> {
     let group = lua.create_table()?;
     group.set(
         "GetSyncOffset",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     Ok(group)
 }
@@ -104,7 +105,7 @@ pub fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
     }
     table.set(
         "Reverse",
-        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(reverse.clone()))?,
     )?;
     Ok(table)
 }
@@ -118,7 +119,7 @@ pub fn create_string_enum_table(lua: &Lua, names: &[&str]) -> mlua::Result<Table
     }
     table.set(
         "Reverse",
-        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(reverse.clone()))?,
     )?;
     Ok(table)
 }
@@ -134,7 +135,7 @@ pub fn create_player_number_table(lua: &Lua) -> mlua::Result<Table> {
     }
     table.set(
         "Reverse",
-        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(reverse.clone()))?,
     )?;
     Ok(table)
 }
@@ -178,7 +179,7 @@ pub fn create_branch_table(lua: &Lua) -> mlua::Result<Table> {
     ] {
         branch.set(
             name,
-            lua.create_function(move |lua, _args: MultiValue| {
+            lua.create_function(move |lua, _args: IgnoredArgs| {
                 Ok(Value::String(lua.create_string(screen)?))
             })?,
         )?;
@@ -204,34 +205,72 @@ fn seconds_to_time_parts(seconds: f64) -> (i64, i64, i64) {
     (minutes, secs, centis)
 }
 
+// Callers supply two or three parts, a first width of one or two, and
+// centiseconds already clamped by seconds_to_time_parts.
+fn format_clock<const N: usize>(
+    parts: [i64; N],
+    first_width: usize,
+    centis: Option<i64>,
+) -> String {
+    let mut buffers = [itoa::Buffer::new(); N];
+    let mut digits = [""; N];
+    for ((buffer, output), value) in buffers.iter_mut().zip(digits.iter_mut()).zip(parts) {
+        *output = buffer.format(value);
+    }
+    let capacity = digits
+        .iter()
+        .enumerate()
+        .map(|(index, text)| text.len().max(if index == 0 { first_width } else { 2 }))
+        .sum::<usize>()
+        + (N - 1)
+        + if centis.is_some() { 3 } else { 0 };
+    let mut out = String::with_capacity(capacity);
+    for (index, text) in digits.into_iter().enumerate() {
+        if index != 0 {
+            out.push(':');
+        }
+        let width = if index == 0 { first_width } else { 2 };
+        if text.len() < width {
+            out.push('0');
+        }
+        out.push_str(text);
+    }
+    if let Some(centis) = centis {
+        out.push('.');
+        out.push(char::from(b'0' + (centis / 10) as u8));
+        out.push(char::from(b'0' + (centis % 10) as u8));
+    }
+    out
+}
+
 #[must_use]
 pub fn seconds_to_hhmmss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{:02}:{:02}:{seconds:02}", minutes / 60, minutes % 60)
+    format_clock([minutes / 60, minutes % 60, seconds], 2, None)
 }
 
 #[must_use]
 pub fn seconds_to_mss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{minutes:01}:{seconds:02}")
+    format_clock([minutes, seconds], 1, None)
 }
 
 #[must_use]
 pub fn seconds_to_mmss(seconds: f64) -> String {
     let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{minutes:02}:{seconds:02}")
+    format_clock([minutes, seconds], 2, None)
 }
 
 #[must_use]
 pub fn seconds_to_mss_ms_ms(seconds: f64) -> String {
     let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
-    format!("{minutes:01}:{seconds:02}.{centis:02}")
+    format_clock([minutes, seconds], 1, Some(centis))
 }
 
 #[must_use]
 pub fn seconds_to_mmss_ms_ms(seconds: f64) -> String {
     let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
-    format!("{minutes:02}:{seconds:02}.{centis:02}")
+    format_clock([minutes, seconds], 2, Some(centis))
 }
 
 #[must_use]
@@ -246,7 +285,12 @@ pub fn format_number_and_suffix(value: i64) -> String {
             _ => "th",
         }
     };
-    format!("{value}{suffix}")
+    let mut buffer = itoa::Buffer::new();
+    let digits = buffer.format(value);
+    let mut out = String::with_capacity(digits.len() + suffix.len());
+    out.push_str(digits);
+    out.push_str(suffix);
+    out
 }
 
 pub fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
@@ -259,7 +303,7 @@ pub fn create_gameman_table(lua: &Lua) -> mlua::Result<Table> {
     let gameman = lua.create_table()?;
     gameman.set(
         "GetStylesForGame",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             let styles = lua.create_table()?;
             styles.raw_set(1, create_style_table(lua, "single")?)?;
             Ok(styles)
@@ -272,16 +316,16 @@ pub fn create_charman_table(lua: &Lua) -> mlua::Result<Table> {
     let charman = lua.create_table()?;
     charman.set(
         "GetAllCharacters",
-        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+        lua.create_function(|lua, _args: IgnoredArgs| lua.create_table())?,
     )?;
     charman.set(
         "GetCharacterCount",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     for method in ["GetCharacter", "GetDefaultCharacter", "GetRandomCharacter"] {
         charman.set(
             method,
-            lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
         )?;
     }
     Ok(charman)
@@ -304,42 +348,41 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
     set_string_method(lua, &theme, "GetThemeAuthor", "")?;
     theme.set(
         "GetNumSelectableThemes",
-        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(1_i64))?,
     )?;
     for method in ["DoesThemeExist", "IsThemeSelectable"] {
         theme.set(
             method,
             lua.create_function(|_, args: MultiValue| {
-                let name = method_arg(&args, 0)
-                    .cloned()
-                    .and_then(read_string)
-                    .unwrap_or_default();
-                Ok(name.eq_ignore_ascii_case(SONG_LUA_THEME_NAME))
+                let Some(Value::String(name)) = method_arg(&args, 0) else {
+                    return Ok(false);
+                };
+                Ok(name
+                    .to_str()
+                    .is_ok_and(|name| name.eq_ignore_ascii_case(SONG_LUA_THEME_NAME)))
             })?,
         )?;
     }
     theme.set(
         "DoesLanguageExist",
         lua.create_function(|_, args: MultiValue| {
-            let name = method_arg(&args, 0)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            Ok(matches!(
-                name.to_ascii_lowercase().as_str(),
-                "en" | "english"
-            ))
+            let Some(Value::String(name)) = method_arg(&args, 0) else {
+                return Ok(false);
+            };
+            Ok(name.to_str().is_ok_and(|name| {
+                name.eq_ignore_ascii_case("en") || name.eq_ignore_ascii_case("english")
+            }))
         })?,
     )?;
     theme.set(
         "get_theme_fallback_list",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             create_string_array(lua, &[SONG_LUA_THEME_NAME])
         })?,
     )?;
     theme.set(
         "RunLuaScripts",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -548,7 +591,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
     )?;
     theme.set(
         "GetSelectableThemeNames",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             let names = lua.create_table()?;
             names.raw_set(1, SONG_LUA_THEME_NAME)?;
             Ok(names)
@@ -557,7 +600,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
     for name in ["ReloadMetrics", "SetTheme"] {
         theme.set(
             name,
-            lua.create_function(|lua, _args: MultiValue| {
+            lua.create_function(|lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(())
             })?,
@@ -580,7 +623,7 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
         "GetMachineProfile",
         lua.create_function({
             let machine_profile = machine_profile.clone();
-            move |_, _args: MultiValue| Ok(machine_profile.clone())
+            move |_, _args: IgnoredArgs| Ok(machine_profile.clone())
         })?,
     )?;
     profileman.set(
@@ -621,11 +664,11 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     )?;
     profileman.set(
         "IsPersistentProfile",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     profileman.set(
         "GetNumLocalProfiles",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     profileman.set(
         "LocalProfileIDToDir",
@@ -641,27 +684,27 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     )?;
     profileman.set(
         "GetLocalProfileIDFromIndex",
-        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+        lua.create_function(|lua, _args: IgnoredArgs| Ok(Value::String(lua.create_string("")?)))?,
     )?;
     profileman.set(
         "GetLocalProfileFromIndex",
         lua.create_function({
             let local_profile = local_profile;
-            move |_, _args: MultiValue| Ok(local_profile.clone())
+            move |_, _args: IgnoredArgs| Ok(local_profile.clone())
         })?,
     )?;
     profileman.set(
         "GetLocalProfile",
-        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
     )?;
     profileman.set(
         "GetLocalProfileIndexFromID",
-        lua.create_function(|_, _args: MultiValue| Ok(-1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(-1_i64))?,
     )?;
     for method in ["GetLocalProfileIDs", "GetLocalProfileDisplayNames"] {
         profileman.set(
             method,
-            lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+            lua.create_function(|lua, _args: IgnoredArgs| lua.create_table())?,
         )?;
     }
     for method in [
@@ -672,16 +715,16 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     ] {
         profileman.set(
             method,
-            lua.create_function(|_, _args: MultiValue| Ok(false))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
         )?;
     }
     profileman.set(
         "GetSongNumTimesPlayed",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     profileman.set(
         "SaveMachineProfile",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -689,7 +732,7 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
     for method in ["SaveProfile", "SaveLocalProfile"] {
         profileman.set(
             method,
-            lua.create_function(|lua, _args: MultiValue| {
+            lua.create_function(|lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(false)
             })?,
@@ -699,7 +742,7 @@ pub fn create_profileman_table(lua: &Lua) -> mlua::Result<Table> {
         "GetStatsPrefix",
         lua.create_function({
             let profileman = profileman.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let prefix = profileman
                     .get::<Option<String>>("__songlua_stats_prefix")?
                     .unwrap_or_default();
@@ -790,13 +833,13 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     set_string_method(lua, &profile, "GetType", "ProfileType_Normal")?;
     profile.set(
         "GetPriority",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     profile.set(
         "AddScreenshot",
         lua.create_function({
             let profile = profile.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(profile.clone())
             }
@@ -806,7 +849,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
         "GetAllUsedHighScoreNames",
         lua.create_function({
             let profile = profile.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let names = lua.create_table()?;
                 let name = profile
                     .get::<Option<String>>("__songlua_last_score_name")?
@@ -822,7 +865,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
         "GetCharacter",
         lua.create_function({
             let profile = profile.clone();
-            move |_, _args: MultiValue| profile.get::<Value>("__songlua_character")
+            move |_, _args: IgnoredArgs| profile.get::<Value>("__songlua_character")
         })?,
     )?;
     profile.set(
@@ -865,7 +908,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
         "GetGoalType",
         lua.create_function({
             let profile = profile.clone();
-            move |_, _args: MultiValue| profile.get::<Value>("__songlua_goal_type")
+            move |_, _args: IgnoredArgs| profile.get::<Value>("__songlua_goal_type")
         })?,
     )?;
     profile.set(
@@ -903,7 +946,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     ] {
         profile.set(
             method,
-            lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
         )?;
     }
     for method in [
@@ -918,13 +961,13 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     ] {
         profile.set(
             method,
-            lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
         )?;
     }
     for method in ["IsCodeUnlocked", "HasPassedAnyStepsInSong"] {
         profile.set(
             method,
-            lua.create_function(|_, _args: MultiValue| Ok(false))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
         )?;
     }
     for method in [
@@ -935,7 +978,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     ] {
         profile.set(
             method,
-            lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
         )?;
     }
     set_state_number_getter(
@@ -954,7 +997,7 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
         "GetDisplayTotalCaloriesBurned",
         lua.create_function({
             let profile = profile.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let calories = profile
                     .get::<Option<f32>>("__songlua_total_calories")?
                     .unwrap_or(0.0)
@@ -989,26 +1032,26 @@ fn create_profile_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     )?;
     profile.set(
         "GetHighScoreList",
-        lua.create_function(|lua, _args: MultiValue| create_high_score_list_table(lua))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_high_score_list_table(lua))?,
     )?;
     profile.set(
         "GetHighScoreListIfExists",
-        lua.create_function(|lua, _args: MultiValue| create_high_score_list_table(lua))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_high_score_list_table(lua))?,
     )?;
     profile.set(
         "GetCategoryHighScoreList",
-        lua.create_function(|lua, _args: MultiValue| create_high_score_list_table(lua))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_high_score_list_table(lua))?,
     )?;
     profile.set(
         "GetUserTable",
         lua.create_function({
             let profile = profile.clone();
-            move |_, _args: MultiValue| profile.get::<Table>("__songlua_user_table")
+            move |_, _args: IgnoredArgs| profile.get::<Table>("__songlua_user_table")
         })?,
     )?;
     profile.set(
         "get_songs",
-        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+        lua.create_function(|lua, _args: IgnoredArgs| lua.create_table())?,
     )?;
     Ok(profile)
 }
@@ -1144,7 +1187,7 @@ pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua
             name,
             lua.create_function({
                 let stage_stats = stage_stats.clone();
-                move |_, _args: MultiValue| Ok(stage_stats.clone())
+                move |_, _args: IgnoredArgs| Ok(stage_stats.clone())
             })?,
         )?;
     }
@@ -1165,10 +1208,10 @@ pub fn create_statsman_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua
             }
         })?,
     )?;
-    statsman.set("Reset", lua.create_function(|_, _args: MultiValue| Ok(()))?)?;
+    statsman.set("Reset", lua.create_function(|_, _args: IgnoredArgs| Ok(()))?)?;
     statsman.set(
         "GetStagesPlayed",
-        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(1_i64))?,
     )?;
     for name in [
         "GetFinalGrade",
@@ -1264,14 +1307,14 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
     )?;
     stage_stats.set(
         "GetMultiPlayerStageStats",
-        lua.create_function(move |_, _args: MultiValue| Ok(multi_player_stats.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(multi_player_stats.clone()))?,
     )?;
     for name in ["GetPlayedSongs", "GetPossibleSongs"] {
         stage_stats.set(
             name,
             lua.create_function({
                 let song = song.clone();
-                move |lua, _args: MultiValue| {
+                move |lua, _args: IgnoredArgs| {
                     let table = lua.create_table()?;
                     table.raw_set(1, song.clone())?;
                     Ok(table)
@@ -1287,47 +1330,47 @@ fn create_stage_stats_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
         "GetGameplaySeconds",
         lua.create_function({
             let stage = stage_stats.clone();
-            move |_, _args: MultiValue| stage.raw_get::<f64>("__songlua_gameplay_seconds")
+            move |_, _args: IgnoredArgs| stage.raw_get::<f64>("__songlua_gameplay_seconds")
         })?,
     )?;
     stage_stats.set(
         "GetTotalPossibleStepsSeconds",
         lua.create_function({
             let total_seconds = context.music_length_seconds.max(0.0);
-            move |_, _args: MultiValue| Ok(total_seconds)
+            move |_, _args: IgnoredArgs| Ok(total_seconds)
         })?,
     )?;
     stage_stats.set(
         "GetStepsSeconds",
         lua.create_function({
             let total_seconds = context.music_length_seconds.max(0.0);
-            move |_, _args: MultiValue| Ok(total_seconds)
+            move |_, _args: IgnoredArgs| Ok(total_seconds)
         })?,
     )?;
     stage_stats.set(
         "GetStageIndex",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     set_string_method(lua, &stage_stats, "GetStage", "Stage_1st")?;
     stage_stats.set(
         "AllFailed",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     stage_stats.set(
         "OnePassed",
-        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(true))?,
     )?;
     stage_stats.set(
         "PlayerHasHighScore",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     stage_stats.set(
         "GetEarnedExtraStage",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     stage_stats.set(
         "GaveUp",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     Ok(stage_stats)
 }
@@ -1384,25 +1427,25 @@ fn create_player_stage_stats_table(
     possible_steps.raw_set(1, steps)?;
     stats.set(
         "GetCaloriesBurned",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     stats.set(
         "GetNumControllerSteps",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     stats.set(
         "GetSurvivalSeconds",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     stats.set(
         "GetCurrentScoreMultiplier",
-        lua.create_function(|_, _args: MultiValue| Ok(1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(1_i64))?,
     )?;
     stats.set(
         "GetCurMaxScore",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(stats
                     .get::<Option<i64>>("__songlua_cur_max_score")?
                     .unwrap_or(0))
@@ -1413,7 +1456,7 @@ fn create_player_stage_stats_table(
         "GetGrade",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(if stats.get::<Option<bool>>("__songlua_failed")?.unwrap_or(false) {
                     "Grade_Failed"
                 } else {
@@ -1428,7 +1471,7 @@ fn create_player_stage_stats_table(
         "GetFailed",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(stats
                     .get::<Option<bool>>("__songlua_failed")?
                     .unwrap_or(false))
@@ -1439,7 +1482,7 @@ fn create_player_stage_stats_table(
         "FailPlayer",
         lua.create_function({
             let stats = stats.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 stats.set("__songlua_failed", true)?;
                 if let Some(player) = stats.raw_get::<Option<usize>>("__songlua_player_index")? {
                     crate::live::fail_player(lua, player);
@@ -1453,7 +1496,7 @@ fn create_player_stage_stats_table(
         "GetScore",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(stats.get::<Option<i64>>("__songlua_score")?.unwrap_or(0))
             }
         })?,
@@ -1515,7 +1558,7 @@ fn create_player_stage_stats_table(
         "GetPercentDancePoints",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 let actual = stats
                     .get::<Option<i64>>("__songlua_actual_dance_points")?
                     .unwrap_or(0);
@@ -1530,7 +1573,7 @@ fn create_player_stage_stats_table(
         "GetActualDancePoints",
         lua.create_function({
             let stats = stats.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(stats
                     .get::<Option<i64>>("__songlua_actual_dance_points")?
                     .unwrap_or(0))
@@ -1541,7 +1584,7 @@ fn create_player_stage_stats_table(
         "GetPossibleDancePoints",
         lua.create_function({
             let stats = stats.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let points = stats
                     .get::<Option<i64>>("__songlua_possible_dance_points")?
                     .unwrap_or(0);
@@ -1554,7 +1597,7 @@ fn create_player_stage_stats_table(
         "GetCurrentPossibleDancePoints",
         lua.create_function({
             let stats = stats.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let points = stats
                     .get::<Option<i64>>("__songlua_current_possible_dance_points")?
                     .unwrap_or(0);
@@ -1577,11 +1620,11 @@ fn create_player_stage_stats_table(
     )?;
     stats.set(
         "GetLifeRemainingSeconds",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     stats.set(
         "GetAliveSeconds",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     stats.set(
         "GetLifeRecord",
@@ -1606,69 +1649,69 @@ fn create_player_stage_stats_table(
     )?;
     stats.set(
         "GetHoldNoteScores",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     stats.set(
         "FullCombo",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     stats.set(
         "MaxCombo",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     stats.set(
         "GetLessonScoreActual",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     stats.set(
         "GetLessonScoreNeeded",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     stats.set(
         "GetPlayedSteps",
-        lua.create_function(move |_, _args: MultiValue| Ok(played_steps.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(played_steps.clone()))?,
     )?;
     stats.set(
         "GetPossibleSteps",
-        lua.create_function(move |_, _args: MultiValue| Ok(possible_steps.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(possible_steps.clone()))?,
     )?;
     stats.set(
         "GetComboList",
-        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+        lua.create_function(|lua, _args: IgnoredArgs| lua.create_table())?,
     )?;
     stats.set(
         "GetRadarActual",
-        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 0.0))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_stage_radar_values_table(lua, 0.0))?,
     )?;
     stats.set(
         "GetRadarPossible",
-        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 1.0))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_stage_radar_values_table(lua, 1.0))?,
     )?;
     stats.set(
         "GetRadarValues",
-        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 0.0))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_stage_radar_values_table(lua, 0.0))?,
     )?;
     stats.set(
         "GetHighScore",
-        lua.create_function(move |_, _args: MultiValue| Ok(high_score.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(high_score.clone()))?,
     )?;
     stats.set(
         "GetMachineHighScoreIndex",
-        lua.create_function(|_, _args: MultiValue| Ok(-1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(-1_i64))?,
     )?;
     stats.set(
         "GetPersonalHighScoreIndex",
-        lua.create_function(|_, _args: MultiValue| Ok(-1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(-1_i64))?,
     )?;
     set_string_method(lua, &stats, "GetStageAward", "StageAward_None")?;
     set_string_method(lua, &stats, "GetPeakComboAward", "PeakComboAward_None")?;
     stats.set(
         "IsDisqualified",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     stats.set(
         "GetPercentageOfTaps",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     set_string_method(
         lua,
@@ -1678,15 +1721,15 @@ fn create_player_stage_stats_table(
     )?;
     stats.set(
         "FullComboOfScore",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     stats.set(
         "GetSongsPassed",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     stats.set(
         "GetSongsPlayed",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     Ok(stats)
 }
@@ -1704,7 +1747,7 @@ fn create_stage_radar_values_table(lua: &Lua, fallback: f32) -> mlua::Result<Tab
     let table = lua.create_table()?;
     table.set(
         "GetValue",
-        lua.create_function(move |_, _args: MultiValue| Ok(fallback))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(fallback))?,
     )?;
     Ok(table)
 }
@@ -1718,7 +1761,7 @@ fn create_high_score_list_table(lua: &Lua) -> mlua::Result<Table> {
         "GetHighScores",
         lua.create_function({
             let high_scores = high_scores.clone();
-            move |_, _args: MultiValue| Ok(high_scores.clone())
+            move |_, _args: IgnoredArgs| Ok(high_scores.clone())
         })?,
     )?;
     table.set(
@@ -1768,39 +1811,39 @@ fn create_high_score_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     set_string_method(lua, &score, "GetModifiers", "")?;
     score.set(
         "GetScore",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     score.set(
         "GetPercentDP",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     score.set(
         "GetPercentDancePoints",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     score.set(
         "GetTapNoteScore",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     score.set(
         "GetHoldNoteScore",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     score.set(
         "GetMaxCombo",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     score.set(
         "GetSurvivalSeconds",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     score.set(
         "IsFillInMarker",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     score.set(
         "GetRadarValues",
-        lua.create_function(|lua, _args: MultiValue| create_stage_radar_values_table(lua, 0.0))?,
+        lua.create_function(|lua, _args: IgnoredArgs| create_stage_radar_values_table(lua, 0.0))?,
     )?;
     set_string_method(lua, &score, "GetStageAward", "StageAward_None")?;
     set_string_method(lua, &score, "GetPeakComboAward", "PeakComboAward_None")?;
@@ -1922,7 +1965,7 @@ pub fn create_prefsmgr_table(
     let prefsmgr_for_save = prefsmgr.clone();
     prefsmgr.set(
         "SavePreferences",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(prefsmgr_for_save.clone())
         })?,
@@ -2108,7 +2151,7 @@ pub fn set_path_methods(
     let has_file = !path.is_empty();
     table.set(
         has_name,
-        lua.create_function(move |_, _args: MultiValue| Ok(has_file))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(has_file))?,
     )?;
     Ok(())
 }
@@ -2212,7 +2255,7 @@ pub fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     let style_name_for_get = style.name.to_string();
     table.set(
         "GetName",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string(&style_name_for_get)?))
         })?,
     )?;
@@ -2220,11 +2263,11 @@ pub fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
     set_string_method(lua, &table, "GetStyleType", style.style_type)?;
     table.set(
         "ColumnsPerPlayer",
-        lua.create_function(move |_, _args: MultiValue| Ok(style.columns as i64))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(style.columns as i64))?,
     )?;
     table.set(
         "GetWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(style.width))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(style.width))?,
     )?;
     table.set(
         "GetColumnInfo",
@@ -2629,16 +2672,16 @@ pub fn create_network_response_table(lua: &Lua) -> mlua::Result<Table> {
     response.set("headers", lua.create_table()?)?;
     response.set(
         "IsFinished",
-        lua.create_function(|_, _args: MultiValue| Ok(true))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(true))?,
     )?;
     let response_for_get = response.clone();
     response.set(
         "GetResponse",
-        lua.create_function(move |_, _args: MultiValue| Ok(response_for_get.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(response_for_get.clone()))?,
     )?;
     response.set(
         "Cancel",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -2655,32 +2698,32 @@ pub fn create_display_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua:
 
     display.set(
         "GetDisplayWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(width))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(width))?,
     )?;
     display.set(
         "GetDisplayHeight",
-        lua.create_function(move |_, _args: MultiValue| Ok(height))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(height))?,
     )?;
     display.set(
         "GetFPS",
-        lua.create_function(|_, _args: MultiValue| Ok(60))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(60))?,
     )?;
-    display.set("GetVPF", lua.create_function(|_, _args: MultiValue| Ok(1))?)?;
+    display.set("GetVPF", lua.create_function(|_, _args: IgnoredArgs| Ok(1))?)?;
     display.set(
         "GetCumFPS",
-        lua.create_function(|_, _args: MultiValue| Ok(60))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(60))?,
     )?;
     display.set(
         "GetDisplaySpecs",
-        lua.create_function(move |_, _args: MultiValue| Ok(specs.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(specs.clone()))?,
     )?;
     display.set(
         "SupportsRenderToTexture",
-        lua.create_function(move |_, _args: MultiValue| Ok(render_to_texture))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(render_to_texture))?,
     )?;
     display.set(
         "SupportsFullscreenBorderlessWindow",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     Ok(display)
 }
@@ -2689,18 +2732,18 @@ pub fn create_memcardman_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
         "GetCardState",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("MemoryCardState_none")?))
         })?,
     )?;
     table.set(
         "GetName",
-        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+        lua.create_function(|lua, _args: IgnoredArgs| Ok(Value::String(lua.create_string("")?)))?,
     )?;
     for name in ["MountCard", "UnmountCard"] {
         table.set(
             name,
-            lua.create_function(|lua, _args: MultiValue| {
+            lua.create_function(|lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(false)
             })?,
@@ -2718,29 +2761,29 @@ pub fn create_unlockman_table(lua: &Lua) -> mlua::Result<Table> {
         "GetPointsForProfile",
         "GetPointsUntilNextUnlock",
     ] {
-        table.set(name, lua.create_function(|_, _args: MultiValue| Ok(0_i64))?)?;
+        table.set(name, lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?)?;
     }
     table.set(
         "AnyUnlocksToCelebrate",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     table.set(
         "GetUnlockEntryIndexToCelebrate",
-        lua.create_function(|_, _args: MultiValue| Ok(-1_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(-1_i64))?,
     )?;
     for name in ["FindEntryID", "GetUnlockEntry"] {
         table.set(
             name,
-            lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+            lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
         )?;
     }
     table.set(
         "GetSongsUnlockedByEntryID",
-        lua.create_function(|lua, _args: MultiValue| lua.create_table())?,
+        lua.create_function(|lua, _args: IgnoredArgs| lua.create_table())?,
     )?;
     table.set(
         "GetStepsUnlockedByEntryID",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok((lua.create_table()?, lua.create_table()?))
         })?,
     )?;
@@ -2755,7 +2798,7 @@ pub fn create_unlockman_table(lua: &Lua) -> mlua::Result<Table> {
             name,
             lua.create_function({
                 let table = table.clone();
-                move |lua, _args: MultiValue| {
+                move |lua, _args: IgnoredArgs| {
                     note_song_lua_side_effect(lua)?;
                     Ok(table.clone())
                 }
@@ -2764,15 +2807,15 @@ pub fn create_unlockman_table(lua: &Lua) -> mlua::Result<Table> {
     }
     table.set(
         "IsSongLocked",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     table.set(
         "IsCourseLocked",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     table.set(
         "IsStepsLocked",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     Ok(table)
 }
@@ -2781,17 +2824,17 @@ pub fn create_hooks_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
         "GetArchName",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string(song_lua_arch_name())?))
         })?,
     )?;
     table.set(
         "GetClipboard",
-        lua.create_function(|lua, _args: MultiValue| Ok(Value::String(lua.create_string("")?)))?,
+        lua.create_function(|lua, _args: IgnoredArgs| Ok(Value::String(lua.create_string("")?)))?,
     )?;
     table.set(
         "SetClipboard",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(false)
         })?,
@@ -2799,7 +2842,7 @@ pub fn create_hooks_table(lua: &Lua) -> mlua::Result<Table> {
     for method in ["OpenFile", "OpenURL", "RestartProgram"] {
         table.set(
             method,
-            lua.create_function(|lua, _args: MultiValue| {
+            lua.create_function(|lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(false)
             })?,
@@ -2813,12 +2856,12 @@ pub fn create_websocket_table(lua: &Lua) -> mlua::Result<Table> {
     websocket.set("is_open", false)?;
     websocket.set(
         "IsOpen",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     for name in ["Send", "Close"] {
         websocket.set(
             name,
-            lua.create_function(|lua, _args: MultiValue| {
+            lua.create_function(|lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(())
             })?,
@@ -2853,7 +2896,7 @@ pub fn create_ini_file_table(
     )?;
     ini.set(
         "WriteFile",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(true)
         })?,
@@ -2884,16 +2927,16 @@ fn create_display_spec_table(lua: &Lua, width: i32, height: i32) -> mlua::Result
         "GetSupportedModes",
         lua.create_function({
             let modes = modes;
-            move |_, _args: MultiValue| Ok(modes.clone())
+            move |_, _args: IgnoredArgs| Ok(modes.clone())
         })?,
     )?;
     spec.set(
         "IsVirtual",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     spec.set(
         "GetCurrentMode",
-        lua.create_function(move |_, _args: MultiValue| Ok(mode.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(mode.clone()))?,
     )?;
     Ok(spec)
 }
@@ -2902,15 +2945,15 @@ fn create_display_mode_table(lua: &Lua, width: i32, height: i32) -> mlua::Result
     let mode = lua.create_table()?;
     mode.set(
         "GetWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(width))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(width))?,
     )?;
     mode.set(
         "GetHeight",
-        lua.create_function(move |_, _args: MultiValue| Ok(height))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(height))?,
     )?;
     mode.set(
         "GetRefreshRate",
-        lua.create_function(|_, _args: MultiValue| Ok(60))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(60))?,
     )?;
     Ok(mode)
 }
@@ -3358,3 +3401,11 @@ mod tests {
         assert_eq!(rate, 1.5);
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/text_format.rs"]
+mod text_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/ignored_tables.rs"]
+mod ignored_args_perf;

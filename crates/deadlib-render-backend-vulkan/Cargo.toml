@@ -18,8 +18,13 @@ winit = "0.30.13"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_System_Performance"] }
 
-[build-dependencies]
+[target.'cfg(not(all(target_os = "windows", target_env = "msvc")))'.build-dependencies]
 shaderc = "0.10.1"
+
+# Vulkan SDK's prebuilt compiler uses /MD. Build its host tool with the same
+# static MSVC runtime as the rest of this workspace instead of mixing CRTs.
+[target.'cfg(all(target_os = "windows", target_env = "msvc"))'.build-dependencies]
+shaderc = { version = "0.10.1", features = ["build-from-source"] }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

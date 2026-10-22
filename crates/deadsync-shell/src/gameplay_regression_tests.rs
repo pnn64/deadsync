@@ -9,6 +9,10 @@ use deadsync_gameplay::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
+#[cfg(test)]
+#[path = "../../../tests/support/song_fixture.rs"]
+mod song_fixture;
+
 use deadsync_profile_gameplay::GameplayProfile;
 
 type State = deadsync_theme_simply_love::screens::gameplay::GameplayCoreState;
@@ -667,6 +671,56 @@ mod tests {
         session: GameplaySession,
         player_profiles: [profile_data::Profile; MAX_PLAYERS],
     ) -> screen_gameplay::State {
+        build_test_state_with_renderer(
+            simfile,
+            viewport,
+            session,
+            player_profiles,
+            &deadlib_render_core::BackendType::Software.to_string(),
+        )
+    }
+
+    /// The compiled compositor tests inspect baked tracks before advancing a
+    /// frame. Live playback has a separate integration fixture below; it does
+    /// not expose future note-hide/ease windows or promise flattened actors.
+    fn build_compiled_test_state(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+    ) -> screen_gameplay::State {
+        build_test_state_with_renderer_horizon(simfile, viewport, session, player_profiles,
+            &deadlib_render_core::BackendType::Software.to_string(), Some(32.0))
+    }
+
+    fn build_test_state_with_renderer(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+    ) -> screen_gameplay::State {
+        build_test_state_with_renderer_horizon(
+            simfile,
+            viewport,
+            session,
+            player_profiles,
+            renderer,
+            None,
+        )
+    }
+
+    fn build_test_state_with_renderer_horizon(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+        until_beat: Option<f32>,
+    ) -> screen_gameplay::State {
+        // Fixture charts are loaded at zero global offset below. Compile and
+        // play with that same clock rather than the cabinet default (-8 ms).
+        let config = GameplayConfig { global_offset_seconds: 0.0, ..Default::default() };
         let song = Arc::new(
             deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
                 .expect("generated gameplay fixture should parse"),
@@ -703,31 +757,59 @@ mod tests {
             hud,
             ..Default::default()
         };
-        let mut prepared = crate::gameplay_entry::prepare_song_lua(
-            &song,
-            &charts,
-            std::array::from_fn(|p| &gameplay_charts[p].timing),
-            &player_profiles,
-            &scroll_speed,
-            1.0,
-            viewport,
-            space::current_window_px(),
-            16.0 / 9.0,
-            0.0,
-            &session,
-            &GameplayConfig::default(),
-            &deadlib_render_core::BackendType::Software.to_string(),
-            1,
-        );
-        assert!(prepared.take_live_scene().expect("compiled preparation").is_none(),
-            "normal gameplay must release the load-time Lua VM");
+        let prepared = if until_beat.is_none() {
+            crate::gameplay_entry::prepare_song_lua(
+                &song,
+                &charts,
+                std::array::from_fn(|p| &gameplay_charts[p].timing),
+                &player_profiles,
+                &scroll_speed,
+                1.0,
+                viewport,
+                space::current_window_px(),
+                16.0 / 9.0,
+                0.0,
+                &session,
+                &config,
+                renderer,
+                1,
+            )
+        } else {
+            let mut context = crate::gameplay_entry::song_lua_context(
+                &song,
+                &charts,
+                std::array::from_fn(|p| &gameplay_charts[p].timing),
+                &player_profiles,
+                &scroll_speed,
+                1.0,
+                viewport,
+                space::current_window_px(),
+                16.0 / 9.0,
+                0.0,
+                &session,
+                &config,
+                renderer,
+                1,
+                false,
+            )
+            .expect("production Lua context");
+            if let Some(beat) = until_beat {
+                context.music_length_seconds = gameplay_charts[0].timing.get_time_for_beat_exact(beat);
+            }
+            deadsync_song_lua::playback::prepare_song_lua(
+                &song,
+                &context,
+                deadsync_assets::song_lua::compile_song_lua,
+                deadsync_assets::song_lua::compile_song_lua_layers,
+            )
+        };
         screen_gameplay::init(
             song,
             charts,
             gameplay_charts,
             viewport,
             session,
-            GameplayConfig::default(),
+            config,
             5,
             1.0,
             scroll_speed,
@@ -757,6 +839,19 @@ mod tests {
             music_time,
         ));
         refresh_active_attack_masks(&mut state.gameplay, 0.0);
+        if state.song_lua.is_some() {
+            // Foreground::Update dispatches On at the authored starting beat;
+            // changing the simulation clock alone does not activate actors.
+            screen_gameplay::update(state, 0.0, deadsync_gameplay::GameplayAudioSnapshot {
+                stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                    music_nanos: deadsync_core::song_time::song_time_ns_from_seconds(music_time),
+                    has_music_mapping: true, valid_at_host_nanos: 1_000_000,
+                    ..Default::default()
+                }, ..Default::default()
+            }, || 1_000_000, &mut Vec::new());
+            let output = state.take_song_lua_output();
+            assert!(output.errors.is_empty(), "fixture Lua frame failed: {:?}", output.errors);
+        }
     }
 
     fn add_sprite_core_feedback(
@@ -939,9 +1034,27 @@ mod tests {
         text_cache: &mut compose::TextLayoutCache,
         compose_scratch: &mut compose::ComposeScratch,
     ) -> deadlib_render_core::RenderFrame {
-        assert_repeatable_composition(compose_scratch, |scratch| {
+        let expected = assert_repeatable_composition(compose_scratch, |scratch| {
             compose_fixture_frame(state, assets, metrics, actors, text_cache, scratch)
-        })
+        });
+        if !state.song_frame().uses_song_lua_compositor() {
+            assert!(state.song_lua.is_none(), "ordinary charts must not own a Lua VM");
+            assert!(state.song_frame().render_targets().is_empty());
+            // The existing scripted compositor is the behavior oracle for the
+            // same immutable simulation, native chart attacks and theme HUD.
+            let native = state.song_scratch.take().unwrap();
+            let mut scripted = deadsync_song_lua::playback::FrameScratch::new(&state.gameplay);
+            scripted.enable_dynamic_scene();
+            state.song_scratch = Some(Box::new(scripted));
+            let mut actual = compose_fixture_frame(
+                state, assets, metrics, actors, text_cache, compose_scratch,
+            );
+            assert_eq!(compare_render_frames(&expected, &actual), Ok(()),
+                "native no-Lua composition must preserve the existing frame");
+            compose_scratch.recycle_frame(&mut actual);
+            state.song_scratch = Some(native);
+        }
+        expected
     }
 
     fn assert_repeatable_composition(
@@ -1122,8 +1235,10 @@ end }
 "#).unwrap();
             space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
             space::set_current_window_px(1280, 720);
-            let state = build_test_state(&simfile, GameplayViewport::new(1280.0,720.0),
-                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
+            let state = build_test_state_with_renderer_horizon(&simfile, GameplayViewport::new(1280.0,720.0),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()),
+                "OpenGL", Some(4.0));
+            assert!(state.song_lua.is_none(), "explicit offline compilation releases its VM");
             let track = state.song_lua_visuals().column_splines[0].iter()
                 .find(|track| track.column == 0).expect("compiled position and zoom track");
             for (second, direction, scale) in [(0.375,1.0,1.0),(0.875,-1.0,0.5),(1.375,1.0,1.0)] {
@@ -1140,14 +1255,15 @@ end }
 
     #[test]
     fn live_lua_screen_frames() {
-        use deadsync_gameplay::SongLuaRuntimeBuilder;
-
         with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
             true, false, || {
             let simfile = write_fixture("live-screen", r#"
 #TITLE:Live screen bridge;
 #MUSIC:music.wav;
 #BPMS:0=120;
+#BGCHANGES:0=background.lua=1=0=0=0=StretchNoLoop====;
+#FGCHANGES:0=primary.lua=1=0=0=0=StretchNoLoop====,
+0.01=foreground.lua=1=0=0=0=StretchNoLoop====;
 #NOTEDATA:;
 #STEPSTYPE:dance-single;
 #DIFFICULTY:Easy;
@@ -1162,8 +1278,6 @@ end }
             let metrics = space::Metrics::centered(640.0, 480.0);
             space::set_current_metrics(metrics);
             space::set_current_window_px(640, 480);
-            let mut state = build_test_state(&simfile, GameplayViewport::new(640.0, 480.0),
-                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
             let dir = simfile.parent().expect("fixture directory");
             fs::write(dir.join("background.lua"), r#"
 LIVE_TICKS = 0
@@ -1173,7 +1287,8 @@ return Def.ActorFrame { Name = 'Background',
             if delta > 0 then LIVE_TICKS = LIVE_TICKS + 1; self:x(80 * LIVE_TICKS) end
         end)
     end,
-    Def.Quad { InitCommand = function(self)
+    -- Background::Update calls InitState before On, resetting Init properties.
+    Def.Quad { OnCommand = function(self)
         self:xy(10, 100):zoomto(8, 8):diffuse({0.37, 0.19, 0.63, 1})
     end },
 }
@@ -1197,6 +1312,7 @@ return Def.ActorFrame { Name = 'Primary',
             end
         end)
     end,
+    Def.Actor { OnCommand = function(self) self:sleep(10) end },
     Def.Quad { InitCommand = function(self)
         MESSAGEMAN:Broadcast('LiveInit')
         self:xy(10, 120):zoomto(8, 8):diffuse({0.81, 0.17, 0.29, 1})
@@ -1210,42 +1326,35 @@ return Def.ActorFrame { Name = 'Foreground',
             if delta > 0 then self:x(20 * LIVE_TICKS) end
         end)
     end,
+    Def.Actor { OnCommand = function(self) self:sleep(10) end },
     Def.Quad { InitCommand = function(self)
         self:xy(10, 140):zoomto(8, 8):diffuse({0.23, 0.71, 0.41, 1})
     end },
 }
 "#).expect("foreground script");
-            let mut song = (*state.source.song).clone();
-            song.background_lua_changes = vec![deadsync_chart::SongBackgroundLuaChange::new(0.0, dir.join("background.lua"))];
-            song.foreground_lua_changes = vec![
-                deadsync_chart::SongForegroundLuaChange { start_beat: 0.0, path: dir.join("primary.lua"), name: "primary.lua".into() },
-                deadsync_chart::SongForegroundLuaChange { start_beat: 0.01, path: dir.join("foreground.lua"), name: "foreground.lua".into() },
-            ];
-            let mut context = deadsync_song_lua::SongLuaCompileContext::new(dir, &song.title);
-            context.live = true;
-            context.screen_width = 640.0;
-            context.screen_height = 480.0;
-            context.music_length_seconds = 10.0;
-            context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
-            context.player_step_indices[0] = Some(0);
-            let mut prepared = deadsync_song_lua::playback::prepare_song_lua(&song, &context,
-                compile_song_lua, deadsync_assets::song_lua::compile_song_lua_layers);
-            let scene = prepared.take_live_scene().expect("single shared session").expect("owned scene");
-            assert!(prepared.take_live_scene().expect("second transfer").is_none());
-            let (_, _, visuals) = prepared.build_song_lua_runtime(deadsync_gameplay::SongLuaRuntimeWindowBuild {
-                song_title: &song.title, timing_players: std::array::from_fn(|p| &state.source.gameplay_charts[p].timing),
-                num_players: 1, machine_global_offset_seconds: 0.0,
-                player_global_offset_shift_seconds: &[0.0; MAX_PLAYERS], screen_width: 640.0, screen_height: 480.0,
-                player_actor_defaults: [deadsync_gameplay::SongLuaPlayerActorDefault { x: 0.0, y: 0.0 }; MAX_PLAYERS],
-            });
-            state.mods.song_lua_visuals = visuals;
-            state.song_scratch = Some(Box::new(deadsync_song_lua::playback::FrameScratch::new(&state.gameplay)));
-            state.attach_song_lua(scene).expect("screen ownership");
+            let mut state = build_test_state(&simfile, GameplayViewport::new(640.0, 480.0),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
+            assert!(state.song_lua.is_some(), "production screen must own its Lua scene");
             let startup = state.take_song_lua_output();
             assert!(startup.errors.is_empty(), "{:?}", startup.errors);
-            assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveEntry").count(), 1);
+            // Foreground::HandleMessage suppresses loading-time On. Its first
+            // Update at the authored start beat dispatches On instead.
+            assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveEntry").count(), 0);
             assert_eq!(startup.broadcasts.iter().filter(|event| event.1 == "LiveInit").count(), 1);
             assert!(state.take_song_lua_output().broadcasts.is_empty());
+            state.boundary.total_elapsed_in_screen = 10.0;
+            screen_gameplay::update(&mut state, 0.0, deadsync_gameplay::GameplayAudioSnapshot {
+                stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                    music_nanos: 0, has_music_mapping: true,
+                    valid_at_host_nanos: 1_000_000, ..Default::default()
+                }, ..Default::default()
+            }, || 1_000_000, &mut Vec::new());
+            let activation = state.take_song_lua_output();
+            assert!(activation.errors.is_empty(), "{:?}", activation.errors);
+            assert_eq!(activation.broadcasts.iter().filter(|event| event.1 == "LiveEntry").count(), 1,
+                "foreground activation at music={}, beat={}, broadcasts={:?}",
+                state.current_music_time_seconds(), state.clock.song_position.current_beat, activation.broadcasts);
+            assert_eq!(activation.broadcasts.iter().filter(|event| event.1 == "LiveFrame").count(), 0);
 
             let assets = fixture_assets();
             let mut actors = Vec::new();
@@ -1279,7 +1388,7 @@ return Def.ActorFrame { Name = 'Foreground',
                     state.players_runtime.players[0].judgment_counts);
                 assert_eq!(state.players_runtime.players[0].judgment_counts[5], (progress / 5) as u32);
                 let root = state.mods.song_lua_visuals.overlays.iter().find(|actor|
-                    actor.name.as_deref() == Some("Primary")).expect("primary binding");
+                    actor.name.as_deref() == Some("primary.lua")).expect("primary binding");
                 assert_eq!(root.initial_state.aux, state.players_runtime.players[0].earned_grade_points as f32);
                 let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
                     &mut actors, &mut text, &mut compose_scratch, &compose::NullTextureContext);
@@ -1320,6 +1429,179 @@ return Def.ActorFrame { Name = 'Foreground',
                     assert!(duration > 0.0);
                     assert_eq!(hidden_duration, duration);
                 }
+            },
+        );
+    }
+
+    #[test]
+    fn ordinary_song_modes_and_views_match_existing_composition() {
+        use deadsync_gameplay::{GameplayInputPlayStyle as G, GameplayInputPlayerSide as S};
+        use profile_data::PlayStyle as P;
+        for (style, runtime_style) in [
+            (P::Single, G::Single),
+            (P::Double, G::Double),
+            (P::Versus, G::Versus),
+            (P::PumpSingle, G::PumpSingle),
+            (P::PumpDouble, G::PumpDouble),
+            (P::PumpVersus, G::PumpVersus),
+        ] {
+            let cols = style.cols_per_player();
+            let row = format!("1{}", "0".repeat(cols - 1));
+            let notes = vec![row; 16].join("\n");
+            let text = format!(
+                "#TITLE:Native modes;\n#BPMS:0=120;\n#FGCHANGES:0=foreground.png;\n\
+                #NOTEDATA:;\n#STEPSTYPE:{};\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:{notes};",
+                style.chart_type()
+            );
+            let simfile = write_fixture(&format!("native-mode-{runtime_style:?}"), &text);
+            image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 255, 255, 255]))
+                .save(simfile.parent().unwrap().join("foreground.png"))
+                .unwrap();
+            for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
+                let versus = style.player_count() == 2;
+                with_session(
+                    style,
+                    side,
+                    versus || side == profile_data::PlayerSide::P1,
+                    versus || side == profile_data::PlayerSide::P2,
+                    || {
+                        let metrics = space::Metrics::centered(854.0, 480.0);
+                        space::set_current_metrics(metrics);
+                        space::set_current_window_px(1280, 720);
+                        let profiles = std::array::from_fn(|p| profile_data::Profile {
+                            noteskin: profile_data::NoteSkin::new("lambda"),
+                            hide_song_bg: p == 0,
+                            ..Default::default()
+                        });
+                        let session = GameplaySession {
+                            play_style: runtime_style,
+                            player_side: if side == profile_data::PlayerSide::P2 {
+                                S::P2
+                            } else {
+                                S::P1
+                            },
+                            ..Default::default()
+                        };
+                        let mut state = build_test_state(
+                            &simfile,
+                            GameplayViewport::new(1280.0, 720.0),
+                            session,
+                            profiles,
+                        );
+                        set_fixture_time(&mut state, 1.0);
+                        assert!(state.song_media.refresh_foreground(&state.gameplay),
+                            "native foreground media must actually activate");
+                        assert!(!state.song_frame().uses_song_lua_compositor());
+                        let assets = fixture_assets();
+                        let mut actors = Vec::new();
+                        let mut text_cache = compose::TextLayoutCache::default();
+                        let mut scratch = compose::ComposeScratch::default();
+                        for (hide_gameplay_hud, show_song_visuals, apply_attacks) in [
+                            (false, true, true),
+                            (true, true, true),
+                            (false, false, false),
+                            (true, false, false),
+                        ] {
+                            let view = screen_gameplay::ActorViewOverride {
+                                hide_gameplay_hud,
+                                show_song_visuals,
+                                apply_attacks,
+                                ..Default::default()
+                            };
+                            let mut expected = compose_fixture_frame_with_view(
+                                &mut state,
+                                &assets,
+                                &metrics,
+                                &mut actors,
+                                &mut text_cache,
+                                &mut scratch,
+                                view,
+                                &FIXTURE_TEXTURES,
+                            );
+                            let native = state.song_scratch.take().unwrap();
+                            let mut full =
+                                deadsync_song_lua::playback::FrameScratch::new(&state.gameplay);
+                            full.enable_dynamic_scene();
+                            state.song_scratch = Some(Box::new(full));
+                            let mut actual = compose_fixture_frame_with_view(
+                                &mut state,
+                                &assets,
+                                &metrics,
+                                &mut actors,
+                                &mut text_cache,
+                                &mut scratch,
+                                view,
+                                &FIXTURE_TEXTURES,
+                            );
+                            assert_eq!(
+                                compare_render_frames(&expected, &actual),
+                                Ok(()),
+                                "{style:?}/{side:?}, hidden HUD={hide_gameplay_hud}, visuals={show_song_visuals}"
+                            );
+                            scratch.recycle_frame(&mut expected);
+                            scratch.recycle_frame(&mut actual);
+                            state.song_scratch = Some(native);
+                        }
+                    },
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn ordinary_song_keeps_lua_runtime_and_input_idle() {
+        let simfile = write_fixture("no-song-lua", generated_sprite_core_simfile());
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let (mut state, _, _) = sprite_core_fixture(&simfile);
+                assert!(state.song_lua.is_none());
+                assert!(!state.song_frame().uses_song_lua_compositor());
+                assert!(state.note_field_tap_callback.is_none());
+                assert!(state.step_callback.is_none());
+                assert!(state.tap_row_judgment_callback.is_none());
+                assert!(state.hold_judgment_callback.is_none());
+                assert!(state.avoided_mine_judgment_callback.is_none());
+                state.queue_song_lua_inputs(std::iter::from_fn(|| {
+                    panic!("ordinary gameplay must not consume Lua input events")
+                }));
+                let mut input_phases = 0;
+                let mut effects = Vec::new();
+                for tick in 0..60 {
+                    screen_gameplay::update_with_input(
+                        &mut state,
+                        1.0 / 60.0,
+                        deadsync_gameplay::GameplayAudioSnapshot {
+                            stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                                music_nanos: 1_000_000_000 + tick * 16_666_667,
+                                has_music_mapping: true,
+                                valid_at_host_nanos: 1_000_000,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                        || 1_000_000,
+                        &mut effects,
+                        |_| input_phases += 1,
+                    );
+                    let output = state.take_song_lua_output();
+                    assert!(
+                        output.errors.is_empty()
+                            && output.sounds.is_empty()
+                            && output.actor_sounds.is_empty()
+                            && output.broadcasts.is_empty()
+                            && output.draw_frames.is_empty()
+                            && output.request.is_none()
+                    );
+                }
+                assert_eq!(
+                    input_phases, 60,
+                    "native input still runs once after every update"
+                );
+                assert!(state.song_lua.is_none());
             },
         );
     }
@@ -3168,7 +3450,8 @@ M000
                 };
                 state.gameplay.mods.attacks.mask_windows[0] =
                     deadsync_gameplay::build_attack_mask_windows(std::slice::from_ref(&attack));
-                refresh_active_attack_masks(&mut state.gameplay, 0.0);
+                // Native attacks approach their targets over elapsed time.
+                refresh_active_attack_masks(&mut state.gameplay, 1.0);
                 state.refresh_live_notefield_options(120.0);
                 assert_eq!(
                     deadsync_gameplay::effective_visual_effects_for_player(&state.gameplay, 0)
@@ -3225,6 +3508,7 @@ M000
 
     fn generated_pipeline_song_lua() -> &'static str {
         r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 local player = nil
 local capture = nil
 local local_target = nil
@@ -3453,7 +3737,7 @@ return root
             || {
                 space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
                 space::set_current_window_px(640, 480);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(640.0, 480.0),
                     GameplaySession::default(),
@@ -3491,6 +3775,8 @@ return root
         fs::create_dir_all(&lua_dir).unwrap();
         let lua_entry = lua_dir.join("default.lua");
         fs::write(&lua_entry, generated_pipeline_song_lua()).unwrap();
+        fs::write(simfile.parent().unwrap().join("easing.lua"),
+            include_str!("../../../tests/fixtures/song_lua/easing.lua")).unwrap();
         simfile
     }
 
@@ -3644,7 +3930,7 @@ return root
                 profiles[0].display_name = "PixelSafePlayer".to_string();
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -3934,7 +4220,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -3943,8 +4229,9 @@ return Def.ActorFrame{
                 set_fixture_time(&mut state, 2.5);
                 let visuals = state.gameplay.song_lua_visuals();
                 assert!(visuals.overlays.iter().any(|overlay| {
-                    overlay.parent_index.is_none()
-                        && matches!(
+                    // An ordinary ActorFrame parent does not make this an AFT
+                    // proxy. The direct-segment assertions below verify that.
+                    matches!(
                             overlay.kind,
                             deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
                                 target: deadsync_assets::song_lua::SongLuaProxyTarget::NoteField {
@@ -4047,7 +4334,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new(skin);
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     simfile,
                     GameplayViewport::new(640.0, 480.0),
                     GameplaySession::default(),
@@ -4195,7 +4482,8 @@ return Def.ActorFrame{
                 space::set_current_window_px(1280, 720);
                 let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
-                let mut state = build_test_state(
+                profiles[0].display_name = "OverlayFooter".into();
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -4218,12 +4506,15 @@ return Def.ActorFrame{
                     if time > 0.0 {
                         assert!(actor_tree_has_text(&actors, "."));
                     }
-                    let actual = top_screen_text_draw(&actors, "EVENT", 0, 1.0)
+                    let actual = top_screen_text_draw(&actors, "OverlayFooter", 0, 1.0)
                         .map_or(0.0, |(_, alpha)| alpha);
                     assert!(
                         (actual - alpha).abs() < 0.02,
                         "footer fade at {time}: {actual} != {alpha}"
                     );
+                    // Simply Love's Event label belongs to In, a sibling of
+                    // Overlay. The score proxy must not make Overlay own it.
+                    assert_eq!(top_screen_text_draw(&actors, "EVENT", 0, 1.0).unwrap().1, 1.0);
                 }
             },
         );
@@ -4231,10 +4522,10 @@ return Def.ActorFrame{
 
     #[cfg(target_os = "windows")]
     #[test]
-    #[ignore = "requires the local lua-songs corpus and a GPU with surface readback"]
+    #[ignore = "long song-fixture playback and GPU readback regression"]
     fn lake_hold_bodies_draw_under_lua_player_callback() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc");
+        let fixture = song_fixture::from_source("Lake of Lost Nostalgia/Lake of Lost Nostalgia.ssc");
+        let simfile = fixture.simfile.clone();
         use winit::platform::windows::EventLoopBuilderExtWindows;
         let event_loop = winit::event_loop::EventLoop::builder()
             .with_any_thread(true)
@@ -4403,10 +4694,1184 @@ return Def.ActorFrame{
     }
 
     #[test]
-    #[ignore = "requires the local lua-songs corpus and GPU readback on Windows"]
+    fn late_foreground_keeps_shared_gameplay_tracks() {
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                for background in [false, true] {
+                    let mut text = generated_pipeline_song_lua_simfile()
+                        .replace("0.000=lua/default.lua", "1.000=lua/default.lua");
+                    if background {
+                        text = text.replace(
+                            "#NOTEDATA:",
+                            "#BGCHANGES:8.000=bg/default.lua=1.000=0=0=0=====;\n#NOTEDATA:",
+                        );
+                    }
+                    let path = write_fixture(
+                        if background {
+                            "late-shared-background"
+                        } else {
+                            "late-shared-foreground"
+                        },
+                        &text,
+                    );
+                    let dir = path.parent().unwrap();
+                    fs::create_dir_all(dir.join("lua")).unwrap();
+                    fs::create_dir_all(dir.join("bg")).unwrap();
+                    fs::write(
+                        dir.join("lua/default.lua"),
+                        include_str!("../../../tests/fixtures/song_lua/late-shared-runtime.lua"),
+                    )
+                    .unwrap();
+                    fs::write(dir.join("bg/default.lua"), "return Def.ActorFrame{}").unwrap();
+                    let profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                    let mut state = build_compiled_test_state(
+                        &path,
+                        GameplayViewport::design(),
+                        GameplaySession::default(),
+                        profiles,
+                    );
+                    assert!(
+                        !state
+                            .gameplay
+                            .song_lua_visuals()
+                            .overlays
+                            .iter()
+                            .any(|actor| actor.name.as_deref() == Some("LateForegroundMarker")),
+                        "shared gameplay data must not promote timed graphics to the root"
+                    );
+                    let layers = &state.gameplay.song_lua_visuals().foreground_visual_layers;
+                    assert_eq!(layers.len(), 1);
+                    let start = state
+                        .timing_for_player(0)
+                        .unwrap()
+                        .get_time_for_beat_exact(1.0);
+                    assert!(
+                        (layers[0].start_second - start).abs() < 0.001,
+                        "late foreground starts at {}, expected {start}",
+                        layers[0].start_second
+                    );
+                    assert!(
+                        layers[0]
+                            .overlays
+                            .iter()
+                            .any(|actor| actor.name.as_deref() == Some("LateForegroundMarker"))
+                    );
+                    for (name, expected) in
+                        [("LateForegroundMarker", true), ("LateDepthDisabled", false)]
+                    {
+                        let actor = layers[0]
+                            .overlays
+                            .iter()
+                            .find(|actor| actor.name.as_deref() == Some(name))
+                            .unwrap();
+                        assert_eq!(
+                            actor.initial_state.depth_test, expected,
+                            "recursive depth setter: {name}"
+                        );
+                    }
+                    assert_eq!(
+                        layers[0]
+                            .overlays
+                            .iter()
+                            .find(|actor| actor.name.as_deref() == Some("LateDepthDisabled"))
+                            .unwrap()
+                            .initial_state
+                            .blend,
+                        deadsync_song_lua::SongLuaOverlayBlendMode::NoEffect
+                    );
+                    for (second, x, stealth, screen_y) in
+                        [(2.5, -9999.0, 1.0, 12.0), (3.5, 213.5, 0.0, 0.0)]
+                    {
+                        set_fixture_time(&mut state, second);
+                        refresh_active_attack_masks(&mut state.gameplay, f32::MAX);
+                        assert_eq!(state.gameplay.song_lua_player_transform(0).x, Some(x));
+                        assert_eq!(
+                            state
+                                .gameplay
+                                .effective_appearance_effects_for_player(0)
+                                .stealth,
+                            stealth
+                        );
+                        let visuals = state.gameplay.song_lua_visuals();
+                        assert!(
+                            visuals.screen_overlay_index.is_some(),
+                            "shared ScreenGameplay pose"
+                        );
+                        let frame = compose_fixture_frame(
+                            &mut state,
+                            &fixture_assets(),
+                            &metrics,
+                            &mut Vec::new(),
+                            &mut compose::TextLayoutCache::default(),
+                            &mut compose::ComposeScratch::default(),
+                        );
+                        let mut markers = 0;
+                        for op in &frame.ops {
+                            let DrawOp::Sprite(run) = op else { continue };
+                            let camera = frame
+                                .cameras
+                                .get(run.camera as usize)
+                                .copied()
+                                .unwrap_or_else(|| metrics.projection());
+                            for instance in &frame.sprite_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                if instance.size != [16.0, 16.0] {
+                                    continue;
+                                }
+                                let p = camera.mul_vec4(
+                                    [
+                                        instance.center[0],
+                                        instance.center[1],
+                                        instance.center[2],
+                                        1.0,
+                                    ]
+                                    .into(),
+                                );
+                                let y = (1.0 - p.y / p.w) * 240.0;
+                                assert!(
+                                    (y - 80.0 - screen_y).abs() < 0.01,
+                                    "shared screen translation: {y}"
+                                );
+                                markers += 1;
+                            }
+                        }
+                        assert_eq!(markers, 1);
+                    }
+                }
+            },
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires a graphics device"]
+    fn song_lua_depth_mask_hides_art_then_opens() {
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1600, 900);
+                let path = write_fixture("depth-mask-gameplay", generated_pipeline_song_lua_simfile());
+                let dir = path.parent().unwrap().join("lua");
+                fs::create_dir_all(&dir).unwrap();
+                fs::write(
+                    dir.join("default.lua"),
+                    include_str!("../../../tests/fixtures/song_lua/no-effect-depth-mask.lua"),
+                )
+                .unwrap();
+                let profiles = std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"),
+                    ..Default::default()
+                });
+                let mut state = build_test_state(
+                    &path,
+                    GameplayViewport::design(),
+                    GameplaySession::default(),
+                    profiles,
+                );
+                let mut capture = SongLuaNotePixelCapture::new(
+                    &state,
+                    &metrics,
+                    std::env::temp_dir().join("deadsync-depth-mask-capture"),
+                );
+                set_fixture_time(&mut state, 2.5);
+                let closed = capture.capture(&mut state, &metrics, 5.0);
+                assert!(
+                    closed > 100,
+                    "closed depth mask must preserve visible notes; got {closed} pixels"
+                );
+                set_fixture_time(&mut state, 3.5);
+                let open = capture.capture(&mut state, &metrics, 7.0);
+                assert_eq!(open, 0, "opening the mask must reveal the covering artwork");
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "long full-song Mawaru transition and GPU readback regression"]
+    fn mawaru7_compiled_notefield_transitions() {
+        let fixture = song_fixture::from_source("mawaru7/mawaru7.sm");
+        let simfile = fixture.simfile.clone();
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1600, 900);
+                let profiles = std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"),
+                    scroll_speed: ScrollSpeedSetting::MMod(730.0),
+                    mini_percent: 60,
+                    background_filter: profile_data::BackgroundFilter::from_percent(95),
+                    ..Default::default()
+                });
+                let until_beat = std::env::var("DEADSYNC_MAWARU7_UNTIL_BEAT")
+                    .ok()
+                    .map(|value| value.parse::<f32>().unwrap());
+                let mut state = build_test_state_with_renderer_horizon(
+                    &simfile,
+                    GameplayViewport::design(),
+                    GameplaySession::default(),
+                    profiles,
+                    "Vulkan (wgpu)",
+                    until_beat,
+                );
+                let layers = &state.gameplay.song_lua_visuals().foreground_visual_layers;
+                assert_eq!(layers.len(), 1, "Mawaru's Lua foreground must compile");
+                let mask = layers[0]
+                    .overlays
+                    .iter()
+                    .find(|actor| actor.name.as_deref() == Some("actor_yv"))
+                    .expect("authored door mask");
+                assert_eq!(
+                    mask.initial_state.blend,
+                    deadsync_song_lua::SongLuaOverlayBlendMode::NoEffect
+                );
+                let sky = layers[0]
+                    .overlays
+                    .iter()
+                    .find(|actor| actor.name.as_deref() == Some("actor_zv"))
+                    .expect("authored door sky");
+                assert!(
+                    sky.initial_state.depth_test,
+                    "door sky must receive its ActorFrame's depth test"
+                );
+                assert!(
+                    !sky.initial_state.depth_write,
+                    "testing must not enable writing"
+                );
+                assert!(
+                    mask.initial_state.depth_write,
+                    "the mask explicitly writes depth"
+                );
+                let assets = fixture_assets();
+                let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
+                let mut handles = Vec::new();
+                ns.for_each_slot(|slot| {
+                    handles.push(FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                });
+                #[cfg(target_os = "windows")]
+                let mut gpu = Some(SongLuaNotePixelCapture::new(
+                    &state,
+                    &metrics,
+                    std::env::var_os("DEADSYNC_MAWARU7_CAPTURE")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| std::env::temp_dir().join("deadsync-mawaru7-capture")),
+                ));
+                let mut tick = 0;
+                for beat in [8.0, 70.0, 94.0, 116.0, 196.0, 308.0, 320.0, 338.0] {
+                    if until_beat.is_some_and(|end| beat > end) {
+                        break;
+                    }
+                    let seconds = state
+                        .gameplay
+                        .gameplay_chart(0)
+                        .unwrap()
+                        .timing
+                        .get_time_for_beat_exact(beat);
+                    while tick < (seconds * 120.0) as u32 {
+                        tick += 1;
+                        set_fixture_time(&mut state, tick as f32 / 120.0);
+                        refresh_active_attack_masks(&mut state.gameplay, 1.0 / 120.0);
+                    }
+                    set_fixture_time(&mut state, seconds);
+                    state
+                        .gameplay
+                        .refresh_live_notefield_options(state.current_bpm_display());
+                    let frame = compose_fixture_frame(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &mut Vec::new(),
+                        &mut compose::TextLayoutCache::default(),
+                        &mut compose::ComposeScratch::default(),
+                    );
+                    let count: u32 = frame
+                        .ops
+                        .iter()
+                        .filter_map(|op| match op {
+                            DrawOp::Sprite(run) if handles.contains(&run.texture_handle) => {
+                                Some(run.instance_count)
+                            }
+                            DrawOp::TexturedMesh(run) if handles.contains(&run.texture_handle) => {
+                                Some(run.instance_count)
+                            }
+                            _ => None,
+                        })
+                        .sum();
+                    let pose = state.gameplay.song_lua_player_transform(0);
+                    let appearance = state.gameplay.effective_appearance_effects_for_player(0);
+                    if beat == 94.0 {
+                        assert_eq!(appearance.stealth, 0.0);
+                        assert!(count > 4, "rhythm section has tap geometry");
+                    }
+                    eprintln!(
+                        "Mawaru7 beat {beat}: noteskin draws={count}, player_x={:?}, player_zoom={}, stealth={}",
+                        pose.x, pose.zoom_x, appearance.stealth
+                    );
+                    #[cfg(target_os = "windows")]
+                    if let Some(gpu) = &mut gpu {
+                        if [70.0, 94.0, 116.0, 196.0, 308.0, 320.0, 338.0].contains(&beat) {
+                            let visible_pixels = gpu.capture(&mut state, &metrics, beat);
+                            if beat == 94.0 {
+                                assert!(visible_pixels > 100, "rhythm section has no visible notes");
+                            }
+                        }
+                    }
+                }
+            },
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    struct SongLuaNotePixelCapture {
+        backend: deadlib_render::Backend,
+        assets: deadlib_assets::AssetManager,
+        _event_loop: winit::event_loop::EventLoop<()>,
+        output: PathBuf,
+    }
+
+    #[cfg(target_os = "windows")]
+    impl SongLuaNotePixelCapture {
+        fn new(state: &screen_gameplay::State, metrics: &space::Metrics, output: PathBuf) -> Self {
+            use winit::platform::windows::EventLoopBuilderExtWindows;
+            let event_loop = winit::event_loop::EventLoop::builder()
+                .with_any_thread(true)
+                .build()
+                .unwrap();
+            #[expect(deprecated, reason = "hidden GPU regression needs no event dispatch")]
+            let window = Arc::new(
+                event_loop
+                    .create_window(
+                        winit::window::Window::default_attributes()
+                            .with_visible(false)
+                            .with_inner_size(winit::dpi::PhysicalSize::new(1600, 900)),
+                    )
+                    .unwrap(),
+            );
+            let mut backend = deadlib_render::create_backend(
+                deadlib_render_core::BackendType::VulkanWgpu,
+                window,
+                metrics.projection(),
+                false,
+                deadlib_render_core::PresentModePolicy::Immediate,
+                false,
+                true,
+            )
+            .unwrap();
+            let mut assets = deadlib_assets::AssetManager::new();
+            load_gpu_capture_assets(&mut assets, &mut backend).unwrap();
+            prewarm_gpu_noteskins(state, &mut assets, &mut backend).unwrap();
+            // Lua sprites bind during actor construction, before the compositor
+            // can discover missing texture keys. Load their resources first.
+            let visuals = state.gameplay.song_lua_visuals();
+            for overlay in visuals.overlays.iter().chain(
+                visuals
+                    .background_visual_layers
+                    .iter()
+                    .chain(&visuals.foreground_visual_layers)
+                    .flat_map(|layer| &layer.overlays),
+            ) {
+                if let deadsync_assets::song_lua::SongLuaOverlayKind::Sprite {
+                    texture_key,
+                    textures,
+                    ..
+                } = &overlay.kind
+                {
+                    for key in
+                        std::iter::once(texture_key).chain(textures.iter().map(|texture| &texture.key))
+                    {
+                        if !deadlib_assets::dynamic::is_dynamic_video_path(Path::new(key.as_ref())) {
+                            ensure_gpu_capture_texture(&mut assets, &mut backend, key, None).unwrap();
+                        }
+                    }
+                }
+            }
+            fs::create_dir_all(&output).unwrap();
+            Self {
+                backend,
+                assets,
+                _event_loop: event_loop,
+                output,
+            }
+        }
+
+        fn capture(
+            &mut self,
+            state: &mut screen_gameplay::State,
+            metrics: &space::Metrics,
+            beat: f32,
+        ) -> usize {
+            let textures = CaptureTextureContext {
+                assets: &self.assets,
+                keys: Default::default(),
+            };
+            let frame = compose_fixture_frame_with_textures(
+                state,
+                &self.assets,
+                metrics,
+                &mut Vec::new(),
+                &mut compose::TextLayoutCache::default(),
+                &mut compose::ComposeScratch::default(),
+                &textures,
+            );
+            let missing = missing_capture_texture_keys(&textures, &self.assets);
+            drop(frame);
+            drop(textures);
+            for key in missing {
+                ensure_gpu_capture_texture(&mut self.assets, &mut self.backend, &key, None).unwrap();
+            }
+            let mut frame = compose_fixture_frame_with_textures(
+                state,
+                &self.assets,
+                metrics,
+                &mut Vec::new(),
+                &mut compose::TextLayoutCache::default(),
+                &mut compose::ComposeScratch::default(),
+                self.assets.texture_context(),
+            );
+            let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
+            let taps: std::collections::HashSet<_> = ns
+                .notes
+                .iter()
+                .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
+                .chain(ns.lift_note_layers.iter().flat_map(|layers| layers.iter()))
+                .map(|slot| {
+                    self.assets
+                        .texture_context()
+                        .texture_handle(slot.texture_key())
+                })
+                .collect();
+            self.backend.request_screenshot();
+            self.backend
+                .draw(&frame, self.assets.textures(), false)
+                .unwrap();
+            let image = self.backend.capture_frame().unwrap();
+            image
+                .save(self.output.join(format!("mawaru7-beat-{beat}.png")))
+                .unwrap();
+            if [308.0, 320.0].contains(&beat) {
+                let visuals = state.gameplay.song_lua_visuals();
+                let titan: std::collections::HashSet<_> = visuals
+                    .foreground_visual_layers
+                    .iter()
+                    .flat_map(|layer| &layer.overlays)
+                    .filter_map(|overlay| match &overlay.kind {
+                        deadsync_assets::song_lua::SongLuaOverlayKind::Sprite {
+                            texture_key,
+                            ..
+                        } if texture_key.contains("games/titan/")
+                            && !texture_key.contains("/skyp")
+                            && !texture_key.ends_with("/note.png") =>
+                        {
+                            Some(self.assets.texture_context().texture_handle(texture_key))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert!(!titan.is_empty(), "Titan scene image resources");
+                let mut without_art = frame.clone();
+                without_art.ops.retain(|op| match op {
+                    DrawOp::Sprite(run) => !titan.contains(&run.texture_handle),
+                    DrawOp::TexturedMesh(run) => !titan.contains(&run.texture_handle),
+                    _ => true,
+                });
+                self.backend.request_screenshot();
+                self.backend
+                    .draw(&without_art, self.assets.textures(), false)
+                    .unwrap();
+                let no_art = self.backend.capture_frame().unwrap();
+                let changed = image
+                    .pixels()
+                    .zip(no_art.pixels())
+                    .filter(|(a, b)| a != b)
+                    .count();
+                eprintln!(
+                    "Mawaru7 GPU beat {beat}: {changed} visible Titan scenery/character pixels"
+                );
+                assert!(
+                    changed > 1_000,
+                    "Titan scenery and characters are hidden behind the sky"
+                );
+            }
+            let without_taps = |op: &DrawOp| match op {
+                DrawOp::Sprite(run) => !taps.contains(&run.texture_handle),
+                DrawOp::TexturedMesh(run) => !taps.contains(&run.texture_handle),
+                _ => true,
+            };
+            frame.ops.retain(without_taps);
+            for target in &mut frame.render_targets {
+                target.ops.retain(without_taps);
+            }
+            self.backend.request_screenshot();
+            self.backend
+                .draw(&frame, self.assets.textures(), false)
+                .unwrap();
+            let no_taps = self.backend.capture_frame().unwrap();
+            let changed = image
+                .pixels()
+                .zip(no_taps.pixels())
+                .filter(|(a, b)| a != b)
+                .count();
+            eprintln!("Mawaru7 GPU beat {beat}: {changed} visible tap pixels");
+            changed
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    impl Drop for SongLuaNotePixelCapture {
+        fn drop(&mut self) {
+            let mut textures = self.assets.take_textures();
+            self.backend.dispose_textures(&mut textures);
+            self.backend.cleanup();
+        }
+    }
+
+    #[test]
+    #[ignore = "long full-song 7th Gear native geometry regression"]
+    fn seventh_saved_mini_reaches_aft_receptors() {
+        let fixture = song_fixture::from_source("7th Gear/7th Gear.ssc");
+        let simfile = fixture.simfile.clone();
+        with_session(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+            true,
+            false,
+            || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                let profiles = std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"),
+                    scroll_speed: ScrollSpeedSetting::MMod(730.0),
+                    mini_percent: 60,
+                    ..Default::default()
+                });
+                // OpenGL selects the song's real three-AFT branch during loading.
+                let mut state = build_test_state_with_renderer(
+                    &simfile,
+                    GameplayViewport::design(),
+                    GameplaySession::default(),
+                    profiles,
+                    "OpenGL",
+                );
+                let assets = fixture_assets();
+                let receptor_handles: Vec<_> = state.noteskin_assets.receptor_noteskin[0]
+                    .as_ref()
+                    .or(state.noteskin_assets.noteskin[0].as_ref())
+                    .unwrap()
+                    .receptor_off
+                    .iter()
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let mut probes = vec![
+                    (112.0, Some(115.0), None),
+                    (115.0, Some(385.0), None),
+                    (123.0, Some(115.0), None),
+                ];
+                let native: serde_json::Value = serde_json::from_slice(&zstd::stream::decode_all(
+                    include_bytes!("../../../tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.json.zst").as_slice(),
+                ).unwrap()).unwrap();
+                assert_eq!(native["oracle"], "itgmania_notefield_render_trace");
+                assert_eq!(native["input"]["window_visible"], false);
+                assert_eq!(native["input"]["native_source"]["revision"], "704cdd5624155f743b59b8b64fedeb0588dae067");
+                assert_eq!(native["input"]["native_source"]["modified_src"], false);
+                let native_project = |clip: &[f64]| {
+                    [
+                        ((1.0 + clip[0] / clip[3]) * 427.0) as f32,
+                        ((1.0 - clip[1] / clip[3]) * 240.0) as f32,
+                    ]
+                };
+                let mut seen_native_beats = std::collections::HashSet::new();
+                let mut native_arrivals = Vec::new();
+                for sample in native["model_geometry_samples"].as_array().unwrap() {
+                    let context = &sample["state"]["note_context"];
+                    if context["kind"] != "actor" || context["note_beat"] != 130.75
+                        || context["column"] != 3 || sample["state"]["mesh_index"] != 0
+                        // Native also draws the original Player to target zero.
+                        // Match the submitted AFT geometry instead of that pass.
+                        || sample["state"]["render_target"].as_u64().unwrap() == 0
+                    {
+                        continue;
+                    }
+                    let beat = context["draw_beat"].as_f64().unwrap() as f32;
+                    if beat < 130.2 { continue; }
+                    if !seen_native_beats.insert(beat.to_bits()) {
+                        continue;
+                    }
+                    let anchors: Vec<Vec<f64>> =
+                        serde_json::from_value(sample["state"]["anchors_clip"].clone()).unwrap();
+                    let origin = native_project(&anchors[0]);
+                    let axis = native_project(&anchors[1]);
+                    let scale = ((axis[0] - origin[0]).powi(2) + (axis[1] - origin[1]).powi(2)).sqrt();
+                    let geometry = native["model_geometry_meshes"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find(|mesh| mesh["id"] == sample["geometry"])
+                        .unwrap();
+                    let vertices: Vec<[f64; 3]> =
+                        serde_json::from_value(geometry["vertices"].clone()).unwrap();
+                    let mut bounds = [
+                        f32::INFINITY,
+                        f32::INFINITY,
+                        f32::NEG_INFINITY,
+                        f32::NEG_INFINITY,
+                    ];
+                    let mut native_points = Vec::new();
+                    for vertex in vertices {
+                        let clip: Vec<f64> = (0..4)
+                            .map(|axis| {
+                                anchors[0][axis]
+                                    + (0..3)
+                                        .map(|component| {
+                                            vertex[component]
+                                                * (anchors[component + 1][axis] - anchors[0][axis])
+                                        })
+                                        .sum::<f64>()
+                            })
+                            .collect();
+                        let point = native_project(&clip);
+                        native_points.push(point);
+                        for axis in 0..2 {
+                            bounds[axis] = bounds[axis].min(point[axis]);
+                            bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                        }
+                    }
+                    let center: [f32; 2] = std::array::from_fn(|axis| {
+                        native_points.iter().map(|point| point[axis]).sum::<f32>()
+                            / native_points.len() as f32
+                    });
+                    for point in &mut native_points {
+                        for axis in 0..2 {
+                            point[axis] = (point[axis] - center[axis]) / scale;
+                        }
+                    }
+                    native_arrivals.push(
+                        serde_json::json!({"beat":beat,"note_beat":130.75,"column":4,
+                        "origin":origin,"scale":scale,"normalized_points":native_points,
+                        "normalized_extent":[(bounds[2]-bounds[0])/scale,(bounds[3]-bounds[1])/scale]}),
+                    );
+                }
+                assert!(
+                    native_arrivals.len() >= 20,
+                    "consecutive native rendered first-arrow frames"
+                );
+                for frame in &native_arrivals {
+                    probes.push((frame["beat"].as_f64().unwrap() as f32, None, None));
+                }
+                let mut native_caps = Vec::new();
+                let mut seen_cap_beats = std::collections::HashSet::new();
+                for sample in native["drawable_samples"].as_array().unwrap() {
+                    let context = &sample["state"]["note_context"];
+                    let beat = context["draw_beat"].as_f64().unwrap() as f32;
+                    if context["part"] != 2 || sample["state"]["render_target"] == 0
+                        || !((121.91..121.99).contains(&beat) || (129.91..129.99).contains(&beat))
+                        || !seen_cap_beats.insert(beat.to_bits()) {
+                        continue;
+                    }
+                    let tail_beat = context["note_beat"].as_f64().unwrap() as f32;
+                    let column = context["column"].as_u64().unwrap() as usize;
+                    let index = state.chart_runtime.notes.iter().position(|note|
+                        note.column == column && note.hold.as_ref().is_some_and(|hold| hold.end_beat == tail_beat)
+                    ).unwrap();
+                    let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
+                    for vertex in sample["vertices"].as_array().unwrap() {
+                        let clip: Vec<f64> = vertex.as_array().unwrap()[3..7].iter().map(|v| v.as_f64().unwrap()).collect();
+                        let point = native_project(&clip);
+                        for axis in 0..2 {
+                            bounds[axis] = bounds[axis].min(point[axis]);
+                            bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                        }
+                    }
+                    native_caps.push((beat, bounds));
+                    probes.push((beat, None, Some(index)));
+                }
+                assert!(native_caps.iter().any(|(beat, _)| *beat < 122.0));
+                assert!(native_caps.iter().any(|(beat, _)| *beat > 129.0));
+                let timing = &state.gameplay.gameplay_chart(0).unwrap().timing;
+                let tracks = &state.gameplay.song_lua_visuals().column_splines[0];
+                let mut smallest_scale = (f32::INFINITY, 0.0f32, 0usize);
+                // Inspect real incoming notes at every compiled swap frame,
+                // rather than only the receptor at three steady-state beats.
+                for track in tracks {
+                    for frame in track.frames.iter() {
+                        let beat = timing.get_beat_for_time(frame.second + track.time_offset);
+                        if !(111.5..174.5).contains(&beat) {
+                            continue;
+                        }
+                        let Some(zoom) = &frame.zoom else {
+                            continue;
+                        };
+                        for (index, note) in state.chart_runtime.notes.iter().enumerate() {
+                            if note.column != track.column as usize
+                                || note.beat < beat
+                                || note.beat > beat + 2.0
+                                || !matches!(
+                                    note.note_type,
+                                    NoteType::Tap | NoteType::Hold | NoteType::Roll
+                                )
+                            {
+                                continue;
+                            }
+                            let scale = zoom.view().sample(beat, note.beat).0[0];
+                            if scale < smallest_scale.0 {
+                                smallest_scale = (scale, beat, index);
+                            }
+                        }
+                    }
+                }
+                assert!(smallest_scale.0.is_finite(), "real incoming swap notes");
+                eprintln!(
+                    "7th Gear incoming note {} at beat {}: spline scale {} at song beat {}",
+                    smallest_scale.2,
+                    state.chart_runtime.notes[smallest_scale.2].beat,
+                    smallest_scale.0,
+                    smallest_scale.1
+                );
+                probes.push((smallest_scale.1, None, None));
+                for beat in [114.45, 114.52, 122.45, 122.52, 122.7, 130.5] {
+                    probes.push((beat, None, None));
+                }
+                let mut hold_directions = [false; 2];
+                for (index, note) in state.chart_runtime.notes.iter().enumerate() {
+                    let Some(hold) = &note.hold else {
+                        continue;
+                    };
+                    let beat = (note.beat + hold.end_beat) * 0.5;
+                    if !(112.0..174.0).contains(&beat) {
+                        continue;
+                    }
+                    let track = tracks
+                        .iter()
+                        .find(|track| track.column as usize == note.column)
+                        .unwrap();
+                    let frame = track
+                        .at_second(timing.get_time_for_beat_exact(beat))
+                        .unwrap();
+                    let Some(position) = &frame.position else {
+                        continue;
+                    };
+                    let derivative = position.view().sample(beat, beat).1;
+                    let reversed = usize::from(derivative[1] < 0.0);
+                    if derivative[1] == 0.0 || hold_directions[reversed] {
+                        continue;
+                    }
+                    hold_directions[reversed] = true;
+                    probes.push((beat, None, Some(index)));
+                }
+                assert_eq!(
+                    hold_directions, [true; 2],
+                    "actual holds in both spline directions"
+                );
+                probes.sort_by(|a, b| a.0.total_cmp(&b.0));
+                let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
+                let body_handles: Vec<_> = ns
+                    .hold_columns
+                    .iter()
+                    .chain(&ns.roll_columns)
+                    .flat_map(|column| [column.body_active.as_ref(), column.body_inactive.as_ref()])
+                    .flatten()
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let tap_handles: std::collections::HashSet<_> = ns
+                    .notes
+                    .iter()
+                    .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let cap_handles: std::collections::HashSet<_> = ns.hold_columns.iter()
+                    .flat_map(|column| [column.bottomcap_active.as_ref(), column.bottomcap_inactive.as_ref()])
+                    .flatten().map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key())).collect();
+                #[cfg(target_os = "windows")]
+                let mut capture = std::env::var_os("DEADSYNC_SEVENTH_CAPTURE").map(|_| {
+                    SongLuaNotePixelCapture::new(
+                        &state,
+                        &metrics,
+                        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                            .join("../../target/seventh-swap-geometry"),
+                    )
+                });
+                let mut tick = 0;
+                let mut native_pose_failures = Vec::new();
+                let mut native_pose_errors = Vec::new();
+                for (beat, expected_y, active_hold) in probes {
+                    let seconds = state
+                        .gameplay
+                        .gameplay_chart(0)
+                        .unwrap()
+                        .timing
+                        .get_time_for_beat_exact(beat);
+                    while tick < (seconds * 120.0) as u32 {
+                        tick += 1;
+                        set_fixture_time(&mut state, tick as f32 / 120.0);
+                        refresh_active_attack_masks(&mut state.gameplay, 1.0 / 120.0);
+                    }
+                    set_fixture_time(&mut state, seconds);
+                    state.clear_active_holds();
+                    let native_arrival = native_arrivals
+                        .iter()
+                        .find(|frame| frame["beat"].as_f64().unwrap() as f32 == beat);
+                    let native_cap = native_caps.iter().find(|(at, _)| *at == beat).map(|(_, bounds)| bounds);
+                    let arrival_note = native_arrival.map(|frame| {
+                        let note_beat = frame["note_beat"].as_f64().unwrap() as f32;
+                        let column = frame["column"].as_u64().unwrap() as usize - 1;
+                        state
+                            .chart_runtime
+                            .notes
+                            .iter()
+                            .position(|note| {
+                                note.beat == note_beat
+                                    && note.column == column
+                                    && note.note_type == NoteType::Tap
+                            })
+                            .expect("native first incoming tap")
+                    });
+                    // Recreate autoplay draw visibility after seeking: past
+                    // taps and completed holds must not leave clamped fragments.
+                    // Isolate the selected hold for its width assertion.
+                    for (index, note) in state.chart_runtime.notes.iter_mut().enumerate() {
+                        note.result = (arrival_note
+                            .map_or(note.beat < beat, |selected| selected != index))
+                        .then_some(Judgment {
+                            time_error_ms: 0.0,
+                            time_error_music_ns: 0,
+                            grade: JudgeGrade::Fantastic,
+                            window: Some(TimingWindow::W1),
+                            miss_because_held: false,
+                        });
+                        if let Some(hold) = &mut note.hold {
+                            hold.result = (arrival_note.is_some()
+                                || hold.end_beat < beat
+                                || active_hold.is_some_and(|selected| selected != index))
+                            .then_some(deadsync_rules::note::HoldResult::Held);
+                        }
+                    }
+                    {
+                        let runtime = &mut state.chart_runtime;
+                        for row in &mut runtime.row_entries {
+                            row.final_outcome = row
+                                .note_indices()
+                                .iter()
+                                .all(|index| runtime.notes[index.get()].result.is_some())
+                                .then_some(deadsync_gameplay::FinalizedRowOutcome {
+                                    final_grade: JudgeGrade::Fantastic,
+                                });
+                        }
+                    }
+                    if let Some(index) = active_hold {
+                        let note = &state.chart_runtime.notes[index];
+                        let column = note.column;
+                        let hold = deadsync_gameplay::ActiveHold {
+                            note_index: index,
+                            start_time_ns: state.chart_runtime.note_time_cache_ns[index],
+                            end_time_ns: cached_hold_end_time_ns(
+                                state.chart_runtime.hold_end_time_cache_ns[index],
+                            )
+                            .unwrap(),
+                            note_type: note.note_type,
+                            let_go: false,
+                            is_pressed: true,
+                            life: 1.0,
+                            last_update_time_ns: deadsync_core::song_time::song_time_ns_from_seconds(
+                                seconds,
+                            ),
+                        };
+                        state.set_active_hold(column, Some(hold));
+                    }
+                    state.gameplay.refresh_live_notefield_options(124.0);
+                    assert!(
+                        (state.field_zoom_for_player(0) - 0.7).abs() < 0.001,
+                        "saved Mini was applied twice at beat {beat}"
+                    );
+                    let frame = compose_fixture_frame(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &mut Vec::new(),
+                        &mut compose::TextLayoutCache::default(),
+                        &mut compose::ComposeScratch::default(),
+                    );
+                    // Update explicitly draws these AFTs, and their visible
+                    // actors draw them again: six passes, three textures.
+                    let targets: std::collections::HashSet<_> = frame
+                        .render_targets
+                        .iter()
+                        .map(|pass| pass.texture_handle)
+                        .collect();
+                    assert_eq!(targets.len(), 3, "actual AFT chain");
+                    let mut receptors = 0;
+                    let mut wide_bodies = 0;
+                    let mut arrival_meshes = 0;
+                    let mut cap_meshes = 0;
+                    for pass in &frame.render_targets {
+                        for op in &pass.ops {
+                            if let Some(expected) = native_cap
+                                && let DrawOp::TexturedMesh(run) = op
+                                && cap_handles.contains(&run.texture_handle) {
+                                let camera = pass.cameras.get(run.camera as usize).copied().unwrap_or_else(|| metrics.projection());
+                                for instance in &pass.tmesh_instances[run.instance_start as usize..(run.instance_start + run.instance_count) as usize] {
+                                    let transform = camera * instance.transform();
+                                    let mut bounds = [f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY];
+                                    for vertex in pass.tmesh_geometries[run.geometry as usize].vertices.iter() {
+                                        let clip = transform.mul_vec4([vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0].into());
+                                        let point = [427.0 + clip.x / clip.w * 427.0,
+                                            240.0 - clip.y / clip.w * pass.viewport[1] as f32 * 427.0 / pass.viewport[0] as f32];
+                                        for axis in 0..2 {
+                                            bounds[axis] = bounds[axis].min(point[axis]);
+                                            bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                                        }
+                                    }
+                                    for axis in 0..4 {
+                                        assert!((bounds[axis] - expected[axis]).abs() < 0.05,
+                                            "native cap at beat {beat}, bound {axis}: {bounds:?} vs {expected:?}");
+                                    }
+                                    cap_meshes += 1;
+                                }
+                            }
+                            if let Some(native) = native_arrival
+                                && let DrawOp::TexturedMesh(run) = op
+                                && tap_handles.contains(&run.texture_handle)
+                            {
+                                let camera = pass
+                                    .cameras
+                                    .get(run.camera as usize)
+                                    .copied()
+                                    .unwrap_or_else(|| metrics.projection());
+                                for instance in &pass.tmesh_instances[run.instance_start as usize
+                                    ..(run.instance_start + run.instance_count) as usize]
+                                {
+                                    let transform = camera * instance.transform();
+                                    let project = |p: [f32; 4]| {
+                                        let clip = transform.mul_vec4(p.into());
+                                        [
+                                            427.0 + clip.x / clip.w * 427.0,
+                                            240.0
+                                                - clip.y / clip.w * pass.viewport[1] as f32 * 427.0
+                                                    / pass.viewport[0] as f32,
+                                        ]
+                                    };
+                                    let origin = project([0.0, 0.0, 0.0, 1.0]);
+                                    let along_x = project([1.0, 0.0, 0.0, 1.0]);
+                                    let scale = ((along_x[0] - origin[0]).powi(2)
+                                        + (along_x[1] - origin[1]).powi(2))
+                                    .sqrt();
+                                    let expected_scale = native["scale"].as_f64().unwrap() as f32;
+                                    if arrival_meshes == 0 {
+                                        native_pose_errors.push((beat, [
+                                            origin[0] - native["origin"][0].as_f64().unwrap() as f32,
+                                            origin[1] - native["origin"][1].as_f64().unwrap() as f32,
+                                            scale - expected_scale,
+                                        ]));
+                                    }
+                                    if (scale - expected_scale).abs() >= 0.021 {
+                                        native_pose_failures.push(format!("native rendered first arrow size at {beat}: {scale} vs {expected_scale}"));
+                                    }
+                                    for axis in 0..2 {
+                                        let expected = native["origin"][axis].as_f64().unwrap() as f32;
+                                        if (origin[axis] - expected).abs() >= 4.0 {
+                                            native_pose_failures.push(format!("native rendered first arrow position at {beat}: {origin:?}, axis {axis}={expected}"));
+                                        }
+                                    }
+                                    let vertices = pass.tmesh_geometries[run.geometry as usize]
+                                        .vertices
+                                        .as_ref();
+                                    let local_width = vertices
+                                        .iter()
+                                        .map(|v| v.pos[0])
+                                        .fold(f32::NEG_INFINITY, f32::max)
+                                        - vertices
+                                            .iter()
+                                            .map(|v| v.pos[0])
+                                            .fold(f32::INFINITY, f32::min);
+                                    if local_width > 60.0 {
+                                        let mut bounds = [
+                                            f32::INFINITY,
+                                            f32::INFINITY,
+                                            f32::NEG_INFINITY,
+                                            f32::NEG_INFINITY,
+                                        ];
+                                        let mut actual_points = Vec::new();
+                                        for vertex in vertices {
+                                            let point = project([
+                                                vertex.pos[0],
+                                                vertex.pos[1],
+                                                vertex.pos[2],
+                                                1.0,
+                                            ]);
+                                            actual_points.push(point);
+                                            for axis in 0..2 {
+                                                bounds[axis] = bounds[axis].min(point[axis]);
+                                                bounds[axis + 2] = bounds[axis + 2].max(point[axis]);
+                                            }
+                                        }
+                                        let center: [f32; 2] = std::array::from_fn(|axis| {
+                                            actual_points.iter().map(|point| point[axis]).sum::<f32>()
+                                                / actual_points.len() as f32
+                                        });
+                                        for point in &mut actual_points {
+                                            for axis in 0..2 {
+                                                point[axis] = (point[axis] - center[axis]) / scale;
+                                            }
+                                        }
+                                        let expected_points: Vec<[f32; 2]> =
+                                            serde_json::from_value(native["normalized_points"].clone())
+                                                .unwrap();
+                                        let distance = |from: &[[f32; 2]], to: &[[f32; 2]]| {
+                                            from.iter()
+                                                .map(|a| {
+                                                    to.iter()
+                                                        .map(|b| {
+                                                            ((a[0] - b[0]).powi(2)
+                                                                + (a[1] - b[1]).powi(2))
+                                                            .sqrt()
+                                                        })
+                                                        .fold(f32::INFINITY, f32::min)
+                                                })
+                                                .fold(0.0, f32::max)
+                                        };
+                                        let error = distance(&actual_points, &expected_points)
+                                            .max(distance(&expected_points, &actual_points));
+                                        assert!(
+                                            error < 0.2,
+                                            "native rendered 3D vertex cloud at {beat}: {error} model units"
+                                        );
+                                        for axis in 0..2 {
+                                            let extent = (bounds[axis + 2] - bounds[axis]) / scale;
+                                            let expected =
+                                                native["normalized_extent"][axis].as_f64().unwrap()
+                                                    as f32;
+                                            assert!(
+                                                (extent - expected).abs() < 0.35,
+                                                "native rendered 3D arrow extent at {beat}, axis {axis}: {extent} vs {expected}"
+                                            );
+                                        }
+                                    }
+                                    arrival_meshes += 1;
+                                }
+                            }
+                            if let DrawOp::TexturedMesh(run) = op
+                                && body_handles.contains(&run.texture_handle)
+                            {
+                                let vertices = pass.tmesh_geometries[run.geometry as usize]
+                                    .vertices
+                                    .as_ref();
+                                let min_x = vertices
+                                    .iter()
+                                    .map(|v| v.pos[0])
+                                    .fold(f32::INFINITY, f32::min);
+                                let max_x = vertices
+                                    .iter()
+                                    .map(|v| v.pos[0])
+                                    .fold(f32::NEG_INFINITY, f32::max);
+                                wide_bodies += usize::from(max_x - min_x > 10.0);
+                            }
+                            let DrawOp::Sprite(run) = op else { continue };
+                            if !receptor_handles.contains(&run.texture_handle) {
+                                continue;
+                            }
+                            for instance in &pass.sprite_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                // Direct proxy draws retain their transform in
+                                // a camera; instances are centered world-space
+                                // coordinates, not already projected pixels.
+                                let camera = pass
+                                    .cameras
+                                    .get(run.camera as usize)
+                                    .copied()
+                                    .unwrap_or_else(|| metrics.projection());
+                                let clip = camera.mul_vec4(
+                                    [
+                                        instance.center[0],
+                                        instance.center[1],
+                                        instance.center[2],
+                                        1.0,
+                                    ]
+                                    .into(),
+                                );
+                                let pixel_y = (1.0 - clip.y / clip.w) * pass.viewport[1] as f32 / 2.0;
+                                // FrameProxyP1 uses dh/2; ProxyP1N uses dw/sw.
+                                let y = 240.0
+                                    + (pixel_y - pass.viewport[1] as f32 / 2.0) * 854.0
+                                        / pass.viewport[0] as f32;
+                                assert!(
+                                    (y - 115.0).abs() < 0.05 || (y - 385.0).abs() < 0.05,
+                                    "beat {beat}: receptor swept between native anchors: Y={y}"
+                                );
+                                assert!(
+                                    expected_y.is_none_or(|expected_y| (y - expected_y).abs() < 0.05),
+                                    "beat {beat}: rendered receptor Y={y}, native={expected_y:?}; raw={:?}, camera={camera:?}",
+                                    instance.center,
+                                );
+                                receptors += 1;
+                            }
+                        }
+                    }
+                    assert!(receptors >= 4, "all four receptors must reach the AFT pass");
+                    if native_arrival.is_some() {
+                        assert!(
+                            arrival_meshes >= 2,
+                            "first arrow must reach both source AFT draws"
+                        );
+                    }
+                    if active_hold.is_some() {
+                        assert!(
+                            wide_bodies > 0,
+                            "beat {beat}: actual active hold collapsed in AFT geometry"
+                        );
+                    }
+                    if native_cap.is_some() {
+                        assert!(cap_meshes >= 2, "native tail cap must reach both source AFT draws");
+                    }
+                    eprintln!(
+                        "7th Gear beat {beat}: {receptors} AFT receptor sprites, {wide_bodies} full-width hold bodies, Mini=60"
+                    );
+                    #[cfg(target_os = "windows")]
+                    if let Some(capture) = &mut capture {
+                        assert!(
+                            capture.capture(&mut state, &metrics, beat) > 0,
+                            "visible Cel note pixels"
+                        );
+                    }
+                }
+                assert!(
+                    native_pose_failures.is_empty(),
+                    "{}",
+                    native_pose_failures.join("\n")
+                );
+                let max_error: [f32; 3] = std::array::from_fn(|axis| native_pose_errors.iter()
+                    .map(|(_, error)| error[axis].abs()).fold(0.0, f32::max));
+                let max_error_step: [f32; 3] = std::array::from_fn(|axis| native_pose_errors.windows(2)
+                    .map(|pair| (pair[1].1[axis] - pair[0].1[axis]).abs()).fold(0.0, f32::max));
+                eprintln!("native pose errors [x,y,scale]: max={max_error:?}, consecutive delta={max_error_step:?}");
+                for (axis, error) in max_error_step[..2].iter().enumerate() {
+                    assert!(*error < 4.0,
+                        "first-arrow motion differs from native between consecutive frames, axis {axis}: {error}");
+                }
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "full-song fixture with GPU readback on Windows"]
     fn bank_account_draws_complete_proxy_stack() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Bank Account/Bank Account.ssc");
+        let fixture = song_fixture::from_source("Bank Account/Bank Account.ssc");
+        let simfile = fixture.simfile.clone();
         with_session(
             profile_data::PlayStyle::Versus,
             profile_data::PlayerSide::P1,
@@ -4601,20 +6066,20 @@ return Def.ActorFrame{
     }
 
     #[test]
-    #[ignore = "requires the local lua-songs reference corpus"]
+    #[ignore = "long full-song compiled render comparison"]
     fn delightful_day_player_proxy_draws_noteskin_instances() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Delightful Day/Delightful Day.ssc");
+        let fixture = song_fixture::from_source("Delightful Day/Delightful Day.ssc");
+        let simfile = fixture.simfile.clone();
         for skin in ["lambda", "cel"] {
             assert_proxy_note_draws(&simfile, skin, 15.0);
         }
     }
 
     #[test]
-    #[ignore = "requires the local lua-songs corpus, ffmpeg/ffprobe and GPU readback on Windows"]
+    #[ignore = "long song-fixture video export and GPU readback regression"]
     fn delightful_day_hides_theme_and_keeps_video() {
-        let simfile = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../lua-songs/Delightful Day/Delightful Day.ssc");
+        let fixture = song_fixture::from_source("Delightful Day/Delightful Day.ssc");
+        let simfile = fixture.simfile.clone();
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
@@ -4858,7 +6323,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -4926,7 +6391,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -4999,7 +6464,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -5069,7 +6534,7 @@ return Def.ActorFrame{
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                 profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                let mut state = build_test_state(
+                let mut state = build_compiled_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
                     GameplaySession::default(),
@@ -5079,8 +6544,9 @@ return Def.ActorFrame{
                 add_sprite_core_feedback(&mut state, 0, 0, 100);
                 let visuals = state.gameplay.song_lua_visuals();
                 assert!(visuals.overlays.iter().any(|overlay| {
-                    overlay.parent_index.is_none()
-                        && matches!(
+                    // An ordinary ActorFrame parent does not make this an AFT
+                    // proxy. The direct-segment assertions below verify that.
+                    matches!(
                             overlay.kind,
                             deadsync_assets::song_lua::SongLuaOverlayKind::ActorProxy {
                                 target: deadsync_assets::song_lua::SongLuaProxyTarget::Combo {
@@ -5154,7 +6620,7 @@ return Def.ActorFrame{
                         ];
                         profiles[0].noteskin = profile_data::NoteSkin::new("lambda");
                         profiles[0].scroll_speed = ScrollSpeedSetting::XMod(2.0);
-                        let mut state = build_test_state(
+                        let mut state = build_compiled_test_state(
                             &simfile,
                             GameplayViewport::new(1280.0, 720.0),
                             GameplaySession::default(),
@@ -5619,6 +7085,7 @@ return Def.ActorFrame{
 
     fn generated_runtime_mod_lua() -> &'static str {
         r#"
+dofile(GAMESTATE:GetCurrentSong():GetSongDir() .. "easing.lua")
 mods = {
     {0, 9999, "*1000 no beat, *1000 no drunk, *1000 no tipsy, *1000 no invert, *1000 no flip, *1000 no dizzy", "end"},
 }
@@ -5703,6 +7170,8 @@ return Def.ActorFrame{}
         let lua_dir = song_dir.join("lua");
         fs::create_dir_all(&lua_dir).unwrap();
         fs::write(lua_dir.join("default.lua"), generated_runtime_mod_lua()).unwrap();
+        fs::write(song_dir.join("easing.lua"),
+            include_str!("../../../tests/fixtures/song_lua/easing.lua")).unwrap();
         let simfile = song_dir.join("generated_lua_regression.ssc");
         fs::write(&simfile, generated_lua_song_simfile()).unwrap();
         simfile

@@ -121,7 +121,7 @@ where
 {
     let mut ending = scene.end().map_err(|err| err.to_string())?;
     let context = scene.selected_context().map_err(|err| err.to_string())?;
-    let entry_paths = scene.entry_paths.clone();
+    let entry_paths = scene.entry_paths;
     let paths = entry_paths.iter().map(|path| path.as_path()).collect::<Vec<_>>();
     let mut compiled = compile_song_lua_layers_with_actors(&paths, scene.primary_index, &context, Some(scene.lua),
         SongLuaNoteskinResolver::default(), create_default_dummy_actor,
@@ -267,6 +267,10 @@ where
         .unwrap_or_else(|| context.song_dir.clone());
     let reloaded = retained_lua.is_some();
     let lua = retained_lua.unwrap_or_else(Lua::new);
+    #[cfg(feature = "test-support")]
+    if !reloaded && context.initial_lua_gc_stopped {
+        lua.gc_stop();
+    }
     if context.live {
         crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
     }
@@ -276,7 +280,7 @@ where
         // the process Lua VM. Reinstalling the host would reset GAMESTATE,
         // authored globals, player options and the random generator.
         crate::host::replace_gameplay_screen(&lua, context,
-            create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+            create_dummy_actor, create_named_child_actor, install_actor_methods).map_err(|err| err.to_string())?;
     } else {
         install_compile_host(&lua, context, noteskin_resolver,
             create_dummy_actor, create_named_child_actor, install_actor_methods)
@@ -497,7 +501,7 @@ where
             crate::lua_util::begin_live_runtime(&lua).map_err(|err| err.to_string())?;
         }
         crate::host::replace_gameplay_screen(&lua, &scene_context,
-            create_dummy_actor, create_named_child_actor).map_err(|err| err.to_string())?;
+            create_dummy_actor, create_named_child_actor, install_actor_methods).map_err(|err| err.to_string())?;
         scene_context = crate::host::selected_scene_context(&lua, &scene_context)
             .map_err(|err| err.to_string())?;
         crate::live::install_query_trace(&lua).map_err(|err| err.to_string())?;
@@ -526,6 +530,7 @@ where
     let mut initial_updates = captured_startup.updates;
     let initial_broadcasts = captured_startup.broadcasts;
     compile_timer.push_stage("startup_commands");
+    if !context.live { crate::input::require_offline_compatible(&lua)?; }
     if context.live {
         // A live scene stops at native Update(0). In particular, extracting
         // assets must never call listeners or replay future queued commands.
@@ -556,6 +561,7 @@ where
             .get::<Option<usize>>(COMPILE_LAYER_KEY).map(|layer| layer.unwrap_or(primary_index))
             .map_err(|err| err.to_string())).collect::<Result<Vec<_>, _>>()?;
         let mut out = CompiledSongLua {
+            overlays: Vec::with_capacity(overlays.len()),
             startup, loaded_steps: Some(context.player_step_indices.map(|index| index.and_then(|index|
                 if context.song_step_chart_indices.is_empty() { Some(index) }
                 else { context.song_step_chart_indices.get(index).copied().flatten() }))),
@@ -590,9 +596,13 @@ where
             .map_err(|err| err.to_string())?);
         compile_timer.push_stage("live_scene");
         log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
-        if entry_paths.is_empty() {
+        if entry_paths.is_empty() || (entry_paths.len() == 1
+            && overlay_layers.iter().all(|&layer| layer == 0)
+            && out.overlays.iter().enumerate().all(|(index, overlay)|
+                overlay.parent_index.is_none_or(|parent| parent < index)))
+        {
             // ScreenGameplay and its theme actors exist without authored song
-            // actors. Retain that owned scene without inventing an entry file.
+            // actors. A single already-ordered layer also owns the output as-is.
             out.live_indices.extend(0..out.overlays.len());
             return Ok(vec![out]);
         }
@@ -1092,18 +1102,7 @@ where
             overlay.actor.kind = SongLuaOverlayKind::AftSprite { capture_name };
         }
     }
-    for overlay in &mut overlays {
-        if let SongLuaOverlayKind::Sprite { textures, .. } = &mut overlay.actor.kind {
-            let pointer = overlay.table.to_pointer() as usize;
-            let mut bindings = sprite_textures
-                .iter()
-                .filter(|(actor, _)| *actor == pointer)
-                .map(|(_, texture)| texture.clone())
-                .collect::<Vec<_>>();
-            bindings.sort_by(|a, b| a.second.total_cmp(&b.second));
-            *textures = bindings.into();
-        }
-    }
+    finalize_sprite_textures(&mut overlays, sprite_textures);
     let startup_seconds = 1.0 / crate::perframe::SONG_LUA_UPDATE_REFERENCE_FPS;
     let startup_time = context.song_timing.as_ref().map_or_else(
         || crate::song_beat_at_elapsed_seconds(startup_seconds, context),
@@ -1112,7 +1111,10 @@ where
         },
     );
     for track in &mut out.overlay_updates {
-        if startup_states.contains_key(&(overlays[track.overlay_index].table.to_pointer() as usize))
+        // EffectTime anchors describe the actor's existing clock, including
+        // before its first update; they are not callback property writes.
+        if track.target != crate::SongLuaOverlayUpdateTarget::EffectTime
+            && startup_states.contains_key(&(overlays[track.overlay_index].table.to_pointer() as usize))
         {
             // Zero-time callbacks run after queued startup; retain the state
             // before setup until the first positive update frame.
@@ -1277,6 +1279,102 @@ where
         });
         overlay_layers.push(primary_index);
     }
+    finalize_tracked_actors(&mut out, tracked_actors, judgment_textures);
+    out.hidden_players = hidden_players;
+
+    sort_compiled_song_lua(&mut out);
+    out.sound_paths = read_song_lua_sound_paths(&lua)?;
+    let mut seen = out
+        .sound_paths
+        .iter()
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect();
+    crate::push_song_lua_overlay_sound_paths(&out.overlays, &mut seen, &mut out.sound_paths);
+    compile_timer.push_stage("finalize");
+    log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
+    crate::input::require_offline_compatible(&lua)?;
+    split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
+}
+
+// Earlier aliases receive independent lists; the final destination takes ownership.
+fn take_final_events<T: Clone>(events: &mut Vec<T>, remaining: &mut usize) -> Vec<T> {
+    if events.is_empty() {
+        return Vec::new();
+    }
+    *remaining -= 1;
+    if *remaining == 0 {
+        std::mem::take(events)
+    } else {
+        events.clone()
+    }
+}
+
+fn finalize_sprite_textures<NoteskinSlot, ModelVertex>(
+    overlays: &mut [crate::SongLuaOverlayCompileActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+    sprite_textures: Vec<(usize, crate::SongLuaSpriteTexture)>,
+) {
+    let mut groups =
+        rustc_hash::FxHashMap::<usize, (Vec<crate::SongLuaSpriteTexture>, usize)>::default();
+    if !sprite_textures.is_empty() {
+        for overlay in overlays.iter() {
+            if matches!(overlay.actor.kind, SongLuaOverlayKind::Sprite { .. }) {
+                groups
+                    .entry(overlay.table.to_pointer() as usize)
+                    .or_default()
+                    .1 += 1;
+            }
+        }
+        for (pointer, texture) in sprite_textures {
+            if let Some((events, _)) = groups.get_mut(&pointer) {
+                events.push(texture);
+            }
+        }
+        for (events, _) in groups.values_mut() {
+            events.sort_by(|a, b| a.second.total_cmp(&b.second));
+        }
+    }
+    for overlay in overlays {
+        if let SongLuaOverlayKind::Sprite { textures, .. } = &mut overlay.actor.kind {
+            *textures = if groups.is_empty() {
+                Vec::new()
+            } else {
+                let (events, remaining) = groups
+                    .get_mut(&(overlay.table.to_pointer() as usize))
+                    .unwrap();
+                take_final_events(events, remaining)
+            }
+            .into();
+        }
+    }
+}
+
+fn finalize_tracked_actors<NoteskinSlot, ModelVertex>(
+    out: &mut DefaultCompiledSongLua<NoteskinSlot, ModelVertex>,
+    tracked_actors: Vec<crate::SongLuaTrackedActor>,
+    judgment_textures: Vec<(usize, crate::SongLuaJudgmentTexture)>,
+) {
+    let mut groups: [(Vec<crate::SongLuaJudgmentTexture>, usize); crate::LUA_PLAYERS] =
+        std::array::from_fn(|_| (Vec::new(), 0));
+    if !judgment_textures.is_empty() {
+        for tracked in &tracked_actors {
+            if let TrackedCompileActorTarget::PlayerJudgment(player) = tracked.target {
+                groups[player].1 += 1;
+            }
+        }
+        for (player, texture) in judgment_textures {
+            if let Some((events, remaining)) = groups.get_mut(player) {
+                if *remaining != 0 {
+                    events.push(texture);
+                }
+            }
+        }
+        for (events, _) in &mut groups {
+            events.sort_by(|a, b| a.second.total_cmp(&b.second));
+            events.dedup_by(|a, b| a.path == b.path);
+        }
+    }
     for tracked in tracked_actors {
         match tracked.target {
             TrackedCompileActorTarget::Player(player) => out.player_actors[player] = tracked.actor,
@@ -1285,14 +1383,8 @@ where
                     initial_state: tracked.actor.initial_state,
                     message_commands: tracked.actor.message_commands,
                     textures: {
-                        let mut textures = judgment_textures
-                            .iter()
-                            .filter(|(index, _)| *index == player)
-                            .map(|(_, texture)| texture.clone())
-                            .collect::<Vec<_>>();
-                        textures.sort_by(|a, b| a.second.total_cmp(&b.second));
-                        textures.dedup_by(|a, b| a.path == b.path);
-                        textures
+                        let (events, remaining) = &mut groups[player];
+                        take_final_events(events, remaining)
                     },
                 };
             }
@@ -1309,22 +1401,54 @@ where
             }
         }
     }
-    out.hidden_players = hidden_players;
-
-    sort_compiled_song_lua(&mut out);
-    out.sound_paths = read_song_lua_sound_paths(&lua)?;
-    let mut seen = out
-        .sound_paths
-        .iter()
-        .map(|path| path.to_string_lossy().into_owned())
-        .collect();
-    crate::push_song_lua_overlay_sound_paths(&out.overlays, &mut seen, &mut out.sound_paths);
-    compile_timer.push_stage("finalize");
-    log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
-    split_compiled_song_lua(out, overlay_layers, &entry_paths, primary_index)
 }
 
 fn merge_runtime_messages(
+    messages: &mut Vec<SongLuaMessageEvent>,
+    action_start: usize,
+    runtime_broadcasts: &[(f32, String, bool)],
+) {
+    if runtime_broadcasts.is_empty() {
+        return;
+    }
+    let action_end = messages.len();
+    if action_end - action_start < 32 || runtime_broadcasts.len() < 16 {
+        return merge_runtime_messages_linear(messages, action_start, runtime_broadcasts);
+    }
+    let mut by_name = rustc_hash::FxHashMap::<&str, Vec<&mut f32>>::default();
+    for event in &mut messages[action_start..action_end] {
+        if !event.message.starts_with("__songlua_overlay_fn_action_") && !event.beat.is_nan() {
+            by_name
+                .entry(event.message.as_str())
+                .or_default()
+                .push(&mut event.beat);
+        }
+    }
+    for beats in by_name.values_mut() {
+        // Stable sorting leaves the last original index last when beats tie.
+        beats.sort_by(|a, b| (**a).total_cmp(&**b));
+    }
+    let mut missing = Vec::new();
+    for (beat, name, _) in runtime_broadcasts {
+        if let Some(beats) = by_name.get_mut(name.as_str()) {
+            let end = beats.partition_point(|scheduled| **scheduled <= *beat + f32::EPSILON);
+            if end != 0 {
+                *beats.remove(end - 1) = *beat;
+                continue;
+            }
+        }
+        missing.push(SongLuaMessageEvent {
+            beat: *beat,
+            message: name.clone(),
+            persists: false,
+        });
+    }
+    // Appended events never participate in the original action window.
+    drop(by_name);
+    messages.extend(missing);
+}
+
+fn merge_runtime_messages_linear(
     messages: &mut Vec<SongLuaMessageEvent>,
     action_start: usize,
     runtime_broadcasts: &[(f32, String, bool)],
@@ -1367,11 +1491,17 @@ fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
     >],
     hidden_players: &mut [bool; crate::LUA_PLAYERS],
 ) -> Result<(), String> {
-    let actor_indices = overlays
-        .iter()
-        .enumerate()
-        .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
-        .collect::<std::collections::HashMap<_, _>>();
+    let actor_indices = if overlays.iter().any(|overlay|
+        matches!(overlay.actor.kind, SongLuaOverlayKind::ActorProxy { .. }))
+    {
+        overlays
+            .iter()
+            .enumerate()
+            .map(|(index, overlay)| (overlay.table.to_pointer() as usize, index))
+            .collect::<std::collections::HashMap<_, _>>()
+    } else {
+        std::collections::HashMap::new()
+    };
     for overlay in overlays {
         if matches!(overlay.actor.kind, SongLuaOverlayKind::Actor)
             && overlay
@@ -1392,7 +1522,7 @@ fn resolve_late_actor_targets<NoteskinSlot, ModelVertex>(
                 let texture_path =
                     crate::lua_util::resolve_actor_asset_path(&overlay.table, &texture)?;
                 overlay.actor.kind = SongLuaOverlayKind::Sprite {
-                    texture_key: std::sync::Arc::from(texture_path.to_string_lossy().into_owned()),
+                    texture_key: crate::lua_util::texture_path_key(&texture_path),
                     texture_path,
                     states: crate::lua_util::read_sprite_states(&overlay.table)?.into(),
                     textures: [].into(),
@@ -1477,14 +1607,31 @@ fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
         return Ok((0..overlays.len()).collect());
     }
     let count = overlays.len();
-    let mut children = vec![Vec::new(); count + 1];
-    for (index, overlay) in overlays.iter().enumerate() {
+    // Parent zero is the root list; parent i + 1 owns actor i.
+    // Keep all child lists in one buffer instead of allocating a Vec per parent.
+    let mut offsets = vec![0usize; count + 2];
+    for overlay in overlays {
         let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
-        let Some(list) = children.get_mut(parent) else {
+        let Some(size) = offsets.get_mut(parent + 1) else {
             return Err("Runtime wrapper has an invalid parent".into());
         };
-        list.push(index);
+        *size += 1;
     }
+    for index in 1..offsets.len() {
+        offsets[index] += offsets[index - 1];
+    }
+    let mut children = vec![0usize; count];
+    // Fill from the end so each list retains original sibling order.
+    // Consumed ends become starts; shift them back to the parent-key positions.
+    for (index, overlay) in overlays.iter().enumerate().rev() {
+        let parent = overlay.parent_index.map_or(0, |parent| parent + 1);
+        offsets[parent + 1] -= 1;
+        children[offsets[parent + 1]] = index;
+    }
+    for parent in 0..=count {
+        offsets[parent] = offsets[parent + 1];
+    }
+    offsets[count + 1] = count;
     let mut source = overlays
         .iter()
         .enumerate()
@@ -1505,7 +1652,7 @@ fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
                 return Err("Cycle in runtime wrapper ownership".into());
             }
             chain.push(next);
-            let Some(&child) = children[next + 1].first() else {
+            let Some(&child) = children[offsets[next + 1]..offsets[next + 2]].first() else {
                 source[next] = next;
                 break;
             };
@@ -1515,17 +1662,26 @@ fn wrapper_overlay_order<NoteskinSlot, ModelVertex>(
             source[index] = source[next];
         }
     }
-    for list in &mut children {
-        list.sort_by_key(|&index| source[index]);
+    for parent in 0..=count {
+        children[offsets[parent]..offsets[parent + 1]].sort_by_key(|&index| source[index]);
     }
     let mut order = Vec::with_capacity(count);
-    let mut pending = children[0].iter().rev().copied().collect::<Vec<_>>();
+    let mut pending = children[offsets[0]..offsets[1]]
+        .iter()
+        .rev()
+        .copied()
+        .collect::<Vec<_>>();
     while let Some(index) = pending.pop() {
         if order.len() >= count {
             return Err("Cycle in runtime wrapper hierarchy".into());
         }
         order.push(index);
-        pending.extend(children[index + 1].iter().rev().copied());
+        pending.extend(
+            children[offsets[index + 1]..offsets[index + 2]]
+                .iter()
+                .rev()
+                .copied(),
+        );
     }
     if order.len() != count {
         return Err("Runtime wrapper hierarchy has no reachable root".into());
@@ -1555,13 +1711,35 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
     let mut outputs = entry_paths
         .iter()
-        .map(|entry_path| DefaultCompiledSongLua {
+        .enumerate()
+        .map(|(layer, entry_path)| DefaultCompiledSongLua {
+            overlays: Vec::with_capacity(local_counts[layer]),
+            live_indices: if compiled.live_scene.is_some() {
+                Vec::with_capacity(local_counts[layer])
+            } else {
+                Vec::new()
+            },
             entry_path: entry_path.clone(),
+            loaded_steps: compiled.loaded_steps,
+            loaded_style: if layer + 1 == entry_paths.len() {
+                compiled.loaded_style.take()
+            } else {
+                compiled.loaded_style.clone()
+            },
+            startup_reloads: compiled.startup_reloads,
             screen_width: compiled.screen_width,
             screen_height: compiled.screen_height,
             overlay_update_unit: compiled.overlay_update_unit,
-            messages: compiled.messages.clone(),
-            sound_paths: compiled.sound_paths.clone(),
+            messages: if layer + 1 == entry_paths.len() {
+                std::mem::take(&mut compiled.messages)
+            } else {
+                compiled.messages.clone()
+            },
+            sound_paths: if layer + 1 == entry_paths.len() {
+                std::mem::take(&mut compiled.sound_paths)
+            } else {
+                compiled.sound_paths.clone()
+            },
             ..DefaultCompiledSongLua::default()
         })
         .collect::<Vec<_>>();
@@ -1604,8 +1782,10 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         let frames = &mut outputs[layer].draw_frames;
         // Repeated immediate Draw calls may have the same owner and clock;
         // keep each submission independent rather than merging owner batches.
-        if let Some(last) = frames.last_mut().filter(|last|
-            !frame.immediate && !last.immediate && last.second == frame.second) {
+        if let Some(last) = frames
+            .last_mut()
+            .filter(|last| !frame.immediate && !last.immediate && last.second == frame.second)
+        {
             last.owner_ends
                 .extend(frame.owner_ends.iter().map(|end| last.ops.len() + end));
             last.owners.extend(frame.owners);
@@ -1618,7 +1798,9 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     let mut overlays = compiled.overlays.drain(..).map(Some).collect::<Vec<_>>();
     for global_index in overlay_order {
         // The validated traversal visits each owned node exactly once.
-        let mut overlay = overlays[global_index].take().expect("unique overlay traversal");
+        let mut overlay = overlays[global_index]
+            .take()
+            .expect("unique overlay traversal");
         let (layer, _) = overlay_map[global_index];
         overlay.parent_index = overlay.parent_index.and_then(|parent| {
             overlay_map
@@ -1692,11 +1874,6 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
         }
     }
 
-    for output in &mut outputs {
-        output.loaded_steps = compiled.loaded_steps;
-        output.loaded_style = compiled.loaded_style.clone();
-        output.startup_reloads = compiled.startup_reloads;
-    }
     let primary = &mut outputs[primary_index];
     primary.live_scene = compiled.live_scene.take();
     #[cfg(feature = "test-support")]
@@ -1724,3 +1901,15 @@ fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
     }
     Ok(outputs)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/compile_finalize.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/finalization_events.rs"]
+mod finalization_events_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/reload_inputs.rs"]
+mod reload_inputs_perf;

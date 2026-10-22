@@ -7,8 +7,8 @@ for index,mode in ipairs(modes) do
     root[#root+1]=Def.Quad{
         Name=mode,
         InitCommand=function(self) self:xy(100+(index-1)*100,260):setsize(48,40):diffuse(.2,.4,.6,.8) end,
-        OnCommand=cmd(sleep,.4;queuecommand,"Begin";sleep,.5;queuecommand,"Begin";sleep,.5;queuecommand,"Other";sleep,.5;queuecommand,"Begin";sleep,.5;queuecommand,"Stop"),
-        BeginCommand=function(self) self[mode](self); self:effectperiod(1.25):effectcolor1(.9,.2,.6,.35):effectcolor2(.1,.8,.3,.9) end,
+        OnCommand=cmd(sleep,.4;queuecommand,"StartEffect";sleep,.5;queuecommand,"StartEffect";sleep,.5;queuecommand,"Other";sleep,.5;queuecommand,"StartEffect";sleep,.5;queuecommand,"Stop"),
+        StartEffectCommand=function(self) self[mode](self); self:effectperiod(1.25):effectcolor1(.9,.2,.6,.35):effectcolor2(.1,.8,.3,.9) end,
         OtherCommand=cmd(rainbow), StopCommand=cmd(stopeffect),
     }
 end

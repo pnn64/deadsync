@@ -1,0 +1,29 @@
+{
+  "song_dir": "tests/fixtures/song-lua",
+  "virtual_simfile": "__oracle_context__/additive-update.ssc",
+  "title": "Additive Update",
+  "difficulty": "Challenge",
+  "steps_type": "dance-single",
+  "description": "",
+  "difficulty_code": 4,
+  "steps_type_code": 0,
+  "max_beat": 4.0,
+  "bpm": 60.0,
+  "bpm_segments": [
+    [
+      0.0,
+      60.0
+    ]
+  ],
+  "beat_step": 0.03125,
+  "max_events": 500000,
+  "random_seed": 1,
+  "entries": [
+    {
+      "path": "tests/fixtures/song-lua/additive-update.lua",
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0
+    }
+  ]
+}

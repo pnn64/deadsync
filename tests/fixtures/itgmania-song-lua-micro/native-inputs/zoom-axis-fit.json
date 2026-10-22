@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "name": "zoom-axis-fit",
+  "screen": {"width": 854, "height": 480},
+  "bpm": 60,
+  "samples": [0, 0.25, 0.5, 0.75, 1],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "sprite", "name": "Sized", "size": [10,20], "base": {"zoom": [2,0.5,1]},
+        "state": {"position": [100,100,0], "zoom_to_width": 30, "zoom_to_height": 40},
+        "tweens": [
+          {"curve": "linear", "duration": 0.5, "state": {"zoom_to_width": 50, "zoom_to_height": 10}},
+          {"curve": "linear", "duration": 0.5, "state": {"zoom": [1,1,1]}}
+        ]
+      },
+      {
+        "kind": "sprite", "name": "Image", "size": [64,32],
+        "state": {"position": [300,200,0], "zoom_to_width": 120, "zoom_to_height": 30},
+        "tweens": [
+          {"curve": "linear", "duration": 0.5, "state": {"zoom_to_width": -60, "zoom_to_height": 90}},
+          {"curve": "linear", "duration": 0.5, "state": {"zoom": [1,1,1]}}
+        ]
+      },
+      {
+        "kind": "sprite", "name": "Unsized", "size": [1,1],
+        "state": {"position": [427,240,0], "zoom_to_width": 854, "zoom_to_height": 480},
+        "tweens": [{"curve": "linear", "duration": 1, "state": {"zoom": [1,1,1]}}]
+      }
+    ]
+  }
+}

@@ -1,0 +1,420 @@
+{
+  "baseline_commit": "88e580792e3333f2a4cb0fd296d4cd045302448f",
+  "prior_review": "ninth-ten-2026-10-18-source-review.json",
+  "repairs": [
+    {
+      "fix_commit": "dd6db3eb55a8da34023b8b1d710cbfe3549be3f1",
+      "cause": "Metronogik classifies actors by their GetText contents. HeaderText was a nonempty key placeholder while the native missing string is empty; stage lead-in and hidden engine PlayerOptions text were empty instead of populated. These differences change the authored text pool and cause later call-order/tween-time mismatches.",
+      "fix": "Initialize the actual native HUD text inputs from theme and game-state contracts. No chart edits, expected query values, comparator changes, or new acceptance gates.",
+      "checks": [
+        {
+          "scope": "72 native gameplay tests including hidden header/options initialization",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\native-hud-text-native-tests.log",
+          "sha256": "4b7944cbe8dc255761622704a59db85063fc42a85059a1415c56ff89f390aa56",
+          "passed": 72,
+          "failed": 0
+        }
+      ],
+      "native_controls": [
+        {
+          "name": "theme-membership-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 540,
+          "replayed_frames": 540,
+          "candidate_sha256": "19b0ef047f458fb556eb9a12340fd948aa90a7614acaf3ab074b1e2f7bc63170",
+          "report_sha256": "a2214ff35cc043ef3fa00f7665d4fd1af4eddfaa55d21b7f2042a436d9266593"
+        }
+      ],
+      "primary_sources": [
+        {
+          "path": "itgmania-harness/target/native-engine-source/Themes/Harness Simply Love/Graphics/_header.lua",
+          "sha256": "792e762831895fd00fc38c91d6b5082358f6ace311c1c4ac04216d86015e03f0"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/Themes/Harness Simply Love/Languages/en.ini",
+          "sha256": "a2e11cc9a2bc4b035a25c35b72cbda28b1a47730b3feffc468018d6adc1e3169"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/Themes/_fallback/Scripts/02 Other.lua",
+          "sha256": "45049dab34a420f7dbc278aa309a91ab4e8dcdc8c5fa7658bcbf0a28049d3b69"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/Themes/Harness Simply Love/BGAnimations/ScreenGameplay in/default.lua",
+          "sha256": "7ef0a8b27f088636af616a3c59cd6e66989a4c924147acad19caf2e371c6feca"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/ScreenGameplay.cpp",
+          "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+        }
+      ],
+      "remaining_chart_result": "Metronogik remains pending after two full replays: 26,077 command/query mismatches; zero callback or draw errors. The HUD input repair is a partial fix."
+    },
+    {
+      "fix_commit": "87486aa507b270be816ce8e7dcc06d1ed15a59c9",
+      "cause": "Mawaru9 starts a Lua background on the same frame as an autoplay judgment. Core judgment callbacks ran before the owned scene prepared that frame, so the background On callbacks came after the judgment; native ScreenGameplay updates the background before Player actors.",
+      "fix": "Prepare the owned GameState clocks, options and background activation once after audio sampling and before Player logic. Complete actor update follows judgments. Production live Lua remains disabled; the owner integration is test-support only.",
+      "checks": [
+        {
+          "scope": "72 native gameplay tests and full background/judgment order control",
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\native-background-before-players-native-tests.log",
+          "sha256": "801e4e484d8f6ed360e1191bbe5ff1920adcf3cca8f1832f964ed57577453cbc",
+          "passed": 72,
+          "failed": 0
+        }
+      ],
+      "native_controls": [
+        {
+          "name": "background-judgment-order-control",
+          "control_only_not_a_catalog_fixture": true,
+          "archive_accepted": true,
+          "native_frames": 543,
+          "replayed_frames": 543,
+          "candidate_sha256": "9f260aa89822781f13a15cbc79bcba866ff86f5111b4fa257602f8cf9ac2b882",
+          "report_sha256": "e8e33355021ae9f5fcffe7fbbdd57999be0ef19b81655f9a3ca6f571f45d9eea"
+        }
+      ],
+      "primary_sources": [
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/ScreenGameplay.cpp",
+          "sha256": "45ef96f5c1a4e9aa641139704f97c7749e061d9664a9bc42bd0cd6c84f58264b"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/Background.cpp",
+          "sha256": "8ac3e579ba9b3adf41acd425c4ad921d0ed17f511761dd9e80301119d76eba2c"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/ActorFrame.cpp",
+          "sha256": "6dd9ea82229994cf1406dce363ce58a4414d429320fc75da0d1c543696ebf1ac"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/Player.cpp",
+          "sha256": "fb9fbc6ead8073b26cc8ff9097068ed2c33b8d8c2bea58b43eb61e0384ae1935"
+        },
+        {
+          "path": "itgmania-harness/target/native-engine-source/src/GameState.cpp",
+          "sha256": "72263c9ec676fb1b612ac938ce5b629be5aa6088e113e8eb175f2375f665ac77"
+        }
+      ],
+      "negative_control": {
+        "name": "background-judgment-order-control",
+        "binary_sha256": "0da4de25a362faaf69ba2b08f56f21b06bef0a5bab5f8af409842ca09e54365c",
+        "report_sha256": "dc585332ecb482523d5fd73dd06f3ddec3f26f15fc13b71e9258b5071def9890",
+        "native_frames": 543,
+        "replayed_frames": 543,
+        "mismatch_count": 6,
+        "callback_errors": []
+      },
+      "remaining_chart_result": "Mawaru9 full attempt1 has111 command/query ordering mismatches at191.87564086914062 seconds; its second full replay is queued with this repair and the same retained native capture."
+    }
+  ],
+  "input_repairs": [
+    {
+      "position": 278,
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "simfile_sha256": "f7d7ca10969dc5d84afa14cd001fba4d3f090778176ebf56cafac937c1c666e2",
+      "capture_exit": 0,
+      "capture_seconds": 107.91485580001608,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The original chart requires or unconditionally accesses both players. Prior single-player capture fails in its two-player setup/exit path. Use native Versus with both players joined, without changing authored song files.",
+      "capture_style": "versus",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-4652-1792334029094296200-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "fc7810ad8883d6db70b72cd24b6c79215d038324b4811f1f54cd77c8a0fdf1cb",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-278\\candidates\\fc7810ad8883d6db70b72cd24b6c79215d038324b4811f1f54cd77c8a0fdf1cb.tar",
+      "trace_sha256": "111bd63cbe28f9b14feec64bbb5dc1d837f4551c35925255c5cea5a2c675f7c1",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-4652-1792334029094296200-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+      "capture_exit": 0,
+      "capture_seconds": 170.39010369998869,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The retained full Metronogik replay fails at the song-end phase. Its older native capture lacks catalog-load preferences and raw host-clock inputs now required to independently reproduce that boundary. Retain the old tape and capture these raw inputs; no expected query values are supplied.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54344-1792334264892010300-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "c899aa3ac42aef157aaa04ebcc372c5f7b0665b577258ef2b96b60cd2127632e",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-496-clock-inputs\\candidates\\c899aa3ac42aef157aaa04ebcc372c5f7b0665b577258ef2b96b60cd2127632e.tar",
+      "trace_sha256": "c24ff821aec76182d425fb147f646e5bad0bd490dac99101f0affe620f41d7e2",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54344-1792334264892010300-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 496,
+      "source_simfile": "Metronogik/Song.ssc",
+      "simfile_sha256": "b47ec860275040252ac437d921d2c8b04338a126a65f0fd84fee2494781d4808",
+      "capture_exit": 0,
+      "capture_seconds": 170.39010369998869,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779",
+      "harness_fix_commit": "a555e39a7c0403db6135f74f4fd29f7fd3c364ca",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "The retained full Metronogik replay fails at the song-end phase. Its older native capture lacks catalog-load preferences and raw host-clock inputs now required to independently reproduce that boundary. Retain the old tape and capture these raw inputs; no expected query values are supplied.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54344-1792334264892010300-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "1a13f75fe215b04a7385afe07eaaae66a0109a3fc00c5506da6935be2d11d779"
+      },
+      "captured_observer_script_sha256": "9c2aed37f5035e348347d529afd421da46dd2538c0d02828205af2e52b9235f0",
+      "candidate_sha256": "c899aa3ac42aef157aaa04ebcc372c5f7b0665b577258ef2b96b60cd2127632e",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\local-capture-496-clock-inputs\\candidates\\c899aa3ac42aef157aaa04ebcc372c5f7b0665b577258ef2b96b60cd2127632e.tar",
+      "trace_sha256": "c24ff821aec76182d425fb147f646e5bad0bd490dac99101f0affe620f41d7e2",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-54344-1792334264892010300-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.86",
+      "capture_reused_without_new_native_execution": true
+    },
+    {
+      "position": 494,
+      "source_simfile": "mawaru9/mawaru9.sm",
+      "simfile_sha256": "0012dd2fa9cef58ae543bd88b3ab84e25d0b390fcea2827c97c3dd1ac7d5a624",
+      "capture_exit": 0,
+      "capture_seconds": 366.6503021999961,
+      "native_engine_sha256": "0280a523dfb6e29ee387bc17d9a0e33a4d09072fadcf9ea7c7c9025654de12db",
+      "harness_binary_sha256": "93a454a6d23b020b4ce4f935b4082f89b422a36549b137cc5fea41908d78557b",
+      "harness_fix_commit": "8561cd88f40a20f66f7786d23ea877adb2371391",
+      "provenance_snapshotted_before_execution": true,
+      "reason": "No complete native capture retained locally; remote capture host is unreachable. Native null-display headless capture uses the existing profile without a visible window.",
+      "capture_style": "single",
+      "requested_difficulty": "Challenge",
+      "requested_fixed_update_fps": null,
+      "max_events": 10000000,
+      "timeout_seconds": 900,
+      "requested_initial_lua_gc_mode": "automatic",
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-32668-1792347527319571700-0",
+      "command_observer": {
+        "dynamic_commands": true,
+        "capture_binary_sha256": "93a454a6d23b020b4ce4f935b4082f89b422a36549b137cc5fea41908d78557b"
+      },
+      "captured_observer_script_sha256": "99b84534d7397266a3d78c8840dfe8ac69e10066912ac6a53ad66c68158d67fd",
+      "candidate_sha256": "8ad4c4b6e1a7634b7434769db1015d1ba42e4ba7f0b2b87a03a0e432ec2531e7",
+      "retained_candidate": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\local-capture-494\\candidates\\8ad4c4b6e1a7634b7434769db1015d1ba42e4ba7f0b2b87a03a0e432ec2531e7.tar",
+      "trace_sha256": "2a6e8501c4442977ed86666dc4dc7bd009aafc19eff0c9888c6c157f4c4b0891",
+      "captured_theme_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-32668-1792347527319571700-0\\Themes\\itgmania-harness",
+      "archive_version": "0.1.89",
+      "capture_reused_without_new_native_execution": false
+    }
+  ],
+  "reused_fixes": [
+    {
+      "fix_commit": "b2186d861cbd9e0e324366b15112e616639833c4",
+      "scope": "Immutable current native-crt-inputs replay executable; includes prior Footer ordering, failed transition, native tween-queue limit, and Windows static CRT contracts."
+    }
+  ],
+  "pending_diagnoses": [
+    {
+      "position": 491,
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45972-1792348346393555200-0",
+      "partial_uncompressed_spool": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-45972-1792348346393555200-0\\Save\\itgmania-harness\\new.song-lua-trace.json.events.new",
+      "partial_spool_bytes": 6090773841,
+      "partial_spool_sha256": "a455c57a0ed355aa01641f276d410dcb5e8108dec00c9e253b1a57c4a6c2bd66",
+      "last_observed_song_seconds": 45.49406051635742,
+      "last_observed_event_sequence": 15168280,
+      "observed_peak_native_resident_bytes": 123142144,
+      "observations_sha256": "e93ec3d77c00cce92c766e22602d3fad61dfcd6888535e6375df1c76fbf56445",
+      "complete_trace": false,
+      "disposition": "One recorder repair was tested this sweep. It fixes the observed event-table memory growth, but native capture throughput still cannot complete within the existing 900-second timeout. No second identified repair or duplicate capture is attempted.",
+      "observations_log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\james-resource-observations.jsonl"
+    },
+    {
+      "position": 492,
+      "retained_run_directory": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-27484-1792348346404557400-0",
+      "partial_uncompressed_spool": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\itgmania-harness-rs\\song-lua-27484-1792348346404557400-0\\Save\\itgmania-harness\\new.song-lua-trace.json.events.new",
+      "partial_spool_bytes": 6054185623,
+      "partial_spool_sha256": "02c503f32406a15b811b668b8486f7d415efabfe2760f0bf52cf7b06bf7f5893",
+      "last_observed_song_seconds": 45.17748260498047,
+      "last_observed_event_sequence": 15074067,
+      "observed_peak_native_resident_bytes": 119365632,
+      "observations_sha256": "e93ec3d77c00cce92c766e22602d3fad61dfcd6888535e6375df1c76fbf56445",
+      "complete_trace": false,
+      "disposition": "One recorder repair was tested this sweep. It fixes the observed event-table memory growth, but native capture throughput still cannot complete within the existing 900-second timeout. No second identified repair or duplicate capture is attempted.",
+      "observations_log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\james-resource-observations.jsonl"
+    }
+  ],
+  "source_preservation": {
+    "user_instruction": "Preserve sources; leave invalid charts pending",
+    "unchanged_invalid_sources": [
+      "Lesson by DJ/Lesson by DJ.sm",
+      "Haxo (Sharks Remix) [sorae]/haxo.ssc",
+      "Cursed Metamorph - [Zaia]/saved/Cursed Metamorph.ssc",
+      "Happiness/Happiness.ssc"
+    ],
+    "scope": "Preserve all authored sources. Latest user scope is the final remaining entries, including Mawaru9; no added difficulty/mode variants."
+  },
+  "latest_user_scope": {
+    "instruction": "basically just do the last remaining ones, including the one we previously ignored",
+    "effect": "Re-enable mawaru9; no additional difficulty or mode variants. Preserve invalid sources as instructed."
+  },
+  "recorder_repairs": [
+    {
+      "harness_fix_commit": "e4315c422edc3e086dd596b93c1a74850e86aba9",
+      "cause": "James executes many recurring 10 ms commands inside one Foreground update. Previously completed event tables could only flush between screen updates, allowing unbounded accumulation during native timer catch-up.",
+      "fix": "Flush completed events after the outermost successful native binding returns; retain original ordering and complete parent return/tween details. Native clocks, source, event contents, and full-replay acceptance are unchanged.",
+      "native_source_references": [
+        "itgmania-harness/target/native-engine-source/src/Foreground.cpp:104",
+        "itgmania-harness/target/native-engine-source/src/Actor.cpp:802"
+      ],
+      "build_proof": {
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\itgmania-harness-capture-v0.1.91-callback-spool.exe",
+        "binary_sha256": "ba73e55d9557ff01514ed4d0374e540623ba6d845954d3a91a09f4bfe83e47f4",
+        "modified_sources": {
+          "Cargo.toml": "4bcfaf84d2da948bcfbd6810eb48123f5ee8d19c7084b5558250db4b9f35fba6",
+          "Cargo.lock": "cd026eaf2108276c65fbdf73b9fcbac47940d766988aa7795c1bda2a76e70497",
+          "src/main.rs": "37042d5f3147afe98140366a2d2857a6d337dbf55991153e742debab98009eeb",
+          "src/song_lua_runtime.rs": "f4e80fe07a42105274c4048389c5871d14b89a4f86ceb79912484ad5c5f16f93",
+          "probe_theme/SongLuaTrace.lua": "afe63f3fbceb38bd93df46c549fe3e356636f6710963906618cf4f6143a49e7d",
+          "README.md": "8250330e8df6a326e9aef4bf94291fc329977d69080cb0660235046758ee8b60"
+        },
+        "tests_sha256": "3039de54222bdc10b2aad42ef50eb1b3cc4aa5b3e9855335d60d6055ea82e704",
+        "native_controls": [
+          {
+            "name": "nested-spool-control",
+            "control_only_not_catalog_fixture": true,
+            "archive_accepted": true,
+            "native_frames": 540,
+            "replayed_frames": 540,
+            "event_count": 10010,
+            "all_event_sequences_contiguous": true,
+            "candidate_sha256": "1e01d7c4ec52d64909a5c2c7d236aa46ccd77d6f34102caf8efb163fb6ddead3",
+            "trace_sha256": "861284c6f481a01750d613edca12f204c3cc86d19387e333d8f0985fd3d8f7ac",
+            "report_sha256": "7443c95f8664c22c637059ccf9806e230f12b6f675799e89b935e3cf63196327"
+          },
+          {
+            "name": "dense-timer-spool-control",
+            "control_only_not_catalog_fixture": true,
+            "archive_accepted": true,
+            "native_frames": 369,
+            "replayed_frames": 369,
+            "event_count": 727590,
+            "all_event_sequences_contiguous": true,
+            "candidate_sha256": "9412281a7ec2faffeaa1cc369cd48289192cf32b6dceedd7a35a729ce7722708",
+            "trace_sha256": "9a8364d343c3c714cc477f4c8669ca3091ad14402f490a08d92f2990db0ce7e3",
+            "report_sha256": "f10acaeb1e903ed0c46a41d5e622b5019f72b88f2dc77f6b1acc356b6dca76ec"
+          }
+        ],
+        "tests": {
+          "passed": 205,
+          "failed": 0,
+          "ignored": 2,
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\harness-callback-spool-tests.log",
+          "sha256": "3039de54222bdc10b2aad42ef50eb1b3cc4aa5b3e9855335d60d6055ea82e704"
+        },
+        "harness_fix_commit": "e4315c422edc3e086dd596b93c1a74850e86aba9"
+      },
+      "remaining_chart_result": "Both complete James captures still timed out at 900 seconds. Sampled native memory remained bounded at approximately120 MB, while only approximately45 song seconds were observed. The recorder repair resolves memory growth but does not make these fixtures pass."
+    }
+  ],
+  "harness_analysis_repairs": [
+    {
+      "harness_fix_commit": "2e24777ea7b6d32cb385b3ffeba54af2733e131a",
+      "actual_failure": "ArrowQuest completed native capture, but the v89 post-capture analysis grew beyond40 GB private memory and left less than1 GB physical memory available. The analysis was stopped; both complete native results were retained.",
+      "fix": "Derive typed events one at a time while preserving the original event tape, first actor-event load boundaries, draw-order changes and final sequence. Release source bytes before derivation, move archive trace buffers instead of copying, and drop parsed traces before archive writes.",
+      "build_proof": {
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\itgmania-harness-capture-v0.1.92-low-memory-analysis.exe",
+        "binary_sha256": "8592b7659cb403b9cd867b53d9ed9ee20e751f7792b375c5392eb6a109f0eb96",
+        "modified_sources": {
+          "Cargo.toml": "4c60ead843d226535cd0691a44614bd6666a54f82731b445364a9119d8329fc5",
+          "Cargo.lock": "886e06f344f93ed119fcece52fc8aa607b855e46b62d39ffb3ff87c4b8c9ef84",
+          "src/main.rs": "175e95bf72b7e82b4ecd1fb7817efbb4f3f296382657a4f0589661dc21eb75ea",
+          "src/song_lua_runtime.rs": "85250ed8d96a17f90ccb504a2e2294347d23a9bef8c9ff0634f29eb4998d3a04",
+          "src/song_lua_semantics.rs": "ef460a9c1c60a587f2c9959e81cc9a436839d343954b8ddb66e05614c42b24af",
+          "src/song_lua_archive.rs": "855e2eccaf0395d0d8538c87ef33db5b257b21508e0363399599dad3d524e8b8",
+          "probe_theme/SongLuaTrace.lua": "afe63f3fbceb38bd93df46c549fe3e356636f6710963906618cf4f6143a49e7d",
+          "README.md": "c396046077704a92cd72df7c7d58c0c2b3a5bc3094e482f0cbb4ec866099b6f9"
+        },
+        "tests_sha256": "c5d38f1312d2bfc990c6a939d9f21e0112b696a3bb19b34881f384502dca1e07",
+        "checks": [
+          {
+            "scope": "Complete retained nested-spool-control reanalysis; byte-for-byte identical output",
+            "input_sha256": "861284c6f481a01750d613edca12f204c3cc86d19387e333d8f0985fd3d8f7ac",
+            "output_sha256": "861284c6f481a01750d613edca12f204c3cc86d19387e333d8f0985fd3d8f7ac",
+            "new_native_capture": false
+          },
+          {
+            "scope": "Complete retained dense-timer-spool-control reanalysis; byte-for-byte identical output",
+            "input_sha256": "9a8364d343c3c714cc477f4c8669ca3091ad14402f490a08d92f2990db0ce7e3",
+            "output_sha256": "9a8364d343c3c714cc477f4c8669ca3091ad14402f490a08d92f2990db0ce7e3",
+            "new_native_capture": false
+          }
+        ],
+        "tests": {
+          "passed": 207,
+          "failed": 0,
+          "ignored": 2,
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\harness-low-memory-analysis-tests.log",
+          "sha256": "c5d38f1312d2bfc990c6a939d9f21e0112b696a3bb19b34881f384502dca1e07"
+        },
+        "harness_fix_commit": "2e24777ea7b6d32cb385b3ffeba54af2733e131a"
+      },
+      "capture_reused": true
+    },
+    {
+      "harness_fix_commit": "0f4bb7cb738c53c7bcb99b2b32a6eade638a475d",
+      "cause": "A long retained trace needs both its parsed metadata and archive payload; loading/copying the full payload alongside the parsed tree exceeds available RAM.",
+      "fix": "Read metadata through a buffered JSON reader, release the parsed tree, then stream the exact trace file into a deterministic tar member. All native observations and existing validation remain intact.",
+      "build_proof": {
+        "binary": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\itgmania-harness-capture-v0.1.93-streamed-archive.exe",
+        "binary_sha256": "91238065b1a6953e3479b269035d7355f505cd70238409d114fa98838601e16f",
+        "modified_sources": {
+          "Cargo.toml": "5848ff889a91c8fc81ffeae8c4c6e3149d9e44a029645641ca00313558978523",
+          "Cargo.lock": "b45b4c0b2f13ea27a9c3d92f8dbcef319777968eb33ec29285d20e2eac509d00",
+          "src/main.rs": "175e95bf72b7e82b4ecd1fb7817efbb4f3f296382657a4f0589661dc21eb75ea",
+          "src/song_lua_runtime.rs": "85250ed8d96a17f90ccb504a2e2294347d23a9bef8c9ff0634f29eb4998d3a04",
+          "src/song_lua_semantics.rs": "ef460a9c1c60a587f2c9959e81cc9a436839d343954b8ddb66e05614c42b24af",
+          "src/song_lua_archive.rs": "d338cf4937c98194fcf5ea8d6c2590d7c63959a299b97dd796c52fc5dbe02c78",
+          "probe_theme/SongLuaTrace.lua": "afe63f3fbceb38bd93df46c549fe3e356636f6710963906618cf4f6143a49e7d",
+          "README.md": "683449dee35e5244c170ffb47277ed78f30760370b678384e13adbc93de49ca8"
+        },
+        "tests_sha256": "c91c186a4f330c2ee4ec57d8c7f59f6fb29469d3f8ecc6c4aa1a76a09d4fe252",
+        "checks": [
+          {
+            "name": "nested-spool-control",
+            "original_archive_sha256": "1e01d7c4ec52d64909a5c2c7d236aa46ccd77d6f34102caf8efb163fb6ddead3",
+            "streamed_archive_sha256": "1e01d7c4ec52d64909a5c2c7d236aa46ccd77d6f34102caf8efb163fb6ddead3",
+            "exact_uncompressed_tar_bytes_match": true,
+            "new_native_capture": false
+          },
+          {
+            "name": "dense-timer-spool-control",
+            "original_archive_sha256": "9412281a7ec2faffeaa1cc369cd48289192cf32b6dceedd7a35a729ce7722708",
+            "streamed_archive_sha256": "9412281a7ec2faffeaa1cc369cd48289192cf32b6dceedd7a35a729ce7722708",
+            "exact_uncompressed_tar_bytes_match": true,
+            "new_native_capture": false
+          }
+        ],
+        "tests": {
+          "passed": 207,
+          "failed": 0,
+          "ignored": 2,
+          "log": "C:\\GitHub\\deadsync\\target\\song-lua-tenth-ten-20261018\\harness-streamed-archive-tests.log",
+          "sha256": "c91c186a4f330c2ee4ec57d8c7f59f6fb29469d3f8ecc6c4aa1a76a09d4fe252"
+        },
+        "harness_fix_commit": "0f4bb7cb738c53c7bcb99b2b32a6eade638a475d"
+      }
+    }
+  ],
+  "sweep_status": "in progress; remaining complete comparisons queued sequentially"
+}

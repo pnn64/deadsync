@@ -39,13 +39,16 @@ pub(crate) fn init_asset_paths() {
             .to_path_buf();
         let data =
             std::env::temp_dir().join(format!("deadsync-noteskin-paths-{}", std::process::id()));
-        let dirs = deadsync_config::dirs::AppDirs {
-            cache_dir: data.join("cache"),
-            data_dir: data,
-            exe_dir: bundle,
-            portable: false,
-        };
-        init_paths(dirs.asset_paths(None)).expect("initialize fixture asset paths");
+        init_paths(deadsync_config::dirs::AssetPaths {
+            search_roots: vec![data.clone(), bundle.clone()],
+            graphic_roots: vec![bundle.join("assets/graphics")],
+            texture_roots: [data.join("assets"), bundle.join("assets")],
+            noteskin_roots: vec![bundle.join("assets/noteskins")],
+            noteskin_pack_roots: vec![bundle.join("assets/noteskins")],
+            noteskin_cache: data.join("cache/noteskins"),
+            banner_cache: data.join("cache/banners"),
+            cdtitle_cache: data.join("cache/cdtitles"),
+        }).expect("initialize fixture asset paths");
     });
 }
 

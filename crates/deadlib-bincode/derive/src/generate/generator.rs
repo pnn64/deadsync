@@ -51,27 +51,24 @@ impl Generator {
     /// - Lifetimes should _not_ have the leading apostrophe.
     /// - `trait_name` should _not_ have custom lifetimes. These will be added automatically.
     ///
-    /// ```
-    /// # use virtue::prelude::*;
-    /// # let mut generator = Generator::with_name("Bar");
+    /// ```text
     /// generator.impl_for_with_lifetimes("Foo", ["a", "b"]);
     ///
     /// // will output:
     /// // impl<'a, 'b> Foo<'a, 'b> for StructOrEnum { }
-    /// # generator.assert_eq("impl < 'a , 'b > Foo < 'a , 'b > for Bar { }");
     /// ```
     ///
-    /// The new lifetimes are not associated with any existing lifetimes. If you want this behavior you can call `.impl_for_with_lifetimes(...).new_lifetimes_depend_on_existing()`
+    /// The new lifetimes are independent. Add a constraint explicitly with `modify_generic_constraints` when they must outlive existing lifetimes.
     ///
-    /// ```
-    /// # use virtue::prelude::*;
-    /// # let mut generator = Generator::with_name("Bar").with_lifetime("a");
+    /// ```text
     /// // given a derive on `struct<'a> Bar<'a>`
-    /// generator.impl_for_with_lifetimes("Foo", ["b"]).new_lifetimes_depend_on_existing();
+    /// generator.impl_for_with_lifetimes("Foo", ["b"])
+    ///     .modify_generic_constraints(|_, constraints| {
+    ///         constraints.push_parsed_constraint("'b: 'a")
+    ///     })?;
     ///
     /// // will output:
     /// // impl<'a, 'b> Foo<'b> for Bar<'a> where 'b: 'a { }
-    /// # generator.assert_eq("impl < 'b , 'a > Foo < 'b > for Bar < 'a > where 'b : 'a { }");
     /// ```
     pub fn impl_for_with_lifetimes<ITER, T>(
         &mut self,

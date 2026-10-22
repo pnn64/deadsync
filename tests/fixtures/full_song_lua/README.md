@@ -1,6 +1,20 @@
 # Full song Lua fixtures
 
-The [latest fixture batch](seventh-ten-2026-10-18-summary.json) adds **10 accepted fixtures**, bringing the total to **470 passed, 30 pending, and one ignored chart** (Mawaru9). Every new fixture passed its complete uncompressed replay before official packing, decoded hash verification, and commit. [Concrete failures](seventh-ten-2026-10-18-pending.json) and [missing coverage](seventh-ten-2026-10-18-coverage.json) are recorded separately. Files over 100,000,000 bytes remain gitignored.
+Checkout tests use `committed-archives.txt` and `committed-songs.json` to select
+only tracked archives, including retained versions needed by older regressions.
+Optional local captures in `index.json` never become test inputs. Historical
+reference aliases are limited by `committed-reference-files.txt`; every target
+must exist, and local-only missing-file exceptions are rejected. Regenerate the
+catalogs with `python -X utf8 scripts/catalog_committed_songs.py` (requires
+`zstandard`). Tests extract their inputs into temporary directories.
+
+The [latest fixture batch](ninth-ten-2026-10-18-summary.json) adds **10 accepted fixtures**, bringing the total to **490 passed, 10 pending, and one ignored chart** (Mawaru9). Every new fixture passed its complete uncompressed replay before official packing, decoded hash verification, and commit. [Concrete failures](ninth-ten-2026-10-18-pending.json) and [missing coverage](ninth-ten-2026-10-18-coverage.json) are recorded separately. Files over 100,000,000 bytes remain gitignored.
+
+Velvet's fixture declares an initially stopped Lua collector in both VMs. Its default automatic-collector replay still has command-order differences, recorded as separate missing coverage. A [readable pending ledger](ninth-ten-2026-10-18-pending.md) lists all ten remaining charts and their concrete failures.
+
+The [preceding fixture batch](eighth-ten-2026-10-18-summary.json) added **10 accepted fixtures**, bringing the total to **480 passed, 20 pending, and one ignored chart** (Mawaru9). Every new fixture passed its complete uncompressed replay before official packing, decoded hash verification, and commit. [Concrete failures](eighth-ten-2026-10-18-pending.json) and [missing coverage](eighth-ten-2026-10-18-coverage.json) are recorded separately. Files over 100,000,000 bytes remain gitignored.
+
+The [preceding fixture batch](seventh-ten-2026-10-18-summary.json) added **10 accepted fixtures**, bringing the total to **470 passed, 30 pending, and one ignored chart** (Mawaru9). Every new fixture passed its complete uncompressed replay before official packing, decoded hash verification, and commit. [Concrete failures](seventh-ten-2026-10-18-pending.json) and [missing coverage](seventh-ten-2026-10-18-coverage.json) are recorded separately. Files over 100,000,000 bytes remain gitignored.
 
 The [preceding fixture pass](sixth-ten-2026-10-18-summary.json) added **10 accepted
 fixtures**, bringing the total to **460 accepted fixtures, 40 pending charts,
@@ -149,6 +163,8 @@ All retained full-song references live directly in this folder:
   decompressed JSON, preserving reference identities across compression changes.
 - `<sha256>.manifest.json`: small original provenance manifests.
 - `references.json`: historical reference paths mapped to the consolidated files.
+- `committed-reference-files.txt`: the Git-tracked target set for those aliases;
+  tests require all targets and reject uncatalogued local files.
 
 Earlier result notes use paths from before consolidation. `references.json`
 maps those paths to the current files, preserving the recorded native versions.
@@ -197,13 +213,12 @@ generating harness; recompression does not change that provenance.
 
 ## Local movie archives
 
-Archives over 100,000,000 bytes are kept locally and explicitly ignored by
-Git. Their index entries retain hashes, aliases, harness version, and
-`local_only: true`. When present, they receive every normal comparison.
-Fresh checkouts report unavailable local-only archives and omit them from
-bulk runs; explicitly selecting an absent archive fails with an explanation.
-Missing tracked fixtures still fail validation. Recreate the two Episode 16
-captures from the original corpus using harness `0.1.4` and level-22 zstd.
+Historical captures over 100,000,000 bytes may be present locally and remain
+Git-ignored. They are not checkout test inputs: test selection uses only the
+explicit tracked-archive catalog. Two obsolete Episode 16 aliases that pointed
+to such uncommitted captures have been removed; no semantic case used those
+aliases. All remaining 658 aliases resolve to 654 tracked targets, and missing
+committed targets fail validation without a local-only exception.
 
 ## Model diagnostic revalidation (2026-10-09)
 

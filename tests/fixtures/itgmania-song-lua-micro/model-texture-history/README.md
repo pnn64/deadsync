@@ -13,9 +13,10 @@ retains all 604 native draws. This comparison uses the production compiler's
 chronological replay and retained material tracks without supplying expected
 UVs or overriding its clocks.
 
-The captures use harness 0.1.39 at `1ceab4b`, linked to ITGmania `5c737928`.
-Each capture retains source hashes, the native executable pin and output
-hash. Reproduce either input with
+The captures were refreshed with harness 0.1.95 at `91f69c2`, linked to
+ITGmania `5c737928`. The input, resource, binary and output hashes are in
+[the capture receipt](../legacy-native-capture-manifest.json). All 644 retained
+draws match the previous observations at native float precision. Reproduce either input with
 `itgmania-harness-rs actor-conformance control.json` or the corresponding
 `control-frames.json` from this directory.
 

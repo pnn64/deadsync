@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 
 /// Upper bound (in device frames) on how far ahead of the audible write head a
 /// scheduled SFX onset may sit before the mixer treats it as stale and drops it.
@@ -120,6 +120,26 @@ fn valid_gain(gain: f32) -> f32 {
     }
 }
 
+/// Optional per-voice control, independent of the sound file and mixer bus.
+/// Two actors loading the same file must still be stoppable independently.
+pub struct SfxVoiceControl {
+    playing: AtomicBool,
+    paused: AtomicBool,
+}
+
+impl SfxVoiceControl {
+    pub fn new() -> Self {
+        Self { playing: AtomicBool::new(true), paused: AtomicBool::new(false) }
+    }
+    pub fn is_playing(&self) -> bool { self.playing.load(Ordering::Acquire) }
+    pub fn stop(&self) { self.playing.store(false, Ordering::Release); }
+    pub fn pause(&self, paused: bool) { self.paused.store(paused, Ordering::Release); }
+}
+
+impl Default for SfxVoiceControl {
+    fn default() -> Self { Self::new() }
+}
+
 #[derive(Clone)]
 pub struct QueuedSfx {
     pub data: Arc<[i16]>,
@@ -132,6 +152,7 @@ pub struct QueuedSfx {
     /// Absolute stream frame at which the first sample should become audible.
     /// `0` means "play immediately" at the start of the next buffer.
     pub target_stream_frame: u64,
+    pub voice: Option<Arc<SfxVoiceControl>>,
 }
 
 /// Active SFX state retained across output callbacks.
@@ -143,6 +164,7 @@ pub struct ActiveSfx {
     pub restart_slot: Option<u8>,
     pub pan: SfxPan,
     pub target_stream_frame: u64,
+    pub voice: Option<Arc<SfxVoiceControl>>,
 }
 
 impl ActiveSfx {
@@ -157,7 +179,14 @@ impl ActiveSfx {
             restart_slot: queued.restart_slot,
             pan: queued.pan,
             target_stream_frame: queued.target_stream_frame,
+            voice: queued.voice,
         }
+    }
+}
+
+impl Drop for ActiveSfx {
+    fn drop(&mut self) {
+        if let Some(voice) = &self.voice { voice.stop(); }
     }
 }
 
@@ -183,6 +212,8 @@ pub fn push_queued_sfx(active: &mut Vec<ActiveSfx>, queued: QueuedSfx, controls:
     }
     if active.len() < MAX_ACTIVE_SFX {
         active.push(ActiveSfx::from_queued(queued));
+    } else if let Some(voice) = queued.voice {
+        voice.stop();
     }
 }
 
@@ -198,6 +229,10 @@ pub fn mix_active_sfx(
     active.retain_mut(|sfx| {
         if !controls.is_current(sfx.bus, sfx.generation) {
             return false;
+        }
+        if let Some(voice) = &sfx.voice {
+            if !voice.is_playing() { return false; }
+            if voice.paused.load(Ordering::Acquire) { return true; }
         }
         let start_sample = match scheduled_onset_decision(
             sfx.target_stream_frame,
@@ -326,6 +361,7 @@ mod tests {
             restart_slot,
             pan: SfxPan::Center,
             target_stream_frame: 0,
+            voice: None,
         }
     }
 

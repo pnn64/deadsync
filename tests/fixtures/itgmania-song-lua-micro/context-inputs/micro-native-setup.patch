@@ -1,0 +1,13 @@
+--- harness/native/oracle_bridge.cpp
++++ adapter/native/oracle_bridge.cpp
+@@ -1213,9 +1213,7 @@
+     // PlayerOptions::FromOneModString uses NOTESKIN for clearall and skin
+     // validation. Keep its native manager alive for the whole Lua session.
+     NoteSkinManager option_skins;
+-    Game option_game{};
+-    option_game.m_szName = "dance";
+-    NoteSkinGlobalGuard option_skin_global(&option_skins, &option_game);
++    NoteSkinGlobalGuard option_skin_global(&option_skins, harness_score_game());
+     lua_pushlightuserdata(state, &option_skins);
+     lua_pushcclosure(state, [](lua_State* L) -> int {
+       auto* manager = static_cast<NoteSkinManager*>(lua_touserdata(L, lua_upvalueindex(1)));
