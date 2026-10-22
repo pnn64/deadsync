@@ -985,7 +985,7 @@ pub enum GameplayAudioCommand {
         looping: bool,
         rate: f32,
     },
-    PlayPreloadedSfx(&'static str),
+    PlayPreloadedMineSfx { path: &'static str, player: u8, two_players: bool },
     PlayPreloadedAssistTick(&'static str),
     PlayAssistTickAtMusicTime {
         path: &'static str,
@@ -1016,6 +1016,22 @@ impl GameplayCommandQueue {
 
     #[inline(always)]
     pub fn push_audio(&mut self, command: GameplayAudioCommand) {
+        // Player::UpdateJudgedRows collects distinct mine sound pointers
+        // before Stop/Play, even when several mines hit on the same frame.
+        if let GameplayAudioCommand::PlayPreloadedMineSfx { path, player, .. } = &command
+            && self.audio.iter().any(|queued| {
+                matches!(
+                    queued,
+                    GameplayAudioCommand::PlayPreloadedMineSfx {
+                        path: queued_path,
+                        player: queued_player,
+                        ..
+                    } if queued_path == path && queued_player == player
+                )
+            })
+        {
+            return;
+        }
         self.audio.push(command);
     }
 

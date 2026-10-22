@@ -214,8 +214,21 @@ const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 // ITGmania PrefsManager default: MusicWheelSwitchSpeed=15.
 const MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT: f32 = 15.0;
+// WheelBase caps sustained high-speed scrolling clicks at 15 Hz.
+const MUSIC_WHEEL_MAX_SOUND_SPEED: f32 = 15.0;
+const MUSIC_WHEEL_SOUND_INTERVAL: Duration = Duration::from_nanos(66_666_667);
 // ITGmania WheelBase::MoveSpecific(): if |offset| < 0.25 then one more move for spin-down.
 const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
+
+#[derive(Clone, Copy)]
+enum WheelChangeSound {
+    /// An individual input press, even if it wraps back to the same item.
+    Immediate,
+    /// Continuous held navigation; use a per-item click below 15 items/sec.
+    Automatic,
+    /// Undoing a chord step or finishing held-scroll spin-down.
+    Silent,
+}
 
 const CHORD_UP: u8 = 1 << 0;
 const CHORD_DOWN: u8 = 1 << 1;
@@ -1790,6 +1803,8 @@ pub struct State {
     last_steps_nav_time_p2: Option<Instant>,
     nav_key_held_direction: Option<NavDirection>,
     nav_key_held_elapsed: Duration,
+    fast_wheel_sound_elapsed: Duration,
+    wheel_change_sound_handled: bool,
     overlay_nav_held_direction: Option<NavDirection>,
     overlay_nav_held_since: Option<Instant>,
     overlay_nav_last_scrolled_at: Option<Instant>,
@@ -3938,6 +3953,8 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_elapsed: Duration::ZERO,
+        fast_wheel_sound_elapsed: MUSIC_WHEEL_SOUND_INTERVAL,
+        wheel_change_sound_handled: false,
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
@@ -4192,6 +4209,8 @@ pub fn init_placeholder() -> State {
         last_steps_nav_time_p2: None,
         nav_key_held_direction: None,
         nav_key_held_elapsed: Duration::ZERO,
+        fast_wheel_sound_elapsed: MUSIC_WHEEL_SOUND_INTERVAL,
+        wheel_change_sound_handled: false,
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
@@ -4276,7 +4295,7 @@ fn music_wheel_settle_offset(state: &mut State, dt: f32) {
 }
 
 #[inline(always)]
-fn music_wheel_change(state: &mut State, dist: isize) {
+fn music_wheel_change(state: &mut State, dist: isize, sound: WheelChangeSound) {
     if dist == 0 {
         return;
     }
@@ -4297,6 +4316,16 @@ fn music_wheel_change(state: &mut State, dist: isize) {
         state.wheel_offset_from_selection -= 1.0;
     }
     state.time_since_selection_change = 0.0;
+    // Audio belongs to the wheel movement, not the final selected index of the
+    // next update. Two presses between frames must play two independent clicks.
+    state.wheel_change_sound_handled = true;
+    if matches!(sound, WheelChangeSound::Immediate)
+        || matches!(sound, WheelChangeSound::Automatic)
+            && music_wheel_hold_spin_speed(state.policy.interaction.wheel_switch_speed)
+                < MUSIC_WHEEL_MAX_SOUND_SPEED
+    {
+        queue_sfx(state, "assets/sounds/change.ogg");
+    }
 }
 
 #[inline(always)]
@@ -4322,7 +4351,7 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
     }
 
     let dist = if moving < 0.0 { -1 } else { 1 };
-    music_wheel_change(state, dist);
+    music_wheel_change(state, dist, WheelChangeSound::Automatic);
 }
 
 #[inline(always)]
@@ -4650,6 +4679,7 @@ fn logic_dt_duration(dt: f32) -> Duration {
 const fn clear_nav_hold(state: &mut State) {
     state.nav_key_held_direction = None;
     state.nav_key_held_elapsed = Duration::ZERO;
+    state.fast_wheel_sound_elapsed = MUSIC_WHEEL_SOUND_INTERVAL;
 }
 
 #[inline(always)]
@@ -4671,6 +4701,30 @@ fn advance_nav_hold(state: &mut State, dt: f32) -> bool {
     }
     state.nav_key_held_elapsed += logic_dt_duration(dt);
     nav_hold_started(state)
+}
+
+/// WheelBase plays per-item clicks at low speeds, and timer-driven 15 Hz
+/// clicks during fast automatic scrolling. Discrete taps always click.
+fn wheel_change_sound_due(
+    elapsed: &mut Duration,
+    auto_scrolling: bool,
+    switch_speed: u8,
+    dt: f32,
+) -> bool {
+    if !auto_scrolling || music_wheel_hold_spin_speed(switch_speed) < MUSIC_WHEEL_MAX_SOUND_SPEED {
+        *elapsed = MUSIC_WHEEL_SOUND_INTERVAL;
+        return false;
+    }
+    if !dt.is_finite() || dt <= 0.0 {
+        return false;
+    }
+
+    *elapsed = (*elapsed + logic_dt_duration(dt)).min(MUSIC_WHEEL_SOUND_INTERVAL);
+    if *elapsed < MUSIC_WHEEL_SOUND_INTERVAL {
+        return false;
+    }
+    *elapsed = Duration::ZERO;
+    true
 }
 
 fn finish_favorite_toggle(state: &mut State, is_now_favorite: bool) {
@@ -4982,8 +5036,8 @@ fn try_open_select_music_menu(state: &mut State) -> bool {
         // without leaving the current wheel selection. Our input path moves on the
         // first press, so cancel that first move before opening the menu.
         match state.nav_key_held_direction {
-            Some(NavDirection::Left) => music_wheel_change(state, 1),
-            Some(NavDirection::Right) => music_wheel_change(state, -1),
+            Some(NavDirection::Left) => music_wheel_change(state, 1, WheelChangeSound::Silent),
+            Some(NavDirection::Right) => music_wheel_change(state, -1, WheelChangeSound::Silent),
             None => {}
         }
         show_select_music_menu(state);
@@ -10213,14 +10267,14 @@ fn handle_pad_dir_impl(
                 {
                     // ITGmania: the newly pressed opposite direction steps once,
                     // then automatic hold scrolling stops while both are down.
-                    music_wheel_change(state, 1);
+                    music_wheel_change(state, 1, WheelChangeSound::Immediate);
                     clear_nav_hold(state);
                     return finish(state, exit_code_entered);
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Right) {
                     return finish(state, exit_code_entered);
                 }
-                music_wheel_change(state, 1);
+                music_wheel_change(state, 1, WheelChangeSound::Immediate);
                 start_nav_hold(state, NavDirection::Right);
             }
             PadDir::Left => {
@@ -10232,14 +10286,14 @@ fn handle_pad_dir_impl(
                 {
                     // ITGmania: the newly pressed opposite direction steps once,
                     // then automatic hold scrolling stops while both are down.
-                    music_wheel_change(state, -1);
+                    music_wheel_change(state, -1, WheelChangeSound::Immediate);
                     clear_nav_hold(state);
                     return finish(state, exit_code_entered);
                 }
                 if state.nav_key_held_direction == Some(NavDirection::Left) {
                     return finish(state, exit_code_entered);
                 }
-                music_wheel_change(state, -1);
+                music_wheel_change(state, -1, WheelChangeSound::Immediate);
                 start_nav_hold(state, NavDirection::Left);
             }
             PadDir::Up | PadDir::Down => {
@@ -10304,6 +10358,7 @@ fn handle_pad_dir_impl(
                         } else {
                             1
                         },
+                        WheelChangeSound::Silent,
                     );
                 }
                 resume_wheel_nav_hold(state);
@@ -11580,8 +11635,17 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         music_wheel_settle_offset(state, dt);
     }
 
-    if state.selected_index != state.prev_selected_index {
+    let selection_changed = state.selected_index != state.prev_selected_index;
+    let wheel_change_handled = std::mem::take(&mut state.wheel_change_sound_handled);
+    if wheel_change_sound_due(
+        &mut state.fast_wheel_sound_elapsed,
+        wheel_moving && !state.entries.is_empty(),
+        state.policy.interaction.wheel_switch_speed,
+        dt,
+    ) || selection_changed && !wheel_change_handled {
         queue_sfx(state, "assets/sounds/change.ogg");
+    }
+    if selection_changed {
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
         state.step_artist_cycle_base = state.session_elapsed;
@@ -14774,6 +14838,63 @@ mod tests {
         sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music, sync_low_confidence_warning,
         sync_overlay_graph_size,
     };
+
+    #[test]
+    fn music_wheel_caps_held_fast_scroll_sounds_but_not_individual_taps() {
+        let mut elapsed = super::MUSIC_WHEEL_SOUND_INTERVAL;
+        // A fast hold can advance the wheel every frame, but its sound is
+        // timer-driven at 15 Hz and remains audible without an item change.
+        let mut clicks = 0;
+        for _ in 0..120 {
+            clicks += usize::from(super::wheel_change_sound_due(
+                &mut elapsed,
+                true,
+                30,
+                1.0 / 120.0,
+            ));
+        }
+        assert_eq!(clicks, 15);
+        assert!(!super::wheel_change_sound_due(&mut elapsed, true, 30, 0.0));
+
+        // Per-item and discrete sounds are generated at the selection event.
+        assert!(!super::wheel_change_sound_due(&mut elapsed, true, 10, 0.05));
+        assert!(!super::wheel_change_sound_due(&mut elapsed, false, 30, 0.01));
+    }
+
+    #[test]
+    fn wheel_taps_play_per_event_and_hold_release_spindown_is_silent() {
+        let mut state = select_lr_state(
+            profile_data::PlayStyle::Single,
+            profile_data::PlayerSide::P1,
+        );
+        state.pending_audio.clear();
+        super::music_wheel_change(&mut state, 1, super::WheelChangeSound::Immediate);
+        super::music_wheel_change(&mut state, -1, super::WheelChangeSound::Immediate);
+        assert_eq!(state.selected_index, 1);
+        assert_eq!(state.pending_audio.len(), 2, "both taps must click before update");
+        assert!(state.wheel_change_sound_handled);
+
+        // A one-entry wheel still registers a directional click.
+        state.pending_audio.clear();
+        state.entries.truncate(1);
+        state.selected_index = 0;
+        state.prev_selected_index = 0;
+        super::music_wheel_change(&mut state, 1, super::WheelChangeSound::Immediate);
+        assert_eq!(state.pending_audio.len(), 1);
+
+        // Low-speed held scrolling clicks on each item; fast scrolling leaves
+        // them to the independent 15 Hz sound timer.
+        state.pending_audio.clear();
+        state.policy.interaction.wheel_switch_speed = 10;
+        super::music_wheel_change(&mut state, 1, super::WheelChangeSound::Automatic);
+        assert_eq!(state.pending_audio.len(), 1);
+        state.pending_audio.clear();
+        state.policy.interaction.wheel_switch_speed = 30;
+        super::music_wheel_change(&mut state, 1, super::WheelChangeSound::Automatic);
+        assert!(state.pending_audio.is_empty());
+        super::music_wheel_change(&mut state, -1, super::WheelChangeSound::Silent);
+        assert!(state.pending_audio.is_empty(), "spin-down must not click");
+    }
     use crate::screens::components::select_music::music_wheel;
     use crate::views::ProfilePickerView;
     use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};

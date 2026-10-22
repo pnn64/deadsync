@@ -5,6 +5,8 @@ use std::sync::{Arc, OnceLock};
 pub const EFFECT_BUS: MixBus = MixBus::new(0);
 pub const SCREEN_BUS: MixBus = MixBus::new(1);
 pub const ASSIST_TICK_BUS: MixBus = MixBus::new(2);
+/// Gameplay-owned mine voices must stop when the gameplay screen exits.
+pub const MINE_BUS: MixBus = MixBus::new(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AudioMixLevels {
@@ -52,6 +54,7 @@ fn apply_levels(controls: &MixControls, levels: AudioMixLevels) {
     let sfx_gain = master * f32::from(levels.sfx_volume) * 0.01;
     controls.set_bus_gain(EFFECT_BUS, sfx_gain);
     controls.set_bus_gain(SCREEN_BUS, sfx_gain);
+    controls.set_bus_gain(MINE_BUS, sfx_gain);
     controls.set_bus_gain(
         ASSIST_TICK_BUS,
         master * f32::from(levels.assist_tick_volume) * 0.01,
@@ -89,6 +92,13 @@ pub fn stop_screen_bus() {
 }
 
 #[inline(always)]
+pub fn stop_mine_bus() {
+    if let Some(controls) = CONTROLS.get() {
+        controls.stop_bus(MINE_BUS);
+    }
+}
+
+#[inline(always)]
 pub fn stop_assist_tick_bus() {
     if let Some(controls) = CONTROLS.get() {
         controls.stop_bus(ASSIST_TICK_BUS);
@@ -121,6 +131,7 @@ mod tests {
         assert!((controls.stream_gain() - 0.4).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(EFFECT_BUS) - 0.3).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(SCREEN_BUS) - 0.3).abs() <= f32::EPSILON);
+        assert!((controls.bus_gain(MINE_BUS) - 0.3).abs() <= f32::EPSILON);
         assert!((controls.bus_gain(ASSIST_TICK_BUS) - 0.2).abs() <= f32::EPSILON);
     }
 }

@@ -101,6 +101,16 @@ impl Default for MixControls {
     }
 }
 
+/// Stereo balance for a sound. ITGmania pans mine sounds to the owning
+/// player when both sides are active; ordinary effects remain centered.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SfxPan {
+    #[default]
+    Center,
+    Left,
+    Right,
+}
+
 #[inline(always)]
 fn valid_gain(gain: f32) -> f32 {
     if gain.is_finite() && gain >= 0.0 {
@@ -135,6 +145,10 @@ pub struct QueuedSfx {
     pub data: Arc<[i16]>,
     pub bus: MixBus,
     pub generation: u64,
+    /// A logical sound instance to stop and restart on another trigger.
+    /// Slots are scoped to a bus; `None` preserves overlapping one-shots.
+    pub restart_slot: Option<u8>,
+    pub pan: SfxPan,
     /// Absolute stream frame at which the first sample should become audible.
     /// `0` means "play immediately" at the start of the next buffer.
     pub target_stream_frame: u64,
@@ -147,6 +161,8 @@ pub struct ActiveSfx {
     pub cursor: usize,
     pub bus: MixBus,
     pub generation: u64,
+    pub restart_slot: Option<u8>,
+    pub pan: SfxPan,
     pub target_stream_frame: u64,
     pub voice: Option<Arc<SfxVoiceControl>>,
 }
@@ -160,6 +176,8 @@ impl ActiveSfx {
             cursor: 0,
             bus: queued.bus,
             generation: queued.generation,
+            restart_slot: queued.restart_slot,
+            pan: queued.pan,
             target_stream_frame: queued.target_stream_frame,
             voice: queued.voice,
         }
@@ -174,7 +192,25 @@ impl Drop for ActiveSfx {
 
 #[inline(always)]
 pub fn push_queued_sfx(active: &mut Vec<ActiveSfx>, queued: QueuedSfx, controls: &MixControls) {
-    if controls.is_current(queued.bus, queued.generation) && active.len() < MAX_ACTIVE_SFX {
+    if !controls.is_current(queued.bus, queued.generation) {
+        return;
+    }
+    if let Some(slot) = queued.restart_slot
+        && let Some(previous) = active.iter_mut().find(|sfx| {
+            sfx.bus == queued.bus
+                && sfx.generation == queued.generation
+                && sfx.restart_slot == Some(slot)
+        })
+    {
+        *previous = ActiveSfx::from_queued(queued);
+        return;
+    }
+    // A bus generation reset can leave stale voices occupying the fixed
+    // capacity until the next callback. Make room for current-generation SFX.
+    if active.len() == MAX_ACTIVE_SFX {
+        active.retain(|sfx| controls.is_current(sfx.bus, sfx.generation));
+    }
+    if active.len() < MAX_ACTIVE_SFX {
         active.push(ActiveSfx::from_queued(queued));
     } else if let Some(voice) = queued.voice {
         voice.stop();
@@ -214,11 +250,25 @@ pub fn mix_active_sfx(
         let bus_gain = controls.bus_gain(sfx.bus);
         let src = &sfx.data[sfx.cursor..sfx.cursor + n];
         let dst = &mut mix_f32[start_sample..start_sample + n];
-        mix_sfx_samples(src, dst, bus_gain);
+        if device_channels == 2 && sfx.pan != SfxPan::Center {
+            mix_sfx_panned_stereo(src, dst, bus_gain, sfx.pan);
+        } else {
+            mix_sfx_samples(src, dst, bus_gain);
+        }
         sfx.cursor += n;
         sfx.cursor < sfx.data.len()
     });
     mixed_sfx
+}
+
+#[inline]
+fn mix_sfx_panned_stereo(src: &[i16], dst: &mut [f32], gain: f32, pan: SfxPan) {
+    let channel = usize::from(pan == SfxPan::Right);
+    // RageSoundUtil::Pan at -1/+1 routes the source's right channel entirely
+    // to the owning side. The prepared mine OGG is mono expanded to stereo.
+    for (source, target) in src.chunks_exact(2).zip(dst.chunks_exact_mut(2)) {
+        target[channel] = i16_to_f32(source[1]).mul_add(gain, target[channel]);
+    }
 }
 
 #[inline]
@@ -297,9 +347,123 @@ pub fn i16_to_f32(sample: i16) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls, ScheduledOnset, f32_to_i16, i16_to_f32,
+        MAX_ACTIVE_SFX, MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls, QueuedSfx, SfxPan,
+        ScheduledOnset, f32_to_i16, i16_to_f32, mix_active_sfx, push_queued_sfx,
         scheduled_onset_decision,
     };
+    use std::sync::Arc;
+
+    fn sample_play(data: &Arc<[i16]>, bus: MixBus, restart_slot: Option<u8>) -> QueuedSfx {
+        QueuedSfx {
+            data: Arc::clone(data),
+            bus,
+            generation: 0,
+            restart_slot,
+            pan: SfxPan::Center,
+            target_stream_frame: 0,
+            voice: None,
+        }
+    }
+
+    #[test]
+    fn mine_retrigger_rewinds_one_player_without_stopping_other_players() {
+        let controls = MixControls::new();
+        let bus = MixBus::new(0);
+        let data: Arc<[i16]> = Arc::from([1000, 2000, 3000, 4000, 5000, 6000]);
+        let mut active = Vec::new();
+
+        // Two mines on one frame are one voice per player, as in ITGmania.
+        push_queued_sfx(&mut active, sample_play(&data, bus, Some(0)), &controls);
+        push_queued_sfx(&mut active, sample_play(&data, bus, Some(0)), &controls);
+        assert_eq!(active.len(), 1);
+        push_queued_sfx(&mut active, sample_play(&data, bus, Some(1)), &controls);
+        assert_eq!(active.len(), 2);
+
+        let mut out = [0.0; 2];
+        assert!(mix_active_sfx(&mut active, &mut out, 0, 1, &controls));
+        assert_eq!(out, [i16_to_f32(2000), i16_to_f32(4000)]);
+        assert_eq!(active[0].cursor, 2);
+        assert_eq!(active[1].cursor, 2);
+
+        push_queued_sfx(&mut active, sample_play(&data, bus, Some(0)), &controls);
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].cursor, 0);
+        assert_eq!(active[1].cursor, 2);
+
+        out.fill(0.0);
+        assert!(mix_active_sfx(&mut active, &mut out, 2, 1, &controls));
+        assert_eq!(out, [i16_to_f32(4000), i16_to_f32(6000)]);
+    }
+
+    #[test]
+    fn menu_sounds_keep_independent_overlapping_voices() {
+        let controls = MixControls::new();
+        let data: Arc<[i16]> = Arc::from([1000, 1000, 1000, 1000]);
+        let mut active = Vec::new();
+        let bus = MixBus::new(1);
+        push_queued_sfx(&mut active, sample_play(&data, bus, None), &controls);
+        push_queued_sfx(&mut active, sample_play(&data, bus, None), &controls);
+        assert_eq!(active.len(), 2);
+        let mut out = [0.0; 4];
+        assert!(mix_active_sfx(&mut active, &mut out, 0, 1, &controls));
+        assert_eq!(out, [i16_to_f32(2000); 4]);
+    }
+
+    #[test]
+    fn two_player_mines_pan_to_separate_sides_using_native_balance() {
+        let controls = MixControls::new();
+        let samples: Arc<[i16]> = Arc::from([1000, 2000, 3000, 4000]);
+        let bus = MixBus::new(3);
+        for (pan, expected) in [
+            (SfxPan::Left, [i16_to_f32(2000), 0.0, i16_to_f32(4000), 0.0]),
+            (SfxPan::Right, [0.0, i16_to_f32(2000), 0.0, i16_to_f32(4000)]),
+            (SfxPan::Center, [i16_to_f32(1000), i16_to_f32(2000), i16_to_f32(3000), i16_to_f32(4000)]),
+        ] {
+            let mut active = Vec::new();
+            let mut queued = sample_play(&samples, bus, Some(0));
+            queued.pan = pan;
+            push_queued_sfx(&mut active, queued, &controls);
+            let mut out = [0.0; 4];
+            assert!(mix_active_sfx(&mut active, &mut out, 0, 2, &controls));
+            assert_eq!(out, expected);
+        }
+    }
+
+    #[test]
+    fn mine_retrigger_works_when_32_voice_pool_is_full() {
+        let controls = MixControls::new();
+        let bus = MixBus::new(0);
+        let first: Arc<[i16]> = Arc::from([1000, 2000]);
+        let replacement: Arc<[i16]> = Arc::from([3000, 4000]);
+        let mut active = Vec::with_capacity(MAX_ACTIVE_SFX);
+        push_queued_sfx(&mut active, sample_play(&first, bus, Some(0)), &controls);
+        for _ in 1..MAX_ACTIVE_SFX {
+            push_queued_sfx(&mut active, sample_play(&first, bus, None), &controls);
+        }
+        assert_eq!(active.len(), MAX_ACTIVE_SFX);
+        push_queued_sfx(&mut active, sample_play(&replacement, bus, Some(0)), &controls);
+        assert_eq!(active.len(), MAX_ACTIVE_SFX);
+        assert!(Arc::ptr_eq(&active[0].data, &replacement));
+    }
+
+    #[test]
+    fn reset_bus_reclaims_stale_voices_before_accepting_new_sfx() {
+        let controls = MixControls::new();
+        let bus = MixBus::new(0);
+        let data: Arc<[i16]> = Arc::from([1000, 2000]);
+        let mut active = Vec::with_capacity(MAX_ACTIVE_SFX);
+        for _ in 0..MAX_ACTIVE_SFX {
+            push_queued_sfx(&mut active, sample_play(&data, bus, None), &controls);
+        }
+        assert_eq!(active.len(), MAX_ACTIVE_SFX);
+        controls.stop_bus(bus);
+        let mut next = sample_play(&data, bus, Some(0));
+        next.generation = controls.bus_generation(bus);
+        push_queued_sfx(&mut active, next, &controls);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].restart_slot, Some(0));
+        assert_eq!(active[0].generation, controls.bus_generation(bus));
+    }
 
     #[test]
     fn scheduled_onset_immediate_when_target_zero() {

@@ -1308,9 +1308,12 @@ where
     pub fn trigger_mine_explosion(&mut self, column: usize) {
         self.note_field_did_tap_note(column, "HitMine", false);
         if self.setup.config.mine_hit_sound {
-            self.push_audio_command(GameplayAudioCommand::PlayPreloadedSfx(
-                "assets/sounds/boom.ogg",
-            ));
+            let player = self.player_for_col(column) as u8;
+            self.push_audio_command(GameplayAudioCommand::PlayPreloadedMineSfx {
+                path: "assets/sounds/boom.ogg",
+                player,
+                two_players: self.setup.num_players == 2,
+            });
         }
     }
 

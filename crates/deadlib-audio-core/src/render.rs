@@ -659,6 +659,8 @@ mod tests {
             data: Arc::from([0, 0]),
             bus: EFFECT_BUS,
             generation: 0,
+            restart_slot: None,
+            pan: crate::SfxPan::Center,
             target_stream_frame: total_before + MIX_CHUNK_FRAMES as u64 + 5,
             voice: None,
         };

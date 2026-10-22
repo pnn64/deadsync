@@ -135,10 +135,11 @@ impl App {
         // routes through, so handle it here rather than per exit path. on_exit is
         // idempotent; skip gameplay->gameplay (restart / next course stage) since
         // on_enter re-establishes the mode anyway.
-        if plan.exit_gameplay
-            && let Some(gs) = self.state.screens.gameplay_state.as_mut()
-        {
-            crate::gameplay_runtime::exit(gs);
+        if plan.exit_gameplay {
+            self.audio.stop_mine_sfx();
+            if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                crate::gameplay_runtime::exit(gs);
+            }
         }
         if prev != target {
             self.mark_screen_entry_runtime_dirty(target);

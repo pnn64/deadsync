@@ -4537,7 +4537,37 @@ mod runtime_regression_tests {
         state.trigger_mine_explosion(1);
         assert!(state.display.visual_feedback.mine_explosions[1].is_none());
         assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(),
-            vec![GameplayAudioCommand::PlayPreloadedSfx("assets/sounds/boom.ogg")]);
+            vec![GameplayAudioCommand::PlayPreloadedMineSfx {
+                path: "assets/sounds/boom.ogg",
+                player: 0,
+                two_players: false,
+            }]);
+    }
+
+    #[test]
+    fn two_player_mine_audio_routes_to_each_players_panned_voice() {
+        let mut state = regression_state();
+        state.setup.num_players = 2;
+        state.setup.config.mine_hit_sound = true;
+        state.drain_audio_commands().for_each(drop);
+        state.trigger_mine_explosion(0);
+        state.trigger_mine_explosion(1);
+        state.trigger_mine_explosion(state.setup.cols_per_player);
+        assert_eq!(
+            state.drain_audio_commands().collect::<Vec<_>>(),
+            vec![
+                GameplayAudioCommand::PlayPreloadedMineSfx {
+                    path: "assets/sounds/boom.ogg",
+                    player: 0,
+                    two_players: true,
+                },
+                GameplayAudioCommand::PlayPreloadedMineSfx {
+                    path: "assets/sounds/boom.ogg",
+                    player: 1,
+                    two_players: true,
+                },
+            ],
+        );
     }
 
     #[test]

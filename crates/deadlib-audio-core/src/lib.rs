@@ -10,7 +10,8 @@ pub mod telemetry;
 
 pub use mixer::{
     ActiveSfx, MAX_ACTIVE_SFX, MAX_MIX_BUSES, MAX_SCHEDULE_AHEAD_FRAMES, MixBus, MixControls,
-    QueuedSfx, ScheduledOnset, SfxVoiceControl, f32_to_i16, i16_to_f32, mix_active_sfx, push_queued_sfx,
+    QueuedSfx, ScheduledOnset, SfxPan, SfxVoiceControl, f32_to_i16, i16_to_f32, mix_active_sfx,
+    push_queued_sfx,
     scheduled_onset_decision,
 };
 pub use output::{AudioOutputMode, OutputBackendReady, OutputDeviceInfo, OutputTimingSnapshot};
