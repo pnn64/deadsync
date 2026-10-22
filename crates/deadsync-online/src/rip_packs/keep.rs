@@ -611,7 +611,7 @@ impl Fill {
                         &self.agent,
                         &cache.index,
                         folder,
-                        &self.scratch.join(&written),
+                        &scratch.join(&written),
                     );
                     return Ok((written, pack_ini));
                 }
