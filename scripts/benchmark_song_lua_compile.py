@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets", "comparison_text", "borrowed_compat", "capture_inputs"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -88,6 +88,10 @@ def main():
         for name in ["capture_inputs.rs", "capture_inputs_before.rs", "capture_inputs_bench.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "navigation_inputs":
+        for name in ["message_inputs.rs", "message_inputs_before.rs", "message_inputs_bench.rs", "reload_inputs.rs", "reload_before.rs", "navigation_inputs.lua"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -143,6 +147,10 @@ def main():
         filters = ["lua_util::capture_inputs_perf::bench::benchmark_capture_input_borrows"]
         baseline = "d418006b7"
         expected_names = 15
+    if args.suite == "navigation_inputs":
+        filters = ["lua_util::message_inputs_perf::bench::benchmark_message_and_action_inputs", "compile::reload_inputs_perf::benchmark_reload_path_moves"]
+        baseline = "82decba51"
+        expected_names = 11
     records = []
     for index in range(args.rounds):
         env = os.environ.copy()
@@ -227,6 +235,8 @@ def main():
         report["timing_scope"] = ("Each sample prepares a fresh Lua state and installs the actual compatibility globals plus frozen baseline callbacks outside timing. Prepared Lua loops call the selected callback 8192 times. One warmup and full collection precede timing, then GC is stopped. Result destruction and Lua table growth are included; VM and prepared-input destruction are excluded. First of ten samples discarded. All three frozen callback bodies match be95399d3 and use unchanged downstream helpers.")
     if args.suite == "capture_inputs":
         report["timing_scope"] = ("Each sample prepares a fresh VM, runtime clock, actor tables and native callback outside timing. Capture scopes run 64 actual indexed, touched or full function-action captures and include snapshots, callback effects, restoration and result destruction. Sound scopes inject prepared path strings into the actual action-capture call log, then consume the production action compiler; event capacity is warmed and event destruction is included. No filesystem lookup or audio decoding occurs in sound scopes. One warmup and full collection precede timing; GC stopped. First of ten samples discarded; VM/input destruction excluded. Frozen capture bodies are unchanged from the baseline.")
+    if args.suite == "navigation_inputs":
+        report["timing_scope"] = ("Message/action scopes prepare fresh VMs, clocks, actors and native callbacks outside timing. One warmup and full collection precede timing; GC stopped. Each retained sample runs 32 captures, including snapshots/restoration and output clearing; VM/input destruction excluded. Reload scopes prepare a retained live scene outside timing, consume it through the complete production or frozen reload function once per sample, and exclude returned DTO/VM destruction. First of ten samples discarded. Frozen functions match the baseline and share unchanged downstream helpers.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:

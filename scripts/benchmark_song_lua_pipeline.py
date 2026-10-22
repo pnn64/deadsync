@@ -22,7 +22,7 @@ def main():
     parser.add_argument("--samples", type=int, default=9)
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -64,6 +64,9 @@ def main():
     if args.suite == "capture_inputs":
         cases = [("offline_capture_inputs", "offline", "crates/deadsync-song-lua/tests/perf/capture_inputs.lua"),
                  ("live_capture_inputs", "live", "crates/deadsync-song-lua/tests/perf/capture_inputs.lua")]
+    if args.suite == "navigation_inputs":
+        cases = [("offline_navigation_inputs", "offline", "crates/deadsync-song-lua/tests/perf/navigation_inputs.lua"),
+                 ("live_navigation_inputs", "live", "crates/deadsync-song-lua/tests/perf/navigation_inputs.lua")]
     args.out.mkdir(parents=True, exist_ok=True)
     paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / name for name in sorted({case[2] for case in cases})]

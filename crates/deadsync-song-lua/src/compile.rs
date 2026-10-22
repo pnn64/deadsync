@@ -121,7 +121,7 @@ where
 {
     let mut ending = scene.end().map_err(|err| err.to_string())?;
     let context = scene.selected_context().map_err(|err| err.to_string())?;
-    let entry_paths = scene.entry_paths.clone();
+    let entry_paths = scene.entry_paths;
     let paths = entry_paths.iter().map(|path| path.as_path()).collect::<Vec<_>>();
     let mut compiled = compile_song_lua_layers_with_actors(&paths, scene.primary_index, &context, Some(scene.lua),
         SongLuaNoteskinResolver::default(), create_default_dummy_actor,
@@ -1909,3 +1909,7 @@ mod perf;
 #[cfg(test)]
 #[path = "../tests/perf/finalization_events.rs"]
 mod finalization_events_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/reload_inputs.rs"]
+mod reload_inputs_perf;

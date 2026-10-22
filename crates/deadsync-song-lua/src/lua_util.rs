@@ -18885,13 +18885,7 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
                 .strip_suffix("MessageCommand")
                 .expect("filtered suffix")
                 .to_owned();
-            commands.push((
-                source_index,
-                source.table.clone(),
-                name,
-                message,
-                function,
-            ));
+            commands.push((source_index, &source.table, name, message, function));
         })
         .map_err(|err| err.to_string())?;
     }
@@ -18902,7 +18896,7 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
             .create_sequence_from([command.clone()])
             .and_then(|functions| snapshot_function_action_tables(lua, &functions))
             .map_err(|err| err.to_string())?;
-        let runner = message_capture_runner(lua, &source, &command_name, &command)
+        let runner = message_capture_runner(lua, source, &command_name, &command)
             .map_err(|err| err.to_string())?;
         let local_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
         let first =
@@ -18922,11 +18916,11 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
             Err(err) => {
                 let detail = defer_actor_message(
                     lua,
-                    &source,
+                    source,
                     &command_name,
                     format!(
                         "{}.{} cannot be replayed for stable cross-actor capture: {err}",
-                        actor_debug_label(&source),
+                        actor_debug_label(source),
                         command_name
                     ),
                 );
@@ -18942,11 +18936,11 @@ pub fn capture_stable_cross_actor_message_commands<Kind>(
         if first != second {
             let detail = defer_actor_message(
                 lua,
-                &source,
+                source,
                 &command_name,
                 format!(
                     "{}.{} changes cross-actor targets or effects between runs",
-                    actor_debug_label(&source),
+                    actor_debug_label(source),
                     command_name
                 ),
             );
@@ -18984,8 +18978,11 @@ pub fn capture_overlay_compile_actor_function_action_blocks<Kind>(
     function: &Function,
     beat: f32,
 ) -> Result<SongLuaFunctionActionCapture, String> {
-    let indices: Vec<_> = (0..overlays.len()).collect();
-    let overlay_tables = overlay_compile_actor_tables_for_indices(overlays, &indices);
+    let overlay_tables = overlays
+        .iter()
+        .enumerate()
+        .map(|(index, overlay)| (index, overlay.table.clone()))
+        .collect::<Vec<_>>();
     capture_function_action_blocks(lua, &overlay_tables, tracked_actors, function, beat)
 }
 
@@ -24371,3 +24368,7 @@ mod comparison_text_perf;
 #[cfg(test)]
 #[path = "../tests/perf/capture_inputs.rs"]
 mod capture_inputs_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/message_inputs.rs"]
+mod message_inputs_perf;
