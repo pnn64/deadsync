@@ -91,6 +91,16 @@ fn decode_texture_hints(key: &str) -> TextureHints {
     hints
 }
 
+/// Native Sprite translations are normalized to a power-of-two allocation.
+/// Our upload contains only the prepared image, so convert those UV distances
+/// once at load time. Stretch, tiny-image and resolution-cap rules must match
+/// the decoder before computing the native allocation.
+pub(crate) fn native_sprite_uv_scale(key: &str, source: [u32; 2]) -> [f32; 2] {
+    deadlib_assets::texture_image_size(source, &decode_texture_hints(key))
+        .map(|image| image.map(|size| size.next_power_of_two() as f32 / size as f32))
+        .unwrap_or([1.0; 2])
+}
+
 #[must_use]
 pub fn model_texture_sampler(key: &str) -> SamplerDesc {
     SamplerDesc {

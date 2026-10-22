@@ -1,0 +1,10 @@
+{
+  "name": "note color coordinates use the native texture allocation",
+  "texture_files": [
+    {"name": "vertical", "file": "_Down Tap Note 2x9.png", "kind": "sprite", "max_size": 2048, "color_depth": 32, "high_resolution": true},
+    {"name": "horizontal", "file": "Horizontal 9x2.png", "kind": "sprite", "max_size": 2048, "color_depth": 32, "high_resolution": true},
+    {"name": "stretch", "file": "Rows (stretch) 2x9.png", "kind": "sprite", "max_size": 2048, "color_depth": 32, "high_resolution": true},
+    {"name": "power-of-two", "file": "Rows 2x8.png", "kind": "sprite", "max_size": 2048, "color_depth": 32, "high_resolution": true},
+    {"name": "tiny", "file": "Tiny 2x9.png", "kind": "sprite", "max_size": 2048, "color_depth": 32, "high_resolution": true}
+  ]
+}

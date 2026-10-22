@@ -604,6 +604,123 @@ mod tests {
     }
 
     #[test]
+    fn note_color_uvs_match_native_texture_allocation() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/note-color-texture");
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-output.json")).unwrap()).unwrap();
+        let input: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-input.json")).unwrap()).unwrap();
+        for (spec, case) in input["texture_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip(native["cases"].as_array().unwrap())
+        {
+            let slot =
+                super::itg_slot_from_path(&fixture.join(spec["file"].as_str().unwrap())).unwrap();
+            let scale = slot.uv_translation_scale();
+            for axis in 0..2 {
+                let allocation = case["dimensions"]["texture"][axis].as_f64().unwrap() as f32;
+                let image = case["dimensions"]["image"][axis].as_f64().unwrap() as f32;
+                assert!(
+                    (scale[axis] - allocation / image).abs() < 1e-6,
+                    "{} axis {axis}: {scale:?}",
+                    case["name"]
+                );
+            }
+        }
+
+        let root = temp_noteskin_root("note-color-texture");
+        for name in [
+            "NoteSkin.lua",
+            "metrics.ini",
+            "Down Tap Note.lua",
+            "_Down Tap Note 2x9.png",
+        ] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "note-color-texture-fixture".into(),
+            overrides: Vec::new(),
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&cache).unwrap();
+        let image = image::open(fixture.join("_Down Tap Note 2x9.png"))
+            .unwrap()
+            .to_rgba8();
+        let beats = [
+            0.0,
+            0.5,
+            1.0 / 3.0,
+            0.25,
+            1.0 / 6.0,
+            0.125,
+            1.0 / 12.0,
+            0.0625,
+            1.0 / 48.0,
+        ];
+        for (bundle, parts) in [&bundle, &cached].into_iter().flat_map(|bundle| {
+            [Some(SkinParts::default().with(SkinPart::Arrows)), None].map(|parts| (bundle, parts))
+        }) {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for col in 0..4 {
+                for (quant, beat) in beats.into_iter().enumerate() {
+                    let layers = &skin.note_layers[col * NUM_QUANTIZATIONS + quant];
+                    assert_eq!(layers.len(), 1);
+                    let slot = &layers[0];
+                    assert_eq!(slot.logical_size(), [16.0; 2]);
+                    let translation = skin.part_uv_translation(NoteAnimPart::Tap, beat, false);
+                    assert_eq!(translation, [0.0, quant as f32 * 0.0625]);
+                    for time in [0.0, 0.25, 0.75, 3.5] {
+                        let phase = skin.part_uv_phase(NoteAnimPart::Tap, time, time, beat);
+                        let frame = slot.frame_index_from_phase(phase);
+                        let uv = slot.uv_for_note_at(frame, time, translation);
+                        let native_rect = &native["cases"][0]["frame_rects"][quant * 2 + frame];
+                        for edge in [1, 3] {
+                            let inset = if edge == 1 { 0.5 } else { -0.5 };
+                            let expected =
+                                (native_rect[edge].as_f64().unwrap() as f32 * 256.0 + inset) / 144.0;
+                            assert!(
+                                (uv[edge] - expected).abs() < 1e-6,
+                                "col {col} quant {quant} time {time}: {uv:?}"
+                            );
+                        }
+                        let color = image.get_pixel(8, quant as u32 * 16 + 8);
+                        for y in [uv[1], (uv[1] + uv[3]) * 0.5, uv[3]] {
+                            let x = ((uv[0] + uv[2]) * 0.5 * image.width() as f32) as u32;
+                            assert_eq!(
+                                image.get_pixel(x, (y * image.height() as f32) as u32),
+                                color,
+                                "col {col} quant {quant} time {time} UV {uv:?} pixel ({x}, {}): the entire note must sample its color row",
+                                (y * image.height() as f32) as u32
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn nested_sprite_cutouts_keep_fill_clock_and_quant_uvs() {
         use deadsync_noteskin::runtime::{SkinPart, SkinParts};
         use deadsync_noteskin::{NoteskinSlot, compiled, compiler};

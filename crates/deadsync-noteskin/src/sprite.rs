@@ -193,8 +193,8 @@ pub trait NoteskinSlot: Sized {
     fn frame_index_from_phase(&self, phase: f32) -> usize;
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];
 
-    /// Converts authored texture translations to the backing texture's UV units.
-    /// Sprite cutouts may use a sheet; native Models use the full image domain.
+    /// Converts native texture translations to the uploaded image's UV units.
+    /// Sprites account for native allocation padding; Models may use a sheet.
     fn uv_translation_scale(&self) -> [f32; 2] {
         [1.0; 2]
     }
