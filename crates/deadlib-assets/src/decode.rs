@@ -211,22 +211,15 @@ fn image_signature(path: &Path) -> image::ImageResult<[u8; 8]> {
 }
 
 /// Raw native texture dimensions before resolution hints or image preparation.
-/// GIF textures use the first frame's dimensions, ignoring canvas and offsets.
+/// GIF textures use the logical canvas, including the first frame's offsets.
 pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
     let signature = image_signature(path)?;
     if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
-        let mut reader = gif_reader(path)?;
-        let frame = reader
-            .next_frame_info()
-            .map_err(gif_error)?
-            .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
-        if frame.width == 0 || frame.height == 0 {
+        let reader = gif_reader(path)?;
+        if reader.width() == 0 || reader.height() == 0 {
             return Err(image_limit());
         }
-        return Ok((u32::from(frame.width), u32::from(frame.height)));
-    }
-    if &signature[..2] == b"BM" {
-        check_bmp_reader_order(path)?;
+        return Ok((u32::from(reader.width()), u32::from(reader.height())));
     }
     image::ImageReader::open(path)?
         .with_guessed_format()?
@@ -242,7 +235,6 @@ fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         return decode_gif(path, color_key);
     }
     if &signature[..2] == b"BM" {
-        check_bmp_reader_order(path)?;
         if let Some(image) = decode_indexed_bmp(path, color_key)? {
             return Ok(image);
         }
@@ -252,24 +244,6 @@ fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         key_rgba(&mut image);
     }
     Ok(image)
-}
-
-// RageSurface_Load tries a registered extension first. Load_BMP retains
-// the previous reader's wrong-format error, so BMP cannot be a fallback after
-// another registered bitmap reader. An unknown extension tries BMP first.
-fn check_bmp_reader_order(path: &Path) -> image::ImageResult<()> {
-    if path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            ["png", "gif", "jpg", "jpeg"]
-                .iter()
-                .any(|format| extension.eq_ignore_ascii_case(format))
-        })
-    {
-        return Err(decode_error(image::ImageFormat::Bmp, "Unknown file format"));
-    }
-    Ok(())
 }
 
 fn decode_error(format: image::ImageFormat, message: &str) -> image::ImageError {
@@ -296,17 +270,22 @@ fn gif_reader(path: &Path) -> image::ImageResult<gif::Decoder<BufReader<std::fs:
 
 fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     let mut reader = gif_reader(path)?;
+    let canvas = [u32::from(reader.width()), u32::from(reader.height())];
+    check_image_alloc(canvas)?;
     let global = reader.global_palette().map(<[u8]>::to_vec);
     let frame = reader
         .next_frame_info()
         .map_err(gif_error)?
         .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
     let size = [u32::from(frame.width), u32::from(frame.height)];
-    if size.contains(&0) {
+    let origin = [u32::from(frame.left), u32::from(frame.top)];
+    if size.contains(&0) || canvas.contains(&0)
+        || origin[0] + size[0] > canvas[0] || origin[1] + size[1] > canvas[1] {
         return Err(image_limit());
     }
     check_image_alloc(size)?;
-    // RageSurface_Load_GIF leaves unused palette entries transparent black.
+    // The primary stb loader starts with a transparent logical canvas and
+    // leaves transparent first-frame pixels unwritten.
     let mut colors = [[0; 4]; 256];
     for (color, rgb) in colors.iter_mut().zip(
         frame
@@ -319,16 +298,18 @@ fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         *color = [rgb[0], rgb[1], rgb[2], 255];
     }
     if let Some(index) = frame.transparent {
-        colors[index as usize][3] = 0;
-    }
-    if color_key {
-        key_palette(&mut colors);
+        colors[index as usize] = [0; 4];
     }
     let mut indices = vec![0; size[0] as usize * size[1] as usize];
     reader.read_into_buffer(&mut indices).map_err(gif_error)?;
-    let mut image = RgbaImage::new(size[0], size[1]);
-    for (pixel, index) in image.pixels_mut().zip(indices) {
-        pixel.0 = colors[index as usize];
+    let mut image = RgbaImage::new(canvas[0], canvas[1]);
+    for (ordinal, index) in indices.into_iter().enumerate() {
+        let x = origin[0] + ordinal as u32 % size[0];
+        let y = origin[1] + ordinal as u32 / size[0];
+        image.put_pixel(x, y, image::Rgba(colors[index as usize]));
+    }
+    if color_key {
+        key_rgba(&mut image);
     }
     Ok(image)
 }
@@ -363,16 +344,17 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
             header[offset + 3],
         ])
     };
-    let (size, planes, bits, compression, declared_colors) = if header_size == 12 {
+    let (size, top_down, planes, bits, compression) = if header_size == 12 {
         (
             [u32::from(le16(18)), u32::from(le16(20))],
+            false,
             le16(22),
             le16(24),
             0,
-            0,
         )
     } else {
-        ([le32(18), le32(22)], le16(26), le16(28), le32(30), le32(46))
+        let height = le32(22) as i32;
+        ([le32(18), height.unsigned_abs()], height < 0, le16(26), le16(28), le32(30))
     };
     if !matches!(bits, 1 | 4 | 8) || compression != 0 {
         return Ok(None);
@@ -381,12 +363,14 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
         return Err(image_limit());
     }
     check_image_alloc(size)?;
-    let color_count = if declared_colors == 0 {
-        1 << bits
-    } else {
-        declared_colors
-    };
-    if planes != 1 || color_count > 256 {
+    // stb derives the available table from the pixel offset, rather than
+    // biClrUsed. Preserve safe palette handling for minimal OS/2 files too;
+    // the primary decoder's negative-size palette path has undefined pixels.
+    let entry_size = if header_size == 12 { 3 } else { 4 };
+    let color_count = data_offset.checked_sub(14 + header_size)
+        .ok_or_else(|| decode_error(image::ImageFormat::Bmp, "invalid bitmap pixel offset"))?
+        / entry_size;
+    if planes != 1 || color_count == 0 || color_count > 256 {
         return Err(decode_error(
             image::ImageFormat::Bmp,
             "invalid indexed BMP planes or palette size",
@@ -398,26 +382,28 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
         input.read_exact(&mut entry[..if header_size == 12 { 3 } else { 4 }])?;
         *color = [entry[2], entry[1], entry[0], 255];
     }
-    if color_key {
-        key_palette(&mut colors);
-    }
     let pitch = usize::try_from((u64::from(size[0]) * u64::from(bits)).div_ceil(32) * 4)
         .map_err(|_| image_limit())?;
     let mut row = vec![0; pitch];
     input.seek(SeekFrom::Start(u64::from(data_offset)))?;
     let mut image = RgbaImage::new(size[0], size[1]);
-    for y in (0..size[1]).rev() {
+    for row_index in 0..size[1] {
+        let y = if top_down { row_index } else { size[1] - 1 - row_index };
         input.read_exact(&mut row)?;
         for x in 0..size[0] {
             let index = match bits {
                 1 => (row[x as usize / 8] >> (7 - x % 8)) & 1,
-                // Pinned RageSurface_Load_BMP reads the low nibble first,
-                // including the padding nibble at the end of an odd row.
-                4 => (row[x as usize / 2] >> (4 * (x % 2))) & 15,
+                4 => (row[x as usize / 2] >> (4 * (1 - x % 2))) & 15,
                 _ => row[x as usize],
             };
+            if u32::from(index) >= color_count {
+                return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
+            }
             image.put_pixel(x, y, image::Rgba(colors[index as usize]));
         }
+    }
+    if color_key {
+        key_rgba(&mut image);
     }
     Ok(Some(image))
 }
@@ -695,6 +681,89 @@ mod perf_tests;
 mod tests {
     use super::*;
     use deadlib_render_core::{SamplerFilter, SamplerWrap};
+
+    #[test]
+    fn primary_bitmap_observations_match_native() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let reference: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("tests/fixtures/itgmania-primary-bitmaps/capture.json"))
+                .expect("committed primary codec observations"),
+        ).expect("primary bitmap JSON");
+        let mut failures = Vec::new();
+        let mut sources = 0;
+        let mut uploads = 0;
+        let rgba = |value: &serde_json::Value| -> Vec<u8> {
+            value.as_array().expect("native pixels").iter().flat_map(|pixel|
+                pixel.as_array().expect("RGBA").iter().map(|value|
+                    u8::try_from(value.as_u64().unwrap()).unwrap())).collect()
+        };
+        for case in reference["cases"].as_array().unwrap() {
+            let name = case["request"]["name"].as_str().unwrap();
+            let path = root.join(case["source"].as_str().unwrap());
+            let native = &case["native"];
+            let expected_source = [native["loaded"]["width"].as_u64().unwrap() as u32,
+                native["loaded"]["height"].as_u64().unwrap() as u32];
+            match texture_source_size(&path) {
+                Ok((width, height)) if [width, height] == expected_source => {},
+                result => failures.push(format!("{name}: source dimensions {result:?}, expected {expected_source:?}")),
+            }
+            match decode_image(&path, false) {
+                Ok(image) => {
+                    if image.as_raw() != &rgba(&native["loaded"]["pixels"]) {
+                        failures.push(format!("{name}: decoded source pixels differ"));
+                    }
+                },
+                Err(error) => failures.push(format!("{name}: source decode failed: {error}")),
+            }
+            sources += 1;
+            let model = case["request"]["kind"] == "model";
+            let hints = TextureHints {
+                non_default: true, hot_pink_color_key: model, stretch: model,
+                min_size: (!model).then_some(8), max_size: Some(2048),
+                color_depth: Some(32), ..Default::default()
+            };
+            match decode_texture(&path, &hints) {
+                Ok(decoded) => {
+                    if serde_json::json!([decoded.image.width(), decoded.image.height()])
+                        != native["dimensions"]["image"] {
+                        failures.push(format!("{name}: prepared image dimensions differ"));
+                    }
+                    if native["upload"]["pixels_captured"] == true {
+                        if decoded.image.as_raw() != &rgba(&native["upload"]["pixels"]) {
+                            failures.push(format!("{name}: prepared upload pixels differ"));
+                        }
+                        uploads += 1;
+                    } else {
+                        assert_ne!(native["dimensions"]["image"], native["dimensions"]["texture"]);
+                    }
+                },
+                Err(error) => failures.push(format!("{name}: preparation failed: {error}")),
+            }
+        }
+        assert_eq!(sources, 35, "retain every defined primary decode");
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+        assert_eq!(uploads, 33, "retain every complete native upload");
+    }
+
+    #[test]
+    fn primary_bitmap_undefined_native_pixels_have_defined_rust_behavior() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let reference: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(root.join("tests/fixtures/itgmania-primary-bitmaps/capture.json"))
+                .expect("committed primary bitmap capture")).unwrap();
+        let cases = reference["header_only"].as_array().unwrap();
+        assert_eq!(cases.len(), 2);
+        for case in cases {
+            let path = root.join(case["source"].as_str().unwrap());
+            let (width, height) = texture_source_size(&path).expect("defined native header dimensions");
+            assert_eq!(serde_json::json!([width, height]), case["native"]["dimensions"]);
+        }
+        let minimal = root.join("tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-1.bmp");
+        let decoded = decode_image(&minimal, false).expect("valid minimal OS/2 bitmap");
+        assert!(decoded.pixels().all(|pixel| pixel.0 == [255, 0, 255, 255]));
+        let invalid = root.join("tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-unused-entry.bmp");
+        assert!(decode_image(&invalid, false).is_err(), "reject an index outside the stored palette");
+    }
 
     fn missing_job(index: usize) -> TextureDecodeJob {
         TextureDecodeJob {

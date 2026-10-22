@@ -90,6 +90,8 @@ pub struct TexturedMeshRun {
     pub texture_handle: TextureHandle,
     pub camera: u8,
     pub depth_test: bool,
+    pub depth_write: bool,
+    pub depth_test_on_fail: bool,
     /// Clear depth before this depth-tested draw to isolate it from earlier
     /// models. Passes start with cleared depth, so the first depth-tested draw
     /// never needs this.
@@ -101,6 +103,12 @@ pub enum DrawOp {
     Sprite(SpriteRun),
     Mesh(MeshRun),
     TexturedMesh(TexturedMeshRun),
+}
+
+impl TexturedMeshRun {
+    pub const fn depth_mode(&self) -> crate::DepthMode {
+        crate::DepthMode::from_flags(self.depth_test, self.depth_write, self.depth_test_on_fail)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

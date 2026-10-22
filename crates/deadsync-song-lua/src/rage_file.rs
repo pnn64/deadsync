@@ -7,15 +7,56 @@ use crate::runtime::note_song_lua_side_effect;
 // publishing their writes to disk would change the next compile's input. Keep
 // them for this compile only; reads across handles observe closed output files.
 // This is authored file state, not a gameplay cache. No live frame does I/O.
-#[derive(Default)]
-struct FileWrites(Vec<(PathBuf, Vec<u8>)>);
+enum FileWrites {
+    Small(Vec<(PathBuf, Vec<u8>)>),
+    Large(rustc_hash::FxHashMap<PathBuf, Vec<u8>>),
+}
 
-fn written_file(lua: &Lua, path: &Path) -> Option<Vec<u8>> {
-    lua.app_data_ref::<FileWrites>()?
-        .0
-        .iter()
-        .find(|(name, _)| name == path)
-        .map(|(_, bytes)| bytes.clone())
+impl Default for FileWrites {
+    fn default() -> Self {
+        Self::Small(Vec::new())
+    }
+}
+
+impl FileWrites {
+    fn get(&self, path: &Path) -> Option<&Vec<u8>> {
+        match self {
+            Self::Small(files) => files
+                .iter()
+                .find(|(name, _)| name == path)
+                .map(|(_, bytes)| bytes),
+            Self::Large(files) => files.get(path),
+        }
+    }
+
+    fn insert(&mut self, path: &Path, bytes: Vec<u8>) {
+        match self {
+            Self::Small(files) => {
+                if let Some((_, current)) = files.iter_mut().find(|(name, _)| name == path) {
+                    *current = bytes;
+                } else if files.len() < 4 {
+                    files.push((path.to_path_buf(), bytes));
+                } else {
+                    // Move existing paths and buffers without copying them.
+                    // Tiny stores retain the original allocation/lookup path.
+                    let mut indexed = rustc_hash::FxHashMap::with_capacity_and_hasher(
+                        files.len() + 1,
+                        Default::default(),
+                    );
+                    indexed.extend(std::mem::take(files));
+                    indexed.insert(path.to_path_buf(), bytes);
+                    *self = Self::Large(indexed);
+                }
+            }
+            Self::Large(files) => {
+                if let Some(current) = files.get_mut(path) {
+                    *current = bytes;
+                } else {
+                    files.insert(path.to_path_buf(), bytes);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -31,6 +72,19 @@ struct RageFile {
 }
 
 impl RageFile {
+    fn load(&mut self, lua: &Lua) -> std::io::Result<()> {
+        if let Some(writes) = lua.app_data_ref::<FileWrites>() {
+            if let Some(bytes) = writes.get(&self.path) {
+                // Each handle still owns a snapshot. Reopening can reuse its
+                // allocation without sharing mutable bytes with later writes.
+                self.bytes.clone_from(bytes);
+                return Ok(());
+            }
+        }
+        self.bytes = std::fs::read(&self.path)?;
+        Ok(())
+    }
+
     fn check(&self, mode: i32) -> mlua::Result<()> {
         let reason = if self.destroyed {
             "has been destroyed"
@@ -56,18 +110,12 @@ impl RageFile {
             let mut writes = lua
                 .app_data_mut::<FileWrites>()
                 .expect("file store installed with RageFileUtil");
-            if let Some((_, bytes)) = writes.0.iter_mut().find(|(path, _)| path == &self.path) {
-                *bytes = std::mem::take(&mut self.bytes);
-            } else {
-                writes
-                    .0
-                    .push((self.path.clone(), std::mem::take(&mut self.bytes)));
-            }
+            writes.insert(&self.path, std::mem::take(&mut self.bytes));
         }
         self.open = false;
     }
 
-    fn read(&mut self, count: i32) -> mlua::Result<Vec<u8>> {
+    fn read(&mut self, count: i32) -> mlua::Result<&[u8]> {
         self.check(1)?;
         if count < -1 {
             return Err(mlua::Error::RuntimeError(
@@ -88,54 +136,76 @@ impl RageFile {
         if count == -1 || wanted > available {
             self.eof = true;
         }
-        Ok(c_string(&self.bytes[start..start + size]).to_vec())
+        Ok(c_string(&self.bytes[start..start + size]))
     }
 
-    fn get_line(&mut self) -> mlua::Result<Vec<u8>> {
+    fn get_line(&mut self) -> mlua::Result<&[u8]> {
         self.check(1)?;
         let start = self.pos.min(self.bytes.len());
         let rest = &self.bytes[start..];
         if rest.is_empty() {
             self.eof = true;
-            return Ok(Vec::new());
+            return Ok(&[]);
         }
-        let size = rest.iter().position(|&byte| byte == b'\n');
+        let size = memchr::memchr(b'\n', rest);
         let mut end = size.unwrap_or(rest.len());
         if size.is_some() && end > 0 && rest[end - 1] == b'\r' {
             end -= 1;
         }
         self.pos += size.map_or(rest.len(), |size| size + 1);
         // Even an unterminated final line delays EOF until the next call.
-        Ok(c_string(&rest[..end]).to_vec())
+        Ok(c_string(&rest[..end]))
     }
 }
 
 fn c_string(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes
-        .iter()
-        .position(|&byte| byte == 0)
-        .unwrap_or(bytes.len())]
+    &bytes[..memchr::memchr(0, bytes).unwrap_or(bytes.len())]
 }
 
-fn file_path(song_dir: &Path, raw: &str) -> PathBuf {
-    let raw = raw.replace('\\', "/");
-    let raw = Path::new(&raw);
-    let path = if raw.is_absolute() {
-        raw.to_path_buf()
+fn file_path_text(raw: &str) -> std::borrow::Cow<'_, str> {
+    if raw.as_bytes().contains(&b'\\') {
+        std::borrow::Cow::Owned(raw.replace('\\', "/"))
     } else {
-        song_dir.join(raw)
-    };
-    let mut result = PathBuf::new();
-    for part in path.components() {
-        match part {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                result.pop();
+        std::borrow::Cow::Borrowed(raw)
+    }
+}
+
+fn set_file_path(result: &mut PathBuf, song_dir: &Path, raw: &str) {
+    let raw = file_path_text(raw);
+    let raw = Path::new(raw.as_ref());
+    let prefixed = matches!(raw.components().next(), Some(Component::Prefix(_)));
+    let verbatim_base = matches!(song_dir.components().next(), Some(Component::Prefix(prefix)) if prefix.kind().is_verbatim());
+    result.clear();
+    if !raw.has_root() && !prefixed && !verbatim_base {
+        result.reserve(song_dir.as_os_str().len() + raw.as_os_str().len() + 1);
+        for part in song_dir.components().chain(raw.components()) {
+            match part {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    result.pop();
+                }
+                _ => result.push(part.as_os_str()),
             }
-            _ => result.push(part.as_os_str()),
+        }
+    } else {
+        // Let Path::join retain platform-specific rooted, drive-relative and
+        // verbatim-prefix rules before applying the existing lexical collapse.
+        let path = if raw.is_absolute() {
+            std::borrow::Cow::Borrowed(raw)
+        } else {
+            std::borrow::Cow::Owned(song_dir.join(raw))
+        };
+        result.reserve(path.as_os_str().len());
+        for part in path.components() {
+            match part {
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    result.pop();
+                }
+                _ => result.push(part.as_os_str()),
+            }
         }
     }
-    result
 }
 
 pub fn create_rage_file_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
@@ -165,7 +235,8 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
             }
             note_song_lua_side_effect(lua)?;
             state.close(lua);
-            state.path = file_path(
+            set_file_path(
+                &mut state.path,
                 &song_dir,
                 &String::from_utf8_lossy(c_string(&raw.as_bytes())),
             );
@@ -182,11 +253,8 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
                 return Ok(false);
             }
             if mode & 1 != 0 {
-                match written_file(lua, &state.path)
-                    .map(Ok)
-                    .unwrap_or_else(|| std::fs::read(&state.path))
-                {
-                    Ok(bytes) => state.bytes = bytes,
+                match state.load(lua) {
+                    Ok(()) => {}
                     Err(error) => {
                         state.error = match error.kind() {
                             std::io::ErrorKind::NotFound => "No such file or directory".into(),
@@ -244,7 +312,8 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
     file.set(
         "ReadBytes",
         lua.create_function(move |lua, (_file, count): (Table, i32)| {
-            lua.create_string(handle.borrow_mut::<RageFile>()?.read(count)?)
+            let mut state = handle.borrow_mut::<RageFile>()?;
+            lua.create_string(state.read(count)?)
         })?,
     )?;
     let handle = state.clone();
@@ -341,6 +410,16 @@ fn create_rage_file_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
         )?;
     }
     Ok(file)
+}
+
+#[cfg(test)]
+mod perf {
+    include!("../tests/perf/rage_file.rs");
+}
+
+#[cfg(test)]
+mod file_open_perf {
+    include!("../tests/perf/file_open.rs");
 }
 
 #[cfg(test)]

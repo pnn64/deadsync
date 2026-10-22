@@ -1275,24 +1275,40 @@ fn apply_blend(gl: &glow::Context, want: BlendMode, last: &mut Option<BlendMode>
             });
         }
         let (src, dst) = match want {
+            BlendMode::NoEffect => (glow::ZERO, glow::ONE),
             BlendMode::Alpha => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
             BlendMode::Add => (glow::SRC_ALPHA, glow::ONE),
             BlendMode::Multiply => (glow::DST_COLOR, glow::ZERO),
             BlendMode::Subtract => (glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA),
         };
-        gl.blend_func_separate(src, dst, glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+        let (src_alpha, dst_alpha) = if want == BlendMode::NoEffect {
+            (glow::ZERO, glow::ONE)
+        } else { (glow::ONE, glow::ONE_MINUS_SRC_ALPHA) };
+        gl.blend_func_separate(src, dst, src_alpha, dst_alpha);
     }
 }
 
 #[inline(always)]
-fn apply_depth_test(gl: &glow::Context, want: bool, last: &mut Option<bool>) {
+fn apply_depth_test(
+    gl: &glow::Context,
+    want: deadlib_render_core::DepthMode,
+    last: &mut Option<deadlib_render_core::DepthMode>,
+) {
     if !gl_state_update(last, want) {
         return;
     }
     // SAFETY: depth-state calls only mutate GL state on the current context and
     // do not retain Rust pointers.
     unsafe {
-        if want {
+        gl.depth_mask(want.writes());
+        gl.depth_func(if want.on_fail() {
+            glow::GREATER
+        } else if want.tests() {
+            glow::LEQUAL
+        } else {
+            glow::ALWAYS
+        });
+        if want != deadlib_render_core::DepthMode::Off {
             gl.enable(glow::DEPTH_TEST);
         } else {
             gl.disable(glow::DEPTH_TEST);
@@ -1467,12 +1483,14 @@ fn draw_modern_offscreen_pass(
 
         for op in frame.ops.iter().copied() {
             if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                gl.depth_mask(true);
                 gl.clear(glow::DEPTH_BUFFER_BIT);
+                last_depth = None;
             }
             match op {
                 DrawOp::Sprite(run) => {
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     if last_prog != Some(0) {
                         gl.use_program(Some(state.program));
                         gl.bind_vertex_array(Some(shared_vao));
@@ -1554,7 +1572,7 @@ fn draw_modern_offscreen_pass(
                         continue;
                     }
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     if last_prog != Some(1) {
                         gl.use_program(Some(state.mesh_program));
                         gl.bind_vertex_array(Some(mesh_vao));
@@ -1580,7 +1598,13 @@ fn draw_modern_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, frame.depth && run.depth_test, &mut last_depth);
+                    apply_depth_test(gl,
+                        if frame.depth {
+                            run.depth_mode()
+                        } else {
+                            deadlib_render_core::DepthMode::Off
+                        }, &mut last_depth,
+                    );
                     if last_prog != Some(2) {
                         gl.use_program(Some(state.tmesh_program));
                         gl.bind_vertex_array(Some(tmesh_vao));
@@ -1703,7 +1727,9 @@ fn draw_legacy_offscreen_pass(
         let mut last_depth = None;
         for op in frame.ops.iter().copied() {
             if frame.depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                gl.depth_mask(true);
                 gl.clear(glow::DEPTH_BUFFER_BIT);
+                last_depth = None;
             }
             match op {
                 DrawOp::Sprite(run) => {
@@ -1712,7 +1738,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     gl.use_program(Some(state.program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.shared_vbo));
                     gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(state.shared_ibo));
@@ -1812,7 +1838,7 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     }
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, false, &mut last_depth);
+                    apply_depth_test(gl, deadlib_render_core::DepthMode::Off, &mut last_depth);
                     gl.use_program(Some(state.mesh_program));
                     gl.bind_buffer(glow::ARRAY_BUFFER, Some(state.mesh_vbo));
                     let stride = mem::size_of::<deadlib_render_core::MeshVertex>() as i32;
@@ -1851,7 +1877,13 @@ fn draw_legacy_offscreen_pass(
                         continue;
                     };
                     apply_blend(gl, run.blend, &mut last_blend);
-                    apply_depth_test(gl, frame.depth && run.depth_test, &mut last_depth);
+                    apply_depth_test(gl,
+                        if frame.depth {
+                            run.depth_mode()
+                        } else {
+                            deadlib_render_core::DepthMode::Off
+                        }, &mut last_depth,
+                    );
                     gl.use_program(Some(state.tmesh_program));
                     gl.enable_vertex_attrib_array(0);
                     gl.enable_vertex_attrib_array(1);
@@ -2017,6 +2049,7 @@ pub fn draw(
                     clear |= glow::DEPTH_BUFFER_BIT;
                 }
             }
+            state.gl.depth_mask(true);
             state.gl.clear(clear);
             if !target_frame.alpha {
                 state.gl.color_mask(true, true, true, false);
@@ -2068,6 +2101,7 @@ pub fn draw(
         let c = frame.clear_color;
         gl.color_mask(true, true, true, true);
         gl.clear_color(c[0], c[1], c[2], 1.0);
+        gl.depth_mask(true);
         gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
         // Keep the presented window surface opaque even when EGL hands us an
         // alpha-bearing default framebuffer. Otherwise Linux compositors can
@@ -2144,12 +2178,16 @@ pub fn draw(
 
             for op in frame.ops.iter().copied() {
                 if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                    gl.depth_mask(true);
                     gl.clear(glow::DEPTH_BUFFER_BIT);
+                    last_depth_test = None;
                 }
                 match op {
                     DrawOp::Sprite(run) => {
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
@@ -2296,7 +2334,9 @@ pub fn draw(
                         }
 
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
@@ -2324,7 +2364,7 @@ pub fn draw(
                             continue;
                         };
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, run.depth_test, &mut last_depth_test);
+                        apply_depth_test(gl, run.depth_mode(), &mut last_depth_test);
 
                         if last_prog != Some(2) {
                             gl.use_program(Some(state.tmesh_program));
@@ -2418,12 +2458,16 @@ pub fn draw(
 
             for op in frame.ops.iter().copied() {
                 if matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
+                    gl.depth_mask(true);
                     gl.clear(glow::DEPTH_BUFFER_BIT);
+                    last_depth_test = None;
                 }
                 match op {
                     DrawOp::Sprite(run) => {
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(0) {
                             gl.use_program(Some(state.program));
@@ -2542,7 +2586,9 @@ pub fn draw(
                         }
 
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, false, &mut last_depth_test);
+                        apply_depth_test(gl,
+                            deadlib_render_core::DepthMode::Off, &mut last_depth_test,
+                        );
 
                         if last_prog != Some(1) {
                             gl.use_program(Some(state.mesh_program));
@@ -2585,7 +2631,7 @@ pub fn draw(
                             continue;
                         };
                         apply_blend(gl, run.blend, &mut last_blend);
-                        apply_depth_test(gl, run.depth_test, &mut last_depth_test);
+                        apply_depth_test(gl, run.depth_mode(), &mut last_depth_test);
 
                         if last_prog != Some(2) {
                             gl.use_program(Some(state.tmesh_program));

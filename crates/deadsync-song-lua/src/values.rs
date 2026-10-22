@@ -84,13 +84,13 @@ pub fn read_i32_value(value: Value) -> Option<i32> {
                 .round()
                 .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32,
         ),
-        Value::String(text) => text
-            .to_str()
-            .ok()?
-            .trim()
-            .parse::<i32>()
-            .ok()
-            .or_else(|| read_f32(Value::String(text)).map(|value| value.round() as i32)),
+        Value::String(text) => {
+            let text = text.to_str().ok()?;
+            let text = text.trim();
+            text.parse::<i32>()
+                .ok()
+                .or_else(|| text.parse::<f32>().ok().map(|value| value.round() as i32))
+        }
         _ => None,
     }
 }
@@ -109,10 +109,10 @@ pub fn read_span_mode(value: Value) -> Option<SongLuaSpanMode> {
     let Value::String(text) = value else {
         return None;
     };
-    let text = text.to_str().ok()?;
-    if text.eq_ignore_ascii_case("len") {
+    let text = text.as_bytes();
+    if text.eq_ignore_ascii_case(b"len") {
         Some(SongLuaSpanMode::Len)
-    } else if text.eq_ignore_ascii_case("end") {
+    } else if text.eq_ignore_ascii_case(b"end") {
         Some(SongLuaSpanMode::End)
     } else {
         None
@@ -142,6 +142,7 @@ pub const fn truthy(value: &Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
 
+#[inline(always)]
 pub fn lua_values_equal(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Nil, Value::Nil) => true,
@@ -150,11 +151,7 @@ pub fn lua_values_equal(left: &Value, right: &Value) -> bool {
         (Value::Integer(left), Value::Number(right)) => (*left as f64) == *right,
         (Value::Number(left), Value::Integer(right)) => *left == (*right as f64),
         (Value::Number(left), Value::Number(right)) => left == right,
-        (Value::String(left), Value::String(right)) => left
-            .to_str()
-            .ok()
-            .zip(right.to_str().ok())
-            .is_some_and(|(left, right)| left == right),
+        (Value::String(left), Value::String(right)) => string_values_equal(left, right),
         (Value::Table(left), Value::Table(right)) => left.to_pointer() == right.to_pointer(),
         _ => false,
     }
@@ -166,12 +163,12 @@ pub fn lua_binary_to_hex(value: Value) -> String {
     };
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let bytes = text.as_bytes();
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes.iter().copied() {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
+    let mut out = vec![0u8; bytes.len() * 2];
+    for (output, &byte) in out.chunks_exact_mut(2).zip(bytes.iter()) {
+        output[0] = HEX[(byte >> 4) as usize];
+        output[1] = HEX[(byte & 0xf) as usize];
     }
-    out
+    String::from_utf8(out).expect("hexadecimal lookup table contains only ASCII")
 }
 
 #[inline(always)]
@@ -186,12 +183,16 @@ pub fn player_index_from_value(value: &Value) -> Option<usize> {
             }
         }
         Value::String(text) => {
-            let text = text.to_str().ok()?;
-            if text.eq_ignore_ascii_case("P1") || text.eq_ignore_ascii_case("PlayerNumber_P1") {
+            let text = text.as_bytes();
+            if text.eq_ignore_ascii_case(b"P1") || text.eq_ignore_ascii_case(b"PlayerNumber_P1") {
                 Some(0)
-            } else if text.eq_ignore_ascii_case("P2") || text.eq_ignore_ascii_case("PlayerNumber_P2") {
+            } else if text.eq_ignore_ascii_case(b"P2")
+                || text.eq_ignore_ascii_case(b"PlayerNumber_P2")
+            {
                 Some(1)
-            } else { None }
+            } else {
+                None
+            }
         }
         _ => None,
     }
@@ -206,3 +207,22 @@ pub fn player_number_name(player: usize) -> &'static str {
         _ => unreachable!("song lua only exposes two player numbers"),
     }
 }
+
+#[inline(never)]
+fn string_values_equal(left: &mlua::LuaString, right: &mlua::LuaString) -> bool {
+    // Equal bytes need one UTF-8 check; invalid strings remain unequal,
+    // including two handles referring to the same Lua string.
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    left.len() == right.len()
+        && (std::ptr::eq(left.as_ptr(), right.as_ptr()) || left[..] == right[..])
+        && std::str::from_utf8(&left).is_ok()
+}
+
+#[cfg(test)]
+#[path = "../tests/perf/values.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/value_dispatch.rs"]
+mod dispatch_perf;

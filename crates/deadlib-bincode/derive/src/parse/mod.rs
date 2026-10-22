@@ -21,14 +21,13 @@ use crate::generate::Generator;
 ///
 /// You can generate this enum by calling
 ///
-/// ```ignore
+/// ```text
 /// use virtue::prelude::*;
 ///
 /// #[proc_macro_derive(YourDerive)]
 /// pub fn derive_your_derive(input: TokenStream) -> TokenStream {
 ///     let parse = Parse::new(input).unwrap();
 ///     // rest
-/// # unimplemented!()
 /// }
 /// ```
 #[non_exhaustive]

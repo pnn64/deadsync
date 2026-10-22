@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "name": "perspective-float",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0,
+    83.7
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Camera",
+    "camera": {
+      "fov": 120,
+      "vanish": [
+        427,
+        240
+      ]
+    },
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "Front",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            427,
+            240,
+            246.52
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Behind",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            427,
+            240,
+            246.54
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Tilted",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            427,
+            240,
+            224.245
+          ],
+          "rotation": [
+            55,
+            30,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Circle",
+        "size": [
+          2646,
+          2595
+        ],
+        "state": {
+          "position": [
+            427,
+            240,
+            0
+          ],
+          "rotation": [
+            48.8098327414963,
+            30.03682014861311,
+            83.7
+          ],
+          "zoom": [
+            0.4377301259288319,
+            0.4377301259288319,
+            0.4377301259288319
+          ]
+        }
+      },
+      {
+        "kind": "frame",
+        "name": "Scaled",
+        "state": {
+          "position": [
+            427,
+            240,
+            0
+          ],
+          "zoom": [
+            1.3754602518576637,
+            1.3754602518576637,
+            1.3754602518576637
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "InheritedCircle",
+            "size": [
+              2646,
+              2595
+            ],
+            "state": {
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                48.8098327414963,
+                30.03682014861311,
+                83.7
+              ],
+              "zoom": [
+                0.4377301259288319,
+                0.4377301259288319,
+                0.4377301259288319
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Spun",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            427,
+            240,
+            224.245
+          ],
+          "rotation": [
+            55,
+            30,
+            1.234567
+          ]
+        },
+        "effect": {
+          "type": "spin",
+          "magnitude": [
+            0,
+            0,
+            5.1
+          ],
+          "clock": "timer"
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Mirrored",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            320,
+            150,
+            40
+          ],
+          "rotation": [
+            15,
+            20,
+            30
+          ],
+          "zoom": [
+            -0.8,
+            1.2,
+            1
+          ]
+        },
+        "alignment": [
+          0.25,
+          0.75
+        ]
+      }
+    ]
+  }
+}

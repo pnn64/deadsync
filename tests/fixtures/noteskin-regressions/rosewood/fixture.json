@@ -1,0 +1,271 @@
+{
+  "images": [
+    {
+      "path": "SCH-CLASSIC-RAINBOW/[CUSTOMIZATION]/Colored Freeze Holds/COLORED/Down Hold Head inactive 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/[CUSTOMIZATION]/Colored Freeze Holds/COLORED/Down Roll Head inactive 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/[CUSTOMIZATION]/Colored Freeze Holds/ORIGINAL/Down Hold Head inactive 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/[CUSTOMIZATION]/Colored Freeze Holds/ORIGINAL/Down Roll Head inactive 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/_Down Go Receptor Go 3x1 (res 192x64).png",
+      "width": 1536,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/_down tap mine (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/_Mine Spark 4x4 (doubleres).png",
+      "width": 640,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Flash Bright (res 96x96).png",
+      "width": 768,
+      "height": 768
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Flash Dim (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down HitMine Explosion 16x1 (doubleres).png",
+      "width": 2560,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Hold Body Active (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Hold Body Inactive (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Hold BottomCap Active (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Hold BottomCap Inactive (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Hold Head active 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Hold Head inactive 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll Body Active (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll Body Inactive (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll BottomCap Active (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll BottomCap Inactive (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll Head active 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll Head inactive 16x1 (res 1024x64).png",
+      "width": 8192,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll TopCap Active (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Roll TopCap Inactive (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Left Hold Body Active (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Left Hold Body Inactive (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Left Hold BottomCap Active (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Left Hold BottomCap Inactive (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Right Hold Body Active (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Right Hold Body Inactive (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Right Hold BottomCap Active (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Right Hold BottomCap Inactive (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/textures/Tap Lift parts (mipmaps).png",
+      "width": 64,
+      "height": 64,
+      "original_placeholder": true
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/textures/Tap Lift2 parts (mipmaps).png",
+      "width": 64,
+      "height": 64,
+      "original_placeholder": true
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/textures/Tap Note parts (mipmaps).png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Up Hold Body Active (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Up Hold Body Inactive (res 64x128).png",
+      "width": 512,
+      "height": 1024
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Up Hold BottomCap Active (res 64x64).png",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Up Hold BottomCap Inactive (res 64x64).png",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "audio": [
+    "ann-1-finalstage.ogg",
+    "ann-2-areyouready.ogg",
+    "ann-3-okletsstart.ogg",
+    "ann-35s-showtime.ogg",
+    "ann-end-crowd.ogg",
+    "ann-end.ogg"
+  ],
+  "sources": [
+    {
+      "path": "lua/default.lua",
+      "sha256": "c7fc93e931d0284bf9d5dc13c89c6c786e31c901bff02d35522ffc3cbeb531a9"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/[CUSTOMIZATION]/READ ME.txt",
+      "sha256": "b2f11026d82949bafe14ee60ffba4577544606302af228f1e6ab48f3e4d7339e"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/_down tap lift model.txt",
+      "sha256": "77eaf63860220cfbb58cb31cb06725035873642b2ac380b31a591a0345717418"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/_down tap note model.txt",
+      "sha256": "63e4198a8b324c2f2e83c0d4b501b887d0a99aa876032ef8aa58f3adce2a31e9"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Receptor.lua",
+      "sha256": "6150994e49566fd68c522a52b8f450f8b682d6469fc187263d87addd582a8bce"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Tap Fake.lua",
+      "sha256": "766ebcef93a3971ab0eac52019cd1e80585869e360ae3c1c6d4ddbcd9dfaa783"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Tap Lift.lua",
+      "sha256": "1451f53e0502210459d9682e131f7b22c955b6e293d998552222b02949d623ea"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Tap Mine.lua",
+      "sha256": "766ebcef93a3971ab0eac52019cd1e80585869e360ae3c1c6d4ddbcd9dfaa783"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Down Tap Note.lua",
+      "sha256": "3d0e4402a272db911d454f5c068d82f3356410f41ee16a70f663e101732fdeb4"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/Fallback Explosion.lua",
+      "sha256": "8d1dd13e982aaa5908411ca413483b5e8e7b3adf359f308466b27dbf330b5ae7"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/metrics.ini",
+      "sha256": "afcd4e56e58cbc40d34a603d381ad66354ac8b1346a4448a38c2f7be3b7263d7"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/NoteSkin.lua",
+      "sha256": "acbc885631aaa5788044cf4850ff07c27e39e40bcb4473c5b344aa5846100cd1"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/textures/Tap Lift parts (mipmaps).ini",
+      "sha256": "a997c3d43fd1b908536e77f87783b5540cd7fe831f0b7100ae316ab477612852"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/textures/Tap Lift2 parts (mipmaps).ini",
+      "sha256": "f0353545a6872b637920e9b2eb9b82d0919a91d3da8cd13d195fdfb2081e7668"
+    },
+    {
+      "path": "SCH-CLASSIC-RAINBOW/textures/Tap Note parts (mipmaps).ini",
+      "sha256": "bbeeb9417acbe0862ec59af4b25a363ea4076e20c476ab263d532a6b9a0a19fb"
+    }
+  ]
+}

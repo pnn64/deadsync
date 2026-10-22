@@ -27,6 +27,10 @@ return Def.ActorFrame {
                 targets.stop:playcommand("Touch")
                 targets.finish:playcommand("Touch")
             end
+            if beat >= 1.8 then
+                assert(queue_result == "123", "queued commands changed order")
+            end
+            targets.witness:x(#queue_result)
         end)
     end,
     Def.Quad {
@@ -50,13 +54,6 @@ return Def.ActorFrame {
     },
     Def.Quad {
         Name = "Witness",
-        OnCommand = function(self)
-            self:SetUpdateFunction(function(self)
-                if GAMESTATE:GetSongBeat() >= 1.8 then
-                    assert(queue_result == "123", "queued commands changed order")
-                end
-                self:x(#queue_result)
-            end)
-        end,
+        InitCommand = function(self) targets.witness = self end,
     },
 }

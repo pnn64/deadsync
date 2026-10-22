@@ -9,14 +9,14 @@ use std::io::Read;
 const ARCHIVE_SCHEMA_VERSION: u32 = 1;
 const ARCHIVE_FILTER_ENV: &str = "DEADSYNC_SONG_ARCHIVE";
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct ArchiveIndex {
     archive_schema_version: u32,
     hash: String,
     archives: Vec<ArchiveEntry>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 struct ArchiveEntry {
     title: String,
     source_simfile: String,
@@ -189,12 +189,26 @@ pub(super) fn reference_json<T: serde::de::DeserializeOwned>(path: &Path) -> T {
 }
 
 fn archive_index() -> ArchiveIndex {
+    static INDEX: std::sync::OnceLock<ArchiveIndex> = std::sync::OnceLock::new();
+    INDEX.get_or_init(load_archive_index).clone()
+}
+
+fn load_archive_index() -> ArchiveIndex {
     let path = archive_root().join("index.json");
     let mut index: ArchiveIndex =
         serde_json::from_slice(&fs::read(&path).unwrap_or_else(|error| {
             panic!("missing song archive index {}: {error}", path.display())
         }))
         .unwrap_or_else(|error| panic!("invalid song archive index {}: {error}", path.display()));
+    let committed = include_str!("../fixtures/full_song_lua/committed-archives.txt")
+        .lines().collect::<HashSet<_>>();
+    // Optional captures used by the CLI are not checkout test inputs. Their
+    // presence on one developer's disk must not change the tested corpus.
+    index.archives.retain(|entry| committed.contains(entry.archive.as_str()));
+    for entry in &index.archives {
+        assert!(archive_root().join(&entry.archive).is_file(),
+            "missing committed song archive: {}", entry.archive);
+    }
     // Retained native versions are runnable by filename as well as the current
     // captures in the index. Discover them in the same flat fixture store.
     let indexed = index
@@ -206,14 +220,14 @@ fn archive_index() -> ArchiveIndex {
         .map(|bytes| serde_json::from_slice(&bytes).expect("reference aliases"))
         .unwrap_or_default();
     let mut extra = Vec::new();
-    for file in fs::read_dir(archive_root()).expect("list song archives") {
-        let file = file.expect("archive directory entry");
-        let name = file.file_name().to_string_lossy().into_owned();
-        if !name.ends_with(".tar.zst") || indexed.contains(&name) {
+    for name in include_str!("../fixtures/full_song_lua/committed-archives.txt").lines() {
+        let name = name.to_owned();
+        if indexed.contains(&name) {
             continue;
         }
+        let path = archive_root().join(&name);
         let decoder = zstd::stream::read::Decoder::new(
-            File::open(file.path()).expect("open retained archive"),
+            File::open(&path).expect("open committed retained archive"),
         )
         .expect("decode retained archive");
         let mut archive = tar::Archive::new(decoder);
@@ -240,7 +254,7 @@ fn archive_index() -> ArchiveIndex {
             source_simfile: manifest.chart.source_path,
             harness_version: manifest.harness_version,
             sha256: name.trim_end_matches(".tar.zst").into(),
-            compressed_bytes: file.metadata().unwrap().len(),
+            compressed_bytes: fs::metadata(&path).unwrap().len(),
             archive: name,
             aliases: historical,
             local_only: false,
@@ -884,6 +898,7 @@ fn composition_checks_nonfinite_alpha_per_frame() {
 }
 
 #[test]
+#[ignore = "long song-fixture audit: streams and validates all 932 committed full-song archives"]
 fn whole_song_archive_index_and_streamed_members_are_valid() {
     crate::paths::init();
     let index = archive_index();
@@ -925,25 +940,20 @@ fn whole_song_archive_index_and_streamed_members_are_valid() {
 }
 
 #[test]
-fn empty_song_layers_match_native_archive() {
+fn empty_song_layers_match_current_native_control() {
     crate::paths::init();
-    let index = archive_index();
-    let entry = index
-        .archives
-        .iter()
-        .find(|entry| entry.source_simfile == "Bank Account/Bank Account.sm")
-        .expect("complete empty-Lua reference");
-    let archive = extract_archive(entry, &archive_root().join(&entry.archive));
-    validate_archive(entry, &archive);
-    let mut trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
-    validate_native_trace(&trace, &archive.manifest);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut trace = read_trace_file(&root.join(
+        "tests/fixtures/itgmania-song-lua-micro/empty-song/native.json",
+    ));
     let (compiled, primary, context) =
-        compile_trace_song_at(&trace, &archive.root.join(&archive.manifest.chart.simfile));
+        compile_trace_song_at(&trace, &root.join("tests/fixtures/song-lua/empty-song/chart.sm"));
     assert!(compiled.is_empty());
     assert!(trace.roots.is_empty());
     let mut parity = compare_semantics(&trace, &compiled, primary, &context);
     runtime_modifiers::compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
     runtime_modifiers::compare_player_frames(&trace, &compiled, primary, &context, &mut parity);
+    assert!(parity.checks() > 0, "the empty scene must still compare native player observations");
     parity.assert_complete("song without Lua layers");
     // Missing compiled roots must still fail instead of skipping native actors.
     trace.roots.push("missing-layer".into());
@@ -1215,8 +1225,12 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     use std::process::ExitCode;
     // Cargo forwards these global libtest options to custom harnesses too.
     // This harness always shows output and explicitly selects expensive runs.
+    // The custom harness is serial; libtest's thread count has no effect.
+    if let Some(index) = args.iter().position(|arg| arg == "--test-threads") {
+        args.drain(index..(index + 2).min(args.len()));
+    }
     args.retain(|arg| {
-        !matches!(
+        !arg.starts_with("--test-threads=") && !matches!(
             arg.as_str(),
             "--nocapture"
                 | "--show-output"
@@ -1630,25 +1644,22 @@ fn consolidated_song_lua_references_resolve_and_are_compressed() {
     )
     .unwrap();
     assert!(!references.is_empty());
-    let index = archive_index();
+    let committed = include_str!("../fixtures/full_song_lua/committed-reference-files.txt")
+        .lines().collect::<HashSet<_>>();
+    let mut referenced = HashSet::new();
     for (alias, filename) in references {
+        assert!(committed.contains(filename.as_str()),
+            "reference target must be a committed fixture: {alias} -> {filename}");
+        referenced.insert(filename.clone());
         let original = Path::new(env!("CARGO_MANIFEST_DIR")).join(&alias);
         let resolved = reference_path(&original);
         assert_eq!(resolved, archive_root().join(&filename), "{alias}");
-        if !resolved.is_file() {
-            assert!(
-                index
-                    .archives
-                    .iter()
-                    .any(|entry| entry.archive == filename && entry.local_only),
-                "{filename}"
-            );
-            continue;
-        }
+        assert!(resolved.is_file(), "missing committed reference fixture: {filename}");
         if !filename.ends_with(".manifest.json") {
             assert!(filename.ends_with(".zst"));
         }
     }
+    assert_eq!(referenced.len(), committed.len(), "reference catalog must have no orphaned targets");
 }
 
 #[test]

@@ -1,27 +1,28 @@
 //! StepMania-like tween segments with a tiny queueing system.
 //!
-//! Usage sketch:
-//! ```ignore
+//! Queue animation segments, then read the current state for actor composition:
+//! ```
 //! use deadlib_present::anim::*;
+//! # let dt = 1.0 / 60.0;
 //!
 //! // initialize per-actor animation state
 //! let mut tw = TweenSeq::new(TweenState::default());
 //!
 //! // queue a few segments (chained like StepMania commands)
-//! tw.push(linear(0.40).xy(640.0, 360.0).zoom(256.0, 256.0).alpha(1.0));
+//! tw.push(linear(0.40).xy(640.0, 360.0).size(256.0, 256.0).alpha(1.0));
 //! tw.push(decelerate(0.25).addx(120.0));
-//! tw.push(sleep(0.10));
+//! tw.push_step(sleep(0.10));
 //! tw.push(accelerate(0.30).diffuse_rgb(1.0, 0.25, 0.25));
 //!
 //! // each frame
 //! tw.update(dt);
 //! let s = tw.state();
-//! let actor = act!(sprite("logo.png"):
-//!     align(0.5, 0.5):
-//!     xy(s.x, s.y):
-//!     zoomto(s.w, s.h):
-//!     diffuse(s.tint[0], s.tint[1], s.tint[2], s.tint[3])
-//! );
+//! assert!(s.x > 0.0 && s.x < 640.0);
+//! tw.update(2.0);
+//! assert!(tw.is_empty());
+//! let s = tw.state();
+//! assert_eq!([s.x, s.y, s.w, s.h], [760.0, 360.0, 256.0, 256.0]);
+//! assert_eq!(s.tint, [1.0, 0.25, 0.25, 1.0]);
 //! ```
 use smallvec::SmallVec;
 use std::collections::VecDeque;

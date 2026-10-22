@@ -1,3 +1,4 @@
+use crate::string_args::string_value;
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::Path;
 
@@ -7,12 +8,12 @@ use crate::{
     create_background_filter_values, create_color_constants_table, create_credits_table,
     create_cryptman_table, create_debug_table, create_ex_judgment_counts, create_fileman_table,
     create_find_files_function, create_ini_file_table, create_lua_compat_table,
-    create_network_table, create_rage_file_util_table, create_range_table, create_split_table,
+    create_network_table, create_rage_file_util_table, create_range_table,
     create_string_array, create_version_parts_table, current_gamestate_player_value,
     current_gamestate_value, current_song_value, current_steps_value, deduplicate_lua_table,
     install_theme_color_helpers, json_to_lua_value, lua_binary_to_hex, lua_table_to_string,
     lua_to_json_value, make_color_table, map_lua_table, note_song_lua_side_effect,
-    parse_chart_info, path_basename, read_color_call, read_color_value, read_f32, read_string,
+    parse_chart_info, read_color_call, read_color_value, read_f32, read_string,
     retarget_loader_env, rotate_lua_table, seconds_to_hhmmss, set_string_method,
     song_lua_is_minimum_product_version, song_lua_is_product_version, stringify_lua_table,
     strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
@@ -79,17 +80,7 @@ pub fn install_stdlib_compat(
     string.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
-            let text = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let separator = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            create_split_table(lua, &text, &separator)
+            crate::string_args::split_args(lua, &args, 0, 1)
         })?,
     )?;
     let math: Table = globals.get("math")?;
@@ -122,39 +113,25 @@ pub fn install_stdlib_compat(
     globals.set(
         "split",
         lua.create_function(|lua, args: MultiValue| {
-            let separator = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let text = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            create_split_table(lua, &text, &separator)
+            crate::string_args::split_args(lua, &args, 1, 0)
         })?,
     )?;
     globals.set(
         "Basename",
-        lua.create_function(|lua, value: Value| {
-            Ok(Value::String(lua.create_string(path_basename(
-                &read_string(value).unwrap_or_default(),
-            ))?))
-        })?,
+        lua.create_function(crate::string_args::basename)?,
     )?;
     globals.set(
         "Var",
         lua.create_function(move |lua, args: MultiValue| {
-            let name = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            if name == "GameCommand" {
-                return Ok(Value::Table(create_game_command_table(lua, callbacks)?));
+            if let Some(Value::String(name)) = args.front()
+                && let Ok(text) = name.to_str()
+            {
+                if text.as_ref() == "GameCommand" {
+                    return Ok(Value::Table(create_game_command_table(lua, callbacks)?));
+                }
+                return Ok(Value::String(name.clone()));
             }
-            Ok(Value::String(lua.create_string(&name)?))
+            Ok(Value::String(lua.create_string("")?))
         })?,
     )?;
     globals.set("ActorUtil", create_actor_util_table(lua, song_dir)?)?;
@@ -162,24 +139,15 @@ pub fn install_stdlib_compat(
     globals.set(
         "cleanGSub",
         lua.create_function(|lua, args: MultiValue| {
-            let text = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let needle = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let replacement = args
-                .get(2)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            Ok(Value::String(
-                lua.create_string(text.replace(&needle, &replacement))?,
-            ))
+            let text = args.front().and_then(string_value);
+            let needle = args.get(1).and_then(string_value);
+            let replacement = args.get(2).and_then(string_value);
+            Ok(Value::String(lua.create_string(
+                text.as_deref().unwrap_or_default().replace(
+                    needle.as_deref().unwrap_or_default(),
+                    replacement.as_deref().unwrap_or_default(),
+                ),
+            )?))
         })?,
     )?;
     globals.set(
@@ -221,12 +189,11 @@ pub fn install_stdlib_compat(
     globals.set(
         "GetVersionParts",
         lua.create_function(|lua, args: MultiValue| {
-            let version = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_else(|| SONG_LUA_PRODUCT_VERSION.to_string());
-            create_version_parts_table(lua, &version)
+            let version = args.front().and_then(string_value);
+            create_version_parts_table(
+                lua,
+                version.as_deref().unwrap_or(SONG_LUA_PRODUCT_VERSION),
+            )
         })?,
     )?;
     globals.set(
@@ -716,8 +683,8 @@ end
     globals.set(
         "loadstring",
         lua.create_function(|lua, (code, chunk_name): (String, Option<String>)| {
-            let code = crate::preprocess_lua_cmd_syntax(&code).map_err(mlua::Error::external)?;
-            let mut chunk = lua.load(&code);
+            let code = crate::cmd::preprocess_lua_cmd_syntax_cow(&code).map_err(mlua::Error::external)?;
+            let mut chunk = lua.load(code.as_ref());
             if let Some(chunk_name) = chunk_name.as_deref() {
                 chunk = chunk.set_name(chunk_name);
             }
@@ -796,14 +763,14 @@ end
 // ITGmania's _fallback/Scripts/00 init.lua replaces Lua's generator with
 // RageUtil/RandomNumbers.cpp. Keep its MT19937 state local to this song VM;
 // compilation and cached playback must not consume another song's stream.
-#[derive(Clone)]
-struct SongLuaRandom {
+#[derive(Debug, Clone)]
+pub(crate) struct SongLuaRandom {
     words: [u32; 624],
     index: usize,
 }
 
 impl SongLuaRandom {
-    fn seeded(seed: u32) -> Self {
+    pub(crate) fn seeded(seed: u32) -> Self {
         let mut words = [0; 624];
         words[0] = seed;
         for index in 1..words.len() {
@@ -834,7 +801,7 @@ impl SongLuaRandom {
         value ^ (value >> 18)
     }
 
-    fn real(&mut self) -> f64 {
+    pub(crate) fn real(&mut self) -> f64 {
         let low = self.next();
         let high = self.next();
         // Match std::uniform_real_distribution<double> in the platform's
@@ -899,6 +866,10 @@ fn random_int_arg(lua: &Lua, args: &MultiValue, index: usize) -> mlua::Result<i3
 }
 
 struct SongLuaRandomState(SongLuaRandom);
+
+impl Default for SongLuaRandom {
+    fn default() -> Self { Self::seeded(1) }
+}
 
 pub(crate) struct RandomSnapshot {
     lua: Lua,
@@ -1069,3 +1040,7 @@ fn create_game_command_table(lua: &Lua, callbacks: SongLuaCompatCallbacks) -> ml
     )?;
     Ok(table)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/borrowed_compat.rs"]
+mod borrowed_compat_perf;

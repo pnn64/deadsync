@@ -702,7 +702,7 @@ fn compose_field_contents<S, F>(
         let use_legacy_hold_sprites = lane_frame.use_legacy_sprites
             && !has_zoom_spline
             && !position_splines[local_col].enabled;
-        let sample_hold_path = |screen_y: f32| {
+        let sample_hold_path = |screen_y: f32, spline_y: f32| {
             // Native GetYOffsetFromYPos inverts Reverse/Tipsy, not AttenuateY/BeatY.
             // NoteDisplay uses that same offset to sample the hold strip.
             let adjusted_travel = travel.adjusted_from_screen_y_with_lane_offset(
@@ -715,7 +715,7 @@ fn compose_field_contents<S, F>(
                 body_head_beat
             } else {
                 body_head_beat
-                    + (hold.end_beat - body_head_beat) * ((screen_y - y_head) / (y_tail - y_head))
+                    + (hold.end_beat - body_head_beat) * ((spline_y - y_head) / (y_tail - y_head))
             };
             let center_x = lane_center_x_from_adjusted_travel(local_col, adjusted_travel);
             let world_z = world_z_for_adjusted_travel(local_col, adjusted_travel);
@@ -728,6 +728,7 @@ fn compose_field_contents<S, F>(
                 world_z,
                 position_offset: offset,
                 spline_derivative: derivative,
+                spline_absolute: position_splines[local_col].absolute,
                 spline_step: if position_splines[local_col].enabled {
                     field_zoom
                 } else {
@@ -743,7 +744,7 @@ fn compose_field_contents<S, F>(
                                 adjusted_travel / field_zoom,
                                 transform_cache,
                                 1.0,
-                            ) + body_zoom_offset_at_y(screen_y)),
+                            ) + body_zoom_offset_at_y(spline_y)),
                     ),
             }
         };
@@ -2014,6 +2015,8 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 uv_offset: mesh.uv_offset,
                 uv_tex_shift: mesh.uv_tex_shift,
                 depth_test: mesh.depth_test,
+                depth_write: mesh.depth_write,
+                depth_test_on_fail: mesh.depth_test_on_fail,
                 clear_depth: mesh.clear_depth,
                 clear_depth_after: mesh.clear_depth_after,
                 cull_mode: deadlib_render_core::CullMode::None,
@@ -2037,6 +2040,8 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 uv_offset: mesh.uv_offset,
                 uv_tex_shift: mesh.uv_tex_shift,
                 depth_test: mesh.depth_test,
+                depth_write: mesh.depth_write,
+                depth_test_on_fail: mesh.depth_test_on_fail,
                 clear_depth: mesh.clear_depth,
                 clear_depth_after: mesh.clear_depth_after,
                 cull_mode: deadlib_render_core::CullMode::None,
@@ -2480,6 +2485,8 @@ mod camera_wrap_tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::None,

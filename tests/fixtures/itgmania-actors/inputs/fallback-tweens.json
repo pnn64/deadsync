@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "name": "fallback-tweens",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "bpm": 60,
+  "samples": [
+    0,
+    0.03333333333333333,
+    0.08333333333333333,
+    0.15,
+    0.25,
+    0.5
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "BounceBegin",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            100,
+            100,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "curve": "bezier",
+            "duration": 0.5,
+            "bezier": [
+              0,
+              0,
+              0.42,
+              -0.42,
+              0.6666666666666666,
+              0.3,
+              1,
+              1
+            ],
+            "state": {
+              "position": [
+                200,
+                100,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "BounceEnd",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            100,
+            100,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "curve": "bezier",
+            "duration": 0.5,
+            "bezier": [
+              0,
+              0,
+              0.3333333333333333,
+              0.7,
+              0.58,
+              1.42,
+              1,
+              1
+            ],
+            "state": {
+              "position": [
+                200,
+                100,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "Cubic",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            100,
+            100,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "curve": "bezier",
+            "duration": 0.5,
+            "bezier": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "state": {
+              "position": [
+                200,
+                100,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "frame",
+        "name": "QueueFrame",
+        "tweens": [
+          {
+            "curve": "sleep",
+            "duration": 0.05
+          },
+          {
+            "queuecommand": "Hide"
+          }
+        ],
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "QueuedChild",
+            "size": [
+              64,
+              32
+            ],
+            "state": {
+              "position": [
+                100,
+                100,
+                0
+              ]
+            },
+            "commands": {
+              "Hide": false
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

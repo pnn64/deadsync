@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "name": "background-fit-smooth",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0.0,
+    1.5166666666666666,
+    2.0166666666666666,
+    2.5166666666666666,
+    3.5
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "frame",
+        "name": "center",
+        "state": {
+          "position": [
+            427,
+            240,
+            0
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "fit",
+            "size": [
+              64,
+              32
+            ],
+            "alignment": [
+              0.5,
+              0
+            ],
+            "state": {
+              "position": [
+                0,
+                -240,
+                0
+              ],
+              "zoom": [
+                15,
+                15,
+                15
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "cover",
+        "size": [
+          1,
+          1
+        ],
+        "state": {
+          "position": [
+            427,
+            240,
+            0
+          ],
+          "zoom": [
+            854,
+            480,
+            1
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0166666666666666,
+            "curve": "sleep"
+          },
+          {
+            "duration": 2,
+            "curve": "bezier",
+            "bezier": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                1
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

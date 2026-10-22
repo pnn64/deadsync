@@ -82,7 +82,7 @@ pub fn prewarm_gameplay_assets<StateDelta>(
 ) {
     let mut seen = FastHashSet::<String>::with_capacity(256);
     let mut seen_model_textures = FastHashSet::<String>::with_capacity(64);
-    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::with_capacity(8);
+    let mut seen_song_lua_fonts = FastHashSet::<&'static str>::default();
     for noteskin in noteskin_sets
         .into_iter()
         .flat_map(|set| set.iter().flatten())
@@ -313,6 +313,14 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     for sound_path in sound_paths {
         let key = sound_path.to_string_lossy();
         if let Some(sound) = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(key.as_ref())) {
+            // Native compiled resources use OS path components while authored
+            // Lua resources use forward slashes. Prepare both lookup spellings
+            // here so gameplay needs no normalization or allocation.
+            let native_key = sound_path.components().collect::<PathBuf>()
+                .to_string_lossy().into_owned();
+            if native_key != key {
+                song_lua.insert(native_key, sound.clone());
+            }
             song_lua.insert(key.into_owned(), sound);
         }
     }

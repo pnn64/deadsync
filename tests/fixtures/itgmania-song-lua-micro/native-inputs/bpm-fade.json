@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "name": "bpm-fade",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "bpm": 333,
+  "samples": [
+    0,
+    0.55,
+    0.6,
+    0.7,
+    0.8,
+    0.9,
+    0.9166666666666666,
+    1,
+    1.1
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "Fade",
+        "size": [
+          64,
+          32
+        ],
+        "state": {
+          "position": [
+            100,
+            120,
+            0
+          ],
+          "diffuse": [
+            1,
+            1,
+            1,
+            0.9
+          ]
+        },
+        "tweens": [
+          {
+            "curve": "sleep",
+            "duration": 0.55
+          },
+          {
+            "curve": "linear",
+            "duration": 0.36036036036036034,
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                0
+              ]
+            }
+          },
+          {
+            "curve": "linear",
+            "duration": 0.36036036036036034,
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                0
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

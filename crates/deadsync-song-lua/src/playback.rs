@@ -59,6 +59,8 @@ pub type GameplayCoreState<P, S> = deadsync_gameplay::GameplayRuntimeState<
 >;
 #[path = "playback/prepare.rs"]
 mod prepare;
+#[path = "playback/native.rs"]
+mod native;
 use deadlib_assets::present_dsl::cover_sprite;
 pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, reload_song_lua, song_lua_sound_paths};
 use prepare::{SongLuaOverlayEaseWindowRuntime, SongLuaSoundEvent};
@@ -3521,9 +3523,9 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         environment: None,
         align: [0.0; 2],
         offset: [0.0; 2],
-        world_z: state.z_bias,
+        world_z: 0.0,
         size: [SizeSpec::Px(0.0); 2],
-        local_transform: song_lua_projected_local_transform(view_proj, canvas * model * leaf),
+        local_transform: song_lua_projected_local_transform(view_proj, canvas * model * leaf, *state),
         texture,
         tint,
         glow: state.glow,
@@ -3533,6 +3535,8 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         uv_offset: [0.0; 2],
         uv_tex_shift: [0.0; 2],
         depth_test: state.depth_test,
+        depth_write: state.depth_write,
+        depth_test_on_fail: state.depth_test_on_fail,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: deadlib_render_core::CullMode::None,
@@ -4906,6 +4910,7 @@ fn song_lua_map_opaque_rect(
         && !state.mask_source
         && !state.mask_dest
         && !state.depth_test
+        && !state.depth_write
         && state.cropleft <= f32::EPSILON
         && state.cropright <= f32::EPSILON
         && state.croptop <= f32::EPSILON
@@ -5727,6 +5732,8 @@ fn song_lua_capture_root_state(state: SongLuaOverlayState) -> SongLuaOverlayStat
         mask_source: state.mask_source,
         mask_dest: state.mask_dest,
         depth_test: state.depth_test,
+        depth_write: state.depth_write,
+        depth_test_on_fail: state.depth_test_on_fail,
         blend: state.blend,
         ..SongLuaOverlayState::default()
     }
@@ -6474,6 +6481,8 @@ pub fn apply_overlay_update(
     set_value!(MaskSource, Bool, mask_source);
     set_value!(MaskDest, Bool, mask_dest);
     set_value!(DepthTest, Bool, depth_test);
+    set_value!(DepthWrite, Bool, depth_write);
+    set_value!(DepthTestOnFail, Bool, depth_test_on_fail);
     set_value!(CullMode, CullMode, cull_mode);
     set_value!(Zoom, F32, zoom);
     set_value!(ZoomX, F32, zoom_x);
@@ -7204,6 +7213,7 @@ fn song_lua_style_capture_actor_in_place(
 #[inline(always)]
 const fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
     match blend {
+        SongLuaOverlayBlendMode::NoEffect => BlendMode::NoEffect,
         SongLuaOverlayBlendMode::Alpha => BlendMode::Alpha,
         SongLuaOverlayBlendMode::Add => BlendMode::Add,
         SongLuaOverlayBlendMode::Multiply => BlendMode::Multiply,
@@ -8152,6 +8162,8 @@ fn append_song_lua_model_actors(
                 uv_offset,
                 uv_tex_shift,
                 depth_test: state.depth_test,
+                depth_write: state.depth_write,
+                depth_test_on_fail: state.depth_test_on_fail,
                 clear_depth: false,
                 clear_depth_after: false,
                 cull_mode: state.cull_mode,
@@ -8518,6 +8530,8 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                     local_transform,
                     environment,
                     depth_test,
+                    depth_write,
+                    depth_test_on_fail,
                     world_z,
                     ..
                 } = &mut actor
@@ -8544,6 +8558,8 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                         },
                     });
                     *depth_test = state.depth_test;
+                    *depth_write = state.depth_write;
+                    *depth_test_on_fail = state.depth_test_on_fail;
                     *world_z += state.z + song_lua_biased_world_z(state, effect_offset[2]);
                     *local_transform =
                         Matrix4::from_scale(Vector3::from(ancestor)) * *local_transform;
@@ -9619,8 +9635,23 @@ fn song_lua_screen_proj(depth: f32) -> Matrix4 {
 fn song_lua_projected_local_transform(
     (view, projection): (Matrix4, Matrix4),
     model: Matrix4,
+    state: SongLuaOverlayState,
 ) -> Matrix4 {
-    song_lua_screen_proj(1.0).inverse() * projection * (view * model)
+    // Actor::SetGlobalRenderStates gives NoEffect masks an implicit ZBias=1.
+    // RageDisplay_OGL maps the depth range to [.05*(1-bias), 1-.05*bias].
+    // Apply that range in homogeneous clip space before the screen projection
+    // is cancelled; painter order must not replace the mask's depth ordering.
+    let bias = if state.z_bias == 0.0 && state.blend == SongLuaOverlayBlendMode::NoEffect {
+        1.0
+    } else {
+        state.z_bias
+    };
+    let mut depth_range = Matrix4::from_scale(Vector3::new(1.0, 1.0, 0.95));
+    depth_range.w_axis.z = 0.05 - 0.1 * bias;
+    if !state.depth_test && !state.depth_write {
+        depth_range = Matrix4::IDENTITY;
+    }
+    song_lua_screen_proj(1.0).inverse() * depth_range * projection * (view * model)
 }
 
 fn append_projected_mesh_vertices(
@@ -9660,6 +9691,8 @@ struct SongLuaProjectedMeshParams {
     local_transform: Matrix4,
     world_z: f32,
     depth_test: bool,
+    depth_write: bool,
+    depth_test_on_fail: bool,
     visible: bool,
     blend: BlendMode,
     z: i16,
@@ -9693,6 +9726,8 @@ fn song_lua_projected_mesh_actor_from_grid(
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: params.depth_test,
+            depth_write: params.depth_write,
+            depth_test_on_fail: params.depth_test_on_fail,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::None,
@@ -9727,6 +9762,8 @@ fn song_lua_projected_mesh_actor_from_grid(
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
         depth_test: params.depth_test,
+        depth_write: params.depth_write,
+        depth_test_on_fail: params.depth_test_on_fail,
         clear_depth: false,
         clear_depth_after: false,
         cull_mode: deadlib_render_core::CullMode::None,
@@ -9800,6 +9837,8 @@ fn song_lua_flat_skewed_overlay_actor(
             local_transform: Matrix4::IDENTITY,
             world_z,
             depth_test: state.depth_test,
+            depth_write: state.depth_write,
+            depth_test_on_fail: state.depth_test_on_fail,
             visible: state.draw_visible(),
             glow: [1.0, 1.0, 1.0, 0.0],
             texture,
@@ -9842,7 +9881,7 @@ fn song_lua_projected_overlay_actor(
     // the GPU clip triangles which cross the near/camera planes.  Dividing by
     // W here made one behind-camera corner discard the whole sprite and also
     // forced affine texture interpolation across projected quads.
-    let local_transform = song_lua_projected_local_transform(view_proj, model);
+    let local_transform = song_lua_projected_local_transform(view_proj, model, state);
     let mut grid = SmallVec::<[TexturedMeshVertex; 16]>::new();
     for &y in &ys {
         for &x in &xs {
@@ -9877,8 +9916,10 @@ fn song_lua_projected_overlay_actor(
                     else { deadlib_render_core::SamplerWrap::Clamp },
             },
             local_transform,
-            world_z: state.z_bias,
+            world_z: 0.0,
             depth_test: state.depth_test,
+            depth_write: state.depth_write,
+            depth_test_on_fail: state.depth_test_on_fail,
             visible: true,
             glow: [1.0, 1.0, 1.0, 0.0],
             texture,
@@ -10017,7 +10058,15 @@ fn build_song_lua_aft_sprite_actor(
         // transform so the strip's authored position compensation cancels
         // its skew instead of doubling it.
         rot_z_deg: -effect_rot[2],
-        skew: [-state.skew_x, -state.skew_y],
+        // Sprite geometry already includes the actor's axis scales. Native
+        // BeginDraw scales before skew; the renderer skews that sized quad.
+        // Conjugate the shear by scale to preserve the native matrix.
+        skew: {
+            let sx = axis_scale[0] * effect_scale[0];
+            let sy = axis_scale[1] * effect_scale[1];
+            [if sy != 0.0 { -state.skew_x * sx / sy } else { 0.0 },
+             if sx != 0.0 { -state.skew_y * sy / sx } else { 0.0 }]
+        },
         local_offset: [0.0, 0.0],
         local_offset_rot_sin_cos: [0.0, 1.0],
         texcoordvelocity: state.texcoord_velocity,
@@ -10660,7 +10709,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 let view_proj = camera_state.and_then(|camera|
                     song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height))
                     .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
-                let transform = song_lua_projected_local_transform(view_proj, model);
+                let transform = song_lua_projected_local_transform(view_proj, model, state);
                 let mesh_actor = if let Some(scratch) = projected_mesh_scratch.as_deref_mut() {
                     let mesh = scratch.update_textured(|out| {
                         append_song_lua_actor_multi_vertex_textured_mesh(out, vertices);
@@ -10678,7 +10727,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         }),
                         align: [0.0, 0.0],
                         offset: [0.0; 2],
-                        world_z: state.z_bias,
+                        world_z: 0.0,
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                         local_transform: transform,
                         texture: texture.clone(),
@@ -10690,6 +10739,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         uv_offset: state.texcoord_offset.unwrap_or([0.0; 2]),
                         uv_tex_shift: [0.0, 0.0],
                         depth_test: state.depth_test,
+                        depth_write: state.depth_write,
+                        depth_test_on_fail: state.depth_test_on_fail,
                         clear_depth: false,
                         clear_depth_after: false,
                         cull_mode: deadlib_render_core::CullMode::None,
@@ -10712,7 +10763,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         }),
                         align: [0.0, 0.0],
                         offset: [0.0; 2],
-                        world_z: state.z_bias,
+                        world_z: 0.0,
                         size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                         local_transform: transform,
                         texture,
@@ -10724,6 +10775,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         uv_offset: state.texcoord_offset.unwrap_or([0.0; 2]),
                         uv_tex_shift: [0.0, 0.0],
                         depth_test: state.depth_test,
+                        depth_write: state.depth_write,
+                        depth_test_on_fail: state.depth_test_on_fail,
                         clear_depth: false,
                         clear_depth_after: false,
                         cull_mode: deadlib_render_core::CullMode::None,
@@ -11435,6 +11488,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             visible,
             blend,
             z,
@@ -11472,6 +11527,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
+                    depth_write: *depth_write,
+                    depth_test_on_fail: *depth_test_on_fail,
                     clear_depth: false,
                     clear_depth_after: false,
                     cull_mode: deadlib_render_core::CullMode::None,
@@ -11505,6 +11562,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
+                    depth_write: *depth_write,
+                    depth_test_on_fail: *depth_test_on_fail,
                     clear_depth: false,
                     clear_depth_after: false,
                     cull_mode: deadlib_render_core::CullMode::None,
@@ -11542,6 +11601,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     uv_offset: *uv_offset,
                     uv_tex_shift: *uv_tex_shift,
                     depth_test: *depth_test,
+                    depth_write: *depth_write,
+                    depth_test_on_fail: *depth_test_on_fail,
                     clear_depth: false,
                     clear_depth_after: false,
                     cull_mode: deadlib_render_core::CullMode::None,
@@ -11564,6 +11625,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             visible,
             blend,
             z,
@@ -11599,6 +11662,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
                 depth_test: *depth_test,
+                depth_write: *depth_write,
+                depth_test_on_fail: *depth_test_on_fail,
                 clear_depth: false,
                 clear_depth_after: false,
                 cull_mode: deadlib_render_core::CullMode::None,
@@ -13019,6 +13084,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
 /// frame's emitted HUD. All retained backing is freed at the song transition.
 #[derive(Default)]
 pub struct FrameScratch {
+    song_lua_enabled: bool,
     render_targets: Vec<deadlib_present::actors::RenderTarget>,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -13068,10 +13134,16 @@ pub struct FrameScratch {
 }
 
 impl FrameScratch {
-    /// Screen-entry-only warmup for a retained Lua scene. Every prepared actor
+    #[cfg(any(test, feature = "test-support"))]
+    pub const fn uses_song_lua_compositor(&self) -> bool {
+        self.song_lua_enabled
+    }
+
+    /// Screen-entry-only warmup for a native program or diagnostic live scene. Every prepared actor
     /// may mutate, including ancestors, draw order and camera scope. The exact
     /// lists are allocated once and reused; frames do not rebuild this plan.
-    pub fn enable_live_scene(&mut self) {
+    pub fn enable_dynamic_scene(&mut self) {
+        self.song_lua_enabled = true;
         // A foreground can bind or retarget a proxy after screen preparation.
         // Reserve the largest direct source (whole Player: three runs) for
         // every root proxy before any of those live callbacks execute.
@@ -13120,6 +13192,22 @@ impl FrameScratch {
         let notefield_underlay_draws =
             player_scratch(active_players, NOTEFIELD_HUD_FLAT_DRAW_SCRATCH_CAPACITY);
         let song_lua_visuals = gameplay.song_lua_visuals();
+        if gameplay.song().background_lua_changes.is_empty()
+            && gameplay.song().foreground_lua_changes.is_empty()
+            && song_lua_visuals.overlays.is_empty()
+            && song_lua_visuals.background_visual_layers.is_empty()
+            && song_lua_visuals.foreground_visual_layers.is_empty()
+        {
+            return Self {
+                notefield_actor_scratch,
+                notefield_flat_draw_scratch,
+                notefield_hud_actor_scratch,
+                notefield_hud_flat_draw_scratch,
+                notefield_underlay_actors,
+                notefield_underlay_draws,
+                ..Self::default()
+            };
+        }
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
             &song_lua_visuals.overlays,
             &song_lua_visuals.overlay_eases,
@@ -13316,6 +13404,7 @@ impl FrameScratch {
             })
             .sum();
         let frame_scratch = Self {
+            song_lua_enabled: true,
             render_targets: Vec::with_capacity(target_capacity),
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
@@ -13632,7 +13721,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         &mut Vec<FlatDraw>,
     ) -> deadsync_notefield::BuiltNotefield,
 ) -> GameplayActorSegments {
+    if !frame_scratch.song_lua_enabled {
+        return native::compose_frame(actors, state, media, frame_scratch, view, draw_layer, draw_field);
+    }
     let FrameScratch {
+        song_lua_enabled: _,
         render_targets,
         song_lua_overlay_order,
         song_lua_background_visual_layer_orders,
@@ -14025,54 +14118,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         song_lua_proxy_actor_scratch.as_mut(),
         screen_layers[2].draw_visible(),
     );
-    let cover_alpha = |player_idx: usize| -> f32 {
-        if player_idx >= state.num_players() {
-            return 0.0;
-        }
-        let profile_cover = f32::from(view.hide_song_bg[player_idx]);
-        let attack_cover = if apply_attacks {
-            state
-                .effective_visibility_effects_for_player(player_idx)
-                .cover
-        } else {
-            0.0
-        };
-        profile_cover.max(attack_cover).clamp(0.0, 1.0)
-    };
-    let left_cover = cover_alpha(0);
-    let right_cover = if state.num_players() > 1 {
-        cover_alpha(1)
-    } else {
-        left_cover
-    };
-    let sw = screen_width();
-    let sh = screen_height();
-    let cx = screen_center_x();
-    if left_cover > 0.0 || right_cover > 0.0 {
-        if (left_cover - right_cover).abs() <= 0.001 {
-            actors.push(deadlib_present::__act_from_builder!((
-                align(0.0, 0.0): xy(0.0, 0.0):
-                zoomto(sw, sh):
-                diffuse(0.0, 0.0, 0.0, left_cover.max(right_cover)):
-                z(-99)
-            ) deadlib_assets::SpriteBuilder::solid()));
-        } else {
-            actors.push(deadlib_present::__act_from_builder!((
-                align(0.0, 0.0): xy(0.0, 0.0):
-                zoomto(cx, sh):
-                faderight(0.1):
-                diffuse(0.0, 0.0, 0.0, left_cover):
-                z(-99)
-            ) deadlib_assets::SpriteBuilder::solid()));
-            actors.push(deadlib_present::__act_from_builder!((
-                align(0.0, 0.0): xy(cx, 0.0):
-                zoomto(sw - cx, sh):
-                fadeleft(0.1):
-                diffuse(0.0, 0.0, 0.0, right_cover):
-                z(-99)
-            ) deadlib_assets::SpriteBuilder::solid()));
-        }
-    }
+    native::push_background_cover(actors, state, view);
 
     // Native exit prompts participate in the Overlay capture target.
     if !hide_overlay_hud {
@@ -14253,6 +14299,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 player_transform.z,
             );
             let player_blend = match player_state.blend {
+                SongLuaOverlayBlendMode::NoEffect => Some(BlendMode::NoEffect),
                 SongLuaOverlayBlendMode::Alpha => None,
                 SongLuaOverlayBlendMode::Add => Some(BlendMode::Add),
                 SongLuaOverlayBlendMode::Multiply => Some(BlendMode::Multiply),

@@ -91,9 +91,16 @@ impl Service {
                 ..Self::default()
             };
             let (tx, rx) = mpsc::sync_channel(DECODED_AHEAD);
+            let metrics = deadlib_present::space::Metrics::centered(
+                deadlib_present::space::screen_width(),
+                deadlib_present::space::screen_height(),
+            );
             let spawned = std::thread::Builder::new()
                 .name("browser-noteskin".to_owned())
-                .spawn(move || load(&wanted, &tx));
+                .spawn(move || {
+                    deadlib_present::space::set_current_metrics(metrics);
+                    load(&wanted, &tx);
+                });
             if spawned.is_ok() {
                 self.loading = Some(rx);
             }

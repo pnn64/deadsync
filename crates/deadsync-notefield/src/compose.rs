@@ -334,6 +334,43 @@ impl NoteDrawRange {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct CompiledSplineBlend<'a> {
+    other: deadsync_gameplay::SongLuaPositionSpline<'a>,
+    fraction: f32,
+}
+
+impl CompiledSplineBlend<'_> {
+    fn sample(
+        self,
+        spline: deadsync_gameplay::SongLuaPositionSpline<'_>,
+        current_beat: f32,
+        note_beat: f32,
+    ) -> ([f32; 3], [f32; 3]) {
+        // Interpolate captured coefficients as CubicSplineN::weighted_average
+        // does, then use NoteDisplay's draw beat. Evaluating both curves
+        // at that same beat is algebraically equivalent and avoids allocating
+        // an interpolated spline. Blending poses at two capture beats instead
+        // replaces the curve with chords and changes its motion each sample.
+        let a = spline.sample(current_beat, note_beat);
+        let b = self.other.sample(current_beat, note_beat);
+        (
+            std::array::from_fn(|axis| a.0[axis] + (b.0[axis] - a.0[axis]) * self.fraction),
+            std::array::from_fn(|axis| a.1[axis] + (b.1[axis] - a.1[axis]) * self.fraction),
+        )
+    }
+
+    fn receptor(
+        self,
+        spline: deadsync_gameplay::SongLuaPositionSpline<'_>,
+        current_beat: f32,
+    ) -> [f32; 3] {
+        let a = spline.receptor(current_beat);
+        let b = self.other.receptor(current_beat);
+        std::array::from_fn(|axis| a[axis] + (b[axis] - a[axis]) * self.fraction)
+    }
+}
+
 /// Purely prepared composition state consumed by actor emission.
 pub struct PreparedNotefield<'a, S> {
     pub frame_plan: NotefieldFramePlan,
@@ -351,6 +388,8 @@ pub struct PreparedNotefield<'a, S> {
     pub column_x_offsets: [f32; MAX_COLS],
     pub column_position_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
     pub column_zoom_splines: [deadsync_gameplay::SongLuaPositionSpline<'a>; MAX_COLS],
+    pub(crate) column_position_blends: [Option<CompiledSplineBlend<'a>>; MAX_COLS],
+    pub(crate) column_zoom_blends: [Option<CompiledSplineBlend<'a>>; MAX_COLS],
     // Resolved once for each lane by prepare_notefield, valid for this frame.
     pub(crate) column_spline_receptors: [[f32; 3]; MAX_COLS],
     pub spline_origin_y: f32,
@@ -360,10 +399,27 @@ pub struct PreparedNotefield<'a, S> {
 }
 
 impl<S> PreparedNotefield<'_, S> {
+    pub(crate) fn spline_sample(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
+        let spline = self.column_position_splines[col];
+        // SetPoint writes move the receptor immediately. Interpolating its
+        // pinned point can invent a sweep across the field during a teleport.
+        // Held heads and the first body row must retain that same anchor.
+        if beat == self.current_beat {
+            return spline.sample(self.current_beat, beat);
+        }
+        self.column_position_blends[col].map_or_else(
+            || spline.sample(self.current_beat, beat),
+            |blend| blend.sample(spline, self.current_beat, beat),
+        )
+    }
+
     pub(crate) fn spline_position(&self, col: usize, beat: f32, base: [f32; 3]) -> [f32; 3] {
         let spline = self.column_position_splines[col];
+        if !spline.enabled && self.column_position_blends[col].is_none() {
+            return base;
+        }
         if spline.enabled && spline.absolute {
-            let position = spline.sample(self.current_beat, beat).0;
+            let position = self.spline_sample(col, beat).0;
             [
                 self.field.playfield_center_x + position[0] * self.field_zoom,
                 self.spline_origin_y + position[1] * self.field_zoom,
@@ -383,8 +439,11 @@ impl<S> PreparedNotefield<'_, S> {
         base: [f32; 3],
     ) -> ([f32; 3], [f32; 3]) {
         let spline = self.column_position_splines[col];
+        if !spline.enabled && self.column_position_blends[col].is_none() {
+            return (base, [0.0; 3]);
+        }
         if spline.enabled && spline.absolute {
-            let (position, derivative) = spline.sample(self.current_beat, beat);
+            let (position, derivative) = self.spline_sample(col, beat);
             (
                 [
                     self.field.playfield_center_x + position[0] * self.field_zoom,
@@ -405,15 +464,35 @@ impl<S> PreparedNotefield<'_, S> {
     pub(crate) fn spline_zoom(&self, col: usize, beat: f32, base: f32) -> f32 {
         let spline = self.column_zoom_splines[col];
         if spline.enabled {
-            spline.sample(self.current_beat, beat).0[0] + if spline.absolute { 0.0 } else { base }
+            let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+                blend.sample(spline, self.current_beat, beat).0[0]
+            } else {
+                spline.sample(self.current_beat, beat).0[0]
+            };
+            zoom + if spline.absolute { 0.0 } else { base }
         } else {
             base
         }
     }
 
+    pub(crate) fn spline_receptor_zoom(&self, col: usize, base: f32) -> f32 {
+        let spline = self.column_zoom_splines[col];
+        if !spline.enabled {
+            return base;
+        }
+        let zoom = if let Some(blend) = self.column_zoom_blends[col] {
+            blend.receptor(spline, self.current_beat)[0]
+        } else {
+            spline.receptor(self.current_beat)[0]
+        };
+        zoom + if spline.absolute { 0.0 } else { base }
+    }
+
     pub(crate) fn spline_offsets(&self, col: usize, beat: f32) -> ([f32; 3], [f32; 3]) {
-        let spline = self.column_position_splines[col];
-        let (position, derivative) = spline.sample(self.current_beat, beat);
+        if !self.column_position_splines[col].enabled && self.column_position_blends[col].is_none() {
+            return ([0.0; 3], [0.0; 3]);
+        }
+        let (position, derivative) = self.spline_sample(col, beat);
         let receptor = self.column_spline_receptors[col];
         (
             std::array::from_fn(|axis| {
@@ -463,11 +542,16 @@ pub fn prepare_notefield<'a, S>(
         current_time_s,
     );
     let mut column_zoom_splines = [deadsync_gameplay::SongLuaPositionSpline::default(); MAX_COLS];
+    let mut column_position_blends = [None; MAX_COLS];
+    let mut column_zoom_blends = [None; MAX_COLS];
     for track in request.song_lua.column_splines {
         if track.column >= frame_plan.num_cols {
             continue;
         }
-        if let Some(frame) = track.at_second(current_time_s) {
+        let index = track
+            .frames
+            .partition_point(|frame| frame.second + track.time_offset <= current_time_s + 1e-5);
+        if let Some(frame) = index.checked_sub(1).map(|index| &track.frames[index]) {
             if let Some(position) = &frame.position {
                 column_position_splines[track.column] = position.view();
             }
@@ -475,11 +559,95 @@ pub fn prepare_notefield<'a, S>(
                 .zoom
                 .as_ref()
                 .map_or_else(Default::default, |zoom| zoom.view());
+            if let Some(next) = track.frames.get(index) {
+                let span = next.second - frame.second;
+                // Only adjacent reference samples describe continuous motion.
+                // Sparse constant intervals and enable/disable boundaries keep
+                // their authored step instead of anticipating a later change.
+                if span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001 {
+                    let elapsed = (current_time_s - track.time_offset - frame.second).clamp(0.0, span);
+                    let adjacent = |span: f32| {
+                        span > 0.0 && span <= request.chart.music_rate / 60.0 + 0.0001
+                    };
+                    let previous = index
+                        .checked_sub(2)
+                        .map(|at| &track.frames[at])
+                        .filter(|previous| adjacent(frame.second - previous.second));
+                    let following = track
+                        .frames
+                        .get(index + 1)
+                        .filter(|following| adjacent(following.second - next.second));
+                    // A jump between two plateaus is a discrete point write,
+                    // not continuous motion starting from rest. Keep the old
+                    // plateau and the other components' prior slope until the
+                    // new sample. Blending across the jump leaks the new bend
+                    // into incoming notes and hold caps a frame early.
+                    let point_step = previous.zip(following).is_some_and(|(previous, following)| {
+                        let (Some(a), Some(b), Some(c), Some(d)) = (
+                            &previous.position, &frame.position,
+                            &next.position, &following.position,
+                        ) else {
+                            return false;
+                        };
+                        let compatible = |other: &deadsync_gameplay::SongLuaSplineData| {
+                            b.beats_per_t == other.beats_per_t
+                                && b.receptor_t == other.receptor_t
+                                && b.subtract_song_beat == other.subtract_song_beat
+                                && b.looping == other.looping
+                                && b.coefficients.len() == other.coefficients.len()
+                        };
+                        [a, c, d].into_iter().all(compatible)
+                            && (0..3).any(|axis| {
+                                a.coefficients.iter().zip(b.coefficients.iter())
+                                    .all(|(a, b)| a[axis] == b[axis])
+                                    && c.coefficients.iter().zip(d.coefficients.iter())
+                                        .all(|(c, d)| c[axis] == d[axis])
+                                    && b.coefficients.iter().zip(c.coefficients.iter())
+                                        .any(|(b, c)| b[axis] != c[axis])
+                            })
+                    });
+                    let (other, fraction) = if point_step {
+                        let previous = previous.unwrap();
+                        (previous, -elapsed / (frame.second - previous.second))
+                    } else {
+                        (next, elapsed / span)
+                    };
+                    for (spline, other_spline, blend) in [
+                        (
+                            &frame.position,
+                            &other.position,
+                            &mut column_position_blends[track.column],
+                        ),
+                        (
+                            &frame.zoom,
+                            &other.zoom,
+                            &mut column_zoom_blends[track.column],
+                        ),
+                    ] {
+                        if let (Some(spline), Some(other_spline)) = (spline, other_spline)
+                            && spline.beats_per_t == other_spline.beats_per_t
+                            && spline.receptor_t == other_spline.receptor_t
+                            && spline.subtract_song_beat == other_spline.subtract_song_beat
+                            && spline.looping == other_spline.looping
+                            && spline.coefficients.len() == other_spline.coefficients.len()
+                        {
+                            *blend = Some(CompiledSplineBlend {
+                                other: other_spline.view(),
+                                fraction,
+                            });
+                        }
+                    }
+                }
+            }
         }
     }
     let mut column_spline_receptors = [[0.0; 3]; MAX_COLS];
     for col in 0..frame_plan.num_cols {
-        let receptor = column_position_splines[col].receptor(request.chart.visible_beat);
+        let spline = column_position_splines[col];
+        if !spline.enabled {
+            continue;
+        }
+        let receptor = spline.receptor(request.chart.visible_beat);
         column_spline_receptors[col] = receptor;
         if !column_position_splines[col].absolute {
             column_x_offsets[col] += receptor[0] * field_zoom;
@@ -487,7 +655,9 @@ pub fn prepare_notefield<'a, S>(
         }
     }
     let mut field = prepare_field(request, frame_plan, field_zoom, column_y_offsets);
-    let spline_origin_y = request.geometry.screen_center_y + request.options.notefield_offset[1];
+    // Player::Load positions NoteField at the midpoint of the two native
+    // receptor metrics. Absolute spline coordinates retain that local origin.
+    let spline_origin_y = f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse);
     for (col, spline) in column_position_splines
         .iter()
         .enumerate()
@@ -544,6 +714,8 @@ pub fn prepare_notefield<'a, S>(
         column_x_offsets,
         column_position_splines,
         column_zoom_splines,
+        column_position_blends,
+        column_zoom_blends,
         column_spline_receptors,
         spline_origin_y,
         column_zooms,

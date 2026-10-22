@@ -51,6 +51,8 @@ fn render_fixture() -> RenderFrame {
                 texture_handle: 8,
                 camera: 0,
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
                 clear_depth: false,
             }),
         ],
@@ -225,6 +227,8 @@ fn semantic_comparison_accepts_mesh_and_textured_mesh_coalescing() {
         texture_handle: 8,
         camera: 0,
         depth_test: true,
+        depth_write: true,
+        depth_test_on_fail: false,
         clear_depth: false,
     }));
     let mut joined = split.clone();

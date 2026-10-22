@@ -1,0 +1,26 @@
+[
+  {
+    "button": "Left",
+    "base_rotation": 90,
+    "spark_rotation": 90,
+    "start_state": 0
+  },
+  {
+    "button": "Down",
+    "base_rotation": 0,
+    "spark_rotation": 0,
+    "start_state": 5
+  },
+  {
+    "button": "Up",
+    "base_rotation": 180,
+    "spark_rotation": 180,
+    "start_state": 8
+  },
+  {
+    "button": "Right",
+    "base_rotation": -90,
+    "spark_rotation": 90,
+    "start_state": 13
+  }
+]

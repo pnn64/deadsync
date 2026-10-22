@@ -655,12 +655,25 @@ pub(crate) fn update(
         effects,
     );
     let output = state.take_song_lua_output();
+    for command in output.actor_sounds {
+        use deadsync_song_lua::SongLuaActorSound;
+        match command {
+            SongLuaActorSound::Play { owner, path } => {
+                // Most assets are prewarmed. A callback may also author a new
+                // path at runtime; do not silently discard that valid sound.
+                let sound = sounds.resolve_path(&path).cloned().or_else(|| audio.prepare_sfx(&path));
+                if let Some(sound) = sound { audio.play_actor_sfx(owner, &sound); }
+            }
+            SongLuaActorSound::Stop { owner } => audio.stop_actor_sfx(owner),
+            SongLuaActorSound::Pause { owner, paused } => audio.pause_actor_sfx(owner, paused),
+        }
+    }
     for error in output.errors { log::warn!("Song Lua: {error}"); }
     for event in output.sounds {
         if let Some(sound) = sounds.resolve_path(&event.path) {
             audio.play_sfx(sound);
         } else {
-            log::warn!("Song Lua sound was not prewarmed: {}", event.path.display());
+            if let Some(sound) = audio.prepare_sfx(&event.path) { audio.play_sfx(&sound); }
         }
     }
     if let Some(request) = output.request {

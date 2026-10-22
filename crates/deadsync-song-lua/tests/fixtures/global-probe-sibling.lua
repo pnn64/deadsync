@@ -18,7 +18,7 @@ function advance_probe()
     probe_world.witness:x(probe_world.calls):y(math.random(1, 4)):z(helper_calls)
 end
 return Def.ActorFrame {
-    Def.Actor { OnCommand = function(self)
+    Def.ActorFrame { OnCommand = function(self)
         self:SetUpdateFunction(function()
             local beat = GAMESTATE:GetSongBeat()
             if not started and beat >= 1 then

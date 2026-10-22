@@ -1,0 +1,38 @@
+{
+  "execution_path": "compiled-rust",
+  "production_preparation_exercised": true,
+  "retained_lua_vm": false,
+  "compiled_gameplay_checks_passed": true,
+  "production_parity_proven": false,
+  "whole_song_parity_proven": false,
+  "pixel_parity_proven": false,
+  "archive_accepted": false,
+  "native_frames": 698,
+  "replayed_frames": 698,
+  "replayed_scenes": 2,
+  "checked_stage_samples": 30,
+  "compared_stage_fields": 660,
+  "interactive": {
+    "input_events_replayed": 102,
+    "draw_samples_compared": 16343,
+    "submitted_vertices_compared": 734094,
+    "live_text_samples_compared": 429,
+    "draw_mismatches": 0,
+    "equivalent_offscreen_culls": 35,
+    "uncompared_owned_immediate_draws": 0,
+    "last_draw_mismatch": null,
+    "pixel_parity_proven": false
+  },
+  "mismatches": [],
+  "errors": [],
+  "pending_coverage": [
+    "full-song completion",
+    "sampled framebuffer pixels",
+    "compiled command/query instrumentation"
+  ],
+  "native_trace": "fof-versus.trace.json.zst",
+  "native_trace_sha256": "2a17a3f75d0cb248f8335cc3d26478a74c009333981398bc3ca87fbe14537cf8",
+  "native_engine_commit": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "source_simfile": "lua-songs/fof_guys/fof.ssc",
+  "test_build": "Windows dev; song-lua opt-level=0 for focused iteration"
+}

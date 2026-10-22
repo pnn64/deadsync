@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "name": "kenpo-motion",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "bpm": 77,
+  "samples": [
+    0.0,
+    0.09740259740259741,
+    0.19480519480519481,
+    0.29220779220779225,
+    0.38961038961038963,
+    0.487012987012987,
+    0.5844155844155845,
+    0.6818181818181819,
+    0.7792207792207793,
+    0.8766233766233766,
+    0.974025974025974,
+    1.0714285714285714,
+    1.168831168831169,
+    1.2662337662337664,
+    1.3636363636363638,
+    1.4610389610389611,
+    1.5584415584415585
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "capture",
+    "children": [
+      {
+        "kind": "frame",
+        "name": "field-proxy",
+        "state": {
+          "position": [
+            427,
+            240,
+            0
+          ],
+          "zoom": [
+            1,
+            1,
+            1.334375
+          ]
+        },
+        "effect": {
+          "type": "wag",
+          "period": 1,
+          "magnitude": [
+            0,
+            20,
+            0
+          ],
+          "clock": "bgm_beat"
+        },
+        "children": [
+          {
+            "kind": "frame",
+            "name": "field-wrapper",
+            "state": {
+              "rotation": [
+                20,
+                0,
+                0
+              ]
+            },
+            "tweens": [
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    -20,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    20,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    -20,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    0,
+                    0,
+                    0
+                  ]
+                }
+              },
+              {
+                "duration": 0.19480519480519481,
+                "curve": "linear",
+                "state": {
+                  "rotation": [
+                    20,
+                    0,
+                    0
+                  ]
+                }
+              }
+            ],
+            "children": [
+              {
+                "kind": "sprite",
+                "name": "left",
+                "size": [
+                  64,
+                  64
+                ],
+                "state": {
+                  "position": [
+                    -224,
+                    -125,
+                    0
+                  ]
+                }
+              },
+              {
+                "kind": "sprite",
+                "name": "middle",
+                "size": [
+                  64,
+                  64
+                ],
+                "state": {
+                  "position": [
+                    32,
+                    -125,
+                    0
+                  ]
+                }
+              },
+              {
+                "kind": "sprite",
+                "name": "right",
+                "size": [
+                  64,
+                  64
+                ],
+                "state": {
+                  "position": [
+                    224,
+                    -125,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

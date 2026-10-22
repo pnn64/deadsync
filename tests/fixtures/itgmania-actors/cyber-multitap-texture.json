@@ -1,5 +1,5 @@
 {
-  "animated_texture": "../deadsync/assets/noteskins/dance/cyber/textures/Tap Note ani texture.ini",
+  "animated_texture": "assets/noteskins/dance/cyber/textures/Tap Note ani texture.ini",
   "cases": [
     {
       "music_rate": 0.75,
@@ -70,10 +70,10 @@
         {
           "animation_second": 166.9589080810547,
           "music_second": 127.32218170166016,
-          "texture_second": 0.958808660507202,
+          "texture_second": 0.9588086605072021,
           "translation": [
             0.0,
-            -0.958808660507202
+            -0.9588086605072021
           ]
         }
       ],
@@ -208,28 +208,28 @@
         {
           "animation_second": 30.876710891723633,
           "music_second": 48.418067932128906,
-          "texture_second": 0.8766925334930419,
+          "texture_second": 0.876692533493042,
           "translation": [
             0.0,
-            -0.8766925334930419
+            -0.876692533493042
           ]
         },
         {
           "animation_second": 31.97260284423828,
           "music_second": 50.06190490722656,
-          "texture_second": 0.972583830356598,
+          "texture_second": 0.9725838303565979,
           "translation": [
             0.0,
-            -0.972583830356598
+            -0.9725838303565979
           ]
         },
         {
           "animation_second": 83.47945404052734,
           "music_second": 127.32218170166016,
-          "texture_second": 0.47940453886985773,
+          "texture_second": 0.4794045388698578,
           "translation": [
             0.0,
-            -0.47940453886985773
+            -0.4794045388698578
           ]
         }
       ],

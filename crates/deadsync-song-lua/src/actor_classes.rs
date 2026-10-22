@@ -1,6 +1,7 @@
 // Native public method tables and instance lookup. Inventories come from the
 // bidirectional compiled ITGmania controls in actor-class-provenance.json.
-use mlua::{Lua, MultiValue, Table, Value};
+use mlua::{IntoLuaMulti, Lua, MultiValue, Table, Value};
+use crate::callback_args::{ForwardArgs, IgnoredArgs as ForwardResults};
 
 pub(crate) const METHODS_KEY: &str = "__songlua_bound_methods";
 
@@ -488,12 +489,12 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
         ("ActorProxy", Some("Actor"), &["SetTarget", "GetTarget"][..]),
         ("BitmapText", Some("Actor"), BITMAP),
     ] {
-        let class = lua.create_table()?;
+        let class = lua.create_table_with_capacity(0, methods.len())?;
         for method in methods {
             forward(lua, &class, method)?;
         }
         if let Some(base) = base {
-            let mt = lua.create_table()?;
+            let mt = lua.create_table_with_capacity(0, 1)?;
             mt.set("__index", globals.get::<Table>(base)?)?;
             class.set_metatable(Some(mt))?;
         }
@@ -505,7 +506,7 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
 pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Result<()> {
     class.set(
         name,
-        lua.create_function(move |lua, args: MultiValue| {
+        lua.create_function(move |lua, args: ForwardArgs| {
             let Some(Value::Table(actor)) = args.front() else {
                 return Err(mlua::Error::RuntimeError(format!(
                     "actor method {name} requires an actor"
@@ -529,14 +530,18 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
                 | "SetUpdateFunction" | "SetTarget" | "GetTexture" | "loop" | "rate")
                 && crate::live::active(lua)
                 && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
-            let trace_args = observed.then(|| args.clone());
-            if observed { crate::live::query_phase(lua, true); }
-            let result = method.call::<MultiValue>(args);
-            if let Some(args) = trace_args {
+            if observed {
+                // Trace reporting keeps the complete MultiValue path.
+                let args = args.into_lua_multi(lua)?;
+                let trace_args = args.clone();
+                crate::live::query_phase(lua, true);
+                let result = method.call::<MultiValue>(args);
                 crate::live::query_phase(lua, false);
-                crate::live::trace_bound_method(lua, name, &args, &result);
+                crate::live::trace_bound_method(lua, name, &trace_args, &result);
+                result.map(|values| ForwardResults::Many { _values: values })
+            } else {
+                method.call::<ForwardResults>(args)
             }
-            result
         })?,
     )
 }
@@ -595,6 +600,25 @@ fn is_core(kind: &str) -> bool {
     )
 }
 
+fn method_name_flags(lua: &Lua, name: &mlua::LuaString) -> mlua::Result<(bool, bool)> {
+    // SAFETY: the checked string stays rooted at base+1. Only validated flags
+    // leave the read scope; neither borrowed bytes nor a pointer escape.
+    unsafe {
+        crate::raw_vm::with_read_stack(lua, 1, |raw, base| {
+            raw.push(name)?;
+            let mut len = 0;
+            let data = mlua::ffi::lua_tolstring(raw.state(), base + 1, &mut len);
+            let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+            let text = std::str::from_utf8(bytes).map_err(|error| mlua::Error::FromLuaConversionError {
+                from: "string", to: "&str".into(), message: Some(error.to_string()),
+            })?;
+            Ok((!text.starts_with("__songlua_") && !text.ends_with("Command"),
+                matches!(text, "SetUpdateFunction" | "SetDrawFunction" | "GetDrawFunction")))
+        })
+    }
+}
+
+// Lua 5.1 gives every Lua closure a table environment; C functions have none.
 pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let bound = match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
         Some(bound) => bound,
@@ -602,19 +626,18 @@ pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     };
     let mut methods = Vec::new();
     actor.for_each::<Value, Value>(|key, value| {
-        if let (Value::String(name), Value::Function(function)) = (&key, &value) {
-            let name = name.to_str()?;
-            if !name.starts_with("__songlua_")
-                && !name.ends_with("Command")
-                && function.info().what == "C"
-            {
-                methods.push((key, value));
+        if let (Value::String(name), Value::Function(function)) = (key, value) {
+            let (native, _) = method_name_flags(lua, &name)?;
+            if native && function.environment().is_none() {
+                methods.push((name, function));
             }
         }
         Ok(())
     })?;
     for (key, value) in methods {
-        bound.raw_set(key.clone(), value)?;
+        let key = Value::String(key);
+        let value = Value::Function(value);
+        bound.raw_set(&key, value)?;
         actor.raw_set(key, Value::Nil)?;
     }
     actor.raw_set(METHODS_KEY, bound)
@@ -624,23 +647,18 @@ pub(crate) fn lookup(lua: &Lua, (actor, key): (Table, Value)) -> mlua::Result<Va
     let Value::String(name) = &key else {
         return Ok(Value::Nil);
     };
-    let name = name.to_str()?;
+    let (_, frame_callback) = method_name_flags(lua, name)?;
     let kind = actor
         .raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_actor_type")?;
     let kind = kind.as_ref().map_or("Actor", |kind| kind.as_str());
     if let Some(class) = lua.globals().get::<Option<Table>>(class_name(kind))? {
-        let method = class.get::<Value>(key.clone())?;
+        let method = class.get::<Value>(&key)?;
         if !method.is_nil() { return Ok(method); }
         if is_core(kind) { return Ok(Value::Nil); }
     }
     // Unlinked classes retain their existing own adapters until their native
     // inventories are audited. Frame callbacks are never inherited by Actor.
-    if !is_frame(kind)
-        && matches!(
-            name.as_ref(),
-            "SetUpdateFunction" | "SetDrawFunction" | "GetDrawFunction"
-        )
-    {
+    if !is_frame(kind) && frame_callback {
         return Ok(Value::Nil);
     }
     match actor.raw_get::<Option<Table>>(METHODS_KEY)? {
@@ -649,12 +667,10 @@ pub(crate) fn lookup(lua: &Lua, (actor, key): (Table, Value)) -> mlua::Result<Va
     }
 }
 
-pub(crate) fn assign(_: &Lua, (actor, key, value): (Table, Value, Value)) -> mlua::Result<()> {
+pub(crate) fn assign(lua: &Lua, (actor, key, value): (Table, Value, Value)) -> mlua::Result<()> {
     if let (Value::String(name), Value::Function(function)) = (&key, &value) {
-        let name = name.to_str()?;
-        if !name.starts_with("__songlua_")
-            && !name.ends_with("Command")
-            && function.info().what == "C"
+        let (native, _) = method_name_flags(lua, name)?;
+        if native && function.environment().is_none()
             && let Some(methods) = actor.raw_get::<Option<Table>>(METHODS_KEY)?
         {
             return methods.raw_set(key, value);
@@ -662,6 +678,18 @@ pub(crate) fn assign(_: &Lua, (actor, key, value): (Table, Value, Value)) -> mlu
     }
     actor.raw_set(key, value)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/native_function.rs"]
+mod native_function_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/vm_reads_actor.rs"]
+mod vm_reads_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/method_storage.rs"]
+mod method_storage_perf;
 
 #[cfg(test)]
 mod tests {
@@ -754,3 +782,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/forward_values.rs"]
+pub(crate) mod forward_values_perf;

@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "name": "runtime-size-zoom",
+  "screen": {"width": 854, "height": 480},
+  "bpm": 60,
+  "samples": [0, 0.1, 0.3, 0.5833333333333333, 0.6, 1.1, 1.2, 1.5],
+  "root": {
+    "kind": "frame",
+    "name": "Root",
+    "children": [
+      {
+        "kind": "sprite", "name": "Resized", "size": [1280, 720],
+        "state": {"position": [427, 240, 0]},
+        "commands": {"Resize": {"size": [854, 480]}},
+        "tweens": [
+          {"curve": "sleep", "duration": 1},
+          {"queuecommand": "Resize"}
+        ]
+      },
+      {
+        "kind": "sprite", "name": "Beat", "size": [64, 32],
+        "state": {"position": [427, 240, 0], "zoom": [0, 0, 0]},
+        "tweens": [
+          {"curve": "sleep", "duration": 0.016666666666666666},
+          {"curve": "decelerate", "duration": 0.585, "state": {"zoom": [1.4, 1.4, 1.4]}},
+          {"curve": "linear", "duration": 0, "state": {"zoom": [0, 0, 0]}}
+        ]
+      }
+    ]
+  }
+}

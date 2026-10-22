@@ -1,0 +1,458 @@
+{
+  "images": [
+    {
+      "path": "_Down Receptor Go (res 64x63).png",
+      "width": 156,
+      "height": 154
+    },
+    {
+      "path": "Down Hold Body active.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold BottomCap active.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Roll Body active.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll BottomCap Active.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Tap Explosion Bright (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "Left Hold Body active.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Left Hold Body inactive.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Left Hold BottomCap active.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Left Hold BottomCap inactive.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Left Roll Body active.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Left Roll Body inactive.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Left Roll BottomCap Active.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Left Roll BottomCap inactive.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Left Tap Explosion Bright (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "Right Hold Body active.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Right Hold Body inactive.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Right Hold BottomCap active.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Right Hold BottomCap inactive.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Right Roll Body Active.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Right Roll Body inactive.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Right Roll BottomCap Active.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Right Roll BottomCap inactive.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Right Tap Explosion Bright (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "textures/Down Tap Note parts.png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "textures/fire_1.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_10.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_11.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_12.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_2.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_3.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_4.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_5.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_6.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_7.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_8.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_9.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/Left Tap Note parts.png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "textures/Right Tap Note parts.png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "textures/Tap Lift parts.png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "textures/Tap Mine parts.png",
+      "width": 1,
+      "height": 1
+    },
+    {
+      "path": "textures/Up Tap Note parts.png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "Up Hold Body active.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Up Hold Body inactive.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Up Hold BottomCap active.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Up Hold BottomCap inactive.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Up Roll Body active.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Up Roll Body inactive.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Up Roll BottomCap active.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Up Roll BottomCap inactive.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Up Tap Explosion Bright (res 93x93).png",
+      "width": 229,
+      "height": 228
+    }
+  ],
+  "audio": [],
+  "sources": [
+    {
+      "path": "__CREDITS.txt",
+      "sha256": "33a1b1f5c533763d069e55a838f811a9e861e7104e1a916b289e4afe9ecbf4e0"
+    },
+    {
+      "path": "_down tap addition meshes.txt",
+      "sha256": "08e9a510eef17988976364e41bcc0bb21483c855ac6add2bc48535fccc908e79"
+    },
+    {
+      "path": "_down tap lift meshes.txt",
+      "sha256": "aed8f3fc8373a9cbf1c06ca4133052f9627bd3ce033cb0b13ba0a04f043a7dcd"
+    },
+    {
+      "path": "_down tap mine.model",
+      "sha256": "c3aa6a7a7dfac37a3f496c344a6763a195a92195d487a35a50d64782e2bc139a"
+    },
+    {
+      "path": "_Down Tap Note materials.txt",
+      "sha256": "f1064e7344a8cdb2b70f7f801049812f05b6764362631f35676098ad0255b705"
+    },
+    {
+      "path": "_down tap note meshes.txt",
+      "sha256": "08e9a510eef17988976364e41bcc0bb21483c855ac6add2bc48535fccc908e79"
+    },
+    {
+      "path": "_left tap mine.model",
+      "sha256": "ade6622846494f7f3da4a0a152516e533736c676d5f7f273b32fa3616a9f85e8"
+    },
+    {
+      "path": "_Left Tap Note materials.txt",
+      "sha256": "dc5ceccb82d389a71d9fad58727fbdd8df0594b24739eb7ed360d2b07728ed15"
+    },
+    {
+      "path": "_mine meshes down.txt",
+      "sha256": "67dd061f5ca77f1e1de4fa55ffc6e4b2abee7cbb8f229471232556fa5242fbd0"
+    },
+    {
+      "path": "_mine meshes left.txt",
+      "sha256": "866c8a2254b71abe0ebf4059c97414078bc3ba2fb96f96dba5be95723e70b2b3"
+    },
+    {
+      "path": "_mine meshes right.txt",
+      "sha256": "f61ae0376a95de6aa31f01a878202aa360e78eba766e32229fef4db9f804ecb3"
+    },
+    {
+      "path": "_mine meshes up.txt",
+      "sha256": "5b98785382c2b1089672857272a46f1774a185853797133629accfd7bdc6f6e2"
+    },
+    {
+      "path": "_right tap mine.model",
+      "sha256": "ee434fc141d80a4348ed8750b0e11e00e88f0457f1ea2d9fb3c5d91aec42f6e5"
+    },
+    {
+      "path": "_Right Tap Note materials.txt",
+      "sha256": "371648c6d3606255806dbf92b1c914f7f64f9469ca3d3d4294fb07f6ad03b7eb"
+    },
+    {
+      "path": "_up tap mine.model",
+      "sha256": "d1b8a99627373dfde518aeb5ae36cffbb92ffbfb2f885050d33502def48f32ff"
+    },
+    {
+      "path": "_Up Tap Note materials.txt",
+      "sha256": "a229cd7baec0474ed0974f09bf2dbb17779949a8e2a5b63ca26c60fb9f74c51e"
+    },
+    {
+      "path": "down hold explosion.redir",
+      "sha256": "ca7ca76645e648c9077600ad098209fc78436f6f494df6cfb1170162b239ae31"
+    },
+    {
+      "path": "Down Receptor.lua",
+      "sha256": "5e4edba8a7b076a7c94a48a0cd13eb6789937b2232a9782bd897bc1a9a579549"
+    },
+    {
+      "path": "Down Tap Explosion Dim.redir",
+      "sha256": "03adc3aa44528e91e286535b55f90f14481039a3af7a6a220127fd1671bb39c4"
+    },
+    {
+      "path": "Down Tap Lift.lua",
+      "sha256": "576c4388af1d2dbb284c259c2d494fc41f802147e0aa20ba9ae775cc9a9f61ac"
+    },
+    {
+      "path": "Down Tap Mine.lua",
+      "sha256": "6c6b3f4f8f4a424175b86d19b02102878319edebeb592e11b1348c9b370845f6"
+    },
+    {
+      "path": "Down Tap Note.lua",
+      "sha256": "f77f1d11818903bf31c39051dfbc2739d66a26269e8b9bae2756c508dc6bbeed"
+    },
+    {
+      "path": "Fallback Explosion.lua",
+      "sha256": "f02c81759d5d8aba045fdd2c648e1e7e526508c9d6fc102471f6f676c6bd1d9a"
+    },
+    {
+      "path": "left hold explosion.redir",
+      "sha256": "4234af015b4e566e3f9bfd6c1c57c01a1a4ee4c3c487a49e873d5e8e66754983"
+    },
+    {
+      "path": "Left Receptor.redir",
+      "sha256": "e75e0cbc3bbadd6af2b8b888244084add2e1b852ae33a4b8cc2b8f8c36fae74e"
+    },
+    {
+      "path": "Left Tap Explosion Dim.redir",
+      "sha256": "de126e4486161199b055feba24c7f427fab874a5ab3fbf7653a47ac2d31ba6de"
+    },
+    {
+      "path": "Left Tap Lift.redir",
+      "sha256": "cabb16f8d5c527b0bc96d724becb29ebb49be0d671c9a9ca3d1a5ce71a95aa46"
+    },
+    {
+      "path": "Left Tap Mine.lua",
+      "sha256": "b09b35d0e59bd8d3c2a40b47f7090566cf8be98017fd9675126fec91a11d81a4"
+    },
+    {
+      "path": "Left Tap Note.lua",
+      "sha256": "b78189a485bae03e9995f6cbc02f5af048c25680e391d77c11a0ab846cf6e3d2"
+    },
+    {
+      "path": "metrics.ini",
+      "sha256": "e6216d5545a23d42c253e9dd696df1eb6ed7d586ae9906ac1cebc4b3953b59af"
+    },
+    {
+      "path": "NoteSkin.lua",
+      "sha256": "125b0a214dc954904132800a7f44c13965ee5a08330894127b0688321dec51e4"
+    },
+    {
+      "path": "right hold explosion.redir",
+      "sha256": "21fb7435527e08b5b49b3ed881f03e4d2e497c5a5739091035b23a5eb67dd0ff"
+    },
+    {
+      "path": "Right Receptor.redir",
+      "sha256": "e75e0cbc3bbadd6af2b8b888244084add2e1b852ae33a4b8cc2b8f8c36fae74e"
+    },
+    {
+      "path": "Right Tap Explosion Dim.redir",
+      "sha256": "71928126fb075f0caef65af74d9cc6bf66cb926f1aa3bcd0f62a42d9f7d6218e"
+    },
+    {
+      "path": "Right Tap Lift.redir",
+      "sha256": "cabb16f8d5c527b0bc96d724becb29ebb49be0d671c9a9ca3d1a5ce71a95aa46"
+    },
+    {
+      "path": "Right Tap Mine.lua",
+      "sha256": "9d90b54638bd758fe0c433e8745fe7a8ba03efb9ed3bf0cf97a5056cf59578ab"
+    },
+    {
+      "path": "Right Tap Note.lua",
+      "sha256": "cf0146d505d95b3e4f0e48db7887270b04d7001a64de742b855951489d30184f"
+    },
+    {
+      "path": "textures/_mine flame.ini",
+      "sha256": "860810c3bcb0e1294268fb1da23547fd2b090f2e0338ba3c2cf9ead5579aa1ab"
+    },
+    {
+      "path": "up hold explosion.redir",
+      "sha256": "d3e60f352a5e654e6a67fb6e0aa6c602d4433895e5e76a0d711d1f5bfa563515"
+    },
+    {
+      "path": "Up Receptor.redir",
+      "sha256": "e75e0cbc3bbadd6af2b8b888244084add2e1b852ae33a4b8cc2b8f8c36fae74e"
+    },
+    {
+      "path": "Up Tap Explosion Dim.redir",
+      "sha256": "f976cd83a92a2e486fcc03a755086a4224e7af17704b55953ee723cd5c4c1e40"
+    },
+    {
+      "path": "Up Tap Lift.redir",
+      "sha256": "cabb16f8d5c527b0bc96d724becb29ebb49be0d671c9a9ca3d1a5ce71a95aa46"
+    },
+    {
+      "path": "Up Tap Mine.lua",
+      "sha256": "7c54960d09fbdb4fbe29efda7b3533b59cc2bcf2b94cb907e3f755863081b4b8"
+    },
+    {
+      "path": "Up Tap Note.lua",
+      "sha256": "6bcf18f0aec82aca61d994b5713035ad307d7215476b97285d2105d8b60ca089"
+    }
+  ]
+}

@@ -1,0 +1,177 @@
+{
+  "scope": "Missing coverage is recorded separately from full replay acceptance.",
+  "prior_coverage": "ninth-ten-2026-10-18-coverage.json",
+  "charts": {
+    "Lesson by DJ/Lesson by DJ.ssc": {
+      "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.SetHeight, Actor.SetWidth, Actor.addcommand, Actor.effectclock, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.skewx, Actor.skewy, Actor.stretchto, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.GetChildren, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, GameState.GetSongPosition, PlayerOptions.FromString, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData, Sprite.SetTexture",
+        "native drawable state/resources: ActorFrameTexture, ActorProxy, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/2/10/1",
+        "missing captured subscriber identity for ScreenGameplay/2/14/1",
+        "missing captured subscriber identity for ScreenGameplay/25",
+        "missing captured subscriber identity for ScreenGameplay/26/1/1",
+        "missing captured subscriber identity for ScreenGameplay/26/1/10",
+        "missing captured subscriber identity for ScreenGameplay/26/1/12",
+        "missing captured subscriber identity for ScreenGameplay/26/1/2",
+        "missing captured subscriber identity for ScreenGameplay/26/1/4",
+        "missing captured subscriber identity for ScreenGameplay/26/1/5",
+        "missing captured subscriber identity for ScreenGameplay/26/1/7",
+        "missing captured subscriber identity for ScreenGameplay/26/1/9",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    },
+    "Metronogik/Song.ssc": {
+      "source_simfile": "Metronogik/Song.ssc",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.addcommand, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.xy, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorMultiVertex.GetTexture, BitmapText.GetText, BitmapText.settext, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.ConfusionOffset1, PlayerOptions.ConfusionOffset2, PlayerOptions.ConfusionOffset3, PlayerOptions.ConfusionOffset4, PlayerOptions.DrawSize, PlayerOptions.FromString, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.MoveY1, PlayerOptions.MoveY2, PlayerOptions.MoveY3, PlayerOptions.MoveY4, PlayerOptions.Stealth, PlayerOptions.XMod, RageDisplay.GetDisplayHeight, RageDisplay.GetDisplayWidth, Song.GetTimingData",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    },
+    "mawaru9/mawaru9.sm": {
+      "source_simfile": "mawaru9/mawaru9.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomY, Actor.GetZoomZ, Actor.accelerate, Actor.addx, Actor.addy, Actor.addz, Actor.basezoomx, Actor.basezoomy, Actor.blend, Actor.bob, Actor.bounce, Actor.bouncebegin, Actor.bounceend, Actor.cropbottom, Actor.cropleft, Actor.cropright, Actor.croptop, Actor.diffuseramp, Actor.diffuseshift, Actor.effect_hold_at_full, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadeleft, Actor.faderight, Actor.fadetop, Actor.finishtweening, Actor.glow, Actor.glowshift, Actor.hibernate, Actor.horizalign, Actor.playcommand, Actor.pulse, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.skewx, Actor.skewy, Actor.smooth, Actor.spring, Actor.stopeffect, Actor.stoptweening, Actor.stretchto, Actor.texturetranslate, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, Actor.zoomz, Actor.ztest, Actor.ztestmode, Actor.zwrite, ActorFrame.GetChildren, ActorFrame.SetDrawByZPosition, ActorFrame.fov, ActorSound.play, BitmapText.settext, GameState.IsHumanPlayer, GameState.PlayerIsUsingModifier, PlayerOptions.Beat, PlayerOptions.Centered, PlayerOptions.Dark, PlayerOptions.DrawSize, PlayerOptions.Drunk, PlayerOptions.Flip, PlayerOptions.NoteSkin, PlayerOptions.Stealth, PlayerOptions.Tipsy, PlayerOptions.XMod, PlayerStageStats.GetPercentDancePoints, PrefsManager.SetPreference, Screen.AddInputCallback, Song.GetAllSteps, Sprite.Load, Sprite.SetStateProperties, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Model, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    },
+    "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm": {
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetX, Actor.GetY, Actor.accelerate, Actor.addx, Actor.addy, Actor.blend, Actor.bob, Actor.bounce, Actor.cropbottom, Actor.diffuseblink, Actor.diffuseshift, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.fadebottom, Actor.fadeleft, Actor.faderight, Actor.fadetop, Actor.finishtweening, Actor.horizalign, Actor.pulse, Actor.rotationx, Actor.rotationy, Actor.shadowlength, Actor.stopeffect, Actor.vertalign, Actor.wag, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.zoomy, ActorFrame.SetDrawByZPosition, ActorFrame.fov, BitmapText.maxheight, BitmapText.maxwidth, BitmapText.settext, GameState.IsEventMode, GameState.PlayerIsUsingModifier, Sprite.SetStateProperties, Sprite.customtexturerect, Sprite.setstate, Sprite.texcoordvelocity",
+        "native drawable state/resources: BitmapText, Quad, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ]
+    }
+  },
+  "private_controls": {
+    "theme-text-control-3": {
+      "control_only_not_a_catalog_fixture": true,
+      "pending_coverage": [
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/TapNoteJudgments//6",
+          "native_text": "GREAT",
+          "owned_text": "W3"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData//2//2",
+          "native_text": "remaining ",
+          "owned_text": "Remaining "
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/TapNoteJudgments//4",
+          "native_text": "EXCELLENT",
+          "owned_text": "W2"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/TapNoteJudgments//8",
+          "native_text": "DECENT",
+          "owned_text": "W4"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData//2//4",
+          "native_text": "song ",
+          "owned_text": "Song "
+        },
+        {
+          "path": "ScreenGameplay/Underlay/NoteFieldContainerP1//3/",
+          "native_text": "PlayerAutoPlay, Overhead",
+          "owned_text": "NoHideLights, PlayerAutoPlay, Overhead"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/TapNoteJudgments//2",
+          "native_text": "FANTASTIC",
+          "owned_text": "W1"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/TapNoteJudgments//10",
+          "native_text": "WAY OFF",
+          "owned_text": "W5"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/P1Score",
+          "native_text": " 0.00",
+          "owned_text": "0.00%"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/HoldsMinesRolls/Mines_Label",
+          "native_text": "mines",
+          "owned_text": "Mines"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/HoldsMinesRolls/Rolls_Label",
+          "native_text": "rolls",
+          "owned_text": "Rolls"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1/BannerAndData/HoldsMinesRolls/Holds_Label",
+          "native_text": "holds",
+          "owned_text": "Holds"
+        },
+        {
+          "path": "ScreenGameplay/Underlay/StepStatsPaneP1//2//1",
+          "native_text": "Peak NPS: 1",
+          "owned_text": "PeakNPS: 1"
+        }
+      ],
+      "scope": "Exact wording/formatting differences observed in a diagnostic; no new catalog acceptance gate."
+    },
+    "background-judgment-order-control": {
+      "scope": "Complete native On-activation versus same-frame Player judgment order; diagnostic control, not a catalog fixture",
+      "native_frames": 543,
+      "baseline_mismatches": 6,
+      "repaired_archive_accepted": true,
+      "repaired_mismatches": 0,
+      "pending_coverage": [
+        "Per-frame background Update callbacks relative to Player judgments remain in the later actor traversal; this repair covers frame preparation and On activation only. No new acceptance gate was added."
+      ]
+    }
+  }
+}

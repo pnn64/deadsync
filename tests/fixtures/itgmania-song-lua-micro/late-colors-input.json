@@ -330,7 +330,7 @@
           ]
         },
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "effect": {
               "type": "diffuse_blink",
               "period": 1.25,
@@ -366,14 +366,14 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -387,7 +387,7 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -419,7 +419,7 @@
           ]
         },
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "effect": {
               "type": "diffuse_shift",
               "period": 1.25,
@@ -455,14 +455,14 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -476,7 +476,7 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -508,7 +508,7 @@
           ]
         },
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "effect": {
               "type": "diffuse_ramp",
               "period": 1.25,
@@ -544,14 +544,14 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -565,7 +565,7 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -597,7 +597,7 @@
           ]
         },
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "effect": {
               "type": "glow_blink",
               "period": 1.25,
@@ -633,14 +633,14 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -654,7 +654,7 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -686,7 +686,7 @@
           ]
         },
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "effect": {
               "type": "glow_shift",
               "period": 1.25,
@@ -722,14 +722,14 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -743,7 +743,7 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -775,7 +775,7 @@
           ]
         },
         "commands": {
-          "Begin": {
+          "StartEffect": {
             "effect": {
               "type": "glow_ramp",
               "period": 1.25,
@@ -811,14 +811,14 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,
@@ -832,7 +832,7 @@
             "curve": "sleep"
           },
           {
-            "queuecommand": "Begin"
+            "queuecommand": "StartEffect"
           },
           {
             "duration": 0.5,

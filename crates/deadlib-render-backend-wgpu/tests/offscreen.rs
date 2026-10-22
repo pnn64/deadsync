@@ -63,6 +63,8 @@ fn mesh_op(geometry: u32, instance: u32, camera: u8) -> DrawOp {
         texture_handle: 1,
         camera,
         depth_test: true,
+        depth_write: true,
+        depth_test_on_fail: false,
         clear_depth: false,
     })
 }
@@ -259,6 +261,8 @@ fn rotated_field(angle: f32, offscreen: bool) -> (RenderFrame, Mat4) {
             texture_handle: 1,
             camera: 0,
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: false,
         }),
     ];
@@ -395,6 +399,7 @@ fn check_model_samplers(state: &mut backend::State) {
         };
         run.sampler = *sampler;
         run.depth_test = false;
+        run.depth_write = false;
         frame.ops.push(op);
     }
     let capture = capture(state, &frame, &textures);

@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "name": "cyber-tap-repeat",
+  "samples": [
+    0.0,
+    0.0125,
+    0.025,
+    0.05,
+    0.075,
+    0.149,
+    0.16,
+    0.23,
+    0.238,
+    0.2495,
+    0.262,
+    0.287,
+    0.312,
+    0.386,
+    0.388
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "tap",
+        "size": [
+          64,
+          64
+        ],
+        "state": {
+          "diffuse": [
+            1,
+            1,
+            1,
+            1.2
+          ],
+          "zoom": [
+            1.1,
+            1.1,
+            1.1
+          ]
+        },
+        "effect": {
+          "type": "glow_shift",
+          "period": 0.05,
+          "color1": [
+            1,
+            1,
+            1,
+            0
+          ],
+          "color2": [
+            1,
+            1,
+            1,
+            0.5
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 0.15,
+            "curve": "accelerate",
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                0
+              ],
+              "zoom": [
+                1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "duration": 0.087,
+            "curve": "sleep"
+          },
+          {
+            "duration": 0.0,
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                1.2
+              ],
+              "zoom": [
+                1.1,
+                1.1,
+                1.1
+              ]
+            }
+          },
+          {
+            "duration": 0.15,
+            "curve": "accelerate",
+            "state": {
+              "diffuse": [
+                1,
+                1,
+                1,
+                0
+              ],
+              "zoom": [
+                1,
+                1,
+                1
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

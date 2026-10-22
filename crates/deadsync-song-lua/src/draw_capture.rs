@@ -178,11 +178,44 @@ pub(crate) fn finish(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
+struct IsSprite(bool);
+
+impl mlua::FromLua for IsSprite {
+    fn from_lua(value: mlua::Value, _: &Lua) -> mlua::Result<Self> {
+        Ok(Self(matches!(value, mlua::Value::String(kind)
+            if kind.as_bytes().eq_ignore_ascii_case(b"Sprite"))))
+    }
+
+    unsafe fn from_stack(index: std::os::raw::c_int, raw: &mlua::state::RawLua) -> mlua::Result<Self> {
+        // SAFETY: mlua supplies a live stack slot under its VM lock. Borrow
+        // only an actual Lua string; no coercion, allocation or pointer escapes.
+        // Non-strings and arbitrary binary strings retain Value's predicate.
+        unsafe {
+            let state = raw.state();
+            if mlua::ffi::lua_type(state, index) != mlua::ffi::LUA_TSTRING {
+                return Ok(Self(false));
+            }
+            let mut len = 0;
+            let data = mlua::ffi::lua_tolstring(state, index, &mut len);
+            let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
+            Ok(Self(bytes.eq_ignore_ascii_case(b"Sprite")))
+        }
+    }
+}
+
 fn state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
     if crate::live::active(lua) {
         crate::live::read_state(lua, actor)
     } else {
-        actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+        // An uninitialized Sprite may resolve Texture/AFT through authored
+        // __index code before later scalar fields are read. Keep those reads
+        // sequential so mutations and errors from that lookup stay observable.
+        let sprite = actor.raw_get::<IsSprite>("__songlua_actor_type")?.0;
+        if sprite && actor.raw_get::<mlua::Value>("__songlua_state_sprite_texture")?.is_nil() {
+            actor_overlay_initial_state(actor).map_err(mlua::Error::external)
+        } else {
+            crate::lua_util::actor_overlay_state_batched(lua, actor).map_err(mlua::Error::external)
+        }
     }
 }
 
@@ -214,8 +247,12 @@ fn scoped_context(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<Opt
     {
         return Ok(None);
     }
-    let mut parents = prior.parents.to_vec();
-    if let Some(wrappers) = actor.raw_get::<Option<Table>>("__songlua_wrappers")? {
+    let wrappers = actor.raw_get::<Option<Table>>("__songlua_wrappers")?;
+    let mut parents = Vec::with_capacity(
+        prior.parents.len() + wrappers.as_ref().map_or(0, Table::raw_len) + 1,
+    );
+    parents.extend_from_slice(&prior.parents);
+    if let Some(wrappers) = wrappers {
         for index in (1..=wrappers.raw_len()).rev() {
             let wrapper = state(lua, &wrappers.raw_get::<Table>(index)?)?;
             if !wrapper.draw_visible()
@@ -285,12 +322,12 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 }
             } else {
                 let kind = actor
-                    .get::<Option<String>>("__songlua_actor_type")?
-                    .unwrap_or_default();
+                    .get::<Option<crate::lua_util::LuaFieldText<32>>>("__songlua_actor_type")?;
+                let kind = kind.as_ref().map_or("", |kind| kind.as_str());
                 let external = actor
-                    .raw_get::<Option<String>>("__songlua_top_screen_child_name")?
+                    .raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_top_screen_child_name")?
                     .is_some()
-                    || actor.raw_get::<Option<String>>("__songlua_player_child_name")?.is_some();
+                    || actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_player_child_name")?.is_some();
                 // Actor::DrawPrimitives is empty. Logic actors still receive
                 // explicit Draw calls, but submit no geometry or draw payload.
                 if kind.eq_ignore_ascii_case("Actor") {
@@ -337,15 +374,14 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                         .last()
                         .expect("draw context includes the actor");
                     // The leaf is built separately; wrappers remain in its caller stack.
-                    let mut parents = context.parents.to_vec();
-                    parents.pop();
+                    let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
                     push(
                         lua,
                         RawOp::Draw(
                             pointer,
                             local,
                             Context {
-                                parents: parents.into(),
+                                parents,
                                 ..context
                             },
                             vertices,
@@ -482,7 +518,10 @@ pub(crate) fn run(lua: &Lua, root: &Table) -> mlua::Result<()> {
         .globals()
         .raw_get::<Option<Table>>("__songlua_top_screen")?;
     let screen = screen.as_ref().map(|actor| state(lua, actor)).transpose()?;
-    let parents = screen.into_iter().collect::<Vec<_>>().into();
+    let parents = screen.as_ref().map_or_else(
+        || Arc::from([]),
+        |state| Arc::from(std::slice::from_ref(state)),
+    );
     let result = visit(
         lua,
         root,
@@ -571,7 +610,10 @@ pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
     convert(frozen, &sources.0).map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
 }
 
-fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<Vec<(usize, DrawFrame)>, String> {
+fn convert(
+    capture: Capture,
+    sources: &FxHashMap<usize, DrawSource>,
+) -> Result<Vec<(usize, DrawFrame)>, String> {
     let overlay_index = |pointer| match sources.get(&pointer) {
         Some(DrawSource::Overlay(index)) => Ok(*index),
         _ => Err("custom draw references an uncompiled capture or callback owner".to_owned()),
@@ -584,7 +626,22 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
             }
         }
     }
-    let mut frames = Vec::new();
+    // Normal frames include the union of callback owners, even quiet tails.
+    // Duplicate authored pointers may need extra slots and retain Vec growth.
+    let capacity = capture
+        .frames
+        .iter()
+        .map(|frame| {
+            if frame.immediate {
+                frame.owners.len()
+            } else {
+                frame.owners.len().max(owners.len())
+            }
+        })
+        .sum();
+    let mut frames = Vec::with_capacity(capacity);
+    let mut positions = FxHashMap::<usize, usize>::default();
+    let mut counts = Vec::new();
     for raw in capture.frames {
         let mut frame_owners = raw.owners;
         for &owner in owners.iter().filter(|_| !raw.immediate) {
@@ -592,22 +649,54 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
                 frame_owners.push(owner);
             }
         }
-        let mut by_owner = frame_owners
-            .into_iter()
-            .map(|pointer| {
-                let owner = overlay_index(pointer)?;
-                Ok((
-                    owner,
-                    DrawFrame {
-                        second: raw.second,
-                        immediate: raw.immediate,
-                        owners: vec![owner],
-                        owner_ends: Vec::new(),
-                        ops: Vec::new(),
-                    },
-                ))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
+        let start = frames.len();
+        // With one owner every valid call belongs to that frame. Quiet tails
+        // reserve nothing; multiple owners retain their independent growth.
+        let command_capacity = if frame_owners.len() == 1 {
+            raw.calls.len()
+        } else {
+            0
+        };
+        let multiple = frame_owners.len() > 1 && !raw.calls.is_empty();
+        if multiple {
+            positions.clear();
+            positions.reserve(frame_owners.len());
+            counts.clear();
+            counts.resize(frame_owners.len(), 0usize);
+        }
+        for pointer in frame_owners {
+            let owner = overlay_index(pointer)?;
+            // Aliased source bindings and duplicate owners route to the first
+            // output frame, matching the original ordered search.
+            if multiple {
+                positions.entry(owner).or_insert(frames.len() - start);
+            }
+            frames.push((
+                owner,
+                DrawFrame {
+                    second: raw.second,
+                    immediate: raw.immediate,
+                    owners: vec![owner],
+                    owner_ends: Vec::with_capacity(1),
+                    ops: Vec::with_capacity(command_capacity),
+                },
+            ));
+        }
+        let by_owner = &mut frames[start..];
+        if multiple {
+            // This sizing pass must not validate calls: source/target errors
+            // still occur in operation order in the consuming loop below.
+            for call in &raw.calls {
+                if let Some(DrawSource::Overlay(owner)) = sources.get(&call.owner)
+                    && let Some(&index) = positions.get(owner)
+                {
+                    counts[index] += 1;
+                }
+            }
+            for ((_, frame), count) in by_owner.iter_mut().zip(&counts) {
+                frame.ops.reserve_exact(*count);
+            }
+        }
         for call in raw.calls {
             let owner = overlay_index(call.owner)?;
             let op = match call.op {
@@ -635,16 +724,29 @@ fn convert(capture: Capture, sources: &FxHashMap<usize, DrawSource>) -> Result<V
                     vertices,
                 },
             };
-            if let Some((_, frame)) = by_owner.iter_mut().find(|(index, _)| *index == owner) {
+            let slot = if multiple {
+                positions.get(&owner).copied()
+            } else {
+                by_owner
+                    .first()
+                    .filter(|(index, _)| *index == owner)
+                    .map(|_| 0)
+            };
+            if let Some(slot) = slot {
+                let frame = &mut by_owner[slot].1;
                 frame.ops.push(op);
             } else {
                 return Err("custom draw lost its callback owner".to_owned());
             }
         }
-        for (_, frame) in &mut by_owner {
+        for (_, frame) in by_owner {
             frame.owner_ends.push(frame.ops.len());
         }
-        frames.extend(by_owner);
     }
     Ok(frames)
+}
+
+#[cfg(test)]
+pub(crate) mod perf {
+    include!("../tests/perf/draw_capture.rs");
 }

@@ -563,17 +563,12 @@
     {
       "title": "7th Gear",
       "source_simfile": "7th Gear/7th Gear.ssc",
-      "harness_version": "0.1.31",
-      "archive": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d.tar.zst",
-      "sha256": "229d287bd2ed09f3e247e11c634a59045737b04b41a8b7c7a6ca651b3038719d",
-      "compressed_bytes": 7300486,
-      "uncompressed_sha256": "718a787a838c89e62b3b5baf0491985927b56d077da603805cb5f3b6eeefaf57",
-      "compression_level": 12,
-      "aliases": [
-        "44d5aef96f51cd946006b48995e2f7f6503ad0db2bf9f9ae2ff26fa03138c55a.tar.zst",
-        "8212e118c8866bc755091fd249497fdb853c6c2cdb99219a6776ad70563d3984.tar.zst",
-        "1ddf6912247513fa3263b175e4ced5881a53f514ae3af175a00e59d9cafb8ddb.tar.zst"
-      ]
+      "harness_version": "0.1.80",
+      "archive": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d.tar.zst",
+      "compressed_bytes": 22659001,
+      "sha256": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d",
+      "uncompressed_sha256": "305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0",
+      "aliases": []
     },
     {
       "title": "99+",
@@ -2643,15 +2638,13 @@
     {
       "title": "Hallways",
       "source_simfile": "Hallways/hallways.ssc",
-      "harness_version": "0.1.0",
-      "archive": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5.tar.zst",
-      "sha256": "9dfe968d0339658b3ce6cbe82f4f7ce9a6320e00c366cf3ff26d17e7727d56b5",
-      "compressed_bytes": 92784,
-      "uncompressed_sha256": "40de13390dbbdc44b7a6f07ec362ebc909dffc890661aea35998f6b91994f285",
-      "compression_level": 22,
-      "aliases": [
-        "cb865534f1e9428c31993c540e6371624b4ca944054037d162cf59923a0d7431.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "d29c96b1c042099c079a9f492c15a534a22f1239286da0bb16ebaf3ccdc5cca3.tar.zst",
+      "compressed_bytes": 108950054,
+      "sha256": "d29c96b1c042099c079a9f492c15a534a22f1239286da0bb16ebaf3ccdc5cca3",
+      "uncompressed_sha256": "54930a40507dc27022f381129d6329b8bbc8d52ad5e16b917cdf45c29b5811cc",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "\u5e78\u305b\u306b\u306a\u308c\u308b\u96a0\u3057\u30b3\u30de\u30f3\u30c9\u304c\u3042\u308b\u3089\u3057\u3044",
@@ -2720,17 +2713,15 @@
       ]
     },
     {
-      "title": "Hello Gordon (Dr. Coomer's Bumpin' Mix)",
+      "title": "Hello Gordon [chairodactyl] - Cameron Wiggers",
       "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
-      "harness_version": "0.1.0",
-      "archive": "db1a39927d2cc432166301e715ada3d22a1484d17d44b51e65a7fb6f05f04e97.tar.zst",
-      "sha256": "db1a39927d2cc432166301e715ada3d22a1484d17d44b51e65a7fb6f05f04e97",
-      "compressed_bytes": 741299,
-      "uncompressed_sha256": "cf30100bacef7a38763b99a1ba1a969eba09c4d3185eeee169c1dcd21e85792f",
-      "compression_level": 22,
-      "aliases": [
-        "4038f16bc894bc1c6ffeda84af222b4bc6f4169655ce3f36610a894428abf812.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "f3cd946337623f7d9dbb7743676e00e4ec50cd57d27913fdb17dd2109dbe4884.tar.zst",
+      "compressed_bytes": 120692819,
+      "sha256": "f3cd946337623f7d9dbb7743676e00e4ec50cd57d27913fdb17dd2109dbe4884",
+      "uncompressed_sha256": "65f267a623cfebda3a83d4fe956f0ff3adc0fa68994690d7adf552354e857d30",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Hispanic Panic",
@@ -2745,15 +2736,13 @@
     {
       "title": "HOPE",
       "source_simfile": "HOPE/HOPE.ssc",
-      "harness_version": "0.1.0",
-      "archive": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d.tar.zst",
-      "sha256": "1dbc6fe1a4a00c04b98bb4d3d03fdfdcb4bf44b6f46d87738e2fbff1ff0c3f0d",
-      "compressed_bytes": 4504552,
-      "uncompressed_sha256": "4a11cc0b00ba7a627396e5c216c4dc70f98095f12c714dbc88468594abad78f7",
-      "compression_level": 22,
-      "aliases": [
-        "c86255946f11b2d0bd64caf6edb7744d84ee797b8f249bf0ce0431d552044741.tar.zst"
-      ]
+      "harness_version": "0.1.85",
+      "archive": "38abdc5f2f5b6e0b27ee4fecdb38c9193d08c5596e7333fe51fc8ff16bf932d2.tar.zst",
+      "compressed_bytes": 120122060,
+      "sha256": "38abdc5f2f5b6e0b27ee4fecdb38c9193d08c5596e7333fe51fc8ff16bf932d2",
+      "uncompressed_sha256": "1468a3058c167da153ae3bb0a3ec4295a6f49a885361cb62f657210932df0f56",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "I",
@@ -2817,17 +2806,15 @@
       "aliases": []
     },
     {
-      "title": "Ibuprofen & Weed (LEFTS Edit)",
+      "title": "Ibuprofen and Weed - [Freya]",
       "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
-      "harness_version": "0.1.0",
-      "archive": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204.tar.zst",
-      "sha256": "449192edf61f0f3fe8df4f05d8161bc21231d7e96743996893341d88cd44f204",
-      "compressed_bytes": 335598,
-      "uncompressed_sha256": "1ae7e8020c76662434ddf6a55cd7da5080d6b1d0a36654c041ea764ea21b797d",
-      "compression_level": 22,
-      "aliases": [
-        "2fb4c77b8c40b4bb144a1f3f412056f17e57550a83d7d04574a9ddce6d4df2d2.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "42b59df74fa8af50c75f4ddfec1aec982936457377d4c339c32701ff732bbde1.tar.zst",
+      "compressed_bytes": 128714773,
+      "sha256": "42b59df74fa8af50c75f4ddfec1aec982936457377d4c339c32701ff732bbde1",
+      "uncompressed_sha256": "124efd0e00d6564c08124aed66ec7b152fc01e03d3d2915db759cf17ae6a8a54",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "ICON KILLER",
@@ -2944,15 +2931,13 @@
     {
       "title": "Intro Outro",
       "source_simfile": "Intro Outro/intro.ssc",
-      "harness_version": "0.1.0",
-      "archive": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e.tar.zst",
-      "sha256": "f058c53573b00d0d177d2b1da07ae6128010bf16956ac1f31d294ff9372f4d3e",
-      "compressed_bytes": 3918013,
-      "uncompressed_sha256": "de2241b9e48b401db3717d6bcc86ea58d0fd384e84e88b8c9fe1e6fdbd5df1a6",
-      "compression_level": 22,
-      "aliases": [
-        "eb5c1a52fe28b1a3d120791e5d89059066018cc09dcbb1bf28d70051cdf20512.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "cb1a7556ac4de1c7a4895e3540b805b67c268c432c77ac47cf800a7afafa0ca2.tar.zst",
+      "compressed_bytes": 115739190,
+      "sha256": "cb1a7556ac4de1c7a4895e3540b805b67c268c432c77ac47cf800a7afafa0ca2",
+      "uncompressed_sha256": "8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Invert",
@@ -3250,15 +3235,13 @@
     {
       "title": "Lesson by DJ",
       "source_simfile": "Lesson by DJ/Lesson by DJ.ssc",
-      "harness_version": "0.1.0",
-      "archive": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835.tar.zst",
-      "sha256": "38cecaf5f613cc14d15bfcc76326f00c881139da30f695d06cb3fdfa4d939835",
-      "compressed_bytes": 1163564,
-      "uncompressed_sha256": "b49f1fac4c33c5c1c09367d8a33ef4c23254c786cd1fc3de53cdd95794cdbddf",
-      "compression_level": 22,
-      "aliases": [
-        "f403d89b4f2235d1ec2866538927ac55346c2d5d7bcadb977ce27872a7b47fef.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "7aa17e101f7ccd476d60cb9b1ed462ab68444d878fc1d8ed466d8fb4347316c0.tar.zst",
+      "compressed_bytes": 110951228,
+      "sha256": "7aa17e101f7ccd476d60cb9b1ed462ab68444d878fc1d8ed466d8fb4347316c0",
+      "uncompressed_sha256": "fc7810ad8883d6db70b72cd24b6c79215d038324b4811f1f54cd77c8a0fdf1cb",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Levels (Skrillex Remix)",
@@ -5083,17 +5066,15 @@
       "aliases": []
     },
     {
-      "title": "Turii -Panta Rhei-",
+      "title": "Velvet LEFTS 1",
       "source_simfile": "Velvet LEFTS 1/chart.ssc",
-      "harness_version": "0.1.0",
-      "archive": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30.tar.zst",
-      "sha256": "97ca1764984f050694cf634f9083f9d4ebd1a3cc59fee842fe36b17bed7b1e30",
-      "compressed_bytes": 1723280,
-      "uncompressed_sha256": "85d98b85f782c4b1b983bb1ec76246b7d65e5a11cf7762df73afad1dff16a455",
-      "compression_level": 22,
-      "aliases": [
-        "6d1ce52489bcea0420cabe11bc1bd308fc6e909fd65148fc98461c0035a2ab34.tar.zst"
-      ]
+      "harness_version": "0.1.90",
+      "archive": "ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049.tar.zst",
+      "compressed_bytes": 112561539,
+      "sha256": "ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049",
+      "uncompressed_sha256": "6f4d4553fcb0dc721397b8641065e1f63b69e9ab987c5b0695949a9cb9f208fb",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "Void Virus",
@@ -5227,17 +5208,15 @@
       "aliases": []
     },
     {
-      "title": "Wndrwll",
+      "title": "wndrwll",
       "source_simfile": "wndrwll/wndrwll.ssc",
-      "harness_version": "0.1.0",
-      "archive": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2.tar.zst",
-      "sha256": "8d72e948ab8d95a85e992f012230dda8a61941abf9b34bd8da77cfcfa9f2d5f2",
-      "compressed_bytes": 104561,
-      "uncompressed_sha256": "d56b9e9eb9556acc407ce230b5de476deb9d98a5722605790dfeae30ad997de0",
-      "compression_level": 22,
-      "aliases": [
-        "7f9d5505bfc800cdf1509c5b11a9b6363c4cbb50ea4a1e143ce15183c260df02.tar.zst"
-      ]
+      "harness_version": "0.1.86",
+      "archive": "d67f19d33c48cef6f4d3e93da0311238b60962c7e05b4202cad0c0a5a3132584.tar.zst",
+      "compressed_bytes": 111053992,
+      "sha256": "d67f19d33c48cef6f4d3e93da0311238b60962c7e05b4202cad0c0a5a3132584",
+      "uncompressed_sha256": "8096066726cdd113f349e916ab9c9c4283b3aa44255e2d0a470957453d5f672d",
+      "aliases": [],
+      "local_only": true
     },
     {
       "title": "[10] Wobbpotato",
@@ -5421,6 +5400,39 @@
       "compressed_bytes": 38272734,
       "uncompressed_sha256": "394dc6c9625c3726430c4cea8636dba824a76b78f3ec61b719860148cc4ebdc2",
       "aliases": []
+    },
+    {
+      "title": "mr sandman",
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "harness_version": "0.1.85",
+      "archive": "7817e31172693ca9bba50c4d844c0b461d18807edce464baf3977273dfee9782.tar.zst",
+      "compressed_bytes": 126226135,
+      "sha256": "7817e31172693ca9bba50c4d844c0b461d18807edce464baf3977273dfee9782",
+      "uncompressed_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
+      "aliases": [],
+      "local_only": true
+    },
+    {
+      "title": "Dongo Bongo",
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "harness_version": "0.1.86",
+      "archive": "9d2c9525dfc15fdaf92e750224b1717266d537af239076ca188c32042917b8cc.tar.zst",
+      "compressed_bytes": 132970317,
+      "sha256": "9d2c9525dfc15fdaf92e750224b1717266d537af239076ca188c32042917b8cc",
+      "uncompressed_sha256": "f537b455407d794e2f35913af9420314dabae2d6b8501da4be35e5dead7343b3",
+      "aliases": [],
+      "local_only": true
+    },
+    {
+      "title": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]",
+      "source_simfile": "308-MISC-[lv.Quest] [Tech Spectrum Super - _TRUE GAMERS CLICK HERE - EXTRA CHARTS]/ArrowQuest.sm",
+      "harness_version": "0.1.89",
+      "archive": "64727f8e25081f8a66aea85242c43958278e43bbca2e89b72a3c4577c1a4ad1d.tar.zst",
+      "compressed_bytes": 250817807,
+      "sha256": "64727f8e25081f8a66aea85242c43958278e43bbca2e89b72a3c4577c1a4ad1d",
+      "uncompressed_sha256": "e57872b1454c2967d5e9e64e93262c5d3ec18fa9efac5bfaae9ee97898608f18",
+      "aliases": [],
+      "local_only": true
     }
   ],
   "compression_level": 22

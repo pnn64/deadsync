@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "hash_encoding": "sha256-lf-text-v1",
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "harness_binary_sha256": "cbd32ce27f8e02d9dca7d9e2148ee7322acd9d90e4348431c9032c06df76b908",
+  "request_manifest_sha256": "eb10243a78d5bc2094b88ee386816dd340261043a6337051c64a257c093a7861",
+  "fixtures": [
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/background-fit-smooth.json",
+      "output": "tests/fixtures/itgmania-actors/background-fit-smooth.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "b1339234999aa1909cd531ae3b0fda01458041be2ff70a904c158ca79e234cc3",
+      "output_sha256": "f1877d7050b73261bf4dba554049723f49b968d93278aea10c7fa2dc069e9f1c",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/crop-fade-color.json",
+      "output": "tests/fixtures/itgmania-actors/crop-fade-color.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "16a16bc231c8d5c63456d8a1527e040bee57afe5b2b45611a4b9a28a05ccc757",
+      "output_sha256": "4547965e6b4d57693d3645c1d2c5864e958ff8a326d00e6e00537b93a8de9659",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/cyber-multitap-texture.json",
+      "output": "tests/fixtures/itgmania-actors/cyber-multitap-texture.json",
+      "oracle": "itgmania_native_animated_texture",
+      "dependencies": [
+        {
+          "path": "assets/noteskins/dance/cyber/textures/Tap Note ani texture.ini",
+          "sha256": "bbeeb9417acbe0862ec59af4b25a363ea4076e20c476ab263d532a6b9a0a19fb"
+        },
+        {
+          "path": "assets/noteskins/dance/cyber/textures/Tap Note parts (mipmaps).png",
+          "sha256": "780299673e9d9d8a9b00545b2661d156166755c8197d60f57480a60d5d1bac57"
+        }
+      ],
+      "input_sha256": "38e80aece2bb5c9e28e7f037853e4949b9ba0cdd2e107f1f243b17005a75f234",
+      "output_sha256": "62a540fe88ac20300179a47d06d4fbd4ca0ca0a1e8a0038c082017de956886c7",
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/cyber-tap-repeat.json",
+      "output": "tests/fixtures/itgmania-actors/cyber-tap-repeat.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "591d3fdf1e7d614e519c362bbe782489350e3afb2c8506597670675c1284ebf5",
+      "output_sha256": "00c497ff77d814adeeaf4c1a762aef6fdbfe2c24950e43bf16546f0a237b0a83",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/draw-order.json",
+      "output": "tests/fixtures/itgmania-actors/draw-order.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "5edaa6b15d414980cc0fdbc814639a6d083426af32aa9c36d46d8426ed0b4fea",
+      "output_sha256": "8418537739d9d6ae490d24f32c3ee4c9b71d7dbf7f1257ca2f4f1d08a81a5b16",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/effects-vibration.json",
+      "output": "tests/fixtures/itgmania-actors/effects-vibration.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "003a0bf3f84597734b100470353c8c930e82ac0792058c41bc7b60bf206b5e03",
+      "output_sha256": "d89efda7405a34bc4e09cb66d6ebd9c95bd192f4d91113b396684fc6f3ead321",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/fallback-tweens.json",
+      "output": "tests/fixtures/itgmania-actors/fallback-tweens.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "6b07d536a6fc9e584cace1787620e25ce4f7d13899776346b9d39717e2bb1bb1",
+      "output_sha256": "f64b2b6e2fa707c159cd8bb9537785843e89b36522c8db2391de71c5948e3e73",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/glow-alpha.json",
+      "output": "tests/fixtures/itgmania-actors/glow-alpha.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "1c6d0d71065019e413be0724a54a5af5172beb779cb2fedecf39dcbeed065280",
+      "output_sha256": "9b2fc58e75664af90cb815f5e039aa5f8e869178f55c02e0e72a369f470181d8",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/kenpo-capture.json",
+      "output": "tests/fixtures/itgmania-actors/kenpo-capture.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "0cde1862256d6e39b9a0af540ccd6ca68436ab4ae1c87fc2fdd73555b45b5ee3",
+      "output_sha256": "df8fc45d63c86a808322628606a9d0723d06077076d2e0c582f97bf510fd94d1",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/kenpo-motion.json",
+      "output": "tests/fixtures/itgmania-actors/kenpo-motion.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "4249fcbd7d80a8cae4f181fec6dba27b2fdab5a4aa77c782f0038d88f8589dc6",
+      "output_sha256": "13af3d4baff1c91f79d84df1cb42d6d6997ade43feeb67e068f545f98c3aaa63",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/layout-alignment.json",
+      "output": "tests/fixtures/itgmania-actors/layout-alignment.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "89b806eba0b96fcb2b7d45aa4ea58bdbe1226db0cf2c46045da2a0f5d94d3256",
+      "output_sha256": "bdd496dc759e7a12fab63d75a9e0366890aeebdd3510dfee6215e91d114fd31c",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/note-zoom-spline-high.json",
+      "output": "tests/fixtures/itgmania-actors/note-zoom-spline-high.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "dd943282b5f5f23cf999bfa3f8be651e9b0a66d3eac492d1b8f1fe7a5db617a3",
+      "output_sha256": "13f9c475dcf592f7dcebed7b882ac0c9e252e6acaa8d177d40f53cc8c6cff3ae",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/note-zoom-spline.json",
+      "output": "tests/fixtures/itgmania-actors/note-zoom-spline.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "e389cc42802842d2156e97cec58492c2b607f55db995f99b7561e4492497ea7d",
+      "output_sha256": "7bd64abba0a216fca56455fa6525a729801149a8a50d06783eaf2678aa56ab44",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/riddle-rotation.json",
+      "output": "tests/fixtures/itgmania-actors/riddle-rotation.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "1cfe980d32378a28b5e8a02795b91ae7582872f32095d5b465497ee082572d28",
+      "output_sha256": "3ce11b0ef01a2090b002774b7965a05e500d713035203ea91101a7eb6050d576",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/spooky-doors.json",
+      "output": "tests/fixtures/itgmania-actors/spooky-doors.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "7fd1a83378bcad6e13011cdeb6053d7426454f2af8bb2b8849c53b8353a4cfc3",
+      "output_sha256": "bfa507c82140e5537022610d1202d8ea854fb8cb13bcdace71760b92fa3221bd",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/transform-projection.json",
+      "output": "tests/fixtures/itgmania-actors/transform-projection.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "19a10139cd1fa0b763260c12e7dfc7b956b49af9eaf1167133f1ac2bedb25140",
+      "output_sha256": "13e66aa304d864610c4eef753ac4fd3fbf1fcd23d6ffcc5fcd91b186e6ca66d8",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/tween-curves.json",
+      "output": "tests/fixtures/itgmania-actors/tween-curves.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "c09a83d86dad0c932bbdf106f7d3fc7d32cd8ef374e2918036e6c5c21e077a22",
+      "output_sha256": "eccfe841108b6fe90604a9bbb6ae710e781214b18367d1974878981a871a1d7c",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    },
+    {
+      "input": "tests/fixtures/itgmania-actors/inputs/tween-queue.json",
+      "output": "tests/fixtures/itgmania-actors/tween-queue.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "input_sha256": "9403a8d71e81e7838f51021d76b04bbeca1ef0cc110537a8ba067a3900ab5ba6",
+      "output_sha256": "b15bf5ae216591d7446fdd9c2fbcff1d9d18c2f18f5bfcc9cb7cd2d42efb8754",
+      "dependencies": [],
+      "native_provenance": {
+        "execution": "embedded_native_sources",
+        "git_dirty": "false",
+        "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+        "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+      }
+    }
+  ]
+}

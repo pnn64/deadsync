@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "hash_encoding": "sha256-lf-text-v1",
+  "review_status": "captured-long-replay-deferred",
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "harness_binary_sha256": "cbd32ce27f8e02d9dca7d9e2148ee7322acd9d90e4348431c9032c06df76b908",
+  "native_revision": "704cdd5624155f743b59b8b64fedeb0588dae067",
+  "native_executable_sha256": "b2ccd9e02df706bbfaf23d54011cb1905590c593a47093de0160f59e667ce09e",
+  "request_manifest_sha256": "bfcc3bca23385c88c9afdc42455dc4f05c6a68669d55a56a660885b9eafa16ec",
+  "archive": "tests/fixtures/full_song_lua/03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d.tar.zst",
+  "archive_sha256": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d",
+  "uncompressed_capture_sha256": "605fa2e2c00b8d716321a7ec2ef400d8508ace2d67490dcb47ca278ccb9373ed",
+  "fixtures": [
+    {
+      "output": "tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.json.zst",
+      "drawable_from_beat": 121.9,
+      "until_beat": 130.74,
+      "capture_fps": 120,
+      "clock": "native-variable",
+      "replay_test": "gameplay_regression_tests::tests::seventh_saved_mini_reaches_aft_receptors",
+      "replay_status": "deferred-long-song",
+      "output_sha256": "5056b3cb5961ccb383249e78f11cccd39f5efeafa3257c58a00bd1ddfae365ef",
+      "native_source": {
+        "cubic_spline_sha256": "93f6dcdd083f6da7a311449d89cf2f29be219590718e4e978e70c365f842eac3",
+        "modified_src": false,
+        "note_display_sha256": "5e62afa89932da9d999d69b0e8facccebed05370756dfabcdd8882fdbfb88d2a",
+        "revision": "704cdd5624155f743b59b8b64fedeb0588dae067"
+      },
+      "models": 21920,
+      "strips": 1546
+    }
+  ]
+}

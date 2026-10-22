@@ -1,0 +1,97 @@
+[
+  {
+    "script": "draworder,90;diffusealpha,1;linear,0.22;diffusealpha,0",
+    "order": 90,
+    "duration": 0.22,
+    "samples": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        0.11,
+        0.5
+      ],
+      [
+        0.22,
+        0.0
+      ]
+    ]
+  },
+  {
+    "script": "diffusealpha,1;linear,0.22;draworder,-45;diffusealpha,0",
+    "order": -45,
+    "duration": 0.22,
+    "samples": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        0.11,
+        0.5
+      ],
+      [
+        0.22,
+        0.0
+      ]
+    ]
+  },
+  {
+    "script": "diffusealpha,1;sleep,0.1;draworder,90;diffusealpha,0",
+    "order": 90,
+    "duration": 0.1,
+    "samples": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        0.05,
+        1.0
+      ],
+      [
+        0.11,
+        0.0
+      ]
+    ]
+  },
+  {
+    "script": "draworder,90;linear,0.22;draworder,-12.9;diffusealpha,0",
+    "order": -12,
+    "duration": 0.22,
+    "samples": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        0.11,
+        0.5
+      ],
+      [
+        0.22,
+        0.0
+      ]
+    ]
+  },
+  {
+    "script": "function(self) self:diffusealpha(1):linear(0.22):draworder(180/2):diffusealpha(0) end",
+    "order": 90,
+    "duration": 0.22,
+    "samples": [
+      [
+        0.0,
+        1.0
+      ],
+      [
+        0.11,
+        0.5
+      ],
+      [
+        0.22,
+        0.0
+      ]
+    ]
+  }
+]

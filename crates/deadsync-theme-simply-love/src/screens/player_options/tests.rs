@@ -2233,6 +2233,7 @@ pub(super) mod tests {
             skin.receptor_idle_glow_layers = vec![Some(slot.clone())];
             skin.receptor_idle_glow = deadsync_noteskin::ReceptorIdleGlow::ActorEffect;
             skin.receptor_overlays = vec![Arc::from([ReceptorOverlay {
+                before_target: false,
                 slot,
                 reverse: Default::default(),
             }])];
@@ -2629,6 +2630,7 @@ pub(super) mod tests {
             receptors[3..]
                 .iter()
                 .map(|slot| deadsync_noteskin::runtime::ReceptorOverlay {
+                    before_target: false,
                     slot: slot.clone(),
                     reverse: Default::default(),
                 })
@@ -3021,7 +3023,6 @@ pub(super) mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     #[allow(deprecated)] // One hidden window exercises transition texture uploads.
-    #[ignore = "requires assets/noteskins/hurg with the installed Workshop"]
     fn workshop_components_animate_in_rows_and_picker() {
         use super::super::{pack_options, render};
         use deadlib_present::actors::Actor;
@@ -3149,6 +3150,7 @@ pub(super) mod tests {
                 .unwrap();
                 assert!(partial.mine_hit_explosion.is_none());
                 let preview_textures = super::super::noteskins::preview_textures(&skin, part);
+                let mut large_sheet_checked = false;
                 for (key, _) in &preview_textures {
                     let handle = assets.texture_context().texture_handle(key);
                     let Some(deadlib_render::Texture::Software(texture)) =
@@ -3159,22 +3161,27 @@ pub(super) mod tests {
                     let source = if let Some(generated) = deadlib_assets::generated_texture(key) {
                         (*generated.image).clone()
                     } else {
+                        let job = deadsync_assets::textures::texture_decode_job(key, false);
                         deadlib_assets::decode_texture_image(
-                            std::path::Path::new(key.as_ref()),
-                            &deadlib_assets::parse_texture_hints(key),
+                            &job.path,
+                            &job.hints,
                         )
-                        .unwrap()
+                        .unwrap_or_else(|error| panic!("{name}: native source {key}: {error}"))
                     };
                     assert_eq!(
                         texture.image, source,
-                        "{name}: preview must retain every native pixel"
+                        "{name}: preview must retain every gameplay-prepared pixel"
                     );
-                    if name.contains("bright-td-vibrant") {
+                    if name.contains("bright-td-vibrant") && key.contains("Tap Note parts") {
                         assert!(
                             texture.image.width() > 256 && texture.image.height() > 256,
                             "regression: shrinking a sheet destroys frame resolution"
                         );
+                        large_sheet_checked = true;
                     }
+                }
+                if name.contains("bright-td-vibrant") {
+                    assert!(large_sheet_checked, "large generated arrow page must be exercised");
                 }
                 let mut first_frame = None;
                 let mut animated = false;

@@ -1,0 +1,178 @@
+{
+  "complete": true,
+  "objective": "Ten additional accepted fixtures beyond480, starting with faster pending charts",
+  "baseline_passed": 480,
+  "baseline_pending": 20,
+  "counts": {
+    "new_passing_fixtures": 10,
+    "passed_fixtures": 490,
+    "pending_charts": 10,
+    "ignored_charts": 1
+  },
+  "acceptance": "Unchanged full_song_lua complete uncompressed replay and official song-lua-pack",
+  "new_passing_fixtures": [
+    {
+      "position": 220,
+      "source_simfile": "Hallways/hallways.ssc",
+      "archive": "d29c96b1c042099c079a9f492c15a534a22f1239286da0bb16ebaf3ccdc5cca3.tar.zst",
+      "archive_sha256": "d29c96b1c042099c079a9f492c15a534a22f1239286da0bb16ebaf3ccdc5cca3",
+      "candidate_sha256": "54930a40507dc27022f381129d6329b8bbc8d52ad5e16b917cdf45c29b5811cc",
+      "native_frames": 1531,
+      "replayed_frames": 1531,
+      "repair_attempts": 1,
+      "compressed_bytes": 108950054,
+      "report_sha256": "8880e937d86f988593a7feacabd4293c31f28f8b2870011a67523c694d563b73"
+    },
+    {
+      "position": 248,
+      "source_simfile": "Intro Outro/intro.ssc",
+      "archive": "cb1a7556ac4de1c7a4895e3540b805b67c268c432c77ac47cf800a7afafa0ca2.tar.zst",
+      "archive_sha256": "cb1a7556ac4de1c7a4895e3540b805b67c268c432c77ac47cf800a7afafa0ca2",
+      "candidate_sha256": "8d203da591bf96b0aac47033a410674286053b13179b14d48b644adf59e83970",
+      "native_frames": 6475,
+      "replayed_frames": 6475,
+      "repair_attempts": 2,
+      "compressed_bytes": 115739190,
+      "report_sha256": "e92140d963109d27fbed599e9c609d77c92ad9e4d62f1573996d98f5e6af715c"
+    },
+    {
+      "position": 474,
+      "source_simfile": "wndrwll/wndrwll.ssc",
+      "archive": "d67f19d33c48cef6f4d3e93da0311238b60962c7e05b4202cad0c0a5a3132584.tar.zst",
+      "archive_sha256": "d67f19d33c48cef6f4d3e93da0311238b60962c7e05b4202cad0c0a5a3132584",
+      "candidate_sha256": "8096066726cdd113f349e916ab9c9c4283b3aa44255e2d0a470957453d5f672d",
+      "native_frames": 8958,
+      "replayed_frames": 8958,
+      "repair_attempts": 1,
+      "compressed_bytes": 111053992,
+      "report_sha256": "b4f2185f93d65288282448c81f6a75a275832281851dd0a138488280c98104ab"
+    },
+    {
+      "position": 236,
+      "source_simfile": "Ibuprofen and Weed - [Freya]/Ibuprofen and Weed_LEFTS.ssc",
+      "archive": "42b59df74fa8af50c75f4ddfec1aec982936457377d4c339c32701ff732bbde1.tar.zst",
+      "archive_sha256": "42b59df74fa8af50c75f4ddfec1aec982936457377d4c339c32701ff732bbde1",
+      "candidate_sha256": "124efd0e00d6564c08124aed66ec7b152fc01e03d3d2915db759cf17ae6a8a54",
+      "native_frames": 11033,
+      "replayed_frames": 11033,
+      "repair_attempts": 2,
+      "compressed_bytes": 128714773,
+      "report_sha256": "0b58171f43386c9ca64f6b1c26ecc189cf3f7f556fe7003e4cdf0cb2810aa618"
+    },
+    {
+      "position": 497,
+      "source_simfile": "mr sandman/mr sandman.sm",
+      "archive": "7817e31172693ca9bba50c4d844c0b461d18807edce464baf3977273dfee9782.tar.zst",
+      "archive_sha256": "7817e31172693ca9bba50c4d844c0b461d18807edce464baf3977273dfee9782",
+      "candidate_sha256": "d074d28b4dd3f7276f67db680aa0d4d87045bee1b47dc24ba360aea50d25a35b",
+      "native_frames": 7301,
+      "replayed_frames": 7301,
+      "repair_attempts": 1,
+      "compressed_bytes": 126226135,
+      "report_sha256": "03c5f576682162171c99e6e02764fa2d37e79b82f5518d69312318c523b770b2"
+    },
+    {
+      "position": 27,
+      "source_simfile": "7th Gear/7th Gear.ssc",
+      "archive": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d.tar.zst",
+      "archive_sha256": "03deca0155f154016a35f421b08a72dc7bf7cff03bea65273ec9fdb1aa924e6d",
+      "candidate_sha256": "305b326563cde8e85ce19701a10f4947df3d35e03e236b1f846f8ff99f56e6c0",
+      "native_frames": 4404,
+      "replayed_frames": 4404,
+      "repair_attempts": 2,
+      "compressed_bytes": 22659001,
+      "report_sha256": "194d71a360ff93297a2d76ac3056a9a3fceb2b9e0674b5676800c913cc4916c7"
+    },
+    {
+      "position": 227,
+      "source_simfile": "Hello Gordon [chairodactyl] - Cameron Wiggers/Hello Gordon.ssc",
+      "archive": "f3cd946337623f7d9dbb7743676e00e4ec50cd57d27913fdb17dd2109dbe4884.tar.zst",
+      "archive_sha256": "f3cd946337623f7d9dbb7743676e00e4ec50cd57d27913fdb17dd2109dbe4884",
+      "candidate_sha256": "65f267a623cfebda3a83d4fe956f0ff3adc0fa68994690d7adf552354e857d30",
+      "native_frames": 10552,
+      "replayed_frames": 10552,
+      "repair_attempts": 2,
+      "compressed_bytes": 120692819,
+      "report_sha256": "c64b843446c8f6343b20064abbef9f06db75bb7e2d178c029ccc3fc0b77ede3e"
+    },
+    {
+      "position": 490,
+      "source_simfile": "Dongo Bongo/dongobongo2.ssc",
+      "archive": "9d2c9525dfc15fdaf92e750224b1717266d537af239076ca188c32042917b8cc.tar.zst",
+      "archive_sha256": "9d2c9525dfc15fdaf92e750224b1717266d537af239076ca188c32042917b8cc",
+      "candidate_sha256": "f537b455407d794e2f35913af9420314dabae2d6b8501da4be35e5dead7343b3",
+      "native_frames": 11269,
+      "replayed_frames": 11269,
+      "repair_attempts": 2,
+      "compressed_bytes": 132970317,
+      "report_sha256": "89f01f9894dadec630aa80fc17af96241049332dd08728d87cc3591ac4e3aeec"
+    },
+    {
+      "position": 229,
+      "source_simfile": "HOPE/HOPE.ssc",
+      "archive": "38abdc5f2f5b6e0b27ee4fecdb38c9193d08c5596e7333fe51fc8ff16bf932d2.tar.zst",
+      "archive_sha256": "38abdc5f2f5b6e0b27ee4fecdb38c9193d08c5596e7333fe51fc8ff16bf932d2",
+      "candidate_sha256": "1468a3058c167da153ae3bb0a3ec4295a6f49a885361cb62f657210932df0f56",
+      "native_frames": 6381,
+      "replayed_frames": 6381,
+      "repair_attempts": 1,
+      "compressed_bytes": 120122060,
+      "report_sha256": "45de59ab8b04f2e3bf6084e72233aff4b135ab3f93d15990d7f9f2d72def6821"
+    },
+    {
+      "position": 460,
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "archive": "ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049.tar.zst",
+      "archive_sha256": "ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049",
+      "candidate_sha256": "6f4d4553fcb0dc721397b8641065e1f63b69e9ab987c5b0695949a9cb9f208fb",
+      "native_frames": 7316,
+      "replayed_frames": 7316,
+      "repair_attempts": 2,
+      "compressed_bytes": 112561539,
+      "report_sha256": "5e04fb58bef3cd09c5d9467cc9e13af2450214f158d093445c8c0768a0c42c87"
+    }
+  ],
+  "details": "ninth-ten-2026-10-18-state.json",
+  "concrete_failures": "ninth-ten-2026-10-18-pending.json",
+  "missing_coverage": "ninth-ten-2026-10-18-coverage.json",
+  "source_review": "ninth-ten-2026-10-18-source-review.json",
+  "prior_status": "eighth-ten-2026-10-18-summary.json",
+  "ignored": [
+    "mawaru9/mawaru9.sm"
+  ],
+  "verification": {
+    "accepted_complete_uncompressed_replays": 10,
+    "saved_archives_and_decoded_hashes_verified": 10,
+    "full_reports_verified": 10,
+    "current_source_hashes_verified": 388,
+    "oversized_fixtures_gitignored": 44,
+    "no_tracked_or_unignored_files_over_100mb": true,
+    "targeted_checks": [
+      {
+        "scope": "72 native gameplay tests including native JSON integer bounds and Windows static-CRT math",
+        "log": "C:\\GitHub\\deadsync\\target\\song-lua-ninth-ten-20261018\\native-crt-inputs-native-tests.log",
+        "sha256": "f3cbdc0c028cf6620940d586ab921c620a2e737f4afa51a110c78017774e3678",
+        "passed": 72,
+        "failed": 0
+      }
+    ],
+    "known_baseline_failure": {
+      "test": "compile_song_lua_supports_named_player_tap_note_shim",
+      "before_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-named-shim-baseline.log",
+      "before_sha256": "e605d754dd9504e54f38f5317233eec53dd7d3333be4daf85e63bb65118b1dab",
+      "after_log": "C:\\GitHub\\deadsync\\target\\song-lua-sixth-ten-20261018\\note-refs-green.log",
+      "after_sha256": "f02b63d031ed72272b01a9f7293f471dc8337bb0ce098b10c68dc82fe4bf398f",
+      "outcome": "Same pre-existing top:GetChildren()[empty-name] assertion on committed pre-fix source and fixed source; expected values unchanged"
+    },
+    "utc": "2026-10-18T17:17:11Z"
+  },
+  "updated_utc": "2026-10-18T17:17:11Z",
+  "readable_concrete_failures": "ninth-ten-2026-10-18-pending.md",
+  "capture_profile_limitations": [
+    {
+      "source_simfile": "Velvet LEFTS 1/chart.ssc",
+      "initial_lua_gc_mode": "stopped",
+      "default_automatic_collector_parity": "Still pending as separate coverage; this passing fixture does not establish it."
+    }
+  ]
+}

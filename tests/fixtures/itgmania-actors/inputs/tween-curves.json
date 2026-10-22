@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "name": "tween-curves",
+  "samples": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "linear",
+        "size": [
+          24.0,
+          24.0
+        ],
+        "state": {
+          "position": [
+            0.0,
+            60.0,
+            0.0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0,
+            "curve": "linear",
+            "state": {
+              "position": [
+                640.0,
+                60.0,
+                0.0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "accelerate",
+        "size": [
+          24.0,
+          24.0
+        ],
+        "state": {
+          "position": [
+            0.0,
+            140.0,
+            0.0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0,
+            "curve": "accelerate",
+            "state": {
+              "position": [
+                640.0,
+                140.0,
+                0.0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "decelerate",
+        "size": [
+          24.0,
+          24.0
+        ],
+        "state": {
+          "position": [
+            0.0,
+            220.0,
+            0.0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0,
+            "curve": "decelerate",
+            "state": {
+              "position": [
+                640.0,
+                220.0,
+                0.0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "spring",
+        "size": [
+          24.0,
+          24.0
+        ],
+        "state": {
+          "position": [
+            0.0,
+            300.0,
+            0.0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0,
+            "curve": "spring",
+            "state": {
+              "position": [
+                640.0,
+                300.0,
+                0.0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "bezier",
+        "size": [
+          24.0,
+          24.0
+        ],
+        "state": {
+          "position": [
+            0.0,
+            380.0,
+            0.0
+          ]
+        },
+        "tweens": [
+          {
+            "duration": 1.0,
+            "curve": "bezier",
+            "bezier": [
+              0.0,
+              0.15,
+              0.85,
+              1.0
+            ],
+            "state": {
+              "position": [
+                640.0,
+                380.0,
+                0.0
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

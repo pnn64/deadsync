@@ -295,21 +295,19 @@ impl DrawChecks {
         trace: &Value,
         scene: u64,
     ) -> Result<(), String> {
-        let owned = state.song_lua.as_ref().ok_or("missing live scene")?;
+        let owned = state.song_lua.as_ref();
         let (order, _) = native_creation_order_with_coverage_for_entries(
             trace,
             scene,
-            owned.context().background_layer_count,
+            owned.map_or(0, |scene| scene.context().background_layer_count),
         )?;
         let paths: BTreeMap<_, _> = order
             .into_iter()
             .map(|(path, pointer)| (pointer, path))
             .collect();
-        let targets: BTreeMap<_, _> = owned
-            .visual_bindings()
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .collect();
+        let bindings = owned.ok_or("missing Lua scene")?
+            .visual_bindings().map_err(|e| e.to_string())?;
+        let targets: BTreeMap<_, _> = bindings.into_iter().collect();
         self.bindings.clear();
         self.composers.clear();
         for creation in trace["actor_creation_inputs"]
@@ -439,11 +437,14 @@ impl DrawChecks {
             let texture_ok = expected_texture
                 .as_deref()
                 .is_none_or(|key| actual_texture == Some(key));
-            let native_depth = sample["state"]["z_test"] == 1;
+            let native_depth = sample["state"]["z_test"] != 0;
+            let native_write = sample["state"]["z_write"] == true;
+            let native_fail = sample["state"]["z_test"] == 2;
             let depth_ok = frame.ops.iter().all(|op| match op {
-                DrawOp::TexturedMesh(r) => r.depth_test == native_depth,
-                _ => !native_depth,
-            }) && sample["state"]["z_write"] == native_depth;
+                DrawOp::TexturedMesh(r) => r.depth_test == native_depth
+                    && r.depth_write == native_write && r.depth_test_on_fail == native_fail,
+                _ => !native_depth && !native_write,
+            });
             let sampler_ok = frame.ops.iter().all(|op| match op {
                 DrawOp::TexturedMesh(r) => r.sampler.is_some_and(|s| {
                     (s.filter == deadlib_present::render::SamplerFilter::Linear)
@@ -459,7 +460,8 @@ impl DrawChecks {
                 continue;
             }
             self.vertices += rows.len();
-            let matches = |actual: &[f32;10], row: &Value| row_matches(actual, row, image_uv_scale, expected_texture.is_none());
+            let depth_range = native_depth_range(&sample["state"]);
+            let matches = |actual: &[f32;10], row: &Value| row_matches(actual, row, image_uv_scale, expected_texture.is_none(), depth_range);
             let geometry_ok = if sample["primitive"] == "Quads" {
                 rows.chunks_exact(6).zip(reference.chunks_exact(4)).all(|(actual, native)| {
                     // GL_QUADS allows either diagonal. Both emitted triangles
@@ -506,10 +508,48 @@ impl DrawChecks {
     }
 }
 
-fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2], untextured: bool) -> bool {
-    actual.iter().enumerate().all(|(axis,&actual)|
-        untextured && (4..6).contains(&axis) || close(actual, native_number(&row[axis+3])
-            * if (4..6).contains(&axis) {image_uv_scale[axis-4]} else {1.0}))
+fn native_depth_range(state: &Value) -> [f32; 2] {
+    if state["z_test"] == 0 && state["z_write"] != true { return [1.0, 0.0]; }
+    // The native hook records projection coordinates BEFORE glDepthRange.
+    // DeadSync represents that range in its submitted homogeneous matrix.
+    // Derive the common comparison space from RageDisplay_Legacy::SetZBias,
+    // including Actor::SetGlobalRenderStates' implicit NoEffect mask bias.
+    let mut bias = state["z_bias"].as_f64().unwrap_or(0.0) as f32;
+    if bias == 0.0 && state["blend"] == 10 { bias = 1.0; }
+    let near = 0.05 * (1.0 - bias);
+    let far = 1.0 - 0.05 * bias;
+    [far - near, far + near - 1.0]
+}
+
+fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2], untextured: bool, depth_range: [f32;2]) -> bool {
+    actual.iter().enumerate().all(|(axis,&actual)| {
+        if untextured && (4..6).contains(&axis) { return true; }
+        let mut expected = native_number(&row[axis+3]);
+        if axis == 2 { expected = expected * depth_range[0] + native_number(&row[6]) * depth_range[1]; }
+        if (4..6).contains(&axis) { expected *= image_uv_scale[axis-4]; }
+        close(actual, expected)
+    })
+}
+
+#[test]
+fn native_depth_comparison_keeps_bias_and_homogeneous_w() {
+    let row = json!([0,0,0, 1,2,0.4,2, 0.2,0.4, 1,1,1,1]);
+    let mut actual = [1.0,2.0,0.48,2.0,0.2,0.4,1.0,1.0,1.0,1.0];
+    let mut state = json!({"z_test":1,"z_write":true,"z_bias":0,"blend":0});
+    assert!(row_matches(&actual, &row, [1.0;2], false, native_depth_range(&state)));
+    actual[2] = 0.4;
+    assert!(!row_matches(&actual, &row, [1.0;2], false, native_depth_range(&state)),
+        "comparing the unadjusted clip depth must still fail");
+    state["z_bias"] = json!(1);
+    actual[2] = 0.28;
+    assert!(row_matches(&actual, &row, [1.0;2], false, native_depth_range(&state)));
+    state["z_bias"] = json!(0);
+    state["blend"] = json!(10);
+    assert!(row_matches(&actual, &row, [1.0;2], false, native_depth_range(&state)));
+    state["z_test"] = json!(0);
+    state["z_write"] = json!(false);
+    actual[2] = 0.4;
+    assert!(row_matches(&actual, &row, [1.0;2], false, native_depth_range(&state)));
 }
 
 // Reject a missing production draw only when native geometry can contribute

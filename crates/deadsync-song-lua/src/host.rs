@@ -1,3 +1,4 @@
+use crate::callback_args::IgnoredArgs;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::Path;
@@ -108,6 +109,7 @@ pub(crate) fn replace_gameplay_screen(
     context: &SongLuaCompileContext,
     create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
     create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
 ) -> mlua::Result<()> {
     crate::song_tables::restart_stage_options(lua)?;
     let state = lua.app_data_ref::<SongLuaGameStateGlobals>()
@@ -125,11 +127,11 @@ pub(crate) fn replace_gameplay_screen(
     // End callbacks still observe the outgoing clock; constructors see the
     // reset SongPosition, including its native 10 BPS before the first update.
     crate::runtime::reset_song_runtime_position(lua)?;
-    crate::lua_util::install_native_gameplay_combo(lua)?;
-    crate::lua_util::install_native_gameplay_underlay(lua, None)?;
-    crate::lua_util::install_native_gameplay_overlay(lua, None, &context)?;
-    crate::lua_util::install_native_gameplay_decorations(lua, None)?;
-    crate::lua_util::install_native_gameplay_transitions(lua, None)?;
+    crate::lua_util::install_native_gameplay_combo(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_underlay(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_overlay(lua, Some(install_actor_methods), &context)?;
+    crate::lua_util::install_native_gameplay_decorations(lua, Some(install_actor_methods))?;
+    crate::lua_util::install_native_gameplay_transitions(lua, Some(install_actor_methods))?;
     Ok(())
 }
 
@@ -171,7 +173,7 @@ pub fn install_compile_host(
         install_actor_methods,
     )?;
     install_file_loader_globals(lua, context.song_dir.clone(), create_dummy_actor)?;
-    crate::lua_util::install_native_gameplay_combo(lua)?;
+    crate::lua_util::install_native_gameplay_combo(lua, Some(install_actor_methods))?;
     crate::lua_util::install_native_gameplay_underlay(lua, Some(install_actor_methods))?;
     crate::lua_util::install_native_gameplay_overlay(lua, Some(install_actor_methods), context)?;
     crate::lua_util::install_native_gameplay_decorations(lua, Some(install_actor_methods))?;
@@ -221,6 +223,8 @@ fn install_compile_globals(
 
 pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
     match value {
+        Value::UserData(data) => Ok(crate::native_vector::snapshot(lua, &data)?
+            .map_or(Value::UserData(data), Value::Table)),
         Value::Table(table) => {
             let cloned = lua.create_table()?;
             // Keep the traversal key on Lua's stack instead of cloning a Rust
@@ -228,6 +232,7 @@ pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {
             table.for_each::<Value, Value>(|key, value| {
                 cloned.set(clone_lua_value(lua, key)?, clone_lua_value(lua, value)?)
             })?;
+            crate::lua_util::copy_live_actor_pose(lua, &table, &cloned)?;
             Ok(Value::Table(cloned))
         }
         other => Ok(other),
@@ -649,15 +654,15 @@ pub fn install_basic_globals(
     )?;
     globals.set(
         "ProductFamily",
-        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_FAMILY))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(SONG_LUA_PRODUCT_FAMILY))?,
     )?;
     globals.set(
         "ProductID",
-        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_ID))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(SONG_LUA_PRODUCT_ID))?,
     )?;
     globals.set(
         "ProductVersion",
-        lua.create_function(|_, _args: MultiValue| Ok(SONG_LUA_PRODUCT_VERSION))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(SONG_LUA_PRODUCT_VERSION))?,
     )?;
     globals.set(
         "ToEnumShortString",
@@ -680,7 +685,17 @@ pub fn install_basic_globals(
     )?;
     globals.set(
         "GetScreenAspectRatio",
-        lua.create_function(move |_, _args: MultiValue| Ok(screen_width / screen_height.max(1.0)))?,
+        lua.create_function({
+            let display_aspect_ratio = context.display_aspect_ratio;
+            move |lua, _args: IgnoredArgs| {
+                // ScreenDimensions.cpp returns the physical display preference,
+                // independent of the rounded logical screen dimensions.
+                let prefs: Table = lua.globals().get("PREFSMAN")?;
+                let values: Table = prefs.raw_get("__songlua_preference_values")?;
+                Ok(values.raw_get::<Option<f32>>("DisplayAspectRatio")?
+                    .unwrap_or(display_aspect_ratio))
+            }
+        })?,
     )?;
     globals.set(
         "WideScale",
@@ -697,15 +712,15 @@ pub fn install_basic_globals(
     let is_widescreen = screen_width / screen_height.max(1.0) > 1.5;
     globals.set(
         "IsUsingWideScreen",
-        lua.create_function(move |_, _args: MultiValue| Ok(is_widescreen))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(is_widescreen))?,
     )?;
     globals.set(
         "DarkUI",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     globals.set(
         "IsServiceAllowed",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     globals.set(
         "round",
@@ -783,7 +798,7 @@ pub fn install_basic_globals(
     )?;
     globals.set(
         "GetTimeSinceStart",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             #[cfg(feature = "test-support")]
             if let Some(value) = crate::clock_inputs::next(lua, "GetTimeSinceStart") {
                 return Ok(Value::Number(value));
@@ -810,7 +825,7 @@ pub fn install_basic_globals(
     )?;
     globals.set(
         "HolidayCheer",
-        lua.create_function(move |_, _args: MultiValue| Ok(holiday_cheer))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(holiday_cheer))?,
     )?;
     globals.set(
         "ASPECT_SCALE_FACTOR",
@@ -881,15 +896,15 @@ pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result
     } = date;
     globals.set(
         "Year",
-        lua.create_function(move |_, _args: MultiValue| Ok(year))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(year))?,
     )?;
     globals.set(
         "MonthOfYear",
-        lua.create_function(move |_, _args: MultiValue| Ok(month_of_year))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(month_of_year))?,
     )?;
     globals.set(
         "DayOfMonth",
-        lua.create_function(move |_, _args: MultiValue| Ok(day_of_month))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(day_of_month))?,
     )?;
     // DateTime.cpp exposes tm_yday: January 1 is zero, including leap years.
     let day_of_year = month_of_year.checked_add(1)
@@ -897,21 +912,21 @@ pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result
         .map(|date| date.ordinal0() as i32);
     globals.set(
         "DayOfYear",
-        lua.create_function(move |_, _args: MultiValue| {
+        lua.create_function(move |_, _args: IgnoredArgs| {
             day_of_year.ok_or_else(|| mlua::Error::RuntimeError("invalid calendar date for DayOfYear".into()))
         })?,
     )?;
     globals.set(
         "Hour",
-        lua.create_function(move |_, _args: MultiValue| Ok(hour))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(hour))?,
     )?;
     globals.set(
         "Minute",
-        lua.create_function(move |_, _args: MultiValue| Ok(minute))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(minute))?,
     )?;
     globals.set(
         "Second",
-        lua.create_function(move |_, _args: MultiValue| Ok(second))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(second))?,
     )?;
     #[cfg(feature = "test-support")]
     crate::clock_inputs::install_calendar(lua)?;
@@ -1054,7 +1069,7 @@ pub fn install_screen_manager_globals(
     let screenman = lua.create_table()?;
     screenman.set(
         "GetTopScreen",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             if lua.globals().raw_get::<Option<bool>>("__songlua_screen_loading")?.unwrap_or(false) {
                 Ok(Value::Nil)
             } else {
@@ -1064,7 +1079,7 @@ pub fn install_screen_manager_globals(
     )?;
     screenman.set(
         "SystemMessage",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -1097,7 +1112,7 @@ pub fn install_screen_manager_globals(
     )?;
     screenman.set(
         "set_input_redirected",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -1150,7 +1165,7 @@ pub fn install_message_manager_globals(
     let messageman_for_logging = messageman.clone();
     messageman.set(
         "SetLogging",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(messageman_for_logging.clone())
         })?,
@@ -1276,7 +1291,7 @@ pub fn create_arrow_effects_table(
         let screen_height = context.screen_height.max(1.0);
         move |lua, args: MultiValue| arrow_effects_x_pos(lua, &args, screen_height, current_style_name)
     })?)?;
-    table.set("Update", lua.create_function(|lua, _args: MultiValue| update_native_arrow_effects(lua))?)?;
+    table.set("Update", lua.create_function(|lua, _args: IgnoredArgs| update_native_arrow_effects(lua))?)?;
     table.set(
         "GetZPos",
         lua.create_function(|lua, args: MultiValue| {
@@ -1893,23 +1908,23 @@ fn record_song_lua_sound_path(
         return Ok(());
     }
 
-    let key = path.to_string_lossy().into_owned();
+    let key = path.to_string_lossy();
     if capture_call {
         crate::lua_util::capture_runtime_sound(lua, path.clone());
         if let Some(calls) = lua
             .globals()
             .get::<Option<Table>>(SONG_LUA_SOUND_CALLS_KEY)?
         {
-            calls.raw_set(calls.raw_len() + 1, key.clone())?;
+            calls.raw_set(calls.raw_len() + 1, key.as_ref())?;
         }
     }
     let paths = song_lua_sound_paths_table(lua)?;
-    for existing in paths.sequence_values::<String>() {
-        if existing? == key {
+    for existing in paths.sequence_values::<crate::lua_util::LuaFieldText<256>>() {
+        if existing?.as_str() == key.as_ref() {
             return Ok(());
         }
     }
-    paths.raw_set(paths.raw_len() + 1, key)?;
+    paths.raw_set(paths.raw_len() + 1, key.as_ref())?;
     Ok(())
 }
 
@@ -1922,7 +1937,7 @@ pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
         let sound_for_return = sound.clone();
         sound.set(
             name,
-            lua.create_function(move |lua, _args: MultiValue| {
+            lua.create_function(move |lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(sound_for_return.clone())
             })?,
@@ -1945,18 +1960,18 @@ pub fn install_sound_globals(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     let sound_for_return = sound.clone();
     sound.set(
         "PlayAnnouncer",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(sound_for_return.clone())
         })?,
     )?;
     sound.set(
         "GetPlayerBalance",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0.0_f32))?,
     )?;
     sound.set(
         "IsTimingDelayed",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     globals.set("SOUND", sound)?;
     Ok(())
@@ -2096,7 +2111,7 @@ pub fn install_game_state_globals(
     let total_song_seconds = context.music_length_seconds.max(0.0);
     globals.set(
         "totalLengthSongOrCourse",
-        lua.create_function(move |_, _args: MultiValue| {
+        lua.create_function(move |_, _args: IgnoredArgs| {
             Ok(total_song_seconds / default_music_rate.max(f32::EPSILON))
         })?,
     )?;
@@ -2104,7 +2119,7 @@ pub fn install_game_state_globals(
         "currentTimeSongOrCourse",
         lua.create_function({
             let song_runtime = song_runtime.clone();
-            move |_, _args: MultiValue| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
+            move |_, _args: IgnoredArgs| song_runtime.get::<f64>(SONG_LUA_RUNTIME_SECONDS_KEY)
         })?,
     )?;
     let current_sort_order = lua.create_table()?;
@@ -2152,7 +2167,7 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "Env",
-        lua.create_function(move |_, _args: MultiValue| Ok(game_env.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(game_env.clone()))?,
     )?;
     let enabled_players = create_enabled_players_table(lua, context.players.clone())?;
     let human_players = enabled_players.clone();
@@ -2162,7 +2177,7 @@ pub fn install_game_state_globals(
         "GetCurrentSong",
         lua.create_function({
             let current_song = current_song.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(current_song
                     .raw_get::<Option<Table>>(1)?
                     .map_or(Value::Nil, Value::Table))
@@ -2178,7 +2193,7 @@ pub fn install_game_state_globals(
         "GetCurrentStyle",
         lua.create_function({
             let current_style = current_style.clone();
-            move |_, _args: MultiValue| {
+            move |_, _args: IgnoredArgs| {
                 Ok(current_style
                     .raw_get::<Option<Table>>(1)?
                     .map_or(Value::Nil, Value::Table))
@@ -2234,21 +2249,21 @@ pub fn install_game_state_globals(
     )?;
     globals.set(
         "IsW0Judgment",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     globals.set(
         "IsW010Judgment",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     globals.set(
         "GetDefaultFailType",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("FailType_Immediate")?))
         })?,
     )?;
     globals.set(
         "GetComboThreshold",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("TapNoteScore_W3")?))
         })?,
     )?;
@@ -2264,7 +2279,7 @@ pub fn install_game_state_globals(
     )?;
     globals.set(
         "GetNotefieldWidth",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(crate::song_lua_style_info(&current_song_lua_style_name(lua)).width)
         })?,
     )?;
@@ -2277,11 +2292,11 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "GetEnabledPlayers",
-        lua.create_function(move |_, _args: MultiValue| Ok(enabled_players.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(enabled_players.clone()))?,
     )?;
     gamestate.set(
         "GetHumanPlayers",
-        lua.create_function(move |_, _args: MultiValue| Ok(human_players.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(human_players.clone()))?,
     )?;
     let player_states = players.player_states.clone();
     gamestate.set(
@@ -2366,7 +2381,7 @@ pub fn install_game_state_globals(
             let current_steps = current_steps.clone();
             let step_objects = Arc::clone(&step_objects);
             let enabled = context.players.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let mut easiest = None;
                 for (player, active) in enabled.iter().enumerate() {
                     if !active.enabled { continue; }
@@ -2472,7 +2487,7 @@ pub fn install_game_state_globals(
     let song_position = create_song_position_table(lua, &song_runtime)?;
     gamestate.set(
         "GetSongPosition",
-        lua.create_function(move |_, _args: MultiValue| Ok(song_position.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(song_position.clone()))?,
     )?;
     gamestate.set(
         "GetSongOptionsObject",
@@ -2495,7 +2510,7 @@ pub fn install_game_state_globals(
     let current = song_options[3].clone();
     gamestate.set(
         "GetSongOptionsString",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             lua.create_string(crate::song_tables::song_options_text(&current)?)
         })?,
     )?;
@@ -2541,7 +2556,7 @@ pub fn install_game_state_globals(
     let master_player_name = player_number_name(master_player).to_string();
     gamestate.set(
         "GetMasterPlayerNumber",
-        lua.create_function(move |lua, _args: MultiValue| {
+        lua.create_function(move |lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string(&master_player_name)?))
         })?,
     )?;
@@ -2552,19 +2567,19 @@ pub fn install_game_state_globals(
         .count() as i32;
     gamestate.set(
         "GetNumSidesJoined",
-        lua.create_function(move |_, _args: MultiValue| Ok(joined_sides))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(joined_sides))?,
     )?;
     gamestate.set(
         "GetNumPlayersEnabled",
-        lua.create_function(move |_, _args: MultiValue| Ok(joined_sides))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(joined_sides))?,
     )?;
     gamestate.set(
         "IsCourseMode",
-        lua.create_function(|_, _args: MultiValue| Ok(false))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(false))?,
     )?;
     gamestate.set(
         "IsEventMode",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             let prefs: Table = lua.globals().get("PREFSMAN")?;
             // GameState reads the native preference directly. Calling its
             // public Lua getter here would create an extra observed API call.
@@ -2587,48 +2602,48 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "GetCurrentCourse",
-        lua.create_function(move |_, _args: MultiValue| Ok(course.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(course.clone()))?,
     )?;
     let current_game = create_game_table(lua)?;
     gamestate.set(
         "GetCurrentGame",
-        lua.create_function(move |_, _args: MultiValue| Ok(current_game.clone()))?,
+        lua.create_function(move |_, _args: IgnoredArgs| Ok(current_game.clone()))?,
     )?;
     gamestate.set(
         "GetCoinMode",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("CoinMode_Free")?))
         })?,
     )?;
     gamestate.set(
         "GetPremium",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("Premium_Off")?))
         })?,
     )?;
     gamestate.set(
         "GetCoins",
-        lua.create_function(|_, _args: MultiValue| Ok(0))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0))?,
     )?;
     gamestate.set(
         "GetCoinsNeededToJoin",
-        lua.create_function(|_, _args: MultiValue| Ok(0))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0))?,
     )?;
     gamestate.set(
         "GetNumStagesLeft",
-        lua.create_function(|_, _args: MultiValue| Ok(1))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(1))?,
     )?;
     gamestate.set(
         "GetCurrentStageIndex",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     gamestate.set(
         "GetCourseSongIndex",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(0_i64))?,
     )?;
     gamestate.set(
         "GetPlayMode",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("PlayMode_Regular")?))
         })?,
     )?;
@@ -2636,7 +2651,7 @@ pub fn install_game_state_globals(
         "GetSortOrder",
         lua.create_function({
             let current_sort_order = current_sort_order.clone();
-            move |lua, _args: MultiValue| {
+            move |lua, _args: IgnoredArgs| {
                 let sort = current_sort_order
                     .raw_get::<Option<String>>(1)?
                     .unwrap_or_else(|| "SortOrder_Group".to_string());
@@ -2646,7 +2661,7 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "GetPlayerFailType",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("FailType_Immediate")?))
         })?,
     )?;
@@ -2697,7 +2712,7 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "InsertCoin",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -2710,7 +2725,7 @@ pub fn install_game_state_globals(
     ] {
         gamestate.set(
             name,
-            lua.create_function(|lua, _args: MultiValue| {
+            lua.create_function(|lua, _args: IgnoredArgs| {
                 note_song_lua_side_effect(lua)?;
                 Ok(true)
             })?,
@@ -2718,7 +2733,7 @@ pub fn install_game_state_globals(
     }
     gamestate.set(
         "JoinPlayer",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(true)
         })?,
@@ -2748,7 +2763,7 @@ pub fn install_game_state_globals(
     )?;
     gamestate.set(
         "SaveProfiles",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             note_song_lua_side_effect(lua)?;
             Ok(())
         })?,
@@ -2899,7 +2914,7 @@ end"#)
             name,
             lua.create_function({
                 let name = name.to_string();
-                move |lua, _args: MultiValue| create_conf_option_row(lua, &name).map(Value::Table)
+                move |lua, _args: IgnoredArgs| create_conf_option_row(lua, &name).map(Value::Table)
             })?,
         )?;
     }
@@ -2910,7 +2925,7 @@ end"#)
     globals.set("Branch", create_branch_table(lua)?)?;
     globals.set(
         "SelectMusicOrCourse",
-        lua.create_function(|lua, _args: MultiValue| {
+        lua.create_function(|lua, _args: IgnoredArgs| {
             Ok(Value::String(lua.create_string("ScreenSelectMusic")?))
         })?,
     )?;
@@ -3100,3 +3115,15 @@ mod tests {
         .expect("native Broadcast parameter contract");
     }
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/ignored_host.rs"]
+mod ignored_args_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/sound_path.rs"]
+mod sound_path_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/comparison_sound.rs"]
+mod comparison_sound_perf;

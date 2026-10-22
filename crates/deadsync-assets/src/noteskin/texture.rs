@@ -184,6 +184,7 @@ pub struct SpriteSlot {
     pub(crate) base_rot_sin_cos: [f32; 2],
     pub source_size: [i32; 2],
     pub source: Arc<SpriteSource>,
+    sprite_uv_scale: [f32; 2],
     pub animation_start_frame: usize,
     animation_start_time: f32,
     pub actor_frame_child: bool,
@@ -220,6 +221,7 @@ impl Clone for SpriteSlot {
             base_rot_sin_cos: self.base_rot_sin_cos,
             source_size: self.source_size,
             source: self.source.clone(),
+            sprite_uv_scale: self.sprite_uv_scale,
             animation_start_frame: self.animation_start_frame,
             animation_start_time: self.animation_start_time,
             actor_frame_child: self.actor_frame_child,
@@ -608,7 +610,11 @@ impl NoteskinSlot for SpriteSlot {
                 frame_size[1] as f32 * texel_scale[1],
             ];
         }
-        [1.0; 2]
+        if self.uv_uses_phase() {
+            [1.0; 2]
+        } else {
+            self.sprite_uv_scale
+        }
     }
 
     #[inline(always)]
@@ -698,6 +704,7 @@ pub fn test_model_slot() -> SpriteSlot {
         def: SpriteDefinition::default(),
         base_rot_sin_cos: [0.0, 1.0],
         source_size: [64, 64],
+        sprite_uv_scale: [1.0; 2],
         animation_start_frame: 0,
         animation_start_time: 0.0,
         actor_frame_child: false,
@@ -1048,6 +1055,11 @@ fn source_from_plan(plan: SpriteSourcePlan, def: &SpriteDefinition) -> Arc<Sprit
 fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     let def = plan.def;
     let source = source_from_plan(plan.source, &def);
+    let tex_dims = match source.as_ref() {
+        SpriteSource::Atlas { tex_dims, .. } | SpriteSource::Animated { tex_dims, .. } => *tex_dims,
+    };
+    let sprite_uv_scale =
+        crate::textures::native_sprite_uv_scale(source.texture_key(), [tex_dims.0, tex_dims.1]);
     SpriteSlot {
         sphere_mapped: false,
         model_animation_length: 1.0,
@@ -1059,6 +1071,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         base_rot_sin_cos: [0.0, 1.0],
         source_size: plan.source_size,
         source,
+        sprite_uv_scale,
         animation_start_frame: 0,
         animation_start_time: 0.0,
         actor_frame_child: false,
@@ -1137,6 +1150,13 @@ pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<Sprite
         assets::texture_source_frame_dims_from_real,
     )
     .map(slot_from_plan)
+}
+
+pub(super) fn itg_apply_actor_frame_override(slot: &mut SpriteSlot, frame: usize) {
+    // A wrapper's Frames={{Frame=n}} replaces the state table with one state.
+    // Unlike Sprite:setstate, it does not keep cycling the original sheet.
+    itg_apply_frame_override(slot, frame);
+    freeze_sprite_animation(slot);
 }
 
 pub(super) fn itg_note_animation_source(
@@ -1951,7 +1971,7 @@ Materials: 1
     }
 
     #[test]
-    fn sprite_sheets_keep_texture_space_offsets() {
+    fn sprite_sheets_translate_in_native_allocation_space() {
         let mut slot = slot_from_plan(generated_animation_sprite_slot_plan(
             "tests/sprite-sheet".into(),
             (192, 64),
@@ -1965,7 +1985,13 @@ Materials: 1
             slot.sprite_mesh = mesh;
             let uv = slot.uv_for_frame_at(1, 0.0);
             let actual = slot.uv_for_note_at(1, 0.0, [0.5, -0.1]);
-            assert_eq!(actual, [uv[0] + 0.5, uv[1] - 0.1, uv[2] + 0.5, uv[3] - 0.1]);
+            // A 192-pixel sheet occupies a native 256-pixel allocation. The
+            // offset uses that allocation, including for Sprite cutout meshes.
+            let shift_x = 0.5 * (256.0 / 192.0);
+            assert_eq!(
+                actual,
+                [uv[0] + shift_x, uv[1] - 0.1, uv[2] + shift_x, uv[3] - 0.1]
+            );
         }
         let slot = test_model_slot();
         let uv = slot.uv_for_frame_at(0, 0.0);

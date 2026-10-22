@@ -9,8 +9,11 @@ song-lua-performance = ["deadsync-song-lua/performance"]
 
 [[bin]]
 name = "song_lua_compile_performance"
-path = "../../tests/song_lua_performance.rs"
+path = "../../examples/song_lua_performance.rs"
 required-features = ["song-lua-performance"]
+
+[[bin]]
+name = "song_lua_execution"
 
 [dependencies]
 deadlib-audio = { path = "../deadlib-audio" }
@@ -60,6 +63,9 @@ smallvec = "1.16.1"
 winit = "0.30.13"
 
 [dev-dependencies]
+zstd = "0.14.0"
+tar = "0.4.46"
+tempfile = "3.27.0"
 deadsync-song-lua = { path = "../deadsync-song-lua", features = ["test-support"] }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "command": "actor-conformance",
+  "receipt": "tests/fixtures/itgmania-song-lua-micro/legacy-native-capture-manifest.json",
+  "fixtures": [
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/native-inputs/manual-player-draws.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/manual-player-native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [],
+      "source_harness_fixture": "fixtures/actors/manual-player-draws.json"
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/control.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/native.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/default.lua",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.ini",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.txt",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.ini",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.txt"
+      ]
+    },
+    {
+      "input": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/control-frames.json",
+      "output": "tests/fixtures/itgmania-song-lua-micro/model-texture-history/native-frames.json",
+      "oracle": "itgmania_native_actor_conformance",
+      "dependencies": [
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/default.lua",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.ini",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/repeated.txt",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.ini",
+        "tests/fixtures/itgmania-song-lua-micro/model-texture-history/single.txt"
+      ]
+    }
+  ]
+}

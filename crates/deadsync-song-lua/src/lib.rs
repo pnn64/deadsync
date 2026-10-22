@@ -13,6 +13,7 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 
 mod actions;
 mod actor_classes;
+mod callback_args;
 mod cmd;
 mod compat;
 mod compile;
@@ -33,7 +34,11 @@ mod json;
 mod lua_util;
 mod raw_vm;
 mod live;
-pub use live::{SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
+#[cfg(feature = "performance")]
+mod live_profile;
+#[cfg(feature = "performance")]
+pub use live_profile::{live_profile_report, reset_live_profile};
+pub use live::{SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput, SongLuaLivePlayer, SongLuaLiveScene, SongLuaLiveRequest, SongLuaLiveSourceRequest, SongLuaLiveTarget};
 #[cfg(feature = "test-support")]
 pub use live::SongLuaOverlayStageObservation;
 mod mod_windows;
@@ -44,6 +49,10 @@ pub use model_texture::{
     SongLuaModelTextureFrame, SongLuaModelTextureUv, SongLuaTextureSample, model_texture_at,
 };
 mod multitap;
+mod native_vector;
+mod render_flags;
+mod base_transform;
+mod tween_pose;
 mod net;
 mod noteskin;
 mod option_rows;
@@ -55,7 +64,9 @@ mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
+mod string_args;
 mod tables;
+mod text_publication;
 mod theme_colors;
 mod timing;
 mod top_screen;
@@ -681,6 +692,8 @@ pub struct SongLuaPlayerContext {
     pub autoplay: f32,
     pub difficulty: SongLuaDifficulty,
     pub speedmod: SongLuaSpeedMod,
+    /// Saved Mini amount already applied before song Lua loads (60% is 0.6).
+    pub mini: f32,
     pub perspective: deadsync_gameplay::PerspectiveEffects,
     pub display_bpms: [f32; 2],
     pub noteskin_name: String,
@@ -720,6 +733,7 @@ impl Default for SongLuaPlayerContext {
             autoplay: 0.0,
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
+            mini: 0.0,
             perspective: deadsync_gameplay::PerspectiveEffects::default(),
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
@@ -1172,6 +1186,11 @@ pub fn theme_string_names(section: &str) -> Vec<String> {
 
 #[must_use]
 pub fn theme_string(section: &str, name: &str) -> String {
+    // Simply Love and its fallback define no gameplay HeaderText string.
+    // ThemeManager's missing lookup returns an empty string, not the key.
+    if section == "ScreenGameplay" && name == "HeaderText" {
+        return String::new();
+    }
     if section == "OptionTitles" && name == "MusicRateMultiplier" { return "x rate".into(); }
     if section.eq_ignore_ascii_case("Difficulty")
         || section.eq_ignore_ascii_case("CustomDifficulty")
@@ -1525,6 +1544,9 @@ pub struct SongLuaCompileContext {
     /// Observational capture profile; does not change actor dispatch or queries.
     #[cfg(feature = "test-support")]
     pub trace_dynamic_commands: bool,
+    /// Explicit initial collector input for deterministic diagnostic captures.
+    #[cfg(feature = "test-support")]
+    pub initial_lua_gc_stopped: bool,
     /// Include the capture tool's visible Overlay probe when replaying its input.
     #[cfg(feature = "test-support")]
     pub capture_overlay_probe: bool,
@@ -1594,6 +1616,8 @@ impl SongLuaCompileContext {
             message_actor_order: Vec::new(),
             #[cfg(feature = "test-support")]
             trace_dynamic_commands: false,
+            #[cfg(feature = "test-support")]
+            initial_lua_gc_stopped: false,
             #[cfg(feature = "test-support")]
             capture_overlay_probe: false,
             #[cfg(feature = "test-support")]
@@ -2147,6 +2171,7 @@ pub enum SongLuaOverlayBlendMode {
     Add,
     Multiply,
     Subtract,
+    NoEffect,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2409,7 +2434,9 @@ pub fn overlay_text_at<'a>(
 
 #[must_use]
 pub const fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {
-    if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
+    if raw.eq_ignore_ascii_case("noeffect") || raw.eq_ignore_ascii_case("blendmode_noeffect") {
+        Some(SongLuaOverlayBlendMode::NoEffect)
+    } else if raw.eq_ignore_ascii_case("add") || raw.eq_ignore_ascii_case("blendmode_add") {
         Some(SongLuaOverlayBlendMode::Add)
     } else if raw.eq_ignore_ascii_case("multiply") || raw.eq_ignore_ascii_case("blendmode_multiply")
     {
@@ -2974,6 +3001,8 @@ pub struct SongLuaOverlayState {
     pub mask_source: bool,
     pub mask_dest: bool,
     pub depth_test: bool,
+    pub depth_write: bool,
+    pub depth_test_on_fail: bool,
     pub cull_mode: deadlib_render_core::CullMode,
     pub zoom: f32,
     pub zoom_x: f32,
@@ -3083,6 +3112,8 @@ impl Default for SongLuaOverlayState {
             mask_source: false,
             mask_dest: false,
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             cull_mode: deadlib_render_core::CullMode::None,
             zoom: 1.0,
             zoom_x: 1.0,
@@ -3237,6 +3268,8 @@ pub struct SongLuaOverlayStateDelta {
     pub mask_source: Option<bool>,
     pub mask_dest: Option<bool>,
     pub depth_test: Option<bool>,
+    pub depth_write: Option<bool>,
+    pub depth_test_on_fail: Option<bool>,
     pub cull_mode: Option<deadlib_render_core::CullMode>,
     pub zoom: Option<f32>,
     pub zoom_x: Option<f32>,
@@ -3330,6 +3363,8 @@ impl SongLuaOverlayStateDelta {
             Target::MaskSource => self.mask_source.is_some(),
             Target::MaskDest => self.mask_dest.is_some(),
             Target::DepthTest => self.depth_test.is_some(),
+            Target::DepthWrite => self.depth_write.is_some(),
+            Target::DepthTestOnFail => self.depth_test_on_fail.is_some(),
             Target::CullMode => self.cull_mode.is_some(),
             Target::Zoom => self.zoom.is_some(),
             Target::ZoomX => self.zoom_x.is_some(),
@@ -3728,6 +3763,12 @@ pub const fn apply_overlay_delta(
     }
     if let Some(value) = delta.depth_test {
         state.depth_test = value;
+    }
+    if let Some(value) = delta.depth_write {
+        state.depth_write = value;
+    }
+    if let Some(value) = delta.depth_test_on_fail {
+        state.depth_test_on_fail = value;
     }
     if let Some(value) = delta.cull_mode {
         state.cull_mode = value;
@@ -4277,6 +4318,16 @@ pub fn overlay_state_lerp(
     {
         from.depth_test = to;
     }
+    if let Some(to) = delta.depth_write
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.depth_write = to;
+    }
+    if let Some(to) = delta.depth_test_on_fail
+        && t >= 1.0 - f32::EPSILON
+    {
+        from.depth_test_on_fail = to;
+    }
 }
 
 const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
@@ -4313,6 +4364,8 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.mask_source.is_none()
         && delta.mask_dest.is_none()
         && delta.depth_test.is_none()
+        && delta.depth_write.is_none()
+        && delta.depth_test_on_fail.is_none()
         && delta.cull_mode.is_none()
         && delta.zoom.is_none()
         && delta.zoom_x.is_none()
@@ -4464,6 +4517,12 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     }
     if from.depth_test.is_some() {
         into.depth_test = from.depth_test;
+    }
+    if from.depth_write.is_some() {
+        into.depth_write = from.depth_write;
+    }
+    if from.depth_test_on_fail.is_some() {
+        into.depth_test_on_fail = from.depth_test_on_fail;
     }
     if from.cull_mode.is_some() {
         into.cull_mode = from.cull_mode;
@@ -4706,6 +4765,8 @@ pub fn overlay_delta_intersection(
     copy_pair!(mask_source);
     copy_pair!(mask_dest);
     copy_pair!(depth_test);
+    copy_pair!(depth_write);
+    copy_pair!(depth_test_on_fail);
     copy_pair!(cull_mode);
     copy_pair!(zoom);
     copy_pair!(zoom_x);
@@ -5150,6 +5211,8 @@ pub enum SongLuaOverlayUpdateTarget {
     AftCreated,
     AftPreserve,
     Hibernating,
+    DepthWrite,
+    DepthTestOnFail,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -5966,6 +6029,29 @@ mod tests {
             test_model_layer_from_slot,
             |_context, _noteskin| None,
         )
+    }
+
+    #[test]
+    fn offline_compile_rejects_input_callbacks_instead_of_dropping_them() {
+        for (name, command) in [
+            ("immediate-input", "OnCommand=function(self) register() end"),
+            ("delayed-input", "OnCommand=function(self) self:sleep(0.1):queuecommand('Ready') end, ReadyCommand=function(self) register() end"),
+        ] {
+            let dir = test_dir(name);
+            let entry = dir.join("custom.lua");
+            std::fs::write(&entry, format!(r#"
+local function register()
+    local screen=SCREENMAN:GetTopScreen()
+    local callback=function(event) return event.button=='Down' end
+    screen:AddInputCallback(callback):RemoveInputCallback(callback)
+end
+return Def.Actor {{ {command} }}
+"#)).unwrap();
+            let mut context = SongLuaCompileContext::new(&dir, name);
+            context.music_length_seconds = 0.5;
+            let error = test_compile_song_lua(&entry, &context).unwrap_err();
+            assert!(error.contains("requires runtime Lua"), "{error}");
+        }
     }
 
     fn test_compile_song_lua_layers(
@@ -10705,10 +10791,18 @@ return Def.ActorFrame{
 
     #[test]
     fn compile_song_lua_keeps_combo_child_callback() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
+        let root = test_dir("combo-child-current-theme");
         let entry = root.join("combo-child.lua");
+        fs::write(&entry, include_str!("../../../tests/fixtures/song-lua/combo-child.lua")).unwrap();
+        // Simply Love returns a leaf Actor when the current theme has no combo
+        // fonts. Provide the directory entries this child-lookup test needs.
+        let font = root.join(crate::SONG_LUA_THEME_PATH_PREFIX).join("Fonts/_Combo Fonts/Wendy");
+        fs::create_dir_all(&font).unwrap();
+        fs::write(font.join("Wendy.ini"), "[main]\n").unwrap();
+        fs::write(font.join("Wendy 4x4.png"), b"").unwrap();
         let mut context = SongLuaCompileContext::new(&root, "Combo Child Callback");
         context.music_length_seconds = 2.0;
+        context.players = std::array::from_fn(|_| SongLuaPlayerContext { enabled: true, ..Default::default() });
         let compiled = test_compile_song_lua(&entry, &context).unwrap();
         assert_eq!(compiled.info.unsupported_perframes, 0, "{:?}", compiled.info);
         for (player, expected) in [(1, 300.0), (2, 400.0)] {
@@ -12791,6 +12885,29 @@ return Def.ActorFrame{{}}
     }
 
     #[test]
+    fn screen_aspect_uses_preference_with_rounded_logical_dimensions() {
+        let song_dir = test_dir("rounded-screen-aspect");
+        let entry = song_dir.join("default.lua");
+        fs::write(&entry, r#"
+assert(SCREEN_WIDTH == 854 and _screen.w == 854)
+assert(GetScreenAspectRatio() == PREFSMAN:GetPreference('DisplayAspectRatio'),
+    'physical display preference is independent of rounded logical dimensions')
+assert(math.abs(_screen.w * 0.529 / GetScreenAspectRatio() - 254.1183731066706) < 1e-10)
+PREFSMAN:SetPreference('DisplayWidth', 1280)
+PREFSMAN:SetPreference('DisplayHeight', 720)
+PREFSMAN:SetPreference('DisplayAspectRatio', 4 / 3)
+assert(math.abs(GetScreenAspectRatio() - 4 / 3) < 1e-6)
+assert(SCREEN_WIDTH == 854, 'changing a preference does not reload screen dimensions')
+return Def.ActorFrame{}
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&song_dir, "Rounded Screen Aspect");
+        context.screen_width = 854.0;
+        context.screen_height = 480.0;
+        context.display_aspect_ratio = 16.0 / 9.0;
+        test_compile_song_lua(&entry, &context).expect("native display aspect contract");
+    }
+
+    #[test]
     fn compile_song_lua_exposes_display_specs_shape() {
         let song_dir = test_dir("display-specs-shape");
         let entry = song_dir.join("default.lua");
@@ -13638,17 +13755,28 @@ return Def.Sound{
             &SongLuaCompileContext::new(&song_dir, "Sound length"),
         )
         .unwrap();
-        let startup = compiled.overlays[0]
-            .message_commands
-            .iter()
-            .find(|command| command.message == SONG_LUA_STARTUP_MESSAGE)
-            .unwrap();
-        assert!(
-            startup
-                .blocks
-                .iter()
-                .any(|block| block.start == 0.25 && block.delta.sound_play == Some(true))
-        );
+        // ActorSound::play is immediate even after sleep(). Its file is the
+        // one loaded at the call, rather than the final File on the actor.
+        assert_eq!(test_compiled_sound_calls(&compiled), vec![(0.0, song_dir.join("second.wav"))]);
+    }
+
+    fn test_compiled_sound_calls(compiled: &TestCompiledSongLua) -> Vec<(f32, PathBuf)> {
+        let mut calls = Vec::new();
+        for actor in &compiled.overlays {
+            let SongLuaOverlayKind::Sound { sound_path } = &actor.kind else { continue };
+            for command in &actor.message_commands {
+                for event in compiled.messages.iter().filter(|event| event.message == command.message) {
+                    for block in &command.blocks {
+                        if block.delta.sound_play == Some(true) {
+                            assert_eq!(block.start, 0.0, "Sound:play is not a tween property");
+                            calls.push((event.beat, sound_path.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        calls.sort_by(|a, b| a.0.total_cmp(&b.0));
+        calls
     }
 
     #[test]
@@ -13683,31 +13811,13 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "Sound Actor Assets"),
         )
         .unwrap();
-        assert_eq!(compiled.overlays.len(), 1);
-        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
-            panic!("expected sound overlay");
-        };
-        assert_eq!(sound_path, &song_dir.join("hit.ogg"));
         assert_eq!(compiled.sound_paths, vec![song_dir.join("hit.ogg")]);
-        assert!(
-            compiled
-                .messages
-                .iter()
-                .any(|event| event.message == SONG_LUA_STARTUP_MESSAGE && event.beat == 0.0)
-        );
-        let startup = compiled.overlays[0]
-            .message_commands
-            .iter()
-            .find(|command| command.message == SONG_LUA_STARTUP_MESSAGE)
-            .expect("expected startup sound command");
-        assert_eq!(startup.blocks[0].delta.sound_play, Some(true));
-        let ding = compiled.overlays[0]
-            .message_commands
-            .iter()
-            .find(|command| command.message == "Ding")
-            .expect("expected Ding sound command");
-        assert_eq!(ding.blocks[0].start, 0.25);
-        assert_eq!(ding.blocks[0].delta.sound_play, Some(true));
+        // Native On and Ding each call ActorSound::Play once. sleep() queues
+        // actor state, while playforplayer() still executes in that callback.
+        assert_eq!(test_compiled_sound_calls(&compiled), vec![
+            (0.0, song_dir.join("hit.ogg")),
+            (1.0, song_dir.join("hit.ogg")),
+        ]);
     }
 
     #[test]
@@ -15160,7 +15270,8 @@ return Def.ActorFrame{
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files");
         let entry = song_dir.join("default.lua");
-        for name in ["gif-offset.gif", "gif-first-frame.gif", "os2-4.bmp"] {
+        for (name, expected) in [("gif-offset.gif", "16:24:16:24:16:32"),
+            ("gif-first-frame.gif", "16:24:16:24:16:32"), ("os2-4.bmp", "8:8:8:8:8:8")] {
             fs::copy(root.join(name), song_dir.join(name)).expect("copy native indexed file");
             fs::write(&entry, format!(r#"
 return Def.Sprite{{
@@ -15178,7 +15289,7 @@ return Def.Sprite{{
                 &entry, &SongLuaCompileContext::new(&song_dir, "Native Indexed Dimensions"),
             ).expect("compile indexed Sprite source getters");
             assert_eq!(compiled.messages.len(), 1);
-            assert_eq!(compiled.messages[0].message, "8:8:8:8:8:8", "{name}");
+            assert_eq!(compiled.messages[0].message, expected, "{name}");
         }
     }
 
@@ -15790,11 +15901,11 @@ return Def.ActorFrame{
         assert!(compiled.messages.iter().any(|event| {
             event.message != SONG_LUA_STARTUP_MESSAGE && event.message == "true:true"
         }));
-        assert_eq!(compiled.overlays.len(), 1);
-        let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
-            panic!("expected sound overlay");
-        };
-        assert_eq!(sound_path, &song_dir.join("other.ogg"));
+        assert!(compiled.overlays.iter().any(|actor| matches!(
+            &actor.kind, SongLuaOverlayKind::Sound { sound_path }
+                if sound_path == &song_dir.join("other.ogg"))));
+        assert_eq!(test_compiled_sound_calls(&compiled), vec![(0.0, audio_path)],
+            "the play call keeps its binary audio file across a later load");
     }
 
     #[test]
@@ -18476,7 +18587,7 @@ mods_ease = {
 return Def.ActorFrame{
     Def.ActorFrame{
         OnCommand=function(self)
-            target = self
+            target = SCREENMAN:GetTopScreen():GetChild("PlayerP1")
         end,
     },
 }
@@ -18489,7 +18600,7 @@ return Def.ActorFrame{
             &SongLuaCompileContext::new(&song_dir, "SkewY Probe"),
         )
         .unwrap();
-        assert_eq!(compiled.info.unsupported_function_eases, 0);
+        assert_eq!(compiled.info.unsupported_function_eases, 0, "{:?}", compiled.info);
         assert_eq!(compiled.eases.len(), 1);
         assert!(matches!(
             compiled.eases[0].target,
@@ -20471,7 +20582,7 @@ return Def.ActorFrame{
     InitCommand=function(self)
         local top = SCREENMAN:GetTopScreen()
         local player = top:GetChild("PlayerP1")
-        assert(top:GetChildren()[""] == nil)
+        assert(top:GetChildren()["PlayerP1"] == player)
         local nf = player:GetChild("NoteField")
         local seen = {}
         nf:set_did_tap_note_callback(function(col, score, bright)
@@ -21169,7 +21280,7 @@ mod_actions = {
         assert(stats:GetCurMaxScore() == 24)
         assert(stats:GetActualDancePoints() == 8)
         assert(stats:GetPossibleDancePoints() == 10)
-        assert(stats:GetPercentDancePoints() == 0.8)
+        assert(math.abs(stats:GetPercentDancePoints() - 0.8) < 0.000001)
     end, true},
 }
 
@@ -21183,7 +21294,7 @@ return Def.ActorFrame{}
             &SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers"),
         )
         .unwrap();
-        assert_eq!(compiled.info.unsupported_function_actions, 0);
+        assert_eq!(compiled.info.unsupported_function_actions, 0, "{:?}", compiled.info);
         assert!(compiled.messages.is_empty());
         assert!(compiled.overlays.is_empty());
     }
@@ -24693,19 +24804,28 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages.len(), 1);
         assert_eq!(
             compiled.messages[0].message,
-            "1.779:200.0:3:2:05|01:05|1:05.50|01:05.50|01:01:01|1st|2nd|3rd|11th|113th"
+            "1.778:200.0:3:2:05|01:05|1:05.50|01:05.50|01:01:01|1st|2nd|3rd|11th|113th"
         );
     }
 
     #[test]
     fn compile_song_lua_exposes_theme_process_compat_helpers() {
         let song_dir = test_dir("theme-process-helpers");
+        let sounds = song_dir.join(crate::SONG_LUA_THEME_PATH_PREFIX).join("S");
+        fs::create_dir_all(&sounds).unwrap();
+        for name in ["Common invalid.ogg", "_unlock.ogg"] {
+            fs::write(sounds.join(name), b"asset lookup only").unwrap();
+        }
+        fs::write(song_dir.join("sample.ogg"), b"asset lookup only").unwrap();
         let entry = song_dir.join("default.lua");
         fs::write(
             &entry,
             r#"
+return Def.ActorFrame{
+    Def.Sound{ Name="InvalidSound", File=THEME:GetPathS("", "Common invalid.ogg") },
+    InitCommand=function(self)
 local top = SCREENMAN:GetTopScreen()
-local sound = LoadActor(THEME:GetPathS("", "Common invalid.ogg"))
+local sound = self:GetChild("InvalidSound")
 sound:play():stop()
 
 SOUND:PlayOnce(THEME:GetPathS("", "_unlock.ogg"))
@@ -24737,20 +24857,24 @@ mod_actions = {
     },
 }
 
-return Def.ActorFrame{}
+MESSAGEMAN:Broadcast(mod_actions[1][2])
+    end,
+}
 "#,
         )
         .unwrap();
 
-        let compiled = test_compile_song_lua(
-            &entry,
-            &SongLuaCompileContext::new(&song_dir, "Theme Process Helpers"),
-        )
-        .unwrap();
-
-        assert_eq!(compiled.messages.len(), 1);
+        // Input callbacks are runtime behavior; offline compilation correctly
+        // rejects them instead of silently dropping the registered function.
+        let mut context = SongLuaCompileContext::new(&song_dir, "Theme Process Helpers");
+        context.live = true;
+        let mut compiled = test_compile_song_lua(&entry, &context).unwrap();
+        let output = compiled.live_scene.as_mut().expect("owned runtime callbacks").take_startup_output();
+        let messages = output.broadcasts.iter().filter(|event| event.1.starts_with("ScreenGameplay:"))
+            .map(|event| event.1.as_str()).collect::<Vec<_>>();
+        assert_eq!(messages.len(), 1, "startup output: {output:?}");
         assert_eq!(
-            compiled.messages[0].message,
+            messages[0],
             "ScreenGameplay:ScreenEvaluationStage:ScreenGameplay:cel:true:false:15:300:Cancel:__songlua_theme_path:0"
         );
         assert_eq!(compiled.info.unsupported_function_actions, 0);

@@ -1015,6 +1015,7 @@ pub fn create_steps_table(
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     player_option_state(lua, &table)?.raw_set("playerautoplay", player.autoplay)?;
+    player_option_state(lua, &table)?.raw_set("mini", player.mini)?;
     if player.perspective.tilt != 0.0 || player.perspective.skew != 0.0 {
         let state = player_option_state(lua, &table)?;
         state.set("tilt", player.perspective.tilt)?;

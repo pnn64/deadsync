@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "song Mini replaces saved Mini at runtime",
+  "option_control": true,
+  "lua_assertions": "local function po(level, name, ...)\n    return _ITG_OPTIONS_AT(0, 'ModsLevel_' .. level, name, ...)\nend\nlocal function near(value, expected)\n    assert(math.abs(value - expected) < 0.000001, tostring(value) .. ' != ' .. tostring(expected))\nend\npo('Preferred', 'SetPlayerOptions', 'M730, 60% Mini')\npo('Song', 'Mini', 0.6, 10000)\n_ITG_OPTIONS_ADVANCE(0.016)\nnear(po('Song', 'Mini'), 0.6)\nnear(po('Current', 'Mini'), 0.6)\n-- The same setter is used by 7th Gear's bigMini easing callbacks.\npo('Song', 'Mini', 0.32, 10000)\n_ITG_OPTIONS_ADVANCE(0.032)\nnear(po('Current', 'Mini'), 0.32)\npo('Song', 'Mini', 0.6, 10000)\n_ITG_OPTIONS_ADVANCE(0.048)\nnear(po('Current', 'Mini'), 0.6)\n-- FromString and direct Current writes also assign absolute values.\npo('Song', 'FromString', '*10000 -100% Mini')\n_ITG_OPTIONS_ADVANCE(0.064)\nnear(po('Current', 'Mini'), -1)\npo('Current', 'Mini', 0.6)\nnear(po('Current', 'Mini'), 0.6)\nnear(po('Preferred', 'Mini'), 0.6)\n"
+}

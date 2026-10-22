@@ -98,6 +98,8 @@ struct TexturedMeshPayload {
     vertices: renderer::TexturedMeshVertices,
     geom_cache_key: renderer::TMeshCacheKey,
     depth_test: bool,
+    depth_write: bool,
+    depth_test_on_fail: bool,
     clear_depth: bool,
     clear_depth_after: bool,
     sampler: Option<renderer::MeshSampler>,
@@ -257,6 +259,8 @@ impl FrameBuilder {
                 vertices,
                 geom_cache_key,
                 depth_test,
+                depth_write,
+                depth_test_on_fail,
                 clear_depth,
                 clear_depth_after,
                 sampler,
@@ -271,6 +275,8 @@ impl FrameBuilder {
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    depth_write,
+                    depth_test_on_fail,
                     clear_depth,
                     clear_depth_after,
                     sampler,
@@ -330,6 +336,8 @@ impl FrameBuilder {
                 vertices,
                 geom_cache_key,
                 depth_test,
+                depth_write,
+                depth_test_on_fail,
                 clear_depth,
                 clear_depth_after,
                 sampler,
@@ -347,6 +355,8 @@ impl FrameBuilder {
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    depth_write,
+                    depth_test_on_fail,
                     clear_depth,
                     clear_depth_after,
                     sampler,
@@ -387,6 +397,8 @@ impl FrameBuilder {
                     vertices: payload.vertices,
                     geom_cache_key: payload.geom_cache_key,
                     depth_test: payload.depth_test,
+                    depth_write: payload.depth_write,
+                    depth_test_on_fail: payload.depth_test_on_fail,
                     clear_depth: payload.clear_depth,
                     clear_depth_after: payload.clear_depth_after,
                     sampler: payload.sampler,
@@ -409,6 +421,8 @@ enum EditablePayload {
         vertices: renderer::TexturedMeshVertices,
         geom_cache_key: renderer::TMeshCacheKey,
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         clear_depth: bool,
         clear_depth_after: bool,
         sampler: Option<renderer::MeshSampler>,
@@ -1922,6 +1936,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     vertices,
                     geom_cache_key,
                     depth_test,
+                    depth_write,
+                    depth_test_on_fail,
                     clear_depth,
                     clear_depth_after,
                     sampler,
@@ -1934,9 +1950,9 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     cursor += 1;
                     continue;
                 }
-                let clear_depth = if depth_test {
+                let clear_depth = if depth_test || depth_write {
                     let clear = std::mem::take(&mut pending_clear) && depth_written;
-                    depth_written = true;
+                    depth_written |= depth_write;
                     clear
                 } else {
                     false
@@ -1971,6 +1987,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                             !payload.clear_depth
                                 && payload.instance.additive_texture == instance.additive_texture
                                 && payload.depth_test == depth_test
+                                && payload.depth_write == depth_write
+                                && payload.depth_test_on_fail == depth_test_on_fail
                                 && payload.sampler == sampler
                                 && tmesh_identity(&payload.vertices, payload.geom_cache_key)
                                     == identity
@@ -1992,6 +2010,8 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     texture_handle,
                     camera,
                     depth_test,
+                    depth_write,
+                    depth_test_on_fail,
                     clear_depth,
                     sampler,
                 }));
@@ -5206,6 +5226,7 @@ fn retained_frame_key(
             Some(BlendMode::Add) => 2,
             Some(BlendMode::Multiply) => 3,
             Some(BlendMode::Subtract) => 4,
+            Some(BlendMode::NoEffect) => 5,
         },
     }
 }
@@ -5551,6 +5572,8 @@ fn push_shadow_objects_for_range(
                         vertices,
                         geom_cache_key: source.geom_cache_key,
                         depth_test: source.depth_test,
+                        depth_write: source.depth_write,
+                        depth_test_on_fail: source.depth_test_on_fail,
                         clear_depth: source.clear_depth,
                         clear_depth_after: source.clear_depth_after,
                         sampler: None,
@@ -5750,8 +5773,11 @@ fn build_actor_sequence_with_state<'a, T, I>(
                     sequence.active_camera =
                         if let Some(root_camera) = segment_camera.map(|camera| camera.root) {
                             *root_camera_id
-                                .get_or_insert_with(|| sequence.camera_id(
-                                    camera_prefix.map_or(*root_camera, |prefix| prefix * *root_camera), cameras))
+                                .get_or_insert_with(|| {
+                            sequence.camera_id(
+                                    camera_prefix.map_or(*root_camera, |prefix| prefix * *root_camera), cameras,
+                            )
+                        })
                         } else {
                             sequence.base_camera
                         };
@@ -5942,7 +5968,9 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
     if fragments.iter().all(|(draws, _)| draws.is_empty()) {
         return;
     }
-    let projected = |matrix: Matrix4| segment.projection_prefix.map_or(matrix, |prefix| *prefix * matrix);
+    let projected = |matrix: Matrix4| {
+        segment.projection_prefix.map_or(matrix, |prefix| *prefix * matrix)
+    };
     let enclosing_camera = enclosing_matrix.map(|matrix| {
         let matrix = projected(*matrix);
         cameras.push(matrix);
@@ -6041,6 +6069,8 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             uv_offset: mesh.uv_offset,
                             uv_tex_shift: mesh.uv_tex_shift,
                             depth_test: mesh.depth_test,
+                            depth_write: mesh.depth_write,
+                            depth_test_on_fail: mesh.depth_test_on_fail,
                             clear_depth: mesh.clear_depth,
                             clear_depth_after: mesh.clear_depth_after,
                             cull_mode: mesh.cull_mode,
@@ -6421,6 +6451,8 @@ struct TexturedMeshActorView<'a> {
     uv_offset: [f32; 2],
     uv_tex_shift: [f32; 2],
     depth_test: bool,
+    depth_write: bool,
+    depth_test_on_fail: bool,
     clear_depth: bool,
     clear_depth_after: bool,
     cull_mode: deadlib_render_core::CullMode,
@@ -6470,6 +6502,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         uv_offset,
         uv_tex_shift,
         depth_test,
+        depth_write,
+        depth_test_on_fail,
         clear_depth,
         clear_depth_after,
         cull_mode,
@@ -6491,6 +6525,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             clear_depth,
             clear_depth_after,
             cull_mode,
@@ -6513,6 +6549,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             uv_offset,
             uv_tex_shift,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             clear_depth,
             clear_depth_after,
             cull_mode,
@@ -6534,6 +6572,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
             *uv_offset,
             *uv_tex_shift,
             *depth_test,
+            *depth_write,
+            *depth_test_on_fail,
             *clear_depth,
             *clear_depth_after,
             *cull_mode,
@@ -6571,6 +6611,8 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         uv_offset,
         uv_tex_shift,
         depth_test,
+        depth_write,
+        depth_test_on_fail,
         clear_depth,
         clear_depth_after,
         cull_mode,
@@ -6697,6 +6739,8 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
+                depth_write: mesh.depth_write,
+                depth_test_on_fail: mesh.depth_test_on_fail,
                 clear_depth: mesh.clear_depth,
                 clear_depth_after: mesh.clear_depth_after && mesh.glow[3] <= 0.0001,
                 sampler: mesh.environment.and_then(|environment| environment.sampler),
@@ -6727,6 +6771,8 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
                 vertices: mesh.vertices.clone_for_render(),
                 geom_cache_key: mesh.geom_cache_key,
                 depth_test: mesh.depth_test,
+                depth_write: mesh.depth_write,
+                depth_test_on_fail: mesh.depth_test_on_fail,
                 clear_depth: mesh.clear_depth && mesh.tint[3] <= 0.0,
                 clear_depth_after: mesh.clear_depth_after,
                 sampler: mesh.environment.and_then(|environment| environment.sampler),
@@ -8197,6 +8243,8 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                     )),
                     geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                     depth_test: false,
+                    depth_write: false,
+                    depth_test_on_fail: false,
                     clear_depth: false,
                     clear_depth_after: false,
                     // Mesh draws otherwise select repeat addressing. A target
@@ -8488,6 +8536,8 @@ fn push_prepared_text_mesh_batches<T: TextureContext + ?Sized>(
                 vertices: renderer::TexturedMeshVertices::Reusable(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -8540,6 +8590,8 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                 vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
                 geom_cache_key: batch.geom_cache_key,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -8595,6 +8647,8 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
                 geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -9535,6 +9589,8 @@ fn clip_textured_mesh_to_world_rect_with(
             vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             sampler: None,
@@ -9622,6 +9678,8 @@ fn clip_rotated_sprite_to_world_rect(
             vertices: renderer::TexturedMeshVertices::Transient(out),
             geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             sampler: None,
@@ -10286,6 +10344,8 @@ mod tests {
                 ]),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -10735,6 +10795,8 @@ mod tests {
             uv_offset: [0.1, 0.2],
             uv_tex_shift: [0.3, 0.4],
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::Back,
@@ -10797,6 +10859,8 @@ mod tests {
             uv_offset: mesh.uv_offset,
             uv_tex_shift: mesh.uv_tex_shift,
             depth_test: mesh.depth_test,
+            depth_write: mesh.depth_write,
+            depth_test_on_fail: mesh.depth_test_on_fail,
             clear_depth: mesh.clear_depth,
             clear_depth_after: mesh.clear_depth_after,
             cull_mode: mesh.cull_mode,
@@ -12222,6 +12286,8 @@ mod tests {
                 vertices: deadlib_render_core::TexturedMeshVertices::Transient(source),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -12299,6 +12365,8 @@ mod tests {
                 vertices: deadlib_render_core::TexturedMeshVertices::Shared(vertices),
                 geom_cache_key: 41,
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -12333,6 +12401,8 @@ mod tests {
                 vertices: actual_vertices,
                 geom_cache_key: actual_key,
                 depth_test: actual_depth,
+                depth_write: actual_write,
+                depth_test_on_fail: false,
                 clear_depth: actual_clear,
                 clear_depth_after: actual_clear_after,
                 sampler: None,
@@ -12342,6 +12412,8 @@ mod tests {
                 vertices: expected_vertices,
                 geom_cache_key: expected_key,
                 depth_test: expected_depth,
+                depth_write: expected_write,
+                depth_test_on_fail: false,
                 clear_depth: expected_clear,
                 clear_depth_after: expected_clear_after,
                 sampler: None,
@@ -12354,6 +12426,7 @@ mod tests {
         assert_eq!(actual_vertices.as_ref(), expected_vertices.as_ref());
         assert_eq!(actual_key, expected_key);
         assert_eq!(actual_depth, expected_depth);
+        assert_eq!(actual_write, expected_write);
         assert_eq!(actual_clear, expected_clear);
         assert_eq!(actual_clear_after, expected_clear_after);
     }
@@ -13621,6 +13694,8 @@ mod tests {
                 vertices: deadlib_render_core::TexturedMeshVertices::Transient(source.clone()),
                 geom_cache_key: INVALID_TMESH_CACHE_KEY,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
                 clear_depth_after: false,
                 sampler: None,
@@ -13871,6 +13946,8 @@ mod tests {
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::None,
@@ -14073,6 +14150,8 @@ mod tests {
                 uv_offset: [0.0; 2],
                 uv_tex_shift: [0.0; 2],
                 depth_test: true,
+                depth_write: true,
+                depth_test_on_fail: false,
                 clear_depth: true,
                 clear_depth_after: true,
                 cull_mode: deadlib_render_core::CullMode::Back,
@@ -14153,6 +14232,8 @@ mod tests {
                     )),
                     geom_cache_key: 7,
                     depth_test: false,
+                    depth_write: false,
+                    depth_test_on_fail: false,
                     clear_depth: false,
                     clear_depth_after: false,
                     sampler,
@@ -14203,6 +14284,8 @@ mod tests {
             for id in 0..next() % 24 {
                 let kind = next() % 6;
                 let depth_test = next() % 3 != 0;
+                let depth_write = depth_test;
+                let depth_test_on_fail = false;
                 let clear_depth = next() % 4 == 0;
                 let clear_depth_after = next() % 4 == 0;
                 let instanced = next() % 2 == 0;
@@ -14252,6 +14335,8 @@ mod tests {
                             INVALID_TMESH_CACHE_KEY
                         },
                         depth_test,
+                        depth_write,
+                        depth_test_on_fail,
                         clear_depth,
                         clear_depth_after,
                         sampler: None,
@@ -14330,6 +14415,8 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::Back,
@@ -14378,6 +14465,8 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::Back,
@@ -14900,6 +14989,8 @@ mod tests {
             uv_offset: [0.0; 2],
             uv_tex_shift: [0.0; 2],
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::None,
@@ -15011,6 +15102,8 @@ mod tests {
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
             depth_test: false,
+            depth_write: false,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             cull_mode: deadlib_render_core::CullMode::None,

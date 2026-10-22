@@ -177,6 +177,89 @@ fn saved_perspective_reaches_lua_for_each_player_side() {
     }
 }
 
+#[test]
+fn saved_mini_reaches_song_lua_constructor_and_reverse_path() {
+    use deadsync_gameplay::{GameplayInputPlayerSide as Side, GameplaySession, GameplayViewport};
+    let root = deadsync_root().join("tests/fixtures/song_lua");
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &root.join("display-size.ssc"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 2.0,
+    ).expect("small context chart");
+    let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+    let timing = TimingData::default();
+    let profiles = [60, -40].map(|mini_percent| deadsync_profile::Profile {
+        mini_percent,
+        scroll_speed: deadsync_rules::scroll::ScrollSpeedSetting::MMod(730.0),
+        ..Default::default()
+    });
+    let speeds = profiles.each_ref().map(|profile| profile.scroll_speed);
+    let native: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/itgmania-song-lua-micro/profile-mini/splines-native.json"
+    )).expect("native CubicSpline reference");
+    for ((side, mini), native) in [(Side::P1, 0.6_f32), (Side::P2, -0.4)]
+        .into_iter().zip(native["splines"].as_array().expect("native paths")) {
+        let context = super::song_lua_play_context(
+            &song, &charts, [&timing; 2], &profiles, &speeds, 1.0,
+            GameplayViewport::design(), (854, 480), 16.0 / 9.0, 1.0,
+            &GameplaySession { player_side: side, ..Default::default() },
+            &Default::default(), "opengl",
+        );
+        let compiled = compile_song_lua_with_default_host(
+            &root.join("profile-mini.lua"), &context, SongLuaNoteskinResolver::default(),
+            test_read_model_slots, test_model_layer_from_slot, |_, _| None,
+        ).expect("compile saved Mini reverse path");
+        let observed = compiled.overlays.iter().find(|actor| actor.name.as_deref() == Some("InitialMini"))
+            .expect("constructor observation").initial_state.x;
+        assert!((observed - mini).abs() < 0.000001,
+            "{side:?}: song constructor saw Mini={observed}, profile requires {mini}");
+        let path = compiled.column_splines.iter().find(|track| track.player == 0 && track.column == 0)
+            .and_then(|track| track.frames.first()).and_then(|frame| frame.position.as_ref())
+            .expect("compiled reverse path");
+        assert_eq!(path.coefficients.len(), native["points"].as_array().unwrap().len(),
+            "path length must use the saved Mini");
+        for sample in native["samples"].as_array().expect("native samples") {
+            let (position, _) = path.view().sample(
+                sample["song_beat"].as_f64().unwrap() as f32,
+                sample["note_beat"].as_f64().unwrap() as f32,
+            );
+            for axis in 0..3 {
+                let expected = sample["position"][axis].as_f64().unwrap() as f32;
+                assert!((position[axis] - expected).abs() < 0.001,
+                    "{side:?}, note beat {}, axis {axis}: {} != native {expected}",
+                    sample["note_beat"], position[axis]);
+            }
+        }
+        let constants = deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+            &compiled, &timing, 0, 0.0,
+        );
+        let (eases, unsupported) = deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+            &compiled, &timing, 0, 0.0, &constants,
+        );
+        assert_eq!(unsupported, 0);
+        assert!(eases.iter().any(|window| window.target == SongLuaEaseMaskTarget::MiniPercent),
+            "the regression must exercise the compiled Mini write");
+        let mut runtime = deadsync_gameplay::GameplayAttackRuntimeState::new(
+            [constants, vec![]], [eases, vec![]],
+        );
+        for tick in 0..=60 {
+            runtime.refresh_player(0, tick as f32 / 60.0, 1.0 / 60.0,
+                Default::default(), || deadsync_gameplay::AttackBaseEffects {
+                    mini_percent: mini * 100.0, ..Default::default()
+                }, Default::default());
+        }
+        let current_mini = runtime.mini_percent[0].expect("compiled Mini reaches gameplay");
+        assert!((current_mini - mini * 100.0).abs() < 0.001,
+            "{side:?}: runtime Mini={current_mini}; native setter replaces saved Mini");
+        let zoom = 1.0 - current_mini / 200.0;
+        let receptor_y = 240.0 + path.view().receptor(0.0)[1] * zoom;
+        assert!((receptor_y - 375.0).abs() < 0.001, "reversed receptor: {receptor_y}");
+        let endpoint_y = 240.0 + path.view().sample(0.0, 8.0).0[1] * zoom;
+        assert!(endpoint_y < -20.0, "future notes clamped onto the score area at y={endpoint_y}");
+    }
+}
+
 fn test_song_lua_double_context(root: &Path, title: &str) -> SongLuaCompileContext {
     let mut context = SongLuaCompileContext::new(root, title);
     context.style_name = "double".to_string();
@@ -1352,22 +1435,67 @@ fn riddle_option_writes_keep_swaps_discrete_and_merge_gradual() {
         "no interpolation toward a future swap"
     );
     advance(&mut runtime, swap_at, dt);
+    assert_eq!(runtime.visual[0].invert, Some(0.0), "actor writes follow the native options update");
+    advance(&mut runtime, swap_at + dt, dt);
     assert_eq!(
         runtime.visual[0].invert,
         Some(1.0),
         "1000 units/s swaps within one frame"
     );
     advance(&mut runtime, merge_at - dt, 1.0);
-    for frame in 0..24 {
+    for frame in 0..=24 {
         advance(&mut runtime, merge_at + frame as f32 * dt, dt);
-        // PlayerOptions::Approach uses speed * seconds, in option units.
-        let amount = 10.0 * (frame + 1) as f32 * dt;
+        // PlayerState::Update approaches the prior frame's target before the
+        // recurring actor command writes the new Song options.
+        let amount = 10.0 * frame as f32 * dt;
         assert!((runtime.visual[0].flip.expect("flip") - amount.min(0.5)).abs() < 0.00001);
+        let mini = if frame == 0 { runtime.mini_percent[0].unwrap_or(0.0) }
+            else { runtime.mini_percent[0].expect("mini after target update") };
         assert!(
-            (runtime.mini_percent[0].expect("mini") + amount.min(1.0) * 100.0).abs() < 0.0001,
+            (mini + amount.min(1.0) * 100.0).abs() < 0.0001,
             "frame {frame}: mini={:?}, amount={amount}",
             runtime.mini_percent[0]
         );
-        assert!((runtime.scroll[0].reverse.expect("reverse") - amount.min(0.1)).abs() < 0.00001);
+        let reverse = if frame == 0 { runtime.scroll[0].reverse.unwrap_or(0.0) }
+            else { runtime.scroll[0].reverse.expect("reverse after target update") };
+        assert!((reverse - amount.min(0.1)).abs() < 0.00001);
+    }
+}
+
+#[test]
+fn column_spline_origin_applies_global_offset_once() {
+    use deadsync_gameplay::{SongLuaColumnSplineFrame, SongLuaColumnSplineTrack};
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+    for offset in [-0.025, -0.008, 0.0, 0.023] {
+        let timing = TimingData::from_segments(
+            -0.021,
+            offset,
+            &TimingSegments {
+                bpms: vec![(0.0, 110.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        for captured_origin in [None, Some(timing.get_time_for_beat_exact(0.0))] {
+            let mut compiled = deadsync_song_lua::CompiledSongLua::<()>::default();
+            compiled.column_spline_origin = captured_origin;
+            compiled.column_splines.push(SongLuaColumnSplineTrack {
+                player: 0,
+                column: 0,
+                time_offset: 0.0,
+                frames: vec![SongLuaColumnSplineFrame {
+                    second: 1.0,
+                    position: None,
+                    zoom: None,
+                }]
+                .into(),
+            });
+            let tracks =
+                deadsync_song_lua::gameplay::song_lua_column_spline_tracks(&compiled, 0, &timing);
+            let at = 1.0 + timing.get_time_for_beat_exact(0.0);
+            assert!(tracks[0].at_second(at - 0.0001).is_none());
+            assert!(tracks[0].at_second(at).is_some(), "offset {offset}");
+            assert!((timing.get_song_position(at).beat - 110.0 / 60.0).abs() < 0.00001);
+        }
     }
 }

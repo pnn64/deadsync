@@ -1,4 +1,8 @@
 use mlua::{Function, Lua, MultiValue, Table, Value};
+
+#[cfg(test)]
+#[path = "../tests/perf/forward_trace.rs"]
+mod forward_trace_perf;
 use std::fmt;
 
 use crate::{SongLuaCompileContext, SongLuaOverlayState, SongLuaTrackedActorTarget, LUA_PLAYERS};
@@ -943,7 +947,7 @@ pub(crate) fn capture_source_request(lua: &Lua, request: SongLuaLiveRequest) -> 
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum SongLuaLiveTarget {
     Root(usize),
     Background(usize, usize),
@@ -962,6 +966,8 @@ pub struct SongLuaLiveBroadcast {
 
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
+    /// Ordered actor-owned audio operations emitted by authored Lua callbacks.
+    pub actor_sounds: Vec<SongLuaActorSound>,
     pub request: Option<SongLuaLiveRequest>,
     /// Authored calls retain their multiplicity while the screen manager
     /// consumes only the final queued screen target.
@@ -982,6 +988,7 @@ pub struct SongLuaLiveOutput {
 
 impl SongLuaLiveOutput {
     pub fn append(&mut self, mut next: Self) {
+        self.actor_sounds.append(&mut next.actor_sounds);
         if next.request.is_some() { self.request = next.request; }
         self.source_requests.append(&mut next.source_requests);
         self.broadcasts.append(&mut next.broadcasts);
@@ -991,6 +998,25 @@ impl SongLuaLiveOutput {
         self.coverage_gaps.append(&mut next.coverage_gaps);
         self.player_writes.append(&mut next.player_writes);
         self.draw_frames.append(&mut next.draw_frames);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SongLuaActorSound {
+    Play { owner: u64, path: std::path::PathBuf },
+    Stop { owner: u64 },
+    Pause { owner: u64, paused: bool },
+}
+
+#[derive(Default)]
+struct ActorSounds(Vec<SongLuaActorSound>);
+
+pub(crate) fn actor_sound(lua: &Lua, command: SongLuaActorSound) {
+    if !active(lua) { return; }
+    if let Some(mut sounds) = lua.app_data_mut::<ActorSounds>() {
+        sounds.0.push(command);
+    } else {
+        lua.set_app_data(ActorSounds(vec![command]));
     }
 }
 
@@ -1008,7 +1034,6 @@ pub struct SongLuaLiveScene {
     pub(crate) actors: Vec<Table>,
     pub(crate) states: Vec<SongLuaOverlayState>,
     pub(crate) tracked: Vec<(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)>,
-    pub(crate) registry: Vec<Table>,
     targets: Vec<(usize, SongLuaLiveTarget)>,
     visual_targets: rustc_hash::FxHashMap<usize, SongLuaLiveTarget>,
     context: SongLuaCompileContext,
@@ -1016,6 +1041,7 @@ pub struct SongLuaLiveScene {
     pub(crate) primary_index: usize,
     last_beat: f64,
     last_music_seconds: f32,
+    prepared_frame_beat: Option<f64>,
     backgrounds: Vec<LiveBackground>,
     background_layers: [LiveBackgroundLayer; 2],
     background_order: Vec<usize>,
@@ -1059,10 +1085,14 @@ impl SongLuaLiveScene {
     {
         if self.ended { return Err(mlua::Error::runtime("cannot send input to an ended song Lua scene")); }
         let (handled, errors) = crate::input::dispatch(&self.lua, event)?;
+        #[cfg(feature = "performance")]
+        let state_read_profile = crate::live_profile::scope(crate::live_profile::Phase::StateRead);
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
         for (_, actor, state) in &mut self.tracked { *state = read_state(&self.lua, actor)?; }
+        #[cfg(feature = "performance")]
+        drop(state_read_profile);
         let mut output = take_output(&self.lua)?;
         output.errors.extend(errors);
         Ok((handled, output))
@@ -1162,9 +1192,10 @@ impl SongLuaLiveScene {
         }
         for layer in &mut background_layers { layer.changes.sort_by(|a,b| a.1.start_beat.total_cmp(&b.1.start_beat)); }
         let background_order = (0..backgrounds.len()).collect();
-        Ok(Self { lua, root, stage, players, actors, states, tracked, registry,
+        crate::lua_util::begin_live_actor_playback(&lua, &registry)?;
+        Ok(Self { lua, root, stage, players, actors, states, tracked,
             targets: Vec::new(), visual_targets: Default::default(), context, entry_paths, primary_index, last_beat,
-            last_music_seconds: -9999.0, backgrounds, background_layers, background_order, foregrounds, startup_output,
+            last_music_seconds: -9999.0, prepared_frame_beat: None, backgrounds, background_layers, background_order, foregrounds, startup_output,
             outro_started: false, outro_options_reset: false, outro_off_pending: false, outro_failed: false,
             ended: false, updated: false,
             chart_attacks: std::array::from_fn(|_| LiveChartAttacks::default()) })
@@ -1185,78 +1216,28 @@ impl SongLuaLiveScene {
         if let Some(mut observer) = self.lua.app_data_mut::<OverlayStageObserver>() {
             observer.observation = None;
         }
-        // GameState.cpp::UpdateSongPosition maintains global Song timing apart
-        // from each Player's selected Steps timing. The domain frame carries
-        // the player's beat; Lua's GAMESTATE and music effects use the song.
-        let music_rate = crate::song_tables::current_music_rate(&self.lua)?;
-        let position = self.context.song_timing.as_ref()
-            .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
-        let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
-        self.feed_stats(&frame)?;
-        let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
-        let uptime = frame.uptime_seconds.unwrap_or(
-            runtime.get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(0.0)
-                + frame.delta_seconds);
-        runtime.set("__songlua_uptime_seconds", uptime)?;
-        crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
-        if let Some(position) = position {
-            let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
-            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;
-            runtime.set("__songlua_freeze", position.is_in_freeze)?;
-            runtime.set("__songlua_delay", position.is_in_delay)?;
-        } else {
-            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;
-        }
-        // GameState::UpdateSongPosition updates each enabled PlayerState
-        // using its selected Steps timing at the same music timestamp.
-        let positions: Table = runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
-        for player in 0..LUA_PLAYERS {
-            if !self.context.players[player].enabled { continue; }
-            let owned: Table = positions.raw_get(player + 1)?;
-            let position = self.context.player_timing[player].as_ref()
-                .or(self.context.song_timing.as_ref())
-                .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
-            owned.raw_set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, frame.music_seconds as f32)?;
-            owned.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY,
-                position.as_ref().map_or(frame.beat as f32, |position| position.beat))?;
-            owned.raw_set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.as_ref()
-                .map_or(runtime.raw_get::<f32>(crate::SONG_LUA_RUNTIME_BPS_KEY)?,
-                    |position| position.bpm / 60.0))?;
-            owned.raw_set("__songlua_freeze", position.as_ref().is_some_and(|position| position.is_in_freeze))?;
-            owned.raw_set("__songlua_delay", position.as_ref().is_some_and(|position| position.is_in_delay))?;
-        }
-        crate::set_compile_song_runtime_delta_values(&self.lua,
-            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
-        self.last_beat = beat;
-        crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
-        self.lua.set_app_data(LivePlayers(frame.players));
-        if !self.outro_started && let Some(windows) = &frame.chart_attacks {
-            let master = self.context.players.iter().position(|player| player.enabled);
-            for (player, attacks) in self.chart_attacks.iter_mut().enumerate() {
-                attacks.update(&self.lua, player, master == Some(player),
-                    &windows[player], frame.music_seconds as f32)?;
-            }
-        }
-        let option_deltas: Option<[f32; LUA_PLAYERS + 1]> = None;
-        #[cfg(feature = "test-support")]
-        let option_deltas = self.lua.remove_app_data::<OptionClockDeltas>()
-            .map(|inputs| inputs.0).or(option_deltas);
-        if let Some(deltas) = option_deltas {
-            crate::song_tables::advance_option_levels_with_clock_deltas(
-                &self.lua, frame.screen_seconds, deltas)?;
-        } else {
-            crate::song_tables::advance_option_levels_with_frame_delta(
-                &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
-        }
-        self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
+        let beat = if let Some(beat) = self.prepared_frame_beat.take() {
+            self.feed_stats(&frame)?;
+            // Player callbacks refresh their own snapshots and can leave a
+            // zero-delta capture frame. Resume the screen's sampled clock and
+            // the final Player feedback before traversing the actor tree.
+            crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
+            crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
+            self.lua.set_app_data(LivePlayers(frame.players));
+            beat
+        } else { self.prepare_frame(&frame)? };
         let lua = self.lua.clone();
         let root = self.root.clone();
+        #[cfg(feature = "performance")]
+        let actor_update_profile = crate::live_profile::scope(crate::live_profile::Phase::ActorUpdate);
         crate::lua_util::run_actor_compile_update_functions_with_entry(
             &lua, &root, frame.delta_seconds, |actor| {
                 // Foreground is sorted after the screen's underlay and Player
                 // actors. Its On callbacks observe their current-frame queues.
                 self.advance_foreground(actor, beat as f32, frame.music_seconds as f32)
             })?;
+        #[cfg(feature = "performance")]
+        drop(actor_update_profile);
         for foreground in &mut self.foregrounds {
             if foreground.started && !foreground.finished && beat as f32 > foreground.stop_beat {
                 foreground.actor.get::<Function>("visible")?.call::<()>((foreground.actor.clone(), false))?;
@@ -1295,17 +1276,16 @@ impl SongLuaLiveScene {
         }
         self.outro_started |= frame.gameplay_outro;
         self.last_music_seconds = frame.music_seconds as f32;
+        #[cfg(feature = "performance")]
+        let state_read_profile = crate::live_profile::scope(crate::live_profile::Phase::StateRead);
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
         for (_, actor, state) in &mut self.tracked {
             *state = read_state(&self.lua, actor)?;
         }
-        // Capture blocks are compiler audit history. Actual tween destinations
-        // and commands live in the bounded pending queue; discard old blocks.
-        for actor in &self.registry {
-            crate::reset_actor_capture(&self.lua, actor)?;
-        }
+        #[cfg(feature = "performance")]
+        drop(state_read_profile);
         // ScreenGameplay updates health after its actor tree. GetHealthState
         // during a SetLife/LifeChanged callback still sees the previous state.
         if let Err(error) = finish_health_update(&self.lua) {
@@ -1316,6 +1296,86 @@ impl SongLuaLiveScene {
         crate::host::update_native_arrow_effects(&self.lua)?;
         self.updated = true;
         take_output(&self.lua)
+    }
+
+    /// Prepare GameState and background actors before Player judgment callbacks.
+    pub fn prepare_gameplay_frame(&mut self, frame: SongLuaLiveFrame) -> mlua::Result<()> {
+        if self.prepared_frame_beat.is_none() {
+            self.prepared_frame_beat = Some(self.prepare_frame(&frame)?);
+        }
+        Ok(())
+    }
+
+    fn prepare_frame(&mut self, frame: &SongLuaLiveFrame) -> mlua::Result<f64> {
+        // GameState.cpp::UpdateSongPosition maintains global Song timing apart
+        // from each Player's selected Steps timing. The domain frame carries
+        // the player's beat; Lua's GAMESTATE and music effects use the song.
+        let music_rate = crate::song_tables::current_music_rate(&self.lua)?;
+        let position = self.context.song_timing.as_ref()
+            .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
+        let beat = position.as_ref().map_or(frame.beat, |position| f64::from(position.beat));
+        self.feed_stats(frame)?;
+        let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+        let uptime = frame.uptime_seconds.unwrap_or(
+            runtime.get::<Option<f64>>("__songlua_uptime_seconds")?.unwrap_or(0.0)
+                + frame.delta_seconds);
+        runtime.set("__songlua_uptime_seconds", uptime)?;
+        crate::set_compile_song_runtime_values(&self.lua, beat as f32, frame.music_seconds as f32)?;
+        if let Some(position) = position {
+            let runtime = self.lua.globals().get::<Table>(crate::SONG_LUA_RUNTIME_KEY)?;
+            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.bpm / 60.0)?;
+            runtime.set("__songlua_freeze", position.is_in_freeze)?;
+            runtime.set("__songlua_delay", position.is_in_delay)?;
+        } else {
+            runtime.set(crate::SONG_LUA_RUNTIME_BPS_KEY, crate::song_bps_at_beat(beat as f32, &self.context))?;
+        }
+        // GameState::UpdateSongPosition updates each enabled PlayerState
+        // using its selected Steps timing at the same music timestamp.
+        let positions: Table = runtime.raw_get(crate::runtime::PLAYER_SONG_POSITIONS_KEY)?;
+        let mut attack_positions = [0.0_f32; LUA_PLAYERS];
+        for player in 0..LUA_PLAYERS {
+            if !self.context.players[player].enabled { continue; }
+            let owned: Table = positions.raw_get(player + 1)?;
+            // GameState updates attack activation before ScreenGameplay samples
+            // this frame's audio position; PlayerState still has the prior one.
+            attack_positions[player] = owned.raw_get(crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
+            let position = self.context.player_timing[player].as_ref()
+                .or(self.context.song_timing.as_ref())
+                .map(|timing| timing.get_song_position_with_rate(frame.music_seconds as f32, music_rate));
+            owned.raw_set(crate::SONG_LUA_RUNTIME_SECONDS_KEY, frame.music_seconds as f32)?;
+            owned.raw_set(crate::SONG_LUA_RUNTIME_BEAT_KEY,
+                position.as_ref().map_or(frame.beat as f32, |position| position.beat))?;
+            owned.raw_set(crate::SONG_LUA_RUNTIME_BPS_KEY, position.as_ref()
+                .map_or(runtime.raw_get::<f32>(crate::SONG_LUA_RUNTIME_BPS_KEY)?,
+                    |position| position.bpm / 60.0))?;
+            owned.raw_set("__songlua_freeze", position.as_ref().is_some_and(|position| position.is_in_freeze))?;
+            owned.raw_set("__songlua_delay", position.as_ref().is_some_and(|position| position.is_in_delay))?;
+        }
+        crate::set_compile_song_runtime_delta_values(&self.lua,
+            (beat - self.last_beat) as f32, frame.delta_seconds as f32)?;
+        self.last_beat = beat;
+        crate::lua_util::set_live_frame(&self.lua, frame.screen_seconds, beat, frame.delta_seconds);
+        self.lua.set_app_data(LivePlayers(frame.players));
+        if !self.outro_started && let Some(windows) = &frame.chart_attacks {
+            let master = self.context.players.iter().position(|player| player.enabled);
+            for (player, attacks) in self.chart_attacks.iter_mut().enumerate() {
+                attacks.update(&self.lua, player, master == Some(player),
+                    &windows[player], attack_positions[player])?;
+            }
+        }
+        let option_deltas: Option<[f32; LUA_PLAYERS + 1]> = None;
+        #[cfg(feature = "test-support")]
+        let option_deltas = self.lua.remove_app_data::<OptionClockDeltas>()
+            .map(|inputs| inputs.0).or(option_deltas);
+        if let Some(deltas) = option_deltas {
+            crate::song_tables::advance_option_levels_with_clock_deltas(
+                &self.lua, frame.screen_seconds, deltas)?;
+        } else {
+            crate::song_tables::advance_option_levels_with_frame_delta(
+                &self.lua, frame.screen_seconds, frame.delta_seconds as f32)?;
+        }
+        self.advance_backgrounds(beat as f32, frame.music_seconds as f32)?;
+        Ok(beat)
     }
 
     /// False until an authored draw callback has been installed. Removing one
@@ -1332,15 +1392,20 @@ impl SongLuaLiveScene {
         // Only authored Draw callbacks can mutate them again in this phase.
         if !self.has_custom_draw()? { return take_output(&self.lua); }
         if let Value::Table(root) = &self.root {
+            #[cfg(feature = "performance")]
+            let _actor_draw_profile = crate::live_profile::scope(crate::live_profile::Phase::ActorDraw);
             crate::lua_util::run_actor_draw_functions_for_table(&self.lua, root)?;
         }
+        #[cfg(feature = "performance")]
+        let state_read_profile = crate::live_profile::scope(crate::live_profile::Phase::StateRead);
         for (actor, state) in self.actors.iter().zip(&mut self.states) {
             *state = read_state(&self.lua, actor)?;
         }
         for (_, actor, state) in &mut self.tracked {
             *state = read_state(&self.lua, actor)?;
         }
-        for actor in &self.registry { crate::reset_actor_capture(&self.lua, actor)?; }
+        #[cfg(feature = "performance")]
+        drop(state_read_profile);
         take_output(&self.lua)
     }
 
@@ -1669,6 +1734,11 @@ impl SongLuaLiveScene {
         }));
     }
 
+    /// ScreenGameplay checks completion after ActorFrame updates and Lua writes.
+    pub fn note_gameplay_outro_after_actors(&mut self) {
+        self.outro_started = true;
+    }
+
     /// LeaveGameplay has dispatched Off; its out transition can now advance.
     pub fn outro_off_dispatched(&self) -> bool {
         self.outro_options_reset && !self.outro_off_pending
@@ -1731,6 +1801,11 @@ impl SongLuaLiveScene {
         if let Value::Table(root) = &self.root {
             crate::lua_util::end_actor_scene(&self.lua, root)?;
         }
+        for actor in &self.actors {
+            if crate::lua_util::actor_type_is(actor, "Sound")? {
+                actor_sound(&self.lua, SongLuaActorSound::Stop { owner: actor.to_pointer() as u64 });
+            }
+        }
         take_output(&self.lua)
     }
 
@@ -1773,6 +1848,8 @@ impl SongLuaLiveScene {
             crate::SongLuaOverlayActor<crate::SongLuaOverlayKind<N, M, deadlib_present::actors::TextAttribute>>, crate::SongLuaCapturedActor,
             crate::gameplay::SongLuaRuntimeOverlayStateDelta>,
     ) -> Result<(), String> {
+        #[cfg(feature = "performance")]
+        let _visual_profile = crate::live_profile::scope(crate::live_profile::Phase::VisualPublication);
         for &(global, target) in &self.targets {
             let actor = match target {
                 SongLuaLiveTarget::Root(local) => visuals.overlays.get_mut(local),
@@ -1843,10 +1920,8 @@ fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind
             }
         }
         crate::SongLuaOverlayKind::BitmapText { text, attributes, stroke_color, .. } => {
-            let current = crate::lua_util::lua_text_value(owned.get("Text").map_err(|error| error.to_string())?)
-                .map_err(|error| error.to_string())?;
-            if text.as_ref() != current { *text = current.into(); }
-            *attributes = crate::lua_util::read_bitmap_text_attributes(owned)?;
+            crate::text_publication::sync_text(owned, text).map_err(|error| error.to_string())?;
+            crate::text_publication::sync_attributes(owned, attributes)?;
             *stroke_color = crate::lua_util::read_actor_color_field(owned, "__songlua_stroke_color")?;
         }
         crate::SongLuaOverlayKind::Sprite { texture_path, texture_key, states, .. } => {
@@ -1856,7 +1931,7 @@ fn sync_visual_content<N, M>(owned: &Table, kind: &mut crate::SongLuaOverlayKind
                 *texture_key = std::sync::Arc::from(path.to_string_lossy().as_ref());
                 *texture_path = path;
             }
-            *states = crate::lua_util::read_sprite_states(owned)?.into();
+            crate::lua_util::sync_sprite_states(owned, states)?;
         }
         _ => {}
     }
@@ -1874,6 +1949,7 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     let source_requests = lua.app_data_mut::<SourceRequests>()
         .map_or_else(Vec::new, |mut events| std::mem::take(&mut events.0));
     let sounds = crate::lua_util::take_runtime_sounds(lua);
+    let actor_sounds = lua.remove_app_data::<ActorSounds>().map_or_else(Vec::new, |sounds| sounds.0);
     let errors = lua.remove_app_data::<crate::lua_util::SongLuaUpdateErrors>()
         .map_or_else(Vec::new, |errors| errors.0);
     let coverage_gaps = crate::lua_util::take_message_coverage(lua);
@@ -1882,18 +1958,730 @@ fn take_output(lua: &Lua) -> mlua::Result<SongLuaLiveOutput> {
     }
     let player_writes = lua.remove_app_data::<PlayerWrites>().map_or_else(Vec::new, |writes| writes.0);
     let draw_frames = crate::draw_capture::take_live(lua).map_err(mlua::Error::external)?;
-    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, errors, coverage_gaps, player_writes, draw_frames })
+    Ok(SongLuaLiveOutput { request, source_requests, broadcasts, source_broadcasts, sounds, actor_sounds, errors, coverage_gaps, player_writes, draw_frames })
 }
 
 pub(crate) fn read_state(lua: &Lua, actor: &Table) -> mlua::Result<SongLuaOverlayState> {
-    let mut state = crate::lua_util::actor_overlay_state_batched(lua, actor).map_err(mlua::Error::external)?;
-    crate::lua_util::replay_tween_pose(lua, actor, &mut state);
+    let mut state = crate::lua_util::live_actor_overlay_state(lua, actor).map_err(mlua::Error::external)?;
     state.spin_baked = crate::lua_util::spin_render_pose(actor)?.is_some();
     Ok(state)
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn live_native_base_transforms_preserve_getters_draws_and_reset() {
+        let source = r#"
+local tick = 0
+return Def.ActorFrame {
+    InitCommand=function(self) ROOT=self; self.authored={retained=true} end,
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            Q:basezoom(2):basezoomx(1):halign(0):valign(1)
+            assert(Q:GetBaseZoomX()==1 and Q:GetBaseZoomY()==2 and Q:GetBaseZoomZ()==2)
+        end)
+        self:SetUpdateFunction(function()
+            tick=tick+1
+            if tick==1 then Q:linear(2):zoom(2):x(100) end
+            if tick==3 then Q:stoptweening() end
+            if tick==4 then Q:linear(1):zoom(3):finishtweening() end
+            local v=tick/8
+            Q:basezoom(v):basezoomx(1):basezoomy(v+1):basezoomz(-v):align(v,1-v)
+            assert(Q:GetBaseZoomX()==1 and Q:GetBaseZoomY()==v+1 and Q:GetBaseZoomZ()==-v)
+            assert(Q:GetHAlign()==v and Q:GetVAlign()==1-v)
+            assert(Q:GetZoomedWidth()==8*Q:GetZoomX())
+            assert(Q:GetZoomedHeight()==12*((v+1)*Q:GetZoomY()))
+        end)
+        self:SetDrawFunction(function()
+            Q:basezoomx(2):halign(0):Draw()
+            Q:basezoomx(3):halign(1):Draw()
+        end)
+    end,
+    Def.Quad { InitCommand=function(self) Q=self; self:SetSize(8,12) end },
+}
+"#;
+        let build = || compile_with_context("native-base-transform", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut live = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
+        let q: Table = live.lua.globals().get("Q").unwrap();
+        for index in 0..6 {
+            if index == 2 {
+                let input = crate::SongLuaInputEvent {
+                    player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+                    kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+                    level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+                };
+                assert!(live.input(&input).unwrap().1.errors.is_empty());
+                assert!(legacy.input(&input).unwrap().1.errors.is_empty());
+                assert_eq!(live.states(), legacy.states(), "input transforms");
+            }
+            let frame = SongLuaLiveFrame { screen_seconds: index as f64 / 16.0,
+                music_seconds: index as f64 / 16.0, beat: index as f64 / 8.0,
+                delta_seconds: 0.0625, ..Default::default() };
+            let actual = live.advance(frame.clone()).unwrap();
+            let expected = legacy.advance(frame).unwrap();
+            assert!(actual.errors.is_empty(), "{:?}", actual.errors);
+            assert!(expected.errors.is_empty(), "{:?}", expected.errors);
+            assert_eq!(live.states(), legacy.states());
+            assert_eq!(actual.draw_frames, expected.draw_frames, "each Draw keeps its own transform");
+            for actor in registry(&live) {
+                for field in crate::base_transform::BaseField::ALL {
+                    assert!(actor.raw_get::<Value>(field.state_key()).unwrap().is_nil(),
+                        "native base transforms must not maintain Lua mirrors");
+                }
+            }
+        }
+        // Scaling to a rectangle consumes alignment through the same getter as Lua.
+        for scene in [&live, &legacy] {
+            scene.lua.load("Q:stoptweening():align(0.25,0.75):scaletofit(10,20,110,120)").exec().unwrap();
+        }
+        let legacy_q: Table = legacy.lua.globals().get("Q").unwrap();
+        assert_eq!(read_state(&live.lua, &q).unwrap(), read_state(&legacy.lua, &legacy_q).unwrap());
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&live.lua, &q).unwrap();
+        let exported = live.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&exported, snapshot).unwrap();
+        let saved = crate::actor_overlay_initial_state(&exported).unwrap();
+        assert_eq!(saved.halign, 0.25);
+        assert_eq!(saved.valign, 0.75);
+        for scene in [&live, &legacy] {
+            let root = scene.lua.globals().get::<Table>("ROOT").unwrap();
+            crate::lua_util::init_actor_native_state(&scene.lua, &root).unwrap();
+            scene.lua.load("assert(ROOT.authored.retained)").exec().unwrap();
+        }
+        let reset = read_state(&live.lua, &q).unwrap();
+        assert_eq!(reset, read_state(&legacy.lua, &legacy_q).unwrap());
+        assert_eq!((reset.basezoom, reset.basezoom_x, reset.basezoom_y, reset.basezoom_z), (1.0,1.0,1.0,1.0));
+        assert_eq!((reset.halign, reset.valign), (0.5,0.5));
+        assert_eq!(crate::actor_overlay_initial_state(&exported).unwrap(), saved);
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                crate::lua_util::capture_block_set_f32(&live.lua, &q, "basezoom_x", i as f32).unwrap();
+                crate::lua_util::capture_block_set_f32(&live.lua, &q, "halign", i as f32 / 100.0).unwrap();
+                crate::lua_util::actor_halign(&live.lua, &q).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn live_native_render_flags_preserve_recursive_writes_draws_and_reset() {
+        let source = r#"
+local tick = 0
+return Def.ActorFrame {
+    InitCommand=function(self) ROOT=self; self.authored={retained=true} end,
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            ROOT:zbuffer(false)
+            Q:ztestmode('WriteOnFail'):zwrite(true):texturewrapping(true)
+        end)
+        self:SetUpdateFunction(function()
+            tick = tick + 1
+            ROOT:SetDrawByZPosition(tick % 2 == 0):zbuffer(tick % 3 == 0)
+            Q:ztestmode('WriteOnFail'):zwrite(false)
+                :SetTextureFiltering(tick % 2 == 0):texturewrapping(tick % 2 ~= 0)
+                :MaskSource():MaskDest()
+            if tick == 1 then Q:linear(2):x(100) end
+            if tick == 3 then Q:stoptweening() end
+            if tick == 4 then Q:linear(1):x(200):finishtweening() end
+        end)
+        self:SetDrawFunction(function()
+            Q:ztest(false):SetTextureFiltering(false):Draw()
+            Q:ztestmode('WriteOnFail'):SetTextureFiltering(true):Draw()
+        end)
+    end,
+    Def.Quad { InitCommand=function(self) Q=self; self:zoomto(16,16) end },
+    Def.ActorFrame {
+        InitCommand=function(self) CHILD=self end,
+        Def.Quad { InitCommand=function(self) GRANDCHILD=self end },
+    },
+}
+"#;
+        let build = || compile_with_context("native-render-flags", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut live = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
+        let q: Table = live.lua.globals().get("Q").unwrap();
+        for frame in 0..6 {
+            if frame == 2 {
+                let input = crate::SongLuaInputEvent {
+                    player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+                    kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+                    level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+                };
+                assert!(live.input(&input).unwrap().1.errors.is_empty());
+                assert!(legacy.input(&input).unwrap().1.errors.is_empty());
+                assert_eq!(live.states(), legacy.states(), "input flags");
+                let state = read_state(&live.lua, &q).unwrap();
+                assert!(state.depth_test && state.depth_test_on_fail && state.depth_write);
+            }
+            let frame = SongLuaLiveFrame { screen_seconds: frame as f64 / 16.0,
+                music_seconds: frame as f64 / 16.0, beat: frame as f64 / 8.0,
+                delta_seconds: 0.0625, ..Default::default() };
+            let output = live.advance(frame.clone()).unwrap();
+            let before = legacy.advance(frame).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(live.states(), legacy.states());
+            assert_eq!(output.draw_frames, before.draw_frames, "separate Draw calls retain their own flags");
+            let state = read_state(&live.lua, &q).unwrap();
+            assert!(state.depth_test && state.depth_test_on_fail && !state.depth_write);
+            assert!(state.mask_source && state.mask_dest && state.texture_filtering);
+            for actor in registry(&live) {
+                for flag in crate::render_flags::RenderFlag::ALL {
+                    assert!(actor.raw_get::<Value>(flag.state_key()).unwrap().is_nil(),
+                        "native render flags must not maintain Lua mirrors");
+                }
+            }
+        }
+        let copied = live.lua.create_table().unwrap();
+        crate::lua_util::copy_live_actor_pose(&live.lua, &q, &copied).unwrap();
+        let saved = crate::actor_overlay_initial_state(&copied).unwrap();
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&live.lua, &q).unwrap();
+        let restored = live.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored, snapshot).unwrap();
+        assert_eq!(crate::actor_overlay_initial_state(&restored).unwrap().depth_test_on_fail,
+            saved.depth_test_on_fail);
+        // Reset both representations and compare recursive child state. Draw
+        // policy and masks survive; depth and texture settings return to defaults.
+        for scene in [&live, &legacy] {
+            let root = scene.lua.globals().get::<Table>("ROOT").unwrap();
+            crate::lua_util::init_actor_native_state(&scene.lua, &root).unwrap();
+            scene.lua.load("assert(ROOT.authored.retained)").exec().unwrap();
+        }
+        for name in ["ROOT", "Q", "CHILD", "GRANDCHILD"] {
+            let actor: Table = live.lua.globals().get(name).unwrap();
+            let old_actor: Table = legacy.lua.globals().get(name).unwrap();
+            assert_eq!(read_state(&live.lua, &actor).unwrap(), read_state(&legacy.lua, &old_actor).unwrap());
+        }
+        let reset = read_state(&live.lua, &q).unwrap();
+        assert!(!reset.depth_test && !reset.depth_write && !reset.depth_test_on_fail);
+        assert!(reset.texture_filtering && !reset.texture_wrapping && reset.mask_source && reset.mask_dest);
+        assert_eq!(crate::actor_overlay_initial_state(&copied).unwrap(), saved,
+            "earlier state exports stay independent of InitState");
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                crate::lua_util::capture_block_set_bool(&live.lua, &q, "texture_filtering", i % 2 == 0).unwrap();
+                crate::lua_util::capture_block_set_bool(&live.lua, &q, "depth_test", i % 2 == 0).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn live_effect_clocks_preserve_effects_getters_and_update_order() {
+        let source = r#"
+local actors, tick = {}, 0
+local root = Def.ActorFrame {
+    OnCommand = function(self)
+        self:SetUpdateRate(0.5)
+        self:SetUpdateFunction(function()
+            tick = tick + 1
+            for i, actor in ipairs(actors) do
+                if tick == 2 then actor:bob():effectperiod(0.5) end
+                if tick == 4 then actor:pulse() end
+                if tick == 6 then actor:hibernate(0.125) end
+                if tick == 8 then actor:diffuseblink():effectclock('beat') end
+                if tick == 10 then actor:diffuseshift():effectclock('music') end
+                if tick == 12 then actor:bounce():effectclock('timer') end
+                if tick == 14 then actor:spin():effectmagnitude(20,30,40):linear(0.25):rotationz(45) end
+                if tick == 16 then actor:stopeffect():finishtweening() end
+                if tick == 18 then actor:bob():effectperiod(0.75) end
+                if tick == 20 then actor:bob():effectperiod(0.5) end
+                actor:x(actor:GetSecsIntoEffect()):y(actor:GetEffectDelta())
+            end
+        end)
+        self:SetDrawFunction(function()
+            local values = {}
+            for i, actor in ipairs(actors) do
+                values[#values+1] = string.format('%.9g:%.9g',
+                    actor:GetSecsIntoEffect(), actor:GetEffectDelta())
+                actor:Draw()
+            end
+            OBSERVED = table.concat(values, ',')
+        end)
+    end,
+}
+for i = 1, 3 do
+    root[#root+1] = Def.Quad {
+        InitCommand = function(self) actors[i] = self end,
+        OnCommand = function(self)
+            self:zoomto(16,16):effectclock(({'timer','music','beat'})[i])
+        end,
+    }
+end
+return root
+"#;
+        let build = || compile_with_context("live-effect-clocks", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut native = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
+        crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
+        for actor in registry(&legacy) {
+            let key = "__songlua_state_motion_clock";
+            let value = actor.raw_get::<Value>(key).unwrap();
+            actor.raw_set(key, crate::host::clone_lua_value(&legacy.lua, value).unwrap()).unwrap();
+            crate::reset_actor_capture(&legacy.lua, &actor).unwrap();
+        }
+        for frame in 0..24 {
+            let seconds = f64::from(frame) / 8.0;
+            let input = SongLuaLiveFrame {
+                screen_seconds: seconds, music_seconds: if frame == 9 { seconds - 0.5 } else { seconds },
+                beat: seconds * 3.0, delta_seconds: match frame { 0 | 5 => 0.0, 7 => 2.5, _ => 0.125 },
+                ..Default::default()
+            };
+            let after = native.advance(input.clone()).unwrap();
+            let before = legacy.advance(input).unwrap();
+            assert!(after.errors.is_empty(), "{:?}", after.errors);
+            assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(after.draw_frames, before.draw_frames, "draws at frame {frame}");
+            assert_eq!(native.states(), legacy.states(), "states at frame {frame}");
+            assert_eq!(native.lua.globals().get::<String>("OBSERVED").unwrap(),
+                legacy.lua.globals().get::<String>("OBSERVED").unwrap(), "getters at frame {frame}");
+            for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
+        }
+        let actors = registry(&native);
+        let key = "__songlua_state_motion_clock";
+        assert!(actors.iter().any(|actor| !actor.raw_get::<Value>(key).unwrap().is_nil()));
+        for actor in actors {
+            crate::lua_util::init_actor_native_state(&native.lua, &actor).unwrap();
+            assert!(actor.raw_get::<Value>(key).unwrap().is_nil());
+        }
+    }
+
+    #[test]
+    fn live_native_queues_preserve_behavior_without_capture_history() {
+        let source = r#"
+local tick = 0
+return Def.ActorFrame {
+    OnCommand = function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            Q:SetWidth(99):shadowlength(7):effectmagnitude(4,5,6)
+        end)
+        self:SetUpdateFunction(function()
+            tick = tick + 1
+            Q:visible(tick % 2 == 0):shadowlengthx(tick):shadowlengthy(-tick)
+                :zwrite(tick % 2 == 0):SetTextureFiltering(tick % 2 == 0)
+                :diffusealpha(0.5):glow(0.1,0.2,0.3,0.4)
+                :SetWidth(12+tick):SetHeight(18+tick):shadowcolor(0.1,0.2,0.3,0.4)
+                :baserotationx(tick):baserotationy(tick*2):baserotationz(-tick)
+                :effectmagnitude(tick,2,3):effectcolor1(0.2,0.4,0.6,0.8)
+                :effectcolor2(0.8,0.6,0.4,0.2):effecttiming(0.1,0.2,0.3,0.4,0.5)
+                :effect_hold_at_full(0.2):effectperiod(2)
+            assert(Q:GetWidth()==12+tick and Q:GetHeight()==18+tick)
+            S:customtexturerect(0,0,1,1):setstate(0)
+            if tick == 3 then Q:hibernate(0.125):hurrytweening(0.5) end
+            if tick == 7 then Q:stoptweening():addx(3):sleep(0):queuecommand('Again') end
+            if tick == 11 then Q:finishtweening() end
+            if tick == 13 then Q:xy(7,9):addy(2):shadowlength(3) end
+            Q:diffusecolor(0.2,0.4,0.6,0.8):diffuseupperleft(0.9,0.7,0.5,0.3)
+                :diffuseupperright(0.1,0.2,0.3,0.4):diffuselowerleft(0.2,0.3,0.4,0.5)
+                :diffuselowerright(0.3,0.4,0.5,0.6):diffusetopedge(0.4,0.5,0.6,0.7)
+                :diffuserightedge(0.5,0.6,0.7,0.8):diffusebottomedge(0.6,0.7,0.8,0.9)
+                :diffuseleftedge(0.7,0.8,0.9,1)
+            Q:zoom(1+tick/32):zoomy(2+tick/32):zoomz(3+tick/32)
+                :y(tick):z(-tick):addz(2):skewx(tick/32):skewy(-tick/32)
+                :cropleft(0.125):cropright(0.25):croptop(0.375):cropbottom(0.5)
+                :fadeleft(0.5):faderight(0.375):fadetop(0.25):fadebottom(0.125)
+            local color, glow = Q:GetDiffuse(), Q:GetGlow()
+            OBSERVED = table.concat({Q:GetX(),Q:GetDestX(),Q:GetY(),Q:GetDestY(),
+                Q:GetZ(),Q:GetDestZ(),Q:getaux(),Q:GetTweenTimeLeft(),color[1],color[4],glow[2],
+                Q:GetZoom(),Q:GetZoomX(),Q:GetZoomY(),Q:GetZoomZ(),
+                Q:GetZoomedWidth(),Q:GetZoomedHeight()}, ',')
+            color[1], glow[2] = 99, 99
+            assert(Q:GetDiffuse()[1] ~= 99 and Q:GetGlow()[2] ~= 99)
+        end)
+        self:SetDrawFunction(function()
+            Q:basezoomx(tick / 10 + 1):SetHeight(40+tick):shadowlengthy(tick+2):glow(1,0,0,0.1)
+            Q:Draw()
+            Q:SetHeight(80+tick):shadowlengthy(tick+4):glow(0,1,0,0.2):zoomx(2):addx(1)
+            Q:Draw()
+            D:diffusetopedge(1,0,0,1):diffusebottomedge(0,0,1,0.5):Draw()
+            D:diffuseleftedge(0,1,0,0.25):Draw()
+        end)
+    end,
+    Def.Quad {
+        InitCommand = function(self) Q=self; self:zoomto(12,18) end,
+        OnCommand = function(self) self:linear(0.125):x(8):aux(2):queuecommand('Again') end,
+        AgainCommand = function(self)
+            self:addx(4):aux(self:getaux()+1):sleep(0.125):queuecommand('Again')
+        end,
+    },
+    Def.Sprite { InitCommand = function(self) S=self end },
+    Def.Quad { InitCommand = function(self) D=self; self:zoomto(8,8) end },
+}
+"#;
+        let build = || compile_with_context("live-capture-history", source,
+            |context| context.defer_initial_live_update = true).live_scene.take().unwrap();
+        let mut live = build();
+        let mut legacy = build();
+        let registry = |scene: &SongLuaLiveScene| crate::lua_util::song_lua_actor_registry(&scene.lua)
+            .unwrap().sequence_values::<Table>().collect::<mlua::Result<Vec<_>>>().unwrap();
+        // Exercise the previous capture-backed setters with identical Lua,
+        // queues and frames. Its old frame boundary discarded audit blocks.
+        legacy.lua.remove_app_data::<crate::lua_util::LiveActorPlayback>();
+        crate::lua_util::use_table_render_flags(&legacy.lua, &registry(&legacy)).unwrap();
+        crate::lua_util::use_table_base_transform(&legacy.lua, &registry(&legacy)).unwrap();
+        for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
+        for frame in 0..20 {
+            if frame == 5 {
+                let input = crate::SongLuaInputEvent {
+                    player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+                    kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+                    level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+                };
+                assert!(live.input(&input).unwrap().1.errors.is_empty());
+                assert!(legacy.input(&input).unwrap().1.errors.is_empty());
+                assert_eq!(live.states(), legacy.states(), "input snapshot");
+                live.lua.load("assert(Q:GetWidth()==99)").exec().unwrap();
+            }
+            let seconds = f64::from(frame) / 16.0;
+            let input = SongLuaLiveFrame { screen_seconds: seconds, music_seconds: seconds,
+                beat: seconds * 2.0, delta_seconds: if frame == 0 { 0.0 } else { 0.0625 },
+                ..Default::default() };
+            let output = live.advance(input.clone()).unwrap();
+            let before = legacy.advance(input).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            assert!(before.errors.is_empty(), "{:?}", before.errors);
+            assert_eq!(output.draw_frames, before.draw_frames, "draw snapshots at frame {frame}");
+            assert_eq!(live.states(), legacy.states(), "frame {frame}");
+            assert_eq!(live.tracked_states().map(|(_, state)| state).collect::<Vec<_>>(),
+                legacy.tracked_states().map(|(_, state)| state).collect::<Vec<_>>());
+            assert_eq!(live.lua.globals().get::<String>("OBSERVED").unwrap(),
+                legacy.lua.globals().get::<String>("OBSERVED").unwrap(), "getters at frame {frame}");
+            for actor in registry(&live) {
+                for key in ["__songlua_capture_blocks", "__songlua_capture_block", "__songlua_capture_immediate_block"] {
+                    assert!(actor.raw_get::<Value>(key).unwrap().is_nil(), "live actor retained {key}");
+                }
+            }
+            for actor in registry(&legacy) { crate::reset_actor_capture(&legacy.lua, &actor).unwrap(); }
+        }
+        let reset = |scene: &SongLuaLiveScene| {
+            let actor = scene.lua.globals().get::<Table>("Q").unwrap();
+            crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+            read_state(&scene.lua, &actor).unwrap()
+        };
+        assert_eq!(reset(&live), reset(&legacy), "InitState resets native properties as before");
+    }
+
+    #[test]
+    fn live_native_colors_export_independent_destination_snapshots() {
+        let mut compiled = compile_with_context("native-color-snapshots", r#"
+return Def.Actor {
+    InitCommand=function(self) ROOT=self; self.authored={retained=true} end,
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+ROOT:diffuse(0.25,0.5,0.75,1):glow(0,0,0,0)
+ROOT:linear(1):diffuse(0.5,0.75,1,0.5):diffuseupperleft(1,0,0,1):glow(1,0.5,0.25,0.75)
+assert(ROOT:GetDiffuse()[1]==0.5 and ROOT:GetGlow()[4]==0.75)
+"#).exec().unwrap();
+        let actor: Table = scene.lua.globals().get("ROOT").unwrap();
+        let before = read_state(&scene.lua, &actor).unwrap();
+        assert_eq!(before.diffuse, [0.25, 0.5, 0.75, 1.0]);
+        assert_eq!(before.glow, [0.0; 4]);
+        let copied = scene.lua.create_table().unwrap();
+        crate::lua_util::copy_live_actor_pose(&scene.lua, &actor, &copied).unwrap();
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&scene.lua, &actor).unwrap();
+        let semantic = crate::lua_util::snapshot_actor_semantic_state_table(&scene.lua, &actor).unwrap();
+        let restored = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored, snapshot).unwrap();
+        let restored_semantic = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored_semantic,
+            crate::lua_util::read_actor_semantic_state_table(&semantic).unwrap()).unwrap();
+        for snapshot in [&copied, &restored, &restored_semantic] {
+            let state = crate::actor_overlay_initial_state(snapshot).unwrap();
+            assert_eq!(state.diffuse, [0.5, 0.75, 1.0, 0.5]);
+            assert_eq!(state.glow, [1.0, 0.5, 0.25, 0.75]);
+            assert_eq!(state.vertex_colors.unwrap()[0], [1.0, 0.0, 0.0, 1.0]);
+        }
+        // A snapshot owns its tables; neither mutation direction changes the other.
+        copied.raw_get::<Table>("__songlua_diffuse").unwrap().raw_set(1, 99).unwrap();
+        scene.lua.load(r#"
+assert(ROOT:GetDiffuse()[1]==0.5)
+ROOT:finishtweening():diffuse(0.75,0.25,0.5,1):glow(0,0,0,0)
+assert(ROOT:GetDiffuse()[1]==0.75 and ROOT:GetGlow()[4]==0)
+assert(ROOT.authored.retained)
+"#).exec().unwrap();
+        assert_eq!(crate::actor_overlay_initial_state(&restored).unwrap().diffuse,
+            [0.5, 0.75, 1.0, 0.5]);
+        assert_eq!(before.diffuse, [0.25, 0.5, 0.75, 1.0], "earlier draw state is immutable");
+        // Immediate native color writes do not allocate replacement Lua tables.
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                crate::lua_util::capture_block_set_color(&scene.lua, &actor, [i as f32; 4]).unwrap();
+                crate::lua_util::capture_block_set_vec4(&scene.lua, &actor, "glow", [i as f32; 4]).unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn live_native_vertex_colors_mutate_destinations_without_allocation() {
+        let mut compiled = compile_with_context("native-vertex-color-writes", r#"
+return Def.Quad { InitCommand=function(self) Q=self end }
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        let actor: Table = scene.lua.globals().get("Q").unwrap();
+        let base = [0.25, 0.5, 0.75, 1.0];
+        let color = [1.0, 0.75, 0.5, 0.25];
+        // Actor.h's corners use the renderer's clockwise order here: UL, UR, LR, LL.
+        for (method, mask) in [
+            ("diffuseupperleft", 1), ("diffuseupperright", 2),
+            ("diffuselowerleft", 8), ("diffuselowerright", 4),
+            ("diffusetopedge", 3), ("diffuserightedge", 6),
+            ("diffusebottomedge", 12), ("diffuseleftedge", 9),
+        ] {
+            for queued in [false, true] {
+                crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+                scene.lua.load("Q:stoptweening():diffuse(0.25,0.5,0.75,1)").exec().unwrap();
+                if queued { scene.lua.load("Q:linear(1)").exec().unwrap(); }
+                let before = read_state(&scene.lua, &actor).unwrap();
+                scene.lua.load(format!("Q:{method}(1,0.75,0.5,0.25)")).exec().unwrap();
+                let expected = std::array::from_fn(|i| if mask & (1 << i) != 0 { color } else { [1.0; 4] });
+                assert_eq!(crate::lua_util::actor_vertex_colors(&scene.lua, &actor).unwrap(), expected);
+                let current = read_state(&scene.lua, &actor).unwrap();
+                if queued {
+                    assert_eq!(current, before, "a destination write cannot change current");
+                    scene.lua.load("Q:finishtweening()").exec().unwrap();
+                } else {
+                    assert_eq!(current.vertex_colors, Some(expected));
+                }
+                assert_eq!(read_state(&scene.lua, &actor).unwrap().vertex_colors, Some(expected));
+            }
+        }
+        // Read color tables at the call boundary; later edits cannot change native state.
+        scene.lua.load(r#"
+local color = {0,1,0,0.5}
+Q:diffusetopedge(color)
+color[2] = 99
+Q:diffusetopedge()
+"#).exec().unwrap();
+        assert_eq!(crate::lua_util::actor_vertex_colors(&scene.lua, &actor).unwrap()[0], [0.0,1.0,0.0,0.5]);
+
+        // Measure the production mutation path, without the optional observer's owned samples.
+        // Its observation semantics are checked separately in lua_util.
+        crate::lua_util::end_overlay_update_capture(&scene.lua);
+        let args = mlua::MultiValue::from_vec(vec![
+            Value::Table(actor.clone()), Value::Number(1.0), Value::Number(0.75),
+            Value::Number(0.5), Value::Number(0.25),
+        ]);
+        for queued in [false, true] {
+            crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+            scene.lua.load("Q:stoptweening():diffuse(0.25,0.5,0.75,1)").exec().unwrap();
+            if queued { scene.lua.load("Q:linear(1)").exec().unwrap(); }
+            let before = read_state(&scene.lua, &actor).unwrap();
+            crate::draw_capture::perf::allocations::assert_no_churn(|| {
+                // Includes the first conversion from a uniform diffuse to four corner colors.
+                for _ in 0..100 {
+                    crate::lua_util::capture_actor_vertex_diffuse(&scene.lua, &actor, &args, 3).unwrap();
+                    crate::lua_util::capture_block_set_vertex_colors(&scene.lua, &actor, [base; 4]).unwrap();
+                }
+            });
+            assert_eq!(crate::lua_util::actor_vertex_colors(&scene.lua, &actor).unwrap(), [base; 4]);
+            if queued { assert_eq!(read_state(&scene.lua, &actor).unwrap(), before); }
+        }
+    }
+
+    #[test]
+    fn live_native_scalar_methods_follow_receivers_and_reset() {
+        let mut compiled = compile_with_context("native-scalar-methods", r#"
+return Def.ActorFrame {
+    Def.Quad { InitCommand=function(self) A=self end },
+    Def.Quad { InitCommand=function(self) B=self end },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+SET_X, ADD_X = Actor.x, Actor.addx
+SET_X(A, 4); SET_X(B, 20)
+A:linear(1):x(12):linear(1):x(20)
+ADD_X(A, 4); ADD_X(B, 2)
+assert(A:GetX()==4 and A:GetDestX()==24)
+assert(B:GetX()==22 and B:GetDestX()==22)
+-- Public methods remain replaceable, and saved methods use their receiver.
+local native = Actor.x
+Actor.x = function(self, value) return native(self, value + 1) end
+B:x(30)
+Actor.x = native
+assert(B:GetX()==31 and A:GetDestX()==24)
+"#).exec().unwrap();
+        let output = scene.advance(SongLuaLiveFrame {
+            delta_seconds: 0.5, screen_seconds: 0.5, music_seconds: 0.5,
+            ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.lua.load(r#"
+assert(A:GetX()==8 and A:GetDestX()==24 and B:GetX()==31)
+A:stoptweening()
+ADD_X(A, 5)
+assert(A:GetX()==13 and A:GetDestX()==13)
+"#).exec().unwrap();
+        let actor: Table = scene.lua.globals().get("A").unwrap();
+        crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();
+        scene.lua.load(r#"
+assert(A:GetX()==0 and A:GetDestX()==0)
+SET_X(A, -3)
+assert(A:GetX()==-3)
+A:linear(1)
+SET_X(A, 16)
+ADD_X(A, 4)
+assert(A:GetX()==-3 and A:GetDestX()==20 and B:GetX()==31)
+A:finishtweening()
+assert(A:GetX()==20)
+"#).exec().unwrap();
+    }
+
+    #[test]
+    fn live_native_scalars_export_current_and_destination_snapshots() {
+        let mut compiled = compile_with_context("native-scalar-snapshots", r#"
+return Def.Quad { InitCommand=function(self) ROOT=self; self.authored={retained=true} end }
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+ROOT:SetSize(8,12):basezoomx(2):basezoomy(3):xy(4,8):z(12):aux(16):zoom(1)
+ROOT:linear(1):xy(20,24):z(28):aux(32):zoom(2):zoomx(3):zoomy(4):zoomz(5)
+    :skewx(0.25):skewy(-0.5):cropleft(0.125):cropright(0.25):croptop(0.375):cropbottom(0.5)
+    :fadeleft(0.5):faderight(0.375):fadetop(0.25):fadebottom(0.125)
+assert(ROOT:GetX()==4 and ROOT:GetDestX()==20 and ROOT:getaux()==16)
+assert(ROOT:GetZoom()==3 and ROOT:GetZoomX()==3 and ROOT:GetZoomY()==4 and ROOT:GetZoomZ()==5)
+assert(ROOT:GetZoomedWidth()==48 and ROOT:GetZoomedHeight()==144)
+"#).exec().unwrap();
+        scene.advance(SongLuaLiveFrame { delta_seconds:0.25, screen_seconds:0.25,
+            music_seconds:0.25, ..Default::default() }).unwrap();
+        let actor: Table = scene.lua.globals().get("ROOT").unwrap();
+        let current = read_state(&scene.lua, &actor).unwrap();
+        assert_eq!((current.x, current.y, current.z, current.aux), (8.0,12.0,16.0,20.0));
+        let snapshot = crate::lua_util::snapshot_actor_mutable_state(&scene.lua, &actor).unwrap();
+        let semantic = crate::lua_util::snapshot_actor_semantic_state_table(&scene.lua, &actor).unwrap();
+        let copied = scene.lua.create_table().unwrap();
+        crate::lua_util::copy_live_actor_pose(&scene.lua, &actor, &copied).unwrap();
+        let restored = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored, snapshot).unwrap();
+        let restored_semantic = scene.lua.create_table().unwrap();
+        crate::lua_util::restore_actor_mutable_state(&restored_semantic,
+            crate::lua_util::read_actor_semantic_state_table(&semantic).unwrap()).unwrap();
+        for snapshot in [&copied, &restored, &restored_semantic] {
+            let dest = crate::actor_overlay_initial_state(snapshot).unwrap();
+            assert_eq!((dest.x,dest.y,dest.z,dest.aux), (20.0,24.0,28.0,32.0));
+            assert_eq!((dest.zoom_x,dest.zoom_y,dest.zoom_z), (3.0,4.0,5.0));
+            assert_eq!((dest.skew_x,dest.skew_y), (0.25,-0.5));
+            assert_eq!([dest.cropleft,dest.cropright,dest.croptop,dest.cropbottom], [0.125,0.25,0.375,0.5]);
+            assert_eq!([dest.fadeleft,dest.faderight,dest.fadetop,dest.fadebottom], [0.5,0.375,0.25,0.125]);
+            for (key, expected) in [("__songlua_current_x",8.0), ("__songlua_current_y",12.0),
+                ("__songlua_current_z",16.0), ("__songlua_aux",20.0)] {
+                assert_eq!(snapshot.raw_get::<f32>(key).unwrap(), expected);
+            }
+        }
+        scene.lua.load(r#"
+ROOT:stoptweening():addx(3):addy(4):addz(5)
+assert(ROOT:GetX()==11 and ROOT:GetDestX()==11 and ROOT:GetY()==16 and ROOT:GetZ()==21)
+ROOT:linear(1):zoom(6):x(40):finishtweening()
+assert(ROOT:GetZoom()==6 and ROOT:GetZoomX()==6 and ROOT:GetZoomY()==6 and ROOT:GetZoomZ()==6)
+assert(ROOT:GetX()==40 and ROOT.authored.retained)
+"#).exec().unwrap();
+        assert_eq!(crate::actor_overlay_initial_state(&restored).unwrap().x, 20.0);
+        assert_eq!(current.x, 8.0, "previous draw pose remains independent");
+        crate::draw_capture::perf::allocations::assert_no_churn(|| {
+            for i in 0..100 {
+                for key in ["x","y","z","aux","zoom","zoom_x","zoom_y","zoom_z","skew_x","skew_y",
+                    "cropleft","cropright","croptop","cropbottom","fadeleft","faderight","fadetop","fadebottom"] {
+                    crate::lua_util::capture_block_set_f32(&scene.lua, &actor, key, i as f32).unwrap();
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn live_native_pose_getters_preserve_queue_and_sibling_order() {
+        let mut compiled = compile_with_context("native-pose-getters", r#"
+return Def.ActorFrame {
+    Def.ActorFrame {
+        InitCommand = function(self)
+            FIRST = self
+            self.authored = { retained = true }
+            self:SetUpdateFunction(function() BEFORE_SECOND = SECOND:GetX() end)
+        end,
+        LaterCommand = function(self)
+            LATER = {self:GetX(), self:getaux(), self:GetDestX()}
+            self:linear(0.25):x(24):aux(12)
+        end,
+    },
+    Def.ActorFrame {
+        InitCommand = function(self)
+            SECOND = self
+            self:SetUpdateFunction(function() AFTER_FIRST = FIRST:GetX() end)
+        end,
+    },
+    Def.Quad {
+        OnCommand = function(self)
+            self:stretchto(10,20,110,220):linear(2):addx(128):addy(64)
+        end,
+    },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let mut scene = compiled.live_scene.take().unwrap();
+        scene.advance(SongLuaLiveFrame::default()).unwrap();
+        scene.lua.load(r#"
+FIRST:stoptweening():x(0):aux(0):zoom(1)
+FIRST:linear(0.5):x(8):aux(4):zoom(2):queuecommand('Later'):linear(0.5):x(16):aux(8):zoom(3)
+FIRST:y(10):z(20):rotationx(30):rotationy(40):rotationz(50):skewx(0.1):skewy(0.2)
+FIRST:cropleft(0.1):cropright(0.2):croptop(0.3):cropbottom(0.4)
+FIRST:fadeleft(0.2):faderight(0.3):fadetop(0.4):fadebottom(0.5)
+FIRST:diffuse(0.1,0.2,0.3,0.4):diffuseupperleft(0.5,0.6,0.7,0.8):glow(0.2,0.3,0.4,0.5)
+SECOND:stoptweening():x(100):linear(1):x(108)
+"#).exec().unwrap();
+        let mut time = 0.0;
+        for (delta, assertion) in [
+            (0.25, "assert(FIRST:GetX()==4 and FIRST:getaux()==2 and FIRST:GetDestX()==16); assert(FIRST:GetZoom()==3); assert(BEFORE_SECOND==100 and AFTER_FIRST==4)"),
+            (0.25, "assert(FIRST:GetX()==8 and FIRST:getaux()==4 and LATER==nil)"),
+            (0.0, "assert(FIRST:GetX()==8 and LATER==nil)"),
+            (0.125, "assert(LATER[1]==8 and LATER[2]==4 and LATER[3]==16); assert(FIRST:GetX()==10 and FIRST:getaux()==5 and FIRST:GetDestX()==24)"),
+        ] {
+            time += delta;
+            let output = scene.advance(SongLuaLiveFrame { screen_seconds: time,
+                music_seconds: time, beat: time * 2.0, delta_seconds: delta,
+                ..Default::default() }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            scene.lua.load(assertion).exec().unwrap();
+            for actor in &scene.actors {
+                // Export a table-backed destination for the old decoder. Live
+                // setters no longer maintain these private mirror fields.
+                let snapshot = scene.lua.create_table().unwrap();
+                for pair in actor.pairs::<Value, Value>() {
+                    let (key, value) = pair.unwrap();
+                    snapshot.raw_set(key, value).unwrap();
+                }
+                crate::lua_util::copy_live_actor_pose(&scene.lua, actor, &snapshot).unwrap();
+                let mut legacy = crate::lua_util::actor_overlay_state_batched(&scene.lua, &snapshot).unwrap();
+                crate::lua_util::replay_tween_pose(&scene.lua, actor, &mut legacy);
+                legacy.spin_baked = crate::lua_util::spin_render_pose(actor).unwrap().is_some();
+                assert_eq!(read_state(&scene.lua, actor).unwrap(), legacy,
+                    "native pose extraction must match the prior table-read/pose-overlay path");
+            }
+        }
+        scene.lua.load(r#"
+FIRST:stoptweening():addx(3):aux(42)
+assert(FIRST:GetX()==13 and FIRST:GetDestX()==13 and FIRST:getaux()==42)
+FIRST:linear(1):x(29):aux(50):finishtweening()
+assert(FIRST:GetX()==29 and FIRST:GetDestX()==29 and FIRST:getaux()==50)
+assert(FIRST.authored.retained)
+"#).exec().unwrap();
+    }
+
     #[cfg(feature = "test-support")]
     #[test]
     fn live_overlay_stage_observation_precedes_foreground_mutations() {
@@ -2234,6 +3022,32 @@ end }
         let output = replacement.advance(SongLuaLiveFrame::default()).unwrap();
         assert!(output.errors.is_empty(), "replacement callback: {:?}", output.errors);
         assert_eq!(output.request, None);
+    }
+
+    #[test]
+    fn live_versus_children_retain_native_player_construction_groups() {
+        let mut compiled = compile_with_context("versus-screen-child-order", r#"
+return Def.Actor {
+ OnCommand=function(self)
+  local selected = {PlayerP1=true, PlayerP2=true, OniGameOverP1=true, OniGameOverP2=true}
+  local names = {}
+  SCREENMAN:GetTopScreen():RunCommandsOnChildren(function(child)
+   local name=child:GetName()
+   if selected[name] then names[#names+1]=name end
+  end)
+  assert(table.concat(names, ',') == 'PlayerP1,PlayerP2,OniGameOverP1,OniGameOverP2',
+   'native Versus child traversal: '..table.concat(names, ','))
+ end
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            context.layer_start_beats = vec![0.0];
+            context.players[0].enabled = true;
+            context.players[1].enabled = true;
+        });
+        let mut scene = compiled.live_scene.take().expect("owned Versus screen");
+        let output = scene.advance(SongLuaLiveFrame::default()).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
     }
 
     #[test]
@@ -3003,6 +3817,138 @@ return Def.Sprite {
     }
 
     #[test]
+    fn live_text_publication_preserves_input_update_draw_and_lookup_order() {
+        let mut compiled = compile_with_context("live-text-publication", r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function()
+            LABEL:settext('input'):AddAttribute(1, {Length=2, Diffuse={1,0,0,1}})
+        end)
+        self:SetUpdateFunction(function()
+            LABEL:settext('update'):ClearAttributes():AddAttribute(2, {Length=3, Glow={0,1,0,1}})
+        end)
+        self:SetDrawFunction(function() LABEL:settext('draw'):ClearAttributes(); LABEL:Draw() end)
+    end,
+    Def.BitmapText {
+        Name='Label', Font='Common normal', Text='initial',
+        InitCommand=function(self) LABEL=self end,
+    },
+}
+"#, |context| context.defer_initial_live_update = true);
+        let local = compiled.overlays.iter().position(|actor| actor.name.as_deref()==Some("Label")).unwrap();
+        let global = compiled.live_actor_indices()[local];
+        let mut kind = compiled.overlays[local].kind.clone();
+        let payload = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
+            SongLuaOverlayKind::BitmapText { text, attributes, .. } => (text.clone(), attributes.clone()),
+            _ => panic!("text visual slot"),
+        };
+        let original = payload(&kind);
+        let mut scene = compiled.live_scene.take().unwrap();
+        let owned = scene.actors[global].clone();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(Arc::ptr_eq(&original.0, &payload(&kind).0));
+        assert!(Arc::ptr_eq(&original.1, &payload(&kind).1));
+        let input = crate::SongLuaInputEvent {
+            player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+            kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+            level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+        };
+        assert!(scene.input(&input).unwrap().1.errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        let after_input = payload(&kind);
+        assert_eq!(after_input.0.as_ref(), "input");
+        assert_eq!((after_input.1[0].start, after_input.1[0].length), (1, 2));
+        assert!(scene.update(SongLuaLiveFrame::default()).unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        let after_update = payload(&kind);
+        assert_eq!(after_update.0.as_ref(), "update");
+        assert_eq!(after_update.1[0].glow, Some([0.0,1.0,0.0,1.0]));
+        assert!(scene.draw().unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(payload(&kind).0.as_ref(), "draw");
+        assert!(payload(&kind).1.is_empty());
+        assert_eq!(original.0.as_ref(), "initial");
+        assert_eq!(after_input.0.as_ref(), "input");
+        assert_eq!(after_input.1[0].color, [1.0,0.0,0.0,1.0]);
+        assert_eq!(after_update.1.len(), 1);
+
+        // Text publishes before attributes, and stroke lookup follows both.
+        // A failed attribute read retains the previous attributes and stroke.
+        let failing: Table = scene.lua.load(r#"
+visits = ''
+return setmetatable({}, {__index=function(_, key)
+    visits=visits .. key .. ';'
+    if key=='Text' then return 'new text' end
+    if key=='__songlua_text_attributes' then return false end
+    error('stroke must not be read')
+end})
+"#).eval().unwrap();
+        assert!(sync_visual_content(&failing, &mut kind).is_err());
+        assert_eq!(scene.lua.globals().get::<String>("visits").unwrap(), "Text;__songlua_text_attributes;");
+        assert_eq!(payload(&kind).0.as_ref(), "new text");
+        assert!(payload(&kind).1.is_empty());
+    }
+
+    #[test]
+    fn live_sprite_publication_preserves_input_update_draw_and_texture_loads() {
+        let mut compiled = compile_with_context("live-sprite-publication", r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        SCREENMAN:GetTopScreen():AddInputCallback(function() SPRITE.Frames[1].Frame=2 end)
+        self:SetUpdateFunction(function() SPRITE.Frames[1].Delay=0.25 end)
+        self:SetDrawFunction(function() SPRITE.Frames[1].Frame=3; SPRITE:Draw() end)
+    end,
+    Def.Sprite {
+        Name='Animated', Texture='first.png', Frames={{Frame=0,Delay=0.5}},
+        InitCommand=function(self) SPRITE=self end,
+    },
+}
+"#, |context| {
+            context.defer_initial_live_update = true;
+            for file in ["first.png", "second.png"] {
+                image::RgbaImage::new(16, 16).save(context.song_dir.join(file)).unwrap();
+            }
+        });
+        let local = compiled.overlays.iter().position(|actor| actor.name.as_deref()==Some("Animated")).unwrap();
+        let global = compiled.live_actor_indices()[local];
+        let mut kind = compiled.overlays[local].kind.clone();
+        let frames = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
+            SongLuaOverlayKind::Sprite { states, .. } => states.clone(),
+            _ => panic!("sprite visual slot"),
+        };
+        let original = frames(&kind);
+        let mut scene = compiled.live_scene.take().unwrap();
+        let owned = scene.actors[global].clone();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(Arc::ptr_eq(&original, &frames(&kind)));
+        let input = crate::SongLuaInputEvent {
+            player:Some(0),controller:Some(0),button:"Right",game_button:"MenuRight",
+            kind:crate::SongLuaInputType::FirstPress,device:"InputDevice_Key",device_button:"DeviceButton_right",
+            level:1.0,z:0,down:true,ago:0.0,is_joystick:false,is_mouse:false,
+        };
+        assert!(scene.input(&input).unwrap().1.errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(frames(&kind)[0].frame, 2);
+        assert!(scene.update(SongLuaLiveFrame::default()).unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(frames(&kind)[0].delay, 0.25);
+        assert!(scene.draw().unwrap().errors.is_empty());
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert_eq!(frames(&kind)[0].frame, 3);
+        assert_eq!(original[0], crate::SongLuaSpriteState { frame:0, delay:0.5 });
+        let drawn = frames(&kind);
+        let next = crate::lua_util::actor_texture_path(&owned).unwrap().unwrap().with_file_name("second.png");
+        scene.lua.globals().set("NEXT_TEXTURE", next.to_string_lossy().as_ref()).unwrap();
+        scene.lua.load("SPRITE:SetTexture(NEXT_TEXTURE)").exec().unwrap();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(Arc::ptr_eq(&drawn, &frames(&kind)), "SetTexture keeps custom frames");
+        scene.lua.load("SPRITE:Load(NEXT_TEXTURE)").exec().unwrap();
+        sync_visual_content(&owned, &mut kind).unwrap();
+        assert!(frames(&kind).is_empty(), "Load replaces custom frames with texture defaults");
+        assert_eq!(drawn[0].frame, 3, "previous draw snapshots remain immutable");
+    }
+
+    #[test]
     fn live_actor_name_ignores_lua_attribute_writes() {
         let mut compiled = compile("native-actor-name", r#"
 return Def.ActorFrame{Name='Root',
@@ -3078,6 +4024,141 @@ return setmetatable({__songlua_actor_type='ActorFrame',Name='Declared',
 
     fn compile(name: &str, source: &str) -> Compiled {
         compile_with_context(name, source, |_| {})
+    }
+
+    fn write_interactive_sound(dir: &Path, name: &str) {
+        let path = dir.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        // One silent PCM sample: real, independently named audio assets.
+        let mut wav = b"RIFF\x26\0\0\0WAVEfmt \x10\0\0\0\x01\0\x01\0".to_vec();
+        wav.extend_from_slice(&8000_u32.to_le_bytes());
+        wav.extend_from_slice(&16000_u32.to_le_bytes());
+        wav.extend_from_slice(b"\x02\0\x10\0data\x02\0\0\0\0\0");
+        fs::write(path, wav).unwrap();
+    }
+
+    #[test]
+    fn interactive_runtime_uses_authored_controls_motion_timers_sounds_and_reload() {
+        // Two independently authored configurations: no known chart filenames,
+        // globals, system layout, constants or asset names enter the runtime.
+        for (name, button, speed, delay, duration, sound) in [
+            ("pilot-a", "Left", 14.0, 0.25, 2.0, "custom/chime.wav"),
+            ("pilot-b", "Up", 38.0, 0.5, 3.0, "different/tone.wav"),
+        ] {
+            let source = format!(r#"
+-- Changing this comment or any parameter must not select another engine path.
+VISITS = (VISITS or 0) + 1
+local tone, velocity, elapsed, finished = nil, 0, 0, false
+return Def.ActorFrame {{
+    Def.Sound {{ File='{sound}', InitCommand=function(self) tone=self end }},
+    Def.ActorFrame {{
+        Name='Pilot',
+        Def.Quad {{ InitCommand=function(self) self:zoomto(20,20) end }},
+        InitCommand=function(self) self:x(17) end,
+        OnCommand=function(self)
+            self:sleep({delay}):queuecommand('Arm')
+        end,
+        ArmCommand=function(self)
+            SCREENMAN:GetTopScreen():AddInputCallback(function(event)
+                if event.button == '{button}' then
+                    if event.type == 'InputEventType_FirstPress' then
+                        velocity={speed}; tone:play()
+                    elseif event.type == 'InputEventType_Release' then
+                        velocity=0; tone:pause(true):pause(false):stop()
+                    end
+                end
+            end)
+            self:SetUpdateFunction(function(self, dt)
+                self:x(self:GetX() + velocity*dt)
+                elapsed=elapsed+dt
+                if elapsed >= {duration} and not finished then
+                    finished=true
+                    SCREENMAN:SetNewScreen('ScreenGameplay')
+                end
+            end)
+        end,
+    }},
+}}
+"#);
+            let mut compiled = compile_with_context(name, &source,
+                |context| write_interactive_sound(&context.song_dir, sound));
+            let index = compiled.overlays.iter().position(|a| a.name.as_deref() == Some("Pilot")).unwrap();
+            let index = compiled.live_actor_indices()[index];
+            let mut scene = compiled.live_scene.take().unwrap();
+            let mut input = crate::SongLuaInputEvent {
+                player: Some(0), controller: Some(0), button, game_button: button,
+                kind: crate::SongLuaInputType::FirstPress, device: "InputDevice_Key",
+                device_button: "DeviceButton_space", level: 1.0, z: 0, down: true,
+                ago: 0.0, is_joystick: false, is_mouse: false,
+            };
+            assert!(scene.input(&input).unwrap().1.actor_sounds.is_empty(), "controls are not registered yet");
+            let frame = |seconds, delta| SongLuaLiveFrame {
+                screen_seconds: seconds, music_seconds: seconds, beat: seconds * 2.0,
+                delta_seconds: delta, ..Default::default()
+            };
+            for step in 1..=8 {
+                let output = scene.advance(frame(f64::from(step) / 8.0, 0.125)).unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                assert!(output.request.is_none());
+            }
+            assert_eq!(scene.states()[index].x, 17.0);
+            let output = scene.input(&input).unwrap().1;
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let [SongLuaActorSound::Play { owner, path }] = output.actor_sounds.as_slice() else {
+                panic!("authored sound was not played: {:?}", output.actor_sounds);
+            };
+            let owner = *owner;
+            assert!(path.ends_with(sound));
+            scene.advance(frame(1.5, 0.5)).unwrap();
+            assert_eq!(scene.states()[index].x, 17.0 + speed as f32 * 0.5);
+            input.kind = crate::SongLuaInputType::Release;
+            input.down = false;
+            let output = scene.input(&input).unwrap().1;
+            assert_eq!(output.actor_sounds, [
+                SongLuaActorSound::Pause { owner, paused: true },
+                SongLuaActorSound::Pause { owner, paused: false },
+                SongLuaActorSound::Stop { owner },
+            ]);
+            let mut requested_at = None;
+            for step in 13..=32 {
+                let seconds = f64::from(step) / 8.0;
+                let output = scene.advance(frame(seconds, 0.125)).unwrap();
+                assert!(output.errors.is_empty());
+                if let Some(request) = output.request {
+                    assert!(matches!(request, SongLuaLiveRequest::NewScreen(ref screen) if screen == "ScreenGameplay"));
+                    requested_at = Some(seconds);
+                    break;
+                }
+            }
+            let at = requested_at.expect("Lua timer requested a screen reload");
+            assert!((at - (delay + duration)).abs() <= 0.25, "timer at {at}");
+            let mut layers = crate::reload_song_lua_with_default_host::<(), (), _>(scene,
+                |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+            let scene = layers.iter_mut().find_map(|layer| layer.live_scene.take()).unwrap();
+            assert_eq!(scene.lua.globals().get::<i32>("VISITS").unwrap(), 2,
+                "screen replacement preserves arbitrary Lua globals");
+        }
+    }
+
+    #[test]
+    fn interactive_runtime_stops_only_the_authored_sound_actor() {
+        let mut compiled = compile_with_context("independent-sounds", r#"
+local a,b
+return Def.ActorFrame {
+    Def.Sound { File='same.wav', InitCommand=function(self) a=self end },
+    Def.Sound { File='same.wav', InitCommand=function(self) b=self end },
+    OnCommand=function(self) a:play(); b:play(); a:stop() end,
+}
+"#, |context| write_interactive_sound(&context.song_dir, "same.wav"));
+        let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
+        let [SongLuaActorSound::Play { owner: a, path: pa },
+            SongLuaActorSound::Play { owner: b, path: pb },
+            SongLuaActorSound::Stop { owner: stop }] = output.actor_sounds.as_slice() else {
+                panic!("unexpected audio sequence: {:?}", output.actor_sounds);
+            };
+        assert_ne!(a, b);
+        assert_eq!(pa, pb);
+        assert_eq!(a, stop);
     }
 
     #[test]
@@ -4058,6 +5139,11 @@ return Def.ActorFrame {
         let mut previous = 0.0;
         for (seconds, drunk) in [(0.0, 0.75), (2.0, 0.75), (2.25, 0.0),
             (2.5, 0.5), (2.75, 0.25), (3.0, 0.25), (4.0, 0.0)] {
+            // Native attack activation reads the preceding ScreenGameplay
+            // position. Prime that input while keeping all boundary assertions.
+            scene.advance(SongLuaLiveFrame { music_seconds: seconds,
+                screen_seconds: seconds, beat: seconds * 2.0,
+                ..Default::default() }).unwrap();
             let output = scene.advance(SongLuaLiveFrame {
                 music_seconds: seconds, screen_seconds: seconds, beat: seconds * 2.0,
                 delta_seconds: seconds - previous, chart_attacks: Some(schedule.clone()),

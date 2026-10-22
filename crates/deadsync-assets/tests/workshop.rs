@@ -1,26 +1,28 @@
-//! Optional end-to-end validation of a locally packaged Cel/Metal workshop.
+//! End-to-end pack validation using bundled skins and generated customizations.
 use deadsync_assets::{init_paths, noteskin, textures};
 use deadsync_config::dirs::AppDirs;
 use deadsync_noteskin::pack::{SLOTS, Selection};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[path = "../../../tests/support/workshop_fixture.rs"]
+mod workshop_fixture;
+use workshop_fixture::build_workshop;
+
 #[test]
-#[ignore = "requires DEADSYNC_WORKSHOP_PACK pointing to an extracted workshop pack"]
 fn installed_workshop_resolves_and_loads_customized_skins() {
-    let pack_root = PathBuf::from(
-        std::env::var_os("DEADSYNC_WORKSHOP_PACK").expect("set DEADSYNC_WORKSHOP_PACK"),
-    )
-    .canonicalize()
-    .unwrap();
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
         .unwrap();
+    let fixture = tempfile::tempdir().unwrap();
+    let pack_root = fixture.path().join("packs/workshop");
+    build_workshop(&pack_root, &workspace);
+    let pack_root = pack_root.canonicalize().unwrap();
     let dirs = AppDirs {
-        data_dir: workspace.clone(),
+        data_dir: fixture.path().join("data"),
         exe_dir: workspace.clone(),
-        cache_dir: workspace.join("target/workshop/runtime-check"),
+        cache_dir: fixture.path().join("cache"),
         portable: true,
     };
     let mut paths = dirs.asset_paths(Some(&workspace));
@@ -36,21 +38,20 @@ fn installed_workshop_resolves_and_loads_customized_skins() {
         .iter()
         .filter(|job| job.path.starts_with(&pack_root))
         .collect();
-    assert_eq!(
-        pack_jobs.len(),
-        pack.manifest.skins.len(),
-        "startup should only decode previews"
+    assert!(
+        pack_jobs.is_empty(),
+        "startup must leave installed pack textures on disk"
     );
-    for job in &pack_jobs {
+    for skin in &pack.manifest.skins {
+        let path = pack.root.join(&skin.preview);
         assert!(
-            job.path
-                .file_name()
+            path.file_name()
                 .unwrap()
                 .to_str()
                 .unwrap()
                 .ends_with("-preview.png")
         );
-        assert_eq!(image::open(&job.path).unwrap().width(), 2048);
+        assert_eq!(image::open(&path).unwrap().width(), 2048);
     }
     let style = noteskin::Style {
         num_cols: 4,

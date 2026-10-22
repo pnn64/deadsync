@@ -460,6 +460,8 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         /// Clear depth before this actor's first visible pass.
         clear_depth: bool,
         /// Clear depth after this actor's last visible pass.
@@ -488,6 +490,8 @@ pub enum Actor {
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],
         depth_test: bool,
+        depth_write: bool,
+        depth_test_on_fail: bool,
         /// Clear depth before this actor's first visible pass.
         clear_depth: bool,
         /// Clear depth after this actor's last visible pass.
@@ -656,6 +660,8 @@ pub struct FlatTexturedMesh {
     pub uv_offset: [f32; 2],
     pub uv_tex_shift: [f32; 2],
     pub depth_test: bool,
+    pub depth_write: bool,
+    pub depth_test_on_fail: bool,
     /// Clear depth before this draw to isolate a new model in painter order.
     pub clear_depth: bool,
     /// Clear depth after this draw so subsequent draws cannot inherit it.
@@ -864,9 +870,7 @@ impl Actor {
                 children.iter().all(Self::retained_static)
             }
             Self::SharedFrame { children, .. } | Self::SharedTransform { children, .. }
-            | Self::SharedCamera { children, .. } => {
-                children.iter().all(Self::retained_static)
-            }
+            | Self::SharedCamera { children, .. } => children.iter().all(Self::retained_static),
             Self::Shadow { child, .. } => child.retained_static(),
             Self::Mesh { .. }
             | Self::ReusableMesh { .. }

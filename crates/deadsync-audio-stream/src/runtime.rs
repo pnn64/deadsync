@@ -178,7 +178,22 @@ impl AudioControl {
         }
     }
 
-    pub fn stop_screen_sfx(&self) {
+    pub fn play_actor_sfx(&mut self, owner: u64, sound: &SfxId) {
+        if let Some(engine) = self.engine.as_mut() {
+            engine.sfx_cache.play_owned(owner, sound, SCREEN_BUS);
+        }
+    }
+
+    pub fn stop_actor_sfx(&mut self, owner: u64) {
+        if let Some(engine) = self.engine.as_mut() { engine.sfx_cache.stop_owned(owner); }
+    }
+
+    pub fn pause_actor_sfx(&self, owner: u64, paused: bool) {
+        if let Some(engine) = &self.engine { engine.sfx_cache.pause_owned(owner, paused); }
+    }
+
+    pub fn stop_screen_sfx(&mut self) {
+        if let Some(engine) = self.engine.as_mut() { engine.sfx_cache.stop_owned_voices(); }
         stop_screen_bus();
     }
 

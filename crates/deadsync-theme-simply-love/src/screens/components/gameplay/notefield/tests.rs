@@ -410,7 +410,7 @@ fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
         .and_then(|layers| layers.iter().find(|slot| slot.model.is_some()))
         .expect("cyber should expose model-backed tap-note layer for 4th notes");
 
-    let logical_h = slot.logical_size()[1].max(1.0);
+    let texture_h = slot.source_size()[1].max(1) as f32;
     let model_h = slot
         .model
         .as_ref()
@@ -421,9 +421,10 @@ fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
         "cyber model-backed tap slot should have positive model height"
     );
     assert!(
-        logical_h / model_h > 1.5,
-        "regression guard: cyber logical height must stay larger than model height so this test catches logical-height scaling; logical={logical_h}, model={model_h}"
+        texture_h / model_h > 1.5,
+        "regression guard: texture height must differ from mesh height; texture={texture_h}, model={model_h}"
     );
+    assert_eq!(slot.logical_size()[1], model_h);
     let scale_h = note_slot_base_size(slot, 1.0)[1];
     assert!(
         (scale_h - model_h).abs() <= 1e-4,

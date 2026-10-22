@@ -66,6 +66,8 @@ fn model_frame() -> RenderFrame {
                     texture_handle: 1,
                     camera: 0,
                     depth_test: true,
+                    depth_write: true,
+                    depth_test_on_fail: false,
                     // Notes 0 and 1 share depth; note 2 is isolated from them.
                     clear_depth: i == 2,
                 })
@@ -163,6 +165,8 @@ fn model_depth_isolation() {
             texture_handle: 1,
             camera: 0,
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: true,
         }));
         backend.request_screenshot();
@@ -217,9 +221,101 @@ fn model_depth_isolation() {
         assert_pixels(&mut backend, &frame, &textures, kind);
         assert_padded_capture(&mut backend, &textures, kind);
         assert_depth_capture(&mut backend, &textures, kind);
+        assert_no_effect_mask(&mut backend, &textures, kind);
+        assert_independent_depth_settings(&mut backend, &textures, kind);
         assert_float_capture(&mut backend, &textures, kind);
         drop(textures);
         backend.cleanup();
+    }
+}
+
+// A NoEffect mask leaves existing pixels untouched and still occludes later
+// geometry. Drawing it with alpha blending paints over an existing notefield.
+fn assert_no_effect_mask(
+    backend: &mut Backend,
+    textures: &TextureHandleMap<Texture>,
+    kind: BackendType,
+) {
+    let mut frame = model_frame();
+    frame.clear_color = [0.0, 1.0, 0.0, 1.0];
+    frame.tmesh_geometries = vec![quad(0.4, 0.4), quad(0.8, 0.0)];
+    frame.tmesh_instances.truncate(2);
+    frame.tmesh_instances[1].tint = [1.0, 0.0, 0.0, 1.0];
+    frame.ops.truncate(2);
+    let DrawOp::TexturedMesh(mask) = &mut frame.ops[0] else {
+        unreachable!()
+    };
+    mask.blend = BlendMode::NoEffect;
+    mask.clear_depth = true;
+    backend.request_screenshot();
+    backend
+        .draw(&frame, textures, false)
+        .expect("draw NoEffect depth mask");
+    let image = backend.capture_frame().expect("capture NoEffect mask");
+    assert_eq!(
+        image.get_pixel(image.width() / 2, image.height() / 2).0[..3],
+        [0, 255, 0],
+        "{kind}: NoEffect must preserve color and occlude later geometry"
+    );
+    assert_eq!(
+        image.get_pixel(image.width() * 3 / 4, image.height() / 2).0[..3],
+        [255, 0, 0],
+        "{kind}: geometry outside the mask must remain visible"
+    );
+}
+
+fn assert_independent_depth_settings(
+    backend: &mut Backend,
+    textures: &TextureHandleMap<Texture>,
+    kind: BackendType,
+) {
+    // A nearer sky tests against masks without writing a wall in front of
+    // subsequently painted scenery. Only an explicit zwrite changes depth.
+    for (test, write, on_fail, expected) in [
+        (false, false, false, [255, 0, 0]),
+        (false, true, false, [0, 255, 0]),
+        (true, false, false, [255, 0, 0]),
+        (true, true, false, [0, 255, 0]),
+    ] {
+        let mut frame = model_frame();
+        frame.ops.truncate(2);
+        let DrawOp::TexturedMesh(sky) = &mut frame.ops[0] else {
+            unreachable!()
+        };
+        sky.depth_test = test;
+        sky.depth_write = write;
+        sky.depth_test_on_fail = on_fail;
+        backend.request_screenshot();
+        backend.draw(&frame, textures, false).unwrap();
+        let image = backend.capture_frame().unwrap();
+        assert_eq!(
+            image.get_pixel(image.width() / 2, image.height() / 2).0[..3],
+            expected,
+            "{kind}: independent test={test}, write={write}"
+        );
+    }
+    // WriteOnFail means GREATER, independently of whether the passing draw
+    // writes depth. A later middle-distance draw reveals accidental writes.
+    for write in [false, true] {
+        let mut frame = model_frame();
+        frame.tmesh_geometries = vec![quad(0.8, 0.4), quad(0.8, -0.4), quad(0.8, 0.0)];
+        let DrawOp::TexturedMesh(rear) = &mut frame.ops[1] else {
+            unreachable!()
+        };
+        rear.depth_test_on_fail = true;
+        rear.depth_write = write;
+        let DrawOp::TexturedMesh(middle) = &mut frame.ops[2] else {
+            unreachable!()
+        };
+        middle.clear_depth = false;
+        backend.request_screenshot();
+        backend.draw(&frame, textures, false).unwrap();
+        let image = backend.capture_frame().unwrap();
+        assert_eq!(
+            image.get_pixel(image.width() / 2, image.height() / 2).0[..3],
+            if write { [0, 0, 255] } else { [255, 0, 0] },
+            "{kind}: WriteOnFail, write={write}"
+        );
     }
 }
 
@@ -559,6 +655,8 @@ fn assert_float_capture(
                         texture_handle: handle,
                         camera: 0,
                         depth_test: false,
+                        depth_write: false,
+                        depth_test_on_fail: false,
                         clear_depth: false,
                     })
                 } else {

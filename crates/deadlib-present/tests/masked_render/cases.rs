@@ -37,6 +37,8 @@ fn mesh(vertices: renderer::TexturedMeshVertices, transform: Matrix4) -> Editabl
             vertices,
             geom_cache_key: 0,
             depth_test: true,
+            depth_write: true,
+            depth_test_on_fail: false,
             clear_depth: false,
             clear_depth_after: false,
             sampler: None,
@@ -103,6 +105,8 @@ fn rotated_clip_keeps_recycled_storage_and_attributes() {
         vertices,
         geom_cache_key,
         depth_test,
+        depth_write,
+        depth_test_on_fail,
         clear_depth: _,
         clear_depth_after: _,
         sampler: _,
@@ -115,7 +119,10 @@ fn rotated_clip_keeps_recycled_storage_and_attributes() {
     assert_eq!(instance.transform(), Matrix4::IDENTITY);
     assert_eq!(instance.tint, sprites[0].tint);
     assert_eq!(instance.texture_mask, 1.0);
-    assert_eq!((*geom_cache_key, *depth_test), (0, false));
+    assert_eq!((*geom_cache_key, *depth_test,
+            *depth_write,
+            *depth_test_on_fail
+        ), (0, false, false, false));
     assert_eq!(
         (obj.texture_handle, obj.blend, obj.z, obj.order),
         (17, BlendMode::Add, 3, 9)
@@ -185,6 +192,8 @@ fn contained_and_rejected_meshes_keep_source_ownership() {
         let EditablePayload::TexturedMesh {
             vertices,
             depth_test,
+            depth_write,
+            depth_test_on_fail,
             clear_depth: _,
             clear_depth_after: _,
             sampler: _,
@@ -196,6 +205,8 @@ fn contained_and_rejected_meshes_keep_source_ownership() {
         assert_eq!(vertices.as_ptr(), ptr);
         assert_eq!(vertices.as_ref(), expected_vertices);
         assert!(*depth_test);
+        assert!(*depth_write);
+        assert!(!*depth_test_on_fail);
         assert_eq!(pool.len(), 1);
     }
 }

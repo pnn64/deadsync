@@ -979,7 +979,7 @@ fn create_textured_mesh_pipeline(
     set_layout: vk::DescriptorSetLayout,
     mode: BlendMode,
     write_alpha: bool,
-    use_depth: bool,
+    depth_mode: deadlib_render_core::DepthMode,
 ) -> Result<PipelinePair, Box<dyn Error>> {
     let vert_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.vert.spv"));
     let frag_shader_code = include_bytes!(concat!(env!("OUT_DIR"), "/vulkan_tmesh.frag.spv"));
@@ -1039,9 +1039,15 @@ fn create_textured_mesh_pipeline(
     let layout = unsafe { device.create_pipeline_layout(&pipeline_layout_info, None)? };
 
     let depth_state = vk::PipelineDepthStencilStateCreateInfo::default()
-        .depth_test_enable(use_depth)
-        .depth_write_enable(use_depth)
-        .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL);
+        .depth_test_enable(depth_mode != deadlib_render_core::DepthMode::Off)
+        .depth_write_enable(depth_mode.writes())
+        .depth_compare_op(if depth_mode.on_fail() {
+            vk::CompareOp::GREATER
+        } else if depth_mode.tests() {
+            vk::CompareOp::LESS_OR_EQUAL
+        } else {
+            vk::CompareOp::ALWAYS
+        });
     let pipeline_info = vk::GraphicsPipelineCreateInfo::default()
         .stages(&shader_stages)
         .vertex_input_state(&vertex_input_info)
@@ -2384,7 +2390,7 @@ fn record_render_pass(
                     let selected = pipelines
                         .depth
                         .as_ref()
-                        .filter(|_| run.depth_test)
+                        .map(|depth| &depth[run.depth_mode() as usize])
                         .unwrap_or(&pipelines.textured);
                     let pipeline = &selected[blend_index(run.blend)];
                     let textured_mesh_pipeline_layout = pipeline.layout;
@@ -3182,7 +3188,7 @@ pub fn cleanup(state: &mut State) {
                 &pipelines.textured,
             ]
             .into_iter()
-            .chain(pipelines.depth.as_ref())
+            .chain(pipelines.depth.iter().flat_map(|modes| modes.iter()))
             {
                 for pipeline in set {
                     device.destroy_pipeline(pipeline.pipe, None);
@@ -3322,6 +3328,15 @@ fn color_blend_for(mode: BlendMode, write_alpha: bool) -> vk::PipelineColorBlend
         vk::ColorComponentFlags::R | vk::ColorComponentFlags::G | vk::ColorComponentFlags::B
     };
     match mode {
+        BlendMode::NoEffect => vk::PipelineColorBlendAttachmentState::default()
+            .color_write_mask(write_mask)
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::ZERO)
+            .dst_color_blend_factor(vk::BlendFactor::ONE)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE)
+            .alpha_blend_op(vk::BlendOp::ADD),
         BlendMode::Alpha => vk::PipelineColorBlendAttachmentState::default()
             .color_write_mask(write_mask)
             .blend_enable(true)
@@ -4834,11 +4849,11 @@ fn create_render_pass(device: &Device, format: vk::Format) -> Result<vk::RenderP
 // five geometry kinds and four blends. Initialization warms all variants;
 // gameplay only selects handles. No misses, pruning, I/O or frame allocations.
 struct PassPipelines {
-    sprites: [PipelinePair; 4],
-    video: [PipelinePair; 4],
-    meshes: [PipelinePair; 4],
-    textured: [PipelinePair; 4],
-    depth: Option<[PipelinePair; 4]>,
+    sprites: [PipelinePair; 5],
+    video: [PipelinePair; 5],
+    meshes: [PipelinePair; 5],
+    textured: [PipelinePair; 5],
+    depth: Option<[[PipelinePair; 5]; 6]>,
 }
 
 struct CapturePass {
@@ -4854,17 +4869,19 @@ const fn blend_index(mode: BlendMode) -> usize {
         BlendMode::Add => 1,
         BlendMode::Multiply => 2,
         BlendMode::Subtract => 3,
+        BlendMode::NoEffect => 4,
     }
 }
 
 fn build_blend_pipelines(
     mut build: impl FnMut(BlendMode) -> Result<PipelinePair, Box<dyn Error>>,
-) -> Result<[PipelinePair; 4], Box<dyn Error>> {
+) -> Result<[PipelinePair; 5], Box<dyn Error>> {
     Ok([
         build(BlendMode::Alpha)?,
         build(BlendMode::Add)?,
         build(BlendMode::Multiply)?,
         build(BlendMode::Subtract)?,
+        build(BlendMode::NoEffect)?,
     ])
 }
 
@@ -4925,20 +4942,24 @@ fn create_pass_pipelines(
                 descriptor_layout,
                 blend,
                 write_alpha,
-                false,
+                deadlib_render_core::DepthMode::Off,
             )
         })?,
         depth: if with_depth {
-            Some(build_blend_pipelines(|blend| {
+            let mut variants = Vec::with_capacity(6);
+            for depth_mode in deadlib_render_core::DepthMode::ALL {
+                variants.push(build_blend_pipelines(|blend| {
                 create_textured_mesh_pipeline(
                     device,
                     render_pass,
                     descriptor_layout,
                     blend,
                     write_alpha,
-                    true,
+                        depth_mode,
                 )
-            })?)
+            })?);
+            }
+            Some(variants.try_into().ok().expect("six depth modes"))
         } else {
             None
         },

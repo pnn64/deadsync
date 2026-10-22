@@ -642,7 +642,7 @@ pub(super) const COMBO_PREVIEW_ZOOM: f32 = 0.45;
 /// Pixel size of one logical noteskin arrow used to compute preview scale.
 pub(super) const NOTESKIN_PREVIEW_ARROW_PIXEL_SIZE: f32 = 64.0;
 /// Scale applied to noteskin preview sprites relative to their natural size.
-pub(super) const NOTESKIN_PREVIEW_SCALE: f32 = 0.45;
+pub(super) const NOTESKIN_PREVIEW_SCALE: f32 = 0.4;
 
 /// Underline thickness for multi-select row indicators (16:9 / 16:10 widescale).
 pub(super) fn underline_thickness() -> f32 {

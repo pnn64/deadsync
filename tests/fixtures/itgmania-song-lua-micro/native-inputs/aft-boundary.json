@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "name": "aft-boundary",
+  "screen": {
+    "width": 854,
+    "height": 480
+  },
+  "samples": [
+    0,
+    0.25
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "Outer",
+    "state": {
+      "position": [
+        427,
+        240,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        17
+      ],
+      "zoom": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "camera": {
+      "fov": 60,
+      "vanish": [
+        427,
+        240
+      ]
+    },
+    "children": [
+      {
+        "kind": "texture_frame",
+        "name": "ScreenTarget",
+        "size": [
+          854,
+          480
+        ],
+        "state": {
+          "position": [
+            80,
+            40,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            31
+          ],
+          "zoom": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        },
+        "children": [
+          {
+            "kind": "sprite",
+            "name": "ScreenBackground",
+            "size": [
+              854,
+              480
+            ],
+            "state": {
+              "position": [
+                427,
+                240,
+                0
+              ]
+            }
+          },
+          {
+            "kind": "texture_frame",
+            "name": "SmallTarget",
+            "size": [
+              320,
+              200
+            ],
+            "state": {
+              "position": [
+                90,
+                50,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                13
+              ]
+            },
+            "children": [
+              {
+                "kind": "sprite",
+                "name": "SmallBackground",
+                "size": [
+                  320,
+                  200
+                ],
+                "state": {
+                  "position": [
+                    160,
+                    100,
+                    0
+                  ]
+                }
+              },
+              {
+                "kind": "frame",
+                "name": "InnerCamera",
+                "camera": {
+                  "fov": 45,
+                  "vanish": [
+                    427,
+                    240
+                  ]
+                },
+                "children": [
+                  {
+                    "kind": "sprite",
+                    "name": "InnerPerspective",
+                    "size": [
+                      100,
+                      60
+                    ],
+                    "state": {
+                      "position": [
+                        427,
+                        240,
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "sprite",
+            "name": "AfterSmall",
+            "size": [
+              40,
+              20
+            ],
+            "state": {
+              "position": [
+                120,
+                80,
+                0
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "kind": "sprite",
+        "name": "AfterTarget",
+        "size": [
+          80,
+          40
+        ],
+        "state": {
+          "position": [
+            50,
+            30,
+            0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "Hidden",
+        "size": [
+          10,
+          10
+        ],
+        "state": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "visible": false
+      },
+      {
+        "kind": "sprite",
+        "name": "VisibilityProbe",
+        "size": [
+          1,
+          1
+        ],
+        "state": {
+          "zoom": [
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    ]
+  }
+}

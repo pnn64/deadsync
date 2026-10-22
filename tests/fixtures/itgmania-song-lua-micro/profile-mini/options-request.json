@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "name": "saved Mini before song construction",
+  "option_control": true,
+  "lua_assertions": "local function po(level, name, ...)\n    return _ITG_OPTIONS_AT(0, 'ModsLevel_' .. level, name, ...)\nend\npo('Preferred', 'SetPlayerOptions', 'M730, 60% Mini')\nfor _, level in ipairs({'Preferred', 'Stage', 'Song', 'Current'}) do\n    assert(math.abs(po(level, 'Mini') - 0.6) < 0.000001)\n    assert(po(level, 'MMod') == 730)\nend\nlocal mini = po('Song', 'Mini')\nlocal scale = (200-mini*100)/200\nlocal speed = po('Song', 'MMod')/124\nassert(math.floor(7.5*8/(speed*scale)+0.5) == 15)\n"
+}

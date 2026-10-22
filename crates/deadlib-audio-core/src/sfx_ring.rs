@@ -75,6 +75,7 @@ mod tests {
             bus: MixBus::new(0),
             generation: frame + 1,
             target_stream_frame: frame,
+            voice: None,
         }
     }
 

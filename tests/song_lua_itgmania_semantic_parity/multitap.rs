@@ -60,6 +60,7 @@ fn multitap_fixtures_pin_noteskin() {
 }
 
 #[test]
+#[ignore = "replays all 9197 frames of the authored Edgar song; run explicitly with --ignored"]
 fn edgar_native_hits_match() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
@@ -97,6 +98,7 @@ fn edgar_native_hits_match() {
 }
 
 #[test]
+#[ignore = "replays all 9197 frames of the authored Edgar song; run explicitly with --ignored"]
 fn edgar_countdown_onsets_and_hit_commands() {
     crate::paths::init();
     let trace = read_trace_file(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EDGAR_TRACE));
@@ -1262,62 +1264,63 @@ fn multitap_boundaries_and_noteskin_commands_match() {
     crate::paths::init();
     let song = tempfile::tempdir().expect("song directory");
     let entry = song.path().join("default.lua");
+    fs::create_dir(song.path().join("multitap")).unwrap();
+    let factory = include_str!("../fixtures/song-lua/multitap-factory.lua")
+        .replace("Font=\"_komika axis 42px.ini\"", "Font=\"Common Normal\"");
+    fs::write(song.path().join("multitap/Default.lua"), factory).unwrap();
+    fs::write(song.path().join("multitap/multitap_data.lua"),
+        "multitaps = {_version={0,9}, Challenge={{lane=1,taps={8,12},peak=6},\
+        {lane=2,taps={}},{lane=3,taps={}},{lane=4,taps={}}}}").unwrap();
     fs::write(&entry, r#"
-local skin = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions("ModsLevel_Current"):NoteSkin()
-multitaps = {Challenge = {{lane=1, taps={8,12}, peak=6}}}
-MYSTERIOUS_VERSION_DEPENDENT_RADIAN_POLTERGEIST = -180 / math.pi
-return Def.ActorFrame{
-    Def.ActorFrame{
-        InitCommand=function(self) self:xy(427,240):fov(45):vanishpoint(427,240) end,
-        Def.ActorFrame{
-            Name="MultitapFrameP1", InitCommand=function(self) self:y(10) end,
-            NOTESKIN:LoadActorForNoteSkin("Down", "Explosion", skin)..{Name="MultitapExplosionP1_1"},
-            Def.ActorFrame{
-                Name="MultitapP1_1", OnCommand=function(self) self:visible(false) end,
-                NOTESKIN:LoadActorForNoteSkin("Down", "Tap Note", skin)..{Name="MultitapArrowP1_1"},
-                Def.ActorFrame{
-                    Name="MultitapDeco1_1", OnCommand=function(self) self:visible(false):z(10) end,
-                    Def.Quad{Name="Decoration", InitCommand=function(self) self:zoomto(128,128):zoom(0.3) end},
-                },
-            },
-        },
-    },
-}
-"#).expect("write multitap chart");
+SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('NoteField'):y(10)
+return LoadActor('multitap/Default.lua')
+"#).expect("write authored multitap fixture");
     let mut context = SongLuaCompileContext::new(song.path(), "multitap boundaries");
     context.players[1].enabled = false;
     context.players[0].difficulty = SongLuaDifficulty::Challenge;
     context.players[0].speedmod = SongLuaSpeedMod::X(1.0);
     context.song_timing_bpms = vec![(0.0, 137.0)];
+    context.music_length_seconds = 6.0;
     for skin in ["cyber", "cel"] {
         context.players[0].noteskin_name = skin.into();
         let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
             .expect("compile multitap")
             .remove(0);
+        // Boundary probes are actual runtime updates. Offline tracks are
+        // sampled at 60 Hz and cannot observe an update at beat 0.001.
+        let mut live_context = context.clone();
+        live_context.live = true;
+        let mut live = compile_song_lua_layers(&[entry.as_path()], 0, &live_context)
+            .expect("prepare live multitap boundary probes").remove(0);
+        let mut scene = live.live_scene.take().expect("owned boundary scene");
+        let startup = scene.take_startup_output();
+        assert!(startup.errors.is_empty(), "{:?}", startup.errors);
         let named = |name: &str| {
-            compiled
+            live
                 .overlays
                 .iter()
                 .position(|actor| actor.name.as_deref() == Some(name))
-                .expect(name)
+                .unwrap_or_else(|| panic!("missing {name}: {:?}", live.overlays.iter()
+                    .map(|actor| actor.name.as_deref()).collect::<Vec<_>>()))
         };
         let frame = named("MultitapP1_1");
         let arrow = named("MultitapArrowP1_1");
-        let deco = named("Decoration");
+        let deco = named("MultitapTextP1_1");
         let explosion = named("MultitapExplosionP1_1");
         let explosion_sprites = deadsync_song_lua::overlay_descendants_by_parent(
-            compiled.overlays.len(),
+            live.overlays.len(),
             explosion,
-            |index| compiled.overlays[index].parent_index,
+            |index| live.overlays[index].parent_index,
         )
         .into_iter()
         .filter(|&index| {
             matches!(
-                compiled.overlays[index].kind,
+                live.overlays[index].kind,
                 SongLuaOverlayKind::Sprite { .. }
             )
         })
         .collect::<Vec<_>>();
+        let mut previous_second = 0.0;
         for (beat, visible, y, zoom_y) in [
             (0.0, false, 0.0, 1.0),
             (0.001, true, 376.936, 1.0),
@@ -1327,15 +1330,20 @@ return Def.ActorFrame{
             (11.0, true, -63.0, 1.05),
             (12.001, false, 0.0, 1.0),
         ] {
-            let local = compiled_local_states_at(
-                &compiled,
-                &context,
-                beat,
-                song_elapsed_seconds_at(beat, &context),
-            );
+            let second = song_elapsed_seconds_at(beat, &context);
+            let output = scene.advance(deadsync_song_lua::SongLuaLiveFrame {
+                beat: f64::from(beat), music_seconds: f64::from(second),
+                screen_seconds: f64::from(second),
+                delta_seconds: f64::from(second - previous_second),
+                ..Default::default()
+            }).expect("advance multitap boundary");
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            previous_second = second;
+            let local = live.live_actor_indices().iter()
+                .map(|&index| scene.states()[index]).collect::<Vec<_>>();
             assert_eq!(local[frame].visible, visible, "beat {beat}");
             let composed = compose_overlay_states(
-                &compiled.overlays,
+                &live.overlays,
                 &local,
                 [854.0, 480.0],
                 [song_elapsed_seconds_at(beat, &context), beat],

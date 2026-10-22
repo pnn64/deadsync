@@ -854,6 +854,10 @@ fn install_pack(job: &DownloadJob) -> Result<PathBuf, StepManiaOnlineError> {
 
 fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepManiaOnlineError> {
     let url = format!("{DOWNLOAD_URL_PREFIX}/{}/", pack.id);
+    download_archive_from(pack, archive_path, &url)
+}
+
+fn download_archive_from(pack: &PackInfo, archive_path: &Path, url: &str) -> Result<u64, StepManiaOnlineError> {
     let response = network::get_streaming_agent()
         .get(url)
         .call()
@@ -1586,19 +1590,42 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "downloads and extracts Bearpocalypse from StepManiaOnline"]
-    fn live_bearpocalypse_download_and_extract() {
-        let root = temp_dir("live-bearpocalypse");
+    fn generated_pack_download_and_extract() {
+        let root = temp_dir("generated-http-pack");
         fs::create_dir_all(&root).expect("create fixture root");
+        let source = root.join("source.zip");
+        write_zip(&source, &[
+            ("Generated Pack/Song/song.ssc", b"#TITLE:Generated;"),
+            ("Generated Pack/Song/music.ogg", b"audio"),
+        ]);
+        let bytes = fs::read(&source).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/download/pack/327/", listener.local_addr().unwrap());
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(10))).unwrap();
+            let mut request = Vec::new();
+            let mut byte = [0];
+            while !request.ends_with(b"\r\n\r\n") {
+                stream.read_exact(&mut byte).unwrap(); request.push(byte[0]);
+                assert!(request.len() < 8192);
+            }
+            assert!(request.starts_with(b"GET /download/pack/327/ HTTP/1.1\r\n"));
+            write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", bytes.len()).unwrap();
+            stream.write_all(&bytes).unwrap();
+        });
         let archive = root.join("download.zip");
         let staging = root.join("staging");
-        let mut pack = pack(327, "Bearpocalypse", Some("itg"), Some("stamina"));
+        let mut pack = pack(327, "Generated Pack", Some("itg"), Some("stamina"));
+        // A stale catalog size must not override the actual HTTP body length.
         pack.size_bytes = 103_325_333;
 
-        let downloaded = download_archive(&pack, &archive).expect("download Bearpocalypse");
+        let downloaded = download_archive_from(&pack, &archive, &url).expect("download generated pack");
+        server.join().unwrap();
         assert_eq!(downloaded, fs::metadata(&archive).unwrap().len());
-        extract_archive(&archive, &staging, downloaded).expect("extract Bearpocalypse");
-        println!("Downloaded and extracted Bearpocalypse ({downloaded} bytes)");
+        extract_archive(&archive, &staging, downloaded).expect("extract generated pack");
+        assert_eq!(fs::read(staging.join("Song/song.ssc")).unwrap(), b"#TITLE:Generated;");
+        assert_eq!(fs::read(staging.join("Song/music.ogg")).unwrap(), b"audio");
 
         fs::remove_dir_all(root).expect("clean fixture root");
     }

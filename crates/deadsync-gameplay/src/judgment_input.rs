@@ -736,6 +736,15 @@ where
     )
 }
 
+pub fn update_core_with_pre_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+    delta_time: f32, audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+    before_players: impl FnOnce(&mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>),
+) -> GameplayAction where Profile: GameplayProfileData {
+    state.update_gameplay_frame_with_pre_player(delta_time, audio_snapshot, ASSIST_TICK_SFX_PATH, fallback_host_nanos, before_players)
+}
+
 #[inline(always)]
 const fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
     match action {

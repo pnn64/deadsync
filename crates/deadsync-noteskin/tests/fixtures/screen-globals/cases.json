@@ -1,0 +1,42 @@
+[
+  {
+    "screen": [640, 480],
+    "script": "self:valign(1):zoomy(SCREEN_HEIGHT):addrotationz(180)",
+    "zoom": [1, 480, 1],
+    "position": [0, 0, 0],
+    "rotation": [0, 0, 180],
+    "vert_align": 1
+  },
+  {
+    "screen": [800, 600],
+    "script": "self:zoomx(SCREEN_WIDTH / 640):zoomy(SCREEN_HEIGHT / 240):zoomz(-2)",
+    "zoom": [1.25, 2.5, -2],
+    "position": [0, 0, 0],
+    "rotation": [0, 0, 0],
+    "vert_align": 0.5
+  },
+  {
+    "screen": [641, 481],
+    "script": "self:x(SCREEN_CENTER_X):y(SCREEN_BOTTOM - SCREEN_CENTER_Y):z(SCREEN_TOP + SCREEN_LEFT)",
+    "zoom": [1, 1, 1],
+    "position": [320, 241, 0],
+    "rotation": [0, 0, 0],
+    "vert_align": 0.5
+  },
+  {
+    "screen": [640, 480],
+    "script": "self:zoomx((SCREEN_RIGHT - SCREEN_LEFT) / 160):zoomy(-SCREEN_HEIGHT / 3 + SCREEN_CENTER_Y):zoomz(SCREEN_HEIGHT / SCREEN_WIDTH)",
+    "zoom": [4, 80, 0.75],
+    "position": [0, 0, 0],
+    "rotation": [0, 0, 0],
+    "vert_align": 0.5
+  },
+  {
+    "screen": [854, 480],
+    "script": "self:zoomx(2):zoomz(3):zoomy(-SCREEN_HEIGHT)",
+    "zoom": [2, -480, 3],
+    "position": [0, 0, 0],
+    "rotation": [0, 0, 0],
+    "vert_align": 0.5
+  }
+]

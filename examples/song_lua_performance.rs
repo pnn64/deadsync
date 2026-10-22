@@ -1,7 +1,7 @@
 //! Measures the same Lua preparation entry point used by the gameplay loader.
-#[path = "support/paths.rs"]
+#[path = "../tests/support/paths.rs"]
 mod paths;
-#[path = "support/song_lua_metrics.rs"]
+#[path = "../tests/support/song_lua_metrics.rs"]
 mod metrics;
 
 use sha2::{Digest, Sha256};
@@ -56,12 +56,14 @@ fn main() {
         samples.push(measurement.finish());
         let mut fingerprint = Fingerprint(Sha256::new());
         let mut count = 0;
+        let mut live_scenes = 0;
         for compiled in prepared.compiled_layers() {
-            assert!(compiled.live_scene.is_none(), "production preparation must drop the Lua VM");
+            live_scenes += usize::from(compiled.live_scene.is_some());
             write!(&mut fingerprint, "{compiled:?}").unwrap();
             count += 1;
         }
         assert!(count > 0, "benchmark requires prepared Lua layers");
+        assert_eq!(live_scenes, 1, "production preparation owns one shared Lua VM");
         let mut hash = String::with_capacity(64);
         for byte in fingerprint.0.finalize() { write!(&mut hash, "{byte:02x}").unwrap(); }
         fingerprints.push(hash);

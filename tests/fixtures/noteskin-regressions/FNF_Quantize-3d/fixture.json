@@ -1,0 +1,573 @@
+{
+  "images": [
+    {
+      "path": "_Down Receptor Go (res 64x63).png",
+      "width": 156,
+      "height": 154
+    },
+    {
+      "path": "Down Hold Body active 12th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 16th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 192nd.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 24th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 32nd.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 48th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 4th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 64th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body active 8th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 12th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 16th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 192nd.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 24th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 32nd.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 48th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 4th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 64th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold Body inactive 8th.png",
+      "width": 32,
+      "height": 64
+    },
+    {
+      "path": "Down Hold BottomCap active 12th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 16th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 192nd.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 24th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 32nd.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 48th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 4th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 64th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap active 8th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 12th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 16th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 192nd.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 24th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 32nd.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 48th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 4th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 64th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Hold BottomCap inactive 8th.png",
+      "width": 32,
+      "height": 31
+    },
+    {
+      "path": "Down Roll Body active 12th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 16th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 192nd.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 24th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 32nd.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 48th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 4th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 64th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body active 8th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 12th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 16th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 192nd.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 24th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 32nd.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 48th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 4th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 64th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll Body inactive 8th.png",
+      "width": 64,
+      "height": 64
+    },
+    {
+      "path": "Down Roll BottomCap active 12th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 16th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 192nd.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 24th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 32nd.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 48th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 4th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap active 64th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap Active 8th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 12th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 16th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 192nd.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 24th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 32nd.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 48th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 4th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 64th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Roll BottomCap inactive 8th.png",
+      "width": 64,
+      "height": 32
+    },
+    {
+      "path": "Down Tap Explosion Bright W1 (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "Down Tap Explosion Dim W1 (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "Down Tap Explosion Dim W2 (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "Down Tap Explosion Dim W3 (res 93x93).png",
+      "width": 229,
+      "height": 228
+    },
+    {
+      "path": "Down Tap Explosion Dim W4 (res 93x93).png",
+      "width": 228,
+      "height": 229
+    },
+    {
+      "path": "Down Tap Explosion Dim W5 (res 93x93).png",
+      "width": 228,
+      "height": 229
+    },
+    {
+      "path": "textures/fire_1.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_10.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_11.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_12.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_2.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_3.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_4.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_5.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_6.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_7.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_8.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/fire_9.png",
+      "width": 266,
+      "height": 484
+    },
+    {
+      "path": "textures/Tap Lift parts.png",
+      "width": 256,
+      "height": 64
+    },
+    {
+      "path": "textures/Tap Mine parts.png",
+      "width": 1,
+      "height": 1
+    },
+    {
+      "path": "textures/Tap Note parts (mipmaps).png",
+      "width": 256,
+      "height": 64
+    }
+  ],
+  "audio": [],
+  "sources": [
+    {
+      "path": "__CREDITS.txt",
+      "sha256": "33a1b1f5c533763d069e55a838f811a9e861e7104e1a916b289e4afe9ecbf4e0"
+    },
+    {
+      "path": "_down tap addition meshes.txt",
+      "sha256": "9b929fdc927adc3eba7881cb2cee189fabc630a936ce7527921a83f1f2e2f471"
+    },
+    {
+      "path": "_down tap lift meshes.txt",
+      "sha256": "aed8f3fc8373a9cbf1c06ca4133052f9627bd3ce033cb0b13ba0a04f043a7dcd"
+    },
+    {
+      "path": "_down tap mine.model",
+      "sha256": "c3aa6a7a7dfac37a3f496c344a6763a195a92195d487a35a50d64782e2bc139a"
+    },
+    {
+      "path": "_down tap note meshes.txt",
+      "sha256": "08e9a510eef17988976364e41bcc0bb21483c855ac6add2bc48535fccc908e79"
+    },
+    {
+      "path": "_left tap mine.model",
+      "sha256": "ade6622846494f7f3da4a0a152516e533736c676d5f7f273b32fa3616a9f85e8"
+    },
+    {
+      "path": "_mine meshes down.txt",
+      "sha256": "67dd061f5ca77f1e1de4fa55ffc6e4b2abee7cbb8f229471232556fa5242fbd0"
+    },
+    {
+      "path": "_mine meshes left.txt",
+      "sha256": "866c8a2254b71abe0ebf4059c97414078bc3ba2fb96f96dba5be95723e70b2b3"
+    },
+    {
+      "path": "_mine meshes right.txt",
+      "sha256": "f61ae0376a95de6aa31f01a878202aa360e78eba766e32229fef4db9f804ecb3"
+    },
+    {
+      "path": "_mine meshes up.txt",
+      "sha256": "5b98785382c2b1089672857272a46f1774a185853797133629accfd7bdc6f6e2"
+    },
+    {
+      "path": "_right tap mine.model",
+      "sha256": "ee434fc141d80a4348ed8750b0e11e00e88f0457f1ea2d9fb3c5d91aec42f6e5"
+    },
+    {
+      "path": "_up tap mine.model",
+      "sha256": "d1b8a99627373dfde518aeb5ae36cffbb92ffbfb2f885050d33502def48f32ff"
+    },
+    {
+      "path": "down hold explosion.redir",
+      "sha256": "b922b20108cf723bcc23349300913a62e7464aa22aeb19cd1fd36a86729f8999"
+    },
+    {
+      "path": "Down Receptor.lua",
+      "sha256": "5e4edba8a7b076a7c94a48a0cd13eb6789937b2232a9782bd897bc1a9a579549"
+    },
+    {
+      "path": "Down Tap Lift.lua",
+      "sha256": "576c4388af1d2dbb284c259c2d494fc41f802147e0aa20ba9ae775cc9a9f61ac"
+    },
+    {
+      "path": "Down Tap Mine.lua",
+      "sha256": "6c6b3f4f8f4a424175b86d19b02102878319edebeb592e11b1348c9b370845f6"
+    },
+    {
+      "path": "Down Tap Note.lua",
+      "sha256": "f91ca687e8acb5b7ca244ce2d7f191bdf673f9db4808d4bb6a81906560be589e"
+    },
+    {
+      "path": "Fallback Explosion.lua",
+      "sha256": "f02c81759d5d8aba045fdd2c648e1e7e526508c9d6fc102471f6f676c6bd1d9a"
+    },
+    {
+      "path": "Left Tap Mine.lua",
+      "sha256": "b09b35d0e59bd8d3c2a40b47f7090566cf8be98017fd9675126fec91a11d81a4"
+    },
+    {
+      "path": "metrics.ini",
+      "sha256": "b546837b1a3a504ec0f9d0a56055316651e5b1703ad303568bba13f70ed72881"
+    },
+    {
+      "path": "NoteSkin.lua",
+      "sha256": "fbe24dc746a1db71ca21a6a6463dc774718bfdd7a1e71d335873c0af9ec93589"
+    },
+    {
+      "path": "Right Tap Mine.lua",
+      "sha256": "9d90b54638bd758fe0c433e8745fe7a8ba03efb9ed3bf0cf97a5056cf59578ab"
+    },
+    {
+      "path": "textures/_mine flame.ini",
+      "sha256": "860810c3bcb0e1294268fb1da23547fd2b090f2e0338ba3c2cf9ead5579aa1ab"
+    },
+    {
+      "path": "Up Tap Mine.lua",
+      "sha256": "7c54960d09fbdb4fbe29efda7b3533b59cc2bcf2b94cb907e3f755863081b4b8"
+    }
+  ]
+}

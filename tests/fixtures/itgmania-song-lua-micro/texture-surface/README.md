@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 Native CPU surface preprocessing from a clean harness 0.1.44 capture.
 
 `control.json` supplies decoded RGB, RGBA and paletted surfaces. The linked

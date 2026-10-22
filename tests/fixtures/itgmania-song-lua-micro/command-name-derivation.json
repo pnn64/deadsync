@@ -1,0 +1,60 @@
+{
+  "scope": "Historical record of the command-name repair before the 0.1.95 refresh. Current semantic capture provenance is recorded in capture-manifest.json.",
+  "reason": "Screen::BeginScreen sends Begin through ActorFrame::HandleMessage before foreground On. These isolated actor controls use an ordinary delayed command; give it a distinct name so the screen lifecycle does not invoke it at startup.",
+  "change": "Only the custom command identifiers are substituted in scripts and reference labels. Recorded state, frame, vertex, and color values are unchanged.",
+  "authority": [
+    "ITGmania src/Screen.cpp:93-112",
+    "ITGmania src/ActorFrame.cpp:538-549",
+    "ITGmania src/Foreground.cpp:123-131"
+  ],
+  "fixtures": [
+    {
+      "fixture": "late-colors",
+      "original_command": "Begin",
+      "command": "StartEffect",
+      "source_sha256_before": "56179f673f6b53422a671e0891aef1131d22e0c47ad2ccd9a6d9605815458bd1",
+      "source_sha256_after": "333238f1cd5b8777f9696534a2b880296d8234999f4bd3841db0dc235b994e71",
+      "renamed_reference_identifiers": [
+        "tests/fixtures/itgmania-song-lua-micro/late-colors-input.json",
+        "tests/fixtures/itgmania-song-lua-micro/late-colors-native.json.zst",
+        "tests/fixtures/itgmania-song-lua-micro/late-colors.json.zst"
+      ]
+    },
+    {
+      "fixture": "scheduled-fade",
+      "original_command": "Begin",
+      "command": "StartEffect",
+      "source_sha256_before": "17b9ade6c15614f87819cc1d68863fb539af8faa22b283f5eb4cc9bad37c22dd",
+      "source_sha256_after": "d7c12efedd55e777360851c6e4d59b100b75eed65c76a66088a163635a36df74",
+      "renamed_reference_identifiers": [
+        "tests/fixtures/itgmania-song-lua-micro/scheduled-fade-input.json",
+        "tests/fixtures/itgmania-song-lua-micro/scheduled-fade-native.json.zst",
+        "tests/fixtures/itgmania-song-lua-micro/scheduled-fade.json.zst"
+      ]
+    },
+    {
+      "fixture": "wrapper-fade",
+      "original_command": "Begin",
+      "command": "StartWrapper",
+      "source_sha256_before": "c76a8c370935f79577d49019451d910f8c2b42bd58ba5e5add1959fae04b9788",
+      "source_sha256_after": "30e76ae38a1b77b7b70d208ce3dba4a8b21a8d03e9f1079896aeac388a9681b6",
+      "renamed_reference_identifiers": [
+        "tests/fixtures/itgmania-song-lua-micro/wrapper-fade.json"
+      ]
+    }
+  ],
+  "native_verification": {
+    "fixture": "late-colors",
+    "exit_code": 0,
+    "request_sha256": "905826303fcd1e2a3f04ef5b246d7986f364d73eb0bd366e42fcb2a12fad8349",
+    "binary_sha256": "a26c9d8b30262aee538ebe7d6ad9224bbced73eb47ad8de218bdd82615381b0d",
+    "samples_equal": true,
+    "sample_count": 241,
+    "provenance": {
+      "execution": "embedded_native_sources",
+      "git_dirty": "false",
+      "git_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+      "source_root": "C:\\GitHub\\itgmania-harness\\vendor/itgmania"
+    }
+  }
+}

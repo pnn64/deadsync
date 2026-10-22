@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 This control retains 183 draws from an independent native ITGmania actor
 tree across 61 updates at 60 Hz. Diffuse and secondary materials use four
 distinct images, unequal frame delays, and a queued `setstate(1)` at 0.5s.

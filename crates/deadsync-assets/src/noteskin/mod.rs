@@ -5,7 +5,7 @@ pub use self::texture::{
     SpriteSlot, SpriteSource, build_model_geometry, load_itg_model_slots, test_model_slot,
 };
 use self::texture::{
-    apply_model_slot_plan, itg_apply_frame_override, itg_apply_state_properties_from_commands,
+    apply_model_slot_plan, itg_apply_actor_frame_override, itg_apply_state_properties_from_commands,
     itg_note_animation_source, itg_slot_from_path, itg_slot_from_path_all_frames,
     itg_slot_from_path_animated, itg_slot_from_path_with_frame, mine_fill_slots,
 };
@@ -464,7 +464,7 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
         apply_receptor_init: itg_apply_receptor_init,
         apply_xy_rotation: itg_apply_xy_rotation,
         apply_rotation: itg_apply_rotation,
-        apply_frame: itg_apply_frame_override,
+        apply_frame: itg_apply_actor_frame_override,
         apply_state: itg_apply_state_properties_from_commands,
         apply_masks: mask::apply_sprite_masks,
         apply_loader_command: itg_apply_loader_command,
@@ -477,6 +477,11 @@ fn itg_compiled_sprite_ops() -> deadsync_noteskin::ItgCompiledSpriteOps<SpriteSl
 }
 
 fn itg_prepare_commands(commands: &mut HashMap<String, String>) {
+    noteskin_script::resolve_screen_args(
+        commands,
+        deadlib_present::space::screen_width(),
+        deadlib_present::space::screen_height(),
+    );
     if !commands
         .values()
         .any(|s| s.contains("math.random") || s.contains("PREFSMAN"))
@@ -542,11 +547,18 @@ fn itg_apply_receptor_init(slot: &mut SpriteSlot, command: &str) {
 }
 
 fn itg_apply_xy_rotation(slot: &mut SpriteSlot, rotation_x: Option<i32>, rotation_y: Option<i32>) {
-    if rotation_x.is_some_and(|degrees| degrees.rem_euclid(360) == 180) {
+    let flip_v = rotation_x.is_some_and(|degrees| degrees.rem_euclid(360) == 180);
+    let flip_h = rotation_y.is_some_and(|degrees| degrees.rem_euclid(360) == 180);
+    if flip_v {
         slot.def.mirror_v = !slot.def.mirror_v;
     }
-    if rotation_y.is_some_and(|degrees| degrees.rem_euclid(360) == 180) {
+    if flip_h {
         slot.def.mirror_h = !slot.def.mirror_h;
+    }
+    if flip_h != flip_v {
+        // Actor::BeginDraw applies native X/Y rotations after Z. Our texture
+        // mirrors happen before Z, so a single reflection reverses that turn.
+        slot.set_rotation_deg((-slot.def.rotation_deg.rem_euclid(360)).rem_euclid(360));
     }
 }
 
@@ -596,6 +608,464 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn rainbow_receptors_keep_native_colors_after_compiling_and_caching() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("rainbow-effect");
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/rainbow-effect");
+        for name in ["NoteSkin.lua", "Down Receptor.lua", "White.png"] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-output.json")).unwrap()).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            name: "rainbow-effect-fixture".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::default(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for bundle in [&bundle, &cached] {
+            for parts in [None, Some(SkinParts::default().with(SkinPart::Receptors))] {
+                let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                    &data,
+                    &Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    &bundle.loader,
+                    &bundle.actors,
+                    parts,
+                )
+                .unwrap();
+                assert_eq!(skin.receptor_off.len(), 4);
+                for target in &skin.receptor_off {
+                    assert_eq!(target.model_effect.mode, ModelEffectMode::Rainbow);
+                    assert_eq!(target.model_effect.clock, ModelEffectClock::Beat);
+                    assert_eq!(target.model_effect.period, 4.0);
+                    for sample in native["samples"].as_array().unwrap() {
+                        let time = sample["time"].as_f64().unwrap() as f32;
+                        let beat = sample["beat"].as_f64().unwrap() as f32;
+                        let draw = target.model_draw_at(time, beat);
+                        let expected = &sample["colors"]["BeatReceptor"];
+                        for (channel, actual) in draw.tint.into_iter().enumerate() {
+                            let expected = expected[channel].as_f64().unwrap() as f32;
+                            assert!((actual - expected).abs() <= 1e-6);
+                        }
+                        assert_eq!(skin.receptor_pulse.color_for_beat(beat), [1.0; 4]);
+                    }
+                }
+                assert_eq!(skin.receptor_glow.len(), 4);
+                for press in &skin.receptor_glow {
+                    let press = press.as_ref().expect("separate press overlay");
+                    assert_eq!(press.model_effect.mode, ModelEffectMode::None);
+                    assert_eq!(press.model_draw.tint, [1.0; 4]);
+                }
+                assert_eq!(skin.receptor_glow_behavior.press_alpha_start, 0.2);
+                assert_eq!(skin.receptor_glow_behavior.alpha_end, 0.0);
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn note_color_uvs_match_native_texture_allocation() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/note-color-texture");
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-output.json")).unwrap()).unwrap();
+        let input: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-input.json")).unwrap()).unwrap();
+        for (spec, case) in input["texture_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .zip(native["cases"].as_array().unwrap())
+        {
+            let slot =
+                super::itg_slot_from_path(&fixture.join(spec["file"].as_str().unwrap())).unwrap();
+            let scale = slot.uv_translation_scale();
+            for axis in 0..2 {
+                let allocation = case["dimensions"]["texture"][axis].as_f64().unwrap() as f32;
+                let image = case["dimensions"]["image"][axis].as_f64().unwrap() as f32;
+                assert!(
+                    (scale[axis] - allocation / image).abs() < 1e-6,
+                    "{} axis {axis}: {scale:?}",
+                    case["name"]
+                );
+            }
+        }
+
+        let root = temp_noteskin_root("note-color-texture");
+        for name in [
+            "NoteSkin.lua",
+            "metrics.ini",
+            "Down Tap Note.lua",
+            "_Down Tap Note 2x9.png",
+        ] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "note-color-texture-fixture".into(),
+            overrides: Vec::new(),
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&cache).unwrap();
+        let image = image::open(fixture.join("_Down Tap Note 2x9.png"))
+            .unwrap()
+            .to_rgba8();
+        let beats = [
+            0.0,
+            0.5,
+            1.0 / 3.0,
+            0.25,
+            1.0 / 6.0,
+            0.125,
+            1.0 / 12.0,
+            0.0625,
+            1.0 / 48.0,
+        ];
+        for (bundle, parts) in [&bundle, &cached].into_iter().flat_map(|bundle| {
+            [Some(SkinParts::default().with(SkinPart::Arrows)), None].map(|parts| (bundle, parts))
+        }) {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for col in 0..4 {
+                for (quant, beat) in beats.into_iter().enumerate() {
+                    let layers = &skin.note_layers[col * NUM_QUANTIZATIONS + quant];
+                    assert_eq!(layers.len(), 1);
+                    let slot = &layers[0];
+                    assert_eq!(slot.logical_size(), [16.0; 2]);
+                    let translation = skin.part_uv_translation(NoteAnimPart::Tap, beat, false);
+                    assert_eq!(translation, [0.0, quant as f32 * 0.0625]);
+                    for time in [0.0, 0.25, 0.75, 3.5] {
+                        let phase = skin.part_uv_phase(NoteAnimPart::Tap, time, time, beat);
+                        let frame = slot.frame_index_from_phase(phase);
+                        let uv = slot.uv_for_note_at(frame, time, translation);
+                        let native_rect = &native["cases"][0]["frame_rects"][quant * 2 + frame];
+                        for edge in [1, 3] {
+                            let inset = if edge == 1 { 0.5 } else { -0.5 };
+                            let expected =
+                                (native_rect[edge].as_f64().unwrap() as f32 * 256.0 + inset) / 144.0;
+                            assert!(
+                                (uv[edge] - expected).abs() < 1e-6,
+                                "col {col} quant {quant} time {time}: {uv:?}"
+                            );
+                        }
+                        let color = image.get_pixel(8, quant as u32 * 16 + 8);
+                        for y in [uv[1], (uv[1] + uv[3]) * 0.5, uv[3]] {
+                            let x = ((uv[0] + uv[2]) * 0.5 * image.width() as f32) as u32;
+                            assert_eq!(
+                                image.get_pixel(x, (y * image.height() as f32) as u32),
+                                color,
+                                "col {col} quant {quant} time {time} UV {uv:?} pixel ({x}, {}): the entire note must sample its color row",
+                                (y * image.height() as f32) as u32
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn shock_mines_preserve_horizontal_sparks_and_continuous_hit_animation() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/shock-mine");
+        let cases: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("cases.json")).unwrap()).unwrap();
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-rotation-output.json")).unwrap())
+                .unwrap();
+        let root = temp_noteskin_root("shock-mine");
+        for file in fs::read_dir(&fixture).unwrap().flatten() {
+            let path = file.path();
+            if matches!(
+                path.extension().and_then(|ext| ext.to_str()),
+                Some("lua" | "ini" | "png")
+            ) {
+                fs::copy(&path, root.join(file.file_name())).unwrap();
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "shock-mine-fixture".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for (bundle, parts) in [&bundle, &cached].into_iter().flat_map(|bundle| {
+            [None, Some(SkinParts::default().with(SkinPart::Mines))].map(|parts| (bundle, parts))
+        }) {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                parts,
+            )
+            .unwrap();
+            for (col, case) in cases.as_array().unwrap().iter().enumerate() {
+                let layers = &skin.mine_layers[col];
+                assert_eq!(layers.len(), 2);
+                let spark = &layers[1];
+                assert!(spark.actor_frame_child && !spark.animation_is_beat_based());
+                assert_eq!(spark.frame_count(), 16);
+                let draw = spark.model_draw_at(0.0, 0.0);
+                assert_eq!(
+                    spark.def.rotation_deg,
+                    case["base_rotation"].as_i64().unwrap() as i32
+                );
+                assert_eq!(draw.rot[2], case["spark_rotation"].as_f64().unwrap() as f32);
+                let (sin, cos) = (spark.def.rotation_deg as f32 + draw.rot[2])
+                    .to_radians()
+                    .sin_cos();
+                for (corner, vertex) in [[-6.0, -2.0], [-6.0, 2.0], [6.0, 2.0], [6.0, -2.0]]
+                    .into_iter()
+                    .zip(native["cases"][col]["vertices"].as_array().unwrap())
+                {
+                    let point = [
+                        (corner[0] * cos - corner[1] * sin) * draw.zoom[0],
+                        (corner[0] * sin + corner[1] * cos) * draw.zoom[1],
+                    ];
+                    for axis in 0..2 {
+                        assert!(
+                            (point[axis] - vertex[axis].as_f64().unwrap() as f32).abs() < 1e-4,
+                            "{}: {point:?} != {vertex}",
+                            case["button"]
+                        );
+                    }
+                }
+                for (time, step) in [(0.001, 0), (0.101, 2), (0.251, 5)] {
+                    assert_eq!(
+                        spark.frame_index(time, 999.0),
+                        (case["start_state"].as_u64().unwrap() as usize + step) % 16
+                    );
+                }
+            }
+            if parts.is_some() {
+                assert!(skin.mine_hit_explosion.is_none());
+                continue;
+            }
+            let explosion = skin.mine_hit_explosion.as_ref().unwrap();
+            assert_eq!(explosion.layers.len(), 1);
+            let layer = &explosion.layers[0];
+            assert_eq!(layer.slot.frame_count(), 16);
+            assert!(
+                layer.animation.animation_uses_screen_clock,
+                "HitMine fades must not restart Sprite frames"
+            );
+            assert!((explosion.duration() - 0.6).abs() < 1e-6);
+            for frame in 0..16 {
+                assert_eq!(
+                    layer.slot.frame_index((frame as f32 + 0.5) * 0.05, 999.0),
+                    frame
+                );
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn base_xy_half_turns_match_native_vertices_and_keep_hold_animation() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/base-xy-rotation");
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-output.json")).unwrap()).unwrap();
+        let compare = |slot: &SpriteSlot, case: &serde_json::Value| {
+            let (sin, cos) = (slot.def.rotation_deg as f32).to_radians().sin_cos();
+            for (corner, vertex) in [[-8.0, -8.0], [-8.0, 8.0], [8.0, 8.0], [8.0, -8.0]]
+                .into_iter()
+                .zip(case["vertices"].as_array().unwrap())
+            {
+                let x = if slot.def.mirror_h {
+                    -corner[0]
+                } else {
+                    corner[0]
+                };
+                let y = if slot.def.mirror_v {
+                    -corner[1]
+                } else {
+                    corner[1]
+                };
+                let actual = [x * cos - y * sin, x * sin + y * cos];
+                for axis in 0..2 {
+                    assert!(
+                        (actual[axis] - vertex[axis].as_f64().unwrap() as f32).abs() < 1e-4,
+                        "{} axis {axis}: {actual:?} != {vertex}",
+                        case["name"]
+                    );
+                }
+            }
+        };
+        for case in native["cases"].as_array().unwrap() {
+            let mut slot = super::test_model_slot();
+            slot.model = None;
+            super::itg_apply_rotation(&mut slot, case["rotation"][2].as_f64().unwrap() as i32);
+            super::itg_apply_xy_rotation(
+                &mut slot,
+                Some(case["rotation"][0].as_f64().unwrap() as i32),
+                Some(case["rotation"][1].as_f64().unwrap() as i32),
+            );
+            compare(&slot, case);
+        }
+
+        let root = temp_noteskin_root("base-xy-rotation");
+        for name in [
+            "NoteSkin.lua",
+            "Down Tap Note.lua",
+            "metrics.ini",
+            "_Down Tap Note 16x8.png",
+        ] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        for button in ["Left", "Down", "Up", "Right"] {
+            for kind in ["Hold", "Roll"] {
+                for state in ["Active", "Inactive"] {
+                    for part in ["Body", "BottomCap"] {
+                        fs::copy(
+                            fixture.join("Body 16x1.png"),
+                            root.join(format!("{button} {kind} {part} {state} 16x1.png")),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "base-xy-rotation-fixture".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        let preview = SkinParts::default()
+            .with(SkinPart::Arrows)
+            .with(SkinPart::HoldActive)
+            .with(SkinPart::HoldInactive)
+            .with(SkinPart::RollActive)
+            .with(SkinPart::RollInactive);
+        for bundle in [&bundle, &cached] {
+            for (col, button) in ["Left", "Down", "Up", "Right"].into_iter().enumerate() {
+                for element in [
+                    "Tap Note",
+                    "Tap Fake",
+                    "Hold Head Active",
+                    "Roll Head Inactive",
+                ] {
+                    let layers =
+                        deadsync_noteskin::runtime::itg_resolve_actor_sprites_with_ops_compiled(
+                            &data,
+                            &bundle.loader,
+                            &bundle.actors,
+                            button,
+                            element,
+                            None,
+                            "dance-single",
+                            super::itg_compiled_sprite_ops(),
+                        );
+                    assert_eq!(layers.len(), 1, "{button} {element}");
+                    compare(&layers[0].slot, &native["cases"][col]);
+                }
+            }
+            for parts in [None, Some(preview)] {
+                let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                    &data,
+                    &Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    &bundle.loader,
+                    &bundle.actors,
+                    parts,
+                )
+                .unwrap();
+                for col in 0..4 {
+                    for quant in 0..NUM_QUANTIZATIONS {
+                        compare(
+                            &skin.notes[col * NUM_QUANTIZATIONS + quant],
+                            &native["cases"][col],
+                        );
+                    }
+                    for roll in [false, true] {
+                        let visuals = skin.hold_visuals_for_col(col, roll);
+                        for (part, slot) in [
+                            (NoteAnimPart::HoldBody, visuals.body_active.as_ref()),
+                            (NoteAnimPart::HoldBody, visuals.body_inactive.as_ref()),
+                            (
+                                NoteAnimPart::HoldBottomCap,
+                                visuals.bottomcap_active.as_ref(),
+                            ),
+                            (
+                                NoteAnimPart::HoldBottomCap,
+                                visuals.bottomcap_inactive.as_ref(),
+                            ),
+                        ] {
+                            let Some(slot) = slot else {
+                                assert!(
+                                    parts.is_some() && matches!(part, NoteAnimPart::HoldBottomCap),
+                                    "missing column {col} roll={roll} {part:?}"
+                                );
+                                continue;
+                            };
+                            assert_eq!(slot.frame_count(), 16);
+                            for (beat, expected) in [(0.0, 0), (1.0, 4), (2.0, 8), (3.0, 12)] {
+                                let phase = skin.part_uv_phase(part, 0.0, beat, 0.0);
+                                let frame = slot.frame_index_from_phase(phase);
+                                assert_eq!(frame, expected);
+                                if frame != 0 {
+                                    assert_ne!(
+                                        slot.uv_for_frame_at(frame, 0.0),
+                                        slot.uv_for_frame_at(0, 0.0)
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -715,6 +1185,109 @@ return Def.ActorFrame { children = {
                 assert!(layers[1].texture_key().ends_with("gloss 2x1.png"));
                 assert!(layers[1].model_draw.blend_add);
                 assert!(layers[2].texture_key().ends_with("frame 2x1.png"));
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn implicit_explosion_sheets_animate_without_overriding_explicit_states() {
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("implicit-animation");
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/implicit-animation");
+        for name in [
+            "NoteSkin.lua",
+            "Fallback Explosion.lua",
+            "Down Tap Explosion 2x1.png",
+        ] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "implicit-animation".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::default(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for bundle in [&bundle, &cached] {
+            let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                &data,
+                &Style {
+                    num_cols: 4,
+                    num_players: 1,
+                },
+                &bundle.loader,
+                &bundle.actors,
+                None,
+            )
+            .unwrap();
+            for col in 0..4 {
+                for bright in [false, true] {
+                    for window in ["W1", "W2", "W3", "W4", "W5"] {
+                        let explosion = skin
+                            .tap_explosion_for_col_with_bright(col, window, bright)
+                            .unwrap();
+                        let visible = explosion
+                            .layers
+                            .iter()
+                            .filter(|layer| {
+                                let state = layer.animation.state_at(0.05);
+                                state.visible && state.diffuse[3] > 0.0
+                            })
+                            .collect::<Vec<_>>();
+                        assert_eq!(
+                            visible.len(),
+                            1,
+                            "{window} {bright}: only the selected judgment flashes"
+                        );
+                        let slot = &visible[0].slot;
+                        assert_eq!(
+                            visible[0].animation.draw_order,
+                            if window == "W1" { 90 } else { 0 }
+                        );
+                        assert_eq!(
+                            visible[0].animation.animation_uses_screen_clock,
+                            window != "W5"
+                        );
+                        assert!((explosion.duration() - 0.22).abs() < 1e-6);
+                        if matches!(window, "W3" | "W4") {
+                            assert_eq!(slot.source.frame_count(), 1);
+                            assert_eq!(slot.def.src, [64, 0]);
+                            let uv = slot.uv_for_frame_at(0, 0.0);
+                            for seconds in [0.0, 0.05, 0.15, 0.35] {
+                                assert_eq!(
+                                    slot.uv_for_frame_at(slot.frame_index(seconds, 99.0), seconds),
+                                    uv
+                                );
+                            }
+                        } else {
+                            assert_eq!(
+                                slot.source.frame_count(),
+                                2,
+                                "{window}: retain both texture frames"
+                            );
+                            for (seconds, frame) in [
+                                (0.0, 0),
+                                (0.05, 0),
+                                (0.1, 1),
+                                (0.15, 1),
+                                (0.2, 0),
+                                (0.35, 1),
+                            ] {
+                                assert_eq!(
+                                    slot.frame_index(seconds, 99.0),
+                                    frame,
+                                    "{window}: native frame at {seconds}s"
+                                );
+                            }
+                        }
+                    }
+                }
             }
         }
         fs::remove_dir_all(root).unwrap();
@@ -1700,6 +2273,306 @@ end }
             }
         }
         fs::remove_dir_all(root).expect("remove synthetic skin");
+    }
+
+    #[test]
+    fn game_aware_loader_resolves_runtime_assets_after_cache_reload() {
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("game-aware");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            include_str!("../../../deadsync-noteskin/tests/fixtures/game-aware/NoteSkin.lua"),
+        )
+        .unwrap();
+        for button in ["Outer", "Inner"] {
+            fs::write(
+                root.join(format!("{button} Tap Note.lua")),
+                format!("return Def.ActorFrame {{\n    Def.Sprite {{\n        Texture=\"_{button}Note\";\n        Frame0000=0;\n        Delay0000=1;\n    }};\n}}\n"),
+            )
+            .unwrap();
+            write_noteskin_png(&root.join(format!("_{button}Note.png")));
+            write_noteskin_png(&root.join(format!("{button} Receptor.png")));
+            for kind in ["Hold", "Roll"] {
+                for part in ["Body", "BottomCap", "TopCap"] {
+                    for state in ["Active", "Inactive"] {
+                        write_noteskin_png(
+                            &root.join(format!("{button} {kind} {part} {state}.png")),
+                        );
+                    }
+                }
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "game-aware".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "")
+            .expect("compile synthetic loader");
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let skin = super::load_itg_sprite_noteskin_parts_compiled(
+            &data,
+            &style,
+            &bundle.loader,
+            &bundle.actors,
+            None,
+        )
+        .expect("load synthetic runtime from cache");
+        for (col, target) in ["Outer", "Inner", "Outer", "Inner"].into_iter().enumerate() {
+            let note = format!("_{target}Note.png");
+            for quant in 0..NUM_QUANTIZATIONS {
+                assert!(
+                    skin.notes[col * NUM_QUANTIZATIONS + quant]
+                        .texture_key()
+                        .ends_with(&note)
+                );
+            }
+            assert!(
+                skin.receptor_off[col]
+                    .texture_key()
+                    .ends_with(&format!("{target} Receptor.png"))
+            );
+            for (is_roll, kind) in [(false, "Hold"), (true, "Roll")] {
+                let visuals = skin.hold_visuals_for_col(col, is_roll);
+                // Heads redirected to Tap Note reuse the quantized arrow slots.
+                assert!(visuals.head_active.is_none());
+                assert!(visuals.head_inactive.is_none());
+                for (state, body, cap) in [
+                    ("Active", &visuals.body_active, &visuals.bottomcap_active),
+                    (
+                        "Inactive",
+                        &visuals.body_inactive,
+                        &visuals.bottomcap_inactive,
+                    ),
+                ] {
+                    for (part, slot) in [("Body", body), ("BottomCap", cap)] {
+                        let expected = format!("{target} {kind} {part} {state}.png");
+                        assert!(
+                            slot.as_ref()
+                                .expect("redirected hold part")
+                                .texture_key()
+                                .ends_with(&expected)
+                        );
+                    }
+                }
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn screen_height_receptor_transform_survives_cache_reload_and_logical_sizes() {
+        use deadlib_present::space::{self, Metrics};
+        use deadsync_noteskin::{
+            compiled, compiler,
+            runtime::{SkinPart, SkinParts},
+        };
+        init_asset_paths();
+        let root = temp_noteskin_root("screen-globals");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Receptor" then
+        return LoadActor(NOTESKIN:GetPath("Down", "Receptor"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "_arrow"))
+end }
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("Down Receptor.lua"),
+            include_str!("../../../deadsync-noteskin/tests/fixtures/screen-globals/Receptor.lua"),
+        )
+        .unwrap();
+        image::RgbaImage::from_pixel(64, 1, image::Rgba([255; 4]))
+            .save(root.join("_backdrop.png"))
+            .unwrap();
+        write_noteskin_png(&root.join("_arrow.png"));
+        let data = noteskin_itg::NoteskinData {
+            overrides: Vec::new(),
+            name: "screen-globals".into(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let cache = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&cache, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&cache).unwrap();
+        assert!(
+            bundle.actors.files.iter().any(|file| {
+                file.decl.sprites.iter().any(|sprite| {
+                    sprite
+                        .commands
+                        .values()
+                        .any(|script| script.contains("SCREEN_HEIGHT"))
+                })
+            }),
+            "cached commands must retain screen globals"
+        );
+        let original_metrics = Metrics::centered(space::screen_width(), space::screen_height());
+        for (width, height) in [(640.0, 480.0), (800.0, 600.0)] {
+            space::set_current_metrics(Metrics::centered(width, height));
+            for parts in [None, Some(SkinParts::default().with(SkinPart::Receptors))] {
+                let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                    &data,
+                    &Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    &bundle.loader,
+                    &bundle.actors,
+                    parts,
+                )
+                .unwrap();
+                for background in &skin.receptor_off {
+                    let draw = background.model_draw_at(0.0, 0.0);
+                    assert_eq!(background.def.size, [64, 1]);
+                    assert_eq!(draw.zoom, [1.0, height, 1.0]);
+                    assert_eq!(draw.vert_align, 1.0);
+                    assert_eq!(draw.rot, [0.0, 0.0, 180.0]);
+                    assert_eq!(background.logical_size()[1] * draw.zoom[1], height);
+                }
+            }
+        }
+        space::set_current_metrics(original_metrics);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn layered_receptor_and_frame_explosion_keep_visible_children() {
+        use deadlib_present::space::{self, Metrics};
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("actor-layers");
+        fs::write(
+            root.join("NoteSkin.lua"),
+            r#"
+return { Load = function()
+    local element = Var "Element"
+    if element == "Receptor" or element == "Explosion" then
+        return LoadActor(NOTESKIN:GetPath("Down", element))
+    end
+    if string.find(element, "Tap Explosion") then
+        return LoadActor(NOTESKIN:GetPath("Down", "Flash"))
+    end
+    return LoadActor(NOTESKIN:GetPath("", "_note"))
+end }
+"#,
+        )
+        .unwrap();
+        for (name, source) in [
+            (
+                "Receptor",
+                include_str!("../../../deadsync-noteskin/tests/fixtures/actor-layers/Receptor.lua"),
+            ),
+            (
+                "Flash",
+                include_str!("../../../deadsync-noteskin/tests/fixtures/actor-layers/Flash.lua"),
+            ),
+            (
+                "Explosion",
+                include_str!(
+                    "../../../deadsync-noteskin/tests/fixtures/actor-layers/Explosion.lua"
+                ),
+            ),
+        ] {
+            fs::write(root.join(format!("Down {name}.lua")), source).unwrap();
+        }
+        for (name, width, height) in [
+            ("_rail", 64, 1),
+            ("_press", 64, 64),
+            ("_target 4x1", 256, 32),
+            ("_flash 16x1", 1024, 64),
+            ("_note", 64, 20),
+        ] {
+            image::RgbaImage::from_pixel(width, height, image::Rgba([255; 4]))
+                .save(root.join(format!("{name}.png")))
+                .unwrap();
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "actor-layers".into(),
+            overrides: Vec::new(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let bundle = compiled::load_compiled_bundle(&path).unwrap();
+        let old = Metrics::centered(space::screen_width(), space::screen_height());
+        space::set_current_metrics(Metrics::centered(854.0, 480.0));
+        let skin = super::load_itg_sprite_noteskin_parts_compiled(
+            &data,
+            &Style {
+                num_cols: 4,
+                num_players: 1,
+            },
+            &bundle.loader,
+            &bundle.actors,
+            None,
+        )
+        .unwrap();
+        for col in 0..4 {
+            assert!(
+                skin.receptor_off[col]
+                    .texture_key()
+                    .ends_with("_target 4x1.png")
+            );
+            assert!(
+                skin.receptor_glow[col]
+                    .as_ref()
+                    .unwrap()
+                    .texture_key()
+                    .ends_with("_press.png")
+            );
+            assert!(skin.receptor_idle_glow_layers[col].is_none());
+            assert_eq!(skin.receptor_overlays[col].len(), 1);
+            let rail = &skin.receptor_overlays[col][0];
+            assert!(rail.before_target);
+            assert_eq!(rail.slot.model_draw.zoom, [1.0, 480.0, 1.0]);
+            for bright in [false, true] {
+                let flash = skin
+                    .tap_explosion_for_col_with_bright(col, "W1", bright)
+                    .unwrap();
+                assert!((flash.duration() - 0.31).abs() < 1e-6);
+                assert!(
+                    flash.layers.iter().any(|layer| {
+                        let state = layer.animation.state_at(0.05);
+                        state.visible && state.diffuse[3] > 0.99
+                    }),
+                    "{bright}: {flash:?}"
+                );
+                assert!(
+                    flash
+                        .layers
+                        .iter()
+                        .all(|layer| layer.animation.state_at(0.32).diffuse[3] == 0.0)
+                );
+                let hidden = skin
+                    .tap_explosion_for_col_with_bright(col, "W2", bright)
+                    .unwrap();
+                assert!(
+                    hidden
+                        .layers
+                        .iter()
+                        .all(|layer| layer.animation.state_at(0.0).diffuse[3] == 0.0)
+                );
+            }
+        }
+        assert!(skin.receptor_glow_behavior.draw_before_target);
+        space::set_current_metrics(old);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

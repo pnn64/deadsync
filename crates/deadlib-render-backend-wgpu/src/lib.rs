@@ -114,6 +114,7 @@ struct PipelineSet {
     add: wgpu::RenderPipeline,
     multiply: wgpu::RenderPipeline,
     subtract: wgpu::RenderPipeline,
+    no_effect: wgpu::RenderPipeline,
 }
 
 impl PipelineSet {
@@ -124,6 +125,7 @@ impl PipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -133,6 +135,7 @@ struct MeshPipelineSet {
     add: wgpu::RenderPipeline,
     multiply: wgpu::RenderPipeline,
     subtract: wgpu::RenderPipeline,
+    no_effect: wgpu::RenderPipeline,
 }
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
@@ -145,6 +148,7 @@ impl MeshPipelineSet {
             BlendMode::Add => &self.add,
             BlendMode::Multiply => &self.multiply,
             BlendMode::Subtract => &self.subtract,
+            BlendMode::NoEffect => &self.no_effect,
         }
     }
 }
@@ -233,7 +237,7 @@ struct CapturePipelines {
     video: [PipelineSet; 2],
     meshes: [MeshPipelineSet; 2],
     textured: [PipelineSet; 2],
-    depth: Option<[PipelineSet; 2]>,
+    depth: Option<[[PipelineSet; 6]; 2]>,
     depth_clear: Option<wgpu::RenderPipeline>,
 }
 
@@ -441,7 +445,7 @@ pub struct State {
     yuv_pipelines: PipelineSet,
     mesh_pipelines: MeshPipelineSet,
     tmesh_pipelines: PipelineSet,
-    tmesh_depth_pipelines: PipelineSet,
+    tmesh_depth_pipelines: [PipelineSet; 6],
     depth_clear_pipeline: wgpu::RenderPipeline,
     capture_pipelines: [[CapturePipelines; 2]; 2],
     depth_texture: wgpu::Texture,
@@ -772,22 +776,24 @@ fn init(
                         &pipeline_layout,
                         format,
                         &tmesh_shader,
-                        false,
+                        deadlib_render_core::DepthMode::Off,
                         write,
                         depth_format,
                     )
                 }),
                 depth: depth_format.map(|format_depth| {
                     writes.map(|write| {
+                        deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
                         build_tmesh_pipelines(
                             &device,
                             &pipeline_layout,
                             format,
                             &tmesh_shader,
-                            true,
+                                depth_mode,
                             write,
                             Some(format_depth),
                         )
+                        })
                     })
                 }),
                 depth_clear: depth_format
@@ -1525,7 +1531,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
     let mut last_sprite_yuv = None;
     let mut bindings = DrawBindingCache::default();
     let mut tmesh_buffer_cache = TexturedMeshBufferCache::default();
-    let mut last_tmesh_depth_test = false;
+    let mut last_tmesh_depth = None;
     let pipelines = if let Some(capture) = capture {
         &capture.sprites[write_alpha as usize]
     } else {
@@ -1551,9 +1557,8 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
             .depth
             .as_ref()
             .map(|p| &p[write_alpha as usize])
-            .unwrap_or(tmesh_pipelines)
     } else {
-        &state.tmesh_depth_pipelines
+        Some(&state.tmesh_depth_pipelines)
     };
     for op in data.ops {
         if has_depth && matches!(op, DrawOp::TexturedMesh(run) if run.clear_depth) {
@@ -1705,16 +1710,21 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                     last_blend = None;
                     tmesh_buffer_cache.reset();
                 }
+                let depth_mode = if has_depth {
+                    run.depth_mode()
+                } else {
+                    deadlib_render_core::DepthMode::Off
+                };
                 if last_blend != Some(run.blend)
-                    || last_tmesh_depth_test != (has_depth && run.depth_test)
+                    || last_tmesh_depth != Some(depth_mode)
                 {
-                    pass.set_pipeline(if has_depth && run.depth_test {
-                        tmesh_depth_pipelines.get(run.blend)
+                    pass.set_pipeline(if let Some(pipelines) = tmesh_depth_pipelines {
+                        pipelines[depth_mode as usize].get(run.blend)
                     } else {
                         tmesh_pipelines.get(run.blend)
                     });
                     last_blend = Some(run.blend);
-                    last_tmesh_depth_test = has_depth && run.depth_test;
+                    last_tmesh_depth = Some(depth_mode);
                 }
                 if bindings.camera_required(run.camera) {
                     set_camera(
@@ -2994,6 +3004,18 @@ fn blend_state(mode: BlendMode) -> Option<wgpu::BlendState> {
         operation: op,
     };
     match mode {
+        BlendMode::NoEffect => Some(wgpu::BlendState {
+            color: comp(
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+            alpha: comp(
+                wgpu::BlendFactor::Zero,
+                wgpu::BlendFactor::One,
+                wgpu::BlendOperation::Add,
+            ),
+        }),
         BlendMode::Alpha => Some(wgpu::BlendState {
             color: comp(
                 wgpu::BlendFactor::SrcAlpha,
@@ -3147,6 +3169,15 @@ fn build_pipelines(
             write_mask,
             depth_format,
         ),
+        no_effect: build_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            write_mask,
+            depth_format,
+        ),
     }
 }
 
@@ -3237,6 +3268,15 @@ fn build_mesh_pipelines(
             write_mask,
             depth_format,
         ),
+        no_effect: build_mesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            write_mask,
+            depth_format,
+        ),
     }
 }
 
@@ -3245,7 +3285,7 @@ fn build_textured_mesh_pipeline_set(
     proj: &ProjState,
     pipeline_layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
-) -> (wgpu::ShaderModule, PipelineSet, PipelineSet) {
+) -> (wgpu::ShaderModule, PipelineSet, [PipelineSet; 6]) {
     let shader_src = match proj {
         ProjState::Immediates => TMESH_SHADER_IMM,
         ProjState::Uniform { .. } => TMESH_SHADER_UBO,
@@ -3260,19 +3300,21 @@ fn build_textured_mesh_pipeline_set(
         pipeline_layout,
         format,
         &shader,
-        false,
+        deadlib_render_core::DepthMode::Off,
         surface_write_mask(),
         Some(DEPTH_FORMAT),
     );
-    let depth_pipelines = build_tmesh_pipelines(
+    let depth_pipelines = deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
+        build_tmesh_pipelines(
         device,
         pipeline_layout,
         format,
         &shader,
-        true,
+            depth_mode,
         surface_write_mask(),
         Some(DEPTH_FORMAT),
-    );
+        )
+    });
 
     (shader, pipelines, depth_pipelines)
 }
@@ -3282,7 +3324,7 @@ fn build_tmesh_pipelines(
     layout: &wgpu::PipelineLayout,
     format: wgpu::TextureFormat,
     shader: &wgpu::ShaderModule,
-    use_depth: bool,
+    depth_mode: deadlib_render_core::DepthMode,
     write_mask: wgpu::ColorWrites,
     depth_format: Option<wgpu::TextureFormat>,
 ) -> PipelineSet {
@@ -3293,7 +3335,7 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Alpha,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
             depth_format,
         ),
@@ -3303,7 +3345,7 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Add,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
             depth_format,
         ),
@@ -3313,7 +3355,7 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Multiply,
             shader,
-            use_depth,
+            depth_mode,
             write_mask,
             depth_format,
         ),
@@ -3323,7 +3365,17 @@ fn build_tmesh_pipelines(
             format,
             BlendMode::Subtract,
             shader,
-            use_depth,
+            depth_mode,
+            write_mask,
+            depth_format,
+        ),
+        no_effect: build_tmesh_pipeline(
+            device,
+            layout,
+            format,
+            BlendMode::NoEffect,
+            shader,
+            depth_mode,
             write_mask,
             depth_format,
         ),
@@ -3487,7 +3539,7 @@ fn build_tmesh_pipeline(
     format: wgpu::TextureFormat,
     mode: BlendMode,
     shader: &wgpu::ShaderModule,
-    use_depth: bool,
+    depth_mode: deadlib_render_core::DepthMode,
     write_mask: wgpu::ColorWrites,
     depth_format: Option<wgpu::TextureFormat>,
 ) -> wgpu::RenderPipeline {
@@ -3526,8 +3578,10 @@ fn build_tmesh_pipeline(
         },
         depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
             format,
-            depth_write_enabled: Some(use_depth),
-            depth_compare: Some(if use_depth {
+            depth_write_enabled: Some(depth_mode.writes()),
+            depth_compare: Some(if depth_mode.on_fail() {
+                wgpu::CompareFunction::Greater
+            } else if depth_mode.tests() {
                 wgpu::CompareFunction::LessEqual
             } else {
                 wgpu::CompareFunction::Always
@@ -3932,6 +3986,8 @@ mod tests {
                 instance_start: 0,
                 instance_count: 1,
                 depth_test: false,
+                depth_write: false,
+                depth_test_on_fail: false,
                 clear_depth: false,
             })],
         };
@@ -3941,6 +3997,7 @@ mod tests {
                 unreachable!()
             };
             run.depth_test = depth;
+            run.depth_write = depth;
             for (transform, expected) in [
                 (Matrix4::IDENTITY, [0, 255, 0]),
                 (

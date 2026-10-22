@@ -1,3 +1,8 @@
+The current `native.json` was regenerated with harness **0.1.95**. See
+[`native-capture-manifest.json`](../native-capture-manifest.json) for its
+request, resources, binary and source revision. Version-specific capture notes
+below describe the earlier capture; numerical observations were retained.
+
 This control compares production Model material clocks with an independent
 native ITGmania actor tree across 121 updates at 60 Hz. The four Models cover
 queued `setstate`, a Model's own hibernation, parent hibernation, and a parent

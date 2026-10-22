@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "scope": "Refreshed short controls; historical and full-song captures are inventoried separately.",
+  "harness_version": "0.1.95",
+  "harness_revision": "91f69c2333db9600c7ab251145ac7269a46cfd64",
+  "itgmania_revision": "5c737928d93778c2c9f68e276052b220b43a468f",
+  "primary_itgmania_revision": "704cdd5624155f743b59b8b64fedeb0588dae067",
+  "groups": [
+    {
+      "requests": "tests/fixtures/itgmania-actors/inputs/manifest.json",
+      "captures": "tests/fixtures/itgmania-actors/capture-manifest.json"
+    },
+    {
+      "requests": "tests/fixtures/itgmania-song-lua-micro/refresh-inputs.json",
+      "captures": "tests/fixtures/itgmania-song-lua-micro/capture-manifest.json"
+    },
+    {
+      "requests": "tests/fixtures/itgmania-song-lua-micro/native-refresh-inputs.json",
+      "captures": "tests/fixtures/itgmania-song-lua-micro/native-capture-manifest.json"
+    },
+    {
+      "requests": "tests/fixtures/itgmania-song-lua-micro/legacy-native-refresh-inputs.json",
+      "captures": "tests/fixtures/itgmania-song-lua-micro/legacy-native-capture-manifest.json"
+    },
+    {
+      "requests": "tests/fixtures/itgmania-song-lua-micro/context-refresh-inputs.json",
+      "captures": "tests/fixtures/itgmania-song-lua-micro/context-capture-manifest.json",
+      "harness_version": "0.1.95+primary-codecs.micro-controls2",
+      "driver": "scripts/oracle_micro_control.rs",
+      "cli_patch": "tests/fixtures/itgmania-song-lua-micro/context-inputs/micro-cli.patch",
+      "native_setup_patch": "tests/fixtures/itgmania-song-lua-micro/context-inputs/micro-native-setup.patch"
+    },
+    {
+      "requests": "tests/fixtures/itgmania-song-lua-micro/empty-song/refresh-inputs.json",
+      "captures": "tests/fixtures/itgmania-song-lua-micro/empty-song/capture-manifest.json"
+    }
+  ],
+  "primary_bitmap_capture_sha256": "6bc6116564a97f9b2d17acb1a3c0a80a114452fee92bedce63b0283b89716ea1",
+  "native_gameplay_controls": {
+    "requests": "tests/fixtures/itgmania-song-lua-micro/gameplay-refresh-inputs.json",
+    "captures": "tests/fixtures/itgmania-song-lua-micro/gameplay-capture-manifest.json"
+  },
+  "native_notefield_controls": {
+    "requests": "tests/fixtures/itgmania-song-lua-micro/notefield-refresh-inputs.json",
+    "captures": "tests/fixtures/itgmania-song-lua-micro/notefield-capture-manifest.json"
+  },
+  "historical_captures": [
+    {
+      "path": "tests/fixtures/itgmania-song-lua-micro/seventh-notefield-native.json",
+      "sha256": "1bbd8c78527093787113feee7865cd4854204b0e780761b9664cc9dcdde65b91",
+      "superseded_by": "tests/fixtures/itgmania-song-lua-micro/seventh-current-704cdd-native.json.zst",
+      "scope": "Historical native build; no active parity test consumes this file. Only its historical integrity hash is checked. The focused full-song test uses the primary-revision capture."
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "song_dir": "tests/fixtures/song-lua",
+  "title": "Native startup-speed-defaults control",
+  "difficulty": "Challenge",
+  "steps_type": "dance-single",
+  "description": "",
+  "difficulty_code": 4,
+  "steps_type_code": 0,
+  "max_beat": 4.0,
+  "bpm": 60.0,
+  "bpm_segments": [
+    [
+      0.0,
+      60.0
+    ]
+  ],
+  "beat_step": 0.25,
+  "max_events": 500000,
+  "random_seed": 1,
+  "entries": [
+    {
+      "path": "tests/fixtures/song-lua/startup-speed-defaults.lua",
+      "layer": "foreground",
+      "index": 0,
+      "start_beat": 0
+    }
+  ],
+  "simfile": "tests/fixtures/itgmania-song-lua-micro/context-inputs/simfiles/startup-speed-defaults.ssc"
+}

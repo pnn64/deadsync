@@ -521,6 +521,168 @@ pub(crate) fn pack_ini_entry(index: &PackIndex) -> Option<usize> {
     best.map(|(_, ix)| ix)
 }
 
+/// The image types a song's art can be, as deadsync-simfile's song art
+/// search lists them.
+const SONG_ART_EXTENSIONS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "bmp"];
+/// The largest banner a song may borrow from its pack: the most the
+/// itgcontent.net relay serves as a card's art.
+const MAX_BORROWED_BANNER_BYTES: u64 = 4 * 1024 * 1024;
+
+/// A path's parts, split at either slash as song folders are.
+fn path_parts(name: &str) -> impl Iterator<Item = &str> {
+    name.split(['/', '\\']).filter(|part| !part.is_empty())
+}
+
+fn is_song_art(file_name: &str) -> bool {
+    let extension = extension(file_name);
+    SONG_ART_EXTENSIONS
+        .iter()
+        .any(|known| extension.eq_ignore_ascii_case(known))
+}
+
+/// Whether the song art search takes an image of this name for the banner
+/// when the simfile's `#BANNER` finds nothing: its name less the extension
+/// holds `banner`, or ends ` bn`, case aside. ITGmania looks the same way
+/// (`Song::TidyUpData`), and so does `resolve_song_artwork_like_itg`.
+fn named_like_banner(file_name: &str) -> bool {
+    let stem = file_name
+        .rsplit_once('.')
+        .map_or(file_name, |(stem, _)| stem)
+        .to_ascii_lowercase();
+    stem.contains("banner") || stem.ends_with(" bn")
+}
+
+/// The banner a song borrows from its pack: the image its simfile's
+/// `#BANNER` names outside the song's own folder -- `../banner.png`, the
+/// pack's own -- and the name it takes inside the folder.
+///
+/// A folder on its own, as a booster or a single-song install has it, shows
+/// no banner: the tag leads out of it to nothing. With the image inside,
+/// named so the song art search takes it once the tag finds nothing
+/// ([`named_like_banner`]), it shows the one it showed in its pack. The
+/// image keeps its own name where that is such a name, else it is
+/// `banner.<ext>`; the site's song downloads bring the same file the same
+/// way. `None` when the tag names no image outside the folder, or one too
+/// large to be a banner, and when the folder already holds an image named
+/// like a banner, which the search would take first.
+pub(crate) fn borrowed_banner(
+    index: &PackIndex,
+    folder: usize,
+    banner_tag: &str,
+) -> Option<(usize, String)> {
+    let song = index.folders.get(folder)?;
+    let first = index.entries.get(*song.entries.first()?)?;
+    let dir: Vec<&str> = path_parts(&first.name).take(2).collect();
+    if dir.len() < 2 || banner_tag.trim().is_empty() {
+        return None;
+    }
+    let mut want = dir.clone();
+    for part in path_parts(banner_tag) {
+        match part {
+            "." => {}
+            ".." => {
+                want.pop();
+            }
+            part => want.push(part),
+        }
+    }
+    // In the folder, or under it: the folder brings it.
+    if want.len() > dir.len()
+        && want
+            .iter()
+            .zip(&dir)
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
+    {
+        return None;
+    }
+    let (at, image) = index.entries.iter().enumerate().find(|(_, entry)| {
+        if entry.is_dir() {
+            return false;
+        }
+        let mut parts = path_parts(&entry.name);
+        want.iter().all(|wanted| {
+            parts
+                .next()
+                .is_some_and(|part| part.eq_ignore_ascii_case(wanted))
+        }) && parts.next().is_none()
+    })?;
+    let file = path_parts(&image.name).last()?;
+    if !is_song_art(file) || image.uncompressed > MAX_BORROWED_BANNER_BYTES {
+        return None;
+    }
+    let has_own = song
+        .entries
+        .iter()
+        .filter_map(|&own| index.entries.get(own))
+        .any(|own| {
+            !own.is_dir()
+                && path_parts(&own.name).count() == 3
+                && path_parts(&own.name)
+                    .last()
+                    .is_some_and(|name| is_song_art(name) && named_like_banner(name))
+        });
+    if has_own {
+        return None;
+    }
+    let name = if named_like_banner(file) {
+        file.to_owned()
+    } else {
+        format!("banner.{}", extension(file).to_ascii_lowercase())
+    };
+    Some((at, name))
+}
+
+/// [`borrowed_banner`], fetched into `staged` -- the song's folder as
+/// [`fetch_folder`] or [`fetch_folder_skipping`] just wrote it -- going by
+/// the `#BANNER` of the simfile written there. Returns the name it took.
+///
+/// One request of its own, for a song that borrows. A banner that cannot be
+/// had is only logged: the song plays as well without it.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn fetch_borrowed_banner(
+    agent: &network::HttpAgent,
+    index: &PackIndex,
+    folder: usize,
+    staged: &Path,
+) -> Option<String> {
+    fetch_borrowed_banner_with(&mut Http::new(agent, index.pack_id), index, folder, staged)
+}
+
+fn fetch_borrowed_banner_with(
+    transport: &mut dyn Transport,
+    index: &PackIndex,
+    folder: usize,
+    staged: &Path,
+) -> Option<String> {
+    let simfile = index.folders.get(folder)?.simfile?;
+    let relative: PathBuf = path_parts(&index.entries.get(simfile)?.name)
+        .skip(2)
+        .collect();
+    let tag = simfile_banner(&fs::read(staged.join(relative)).ok()?);
+    let (entry, name) = borrowed_banner(index, folder, &tag)?;
+    let dest = staged.join(&name);
+    if dest.exists() {
+        return None;
+    }
+    match fetch_entry_to_file_with(
+        transport,
+        index,
+        entry,
+        &dest,
+        MAX_BORROWED_BANNER_BYTES,
+        &mut |_, _| true,
+    ) {
+        Ok(_) => Some(name),
+        Err(error) => {
+            log::warn!(
+                "Could not fetch the banner '{}' borrows from its pack: {error}",
+                staged.display()
+            );
+            None
+        }
+    }
+}
+
 /// [`fetch_folder`], leaving out every entry `skip` names -- `.oldsync`
 /// backups, for one -- and reading `also` (a small entry outside the folder,
 /// such as the pack's `Pack.ini`) inflated into memory in the same request,
@@ -2640,6 +2802,34 @@ pub(crate) fn simfile_tags(bytes: &[u8]) -> SimfileTags {
     tags
 }
 
+/// The song's own `#BANNER`, read as [`simfile_tags`] reads the header: the
+/// last one before the first chart, `""` when there is none.
+pub(crate) fn simfile_banner(bytes: &[u8]) -> String {
+    let mut banner = String::new();
+    let mut at = 0;
+    while let Some(start) = next_tag(bytes, at) {
+        let (name, value_at) = read_tag_name(bytes, start);
+        let name = name.trim_ascii();
+        if name.eq_ignore_ascii_case(b"NOTES")
+            || name.eq_ignore_ascii_case(b"NOTES2")
+            || name.eq_ignore_ascii_case(b"NOTEDATA")
+        {
+            break;
+        }
+        let Some(value_at) = value_at else {
+            at = start + 1;
+            continue;
+        };
+        let keep = name.eq_ignore_ascii_case(b"BANNER");
+        let (value, next) = read_tag_value(bytes, value_at, keep);
+        if keep {
+            banner = String::from_utf8_lossy(value.trim_ascii()).into_owned();
+        }
+        at = next;
+    }
+    banner
+}
+
 /// The next `#` from `at` that is not inside a comment.
 fn next_tag(bytes: &[u8], mut at: usize) -> Option<usize> {
     while at < bytes.len() {
@@ -3897,6 +4087,189 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
         assert_eq!(fs::read(&filler_dest).expect("filler"), b"#TITLE:Filler;");
 
         fs::remove_dir_all(dir).expect("clean fixture root");
+    }
+
+    /// A pack whose banner is its own, at its root, which some of its songs'
+    /// simfiles name one folder up. The banner is first and a filler follows
+    /// it, so it lies outside the tail and has to be fetched.
+    fn borrowing_pack() -> Vec<u8> {
+        build_zip(&[
+            Item::Stored("Pack/banner.png", &noise(2_000, 21)),
+            Item::Stored("Pack/Filler/filler.bin", &noise(150_000, 22)),
+            Item::Stored("Pack/Pack Logo.jpg", &noise(1_500, 23)),
+            Item::Stored("Pack/notes.txt", b"not art"),
+            Item::Deflated(
+                "Pack/Borrows/borrows.sm",
+                b"#TITLE:Borrows;\n#BANNER:../banner.png;\n#NOTES:\n",
+            ),
+            Item::Stored("Pack/Borrows/borrows.ogg", &noise(5_000, 24)),
+            Item::Deflated(
+                "Pack/Renamed/renamed.ssc",
+                b"#TITLE:Renamed;\n#BANNER:../pack logo.JPG;\n#NOTEDATA:;\n",
+            ),
+            Item::Deflated(
+                "Pack/Own/own.sm",
+                b"#TITLE:Own;\n#BANNER:../banner.png;\n#NOTES:\n",
+            ),
+            Item::Stored("Pack/Own/Own BN.png", &noise(1_000, 25)),
+            Item::Deflated(
+                "Pack/Inside/inside.sm",
+                b"#TITLE:Inside;\n#BANNER:art/inside.png;\n#NOTES:\n",
+            ),
+            Item::Stored("Pack/Inside/art/inside.png", &noise(1_000, 26)),
+            Item::Deflated(
+                "Pack/Text/text.sm",
+                b"#TITLE:Text;\n#BANNER:../notes.txt;\n#NOTES:\n",
+            ),
+        ])
+    }
+
+    #[test]
+    fn a_simfiles_banner_is_its_last_header_banner() {
+        let text = b"#TITLE:Song;\n#BANNER:first.png;\n// #BANNER:commented.png;\n\
+                     #BANNER: ../banner.png ;\n#NOTES:\n#BANNER:chart.png;\n";
+        assert_eq!(simfile_banner(text), "../banner.png");
+        assert_eq!(
+            simfile_banner(b"#TITLE:Song;\n#NOTEDATA:;\n#BANNER:late.png;"),
+            ""
+        );
+        assert_eq!(simfile_banner(b"#TITLE:Song;"), "");
+    }
+
+    #[test]
+    fn a_banners_name_is_one_the_song_art_search_takes() {
+        for name in [
+            "banner.png",
+            "BANNER.JPG",
+            "bannergirls.png",
+            "Stamina Showcase 3-Banner.png",
+            "R.E.L Bn.png",
+        ] {
+            assert!(named_like_banner(name), "{name}");
+        }
+        for name in [
+            "betterond-bn.png",
+            "srpg10bsnbn.png",
+            "bn.png",
+            "abnormal.png",
+            "pack.png",
+        ] {
+            assert!(!named_like_banner(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_song_borrows_the_image_its_simfile_names_in_its_pack() {
+        let mut server = FakeServer::new(borrowing_pack());
+        let index = fetch_index_with(&mut server, 5, 5).expect("index");
+        let folder = |name: &str| {
+            index
+                .folders
+                .iter()
+                .position(|folder| folder.name == name)
+                .expect("folder")
+        };
+        let entry = |name: &str| {
+            index
+                .entries
+                .iter()
+                .position(|entry| entry.name == name)
+                .expect("entry")
+        };
+        assert_eq!(
+            borrowed_banner(&index, folder("Borrows"), "../banner.png"),
+            Some((entry("Pack/banner.png"), "banner.png".to_owned()))
+        );
+        // Not named like a banner: in it comes as banner.<ext>, and the tag
+        // finds it whatever its case.
+        assert_eq!(
+            borrowed_banner(&index, folder("Renamed"), "../pack logo.JPG"),
+            Some((entry("Pack/Pack Logo.jpg"), "banner.jpg".to_owned()))
+        );
+        // A folder with an image named like a banner shows that one.
+        assert_eq!(
+            borrowed_banner(&index, folder("Own"), "../banner.png"),
+            None
+        );
+        // In the folder, or under it: the folder brings it.
+        assert_eq!(
+            borrowed_banner(&index, folder("Inside"), "art/inside.png"),
+            None
+        );
+        // An image, and one that is there.
+        assert_eq!(
+            borrowed_banner(&index, folder("Text"), "../notes.txt"),
+            None
+        );
+        assert_eq!(
+            borrowed_banner(&index, folder("Borrows"), "../missing.png"),
+            None
+        );
+        assert_eq!(borrowed_banner(&index, folder("Borrows"), ""), None);
+    }
+
+    #[test]
+    fn a_borrowed_banner_is_fetched_into_the_staged_song() {
+        let mut server = FakeServer::new(borrowing_pack());
+        let index = fetch_index_with(&mut server, 5, 5).expect("index");
+        let folder = |name: &str| {
+            index
+                .folders
+                .iter()
+                .position(|folder| folder.name == name)
+                .expect("folder")
+        };
+        let dir = temp_dir("borrow");
+        let staging = dir.join("staging");
+        let written = fetch_folder_with(
+            &mut server,
+            &index,
+            folder("Borrows"),
+            &dir.join("borrows.part"),
+            &staging,
+            MAX,
+            &mut accept_all(),
+        )
+        .expect("song");
+        let staged = staging.join(&written);
+
+        server.requests.clear();
+        assert_eq!(
+            fetch_borrowed_banner_with(&mut server, &index, folder("Borrows"), &staged),
+            Some("banner.png".to_owned())
+        );
+        assert_eq!(
+            fs::read(staged.join("banner.png")).expect("banner"),
+            noise(2_000, 21)
+        );
+        assert_eq!(server.requests.len(), 1);
+
+        // Already in the folder: not fetched again.
+        server.requests.clear();
+        assert_eq!(
+            fetch_borrowed_banner_with(&mut server, &index, folder("Borrows"), &staged),
+            None
+        );
+        assert!(server.requests.is_empty());
+
+        // A song that borrows nothing asks for nothing.
+        let own = fetch_folder_with(
+            &mut server,
+            &index,
+            folder("Own"),
+            &dir.join("own.part"),
+            &staging,
+            MAX,
+            &mut accept_all(),
+        )
+        .expect("own");
+        server.requests.clear();
+        assert_eq!(
+            fetch_borrowed_banner_with(&mut server, &index, folder("Own"), &staging.join(own)),
+            None
+        );
+        assert!(server.requests.is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     fn song_pack() -> (Vec<u8>, Vec<u8>) {

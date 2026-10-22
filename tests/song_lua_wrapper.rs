@@ -3,7 +3,7 @@ mod paths;
 
 use deadsync_assets::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
-    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, compile_song_lua,
+    SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, SongLuaTimeUnit, compile_song_lua,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -37,7 +37,8 @@ return Def.Actor {
     LoopCommand=function(self)
         local beat = GAMESTATE:GetSongBeat()
         local seconds = GAMESTATE:GetCurMusicSeconds()
-        assert(math.abs(beat - seconds * 155 / 60) < 1e-12, 'Lua clock lost precision')
+        -- ITGmania's SongPosition stores both clocks as floats.
+        assert(math.abs(beat - seconds * 155 / 60) < 1e-6, 'Lua clocks diverged')
         if beat < 1 then previous = curve(beat) end
         options:Mini(previous)
         if beat > 1 then options:FromString('*10000 inf beat') end
@@ -49,25 +50,30 @@ return Def.Actor {
     .unwrap();
     let mut context = SongLuaCompileContext::new(&song_dir, "Recurring Song Easing");
     context.song_display_bpms = [155.0; 2];
+    context.song_timing_bpms = vec![(0.0, 155.0)];
     context.music_length_seconds = 1.0;
     let compiled = compile_song_lua(&entry, &context).unwrap();
     assert_eq!(compiled.info.unsupported_perframes, 0);
+    let beat_at = |unit, value| match unit {
+        SongLuaTimeUnit::Beat => value,
+        SongLuaTimeUnit::Second | SongLuaTimeUnit::BeatClock => value * 155.0 / 60.0,
+    };
     for beat in [0.4, 0.8] {
         let samples = compiled
             .eases
             .iter()
             .filter(|ease| {
                 ease.target == SongLuaEaseTarget::Mod("mini".into())
-                    && ease.start >= beat
-                    && ease.start < beat + 0.1
+                    && beat_at(ease.unit, ease.start) >= beat
+                    && beat_at(ease.unit, ease.start) < beat + 0.1
             })
             .collect::<Vec<_>>();
         // Finishing a sleep on an exact frame boundary can leave the queued
         // command for the next frame; inspect a range containing an actual run.
         assert!(
-            samples
-                .iter()
-                .any(|sample| { (sample.from - sample.start.powi(3) * 100.0).abs() < 0.001 }),
+            samples.iter().any(|sample| {
+                (sample.from - beat_at(sample.unit, sample.start).powi(3) * 100.0).abs() < 0.001
+            }),
             "LoopCommand must sample the authored curve near {beat}: {samples:?}"
         );
     }
@@ -76,8 +82,8 @@ return Def.Actor {
         .iter()
         .find(|ease| {
             ease.target == SongLuaEaseTarget::Mod("mini".into())
-                && ease.start <= 1.1
-                && ease.start + ease.limit > 1.1
+                && beat_at(ease.unit, ease.start) <= 1.1
+                && beat_at(ease.unit, ease.start + ease.limit) > 1.1
         })
         .expect("last sampled value should persist");
     assert!(held.from > 70.0 && held.from < 100.0);
@@ -272,9 +278,12 @@ return Def.ActorFrame{{
     assert!(layers.iter().all(|layer| !layer.vertices.is_empty()));
     assert!(layers.iter().all(|layer| !layer.texture_key.is_empty()));
     assert!(layers[0].model_size[0] > 0.0);
-    assert_eq!(compiled.overlays[0].initial_state.rot_x_deg, -60.0);
-    assert_eq!(compiled.overlays[0].initial_state.rot_y_deg, 20.0);
-    assert_eq!(compiled.overlays[0].initial_state.rot_z_deg, 50.0);
+    let state = compiled.overlays[0].initial_state;
+    assert_eq!(state.base_rotation, [-60.0, 20.0, 50.0]);
+    assert_eq!(
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg],
+        [0.0; 3]
+    );
 }
 
 #[test]
@@ -309,7 +318,8 @@ fn compile_song_lua_loads_bundled_noteskin_actor_fixture() {
         .iter()
         .position(|overlay| overlay.name.as_deref() == Some("FixtureArrow"))
         .unwrap();
-    let SongLuaOverlayKind::NoteskinActor { slots, .. } = &compiled.overlays[arrow_index].kind else {
+    let SongLuaOverlayKind::NoteskinActor { slots, .. } = &compiled.overlays[arrow_index].kind
+    else {
         panic!("fixture arrow should reuse the bundled ddr-note actor");
     };
     assert!(slots.len() >= 2);
@@ -415,7 +425,16 @@ fn spooky_door_slide_moves_stretched_bounds() {
     assert_eq!(doors.len(), 2);
     for (side, door) in doors.iter().enumerate() {
         let initial = door.initial_state;
-        let [left, top, right, bottom] = initial.stretch_rect.expect("stretched door");
+        let bounds = |state| {
+            let vertices = deadsync_song_lua::playback::actor_conformance::overlay_sprite_matrix(
+                state, [1.0; 2],
+            );
+            // These doors have no rotation or skew; the unit Quad is scaled by StretchTo.
+            let [x, y] = [vertices[0][3], vertices[1][3]];
+            let [w, h] = [vertices[0][0], vertices[1][1]];
+            [x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0]
+        };
+        let [left, top, right, bottom] = bounds(initial);
         let width = right - left;
         assert_eq!(initial.x, width / 2.0, "StretchTo sets actor position");
         assert_eq!(initial.y, (top + bottom) / 2.0);
@@ -431,7 +450,7 @@ fn spooky_door_slide_moves_stretched_bounds() {
             let x = from + (width / 2.0 - from) * t;
             let state =
                 deadsync_song_lua::overlay_state_after_blocks(initial, &command.blocks, elapsed);
-            let rect = state.stretch_rect.unwrap();
+            let rect = bounds(state);
             assert!((state.x - x).abs() < 0.001);
             assert!(
                 (rect[0] - (x - width / 2.0)).abs() < 0.001,

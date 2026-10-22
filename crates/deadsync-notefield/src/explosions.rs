@@ -57,7 +57,9 @@ pub(crate) fn compose_explosion_layers<S, F>(
             .relative_frame_beat
             .filter(|_| slot.animation_is_beat_based())
             .unwrap_or(request.current_frame_beat);
-        let (frame_time, frame_beat) =
+        let (frame_time, frame_beat) = if layer.animation.animation_uses_screen_clock {
+            (request.uv_elapsed_s, request.current_frame_beat)
+        } else {
             layer
                 .animation
                 .animation_seconds
@@ -67,7 +69,8 @@ pub(crate) fn compose_explosion_layers<S, F>(
                         request.elapsed_s + seconds,
                         request.relative_frame_beat.unwrap_or(request.elapsed_s) + seconds,
                     )
-                });
+                })
+        };
         let frame = slot.frame_index(frame_time, frame_beat);
         let uv = slot.uv_for_frame_at(frame, request.uv_elapsed_s);
         let size = scale_effect_size(
@@ -168,6 +171,7 @@ mod tests {
         texture: Arc<str>,
         beat_based: bool,
         start_time: f32,
+        sampled_clock: std::cell::Cell<[f32; 2]>,
     }
 
     impl NoteskinSlot for TestSlot {
@@ -199,7 +203,8 @@ mod tests {
             self.start_time
         }
 
-        fn frame_index(&self, _time: f32, beat: f32) -> usize {
+        fn frame_index(&self, time: f32, beat: f32) -> usize {
+            self.sampled_clock.set([time, beat]);
             (beat + self.start_time).max(0.0).floor() as usize
         }
 
@@ -240,8 +245,10 @@ mod tests {
                 texture: Arc::from("explosion"),
                 beat_based: true,
                 start_time: 0.0,
+                sampled_clock: std::cell::Cell::new([0.0; 2]),
             },
             animation: ExplosionAnimation {
+                parents: Vec::new(),
                 initial: ExplosionState {
                     zoom: 1.5,
                     color: [0.2, 0.3, 0.4, 0.5],
@@ -256,6 +263,8 @@ mod tests {
                 }),
                 blend_add,
                 animation_seconds: None,
+                animation_uses_screen_clock: false,
+                draw_order: 0,
             },
         }
     }
@@ -294,6 +303,93 @@ mod tests {
             };
             assert!((sprite.uv_rect[0] - (elapsed + 2.0) * 0.1).abs() < 1e-6);
             assert_eq!(sprite.tint[3], 1.0 - elapsed * 0.5);
+        }
+    }
+
+    #[test]
+    fn continuous_sprite_clock_does_not_restart_with_the_hit_fade() {
+        let mut layers = [layer(true, false)];
+        layers[0].slot.beat_based = false;
+        layers[0].animation = deadsync_noteskin::runtime::itg_hit_mine_explosion_from_slot(
+            (),
+            Some(&std::collections::HashMap::from([
+                (
+                    "initcommand".into(),
+                    "diffusealpha,0;SetAllStateDelays,0.05".into(),
+                ),
+                (
+                    "hitminecommand".into(),
+                    "finishtweening;diffusealpha,1;sleep,0.3;linear,0.3;diffusealpha,0".into(),
+                ),
+            ])),
+            None,
+        )
+        .animation;
+        for age in [0.01, 0.15] {
+            let mut draws = Vec::new();
+            compose_explosion_layers(
+                &mut draws,
+                ExplosionComposeRequest {
+                    layers: &layers,
+                    hit_seed: 0,
+                    elapsed_s: age,
+                    effect_elapsed_s: age,
+                    current_frame_beat: 99.0,
+                    relative_frame_beat: Some(age),
+                    uv_elapsed_s: 3.0,
+                    center: [0.0; 2],
+                    field_zoom: 1.0,
+                    effect_zoom: 1.0,
+                    rotation_x_deg: 0.0,
+                    rotation_y_deg: 0.0,
+                    rotation: ExplosionRotation::Mine,
+                    z: 0,
+                },
+                &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
+            );
+            assert_eq!(layers[0].slot.sampled_clock.get(), [3.0, 99.0]);
+        }
+    }
+
+    #[test]
+    fn hit_draw_order_metadata_keeps_authored_layer_order_and_depth() {
+        let mut layers = [layer(true, false), layer(true, false), layer(true, false)];
+        for ((layer, name), order) in layers
+            .iter_mut()
+            .zip(["first", "second", "third"])
+            .zip([90, -90, 90])
+        {
+            layer.slot.texture = Arc::from(name);
+            layer.animation.draw_order = order;
+        }
+        let mut draws = Vec::new();
+        compose_explosion_layers(
+            &mut draws,
+            ExplosionComposeRequest {
+                layers: &layers,
+                hit_seed: 0,
+                elapsed_s: 0.0,
+                effect_elapsed_s: 0.0,
+                current_frame_beat: 0.0,
+                relative_frame_beat: None,
+                uv_elapsed_s: 0.0,
+                center: [0.0; 2],
+                field_zoom: 1.0,
+                effect_zoom: 1.0,
+                rotation_x_deg: 0.0,
+                rotation_y_deg: 0.0,
+                rotation: ExplosionRotation::Mine,
+                z: 145,
+            },
+            &|slot| SpriteSource::Texture(Arc::clone(&slot.texture)),
+        );
+        assert_eq!(draws.len(), 3);
+        for (draw, name) in draws.iter().zip(["first", "second", "third"]) {
+            let FlatDraw::Sprite(sprite) = draw else {
+                panic!("sprite")
+            };
+            assert_eq!(sprite.source.texture_key(), Some(name));
+            assert_eq!(sprite.z, 145);
         }
     }
 

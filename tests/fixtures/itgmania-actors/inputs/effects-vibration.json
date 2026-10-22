@@ -1,0 +1,198 @@
+{
+  "schema_version": 1,
+  "name": "effects-vibration",
+  "random_seed": 1337,
+  "bpm": 150.0,
+  "samples": [
+    0.0,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "root": {
+    "kind": "frame",
+    "name": "root",
+    "children": [
+      {
+        "kind": "sprite",
+        "name": "vibrate",
+        "size": [
+          64.0,
+          64.0
+        ],
+        "state": {
+          "position": [
+            100.0,
+            120.0,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "vibrate",
+          "magnitude": [
+            7.0,
+            11.0,
+            3.0
+          ],
+          "clock": "timer"
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "wag",
+        "size": [
+          64.0,
+          64.0
+        ],
+        "state": {
+          "position": [
+            220.0,
+            120.0,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "wag",
+          "period": 1.0,
+          "magnitude": [
+            10.0,
+            20.0,
+            30.0
+          ],
+          "clock": "bgm_beat"
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "pulse",
+        "size": [
+          64.0,
+          64.0
+        ],
+        "state": {
+          "position": [
+            340.0,
+            120.0,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "pulse",
+          "period": 1.0,
+          "zoom": [
+            0.75,
+            1.5
+          ],
+          "color1": [
+            1.0,
+            0.8,
+            0.6,
+            1.0
+          ],
+          "color2": [
+            0.5,
+            1.0,
+            1.25,
+            1.0
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "diffuse",
+        "size": [
+          64.0,
+          64.0
+        ],
+        "state": {
+          "position": [
+            460.0,
+            120.0,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "diffuse_shift",
+          "period": 1.0,
+          "color1": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "color2": [
+            0.0,
+            0.25,
+            1.0,
+            0.5
+          ],
+          "timing": [
+            0.1,
+            0.2,
+            0.3,
+            0.15,
+            0.25
+          ]
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "glow",
+        "size": [
+          64.0,
+          64.0
+        ],
+        "state": {
+          "position": [
+            220.0,
+            280.0,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "glow_ramp",
+          "period": 1.0,
+          "color1": [
+            1.0,
+            1.0,
+            1.0,
+            0.8
+          ],
+          "color2": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "offset": 0.125
+        }
+      },
+      {
+        "kind": "sprite",
+        "name": "spin",
+        "size": [
+          64.0,
+          64.0
+        ],
+        "state": {
+          "position": [
+            380.0,
+            280.0,
+            0.0
+          ]
+        },
+        "effect": {
+          "type": "spin",
+          "magnitude": [
+            30.0,
+            60.0,
+            90.0
+          ],
+          "clock": "timer"
+        }
+      }
+    ]
+  }
+}
