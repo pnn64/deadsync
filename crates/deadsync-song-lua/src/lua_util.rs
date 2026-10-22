@@ -13594,7 +13594,7 @@ pub(crate) fn effect_render_time(
     ]))
 }
 
-pub(crate) fn sync_motion_restart(actor: &Table, epoch: f32, seconds: f32) -> mlua::Result<()> {
+pub(crate) fn sync_motion_restart(lua: &Lua, actor: &Table, epoch: f32, seconds: f32) -> mlua::Result<()> {
     // Global clocks replace the timer on every update. A startup effect reset
     // must not overwrite that frame's beat/music clock with elapsed seconds.
     if !actor.raw_get::<Option<bool>>("__songlua_state_effect_timer")?.unwrap_or(true) {
@@ -13605,8 +13605,17 @@ pub(crate) fn sync_motion_restart(actor: &Table, epoch: f32, seconds: f32) -> ml
     };
     if clock.get::<Option<f32>>("replay_epoch")? != Some(epoch) {
         clock.set("replay_epoch", epoch)?;
-        // Queued commands run after Actor::UpdateInternal has advanced time.
-        clock.set("pending_units", (seconds - epoch).max(0.0))?;
+        let units = (seconds - epoch).max(0.0);
+        if lua.app_data_ref::<SongLuaCompileFrames>().is_none_or(|frames| frames.frame == 0) {
+            // Init/On precede the first Actor::UpdateInternal. Reset now so the
+            // first positive delta still advances the timer; deferring this
+            // reset would discard that delta and leave bob/bounce a frame late.
+            clock.set("units", units)?;
+            clock.set("pending_units", Value::Nil)?;
+        } else {
+            // Queued commands run after Actor::UpdateInternal has advanced time.
+            clock.set("pending_units", units)?;
+        }
     }
     Ok(())
 }

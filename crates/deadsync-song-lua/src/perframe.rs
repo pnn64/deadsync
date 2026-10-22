@@ -4126,6 +4126,7 @@ fn apply_perframe_active_message<Kind>(
         song_elapsed_seconds_at(message.start_beat, context),
     ) {
         crate::lua_util::sync_motion_restart(
+            lua,
             &overlay.table,
             epoch,
             song_elapsed_seconds_at(beat, context),

@@ -9247,6 +9247,141 @@ fn compiled_song_lua_heading_accumulates_and_tweens_quaternions() {
 }
 
 #[test]
+fn compiled_song_lua_startup_motion_keeps_first_timer_delta() {
+    use deadsync_song_lua::playback::actor_conformance::transform_state;
+    crate::paths::init();
+    for mode in ["bob", "bounce", "wag"] {
+        let temp = tempfile::tempdir().unwrap();
+        let entry = temp.path().join("default.lua");
+        fs::write(
+            &entry,
+            format!(
+                r#"return Def.ActorFrame{{
+            Def.Quad{{Name='Panel', InitCommand=function(self)
+                self:{mode}():effectmagnitude(5,10,0)
+                    :effectclock('timer'):effectperiod(0.5):effectoffset(0.125)
+            end,
+            OnCommand=function(self) self:linear(1):x(100) end}},
+        }}"#
+            ),
+        )
+        .unwrap();
+        let mut context = SongLuaCompileContext::new(temp.path(), "Startup motion clock");
+        context.music_length_seconds = 1.0;
+        context.compile_clock_inputs = vec![
+            [0.0, 0.0, 0.0],
+            [0.031, 0.031, 0.031],
+            [0.09, 0.09, 0.059],
+            [0.51, 0.51, 0.42],
+            [0.7, 0.7, 0.19],
+        ];
+        let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+            .unwrap()
+            .remove(0);
+        assert!(compiled.live_scene.is_none());
+        let index = compiled
+            .overlays
+            .iter()
+            .position(|actor| actor.name.as_deref() == Some("Panel"))
+            .unwrap();
+        let mut native_timer = 0.0_f32;
+        for &[raw, beat, delta] in &context.compile_clock_inputs {
+            // Actor::UpdateInternal adds the frame delta, then subtracts one
+            // period on overflow. Init/On resets happen before this addition.
+            native_timer += delta as f32;
+            if native_timer > 0.5 {
+                native_timer -= 0.5;
+            }
+            let local =
+                compiled_local_states_at(&compiled, &context, beat as f32, raw as f32)[index];
+            let [at, units] = local.effect_time.expect("compiled effect clock anchor");
+            assert!(
+                (units + (raw as f32 - at) - native_timer).abs() < 0.000001,
+                "{mode} at {raw}: anchor={:?}, native timer={native_timer}",
+                local.effect_time
+            );
+            let drawn = transform_state(local, [raw as f32, beat as f32]);
+            let percent = (native_timer + 0.125) % 0.5 / 0.5;
+            let angle = if mode == "bounce" {
+                percent * std::f32::consts::PI
+            } else {
+                percent * std::f32::consts::PI * 2.0
+            };
+            let actual = if mode == "wag" {
+                drawn.rot_y_deg - local.rot_y_deg
+            } else {
+                drawn.y - local.y
+            };
+            assert!(
+                (actual - 10.0 * angle.sin()).abs() < 0.00001,
+                "{mode} at {raw}: {actual}"
+            );
+        }
+    }
+}
+
+#[test]
+fn compiled_song_lua_queued_motion_resets_after_timer_advance() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"return Def.ActorFrame{
+        Def.Quad{Name='Panel', InitCommand=function(self)
+            self:bounce():effectclock('timer'):effectperiod(0.5)
+        end,
+        OnCommand=function(self) self:sleep(0.05):queuecommand('Restart') end,
+        RestartCommand=function(self) self:bob():effectperiod(0.5) end},
+    }"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Queued motion clock reset");
+    context.music_length_seconds = 1.0;
+    context.compile_clock_inputs = vec![
+        [0.0, 0.0, 0.0],
+        [0.03, 0.03, 0.03],
+        [0.08, 0.08, 0.05],
+        [0.16, 0.16, 0.08],
+        [0.52, 0.52, 0.36],
+        [0.6, 0.6, 0.08],
+    ];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert!(compiled.live_scene.is_none());
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Panel"))
+        .unwrap();
+    for (time, expected) in [
+        (0.0, 0.0),
+        (0.03, 0.03),
+        (0.08, 0.0),
+        (0.16, 0.08),
+        (0.52, 0.44),
+        (0.6, 0.02),
+    ] {
+        let state = compiled_local_states_at(&compiled, &context, time, time)[index];
+        let [at, units] = state.effect_time.expect("compiled effect clock anchor");
+        assert!(
+            (units + (time - at) - expected).abs() < 0.000001,
+            "at {time}: anchor={:?}, expected {expected}",
+            state.effect_time
+        );
+        assert_eq!(
+            state.effect_mode,
+            if time < 0.08 {
+                EffectMode::Bounce
+            } else {
+                EffectMode::Bob
+            }
+        );
+    }
+}
+
+#[test]
 fn compiled_song_lua_basezoom_bypasses_queued_tweens() {
     crate::paths::init();
     for queued in [false, true] {
