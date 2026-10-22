@@ -547,11 +547,18 @@ fn itg_apply_receptor_init(slot: &mut SpriteSlot, command: &str) {
 }
 
 fn itg_apply_xy_rotation(slot: &mut SpriteSlot, rotation_x: Option<i32>, rotation_y: Option<i32>) {
-    if rotation_x.is_some_and(|degrees| degrees.rem_euclid(360) == 180) {
+    let flip_v = rotation_x.is_some_and(|degrees| degrees.rem_euclid(360) == 180);
+    let flip_h = rotation_y.is_some_and(|degrees| degrees.rem_euclid(360) == 180);
+    if flip_v {
         slot.def.mirror_v = !slot.def.mirror_v;
     }
-    if rotation_y.is_some_and(|degrees| degrees.rem_euclid(360) == 180) {
+    if flip_h {
         slot.def.mirror_h = !slot.def.mirror_h;
+    }
+    if flip_h != flip_v {
+        // Actor::BeginDraw applies native X/Y rotations after Z. Our texture
+        // mirrors happen before Z, so a single reflection reverses that turn.
+        slot.set_rotation_deg((-slot.def.rotation_deg.rem_euclid(360)).rem_euclid(360));
     }
 }
 
@@ -822,6 +829,174 @@ mod tests {
                     layer.slot.frame_index((frame as f32 + 0.5) * 0.05, 999.0),
                     frame
                 );
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn base_xy_half_turns_match_native_vertices_and_keep_hold_animation() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{NoteskinSlot, compiled, compiler};
+        init_asset_paths();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/base-xy-rotation");
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-output.json")).unwrap()).unwrap();
+        let compare = |slot: &SpriteSlot, case: &serde_json::Value| {
+            let (sin, cos) = (slot.def.rotation_deg as f32).to_radians().sin_cos();
+            for (corner, vertex) in [[-8.0, -8.0], [-8.0, 8.0], [8.0, 8.0], [8.0, -8.0]]
+                .into_iter()
+                .zip(case["vertices"].as_array().unwrap())
+            {
+                let x = if slot.def.mirror_h {
+                    -corner[0]
+                } else {
+                    corner[0]
+                };
+                let y = if slot.def.mirror_v {
+                    -corner[1]
+                } else {
+                    corner[1]
+                };
+                let actual = [x * cos - y * sin, x * sin + y * cos];
+                for axis in 0..2 {
+                    assert!(
+                        (actual[axis] - vertex[axis].as_f64().unwrap() as f32).abs() < 1e-4,
+                        "{} axis {axis}: {actual:?} != {vertex}",
+                        case["name"]
+                    );
+                }
+            }
+        };
+        for case in native["cases"].as_array().unwrap() {
+            let mut slot = super::test_model_slot();
+            slot.model = None;
+            super::itg_apply_rotation(&mut slot, case["rotation"][2].as_f64().unwrap() as i32);
+            super::itg_apply_xy_rotation(
+                &mut slot,
+                Some(case["rotation"][0].as_f64().unwrap() as i32),
+                Some(case["rotation"][1].as_f64().unwrap() as i32),
+            );
+            compare(&slot, case);
+        }
+
+        let root = temp_noteskin_root("base-xy-rotation");
+        for name in [
+            "NoteSkin.lua",
+            "Down Tap Note.lua",
+            "metrics.ini",
+            "_Down Tap Note 16x8.png",
+        ] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        for button in ["Left", "Down", "Up", "Right"] {
+            for kind in ["Hold", "Roll"] {
+                for state in ["Active", "Inactive"] {
+                    for part in ["Body", "BottomCap"] {
+                        fs::copy(
+                            fixture.join("Body 16x1.png"),
+                            root.join(format!("{button} {kind} {part} {state} 16x1.png")),
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        }
+        let data = noteskin_itg::NoteskinData {
+            name: "base-xy-rotation-fixture".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::parse_file(&root.join("metrics.ini")).unwrap(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        let preview = SkinParts::default()
+            .with(SkinPart::Arrows)
+            .with(SkinPart::HoldActive)
+            .with(SkinPart::HoldInactive)
+            .with(SkinPart::RollActive)
+            .with(SkinPart::RollInactive);
+        for bundle in [&bundle, &cached] {
+            for (col, button) in ["Left", "Down", "Up", "Right"].into_iter().enumerate() {
+                for element in [
+                    "Tap Note",
+                    "Tap Fake",
+                    "Hold Head Active",
+                    "Roll Head Inactive",
+                ] {
+                    let layers =
+                        deadsync_noteskin::runtime::itg_resolve_actor_sprites_with_ops_compiled(
+                            &data,
+                            &bundle.loader,
+                            &bundle.actors,
+                            button,
+                            element,
+                            None,
+                            "dance-single",
+                            super::itg_compiled_sprite_ops(),
+                        );
+                    assert_eq!(layers.len(), 1, "{button} {element}");
+                    compare(&layers[0].slot, &native["cases"][col]);
+                }
+            }
+            for parts in [None, Some(preview)] {
+                let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                    &data,
+                    &Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    &bundle.loader,
+                    &bundle.actors,
+                    parts,
+                )
+                .unwrap();
+                for col in 0..4 {
+                    for quant in 0..NUM_QUANTIZATIONS {
+                        compare(
+                            &skin.notes[col * NUM_QUANTIZATIONS + quant],
+                            &native["cases"][col],
+                        );
+                    }
+                    for roll in [false, true] {
+                        let visuals = skin.hold_visuals_for_col(col, roll);
+                        for (part, slot) in [
+                            (NoteAnimPart::HoldBody, visuals.body_active.as_ref()),
+                            (NoteAnimPart::HoldBody, visuals.body_inactive.as_ref()),
+                            (
+                                NoteAnimPart::HoldBottomCap,
+                                visuals.bottomcap_active.as_ref(),
+                            ),
+                            (
+                                NoteAnimPart::HoldBottomCap,
+                                visuals.bottomcap_inactive.as_ref(),
+                            ),
+                        ] {
+                            let Some(slot) = slot else {
+                                assert!(
+                                    parts.is_some() && matches!(part, NoteAnimPart::HoldBottomCap),
+                                    "missing column {col} roll={roll} {part:?}"
+                                );
+                                continue;
+                            };
+                            assert_eq!(slot.frame_count(), 16);
+                            for (beat, expected) in [(0.0, 0), (1.0, 4), (2.0, 8), (3.0, 12)] {
+                                let phase = skin.part_uv_phase(part, 0.0, beat, 0.0);
+                                let frame = slot.frame_index_from_phase(phase);
+                                assert_eq!(frame, expected);
+                                if frame != 0 {
+                                    assert_ne!(
+                                        slot.uv_for_frame_at(frame, 0.0),
+                                        slot.uv_for_frame_at(0, 0.0)
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         fs::remove_dir_all(root).unwrap();

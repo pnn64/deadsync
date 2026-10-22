@@ -1701,10 +1701,10 @@ pub fn itg_resolve_actor_file_compiled<T>(
         else {
             return Vec::new();
         };
-        apply_xy_rotation(&mut slot, rotation_x, rotation_y);
         if let Some(rotation_z) = rotation_z {
             apply_rotation(&mut slot, rotation_z);
         }
+        apply_xy_rotation(&mut slot, rotation_x, rotation_y);
         return vec![ItgResolvedSprite {
             element: element.to_string(),
             slot,
