@@ -14620,7 +14620,7 @@ fn load_native_gameplay_in_bitmap(name: &str) -> mlua::Result<String> {
     }).as_ref().cloned().map_err(|error| mlua::Error::external(error.clone()))
 }
 
-const NATIVE_BLANK_TEXTURE_PATH: &str = "Themes/_fallback/Graphics/_blank.png";
+pub(crate) const NATIVE_BLANK_TEXTURE_PATH: &str = "Themes/_fallback/Graphics/_blank.png";
 
 fn load_native_blank_texture() -> mlua::Result<&'static str> {
     // Bundled native bitmap, decoded/prepared once at screen construction.

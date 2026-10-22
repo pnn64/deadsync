@@ -661,6 +661,44 @@ fn manual_player_compositor_matches_native_geometry() {
 }
 
 #[test]
+fn compiled_custom_draw_skips_native_empty_and_waiting_actors() {
+    crate::tests::init_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("default.lua");
+    std::fs::write(&entry, r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        local screen = SCREENMAN:GetTopScreen()
+        local player = screen:GetChild('PlayerP1')
+        player:visible(false)
+        self:SetDrawFunction(function(self)
+            for _, name in ipairs({'Cancel', 'Out', 'Debug', 'LyricDisplay',
+                'OniGameOverP1', 'Header', 'Footer'}) do
+                screen:GetChild(name):Draw()
+            end
+            self:GetChild('Glowing'):Draw()
+            player:visible(true):Draw()
+            player:visible(false)
+        end)
+    end,
+    Def.Quad { Name='Glowing', InitCommand=function(self) self:diffusealpha(0):glow(1,0,0,1) end },
+}
+"#).unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(dir.path(), "Native draw traversal");
+    context.music_length_seconds = 1.0;
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    let compiled = compile_song_lua(&entry, &context).expect("bake native draw traversal");
+    assert!(compiled.live_scene.is_none(), "compilation releases the Lua VM");
+    let glowing = compiled.overlays.iter().position(|actor| actor.name.as_deref() == Some("Glowing")).unwrap();
+    assert!(!compiled.draw_frames.is_empty());
+    for frame in &compiled.draw_frames {
+        assert_eq!(frame.ops.len(), 2, "only glow and player draw: {frame:?}");
+        assert!(matches!(&frame.ops[0], SongLuaDrawOp::Draw { source: SongLuaDrawSource::Overlay(index), .. } if *index == glowing));
+        assert!(matches!(&frame.ops[1], SongLuaDrawOp::Draw { source: SongLuaDrawSource::Player(0), .. }));
+    }
+}
+
+#[test]
 fn manual_rgb_passes_keep_geometry_and_preserve_flags() {
     crate::tests::init_paths();
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");

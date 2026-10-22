@@ -334,7 +334,10 @@ pub fn model_texture_at(
     samples: &[SongLuaTextureSample],
     second: f32,
 ) -> Option<SongLuaTextureSample> {
-    let end = samples.partition_point(|sample| sample.second <= second);
+    // Foreground age subtracts its song-time origin in f32. At an exact baked
+    // frame that subtraction can land one ULP below the sample timestamp;
+    // do not hold the previous material frame for another update.
+    let end = samples.partition_point(|sample| sample.second <= second.next_up());
     end.checked_sub(1).map(|index| samples[index])
 }
 

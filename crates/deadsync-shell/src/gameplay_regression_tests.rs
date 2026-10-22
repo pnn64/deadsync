@@ -680,9 +680,7 @@ mod tests {
         )
     }
 
-    /// The compiled compositor tests inspect baked tracks before advancing a
-    /// frame. Live playback has a separate integration fixture below; it does
-    /// not expose future note-hide/ease windows or promise flattened actors.
+    /// Bound compilation for compositor fixtures that only exercise the opening.
     fn build_compiled_test_state(
         simfile: &Path,
         viewport: GameplayViewport,
@@ -717,6 +715,19 @@ mod tests {
         player_profiles: [profile_data::Profile; MAX_PLAYERS],
         renderer: &str,
         until_beat: Option<f32>,
+    ) -> screen_gameplay::State {
+        build_test_state_with_lua_mode(simfile, viewport, session, player_profiles,
+            renderer, until_beat, false)
+    }
+
+    fn build_test_state_with_lua_mode(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+        until_beat: Option<f32>,
+        live_diagnostic: bool,
     ) -> screen_gameplay::State {
         // Fixture charts are loaded at zero global offset below. Compile and
         // play with that same clock rather than the cabinet default (-8 ms).
@@ -757,7 +768,7 @@ mod tests {
             hud,
             ..Default::default()
         };
-        let prepared = if until_beat.is_none() {
+        let prepared = if until_beat.is_none() && !live_diagnostic {
             crate::gameplay_entry::prepare_song_lua(
                 &song,
                 &charts,
@@ -790,7 +801,7 @@ mod tests {
                 &config,
                 renderer,
                 1,
-                false,
+                live_diagnostic,
             )
             .expect("production Lua context");
             if let Some(beat) = until_beat {
@@ -1235,10 +1246,9 @@ end }
 "#).unwrap();
             space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
             space::set_current_window_px(1280, 720);
-            let state = build_test_state_with_renderer_horizon(&simfile, GameplayViewport::new(1280.0,720.0),
-                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()),
-                "OpenGL", Some(4.0));
-            assert!(state.song_lua.is_none(), "explicit offline compilation releases its VM");
+            let state = build_test_state(&simfile, GameplayViewport::design(),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
+            assert!(state.song_lua.is_none(), "production compilation releases its VM");
             let track = state.song_lua_visuals().column_splines[0].iter()
                 .find(|track| track.column == 0).expect("compiled position and zoom track");
             for (second, direction, scale) in [(0.375,1.0,1.0),(0.875,-1.0,0.5),(1.375,1.0,1.0)] {
@@ -1250,6 +1260,73 @@ end }
             }
             let cleared = track.at_second(1.875).unwrap();
             assert!(cleared.position.is_none() && cleared.zoom.is_none());
+        });
+    }
+
+    #[test]
+    fn sharkmode_compiled_draws_keep_notes_in_direct_and_texture_passes() {
+        let fixture = song_fixture::from_source("280-MODS-[MASTER] Sharkmode/Sharkmode.ssc");
+        with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+            true, false, || {
+            let metrics = space::Metrics::centered(854.0, 480.0);
+            space::set_current_metrics(metrics);
+            space::set_current_window_px(1280, 720);
+            let mut state = build_test_state(&fixture.simfile, GameplayViewport::design(),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("lambda"), ..Default::default()
+                }));
+            assert!(state.song_lua.is_none(), "production must release the compiler VM");
+            let visuals = state.song_lua_visuals();
+            assert!(visuals.overlays.iter().chain(visuals.background_visual_layers.iter()
+                .chain(&visuals.foreground_visual_layers).flat_map(|layer| &layer.overlays)).any(|actor| matches!(
+                &actor.kind, deadsync_song_lua::SongLuaOverlayKind::UpdateTracks { draw_frames, .. }
+                if !draw_frames.is_empty())), "custom draws must be baked before gameplay");
+            let assets = fixture_assets();
+            let mut note_handles = Vec::new();
+            state.noteskin_assets.noteskin[0].as_ref().unwrap().for_each_slot(|slot| {
+                note_handles.push(FIXTURE_TEXTURES.texture_handle(slot.texture_key()));
+            });
+            let mut actors = Vec::new();
+            let mut text = compose::TextLayoutCache::default();
+            let mut scratch = compose::ComposeScratch::default();
+            for beat in [16.0, 74.0, 122.0, 260.0, 290.0, 340.0] {
+                let second = state.gameplay.timing_runtime.timing.get_time_for_beat(beat);
+                set_fixture_time(&mut state, second);
+                let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
+                    &mut actors, &mut text, &mut scratch, &FIXTURE_TEXTURES);
+                assert!(frame.ops.iter().chain(frame.render_targets.iter().flat_map(|target| &target.ops))
+                    .any(|op| matches!(op, DrawOp::Sprite(run)
+                    if note_handles.contains(&run.texture_handle))), "Sharkmode notes/receptors at beat {beat}");
+            }
+        });
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "requires a local Vulkan device and screenshot readback"]
+    fn sharkmode_compiled_notes_visible_vulkan_pixels() {
+        let fixture = song_fixture::from_source("280-MODS-[MASTER] Sharkmode/Sharkmode.ssc");
+        with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+            true, false, || {
+            let metrics = space::Metrics::centered(854.0, 480.0);
+            space::set_current_metrics(metrics);
+            space::set_current_window_px(1600, 900);
+            let mut state = build_test_state_with_renderer(&fixture.simfile, GameplayViewport::design(),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"), ..Default::default()
+                }), "Vulkan (wgpu)");
+            assert!(state.song_lua.is_none(), "Vulkan must render compiled Lua");
+            state.background_texture_key = deadlib_assets::media_path_key(
+                state.song().background_path.as_deref().expect("Sharkmode background"));
+            set_fixture_time(&mut state, 0.0);
+            let mut gpu = SongLuaNotePixelCapture::new(&state, &metrics,
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/sharkmode-pixels"));
+            for beat in [16.0, 74.0, 122.0, 290.0] {
+                let second = state.gameplay.timing_runtime.timing.get_time_for_beat(beat);
+                set_fixture_time(&mut state, second);
+                assert!(gpu.capture_named(&mut state, &metrics, beat, "sharkmode") > 100,
+                    "Sharkmode tap notes must reach the framebuffer at beat {beat}");
+            }
         });
     }
 
@@ -1332,9 +1409,10 @@ return Def.ActorFrame { Name = 'Foreground',
     end },
 }
 "#).expect("foreground script");
-            let mut state = build_test_state(&simfile, GameplayViewport::new(640.0, 480.0),
-                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()));
-            assert!(state.song_lua.is_some(), "production screen must own its Lua scene");
+            let mut state = build_test_state_with_lua_mode(&simfile, GameplayViewport::new(640.0, 480.0),
+                GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()),
+                "Software", None, true);
+            assert!(state.song_lua.is_some(), "explicit diagnostic scene retains its VM");
             let startup = state.take_song_lua_output();
             assert!(startup.errors.is_empty(), "{:?}", startup.errors);
             // Foreground::HandleMessage suppresses loading-time On. Its first
@@ -5116,6 +5194,16 @@ return Def.ActorFrame{
             metrics: &space::Metrics,
             beat: f32,
         ) -> usize {
+            self.capture_named(state, metrics, beat, "mawaru7")
+        }
+
+        fn capture_named(
+            &mut self,
+            state: &mut screen_gameplay::State,
+            metrics: &space::Metrics,
+            beat: f32,
+            name: &str,
+        ) -> usize {
             let textures = CaptureTextureContext {
                 assets: &self.assets,
                 keys: Default::default(),
@@ -5162,9 +5250,9 @@ return Def.ActorFrame{
                 .unwrap();
             let image = self.backend.capture_frame().unwrap();
             image
-                .save(self.output.join(format!("mawaru7-beat-{beat}.png")))
+                .save(self.output.join(format!("{name}-beat-{beat}.png")))
                 .unwrap();
-            if [308.0, 320.0].contains(&beat) {
+            if name == "mawaru7" && [308.0, 320.0].contains(&beat) {
                 let visuals = state.gameplay.song_lua_visuals();
                 let titan: std::collections::HashSet<_> = visuals
                     .foreground_visual_layers
@@ -5227,7 +5315,7 @@ return Def.ActorFrame{
                 .zip(no_taps.pixels())
                 .filter(|(a, b)| a != b)
                 .count();
-            eprintln!("Mawaru7 GPU beat {beat}: {changed} visible tap pixels");
+            eprintln!("{name} GPU beat {beat}: {changed} visible tap pixels");
             changed
         }
     }

@@ -234,6 +234,11 @@ fn partially_opaque(state: SongLuaOverlayState, parents: &[SongLuaOverlayState])
 }
 
 fn scoped_context(lua: &Lua, actor: &Table, prior: &Context) -> mlua::Result<Option<Context>> {
+    // Transition::EarlyAbortDraw: waiting transitions are not drawable, even
+    // if their child has an opaque queued destination state.
+    if actor.raw_get::<Option<u8>>("__songlua_transition_state")? == Some(0) {
+        return Ok(None);
+    }
     if actor
         .raw_get::<Option<bool>>("__songlua_theme_hibernating")?
         .unwrap_or(false)
@@ -324,13 +329,41 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let kind = actor
                     .get::<Option<crate::lua_util::LuaFieldText<32>>>("__songlua_actor_type")?;
                 let kind = kind.as_ref().map_or("", |kind| kind.as_str());
-                let external = actor
-                    .raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_top_screen_child_name")?
-                    .is_some()
-                    || actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>("__songlua_player_child_name")?.is_some();
+                // Only native frames backed by a compositor source are opaque
+                // leaves. Other screen frames use ActorFrame::DrawPrimitives:
+                // traverse their children, including empty transition frames.
+                // Keep this set aligned with read_tracked_compile_actors.
+                let screen_child = actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>(
+                    "__songlua_top_screen_child_name")?;
+                let player_child = actor.raw_get::<Option<crate::lua_util::LuaFieldText<64>>>(
+                    "__songlua_player_child_name")?;
+                let external = matches!(screen_child.as_ref().map(|name| name.as_str()),
+                    Some("Underlay" | "Overlay" | "SongBackground" | "SongForeground" | "In"))
+                    || matches!(player_child.as_ref().map(|name| name.as_str()),
+                        Some("Judgment" | "Combo"));
                 // Actor::DrawPrimitives is empty. Logic actors still receive
                 // explicit Draw calls, but submit no geometry or draw payload.
                 if kind.eq_ignore_ascii_case("Actor") {
+                    return Ok(());
+                }
+                // BitmapText::EarlyAbortDraw skips empty text. Native screen
+                // placeholders are not compiled overlay leaves either.
+                if kind.eq_ignore_ascii_case("BitmapText")
+                    && actor.raw_get::<Option<mlua::LuaString>>("Text")?
+                        .is_none_or(|text| text.as_bytes().is_empty())
+                {
+                    return Ok(());
+                }
+                let local = *context.parents.last().expect("draw context includes the actor");
+                // The bundled fallback bitmap contains only transparent pixels.
+                // Its ordinary alpha draw cannot change color, depth or masks.
+                if kind.eq_ignore_ascii_case("Sprite")
+                    && actor.raw_get::<Option<mlua::LuaString>>("Texture")?
+                        .is_some_and(|path| path.as_bytes().as_ref()
+                            == crate::lua_util::NATIVE_BLANK_TEXTURE_PATH.as_bytes())
+                    && local.blend == crate::SongLuaOverlayBlendMode::Alpha
+                    && !local.depth_write && !local.mask_source && !local.mask_dest
+                {
                     return Ok(());
                 }
                 // ActorProxy::DrawPrimitives submits nothing until SetTarget.
@@ -369,10 +402,6 @@ pub(crate) fn draw(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     }
                     let vertices =
                         read_actor_multi_vertex_mesh(actor).map_err(mlua::Error::external)?;
-                    let local = *context
-                        .parents
-                        .last()
-                        .expect("draw context includes the actor");
                     // The leaf is built separately; wrappers remain in its caller stack.
                     let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
                     push(
