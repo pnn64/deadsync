@@ -2983,12 +2983,12 @@ fn restore_scalar_globals(lua: &Lua, snapshot: Vec<(String, Value)>) -> mlua::Re
     Ok(())
 }
 
-pub fn snapshot_actors_semantic_state(
+pub fn snapshot_actors_semantic_state<'a>(
     lua: &Lua,
-    actors: &[Table],
+    actors: impl IntoIterator<Item = &'a Table>,
 ) -> mlua::Result<Vec<(Table, Vec<(String, Value)>)>> {
     actors
-        .iter()
+        .into_iter()
         .map(|actor| Ok((actor.clone(), snapshot_actor_semantic_state(lua, actor)?)))
         .collect()
 }
@@ -18223,9 +18223,8 @@ pub fn capture_indexed_actor_function_blocks(
     if let Some(song_beat) = song_beat {
         set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
     }
-    let snapshot_tables: Vec<_> = actors.iter().map(|(_, actor)| actor.clone()).collect();
-    let state_snapshot =
-        snapshot_actors_semantic_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
+    let state_snapshot = snapshot_actors_semantic_state(lua, actors.iter().map(|(_, actor)| actor))
+        .map_err(|err| err.to_string())?;
     reset_indexed_actor_capture_tables(lua, actors)?;
     let result = match arg {
         Some(value) => function.call::<Value>(value),
@@ -18266,9 +18265,8 @@ fn capture_touched_blocks(
     let touched = actors
         .iter()
         .filter(|(_, actor)| actor_ptrs.contains(&(actor.to_pointer() as usize)))
-        .cloned()
-        .collect::<Vec<_>>();
-    let blocks = collect_indexed_actor_capture_blocks(&touched);
+        .map(|(index, actor)| (*index, actor));
+    let blocks = collect_borrowed_actor_capture_blocks(touched);
     reset_actor_capture_tables(lua, &touched_actors)?;
     restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
@@ -18661,13 +18659,12 @@ fn capture_function_action_blocks_inner(
     let state_snapshot =
         capture_scope_snapshots(&capture_scope.snapshots).map_err(|err| err.to_string())?;
     restore_action_capture_scope(lua, capture_scope).map_err(|err| err.to_string())?;
-    let overlay_tables: Vec<_> = overlays
+    let overlay_tables = overlays
         .iter()
         .filter(|(_, actor)| actor_ptrs.contains(&(actor.to_pointer() as usize)))
-        .map(|(index, actor)| (*index, actor.clone()))
-        .collect();
+        .map(|(index, actor)| (*index, actor));
     let tracked_indices = tracked_indices_for_actor_pointers(tracked_actors, &actor_ptrs);
-    let overlay_blocks = collect_indexed_actor_capture_blocks(&overlay_tables);
+    let overlay_blocks = collect_borrowed_actor_capture_blocks(overlay_tables);
     let tracked_blocks =
         collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
     let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
@@ -19013,8 +19010,7 @@ pub fn compile_overlay_compile_actor_function_action<Kind>(
     sound_events.extend(
         capture
             .sound_paths
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|path| SongLuaSoundEvent {
                 beat,
                 path,
@@ -24371,3 +24367,7 @@ mod foreign_assets_perf;
 #[cfg(test)]
 #[path = "../tests/perf/comparison_text.rs"]
 mod comparison_text_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/capture_inputs.rs"]
+mod capture_inputs_perf;

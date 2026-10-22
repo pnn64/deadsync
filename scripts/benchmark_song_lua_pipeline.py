@@ -22,7 +22,7 @@ def main():
     parser.add_argument("--samples", type=int, default=9)
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -61,6 +61,9 @@ def main():
     if args.suite == "borrowed_compat":
         cases = [("offline_borrowed_compat", "offline", "crates/deadsync-song-lua/tests/perf/borrowed_compat.lua"),
                  ("live_borrowed_compat", "live", "crates/deadsync-song-lua/tests/perf/borrowed_compat.lua")]
+    if args.suite == "capture_inputs":
+        cases = [("offline_capture_inputs", "offline", "crates/deadsync-song-lua/tests/perf/capture_inputs.lua"),
+                 ("live_capture_inputs", "live", "crates/deadsync-song-lua/tests/perf/capture_inputs.lua")]
     args.out.mkdir(parents=True, exist_ok=True)
     paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / name for name in sorted({case[2] for case in cases})]
@@ -77,6 +80,8 @@ def main():
         paths += [root / "crates/deadsync-song-lua/tests/perf/asset-string.wav"]
     if args.suite == "comparison_text":
         paths += [root / "crates/deadsync-song-lua/tests/perf/finalization-a 2x6.png"]
+    if args.suite == "capture_inputs":
+        paths += [root / "crates/deadsync-song-lua/tests/perf/asset-string.wav"]
     sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
     records = []
