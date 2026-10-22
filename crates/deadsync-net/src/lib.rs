@@ -7,6 +7,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// What a pooled agent keeps open in all, at the least: ureq's own default.
+const MIN_IDLE_CONNECTIONS: usize = 10;
 
 // Match Simply Love / ITGmania's GrooveStats request timeout (60s).
 pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
@@ -223,6 +225,22 @@ pub fn build_agent_with_connect(config: AgentConfig, connect: Duration) -> ureq:
         .into()
 }
 
+/// [`build_agent`], keeping up to `per_host` connections to one site open
+/// between requests, for a caller that asks one site that many things at
+/// once: each asks over a connection already open, where the shared agents
+/// keep three and the rest connect afresh every time -- which, on a page the
+/// site answers in a tenth of a second, costs more than the answer.
+#[must_use]
+pub fn build_agent_with_pool(config: AgentConfig, per_host: usize) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .user_agent(deadsync_version::user_agent())
+        .timeout_global(Some(config.timeout))
+        .max_idle_connections(per_host.max(MIN_IDLE_CONNECTIONS))
+        .max_idle_connections_per_host(per_host)
+        .build()
+        .into()
+}
+
 // Reuse a single process-wide agent so score submits and leaderboard requests share
 // one connection pool instead of opening fresh sockets/TLS sessions per request.
 static DEFAULT_AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| build_agent(AgentConfig::default()));
@@ -312,6 +330,21 @@ mod tests {
         let timeouts = short.config().timeouts();
         assert_eq!(timeouts.global, Some(Duration::from_secs(15)));
         assert_eq!(timeouts.connect, Some(Duration::from_secs(10)));
+
+        let pooled = build_agent_with_pool(AgentConfig::default(), 8);
+        assert_dead_sync_user_agent(&pooled);
+        assert_eq!(pooled.config().max_idle_connections_per_host(), 8);
+        assert_eq!(pooled.config().max_idle_connections(), MIN_IDLE_CONNECTIONS);
+        let wide = build_agent_with_pool(AgentConfig::default(), 16);
+        assert_eq!(
+            wide.config().max_idle_connections(),
+            16,
+            "room for every one"
+        );
+        assert_eq!(
+            pooled.config().timeouts().global,
+            Some(DEFAULT_REQUEST_TIMEOUT)
+        );
     }
 
     #[test]

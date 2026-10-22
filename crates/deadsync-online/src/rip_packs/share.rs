@@ -6,10 +6,13 @@
 //! machine, so it reports each one instead: when a search deals cards, a
 //! worker posts what the rip asked for and the songs it found to
 //! `/api/rips`, and the site answers at once with the rip's id. It believes
-//! none of it -- every song is checked against stepmaniaonline.net before the
-//! rip is listed. KEEP posts that id to `/api/rips/kept`; a KEEP that comes
-//! before the answer is posted as soon as the answer does, even when the rip
-//! was thrown back or reset by then. A re-rip also sends the keys of the
+//! none of it but each card's tempo -- every song is checked against
+//! stepmaniaonline.net before the rip is listed, and its title, artist and
+//! BPM are the pack page's; the tempo only says where in the page's range of
+//! BPMs the song mostly plays, for its colour on the site as on the card.
+//! KEEP posts that id to `/api/rips/kept`; a KEEP that comes before the
+//! answer is posted as soon as the answer does, even when the rip was thrown
+//! back or reset by then. A re-rip also sends the keys of the
 //! cards it threw back, by which the site marks the earlier rip re-ripped; a
 //! re-rip that found nothing, or was stopped, sends only those.
 //!
@@ -73,6 +76,8 @@ const MAX_NAME_UNITS: usize = 64;
 const MAX_THROWN: usize = 60;
 const MAX_SIMS: usize = 8;
 const MAX_METER: u32 = 30;
+/// A tempo as the site takes it: as high as a card's can be.
+const MAX_TEMPO: u32 = 100_000;
 const MAX_SONG_BYTES: u64 = (1 << 31) - 1;
 /// A credit's length as the site counts it: code points.
 const MAX_CREDIT_CHARS: usize = 255;
@@ -217,12 +222,14 @@ struct SongBody<'a> {
     credit: &'a str,
     meter: u32,
     year: u16,
+    /// The tempo the card is coloured by ([`super::CardBpm::tempo`]).
+    bpm: u32,
     sync: &'static str,
     sims: &'a [String],
     bytes: u64,
 }
 
-const fn era_key(era: Era) -> &'static str {
+pub(super) const fn era_key(era: Era) -> &'static str {
     match era {
         Era::Modern => "modern",
         Era::Mid => "mid",
@@ -319,6 +326,11 @@ pub(super) fn report_body(asked: &Asked, songs: &[SharedSong<'_>]) -> Result<Vec
                         0
                     },
                     year: site_year(song.year, this_year),
+                    bpm: if song.bpm.tempo <= MAX_TEMPO {
+                        song.bpm.tempo
+                    } else {
+                        0
+                    },
                     sync: shared.sync.map_or("", DeclaredSync::label),
                     sims: &shared.sims[..shared.sims.len().min(MAX_SIMS)],
                     bytes: song.bytes.min(MAX_SONG_BYTES),
@@ -690,6 +702,10 @@ mod tests {
             credit: credit.to_owned(),
             meter,
             year,
+            bpm: super::super::CardBpm {
+                text: "150-190".to_owned(),
+                tempo: 175,
+            },
             art_url: Some("https://example.invalid/never-sent.png".to_owned()),
             folder: folder.to_owned(),
             bytes,
@@ -780,13 +796,29 @@ mod tests {
                 r#"{"eras":["modern","mid"],"lo":8,"hi":14,"full":false,"#,
                 r#""authors":["Zaia","dimo"],"avoid":["someone"],"songs":["#,
                 r#"{"key":"4110:528511","pack":4110,"song":528511,"folder":"Song Folder","#,
-                r#""credit":"Mad Matt","meter":14,"year":2021,"sync":"ITG","#,
+                r#""credit":"Mad Matt","meter":14,"year":2021,"bpm":175,"sync":"ITG","#,
                 r#""sims":["song.ssc"],"bytes":12345678},"#,
                 r#"{"key":"77:9001","pack":77,"song":9001,"folder":"Other","#,
-                r#""credit":"","meter":9,"year":0,"sync":"","#,
+                r#""credit":"","meter":9,"year":0,"bpm":175,"sync":"","#,
                 r#""sims":["Other.sm","Other.ssc"],"bytes":4096}]}"#,
             )
         );
+    }
+
+    #[test]
+    fn a_tempo_past_what_the_site_takes_is_sent_as_none() {
+        let mut cards = cards();
+        cards[0].bpm.tempo = MAX_TEMPO + 1;
+        cards[1].bpm = super::super::CardBpm::default();
+        let body = report_body(&first_rip(), &shared(&cards)).expect("a report");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        let tempos: Vec<u64> = json["songs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|song| song["bpm"].as_u64().unwrap())
+            .collect();
+        assert_eq!(tempos, vec![0, 0]);
     }
 
     #[test]
@@ -802,7 +834,7 @@ mod tests {
                 r#"{"eras":[],"lo":8,"hi":14,"full":true,"authors":[],"avoid":[],"#,
                 r#""x":["1:2","3:4"],"songs":["#,
                 r#"{"key":"4110:528511","pack":4110,"song":528511,"folder":"Song Folder","#,
-                r#""credit":"Mad Matt","meter":14,"year":2021,"sync":"NULL","#,
+                r#""credit":"Mad Matt","meter":14,"year":2021,"bpm":175,"sync":"NULL","#,
                 r#""sims":["song.ssc"],"bytes":12345678}]}"#,
             )
         );

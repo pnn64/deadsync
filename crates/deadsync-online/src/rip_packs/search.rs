@@ -48,8 +48,8 @@
 
 use super::dates::{self, Appearances, PackDate, ZipFacts};
 use super::lists::{self, PackDates};
-use super::pages::{self, Singles};
-use super::{BOOSTER_SONGS, HeldSong, RipSong};
+use super::pages::{self, ChartFacts, Singles};
+use super::{BOOSTER_SONGS, HeldSong, RipSong, bpm};
 use crate::pack_archive::{self, ArchiveError, PackIndex};
 use crate::pack_page::{self, PackPage, SongRow};
 use crate::smo_search::{self, CreditPack};
@@ -65,10 +65,20 @@ use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard, OnceLock, PoisonError
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
-/// Packs looked into at once, as the relay looks into them. Most of what a
-/// worker waits on is a free page, and the counted requests have a budget of
-/// their own whatever the pace.
-const PARALLEL: usize = 8;
+/// Packs looked into at once. Most of what a worker waits on is a free page,
+/// which the site answers as fast with sixteen asking as with eight -- 48
+/// song pages in 0.7 s against 1.6 s, none of them slower -- so sixteen fill
+/// a rip in about half the time the relay's eight take. The counted requests
+/// have a budget of their own whatever the pace, and a worker pays only for a
+/// song with a place on the table.
+const PARALLEL: usize = 16;
+/// The free pages' requests, on connections held open for every worker: a
+/// page comes back in about a tenth of a second over one already open, and
+/// in three or four over a new one, so a worker that had to connect afresh
+/// for every page -- as all but three did on the shared agent -- spent most
+/// of a rip shaking hands.
+static PAGES_AGENT: LazyLock<network::HttpAgent> =
+    LazyLock::new(|| network::build_agent_with_pool(network::AgentConfig::default(), PARALLEL));
 /// Packs one rip may open, as the relay allowed. Most candidates are turned
 /// away by their pages for free, so this bounds a crawl, not a cost.
 const MAX_PACKS: usize = 600;
@@ -151,10 +161,15 @@ pub(super) fn run(job: SearchJob) {
     super::search_finished(job.generation, found);
 }
 
+/// The counted requests' own agent ([`COUNTED_TIMEOUT`]), holding a
+/// connection open for every worker as [`PAGES_AGENT`] does.
 static COUNTED_AGENT: LazyLock<network::HttpAgent> = LazyLock::new(|| {
-    network::build_agent(network::AgentConfig {
-        timeout: COUNTED_TIMEOUT,
-    })
+    network::build_agent_with_pool(
+        network::AgentConfig {
+            timeout: COUNTED_TIMEOUT,
+        },
+        PARALLEL,
+    )
 });
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -172,7 +187,7 @@ fn search(job: &SearchJob) -> Result<Vec<(RipSong, HeldSong)>, String> {
     // Usually loading since the tab opened; if not, from now, while the
     // credit searches run.
     lists::warm(&job.cache_dir);
-    let agent = network::get_agent();
+    let agent = PAGES_AGENT.clone();
     let options = &job.options;
 
     let mut made = HashMap::new();
@@ -1476,14 +1491,7 @@ impl Search<'_> {
                 Place::Taken | Place::Wait => continue,
                 Place::Full => return Pick::Stop,
             }
-            match self.pay(
-                candidate,
-                in_hand.as_ref(),
-                &page.songs,
-                at,
-                &chart.author,
-                meter,
-            ) {
+            match self.pay(candidate, in_hand.as_ref(), &page.songs, at, &chart, meter) {
                 Paid::Song(found, index, names) => {
                     if !self.settle(&key, Some(*found), &names) {
                         return Pick::Nothing;
@@ -1519,16 +1527,18 @@ impl Search<'_> {
 
     /// The counted step, for a song every free page passed: its pack's index,
     /// its folder, and from those its dates, year and size. `in_hand` is the
-    /// index when [`Self::out_of_eras`] already had it.
+    /// index when [`Self::out_of_eras`] already had it; `chart` is SMO's
+    /// reading of its Expert chart.
     fn pay(
         &self,
         candidate: &Candidate,
         in_hand: Option<&Arc<HeldIndex>>,
         rows: &[SongRow],
         at: usize,
-        credit: &str,
+        chart: &ChartFacts,
         meter: u32,
     ) -> Paid {
+        let credit = chart.author.as_str();
         let held = match in_hand {
             Some(held) => Arc::clone(held),
             None => match self.index_of(candidate) {
@@ -1652,6 +1662,7 @@ impl Search<'_> {
             credit: credit.trim().to_owned(),
             meter,
             year: card_year(first),
+            bpm: bpm::card_bpm(&row.bpm, chart.length_ms, chart.measures),
             art_url: row.image_url.clone(),
             folder: folder_name.to_owned(),
             bytes,
@@ -1752,6 +1763,7 @@ mod tests {
             credit: String::new(),
             meter: 10,
             year: None,
+            bpm: bpm::CardBpm::default(),
             art_url: None,
             folder: title.to_owned(),
             bytes: 0,
