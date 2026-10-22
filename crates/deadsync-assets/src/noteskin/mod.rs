@@ -611,6 +611,72 @@ mod tests {
     }
 
     #[test]
+    fn rainbow_receptors_keep_native_colors_after_compiling_and_caching() {
+        use deadsync_noteskin::runtime::{SkinPart, SkinParts};
+        use deadsync_noteskin::{compiled, compiler};
+        init_asset_paths();
+        let root = temp_noteskin_root("rainbow-effect");
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../deadsync-noteskin/tests/fixtures/rainbow-effect");
+        for name in ["NoteSkin.lua", "Down Receptor.lua", "White.png"] {
+            fs::copy(fixture.join(name), root.join(name)).unwrap();
+        }
+        let native: serde_json::Value =
+            serde_json::from_slice(&fs::read(fixture.join("native-output.json")).unwrap()).unwrap();
+        let data = noteskin_itg::NoteskinData {
+            name: "rainbow-effect-fixture".into(),
+            overrides: Vec::new(),
+            search_dirs: vec![root.clone()],
+            metrics: noteskin_itg::IniData::default(),
+        };
+        let bundle = compiler::compile_data("dance", &data, "fixture", "").unwrap();
+        let path = root.join("compiled.bin");
+        compiled::save_compiled_bundle(&path, &bundle).unwrap();
+        let cached = compiled::load_compiled_bundle(&path).unwrap();
+        for bundle in [&bundle, &cached] {
+            for parts in [None, Some(SkinParts::default().with(SkinPart::Receptors))] {
+                let skin = super::load_itg_sprite_noteskin_parts_compiled(
+                    &data,
+                    &Style {
+                        num_cols: 4,
+                        num_players: 1,
+                    },
+                    &bundle.loader,
+                    &bundle.actors,
+                    parts,
+                )
+                .unwrap();
+                assert_eq!(skin.receptor_off.len(), 4);
+                for target in &skin.receptor_off {
+                    assert_eq!(target.model_effect.mode, ModelEffectMode::Rainbow);
+                    assert_eq!(target.model_effect.clock, ModelEffectClock::Beat);
+                    assert_eq!(target.model_effect.period, 4.0);
+                    for sample in native["samples"].as_array().unwrap() {
+                        let time = sample["time"].as_f64().unwrap() as f32;
+                        let beat = sample["beat"].as_f64().unwrap() as f32;
+                        let draw = target.model_draw_at(time, beat);
+                        let expected = &sample["colors"]["BeatReceptor"];
+                        for (channel, actual) in draw.tint.into_iter().enumerate() {
+                            let expected = expected[channel].as_f64().unwrap() as f32;
+                            assert!((actual - expected).abs() <= 1e-6);
+                        }
+                        assert_eq!(skin.receptor_pulse.color_for_beat(beat), [1.0; 4]);
+                    }
+                }
+                assert_eq!(skin.receptor_glow.len(), 4);
+                for press in &skin.receptor_glow {
+                    let press = press.as_ref().expect("separate press overlay");
+                    assert_eq!(press.model_effect.mode, ModelEffectMode::None);
+                    assert_eq!(press.model_draw.tint, [1.0; 4]);
+                }
+                assert_eq!(skin.receptor_glow_behavior.press_alpha_start, 0.2);
+                assert_eq!(skin.receptor_glow_behavior.alpha_end, 0.0);
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn note_color_uvs_match_native_texture_allocation() {
         use deadsync_noteskin::runtime::{SkinPart, SkinParts};
         use deadsync_noteskin::{NoteskinSlot, compiled, compiler};

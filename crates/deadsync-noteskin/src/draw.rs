@@ -199,6 +199,7 @@ pub enum ModelEffectMode {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
+    Rainbow,
     Pulse,
     Bob,
     Bounce,
@@ -262,6 +263,7 @@ fn model_effect_mix_impl(
         ModelEffectMode::DiffuseRamp
             | ModelEffectMode::DiffuseShift
             | ModelEffectMode::GlowShift
+            | ModelEffectMode::Rainbow
             | ModelEffectMode::Pulse
             | ModelEffectMode::Bob
             | ModelEffectMode::Bounce
@@ -481,7 +483,10 @@ fn model_draw_at_impl(
     if (!optimized
         || matches!(
             effect.mode,
-            ModelEffectMode::DiffuseRamp | ModelEffectMode::DiffuseShift | ModelEffectMode::Pulse
+            ModelEffectMode::DiffuseRamp
+                | ModelEffectMode::DiffuseShift
+                | ModelEffectMode::Rainbow
+                | ModelEffectMode::Pulse
         ))
         && let Some(percent) = model_effect_mix(effect, time, beat)
     {
@@ -506,6 +511,14 @@ fn model_draw_at_impl(
                 out.tint[1] *= c[1];
                 out.tint[2] *= c[2];
                 out.tint[3] *= c[3];
+            }
+            ModelEffectMode::Rainbow => {
+                // Actor::PreDraw uses the sine-eased color phase, replaces RGB,
+                // and retains diffuse alpha (including any in-progress tween).
+                let angle = glowshift_mix(percent) * 2.0 * std::f32::consts::PI;
+                out.tint[0] = angle.cos() * 0.5 + 0.5;
+                out.tint[1] = (angle + std::f32::consts::PI * 2.0 / 3.0).cos() * 0.5 + 0.5;
+                out.tint[2] = (angle + std::f32::consts::PI * 4.0 / 3.0).cos() * 0.5 + 0.5;
             }
             ModelEffectMode::Pulse => {
                 let offset = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);

@@ -70,6 +70,7 @@ pub enum ScriptEffectMod {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
+    Rainbow,
     Pulse,
     Thump(f32),
     Spin,
@@ -141,6 +142,7 @@ pub enum ScriptCommand<'a> {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
+    Rainbow,
     Pulse,
     Thump,
     Spin,
@@ -217,6 +219,7 @@ impl<'a> ScriptCommand<'a> {
             Self::DiffuseRamp => "diffuseramp",
             Self::DiffuseShift => "diffuseshift",
             Self::GlowShift => "glowshift",
+            Self::Rainbow => "rainbow",
             Self::Pulse => "pulse",
             Self::Thump => "thump",
             Self::Spin => "spin",
@@ -283,6 +286,7 @@ impl<'a> From<&'a str> for ScriptCommand<'a> {
                 command!("diffuse", Diffuse);
                 command!("fadetop", FadeTop);
                 command!("visible", Visible);
+                command!("rainbow", Rainbow);
             }
             8 => {
                 command!("basezoom", BaseZoom);
@@ -1104,6 +1108,7 @@ pub fn parse_script_effect_mod<'a, A: AsRef<str>>(
         ScriptCommand::DiffuseRamp => Some(ScriptEffectMod::DiffuseRamp),
         ScriptCommand::DiffuseShift => Some(ScriptEffectMod::DiffuseShift),
         ScriptCommand::GlowShift => Some(ScriptEffectMod::GlowShift),
+        ScriptCommand::Rainbow => Some(ScriptEffectMod::Rainbow),
         ScriptCommand::Pulse => Some(ScriptEffectMod::Pulse),
         ScriptCommand::Thump => Some(ScriptEffectMod::Thump(
             args.first()
@@ -1658,6 +1663,12 @@ pub(crate) fn model_draw_program_from_scripts(
                         effect.color1 = [1.0, 1.0, 1.0, 0.2];
                         effect.color2 = [1.0, 1.0, 1.0, 0.8];
                     }
+                    ScriptEffectMod::Rainbow => {
+                        // Actor's Lua rainbow() binding starts a two-second cycle.
+                        effect.mode = ModelEffectMode::Rainbow;
+                        effect.period = 2.0;
+                        effect.timing = [1.0, 0.0, 1.0, 0.0, 0.0];
+                    }
                     ScriptEffectMod::Pulse => {
                         effect.mode = ModelEffectMode::Pulse;
                         effect.period = 2.0;
@@ -2153,6 +2164,49 @@ mod tests {
                     crate::draw::model_draw_at(draw, &timeline, effect, 0.0, &[], time, 0.0);
                 assert_eq!(sampled.tint[3], alpha, "{script} at {time}");
             }
+        }
+    }
+
+    #[test]
+    fn rainbow_colors_match_native_actor_samples() {
+        use crate::draw::{ModelTweenCursor, model_draw_at, model_draw_at_cursor};
+        let input: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/rainbow-effect/native-input.json"
+        ))
+        .unwrap();
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../tests/fixtures/rainbow-effect/native-output.json"
+        ))
+        .unwrap();
+        for actor in input["root"]["children"].as_array().unwrap() {
+            let name = actor["name"].as_str().unwrap();
+            let script = actor["noteskin_command"].as_str().unwrap();
+            let commands = HashMap::from([("initcommand".into(), script.into())]);
+            let (draw, timeline, effect) = model_draw_program(&commands);
+            assert_eq!(effect.mode, ModelEffectMode::Rainbow);
+            let mut cursor = ModelTweenCursor::default();
+            for sample in native["samples"].as_array().unwrap() {
+                let time = sample["time"].as_f64().unwrap() as f32;
+                let beat = sample["beat"].as_f64().unwrap() as f32;
+                let expected = &sample["colors"][name];
+                for sampled in [
+                    model_draw_at(draw, &timeline, effect, 0.0, &[], time, beat),
+                    model_draw_at_cursor(draw, &timeline, effect, 0.0, &[], [time, beat], &mut cursor),
+                ] {
+                    for (channel, actual) in sampled.tint.into_iter().enumerate() {
+                        let expected = expected[channel].as_f64().unwrap() as f32;
+                        assert!(
+                            (actual - expected).abs() <= 1e-6,
+                            "{name} at {time}, channel {channel}: {actual} != {expected}"
+                        );
+                    }
+                }
+            }
+            let commands = HashMap::from([("initcommand".into(), format!("{script};stopeffect"))]);
+            let (draw, timeline, effect) = model_draw_program(&commands);
+            assert_eq!(effect.mode, ModelEffectMode::None);
+            let sampled = model_draw_at(draw, &timeline, effect, 0.0, &[], 0.0, 0.0);
+            assert_eq!(sampled.tint, [0.2, 0.4, 0.6, 0.65]);
         }
     }
 
