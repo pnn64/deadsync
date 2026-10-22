@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--rounds", type=int, default=6)
-    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets", "comparison_text"), default="finalize")
+    parser.add_argument("--suite", choices=("finalize", "startup", "vm_reads", "actor_state", "ignored_args", "prefix_args", "method_storage", "forward_values", "finalization_events", "asset_strings", "foreign_assets", "comparison_text", "borrowed_compat"), default="finalize")
     args = parser.parse_args()
     assert args.rounds > 0
     root = Path(__file__).resolve().parent.parent
@@ -80,6 +80,10 @@ def main():
         for name in ["comparison_text.rs", "comparison_text_before.rs", "comparison_sound.rs", "comparison_sound_before.rs", "sound_path.rs"]:
             path = root / "crates/deadsync-song-lua/tests/perf" / name
             sources[path.relative_to(root).as_posix()] = sha(path)
+    if args.suite == "borrowed_compat":
+        for name in ["borrowed_compat.rs", "borrowed_compat_before.rs"]:
+            path = root / "crates/deadsync-song-lua/tests/perf" / name
+            sources[path.relative_to(root).as_posix()] = sha(path)
     filters = ["compile::perf::benchmark_compile_finalize"] if args.suite == "finalize" else [
         "actor_classes::native_function_perf::benchmark_native_binding",
         "lua_util::startup_capture_perf::benchmark_snapshot_storage",
@@ -127,6 +131,10 @@ def main():
         baseline = "142996521"
         expected_names = 15
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    if args.suite == "borrowed_compat":
+        filters = ["compat::borrowed_compat_perf::benchmark_borrowed_compat_callbacks"]
+        baseline = "be95399d3"
+        expected_names = 12
     records = []
     for index in range(args.rounds):
         env = os.environ.copy()
@@ -207,6 +215,8 @@ def main():
         report["timing_scope"] = ("Setter samples prepare source/target VMs, actor tables and string values outside timing. GC is stopped after one warmup call. Each sample invokes the actual setter 8192 times, including its writes and texture/video classification; temporary/result destruction is included, input/VM destruction excluded. Sound-path samples prepare fresh VMs, capture/log/path tables and 64 arguments outside timing, then execute 64 actual recording calls including filesystem existence/type checks, path resolution, Rust event capture, optional Lua call-log writes and ordered deduplication. Result tables/events and VM destruction are excluded. Sound-path files are created once before measurement. First of ten samples discarded. Frozen helpers match the baseline and share unchanged downstream code.")
     if args.suite == "comparison_text":
         report["timing_scope"] = ("Text samples prepare fresh VMs and actor/payload/probe tables outside timing and stop GC. Each sample performs 8192 actual native-texture setter calls or probe classifications, including temporary/result destruction. Sound samples prepare the existing fixture helper runtime at beat 3.25, sound capture, path tables and call arguments outside timing, then perform 64 actual recording calls including filesystem checks, path resolution, capture and ordered duplicate scans. Result tables/events and VM destruction are excluded. Long text/path and numeric-coercion cases retain the normal fallback. First of ten samples discarded. Frozen helper bodies match the baseline; the existing inline reader and unchanged downstream helpers remain shared.")
+    if args.suite == "borrowed_compat":
+        report["timing_scope"] = ("Each sample prepares a fresh Lua state and installs the actual compatibility globals plus frozen baseline callbacks outside timing. Prepared Lua loops call the selected callback 8192 times. One warmup and full collection precede timing, then GC is stopped. Result destruction and Lua table growth are included; VM and prepared-input destruction are excluded. First of ten samples discarded. All three frozen callback bodies match be95399d3 and use unchanged downstream helpers.")
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2)+"\n", encoding="utf-8")
     for row in summary:

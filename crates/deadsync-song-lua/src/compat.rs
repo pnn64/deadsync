@@ -1,3 +1,4 @@
+use crate::string_args::string_value;
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::Path;
 
@@ -122,15 +123,15 @@ pub fn install_stdlib_compat(
     globals.set(
         "Var",
         lua.create_function(move |lua, args: MultiValue| {
-            let name = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            if name == "GameCommand" {
-                return Ok(Value::Table(create_game_command_table(lua, callbacks)?));
+            if let Some(Value::String(name)) = args.front()
+                && let Ok(text) = name.to_str()
+            {
+                if text.as_ref() == "GameCommand" {
+                    return Ok(Value::Table(create_game_command_table(lua, callbacks)?));
+                }
+                return Ok(Value::String(name.clone()));
             }
-            Ok(Value::String(lua.create_string(&name)?))
+            Ok(Value::String(lua.create_string("")?))
         })?,
     )?;
     globals.set("ActorUtil", create_actor_util_table(lua, song_dir)?)?;
@@ -138,24 +139,15 @@ pub fn install_stdlib_compat(
     globals.set(
         "cleanGSub",
         lua.create_function(|lua, args: MultiValue| {
-            let text = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let needle = args
-                .get(1)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            let replacement = args
-                .get(2)
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            Ok(Value::String(
-                lua.create_string(text.replace(&needle, &replacement))?,
-            ))
+            let text = args.front().and_then(string_value);
+            let needle = args.get(1).and_then(string_value);
+            let replacement = args.get(2).and_then(string_value);
+            Ok(Value::String(lua.create_string(
+                text.as_deref().unwrap_or_default().replace(
+                    needle.as_deref().unwrap_or_default(),
+                    replacement.as_deref().unwrap_or_default(),
+                ),
+            )?))
         })?,
     )?;
     globals.set(
@@ -197,12 +189,11 @@ pub fn install_stdlib_compat(
     globals.set(
         "GetVersionParts",
         lua.create_function(|lua, args: MultiValue| {
-            let version = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_else(|| SONG_LUA_PRODUCT_VERSION.to_string());
-            create_version_parts_table(lua, &version)
+            let version = args.front().and_then(string_value);
+            create_version_parts_table(
+                lua,
+                version.as_deref().unwrap_or(SONG_LUA_PRODUCT_VERSION),
+            )
         })?,
     )?;
     globals.set(
@@ -1049,3 +1040,7 @@ fn create_game_command_table(lua: &Lua, callbacks: SongLuaCompatCallbacks) -> ml
     )?;
     Ok(table)
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/borrowed_compat.rs"]
+mod borrowed_compat_perf;

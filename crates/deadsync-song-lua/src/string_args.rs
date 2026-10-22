@@ -1,7 +1,7 @@
 use crate::{create_split_table, path_basename};
 use mlua::{BorrowedStr, Lua, MultiValue, Table, Value};
 
-fn string_value(value: &Value) -> Option<BorrowedStr> {
+pub(crate) fn string_value(value: &Value) -> Option<BorrowedStr> {
     // These callbacks accept UTF-8 strings; other values fall back to "".
     let Value::String(text) = value else {
         return None;
