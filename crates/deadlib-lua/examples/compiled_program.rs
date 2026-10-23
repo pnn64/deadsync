@@ -351,6 +351,43 @@ fn main() {
             }
         }
     }
+    // A real large-register body with a cheap early-return input branch. Both
+    // flags run the same native code; compare separately preserved binaries.
+    let mut sparse = {
+        let lua = Lua::new();
+        let names = (0..190).map(|i| format!("n{i}")).collect::<Vec<_>>().join(",");
+        let values = vec!["e.level"; 190].join(",");
+        let callback: Function = lua.load(format!("return function(e) if e.button~='Right' then return false end;local {names}={values};return n189>0 end")).eval().unwrap();
+        let fields = [("button", 0, Types::BYTES), ("level", 1, Types::NUMBER)]
+            .into_iter()
+            .map(|(name, slot, types)| Field {
+                object: 0,
+                name: name.as_bytes().into(),
+                value: FieldValue::Value(Binding::Input { slot, types }),
+            })
+            .collect();
+        program::compile(
+            &callback,
+            &Bindings {
+                arguments: vec![Binding::Object(0)],
+                fields,
+                ..Bindings::default()
+            },
+        )
+        .unwrap()
+        .machine()
+    };
+    compare(
+        "sparse_early_return_native",
+        4096,
+        |_| {
+            let frame = [Datum::Bytes(b"Left"), Datum::Number(1.0)];
+            let result = sparse.run(&frame, |_, _| unreachable!()).unwrap().is_truthy();
+            assert!(!result);
+            u64::from(!result)
+        },
+        &mut rows,
+    );
     let lua = Lua::new();
     let f:Function=lua.load("local a,b,c,d,e,f,g,h='one','two','three','four','five','six','seven','eight';return function() return a,b,c,d,e,f,g,h end").eval().unwrap();
     compare(

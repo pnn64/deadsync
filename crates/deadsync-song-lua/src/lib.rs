@@ -30,7 +30,7 @@ mod host;
 #[cfg(feature = "test-support")]
 mod clock_inputs;
 mod input;
-pub use input::{SongLuaInputEvent, SongLuaInputType};
+pub use input::{SongLuaCompiledInput, SongLuaInputEvent, SongLuaInputType};
 mod json;
 mod lua_util;
 mod raw_vm;

@@ -791,6 +791,18 @@ impl Lua {
         }
     }
 
+    /// Whether the current thread has a debug hook installed. This also detects
+    /// hooks installed through Lua's debug library. Native execution adapters
+    /// can retain Lua execution when hooks must observe the authored body.
+    #[cfg(not(feature = "luau"))]
+    #[cfg_attr(docsrs, doc(cfg(not(feature = "luau"))))]
+    pub fn has_hook(&self) -> bool {
+        let lua = self.lock();
+        // SAFETY: the live thread is accessed under its VM lock. gethook only
+        // reads the hook pointer; no stack or authored code is touched.
+        unsafe { ffi::lua_gethook(lua.state()).is_some() }
+    }
+
     /// Sets an interrupt function that will periodically be called by Luau VM.
     ///
     /// Any Luau code is guaranteed to call this handler "eventually"

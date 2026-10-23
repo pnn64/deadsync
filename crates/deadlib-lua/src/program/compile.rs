@@ -257,7 +257,8 @@ pub(super) fn lower(prototype: Prototype, bindings: &Bindings) -> Result<Program
         .map(|v| builder.binding(v))
         .collect::<Result<Vec<_>, _>>()?;
     let mut parameters = Vec::with_capacity(prototype.parameters);
-    let mut first = vec![Symbol::Unknown; prototype.registers];
+    // Lua 5.1 clears non-parameter registers on entry and can omit LOADNIL.
+    let mut first = vec![Symbol::Constant(Value::Nil); prototype.registers];
     for (index, symbol) in first.iter_mut().take(prototype.parameters).enumerate() {
         let source = match bindings.arguments.get(index) {
             Some(v) => builder.binding(v)?,

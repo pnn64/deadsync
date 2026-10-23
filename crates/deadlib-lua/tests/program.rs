@@ -515,3 +515,80 @@ fn noncanonical_boolean_constants_are_rejected() {
         Err(program::CompileError::InvalidChunk)
     ));
 }
+
+#[test]
+fn reused_registers_do_not_leak_previous_inputs_after_branches_or_failed_reads() {
+    let lua = Lua::new();
+    let callback: Function = lua.load("return function(e) if e.path=='skip' then return false end;local a=e.a;if e.path=='missing' then return e.b end;return a end").eval().unwrap();
+    let bindings = Bindings {
+        arguments: vec![Binding::Object(0)],
+        fields: vec![
+            input("path", 0, Types::BYTES),
+            input("a", 1, Types::NIL | Types::BOOLEAN | Types::NUMBER | Types::BYTES),
+            input("b", 2, Types::BYTES),
+        ],
+        ..Bindings::default()
+    };
+    let mut machine = program::compile(&callback, &bindings).unwrap().machine();
+    for _ in 0..8 {
+        {
+            let owned = vec![0, 255, 17];
+            assert_eq!(
+                machine
+                    .run(&[Datum::Bytes(b"read"), Datum::Bytes(&owned)], |_, _| {})
+                    .unwrap(),
+                Datum::Bytes(&owned)
+            );
+        }
+        assert_eq!(
+            machine.run(&[Datum::Bytes(b"missing"), Datum::Boolean(true)], |_, _| {}),
+            Err(program::RunError::MissingInput(2))
+        );
+        assert_eq!(
+            machine.run(&[Datum::Bytes(b"skip")], |_, _| {}).unwrap(),
+            Datum::Boolean(false)
+        );
+        assert_eq!(
+            machine
+                .run(&[Datum::Bytes(b"read"), Datum::Nil], |_, _| {})
+                .unwrap(),
+            Datum::Nil
+        );
+    }
+}
+
+#[test]
+fn implicit_entry_nils_are_restored_only_where_control_flow_can_read_them() {
+    let lua = Lua::new();
+    let locals = (0..190).map(|i| format!("n{i}")).collect::<Vec<_>>().join(",");
+    for body in [
+        "return nil".to_owned(),
+        "local value;if e.pick then value=e.value end;return value".to_owned(),
+        "local value;return not value".to_owned(),
+        format!("local {locals};if e.pick then n0=e.value end;return n0"),
+    ] {
+        let callback: Function = lua.load(format!("return function(e) {body} end")).eval().unwrap();
+        let bindings = Bindings {
+            arguments: vec![Binding::Object(0)],
+            fields: vec![input("pick", 0, Types::BOOLEAN), input("value", 1, Types::BYTES)],
+            ..Bindings::default()
+        };
+        let mut machine = program::compile(&callback, &bindings).unwrap().machine();
+        for pick in [true, false, true, false, false, true] {
+            let event = lua.create_table().unwrap();
+            event.set("pick", pick).unwrap();
+            event
+                .set("value", lua.create_string([0, 255, 9]).unwrap())
+                .unwrap();
+            let expected = callback.call::<Value>(event).unwrap();
+            let inputs = [Datum::Boolean(pick), Datum::Bytes(&[0, 255, 9])];
+            let actual = machine.run(&inputs, |_, _| {}).unwrap();
+            match (expected, actual) {
+                (Value::Nil, Datum::Nil) => {}
+                (Value::Boolean(a), Datum::Boolean(b)) => assert_eq!(a, b),
+                (Value::String(a), Datum::Bytes(b)) => assert_eq!(a.as_bytes().as_ref(), b),
+                pair => panic!("entry nil differs: {body}: {pair:?}"),
+            }
+        }
+    }
+}

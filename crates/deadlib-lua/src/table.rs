@@ -486,6 +486,40 @@ impl Table {
         }
     }
 
+    /// Writes raw key-value pairs in iterator order under one lock and table
+    /// root. Each key/value is converted and written before requesting the next
+    /// pair. Nil removes a field; metamethods are bypassed. Errors retain prior
+    /// writes and stop iteration, like repeated [`Table::raw_set`] calls.
+    ///
+    /// The iterator/conversions may reenter safe Lua APIs. The caller's stack is
+    /// restored on errors and unwinding; no intermediate collection is created.
+    pub fn raw_set_many<K: IntoLua, V: IntoLua>(
+        &self,
+        pairs: impl IntoIterator<Item = (K, V)>,
+    ) -> Result<()> {
+        let lua = self.0.lua.lock();
+        let state = lua.state();
+        // SAFETY: the lock and guard cover the whole batch. One rooted table
+        // remains on the stack between writes. Only the rawset call crosses a
+        // protected Lua boundary; the owning iterator/conversions stay outside
+        // it. Both protected and direct paths leave the table as one result.
+        unsafe {
+            let _sg = StackGuard::new(state);
+            check_stack(state, 5)?;
+            lua.push_ref(&self.0);
+            for (key, value) in pairs {
+                key.push_into_stack(&lua)?;
+                value.push_into_stack(&lua)?;
+                #[cfg(feature = "luau")]
+                self.check_readonly_write(&lua)?;
+                protect_lua_mem!(lua, or !Self::is_valid_key(state, -2), 3, 1, fn(state) {
+                    ffi::lua_rawset(state, -3)
+                })?;
+            }
+            Ok(())
+        }
+    }
+
     /// Gets the value associated to `key` without invoking metamethods.
     pub fn raw_get<V: FromLua>(&self, key: impl IntoLua) -> Result<V> {
         let lua = self.0.lua.lock();
