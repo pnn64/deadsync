@@ -303,10 +303,18 @@ fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     let mut indices = vec![0; size[0] as usize * size[1] as usize];
     reader.read_into_buffer(&mut indices).map_err(gif_error)?;
     let mut image = RgbaImage::new(canvas[0], canvas[1]);
-    for (ordinal, index) in indices.into_iter().enumerate() {
-        let x = origin[0] + ordinal as u32 % size[0];
-        let y = origin[1] + ordinal as u32 / size[0];
-        image.put_pixel(x, y, image::Rgba(colors[index as usize]));
+    for (source, row) in indices.chunks_exact(size[0] as usize).zip(
+        image
+            .as_mut()
+            .chunks_exact_mut(canvas[0] as usize * 4)
+            .skip(origin[1] as usize),
+    ) {
+        for (&index, pixel) in source
+            .iter()
+            .zip(row[origin[0] as usize * 4..].as_chunks_mut::<4>().0)
+        {
+            *pixel = colors[index as usize];
+        }
     }
     if color_key {
         key_rgba(&mut image);
@@ -444,6 +452,16 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     let alpha = reader.info().trns.clone();
     let mut bytes = vec![0; reader.output_buffer_size().ok_or_else(image_limit)?];
     let info = reader.next_frame(&mut bytes).map_err(png_error)?;
+    if info.color_type == png::ColorType::Rgba {
+        // STRIP_16 leaves tightly packed RGBA8, already in the upload layout.
+        bytes.truncate(info.buffer_size());
+        let mut image = RgbaImage::from_raw(info.width, info.height, bytes)
+            .expect("decoded RGBA frame fits its output buffer");
+        if color_key {
+            key_rgba(&mut image);
+        }
+        return Ok(image);
+    }
     let mut image = RgbaImage::new(info.width, info.height);
     if indexed {
         let mut colors = [[0, 0, 0, 255]; 256];
@@ -482,10 +500,11 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         {
             pixel.0 = match info.color_type {
                 png::ColorType::Rgb => [source[0], source[1], source[2], 255],
-                png::ColorType::Rgba => [source[0], source[1], source[2], source[3]],
                 png::ColorType::Grayscale => [source[0], source[0], source[0], 255],
                 png::ColorType::GrayscaleAlpha => [source[0], source[0], source[0], source[1]],
-                png::ColorType::Indexed => unreachable!("indexed branch handled above"),
+                png::ColorType::Rgba | png::ColorType::Indexed => {
+                    unreachable!("RGBA and indexed branches handled above")
+                }
             };
         }
         if color_key {
@@ -578,13 +597,22 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
         let xs = zoom_axis(image.width(), next[0]);
         let ys = zoom_axis(image.height(), next[1]);
         let mut output = RgbaImage::new(next[0], next[1]);
-        for (y, &(top, bottom, wy)) in ys.iter().enumerate() {
-            for (x, &(left, right, wx)) in xs.iter().enumerate() {
-                let c00 = image.get_pixel(left, top).0;
-                let c01 = image.get_pixel(right, top).0;
-                let c10 = image.get_pixel(left, bottom).0;
-                let c11 = image.get_pixel(right, bottom).0;
-                let pixel = output.get_pixel_mut(x as u32, y as u32);
+        let width = image.width() as usize;
+        let source = image.as_raw().as_chunks::<4>().0;
+        for (row, &(top, bottom, wy)) in output
+            .as_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .chunks_exact_mut(next[0] as usize)
+            .zip(&ys)
+        {
+            let upper_row = &source[top as usize * width..(top as usize + 1) * width];
+            let lower_row = &source[bottom as usize * width..(bottom as usize + 1) * width];
+            for (pixel, &(left, right, wx)) in row.iter_mut().zip(&xs) {
+                let c00 = upper_row[left as usize];
+                let c01 = upper_row[right as usize];
+                let c10 = lower_row[left as usize];
+                let c11 = lower_row[right as usize];
                 for c in 0..4 {
                     let upper =
                         (u32::from(c00[c]) * wx + u32::from(c01[c]) * (16777216 - wx)) >> 24;
@@ -873,3 +901,7 @@ mod tests {
         std::fs::remove_file(path).expect("remove decode fixture");
     }
 }
+
+#[cfg(test)]
+#[path = "texture_pixels_perf.rs"]
+mod texture_pixels_perf;
