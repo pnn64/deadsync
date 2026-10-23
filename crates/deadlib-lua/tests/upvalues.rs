@@ -1,6 +1,63 @@
 use mlua::{Error, Function, Lua, MultiValue, Result, Value, ffi};
 
 #[test]
+fn restoring_an_upvalue_preserves_shared_cells_and_gc_roots() -> Result<()> {
+    let lua = Lua::new();
+    let (read, other, write): (Function, Function, Function) = lua
+        .load("local x={}; return function() return x end, function() return x end, function(v) x=v end")
+        .eval()?;
+    let original: Value = read.call(())?;
+    write.call::<()>(17)?;
+    assert_eq!(other.call::<i32>(())?, 17);
+    assert!(read.set_upvalue(1, original.clone())?);
+    lua.gc_collect()?;
+    assert_eq!(read.call::<Value>(())?, original);
+    assert_eq!(other.call::<Value>(())?, original);
+    write.call::<()>(false)?;
+    assert_eq!(read.call::<bool>(())?, false);
+    assert!(!read.set_upvalue(0, true)?);
+    assert!(!read.set_upvalue(255, true)?);
+    let native = lua.create_function(|_, ()| Ok(42))?;
+    assert!(!native.set_upvalue(1, true)?);
+    assert_eq!(native.call::<i32>(())?, 42);
+    for bits in [(-0.0_f64).to_bits(), 0x7ff8_0000_0000_1234] {
+        assert!(read.set_upvalue(1, f64::from_bits(bits))?);
+        let value: f64 = other.call(())?;
+        assert_eq!(value.to_bits(), bits);
+    }
+    Ok(())
+}
+
+#[test]
+fn failed_upvalue_conversion_restores_stack_and_leaves_cell_unchanged() -> Result<()> {
+    struct Fails;
+    impl mlua::IntoLua for Fails {
+        fn into_lua(self, _: &Lua) -> Result<Value> {
+            Err(Error::runtime("cannot convert saved value"))
+        }
+    }
+    let lua = Lua::new();
+    let function: Function = lua.load("local x=17; return function() return x end").eval()?;
+    lua.exec_raw_lua(|raw| -> Result<()> {
+        // SAFETY: this scope owns the lock and reserves its marker slot.
+        unsafe {
+            assert_ne!(ffi::lua_checkstack(raw.state(), 4), 0);
+            raw.push(42)?;
+            let top = ffi::lua_gettop(raw.state());
+            assert!(function.set_upvalue(1, Fails).is_err());
+            assert_eq!(ffi::lua_gettop(raw.state()), top);
+            assert_eq!(function.call::<i32>(())?, 17);
+            assert!(function.set_upvalue(1, 23)?);
+            assert_eq!(ffi::lua_gettop(raw.state()), top);
+            assert_eq!(raw.pop::<i32>()?, 42);
+        }
+        Ok(())
+    })?;
+    assert_eq!(function.call::<i32>(())?, 23);
+    Ok(())
+}
+
+#[test]
 fn upvalue_names_values_and_aliases_survive_gc_and_reentrant_calls() -> Result<()> {
     let lua = Lua::new();
     let function: Function = lua

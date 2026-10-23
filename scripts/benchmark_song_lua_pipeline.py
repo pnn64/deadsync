@@ -24,7 +24,7 @@ def main():
                         help="Measure only the named workload; may be repeated")
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs", "state_boundaries"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -69,6 +69,9 @@ def main():
     if args.suite == "navigation_inputs":
         cases = [("offline_navigation_inputs", "offline", "crates/deadsync-song-lua/tests/perf/navigation_inputs.lua"),
                  ("live_navigation_inputs", "live", "crates/deadsync-song-lua/tests/perf/navigation_inputs.lua")]
+    if args.suite == "state_boundaries":
+        cases = [("offline_state_boundaries", "offline", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+                 ("live_state_boundaries", "live", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua")]
     if args.only:
         selected = set(args.only)
         cases = [case for case in cases if case[0] in selected]

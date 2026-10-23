@@ -18773,17 +18773,9 @@ fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -
     for cell in snapshot.cells.sequence_values::<Table>() {
         let cell = cell?;
         let function = cell.raw_get::<Function>(1)?;
-        let index = cell.raw_get::<i64>(2)?;
+        let index = cell.raw_get::<u8>(2)?;
         let value = cell.raw_get::<Value>(3)?;
-        // SAFETY: exec_raw owns the function, index and saved value on its
-        // stack. lua_setupvalue consumes only the saved value; no Lua stack
-        // references escape this call.
-        unsafe {
-            lua.exec_raw::<()>((function, index, value), |state| {
-                ffi::lua_setupvalue(state, 1, ffi::lua_tointeger(state, 2) as c_int);
-                ffi::lua_settop(state, 0);
-            })?;
-        }
+        function.set_upvalue(index, value)?;
     }
     for row in snapshot.tables.sequence_values::<Table>() {
         let row = row?;
@@ -23944,10 +23936,11 @@ pub fn create_color_constants_table(lua: &Lua) -> mlua::Result<Table> {
 
 #[inline(always)]
 fn table_color(table: &Table) -> Option<[f32; 4]> {
+    let [r, g, b] = table.raw_get_array::<f32, 3>().ok()?;
     Some([
-        table.raw_get::<f32>(1).ok()?,
-        table.raw_get::<f32>(2).ok()?,
-        table.raw_get::<f32>(3).ok()?,
+        r,
+        g,
+        b,
         table.raw_get::<Option<f32>>(4).ok()?.unwrap_or(1.0),
     ])
 }

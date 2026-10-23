@@ -193,7 +193,7 @@ fn cycles() -> u64 {
 }
 
 #[cfg(windows)]
-fn pin() {
+pub(super) fn pin() {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentThread() -> *mut std::ffi::c_void;
@@ -207,7 +207,7 @@ fn pin() {
 }
 
 #[cfg(windows)]
-fn compare(name: &str, batch: usize, mut work: impl FnMut(bool)) {
+pub(super) fn compare(name: &str, batch: usize, mut work: impl FnMut(bool)) {
     for sample in 0..10 {
         for current in [sample % 2 != 0, sample % 2 == 0] {
             let start = std::time::Instant::now();

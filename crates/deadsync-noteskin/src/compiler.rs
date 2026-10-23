@@ -1004,28 +1004,25 @@ fn normalize_table_aliases(
     let Some(table) = noteskin.get::<Option<Table>>(table_key)? else {
         return Ok(());
     };
-    let mut existing = SmallVec::<[(u64, mlua::LuaString, Value); 8]>::new();
-    for pair in table.pairs::<Value, Value>() {
-        let (key, value) = pair?;
+    let mut existing = SmallVec::<[(u64, mlua::BorrowedStr, Value); 8]>::new();
+    table.for_each::<Value, Value>(|key, value| {
         let Value::String(text) = key else {
-            continue;
+            return Ok(());
         };
-        let Ok(text_ref) = text.to_str() else {
-            continue;
+        let Ok(text) = mlua::BorrowedStr::try_from(text) else {
+            return Ok(());
         };
-        let fingerprint = ascii_case_hash(&text_ref);
+        let fingerprint = ascii_case_hash(&text);
         existing.push((fingerprint, text, value));
-    }
+        Ok(())
+    })?;
     for want in canonical_keys {
         if table.contains_key(want.as_str())? {
             continue;
         }
         let fingerprint = ascii_case_hash(want);
         if let Some((_, _, value)) = existing.iter().find(|(hash, have, _)| {
-            *hash == fingerprint
-                && have
-                    .to_str()
-                    .is_ok_and(|have| have.eq_ignore_ascii_case(want))
+            *hash == fingerprint && have.eq_ignore_ascii_case(want)
         }) {
             table.set(want.as_str(), value.clone())?;
         }
@@ -1670,3 +1667,7 @@ mod resource_perf;
 #[cfg(test)]
 #[path = "compiler_callbacks_perf.rs"]
 mod callbacks_perf;
+
+#[cfg(test)]
+#[path = "compiler_aliases_perf.rs"]
+mod aliases_perf;

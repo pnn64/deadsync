@@ -523,6 +523,31 @@ impl Function {
         Ok(())
     }
 
+    /// Replaces a Lua closure's one-based upvalue without replacing its cell.
+    ///
+    /// Other closures sharing the cell observe the new value. Returns `false`
+    /// for a missing index (including zero) or a native C closure. Native
+    /// callback storage is private and cannot be changed with this method.
+    /// The value is converted before checking the index; conversion errors
+    /// leave the upvalue unchanged. No authored code runs during the write.
+    pub fn set_upvalue(&self, index: u8, value: impl IntoLua) -> Result<bool> {
+        let lua = self.0.lua.lock();
+        let state = lua.state();
+        // SAFETY: the lock and guard cover the rooted function and converted
+        // value. setupvalue writes an existing cell and runs the GC barrier;
+        // it neither allocates nor invokes Lua. C closure internals are excluded.
+        unsafe {
+            let _sg = StackGuard::new(state);
+            check_stack(state, 3)?;
+            lua.push_ref(&self.0);
+            value.push_into_stack(&lua)?;
+            if index == 0 || ffi::lua_iscfunction(state, -2) != 0 {
+                return Ok(false);
+            }
+            Ok(!ffi::lua_setupvalue(state, -2, index.into()).is_null())
+        }
+    }
+
     /// Dumps the function as a binary chunk.
     ///
     /// If `strip` is true, the binary representation may not include all debug information

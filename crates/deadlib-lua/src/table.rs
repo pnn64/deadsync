@@ -502,6 +502,38 @@ impl Table {
         }
     }
 
+    /// Reads exactly `N` array slots, starting at one, without invoking metamethods.
+    ///
+    /// Unlike sequence iteration, nil does not stop the reads. Extra slots are
+    /// ignored. Each value is converted before reading the next slot, so a
+    /// custom conversion can change later values. The first conversion error
+    /// stops the operation. The table is locked and rooted once for the batch;
+    /// no temporary collection is allocated.
+    pub fn raw_get_array<V: FromLua, const N: usize>(&self) -> Result<[V; N]> {
+        if N > c_int::MAX as usize {
+            return Err(Error::runtime("array length exceeds the Lua index range"));
+        }
+        let lua = self.0.lua.lock();
+        let state = lua.state();
+        let mut values = std::array::from_fn::<_, N, _>(|_| None);
+        // SAFETY: the table stays rooted under the lock and stack guard. Each
+        // raw read uses one checked slot; checked conversion finishes before
+        // that slot is popped. No borrowed pointers escape. The index bound
+        // also supports Lua versions whose rawgeti accepts only c_int.
+        unsafe {
+            let _sg = StackGuard::new(state);
+            check_stack(state, 3)?;
+            lua.push_ref(&self.0);
+            let table = ffi::lua_gettop(state);
+            for (index, value) in values.iter_mut().enumerate() {
+                ffi::lua_rawgeti(state, table, (index + 1) as _);
+                *value = Some(V::from_stack(-1, &lua)?);
+                ffi::lua_pop(state, 1);
+            }
+        }
+        Ok(values.map(|value| value.expect("all array slots converted")))
+    }
+
     /// Inserts element value at position `idx` to the table, shifting up the elements from
     /// `table[idx]`.
     ///
