@@ -158,7 +158,7 @@ fn thread_cycles() -> u64 {
 }
 
 #[cfg(windows)]
-fn pin_worker() {
+pub(super) fn pin_worker() {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentThread() -> *mut std::ffi::c_void;
@@ -171,7 +171,7 @@ fn pin_worker() {
     );
 }
 
-fn compare<T>(
+pub(super) fn compare<T>(
     label: &str,
     count: usize,
     mut prepare: impl FnMut() -> T,

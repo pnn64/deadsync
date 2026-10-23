@@ -395,19 +395,21 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
     let mut row = vec![0; pitch];
     input.seek(SeekFrom::Start(u64::from(data_offset)))?;
     let mut image = RgbaImage::new(size[0], size[1]);
+    let stride = size[0] as usize * 4;
     for row_index in 0..size[1] {
         let y = if top_down { row_index } else { size[1] - 1 - row_index };
         input.read_exact(&mut row)?;
-        for x in 0..size[0] {
+        let destination = &mut image.as_mut()[y as usize * stride..][..stride];
+        for (x, pixel) in destination.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             let index = match bits {
-                1 => (row[x as usize / 8] >> (7 - x % 8)) & 1,
-                4 => (row[x as usize / 2] >> (4 * (1 - x % 2))) & 15,
-                _ => row[x as usize],
+                1 => (row[x / 8] >> (7 - x % 8)) & 1,
+                4 => (row[x / 2] >> (4 * (1 - x % 2))) & 15,
+                _ => row[x],
             };
             if u32::from(index) >= color_count {
                 return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
             }
-            image.put_pixel(x, y, image::Rgba(colors[index as usize]));
+            *pixel = colors[index as usize];
         }
     }
     if color_key {
@@ -486,11 +488,23 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
             key_palette(&mut colors);
         }
         let bits = info.bit_depth as usize;
-        for (x, y, pixel) in image.enumerate_pixels_mut() {
-            let bit = x as usize * bits;
-            let byte = bytes[y as usize * info.line_size + bit / 8];
-            let index = (byte >> (8 - bits - bit % 8)) & ((1u16 << bits) - 1) as u8;
-            pixel.0 = colors[index as usize];
+        let pixels = image.as_mut().as_chunks_mut::<4>().0;
+        if bits == 8 {
+            for (pixel, &index) in pixels.iter_mut().zip(&bytes[..info.buffer_size()]) {
+                *pixel = colors[index as usize];
+            }
+        } else {
+            let mask = ((1u16 << bits) - 1) as u8;
+            for (pixels, row) in pixels
+                .chunks_exact_mut(info.width as usize)
+                .zip(bytes.chunks_exact(info.line_size))
+            {
+                for (x, pixel) in pixels.iter_mut().enumerate() {
+                    let bit = x * bits;
+                    let index = (row[bit / 8] >> (8 - bits - bit % 8)) & mask;
+                    *pixel = colors[index as usize];
+                }
+            }
         }
     } else {
         let channels = info.color_type.samples();
@@ -527,9 +541,21 @@ fn key_rgba(image: &mut RgbaImage) {
     } else {
         [255, 0, 255, 255]
     };
-    for pixel in image.pixels_mut() {
-        if pixel.0 == key {
-            pixel.0 = [0; 4];
+    let key = u32::from_ne_bytes(key);
+    let length = image.width() as usize * image.height() as usize * 4;
+    // Scan 16 RGBA pixels per block, avoiding writes to blocks without the key.
+    for block in image.as_mut()[..length].chunks_mut(64) {
+        let pixels = block.as_chunks_mut::<4>().0;
+        let mut has_key = false;
+        for pixel in &*pixels {
+            has_key |= u32::from_ne_bytes(*pixel) == key;
+        }
+        if has_key {
+            for pixel in pixels {
+                let value = u32::from_ne_bytes(*pixel);
+                let keep = u32::from(value != key).wrapping_neg();
+                *pixel = (value & keep).to_ne_bytes();
+            }
         }
     }
 }
@@ -905,3 +931,7 @@ mod tests {
 #[cfg(test)]
 #[path = "texture_pixels_perf.rs"]
 mod texture_pixels_perf;
+
+#[cfg(test)]
+#[path = "indexed_pixels_perf.rs"]
+mod indexed_pixels_perf;
