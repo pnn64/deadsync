@@ -4387,10 +4387,10 @@ pub fn install_actor_metatable(
             };
             // Luna::tostring_T exposes only type and opaque object identity.
             #[cfg(target_os = "windows")]
-            let identity = format!("{:016X}", actor.to_pointer() as usize);
+            let text = format!("{kind} ({:016X})", actor.to_pointer() as usize);
             #[cfg(not(target_os = "windows"))]
-            let identity = format!("{:p}", actor.to_pointer());
-            Ok(format!("{kind} ({identity})"))
+            let text = format!("{kind} ({:p})", actor.to_pointer());
+            Ok(text)
         })?,
     )?;
     let _ = actor.set_metatable(Some(mt));

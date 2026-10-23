@@ -613,7 +613,7 @@ pub(crate) fn take<Kind>(
         };
         sources.insert(actor.table.to_pointer() as usize, source);
     }
-    convert(capture, &sources)
+    convert(capture.frames, &capture.labels, &sources)
 }
 
 pub(crate) struct LiveSources(pub FxHashMap<usize, DrawSource>);
@@ -625,22 +625,25 @@ pub(crate) fn take_live(lua: &Lua) -> Result<Vec<DrawFrame>, String> {
     }
     if lua.app_data_ref::<LiveSources>().is_none() { return Ok(Vec::new()); }
     let mut capture = lua.remove_app_data::<Capture>().expect("complete capture frames");
-    let (immediate, normal) = std::mem::take(&mut capture.frames).into_iter()
-        .partition::<Vec<_>, _>(|frame| frame.immediate);
-    let frozen = Capture { frames: immediate, labels: capture.labels.clone(), ..Capture::default() };
-    capture.frames = normal;
+    let immediate = capture.frames.extract_if(.., |frame| frame.immediate).collect();
+    // Conversion reads labels only for errors and invokes no Lua callbacks.
+    // Borrow them before restoring capture, including when conversion fails.
+    let result = {
+        let sources = lua.app_data_ref::<LiveSources>().expect("live source bindings");
+        convert(immediate, &capture.labels, &sources.0)
+    };
     if capture.frames.is_empty() && capture.calls.is_empty() && capture.targets.is_empty() {
         capture.bytes = 0;
         capture.frame_ops = 0;
         capture.labels.clear();
     }
     lua.set_app_data(capture);
-    let sources = lua.app_data_ref::<LiveSources>().expect("live source bindings");
-    convert(frozen, &sources.0).map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
+    result.map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
 }
 
 fn convert(
-    capture: Capture,
+    raw_frames: Vec<RawFrame>,
+    labels: &FxHashMap<usize, String>,
     sources: &FxHashMap<usize, DrawSource>,
 ) -> Result<Vec<(usize, DrawFrame)>, String> {
     let overlay_index = |pointer| match sources.get(&pointer) {
@@ -648,7 +651,7 @@ fn convert(
         _ => Err("custom draw references an uncompiled capture or callback owner".to_owned()),
     };
     let mut owners = Vec::new();
-    for frame in capture.frames.iter().filter(|frame| !frame.immediate) {
+    for frame in raw_frames.iter().filter(|frame| !frame.immediate) {
         for &owner in &frame.owners {
             if !owners.contains(&owner) {
                 owners.push(owner);
@@ -657,8 +660,7 @@ fn convert(
     }
     // Normal frames include the union of callback owners, even quiet tails.
     // Duplicate authored pointers may need extra slots and retain Vec growth.
-    let capacity = capture
-        .frames
+    let capacity = raw_frames
         .iter()
         .map(|frame| {
             if frame.immediate {
@@ -671,7 +673,7 @@ fn convert(
     let mut frames = Vec::with_capacity(capacity);
     let mut positions = FxHashMap::<usize, usize>::default();
     let mut counts = Vec::new();
-    for raw in capture.frames {
+    for raw in raw_frames {
         let mut frame_owners = raw.owners;
         for &owner in owners.iter().filter(|_| !raw.immediate) {
             if !frame_owners.contains(&owner) {
@@ -740,8 +742,7 @@ fn convert(
                     source: *sources.get(&pointer).ok_or_else(|| {
                         format!(
                             "custom draw references an uncompiled actor {} at {:.6}s",
-                            capture
-                                .labels
+                            labels
                                 .get(&pointer)
                                 .map_or("<unnamed>", String::as_str),
                             raw.second,
@@ -779,3 +780,7 @@ fn convert(
 pub(crate) mod perf {
     include!("../tests/perf/draw_capture.rs");
 }
+
+#[cfg(test)]
+#[path = "../tests/perf/live_extract.rs"]
+mod live_extract_perf;

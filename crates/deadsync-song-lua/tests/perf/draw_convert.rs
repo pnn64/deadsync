@@ -36,7 +36,7 @@ fn compare(build: impl Fn() -> (Capture, FxHashMap<usize, DrawSource>)) {
     let (input, sources) = build();
     let old = before::convert(input, &sources);
     let (input, sources) = build();
-    let new = convert(input, &sources);
+    let new = convert(input.frames, &input.labels, &sources);
     assert_eq!(format!("{old:?}"), format!("{new:?}"));
 }
 
@@ -169,7 +169,7 @@ fn conversion_moves_retained_payloads_and_all_source_variants() {
             op: RawOp::Finish(2),
         });
         let result = if current {
-            convert(capture, &sources)
+            convert(capture.frames, &capture.labels, &sources)
         } else {
             before::convert(capture, &sources)
         }
@@ -260,7 +260,7 @@ fn benchmark_conversion() {
                 let start_cycles = cycles();
                 let (output, churn) = allocations::measure(|| {
                     if current {
-                        convert(input, &sources)
+                        convert(input.frames, &input.labels, &sources)
                     } else {
                         before::convert(input, &sources)
                     }

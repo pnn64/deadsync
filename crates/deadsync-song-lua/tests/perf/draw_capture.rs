@@ -196,7 +196,8 @@ fn finish(
     sources: &FxHashMap<usize, DrawSource>,
 ) -> Result<Vec<(usize, DrawFrame)>, String> {
     if current {
-        convert(lua.remove_app_data::<Capture>().unwrap(), sources)
+        let capture = lua.remove_app_data::<Capture>().unwrap();
+        convert(capture.frames, &capture.labels, sources)
     } else {
         baseline::finish_for_test(lua, sources)
     }

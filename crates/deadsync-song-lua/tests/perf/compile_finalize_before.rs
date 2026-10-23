@@ -618,6 +618,7 @@ where
             crate::perframe::update_function_end_beat(context),
         )
         .into_iter(),
+        crate::perframe::reference_actor_frames(context).as_deref(),
     );
     compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
