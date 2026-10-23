@@ -16842,10 +16842,11 @@ return Def.ActorFrame{
         assert_eq!(compiled.messages[0].message, "ok");
         assert_eq!(compiled.overlays.len(), 1);
         let colors = compiled.overlays[0].initial_state.vertex_colors.unwrap();
+        // ITGmania Actor.h's diffuse state order is UL, UR, LL, LR.
         assert_eq!(colors[0], [1.0, 0.0, 0.0, 1.0]);
         assert_eq!(colors[1], [0.0, 1.0, 0.0, 1.0]);
-        assert_eq!(colors[2], [1.0, 1.0, 0.0, 1.0]);
-        assert_eq!(colors[3], [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(colors[2], [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(colors[3], [1.0, 1.0, 0.0, 1.0]);
     }
 
     #[test]

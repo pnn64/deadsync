@@ -2436,12 +2436,13 @@ return Def.Quad { InitCommand=function(self) Q=self end }
         let actor: Table = scene.lua.globals().get("Q").unwrap();
         let base = [0.25, 0.5, 0.75, 1.0];
         let color = [1.0, 0.75, 0.5, 0.25];
-        // Actor.h's corners use the renderer's clockwise order here: UL, UR, LR, LL.
+        // ITGmania Actor.h stores diffuse corners as UL, UR, LL, LR.
+        // Sprite.cpp maps those slots to render vertices separately.
         for (method, mask) in [
             ("diffuseupperleft", 1), ("diffuseupperright", 2),
-            ("diffuselowerleft", 8), ("diffuselowerright", 4),
-            ("diffusetopedge", 3), ("diffuserightedge", 6),
-            ("diffusebottomedge", 12), ("diffuseleftedge", 9),
+            ("diffuselowerleft", 4), ("diffuselowerright", 8),
+            ("diffusetopedge", 3), ("diffuserightedge", 10),
+            ("diffusebottomedge", 12), ("diffuseleftedge", 5),
         ] {
             for queued in [false, true] {
                 crate::lua_util::init_actor_native_state(&scene.lua, &actor).unwrap();

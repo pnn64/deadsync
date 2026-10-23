@@ -135,15 +135,23 @@ fn fixture_with_properties(
                 index,
                 properties,
             );
-            // Exercise external proxies and both String-compatible name reads.
+            // ActorProxy::EarlyAbortDraw in ITGmania skips targetless proxies.
+            // Bind a native player target; a screen-child label on the proxy
+            // itself does not replace SetTarget (the frozen reader allowed it).
             if leaf % 3 == 0 {
-                child
-                    .raw_set("__songlua_top_screen_child_name", "PlayerP1")
-                    .unwrap();
+                let target = actor(&lua, "Player", index);
+                target.raw_set("__songlua_player_index", owner % 2).unwrap();
+                crate::lua_util::set_proxy_target_fields(&child, &target).unwrap();
             }
+            // Exercise both String-compatible native child-name reads.
             if leaf % 3 == 1 {
                 child
                     .raw_set("__songlua_player_child_name", "Combo")
+                    .unwrap();
+            }
+            if leaf % 3 == 2 {
+                child
+                    .raw_set("__songlua_top_screen_child_name", "SongForeground")
                     .unwrap();
             }
             let states = lua.create_table().unwrap();
