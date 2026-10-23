@@ -99,24 +99,50 @@ pub(crate) fn bindings() -> Bindings {
     }
 }
 
+enum Name {
+    Static(&'static [u8]),
+    Formatted(SmallVec<[u8; 64]>),
+}
+
+impl std::ops::Deref for Name {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            Self::Static(value) => value,
+            Self::Formatted(value) => value,
+        }
+    }
+}
+
 pub(crate) struct Frame {
-    controller: Option<SmallVec<[u8; 64]>>,
-    player: Option<SmallVec<[u8; 64]>>,
+    controller: Option<Name>,
+    player: Option<Name>,
 }
 
 impl Frame {
     pub fn new(input: &SongLuaInputEvent<'_>) -> Self {
-        fn name(prefix: &[u8], index: Option<usize>) -> Option<SmallVec<[u8; 64]>> {
+        fn name(prefix: &[u8], common: [&'static [u8]; 2], index: Option<usize>) -> Option<Name> {
             index.map(|index| {
+                if let Some(value) = common.get(index) {
+                    return Name::Static(value);
+                }
                 let mut bytes = SmallVec::from_slice(prefix);
                 let mut number = itoa::Buffer::new();
                 bytes.extend_from_slice(number.format(index + 1).as_bytes());
-                bytes
+                Name::Formatted(bytes)
             })
         }
         Self {
-            controller: name(b"GameController_", input.controller),
-            player: name(b"PlayerNumber_P", input.player),
+            controller: name(
+                b"GameController_",
+                [b"GameController_1", b"GameController_2"],
+                input.controller,
+            ),
+            player: name(
+                b"PlayerNumber_P",
+                [b"PlayerNumber_P1", b"PlayerNumber_P2"],
+                input.player,
+            ),
         }
     }
 

@@ -1077,8 +1077,9 @@ impl SongLuaLiveScene {
     /// States and captured actor bindings are copied at this point. Subsequent
     /// live scene activity is independent of this snapshot.
     ///
-    /// Captured actors and authenticated native `visible(boolean)` calls are
-    /// supported. Globals, shared scalar captures, event mutation and other
+    /// Captured actors, raw scalar tables shared by callbacks and authenticated
+    /// native `visible(boolean)` calls are supported. Globals, scalar upvalues,
+    /// event mutation and other
     /// methods reject the whole input snapshot without executing callbacks.
     pub fn compile_actor_inputs(&self) -> Option<crate::SongLuaCompiledActorInputs> {
         if self.ended { return None; }

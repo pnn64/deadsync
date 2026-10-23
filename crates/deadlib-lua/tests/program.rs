@@ -48,6 +48,200 @@ struct Row {
 }
 
 #[test]
+fn grouped_callbacks_share_actual_cells_and_survive_loading_vm_destruction() {
+    let dropped = Arc::new(AtomicBool::new(false));
+    let (mut group, expected) = {
+        let lua = Lua::new();
+        lua.set_app_data(Dropped(dropped.clone()));
+        let actions = Arc::new(Mutex::new(Vec::new()));
+        let actor = lua.create_table().unwrap();
+        actor
+            .set(
+                "visible",
+                lua.create_function({
+                    let actor = actor.clone();
+                    let actions = actions.clone();
+                    move |_, (_, value): (Table, bool)| {
+                        actions.lock().unwrap().push(value);
+                        Ok(actor.clone())
+                    }
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let factory: Function = lua.load(r#"return function(actor)
+            local state={held=false,count=-0.0}
+            local alias=state
+            return function(e)
+                if e.button=='Right' then state.held=not state.held;actor:visible(state.held) end
+                return false
+            end,function(e)
+                if e.type=='Release' then alias.count=alias.count+1;alias.held=false;actor:visible(false) end
+                return alias.held
+            end,state
+        end"#).eval().unwrap();
+        let (first, second, shared): (Function, Function, Table) =
+            factory.call(actor.clone()).unwrap();
+        let mut bindings = Bindings {
+            arguments: vec![Binding::Object(0)],
+            cells: vec![Cell::Boolean(false), Cell::Number(-0.0)],
+            fields: vec![
+                input("button", 0, Types::BYTES),
+                input("type", 1, Types::BYTES),
+                property(2, "held", 0),
+                property(2, "count", 1),
+                visible(),
+            ],
+            ..Bindings::default()
+        };
+        let mut programs = Vec::new();
+        for callback in [&first, &second] {
+            bindings.upvalues.clear();
+            callback
+                .for_each_upvalue_as::<mlua::InspectionValue>(|_, _, value| {
+                    let mlua::InspectionValue::Table(table) = value else {
+                        panic!("table capture");
+                    };
+                    let object = if table.to_pointer() == actor.to_pointer() {
+                        1
+                    } else {
+                        assert_eq!(table.to_pointer(), shared.to_pointer());
+                        2
+                    };
+                    bindings.upvalues.push(Binding::Object(object));
+                    Ok(())
+                })
+                .unwrap();
+            programs.push(program::compile(callback, &bindings).unwrap());
+        }
+        let group = program::Group::new(programs).unwrap();
+        let mut expected = Vec::new();
+        for index in 0..24 {
+            let event = lua.create_table().unwrap();
+            event
+                .set("button", if index % 3 == 0 { "Left" } else { "Right" })
+                .unwrap();
+            event
+                .set("type", if index % 4 == 0 { "Release" } else { "Repeat" })
+                .unwrap();
+            let a = first.call::<Value>(event.clone()).unwrap();
+            let b = second.call::<Value>(event).unwrap();
+            expected.push((
+                !matches!(a, Value::Nil | Value::Boolean(false)),
+                !matches!(b, Value::Nil | Value::Boolean(false)),
+                shared.get::<bool>("held").unwrap(),
+                shared.get::<f64>("count").unwrap().to_bits(),
+                std::mem::take(&mut *actions.lock().unwrap()),
+            ));
+        }
+        (group, expected)
+    };
+    assert!(dropped.load(Ordering::SeqCst));
+    assert_eq!(group.cell(1), Some(Datum::Number(-0.0)));
+    for (index, (a, b, held, count, expected_actions)) in expected.into_iter().enumerate() {
+        let inputs = [
+            Datum::Bytes(if index % 3 == 0 { b"Left" } else { b"Right" }),
+            Datum::Bytes(if index % 4 == 0 {
+                b"Release"
+            } else {
+                b"Repeat"
+            }),
+        ];
+        let mut actions = Vec::new();
+        let mut run = |which| {
+            group
+                .run(which, &inputs, |tag, args| {
+                    assert_eq!(tag, 7);
+                    let Some(Datum::Boolean(value)) = args.get(1) else {
+                        panic!("boolean action")
+                    };
+                    actions.push(value);
+                })
+                .unwrap()
+                .unwrap()
+                .is_truthy()
+        };
+        assert_eq!(run(0), a);
+        assert_eq!(run(1), b);
+        assert_eq!(actions, expected_actions);
+        assert_eq!(group.cell(0), Some(Datum::Boolean(held)));
+        let Some(Datum::Number(value)) = group.cell(1) else {
+            panic!("number cell")
+        };
+        assert_eq!(value.to_bits(), count);
+    }
+    assert!(
+        group
+            .run(2, &[], |_, _| panic!("invalid index has no effects"))
+            .is_none()
+    );
+}
+
+#[test]
+fn groups_check_cell_layout_bits_and_clear_scratch_between_programs() {
+    let lua = Lua::new();
+    let callback: Function = lua
+        .load("local n=0;return function()return n end")
+        .eval()
+        .unwrap();
+    let compile = |cell| {
+        program::compile(
+            &callback,
+            &Bindings {
+                upvalues: vec![Binding::Cell(0)],
+                cells: vec![cell],
+                ..Bindings::default()
+            },
+        )
+        .unwrap()
+    };
+    assert!(
+        program::Group::new(vec![
+            compile(Cell::Number(-0.0)),
+            compile(Cell::Number(0.0))
+        ])
+        .is_err()
+    );
+    assert!(
+        program::Group::new(vec![
+            compile(Cell::Boolean(false)),
+            compile(Cell::Number(0.0))
+        ])
+        .is_err()
+    );
+    let bits = 0x7ff8_0000_0000_1234;
+    let group = program::Group::new(vec![
+        compile(Cell::Number(f64::from_bits(bits))),
+        compile(Cell::Number(f64::from_bits(bits))),
+    ])
+    .unwrap();
+    let Some(Datum::Number(value)) = group.cell(0) else {
+        panic!("number cell")
+    };
+    assert_eq!(value.to_bits(), bits);
+    let a: Function = lua
+        .load("return function()local a,b,c,d,e,f,g=1,2,3,4,5,6,7;return g end")
+        .eval()
+        .unwrap();
+    let b: Function = lua
+        .load("return function()local a;return a end")
+        .eval()
+        .unwrap();
+    let mut group = program::Group::new(vec![
+        program::compile(&a, &Bindings::default()).unwrap(),
+        program::compile(&b, &Bindings::default()).unwrap(),
+    ])
+    .unwrap();
+    for _ in 0..10 {
+        assert_eq!(
+            group.run(0, &[], |_, _| {}).unwrap().unwrap(),
+            Datum::Number(7.0)
+        );
+        assert_eq!(group.run(1, &[], |_, _| {}).unwrap().unwrap(), Datum::Nil);
+    }
+}
+
+#[test]
 fn real_branching_inputs_actions_and_aliased_state_survive_vm_destruction() {
     let dropped = Arc::new(AtomicBool::new(false));
     let sequence = [

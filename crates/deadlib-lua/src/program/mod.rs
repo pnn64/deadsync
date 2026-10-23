@@ -10,9 +10,9 @@
 //! shared cells. The compiler cannot infer these promises from field names or
 //! equal captured values. Hosts must validate them against their Lua objects.
 //! These contracts must hold for every call, including action side effects.
-//! Mutable captures must be private to this machine; another callback or live
-//! Lua object must not observe or change their former storage. Cells are shared
-//! within one machine, not between independent machines. Actions cannot change
+//! Mutable captures must be private to one machine or explicitly shared group;
+//! live Lua must not observe or change their former storage. A group binds
+//! the same host-established cell indices across its programs. Actions cannot change
 //! inputs or native cells indirectly, and must have the declared static return.
 //! Mutable cells keep one fixed boolean or number type. String/number coercion,
 //! dynamic lookup, object equality, loops and general Lua calls are unsupported.
@@ -405,115 +405,214 @@ impl Machine {
     pub fn run<'a>(
         &'a mut self,
         inputs: &'a [Datum<'a>],
-        mut emit: impl FnMut(u32, Arguments<'_>),
+        emit: impl FnMut(u32, Arguments<'_>),
     ) -> Result<Datum<'a>, RunError> {
-        let code = &self.program.0;
-        let registers = &mut self.registers;
-        registers.fill(Value::Nil);
-        for (dst, source) in code.parameters.iter().enumerate() {
-            registers[dst] = read(*source, &self.cells, inputs)?;
+        execute(
+            &self.program.0,
+            &mut self.cells,
+            &mut self.registers,
+            inputs,
+            emit,
+        )
+    }
+}
+
+/// Programs with one explicit cell store and one reusable scratch buffer.
+///
+/// The host declares that identical cell indices refer to the same logical
+/// storage across programs. Matching initial values do not prove aliasing.
+/// Construction checks complete initial layouts, including numeric bits; the
+/// host must establish identity and exclude observers outside this owner.
+/// Programs execute in the order selected by the host. No Lua handles remain.
+pub struct Group {
+    programs: Box<[Program]>,
+    cells: Box<[Value]>,
+    registers: Box<[Value]>,
+}
+
+impl Group {
+    /// Consume programs using the same host-established cell layout.
+    pub fn new(programs: Vec<Program>) -> Result<Self, CompileError> {
+        let initial = programs.first().map_or(&[][..], |p| p.0.cells.as_ref());
+        if programs.iter().any(|p| p.0.cells.as_ref() != initial) {
+            return Err(CompileError::InvalidBindings("shared cell layout"));
         }
-        let mut pc = 0;
-        loop {
-            let op = code.ops[pc];
-            pc += 1;
-            match op {
-                Op::Unreachable => unreachable!("verified control flow"),
-                Op::Load { dst, source, skip } => {
-                    registers[dst] = read(source, &self.cells, inputs)?;
-                    pc += usize::from(skip);
-                }
-                Op::Move { dst, source } => registers[dst] = registers[source],
-                Op::Nil { first, last } => registers[first..=last].fill(Value::Nil),
-                Op::Write { cell, source } => self.cells[cell] = source.get(registers),
-                Op::Method {
-                    dst,
-                    receiver,
-                    action,
-                } => {
-                    let value = registers[receiver];
-                    registers[dst + 1] = value;
-                    registers[dst] = Value::Action(action);
-                }
-                Op::Not { dst, source } => registers[dst] = Value::Boolean(!registers[source].truthy()),
-                Op::Neg { dst, source } => {
-                    registers[dst] = Value::Number((-registers[source].number()).to_bits())
-                }
-                Op::Arithmetic {
-                    dst,
-                    left,
-                    right,
-                    operator,
-                } => {
-                    let (a, b) = (left.get(registers).number(), right.get(registers).number());
-                    registers[dst] = Value::Number(
-                        match operator {
-                            12 => a + b,
-                            13 => a - b,
-                            14 => a * b,
-                            15 => a / b,
-                            _ => unreachable!(),
-                        }
-                        .to_bits(),
-                    );
-                }
-                Op::Compare {
-                    left,
-                    right,
-                    operator,
-                    expected,
-                } => {
-                    let (a, b) = (left.get(registers), right.get(registers));
-                    let equal = match operator {
-                        23 => equal(a, b, code, inputs),
-                        24 => a.number() < b.number(),
-                        25 => a.number() <= b.number(),
+        let cells = initial.to_vec().into_boxed_slice();
+        let registers =
+            vec![Value::Nil; programs.iter().map(|p| p.0.registers).max().unwrap_or(0)].into_boxed_slice();
+        Ok(Self {
+            programs: programs.into_boxed_slice(),
+            cells,
+            registers,
+        })
+    }
+
+    pub fn len(&self) -> usize {
+        self.programs.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.programs.is_empty()
+    }
+
+    /// Current scalar state; values and aliases are never merged by equality.
+    pub fn cell(&self, index: usize) -> Option<Datum<'_>> {
+        self.cells.get(index).map(|value| match *value {
+            Value::Boolean(value) => Datum::Boolean(value),
+            Value::Number(bits) => Datum::Number(f64::from_bits(bits)),
+            _ => unreachable!("verified scalar cell"),
+        })
+    }
+
+    /// Execute one program. None means an invalid program index and has no
+    /// effects. Input errors retain preceding writes/actions, as in Machine.
+    pub fn run<'a>(
+        &'a mut self,
+        index: usize,
+        inputs: &'a [Datum<'a>],
+        emit: impl FnMut(u32, Arguments<'_>),
+    ) -> Option<Result<Datum<'a>, RunError>> {
+        let program = self.programs.get(index)?;
+        Some(execute(
+            &program.0,
+            &mut self.cells,
+            &mut self.registers[..program.0.registers],
+            inputs,
+            emit,
+        ))
+    }
+
+    /// Owned payload, counting shared program allocations once; allocator and
+    /// Arc bookkeeping are excluded. This diagnostic does not allocate.
+    pub fn retained_bytes(&self) -> usize {
+        size_of::<Self>()
+            + size_of_val(self.programs.as_ref())
+            + size_of_val(self.cells.as_ref())
+            + size_of_val(self.registers.as_ref())
+            + self
+                .programs
+                .iter()
+                .enumerate()
+                .filter(|(index, program)| {
+                    !self.programs[..*index]
+                        .iter()
+                        .any(|other| Arc::ptr_eq(&other.0, &program.0))
+                })
+                .map(|(_, program)| program.retained_bytes())
+                .sum::<usize>()
+    }
+}
+
+fn execute<'a>(
+    code: &'a Code,
+    cells: &mut [Value],
+    registers: &mut [Value],
+    inputs: &'a [Datum<'a>],
+    mut emit: impl FnMut(u32, Arguments<'_>),
+) -> Result<Datum<'a>, RunError> {
+    registers.fill(Value::Nil);
+    for (dst, source) in code.parameters.iter().enumerate() {
+        registers[dst] = read(*source, cells, inputs)?;
+    }
+    let mut pc = 0;
+    loop {
+        let op = code.ops[pc];
+        pc += 1;
+        match op {
+            Op::Unreachable => unreachable!("verified control flow"),
+            Op::Load { dst, source, skip } => {
+                registers[dst] = read(source, cells, inputs)?;
+                pc += usize::from(skip);
+            }
+            Op::Move { dst, source } => registers[dst] = registers[source],
+            Op::Nil { first, last } => registers[first..=last].fill(Value::Nil),
+            Op::Write { cell, source } => cells[cell] = source.get(registers),
+            Op::Method {
+                dst,
+                receiver,
+                action,
+            } => {
+                let value = registers[receiver];
+                registers[dst + 1] = value;
+                registers[dst] = Value::Action(action);
+            }
+            Op::Not { dst, source } => registers[dst] = Value::Boolean(!registers[source].truthy()),
+            Op::Neg { dst, source } => {
+                registers[dst] = Value::Number((-registers[source].number()).to_bits())
+            }
+            Op::Arithmetic {
+                dst,
+                left,
+                right,
+                operator,
+            } => {
+                let (a, b) = (left.get(registers).number(), right.get(registers).number());
+                registers[dst] = Value::Number(
+                    match operator {
+                        12 => a + b,
+                        13 => a - b,
+                        14 => a * b,
+                        15 => a / b,
                         _ => unreachable!(),
-                    };
-                    if equal != expected {
-                        pc += 1;
                     }
+                    .to_bits(),
+                );
+            }
+            Op::Compare {
+                left,
+                right,
+                operator,
+                expected,
+            } => {
+                let (a, b) = (left.get(registers), right.get(registers));
+                let equal = match operator {
+                    23 => equal(a, b, code, inputs),
+                    24 => a.number() < b.number(),
+                    25 => a.number() <= b.number(),
+                    _ => unreachable!(),
+                };
+                if equal != expected {
+                    pc += 1;
                 }
-                Op::Test {
-                    source,
-                    expected,
-                    copy,
-                } => {
-                    if registers[source].truthy() == expected {
-                        if let Some(dst) = copy {
-                            registers[dst] = registers[source];
-                        }
-                    } else {
-                        pc += 1;
+            }
+            Op::Test {
+                source,
+                expected,
+                copy,
+            } => {
+                if registers[source].truthy() == expected {
+                    if let Some(dst) = copy {
+                        registers[dst] = registers[source];
                     }
+                } else {
+                    pc += 1;
                 }
-                Op::Jump(target) => pc = target,
-                Op::Call {
+            }
+            Op::Jump(target) => pc = target,
+            Op::Call {
+                tag,
+                first,
+                count,
+                dst,
+                result,
+                tail,
+            } => {
+                emit(
                     tag,
-                    first,
-                    count,
-                    dst,
-                    result,
-                    tail,
-                } => {
-                    emit(
-                        tag,
-                        Arguments {
-                            values: &registers[first..first + count],
-                            code,
-                            inputs,
-                        },
-                    );
-                    if tail {
-                        return Ok(datum(result, code, inputs));
-                    }
-                    if let Some(dst) = dst {
-                        registers[dst] = result;
-                    }
+                    Arguments {
+                        values: &registers[first..first + count],
+                        code,
+                        inputs,
+                    },
+                );
+                if tail {
+                    return Ok(datum(result, code, inputs));
                 }
-                Op::Return(source) => {
-                    return Ok(datum(source.map_or(Value::Nil, |i| registers[i]), code, inputs));
+                if let Some(dst) = dst {
+                    registers[dst] = result;
                 }
+            }
+            Op::Return(source) => {
+                return Ok(datum(source.map_or(Value::Nil, |i| registers[i]), code, inputs));
             }
         }
     }

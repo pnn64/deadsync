@@ -85,7 +85,10 @@ fn main() {
     pin();
     let out = std::env::args().nth(1).expect("actor_input REPORT");
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let path = root.join("tests/fixtures/actor-input.lua");
+    let path = std::env::args()
+        .nth(2)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| root.join("tests/fixtures/actor-input.lua"));
     let mut live = load(&path);
     let mut native = live
         .compile_actor_inputs()
@@ -112,7 +115,12 @@ fn main() {
         "retained_lua_allocator_bytes":live.lua_memory_bytes(),
         "scope":"native owned input code, all overlay/tracked states and target identities; allocator/Arc bookkeeping excluded"});
     let mut rows = Vec::new();
-    for sample in 0..10 {
+    let runtime_samples = if std::env::args().nth(3).as_deref() == Some("prepare") {
+        0
+    } else {
+        10
+    };
+    for sample in 0..runtime_samples {
         for current in [sample % 2 == 0, sample % 2 != 0] {
             let measure = metrics::Measurement::start();
             let mut digest = 0u64;
@@ -162,7 +170,7 @@ fn main() {
     let source = format!(
         "local proxy=newproxy(true); getmetatable(proxy).__gc=function() local f=assert(io.open([[{}]],'w'));f:write('closed');f:close() end; _G.input_drop_marker=proxy;\n{}",
         marker.to_string_lossy().replace('\\', "/"),
-        include_str!("../tests/fixtures/actor-input.lua")
+        std::fs::read_to_string(&path).unwrap()
     );
     std::fs::write(&file, source).unwrap();
     let scene = load(&file);

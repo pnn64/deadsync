@@ -225,3 +225,108 @@ fn copied_setter_rejects_custom_assignment_on_its_actual_mutation_target() {
         "Lua fallback preserves target assignment side effects"
     );
 }
+
+fn scalars(native: &SongLuaCompiledActorInputs) -> Vec<(usize, Vec<u8>, u64)> {
+    let mut values = native
+        .scalar_states()
+        .map(|(table, key, value)| {
+            (
+                table,
+                key.to_vec(),
+                match value {
+                    SongLuaInputScalar::Boolean(value) => u64::from(value),
+                    SongLuaInputScalar::Number(value) => value.to_bits(),
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    values.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+    values
+}
+
+fn stateful_event(index: usize) -> SongLuaInputEvent<'static> {
+    let mut input = event(index);
+    input.kind = [
+        SongLuaInputType::FirstPress,
+        SongLuaInputType::Repeat,
+        SongLuaInputType::Release,
+    ][(index / 3) % 3];
+    input.level = if index < 30 {
+        [-0.0, 0.25, 0.5, 1.0][index % 4]
+    } else {
+        [-0.0, 0.25, 0.5, 1.0, f32::from_bits(0x7fc0_1234)][index % 5]
+    };
+    input
+}
+
+#[test]
+fn shared_tables_cross_callbacks_without_merging_equal_independent_state() {
+    let (mut scene, _directory) = scene(include_str!("fixtures/stateful-input.lua"));
+    let mut native = scene
+        .compile_actor_inputs()
+        .expect("raw shared scalar tables");
+    assert_eq!(native.scalar_states().count(), 3);
+    let mut expected = Vec::new();
+    for index in 0..90 {
+        let input = stateful_event(index);
+        let (handled, output) = scene.input(&input).unwrap();
+        assert!(output.errors.is_empty());
+        // A fresh snapshot reads actual Lua upvalue tables after the call.
+        // This observes every scalar's bits without running another callback.
+        let snapshot = scene.compile_actor_inputs().unwrap();
+        expected.push((
+            handled,
+            scene.states().to_vec(),
+            tracked(scene.tracked_states()),
+            scalars(&snapshot),
+        ));
+    }
+    drop(scene);
+    for (index, (handled, states, tracked_states, cells)) in expected.into_iter().enumerate() {
+        let input = stateful_event(index);
+        let mut actions = Vec::new();
+        assert_eq!(
+            native.input_with_actions(&input, |a| actions.push(a)),
+            handled
+        );
+        let mut expected_actions = vec![SongLuaActorInputAction::Visible {
+            actor: if input.game_button == "Left" { 1 } else { 2 },
+            visible: states[if input.game_button == "Left" { 1 } else { 2 }].visible,
+        }];
+        if input.game_button == "Right" && input.kind == SongLuaInputType::Release {
+            expected_actions.push(SongLuaActorInputAction::Visible {
+                actor: 1,
+                visible: false,
+            });
+        }
+        assert_eq!(
+            actions, expected_actions,
+            "ordered writes after input {index}"
+        );
+        assert_eq!(native.states(), states);
+        assert_eq!(tracked(native.tracked_states()), tracked_states);
+        assert_eq!(scalars(&native), cells, "scalar bits after input {index}");
+    }
+}
+
+#[test]
+fn state_table_metamethods_unknown_fields_and_type_changes_keep_lua_fallback() {
+    let template = include_str!("fixtures/stateful-input.lua");
+    for replacement in [
+        "local shared=setmetatable({held=false,count=0},{__index=function() error('must not run') end})",
+        "local shared={held=false,count=0,unexpected=function() error('must not run') end}",
+    ] {
+        let source = template.replace("local shared = { held = false, count = -0.0 }", replacement);
+        let (scene, _directory) = scene(&source);
+        assert!(scene.compile_actor_inputs().is_none());
+    }
+    for statement in [
+        "shared.new_field = true",
+        "shared.held = 0",
+        "shared.count = false",
+    ] {
+        let source = template.replace("shared.held = not alias.held", statement);
+        let (scene, _directory) = scene(&source);
+        assert!(scene.compile_actor_inputs().is_none(), "{statement}");
+    }
+}

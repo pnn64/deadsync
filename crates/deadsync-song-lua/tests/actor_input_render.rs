@@ -110,31 +110,6 @@ mod renderer {
         let metrics = deadlib_present::space::Metrics::centered(64.0, 48.0);
         deadlib_present::space::set_current_metrics(metrics);
         deadlib_present::space::set_current_window_px(64, 48);
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/actor-input.lua");
-        let mut context = SongLuaCompileContext::new(path.parent().unwrap(), "input pixel test");
-        context.live = true;
-        context.music_length_seconds = 1.0;
-        context.screen_width = 64.0;
-        context.screen_height = 48.0;
-        let mut compiled = compile_song_lua_layers_with_default_host(
-            &[&path],
-            0,
-            &context,
-            SongLuaNoteskinResolver::default(),
-            |_: &Path, _: &Path, _: &Path| {
-                Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([]))
-            },
-            |_: &deadsync_assets::noteskin::SpriteSlot| None::<SongLuaOverlayModelLayer>,
-            |_: &SongLuaCompileContext, _: &str| {
-                None::<(
-                    SongLuaOverlayKind<deadsync_assets::noteskin::SpriteSlot>,
-                    SongLuaOverlayState,
-                )>
-            },
-        )
-        .unwrap();
-        let mut scene = compiled[0].live_scene.take().unwrap();
-        let mut native = scene.compile_actor_inputs().unwrap();
         let event_loop = EventLoop::builder().with_any_thread(true).build().unwrap();
         #[expect(deprecated, reason = "hidden pixel fixture needs no event dispatch")]
         let window = Arc::new(
@@ -175,40 +150,70 @@ mod renderer {
             backend.draw(frame, textures, false).unwrap();
             backend.capture_frame().unwrap()
         }
-        let mut visible_frames = 0;
-        for index in 0..30 {
-            let input = SongLuaInputEvent {
-                player: Some(index % 2),
-                controller: Some(0),
-                button: ["Left", "Right", "Other"][index % 3],
-                game_button: ["Left", "Right", "Other"][index % 3],
-                kind: [
-                    SongLuaInputType::FirstPress,
-                    SongLuaInputType::Repeat,
-                    SongLuaInputType::Release,
-                ][index % 3],
-                device: "InputDevice_Key",
-                device_button: "DeviceButton_left",
-                level: [0.25, 0.5, 1.0][index % 3],
-                z: 0,
-                down: index % 2 == 0,
-                ago: 0.0,
-                is_joystick: false,
-                is_mouse: false,
-            };
-            assert_eq!(native.input(&input), scene.input(&input).unwrap().0);
-            let before = frame(&compiled[0].overlays, scene.states());
-            let after = frame(&compiled[0].overlays, native.states());
-            assert_eq!(
-                deadlib_render_core::frame_compare::compare_render_frames(&before, &after),
-                Ok(())
-            );
-            let before = pixels(&mut backend, &before, &textures);
-            let after = pixels(&mut backend, &after, &textures);
-            assert_eq!(before.as_raw(), after.as_raw(), "input {index}");
-            visible_frames += usize::from(before.pixels().any(|p| p.0[..3] != [0, 0, 0]));
+        for fixture in ["actor-input.lua", "stateful-input.lua"] {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures")
+                .join(fixture);
+            let mut context =
+                SongLuaCompileContext::new(path.parent().unwrap(), "input pixel test");
+            context.live = true;
+            context.music_length_seconds = 1.0;
+            context.screen_width = 64.0;
+            context.screen_height = 48.0;
+            let mut compiled = compile_song_lua_layers_with_default_host(
+                &[&path],
+                0,
+                &context,
+                SongLuaNoteskinResolver::default(),
+                |_: &Path, _: &Path, _: &Path| {
+                    Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([]))
+                },
+                |_: &deadsync_assets::noteskin::SpriteSlot| None::<SongLuaOverlayModelLayer>,
+                |_: &SongLuaCompileContext, _: &str| {
+                    None::<(
+                        SongLuaOverlayKind<deadsync_assets::noteskin::SpriteSlot>,
+                        SongLuaOverlayState,
+                    )>
+                },
+            )
+            .unwrap();
+            let mut scene = compiled[0].live_scene.take().unwrap();
+            let mut native = scene.compile_actor_inputs().unwrap();
+            let mut visible_frames = 0;
+            for index in 0..30 {
+                let input = SongLuaInputEvent {
+                    player: Some(index % 2),
+                    controller: Some(0),
+                    button: ["Left", "Right", "Other"][index % 3],
+                    game_button: ["Left", "Right", "Other"][index % 3],
+                    kind: [
+                        SongLuaInputType::FirstPress,
+                        SongLuaInputType::Repeat,
+                        SongLuaInputType::Release,
+                    ][(index / 3) % 3],
+                    device: "InputDevice_Key",
+                    device_button: "DeviceButton_left",
+                    level: [0.25, 0.5, 1.0][index % 3],
+                    z: 0,
+                    down: index % 2 == 0,
+                    ago: 0.0,
+                    is_joystick: false,
+                    is_mouse: false,
+                };
+                assert_eq!(native.input(&input), scene.input(&input).unwrap().0);
+                let before = frame(&compiled[0].overlays, scene.states());
+                let after = frame(&compiled[0].overlays, native.states());
+                assert_eq!(
+                    deadlib_render_core::frame_compare::compare_render_frames(&before, &after),
+                    Ok(())
+                );
+                let before = pixels(&mut backend, &before, &textures);
+                let after = pixels(&mut backend, &after, &textures);
+                assert_eq!(before.as_raw(), after.as_raw(), "input {index}");
+                visible_frames += usize::from(before.pixels().any(|p| p.0[..3] != [0, 0, 0]));
+            }
+            assert!(visible_frames > 0, "fixture must draw visible gameplay");
         }
-        assert!(visible_frames > 0, "fixture must draw visible gameplay");
         backend.cleanup();
     }
 }
