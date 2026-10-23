@@ -76,6 +76,7 @@ mod macros;
 
 mod buffer;
 mod conversion;
+mod inspection;
 mod memory;
 mod multi;
 mod scope;
@@ -94,6 +95,8 @@ pub mod function;
 #[cfg_attr(docsrs, doc(cfg(feature = "luau")))]
 pub mod luau;
 pub mod prelude;
+#[cfg(feature = "lua51")]
+pub mod program;
 pub mod state;
 pub mod string;
 pub mod table;
@@ -111,6 +114,7 @@ pub use crate::error::{Error, Result};
 pub use crate::error::{ErrorContext, ExternalError, ExternalResult};
 #[doc(inline)]
 pub use crate::function::Function;
+pub use crate::inspection::InspectionValue;
 pub use crate::multi::{IgnoredArgs, MultiValue, Variadic};
 pub use crate::scope::Scope;
 #[doc(inline)]

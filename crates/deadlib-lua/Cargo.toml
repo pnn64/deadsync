@@ -119,6 +119,10 @@ name = "guided_tour"
 required-features = ["macros"]
 
 [[example]]
+name = "compiled_program"
+required-features = ["lua51"]
+
+[[example]]
 name = "serde"
 required-features = ["serde"]
 

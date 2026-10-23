@@ -496,13 +496,25 @@ impl Function {
     /// safe Lua APIs, including nested visitors. Each value is read immediately
     /// before its visit, so changes to later upvalues remain visible. An error
     /// stops traversal; the caller's stack is restored on errors and unwinding.
-    pub fn for_each_upvalue(&self, mut visit: impl FnMut(u8, &[u8], Value) -> Result<()>) -> Result<()> {
+    pub fn for_each_upvalue(&self, visit: impl FnMut(u8, &[u8], Value) -> Result<()>) -> Result<()> {
+        self.for_each_upvalue_as::<Value>(visit)
+    }
+
+    /// Visits upvalues with a caller-selected checked conversion. Ordering,
+    /// rooting and stack restoration match [`Function::for_each_upvalue`].
+    /// [`crate::InspectionValue`] can classify unsupported capture types without
+    /// decoding private panic payloads during conservative compiler inspection.
+    pub fn for_each_upvalue_as<V: crate::FromLua>(
+        &self,
+        mut visit: impl FnMut(u8, &[u8], V) -> Result<()>,
+    ) -> Result<()> {
         let lua = self.0.lua.lock();
         let state = lua.state();
         // SAFETY: the lock and stack guard outlive every raw access. The pushed
         // function roots its immutable prototype and names through each visit.
-        // getupvalue only reads existing cells; checked pop roots each value
-        // before calling Rust. No raw pointers or stack references escape.
+        // getupvalue only reads existing cells. Typed conversion completes
+        // while the value is rooted; owning conversions retain their handles.
+        // No raw pointers or stack references escape.
         unsafe {
             let _sg = StackGuard::new(state);
             check_stack(state, 3)?;
@@ -516,7 +528,7 @@ impl Function {
                 if name.is_null() {
                     break;
                 }
-                let value = lua.pop::<Value>()?;
+                let value = lua.pop::<V>()?;
                 visit(index, CStr::from_ptr(name).to_bytes(), value)?;
             }
         }
