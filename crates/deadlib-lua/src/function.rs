@@ -74,6 +74,7 @@
 //! to inspect or modify this environment.
 
 use std::cell::RefCell;
+use std::ffi::CStr;
 use std::os::raw::{c_int, c_void};
 use std::result::Result as StdResult;
 use std::{mem, ptr, slice};
@@ -483,6 +484,43 @@ impl Function {
                 is_vararg: ar.isvararg != 0,
             }
         }
+    }
+
+    /// Visits a Lua closure's upvalues in ascending, one-based index order.
+    ///
+    /// Names are borrowed bytes and need not be UTF-8. Values are owning handles
+    /// that the visitor may retain. Native C closures are not visited, keeping
+    /// the binding library's private callback storage inaccessible.
+    ///
+    /// The function is locked and rooted once for the batch. The visitor may use
+    /// safe Lua APIs, including nested visitors. Each value is read immediately
+    /// before its visit, so changes to later upvalues remain visible. An error
+    /// stops traversal; the caller's stack is restored on errors and unwinding.
+    pub fn for_each_upvalue(&self, mut visit: impl FnMut(u8, &[u8], Value) -> Result<()>) -> Result<()> {
+        let lua = self.0.lua.lock();
+        let state = lua.state();
+        // SAFETY: the lock and stack guard outlive every raw access. The pushed
+        // function roots its immutable prototype and names through each visit.
+        // getupvalue only reads existing cells; checked pop roots each value
+        // before calling Rust. No raw pointers or stack references escape.
+        unsafe {
+            let _sg = StackGuard::new(state);
+            check_stack(state, 3)?;
+            lua.push_ref(&self.0);
+            let function = ffi::lua_gettop(state);
+            if ffi::lua_iscfunction(state, function) != 0 {
+                return Ok(());
+            }
+            for index in 1..=u8::MAX {
+                let name = ffi::lua_getupvalue(state, function, index.into());
+                if name.is_null() {
+                    break;
+                }
+                let value = lua.pop::<Value>()?;
+                visit(index, CStr::from_ptr(name).to_bytes(), value)?;
+            }
+        }
+        Ok(())
     }
 
     /// Dumps the function as a binary chunk.

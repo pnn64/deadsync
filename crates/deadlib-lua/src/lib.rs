@@ -111,7 +111,7 @@ pub use crate::error::{Error, Result};
 pub use crate::error::{ErrorContext, ExternalError, ExternalResult};
 #[doc(inline)]
 pub use crate::function::Function;
-pub use crate::multi::{MultiValue, Variadic};
+pub use crate::multi::{IgnoredArgs, MultiValue, Variadic};
 pub use crate::scope::Scope;
 #[doc(inline)]
 pub use crate::state::{Lua, LuaOptions, WeakLua};

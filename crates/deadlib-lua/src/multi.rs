@@ -225,6 +225,89 @@ impl FromLuaMulti for MultiValue {
     }
 }
 
+/// Checked argument storage for callbacks that do not read their inputs.
+///
+/// Unlike `()`, this converts every input with [`Value`]'s normal conversion,
+/// preserving conversion errors and caught Rust panic propagation. Converted
+/// values remain rooted until this container is dropped. Zero or one input is
+/// stored inline; larger lists use [`MultiValue`]'s unchanged conversion path.
+/// The arguments can also be forwarded through [`IntoLuaMulti`].
+///
+/// ```
+/// # use mlua::{IgnoredArgs, Lua, Result};
+/// # fn main() -> Result<()> {
+/// let lua = Lua::new();
+/// let query = lua.create_function(|_, _args: IgnoredArgs| Ok(42))?;
+/// assert_eq!(query.call::<i32>(lua.create_table()?)?, 42);
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug)]
+pub struct IgnoredArgs(IgnoredArgsStorage);
+
+#[derive(Debug)]
+enum IgnoredArgsStorage {
+    Empty,
+    One(Value),
+    Many(MultiValue),
+}
+
+/// Retains an already-converted value list and its existing allocation.
+impl From<MultiValue> for IgnoredArgs {
+    #[inline]
+    fn from(values: MultiValue) -> Self {
+        Self(IgnoredArgsStorage::Many(values))
+    }
+}
+
+impl FromLuaMulti for IgnoredArgs {
+    #[inline]
+    fn from_lua_multi(mut values: MultiValue, _: &Lua) -> Result<Self> {
+        Ok(Self(match values.len() {
+            0 => IgnoredArgsStorage::Empty,
+            1 => IgnoredArgsStorage::One(values.pop_front().unwrap()),
+            _ => IgnoredArgsStorage::Many(values),
+        }))
+    }
+
+    #[inline]
+    unsafe fn from_stack_multi(nvals: c_int, lua: &RawLua) -> Result<Self> {
+        // SAFETY: the trait's caller supplies nvals live argument slots. Keep
+        // the original checked conversions, order and ownership. Longer lists
+        // delegate to MultiValue, including its allocation and error policy.
+        Ok(Self(match nvals {
+            0 => IgnoredArgsStorage::Empty,
+            1 => IgnoredArgsStorage::One(unsafe { Value::from_stack(-1, lua)? }),
+            _ => IgnoredArgsStorage::Many(unsafe { MultiValue::from_stack_multi(nvals, lua)? }),
+        }))
+    }
+}
+
+impl IntoLuaMulti for IgnoredArgs {
+    #[inline]
+    fn into_lua_multi(self, _: &Lua) -> Result<MultiValue> {
+        Ok(match self.0 {
+            IgnoredArgsStorage::Empty => MultiValue::new(),
+            IgnoredArgsStorage::One(value) => MultiValue::from_vec(vec![value]),
+            IgnoredArgsStorage::Many(values) => values,
+        })
+    }
+
+    #[inline]
+    unsafe fn push_into_stack_multi(self, lua: &RawLua) -> Result<c_int> {
+        // SAFETY: delegate stack checks and writes to existing implementations.
+        // The trailing unit keeps MultiValue's n+1 reservation. Borrowing keeps
+        // every converted handle alive until all argument pushes have finished.
+        unsafe {
+            match self.0 {
+                IgnoredArgsStorage::Empty => ((),).push_into_stack_multi(lua),
+                IgnoredArgsStorage::One(value) => (&value, ()).push_into_stack_multi(lua),
+                IgnoredArgsStorage::Many(values) => values.push_into_stack_multi(lua),
+            }
+        }
+    }
+}
+
 /// Wraps a variable number of `T`s.
 ///
 /// Can be used to work with variadic functions more easily. Using this type as the last argument of

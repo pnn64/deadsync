@@ -18685,10 +18685,16 @@ fn snapshot_function_locals(
                         Ok(())
                     })?;
                 }
-                for index in 1..=function_upvalue_count(lua, &function)? {
-                    let (name, value) = read_function_upvalue(lua, function.clone(), index.into())?;
-                    if matches!(&name, Value::String(name) if name.to_str()?.as_ref() == "_ENV") {
-                        continue;
+                function.for_each_upvalue(|index, name, value| {
+                    let name = std::str::from_utf8(name).map_err(|error| {
+                        mlua::Error::FromLuaConversionError {
+                            from: "string",
+                            to: "&str".into(),
+                            message: Some(error.to_string()),
+                        }
+                    })?;
+                    if name == "_ENV" {
+                        return Ok(());
                     }
                     pending_count += 1;
                     pending.raw_set(pending_count, value.clone())?;
@@ -18701,7 +18707,8 @@ fn snapshot_function_locals(
                             value,
                         ])?,
                     )?;
-                }
+                    Ok(())
+                })?;
             }
             Value::Table(table)
                 if seen.insert(table.to_pointer() as usize)
@@ -18724,6 +18731,7 @@ fn snapshot_function_locals(
     })
 }
 
+#[cfg(test)]
 fn function_upvalue_count(lua: &Lua, function: &Function) -> mlua::Result<u8> {
     // SAFETY: >u consumes a rooted function and fills only debug metadata.
     // It does not execute the function or allocate/throw in Lua 5.1.
@@ -24587,3 +24595,7 @@ mod capture_inputs_perf;
 #[cfg(test)]
 #[path = "../tests/perf/message_inputs.rs"]
 mod message_inputs_perf;
+
+#[cfg(test)]
+#[path = "../tests/perf/upvalue_batches.rs"]
+mod upvalue_batches_perf;

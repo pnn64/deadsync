@@ -134,7 +134,7 @@ pub(crate) fn forward_outputs(lua: &Lua, class: &Table, name: &'static str) -> m
                 let result = method.call::<MultiValue>(args);
                 crate::live::query_phase(lua, false);
                 crate::live::trace_bound_method(lua, name, &trace_args, &result);
-                result.map(|values| ForwardResults::Many { _values: values })
+                result.map(ForwardResults::from)
             } else {
                 method.call::<ForwardResults>(args)
             }

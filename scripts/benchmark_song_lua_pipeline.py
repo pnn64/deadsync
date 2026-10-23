@@ -20,6 +20,8 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--pairs", type=int, default=6)
     parser.add_argument("--samples", type=int, default=9)
+    parser.add_argument("--only", action="append", metavar="WORKLOAD",
+                        help="Measure only the named workload; may be repeated")
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
     parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs"), default="live")
@@ -67,8 +69,15 @@ def main():
     if args.suite == "navigation_inputs":
         cases = [("offline_navigation_inputs", "offline", "crates/deadsync-song-lua/tests/perf/navigation_inputs.lua"),
                  ("live_navigation_inputs", "live", "crates/deadsync-song-lua/tests/perf/navigation_inputs.lua")]
+    if args.only:
+        selected = set(args.only)
+        cases = [case for case in cases if case[0] in selected]
+        missing = selected - {case[0] for case in cases}
+        if missing:
+            parser.error(f"Unknown workload(s) in this suite: {', '.join(sorted(missing))}")
     args.out.mkdir(parents=True, exist_ok=True)
-    paths = list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
+    paths = [path for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin")
+             for path in (root / "crates" / crate / "src").rglob("*.rs")]
     paths += [root / name for name in sorted({case[2] for case in cases})]
     paths += [root / name for name in ["Cargo.toml", "Cargo.lock", ".cargo/config.toml",
         "crates/deadsync-song-lua/Cargo.toml", "crates/deadsync-song-lua/examples/compile_pipeline.rs",
@@ -126,7 +135,7 @@ def main():
     assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == head
     result = dict(worktree_head=head, binaries={key:{"path":str(path),"sha256":binary_hashes[key]} for key,path in binaries.items()},
                   source_sha256=sources, suite=args.suite, pairs=args.pairs, reverse_first=args.reverse_first, samples_per_variant_per_case=args.pairs*args.samples,
-                  rustc=subprocess.check_output(["rustc", "+1.98.1", "-Vv"], text=True),
+                  rustc=subprocess.check_output(["rustc", "-Vv"], text=True),
                   system=platform.platform(), logical_processors=os.cpu_count(), logical_cpu=2,
                   summary=summary, records=records,
                   validation="Every complete DTO snapshot is compared exactly across all runs; snapshots and sample metrics are retained uncompressed in each run report.")

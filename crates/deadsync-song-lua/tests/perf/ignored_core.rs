@@ -85,11 +85,7 @@ fn checked_unused_arguments_match_values_panics_and_reference_pressure() {
         let lua = Lua::new();
         let capture = if current {
             lua.create_function(|lua, args: IgnoredArgs| {
-                let args = match args {
-                    IgnoredArgs::Empty => Vec::new(),
-                    IgnoredArgs::One { _value } => vec![_value],
-                    IgnoredArgs::Many { _values } => _values.into_vec(),
-                };
+                let args = args.into_lua_multi(lua)?.into_vec();
                 let count = args.len();
                 Ok((count, lua.create_sequence_from(args)?))
             })

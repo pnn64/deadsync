@@ -5,7 +5,7 @@ use crate::{
     itg as noteskin_itg,
 };
 use log::{info, warn};
-use mlua::{Function, Lua, MultiValue, Table, Value};
+use mlua::{Function, IgnoredArgs, Lua, MultiValue, Table, Value};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -560,29 +560,29 @@ fn install_host(
     let options = player_options.to_owned();
     player.set(
         "GetPlayerOptionsString",
-        lua.create_function(move |_, _: MultiValue| Ok(options.clone()))?,
+        lua.create_function(move |_, _: IgnoredArgs| Ok(options.clone()))?,
     )?;
     let state = lua.create_table()?;
     let current_game = lua.create_table()?;
     let game_name = game.trim().to_ascii_lowercase();
     current_game.set(
         "GetName",
-        lua.create_function(move |_, _: MultiValue| Ok(game_name.clone()))?,
+        lua.create_function(move |_, _: IgnoredArgs| Ok(game_name.clone()))?,
     )?;
     state.set(
         "GetCurrentGame",
-        lua.create_function(move |_, _: MultiValue| Ok(current_game.clone()))?,
+        lua.create_function(move |_, _: IgnoredArgs| Ok(current_game.clone()))?,
     )?;
     state.set(
         "GetPlayerState",
-        lua.create_function(move |_, _: MultiValue| Ok(player.clone()))?,
+        lua.create_function(move |_, _: IgnoredArgs| Ok(player.clone()))?,
     )?;
     globals.set("GAMESTATE", state)?;
     let theme = lua.create_table()?;
     // DeadSync has no ThemeInfo.ini author; match its song-Lua compatibility API.
     theme.set(
         "GetThemeAuthor",
-        lua.create_function(|_, _: MultiValue| Ok(""))?,
+        lua.create_function(|_, _: IgnoredArgs| Ok(""))?,
     )?;
     globals.set("THEME", theme)?;
     let actor_mt = lua.create_table()?;
@@ -676,7 +676,7 @@ fn install_host(
     globals.set("Var", var_fn)?;
     globals.set(
         "cmd",
-        lua.create_function(|_, _args: MultiValue| Ok(Value::Nil))?,
+        lua.create_function(|_, _args: IgnoredArgs| Ok(Value::Nil))?,
     )?;
     let noteskin = lua.create_table()?;
     let metrics = data.metrics.clone();
@@ -732,7 +732,7 @@ fn install_host(
                 return Ok(Value::Nil);
             };
             let make_actor = make_actor.clone();
-            let func = lua.create_function(move |_, _args: MultiValue| -> mlua::Result<Table> {
+            let func = lua.create_function(move |_, _args: IgnoredArgs| -> mlua::Result<Table> {
                 make_actor.call((false, button.clone(), element.clone()))
             })?;
             Ok(Value::Function(func))
@@ -1160,14 +1160,27 @@ fn actor_loader_command(actor: &Table) -> Result<Option<String>, String> {
     else {
         return Ok(None);
     };
-    let mut out = Vec::with_capacity(commands.raw_len());
-    for command in commands.sequence_values::<String>() {
+    let capacity = commands.raw_len();
+    let mut commands = commands.sequence_values::<String>();
+    let Some(first) = commands.next() else {
+        return Ok(None);
+    };
+    let first = first.map_err(|err| err.to_string())?;
+    let mut out = SmallVec::<[String; 8]>::with_capacity(capacity);
+    if !first.trim().is_empty() {
+        out.push(first);
+    }
+    for command in commands {
         let command = command.map_err(|err| err.to_string())?;
         if !command.trim().is_empty() {
             out.push(command);
         }
     }
-    Ok((!out.is_empty()).then(|| out.join(";")))
+    Ok(match out.len() {
+        0 => None,
+        1 => out.pop(),
+        _ => Some(out.join(";")),
+    })
 }
 
 fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoaderEntry, String> {
@@ -1653,3 +1666,7 @@ return Def.ActorFrame {
 #[cfg(test)]
 #[path = "compiler_resources_perf.rs"]
 mod resource_perf;
+
+#[cfg(test)]
+#[path = "compiler_callbacks_perf.rs"]
+mod callbacks_perf;
