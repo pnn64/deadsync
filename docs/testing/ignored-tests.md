@@ -1,6 +1,6 @@
 # Ignored test inventory
 
-Current source inventory: **261 ignore attributes**. These are source attributes, not macro-expanded test counts. The initial audit had 249.
+Current source inventory: **258 ignore attributes**. These are source attributes, not macro-expanded test counts. The initial audit had 249.
 
 Six entries in vendored rfd are Linux dialog checks; target platform configuration determines which tests exist in a Windows build.
 
@@ -9,7 +9,7 @@ Only long song-fixture runs are authorized deferrals for this cleanup. The expan
 | Category | Source attributes |
 | --- | ---: |
 | benchmark/timing | 191 |
-| hardware/display | 25 |
+| hardware/display | 22 |
 | long song fixture | 38 |
 | other | 7 |
 
@@ -21,9 +21,6 @@ Only long song-fixture runs are authorized deferrals for this cleanup. The expan
 | `shared_and_exclusive_render_and_release_endpoint` | [crates/deadlib-audio-backend-wasapi/tests/hardware.rs:16](../../crates/deadlib-audio-backend-wasapi/tests/hardware.rs) | requires a Windows audio endpoint with exclusive access enabled |
 | `legacy_shared_stream_renders` | [crates/deadlib-audio-backend-wasapi/tests/native/mod.rs:6](../../crates/deadlib-audio-backend-wasapi/tests/native/mod.rs) | requires an available Windows audio endpoint |
 | `modern_shared_selects_driver_minimum` | [crates/deadlib-audio-backend-wasapi/tests/native/mod.rs:58](../../crates/deadlib-audio-backend-wasapi/tests/native/mod.rs) | requires a Windows 10/11 endpoint supporting IAudioClient3 |
-| `shared_playback_clock_tracks_device_across_restarts` | [crates/deadlib-audio-backend-wasapi/tests/native/clock.rs](../../crates/deadlib-audio-backend-wasapi/tests/native/clock.rs) | requires an available Windows audio endpoint; passed with independent device-clock readings |
-| `legacy_playback_clock_tracks_device_across_restarts` | [crates/deadlib-audio-backend-wasapi/tests/native/clock.rs](../../crates/deadlib-audio-backend-wasapi/tests/native/clock.rs) | requires an available Windows audio endpoint; passed with independent device-clock readings |
-| `exclusive_playback_clock_tracks_device_across_restarts` | [crates/deadlib-audio-backend-wasapi/tests/native/clock.rs](../../crates/deadlib-audio-backend-wasapi/tests/native/clock.rs) | requires a Windows audio endpoint with exclusive access enabled; passed with independent device-clock readings |
 | `benchmark_runtime_audio_insert` | [crates/deadlib-audio-core/src/position_perf.rs:157](../../crates/deadlib-audio-core/src/position_perf.rs) | paired release benchmark |
 | `benchmark_music_gain_ramp` | [crates/deadlib-audio-core/src/render_perf_tests.rs:70](../../crates/deadlib-audio-core/src/render_perf_tests.rs) | paired release benchmark; run alone with --ignored --nocapture --test-threads=1 |
 | `benchmark_planar_packet_drain` | [crates/deadlib-audio-decode/src/resample_perf_tests.rs:113](../../crates/deadlib-audio-decode/src/resample_perf_tests.rs) | paired release benchmark; run alone with --ignored --nocapture --test-threads=1 |

@@ -2,8 +2,6 @@
 use super::*;
 use windows::core::Interface;
 
-mod clock;
-
 #[test]
 #[ignore = "requires an available Windows audio endpoint"]
 fn legacy_shared_stream_renders() {
