@@ -488,6 +488,56 @@ fn malformed_or_mutated_dumps_never_need_a_lua_vm_to_validate_or_execute() {
 }
 
 #[test]
+fn borrowed_instruction_decoding_preserves_endianness_and_outlives_the_dump() {
+    fn integer(bytes: &mut Vec<u8>, value: u64, width: usize, little: bool) {
+        let encoded = if little {
+            value.to_le_bytes()
+        } else {
+            value.to_be_bytes()
+        };
+        bytes.extend_from_slice(if little {
+            &encoded[..width]
+        } else {
+            &encoded[8 - width..]
+        });
+    }
+    for little in [false, true] {
+        for size_t in [4, 8] {
+            for bits in [
+                0x8000_0000_0000_0000,
+                0x7ff8_0000_0000_1234,
+                123.5_f64.to_bits(),
+            ] {
+                let program = {
+                    let mut bytes = b"\x1bLua\x51\0".to_vec();
+                    bytes.extend_from_slice(&[u8::from(little), 4, size_t as u8, 4, 8, 0]);
+                    integer(&mut bytes, 0, size_t, little); // no source name
+                    integer(&mut bytes, 0, 4, little);
+                    integer(&mut bytes, 0, 4, little);
+                    bytes.extend_from_slice(&[0, 0, 0, 2]); // captures, args, vararg, registers
+                    integer(&mut bytes, 2, 4, little);
+                    integer(&mut bytes, 1, 4, little); // LOADK R0 K0
+                    integer(&mut bytes, 30 | (2 << 23), 4, little); // RETURN R0, one result
+                    integer(&mut bytes, 1, 4, little);
+                    bytes.push(3);
+                    integer(&mut bytes, bits, 8, little);
+                    for _ in 0..4 {
+                        integer(&mut bytes, 0, 4, little);
+                    }
+                    program::compile_bytecode(&bytes, &Bindings::default()).unwrap()
+                };
+                let mut machine = program.machine();
+                let Datum::Number(value) = machine.run(&[], |_, _| panic!("no action")).unwrap()
+                else {
+                    panic!("numeric return");
+                };
+                assert_eq!(value.to_bits(), bits);
+            }
+        }
+    }
+}
+
+#[test]
 fn noncanonical_boolean_constants_are_rejected() {
     let lua = Lua::new();
     let f: Function = lua

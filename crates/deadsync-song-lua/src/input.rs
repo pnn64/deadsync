@@ -3,7 +3,7 @@
 use mlua::{Function, Lua, Table, Value};
 
 #[path = "input/compiled.rs"]
-mod compiled;
+pub(crate) mod compiled;
 pub use compiled::SongLuaCompiledInput;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +52,12 @@ struct Callback {
     key: usize,
     function: Function,
     native: Option<SongLuaCompiledInput>,
+}
+
+pub(crate) fn functions(lua: &Lua) -> Option<Vec<Function>> {
+    let callbacks = lua.app_data_ref::<Callbacks>()?;
+    if callbacks.dispatching { return None; }
+    Some(callbacks.functions.iter().map(|entry| entry.function.clone()).collect())
 }
 
 impl Callbacks {

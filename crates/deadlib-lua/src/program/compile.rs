@@ -36,9 +36,9 @@ enum Resolved {
     Value(Source),
     Action(usize),
 }
-struct Call {
+struct Call<'a> {
     tag: u32,
-    parameters: Vec<Parameter>,
+    parameters: &'a [Parameter],
     result: Value,
 }
 struct Builder<'a> {
@@ -46,7 +46,7 @@ struct Builder<'a> {
     strings: Vec<Box<[u8]>>,
     cells: Vec<Value>,
     fields: Vec<Option<Resolved>>,
-    actions: Vec<Call>,
+    actions: Vec<Call<'a>>,
 }
 
 impl Builder<'_> {
@@ -129,7 +129,7 @@ impl Builder<'_> {
                 }
                 self.actions.push(Call {
                     tag: action.tag,
-                    parameters: action.parameters.clone(),
+                    parameters: &action.parameters,
                     result,
                 });
                 Resolved::Action(id)
@@ -219,7 +219,7 @@ fn edge(
     Ok(())
 }
 
-pub(super) fn lower(prototype: Prototype, bindings: &Bindings) -> Result<Program, CompileError> {
+pub(super) fn lower(prototype: Prototype<'_>, bindings: &Bindings) -> Result<Program, CompileError> {
     if prototype.upvalues != bindings.upvalues.len() {
         return Err(CompileError::InvalidBindings("upvalue count"));
     }

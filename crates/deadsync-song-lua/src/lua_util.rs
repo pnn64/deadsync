@@ -4360,8 +4360,17 @@ pub fn install_actor_metatable(
 ) -> mlua::Result<()> {
     crate::actor_classes::bind(lua, actor)?;
     let mt = lua.create_table_with_capacity(0, 4)?;
-    mt.set("__index", lua.create_function(crate::actor_classes::lookup)?)?;
-    mt.set("__newindex", lua.create_function(crate::actor_classes::assign)?)?;
+    let lookup = lua.create_function(crate::actor_classes::lookup)?;
+    let compile_input = crate::live::active(lua);
+    if compile_input {
+        crate::actor_methods::register(lua, &lookup, crate::actor_methods::Method::Lookup)?;
+    }
+    mt.set("__index", lookup)?;
+    let assign = lua.create_function(crate::actor_classes::assign)?;
+    if compile_input {
+        crate::actor_methods::register(lua, &assign, crate::actor_methods::Method::Assign)?;
+    }
+    mt.set("__newindex", assign)?;
     mt.set(
         "__concat",
         lua.create_function(move |lua, (lhs, rhs): (Table, Table)| {
@@ -7121,20 +7130,22 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
             })?,
         )?;
     }
-    actor.set(
-        "visible",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-                if let Some(value) = value.and_then(read_boolish) {
-                    prepare_capture_scope_actor(lua, &actor)?;
-                    actor.set("__songlua_visible", value)?;
-                    capture_block_set_bool(lua, &actor, "visible", value)?;
-                }
-                Ok(actor.clone())
+    let visible = lua.create_function({
+        let actor = actor.clone();
+        move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+            if let Some(value) = value.and_then(read_boolish) {
+                prepare_capture_scope_actor(lua, &actor)?;
+                actor.set("__songlua_visible", value)?;
+                capture_block_set_bool(lua, &actor, "visible", value)?;
             }
-        })?,
-    )?;
+            Ok(actor.clone())
+        }
+    })?;
+    if crate::live::active(lua) {
+        crate::actor_methods::register(lua, &visible,
+            crate::actor_methods::Method::VisibleBound(actor.to_pointer() as usize))?;
+    }
+    actor.set("visible", visible)?;
     actor.set(
         "addcommand",
         lua.create_function({
@@ -11728,6 +11739,12 @@ pub(crate) struct LiveActorPlayback;
 
 fn live_actor_playback(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveActorPlayback>().is_some()
+}
+
+pub(crate) fn can_compile_actor_input(lua: &Lua) -> bool {
+    live_actor_playback(lua) && lua.app_data_ref::<SongLuaActionCaptureActive>().is_none()
+        && !lua.has_hook()
+        && !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
 }
 
 pub(crate) fn begin_live_actor_playback(lua: &Lua, actors: &[Table]) -> mlua::Result<()> {

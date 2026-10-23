@@ -504,46 +504,47 @@ pub(crate) fn install_native(lua: &Lua) -> mlua::Result<()> {
 }
 
 pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Result<()> {
-    class.set(
-        name,
-        lua.create_function(move |lua, args: ForwardArgs| {
-            let Some(Value::Table(actor)) = args.front() else {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "actor method {name} requires an actor"
-                )));
-            };
-            let bound = actor.raw_get::<Option<Table>>(METHODS_KEY)?;
-            let method = match bound {
-                Some(bound) => bound.raw_get::<Value>(name)?,
-                None => actor.raw_get::<Value>(name)?,
-            };
-            let Value::Function(method) = method else {
-                return Err(mlua::Error::RuntimeError(format!(
-                    "native actor method {name} has no semantic implementation"
-                )));
-            };
-            let observed = matches!(name, "GetChild" | "GetName" | "GetParent" | "GetNumChildren"
-                | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude"
-                | "Center" | "FullScreen" | "animate" | "decelerate" | "diffuse" | "diffusealpha"
-                | "effectperiod" | "linear" | "queuemessage" | "rainbow" | "rotationz"
-                | "spin" | "visible" | "zoom" | "zoomto"
-                | "SetUpdateFunction" | "SetTarget" | "GetTexture" | "loop" | "rate")
-                && crate::live::active(lua)
-                && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
-            if observed {
-                // Trace reporting keeps the complete MultiValue path.
-                let args = args.into_lua_multi(lua)?;
-                let trace_args = args.clone();
-                crate::live::query_phase(lua, true);
-                let result = method.call::<MultiValue>(args);
-                crate::live::query_phase(lua, false);
-                crate::live::trace_bound_method(lua, name, &trace_args, &result);
-                result.map(ForwardResults::from)
-            } else {
-                method.call::<ForwardResults>(args)
-            }
-        })?,
-    )
+    let function = lua.create_function(move |lua, args: ForwardArgs| {
+        let Some(Value::Table(actor)) = args.front() else {
+            return Err(mlua::Error::RuntimeError(format!(
+                "actor method {name} requires an actor"
+            )));
+        };
+        let bound = actor.raw_get::<Option<Table>>(METHODS_KEY)?;
+        let method = match bound {
+            Some(bound) => bound.raw_get::<Value>(name)?,
+            None => actor.raw_get::<Value>(name)?,
+        };
+        let Value::Function(method) = method else {
+            return Err(mlua::Error::RuntimeError(format!(
+                "native actor method {name} has no semantic implementation"
+            )));
+        };
+        let observed = matches!(name, "GetChild" | "GetName" | "GetParent" | "GetNumChildren"
+            | "name" | "aux" | "getaux" | "x" | "y" | "zoomx" | "vibrate" | "effectmagnitude"
+            | "Center" | "FullScreen" | "animate" | "decelerate" | "diffuse" | "diffusealpha"
+            | "effectperiod" | "linear" | "queuemessage" | "rainbow" | "rotationz"
+            | "spin" | "visible" | "zoom" | "zoomto"
+            | "SetUpdateFunction" | "SetTarget" | "GetTexture" | "loop" | "rate")
+            && crate::live::active(lua)
+            && log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace);
+        if observed {
+            // Trace reporting keeps the complete MultiValue path.
+            let args = args.into_lua_multi(lua)?;
+            let trace_args = args.clone();
+            crate::live::query_phase(lua, true);
+            let result = method.call::<MultiValue>(args);
+            crate::live::query_phase(lua, false);
+            crate::live::trace_bound_method(lua, name, &trace_args, &result);
+            result.map(ForwardResults::from)
+        } else {
+            method.call::<ForwardResults>(args)
+        }
+    })?;
+    if name == "visible" && crate::live::active(lua) {
+        crate::actor_methods::register(lua, &function, crate::actor_methods::Method::VisibleForward)?;
+    }
+    class.set(name, function)
 }
 
 fn class_name(kind: &str) -> &'static str {
@@ -677,6 +678,103 @@ pub(crate) fn assign(lua: &Lua, (actor, key, value): (Table, Value, Value)) -> m
         }
     }
     actor.raw_set(key, value)
+}
+
+/// Resolve an authenticated visibility method without running authored lookup
+/// code. Context/state ownership remains the compiler host's responsibility.
+pub(crate) fn visible_target(lua: &Lua, actor: &Table) -> mlua::Result<Option<usize>> {
+    use crate::actor_methods::{self, Method};
+    use mlua::InspectionValue as V;
+    let mt = actor.metatable();
+    if let Some(mt) = &mt {
+        match mt.raw_get::<V>("__newindex")? {
+            V::Nil => {}
+            V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Assign) => {}
+            _ => return Ok(None),
+        }
+        match mt.raw_get::<V>("__index")? {
+            V::Nil => {}
+            V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Lookup) => {}
+            _ => return Ok(None),
+        }
+    }
+    let method = match actor.raw_get::<V>("visible")? {
+        V::Function(f) => actor_methods::identity(lua, &f)?,
+        V::Nil => {
+            let Some(mt) = mt else {
+                return Ok(None);
+            };
+            let V::Function(lookup) = mt.raw_get::<V>("__index")? else {
+                return Ok(None);
+            };
+            if actor_methods::identity(lua, &lookup)? != Some(Method::Lookup) {
+                return Ok(None);
+            }
+            let kind = match actor.raw_get::<V>("__songlua_actor_type")? {
+                V::Nil => "Actor".to_owned(),
+                V::Bytes(kind) => match String::from_utf8(kind.into_vec()) {
+                    Ok(kind) => kind,
+                    Err(_) => return Ok(None),
+                },
+                _ => return Ok(None),
+            };
+            // Unlinked classes have additional fallback rules. They remain on
+            // the ordinary path until their complete inventory is supported.
+            if !is_core(&kind) {
+                return Ok(None);
+            }
+            let V::Table(mut class) = lua.globals().raw_get::<V>(class_name(&kind))? else {
+                return Ok(None);
+            };
+            let mut seen = smallvec::SmallVec::<[usize; 8]>::new();
+            let mut selected = None;
+            loop {
+                let identity = class.to_pointer() as usize;
+                if seen.len() == 64 || seen.contains(&identity) {
+                    return Ok(None);
+                }
+                seen.push(identity);
+                if selected.is_none() {
+                    match class.raw_get::<V>("visible")? {
+                        V::Function(f) => {
+                            selected = actor_methods::identity(lua, &f)?;
+                            if selected.is_none() {
+                                return Ok(None);
+                            }
+                        }
+                        V::Nil => {}
+                        _ => return Ok(None),
+                    }
+                }
+                let Some(mt) = class.metatable() else {
+                    break;
+                };
+                match mt.raw_get::<V>("__index")? {
+                    V::Nil => break,
+                    V::Table(next) => class = next,
+                    _ => return Ok(None),
+                }
+            }
+            selected
+        }
+        _ => return Ok(None),
+    };
+    match method {
+        Some(Method::VisibleBound(target)) => Ok(Some(target)),
+        Some(Method::VisibleForward) => {
+            let V::Table(methods) = actor.raw_get::<V>(METHODS_KEY)? else {
+                return Ok(None);
+            };
+            let V::Function(bound) = methods.raw_get::<V>("visible")? else {
+                return Ok(None);
+            };
+            match actor_methods::identity(lua, &bound)? {
+                Some(Method::VisibleBound(target)) => Ok(Some(target)),
+                _ => Ok(None),
+            }
+        }
+        _ => Ok(None),
+    }
 }
 
 #[cfg(test)]

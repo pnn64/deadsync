@@ -1,11 +1,56 @@
 use super::{CompileError, Literal};
 
-pub(super) struct Prototype {
+pub(super) struct Prototype<'a> {
     pub upvalues: usize,
     pub parameters: usize,
     pub registers: usize,
-    pub code: Vec<u32>,
+    pub code: Instructions<'a>,
     pub constants: Vec<Literal>,
+}
+
+// The dump stays borrowed until lowering finishes. Decode each checked word
+// once at use, without allocating and copying an intermediate instruction Vec.
+pub(super) struct Instructions<'a> {
+    bytes: &'a [u8],
+    little: bool,
+}
+
+impl Instructions<'_> {
+    pub fn len(&self) -> usize {
+        self.bytes.len() / 4
+    }
+}
+
+pub(super) struct InstructionIter<'a> {
+    words: std::slice::ChunksExact<'a, u8>,
+    little: bool,
+}
+
+impl Iterator for InstructionIter<'_> {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        let bytes = self.words.next()?.try_into().expect("four-byte instruction");
+        Some(if self.little {
+            u32::from_le_bytes(bytes)
+        } else {
+            u32::from_be_bytes(bytes)
+        })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.words.size_hint()
+    }
+}
+impl ExactSizeIterator for InstructionIter<'_> {}
+
+impl<'a> IntoIterator for Instructions<'a> {
+    type Item = u32;
+    type IntoIter = InstructionIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        InstructionIter {
+            words: self.bytes.chunks_exact(4),
+            little: self.little,
+        }
+    }
 }
 
 struct Reader<'a> {
@@ -15,8 +60,8 @@ struct Reader<'a> {
     size_t: usize,
 }
 
-impl Reader<'_> {
-    fn take(&mut self, count: usize) -> Result<&[u8], CompileError> {
+impl<'a> Reader<'a> {
+    fn take(&mut self, count: usize) -> Result<&'a [u8], CompileError> {
         let end = self.at.checked_add(count).ok_or(CompileError::InvalidChunk)?;
         let bytes = self.bytes.get(self.at..end).ok_or(CompileError::InvalidChunk)?;
         self.at = end;
@@ -66,7 +111,7 @@ impl Reader<'_> {
     }
 }
 
-pub(super) fn decode(bytes: &[u8]) -> Result<Prototype, CompileError> {
+pub(super) fn decode(bytes: &[u8]) -> Result<Prototype<'_>, CompileError> {
     let mut r = Reader {
         bytes,
         at: 0,
@@ -113,10 +158,11 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Prototype, CompileError> {
             reason: "instruction count",
         });
     }
-    let mut code = Vec::with_capacity(count);
-    for _ in 0..count {
-        code.push(r.uint(4)? as u32);
-    }
+    let little = r.little;
+    let code = Instructions {
+        bytes: r.take(count.checked_mul(4).ok_or(CompileError::InvalidChunk)?)?,
+        little,
+    };
     let count = r.count()?;
     if count > 4096 {
         return Err(CompileError::Unsupported {

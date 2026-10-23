@@ -1066,6 +1066,25 @@ impl fmt::Debug for SongLuaLiveScene {
 }
 
 impl SongLuaLiveScene {
+    /// Lua allocator bytes currently retained by this scene's VM. This excludes
+    /// Rust actor state, native compiled code and allocator bookkeeping.
+    pub fn lua_memory_bytes(&self) -> usize { self.lua.used_memory() }
+
+    /// Compile a snapshot of the screen's input interactions and actor states.
+    /// The returned owner processes future inputs without Lua. This covers only
+    /// input callbacks: updates, timers, drawing callbacks and other scene
+    /// lifecycle behavior remain owned by this live scene.
+    /// States and captured actor bindings are copied at this point. Subsequent
+    /// live scene activity is independent of this snapshot.
+    ///
+    /// Captured actors and authenticated native `visible(boolean)` calls are
+    /// supported. Globals, shared scalar captures, event mutation and other
+    /// methods reject the whole input snapshot without executing callbacks.
+    pub fn compile_actor_inputs(&self) -> Option<crate::SongLuaCompiledActorInputs> {
+        if self.ended { return None; }
+        crate::actor_input::compile(&self.lua, &self.actors, &self.states, &self.tracked)
+    }
+
     /// Independent ModsGroup timer inputs, observed before the next screen update.
     #[cfg(feature = "test-support")]
     pub fn set_option_clock_deltas(&mut self, deltas: [f32; LUA_PLAYERS + 1]) {
