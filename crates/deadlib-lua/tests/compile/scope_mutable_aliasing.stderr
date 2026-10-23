@@ -1,0 +1,18 @@
+error[E0499]: cannot borrow `i` as mutable more than once at a time
+  --> tests/compile/scope_mutable_aliasing.rs:12:51
+   |
+10 |     lua.scope(|scope| {
+   |                ----- has type `&mlua::Scope<'_, '1>`
+11 |         let _a = scope.create_userdata(MyUserData(&mut i)).unwrap();
+   |                  -----------------------------------------
+   |                  |                                |
+   |                  |                                first mutable borrow occurs here
+   |                  argument requires that `i` is borrowed for `'1`
+12 |         let _b = scope.create_userdata(MyUserData(&mut i)).unwrap();
+   |                                                   ^^^^^^ second mutable borrow occurs here
+   |
+note: requirement that the value outlives `'1` introduced here
+  --> src/scope.rs
+   |
+   |         T: UserData + 'env,
+   |                       ^^^^
