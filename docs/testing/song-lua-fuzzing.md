@@ -138,6 +138,12 @@ Statuses distinguish mismatches from oracle/compiler errors, incomplete captures
 and timeouts. Timeouts terminate the process tree; Ctrl+C does likewise. Reports
 are written incrementally. Mutation fuzzing is deliberately separate.
 
+Native captures whose active music timestamps repeat or move backwards are
+reported as `oracle_unsupported`. Compiled tracks require an increasing music
+clock; a stopped beat is still supported while music seconds advance. The
+original capture is retained and the result is not counted as a parity pass.
+Replay that saved `case.json` to obtain a new native input schedule.
+
 ## Checks
 
 ```powershell
@@ -149,16 +155,24 @@ The generated Rust test is ignored unless explicitly invoked by the Python
 runner with trace, simfile, oracle and report environment variables. Its pass
 requires `execution_path=compiled-song-lua` and `retained_lua_vm=false`.
 
-Validation of this revision: all 100 seed-1 and 100 seed-666 native cases and
-seed-41/seed-42 cases 0 through 24 pass against saved captures (250 cases).
-Seed-1 cases 9 and 28 also pass fresh native execution. All runs use compiled
-playback with zero draw mismatches and no retained Lua VM. The 34 targeted Rust
-integration regressions and two timing unit tests pass, including offset-free
-rainbow color bytes after a stop, paired diffuse/glow batching rejection cases,
-startup and queued timer resets with irregular frame intervals
-and period wrapping, native motion/effect captures, immediate base zoom, stable
-child command/update order, fade color bytes, named/text alignment inside queued
-tweens, and queued rotation writes with active or stopped spin.
+The seed-2 campaign requested 2,500 cases but stopped after 1,820 completed
+results (indices 0 through 1819). All 1,819 supported saved captures now pass
+with zero draw mismatches and no retained Lua VM. The earlier 100 seed-1,
+100 seed-666, 25 seed-41 and 25 seed-42 captures also pass: 2,069 supported
+saved captures in total. Results are in
+`target/fuzz-seed2-investigation/full/summary.json`.
+
+The seed-2 follow-up fixes all 13 original draw mismatches. Fresh native replays
+of cases 23, 47, 773, 1465, 1639 and 1767 pass with compiled playback and no
+retained Lua VM. The original case-1767 capture moves music time backwards at
+frame 414 (1.447918057 to 1.423877597 seconds); that capture is unsupported,
+not a parity pass. The new native capture has an increasing clock and passes.
+
+The 38 targeted Rust integration regressions and 13 Python fuzzer tests pass.
+They cover shear/alignment composition, wrapped relative rotation, startup
+music-clock spin, exact foreground startup deltas, offset-free rainbow color
+bytes, batching rejection cases, queued clocks, native motion/effect captures,
+base zoom, child update order, fade colors and queued alignment/rotation.
 
 The fixes follow native `Actor.cpp`, `Actor.h`, `ActorFrame.cpp`, `RageMath.cpp`,
 `TimingData.cpp`, and `Sprite.cpp`: size/alignment/basealpha/basezoom setters bypass tween
@@ -179,4 +193,17 @@ and batching across different native render states.
 
 An earlier 1,000-case generation run authored 113 method names and all 3,239
 catalog pairs. This was generation, not a 1,000-case engine parity run. Passing
-these 250 native cases does not establish complete Lua API or pixel coverage.
+the covered native cases does not establish complete Lua API or pixel coverage.
+
+Seed-2 follow-up fixes match native `Actor::BeginDraw`, `Actor::UpdateInternal`,
+`Actor::DestTweenState`, and `Foreground::Update`:
+
+- Child shear preserves alignment translation under parent rotation and uniform
+  scale, without unnecessary rotation/scale decomposition.
+- Relative rotation setters use the back tween destination or wrapped current
+  spin rotation after the queue finishes.
+- Startup music-clock spin preserves its current rotation while queued tween
+  destinations retain their Init/On values.
+- The native comparison adapter uses the float foreground start time for its
+  first actor delta, independently of the integer compiler timeline origin.
+  This preserves timer rainbow color bytes without changing comparison tolerances.

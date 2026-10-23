@@ -9742,6 +9742,143 @@ fn compiled_song_lua_quaternion_parent_and_child_rotate_about_world_origin() {
 }
 
 #[test]
+fn compiled_song_lua_child_shears_preserve_alignment_under_parent_rotation() {
+    use deadsync_song_lua::playback::actor_conformance::{overlay_sprite_matrix, project_world};
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"return Def.ActorFrame{
+        InitCommand=function(self) self:zoom(0.75) end,
+        Def.ActorFrame{InitCommand=function(self) self:xy(8,-4):rotationz(90) end,
+            Def.Quad{Name='Panel', InitCommand=function(self)
+                self:setsize(24,32):xy(20,30):zoom(0.5):rotationz(90)
+                    :halign(0):valign(1):skewx(0.2):skewy(-0.15)
+            end},
+        },
+    }"#,
+    )
+    .unwrap();
+    let context = SongLuaCompileContext::new(temp.path(), "Child shear alignment");
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert!(compiled.live_scene.is_none());
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|a| a.name.as_deref() == Some("Panel"))
+        .unwrap();
+    let state = compiled_overlay_states_at(&compiled, &context, 0.0, 0.0)[index];
+    let matrix = overlay_sprite_matrix(state, [24.0, 32.0]);
+    // Native order: child Y shear, X shear, alignment, scale, rotation,
+    // translation; then parent rotation/translation and outer scale.
+    for (point, expected) in [
+        ([0.0, 0.0, 0.0, 1.0], [-21.0, 18.0, 0.0, 1.0]),
+        ([-12.0, -16.0, 0.0, 1.0], [-15.435, 23.325, 0.0, 1.0]),
+        ([12.0, 16.0, 0.0, 1.0], [-26.565, 12.675, 0.0, 1.0]),
+    ] {
+        let actual = project_world(matrix, point);
+        assert!(
+            actual
+                .iter()
+                .zip(expected)
+                .all(|(a, b)| (a - b).abs() < 0.0001),
+            "{point:?}: {actual:?}"
+        );
+    }
+}
+
+#[test]
+fn compiled_song_lua_relative_rotation_reads_wrapped_current_after_tween() {
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(
+        &entry,
+        r#"local fired=false
+        return Def.ActorFrame{
+            OnCommand=function(self) self:SetUpdateFunction(function(self)
+                if GAMESTATE:GetSongBeat() >= 0.3 and not fired then
+                    fired=true
+                    self:GetChild('Panel'):linear(1):addrotationy(-10)
+                end
+            end) end,
+            Def.Quad{Name='Panel', InitCommand=function(self)
+                self:rotationy(-20):spin():effectmagnitude(0,0,0)
+            end, OnCommand=function(self) self:sleep(0.1) end},
+        }"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Wrapped relative rotation");
+    context.music_length_seconds = 1.0;
+    // Sleep also queues a zero-duration destination. Allow that to finish,
+    // then one spin update wraps the current rotation before the callback.
+    context.compile_clock_inputs = vec![
+        [0.0, 0.0, 0.0],
+        [0.1, 0.1, 0.1],
+        [0.2, 0.2, 0.1],
+        [0.3, 0.3, 0.1],
+        [0.4, 0.4, 0.1],
+    ];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert!(compiled.live_scene.is_none());
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|a| a.name.as_deref() == Some("Panel"))
+        .unwrap();
+    let state = compiled_local_states_at(&compiled, &context, 0.4, 0.4)[index];
+    assert!((state.rot_y_deg - 339.0).abs() < 0.0001, "{state:?}");
+}
+
+#[test]
+fn compiled_song_lua_startup_music_spin_preserves_current_and_tween_destination() {
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+    crate::paths::init();
+    let temp = tempfile::tempdir().unwrap();
+    let entry = temp.path().join("default.lua");
+    fs::write(&entry, r#"return Def.Quad{Name='Panel',
+        InitCommand=function(self) self:rotationz(10):spin():effectmagnitude(0,0,20):effectclock('music') end,
+        OnCommand=function(self) self:linear(1):x(100) end,
+    }"#).unwrap();
+    let mut context = SongLuaCompileContext::new(temp.path(), "Startup music spin");
+    context.music_length_seconds = 1.0;
+    context.song_timing_bpms = vec![(0.0, 60.0)];
+    context.song_timing = Some(TimingData::from_segments(
+        0.0,
+        -0.1,
+        &TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            ..Default::default()
+        },
+        &[],
+    ));
+    context.compile_clock_inputs = vec![[0.1, 0.0, 0.0], [0.12, 0.02, 0.02], [0.15, 0.05, 0.03]];
+    let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
+        .unwrap()
+        .remove(0);
+    assert!(compiled.live_scene.is_none());
+    let index = compiled
+        .overlays
+        .iter()
+        .position(|a| a.name.as_deref() == Some("Panel"))
+        .unwrap();
+    // First native spin delta is the raw music time. Tween elapsed time starts
+    // at the foreground origin; it still targets the pre-update rotation 10.
+    for (elapsed, angle) in [(0.02, 12.352), (0.05, 12.28)] {
+        let state = compiled_local_states_at(&compiled, &context, elapsed, elapsed)[index];
+        assert!(
+            (state.rot_z_deg - angle).abs() < 0.0001,
+            "at {elapsed}: {state:?}"
+        );
+    }
+}
+
+#[test]
 fn compiled_song_lua_beatnooffset_preserves_rainbow_color_bytes_after_stop() {
     use deadsync_rules::timing::{StopSegment, TimingData, TimingSegments};
     use deadsync_song_lua::playback::actor_conformance::effect_sample;

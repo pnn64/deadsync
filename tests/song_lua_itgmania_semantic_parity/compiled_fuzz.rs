@@ -181,6 +181,12 @@ pub(super) fn compare(trace: &Value, trace_path: &Path, simfile: &Path) -> Resul
                             "rotation":[locals[l][i].rot_x_deg,locals[l][i].rot_y_deg,locals[l][i].rot_z_deg],
                             "quaternion":locals[l][i].quaternion,
                             "alignment":[locals[l][i].halign,locals[l][i].valign]},
+                        "compiled_effect_clock":locals[l][i].effect_time,
+                        "compiled_draw_pose": {"position":[states[l][i].x,states[l][i].y,states[l][i].z],
+                            "rotation":[states[l][i].rot_x_deg,states[l][i].rot_y_deg,states[l][i].rot_z_deg],
+                            "zoom":[states[l][i].zoom,states[l][i].zoom_x,states[l][i].zoom_y],
+                            "basezoom":[states[l][i].basezoom,states[l][i].basezoom_x,states[l][i].basezoom_y],
+                            "skew":[states[l][i].skew_x,states[l][i].skew_y]},
                         "native_texture":sample["state"]["texture"],
                         "compiled_texture":match op { DrawOp::Sprite(r) => Some(composer.texture_key(r.texture_handle)),
                             DrawOp::TexturedMesh(r) => Some(composer.texture_key(r.texture_handle)), _ => None },
@@ -540,4 +546,41 @@ fn batched_quads_require_every_native_vertex_once() {
     assert!(!geometry_matches(&actual, &native, true, matches), "duplicate quad must not replace the missing quad");
     actual[6..].copy_from_slice(&[row(0),row(1),row(2),row(0),row(2),row(7)]);
     assert!(!geometry_matches(&actual, &native, true, matches), "changed corner must fail");
+}
+
+#[test]
+fn foreground_clock_uses_float_start_and_rejects_rewound_samples() {
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(Path::new("."), "Clock inputs");
+    let mut timing = TimingData::from_segments(
+        0.0,
+        -0.008,
+        &TimingSegments {
+            bpms: vec![(0.0, 90.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+    timing.shift_group_offset_seconds(-0.009);
+    context.song_timing = Some(timing);
+    let mut trace = json!({"update_frames": [
+        {"sequence": 340, "seconds": 0.0, "beat": -0.1},
+        {"sequence": 341, "seconds": 0.020090702921152115, "beat": 0.00463605},
+        {"sequence": 342, "seconds": 0.040090702921152115, "beat": 0.03463605}
+    ]});
+    let inputs = native_gameplay::generated_foreground_clock_inputs(&trace, &context).unwrap();
+    // Native Foreground.cpp uses GetElapsedTimeFromBeat(0), not integer note
+    // timing: seed 2/case 1465's first delta must retain this exact float.
+    assert_eq!(
+        (inputs[1][2] as f32).to_bits(),
+        0.003090701997280121_f32.to_bits()
+    );
+    let raw = inputs[2][0] as f32 - inputs[1][0] as f32;
+    assert_eq!((inputs[2][2] as f32).to_bits(), raw.to_bits());
+    trace["update_frames"][2]["seconds"] = json!(0.01);
+    let error = native_gameplay::generated_foreground_clock_inputs(&trace, &context).unwrap_err();
+    assert!(
+        error.contains("frame 342") && error.contains("increasing clock"),
+        "{error}"
+    );
 }

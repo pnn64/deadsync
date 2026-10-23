@@ -61,7 +61,8 @@ class VerdictTests(unittest.TestCase):
     def evaluate(self, *, oracle="semantic", manifest_status="ok", capture_code=0,
                  replay_code=0, replay_pass=True, missing_report=False,
                  capture_timeout=False, replay_timeout=False, runtime_errors=None,
-                 corrupt_capture=False, corrupt_report=False, retained_vm=False):
+                 corrupt_capture=False, corrupt_report=False, retained_vm=False,
+                 native_times=(0.02, 0.04)):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             case = fuzz.generate_case(1, 0, next(fuzz.factor_rows(1, 1, "random")))
@@ -82,6 +83,8 @@ class VerdictTests(unittest.TestCase):
                         fuzz.write_json(out / "oracle/_semantic_manifest.json", {
                             "simfiles": [{"status": manifest_status, "lua_entries": 1}]})
                     else:
+                        data["update_frames"] = [dict(sequence=i+1, seconds=s, beat=i)
+                                                 for i, s in enumerate(native_times)]
                         fuzz.write_json(out / "native.json", data)
                     if corrupt_capture:
                         target = out / ("oracle/song.sm.semantic.json" if oracle == "semantic" else "native.json")
@@ -120,6 +123,19 @@ class VerdictTests(unittest.TestCase):
 
     def test_replay_timeout_is_distinct_from_mismatch(self):
         self.assertEqual(self.evaluate(replay_timeout=True)[0]["status"], "deadsync_timeout")
+
+    def test_native_clock_rewind_or_repeat_is_unsupported_and_never_replays(self):
+        for times in [(1.4479180574417114, 1.4238775968551636), (0.02, 0.02)]:
+            result, calls = self.evaluate(oracle="native", native_times=times)
+            self.assertEqual(result["status"], "oracle_unsupported")
+            self.assertIn("frame 2", result["failure_summary"])
+            self.assertIn("Replay this case", result["error"])
+            self.assertEqual(len(calls), 1)
+
+    def test_native_stop_can_hold_beat_while_music_clock_advances(self):
+        trace = {"update_frames": [dict(sequence=1, seconds=1.0, beat=2),
+                                    dict(sequence=2, seconds=1.1, beat=2)]}
+        self.assertIsNone(fuzz.unsupported_native_clock(trace))
 
     def test_malformed_reports_are_saved_as_engine_errors(self):
         result, calls = self.evaluate(corrupt_capture=True)

@@ -5016,27 +5016,10 @@ pub(super) fn compile_generated(
     // Foreground::Update ignores the screen's fixed delta. It uses music time
     // since the layer's start beat, then successive music-time differences.
     // Keep the beat-zero initial state and replay every captured active frame.
-    let origin = context.song_timing.as_ref()
-        .map_or(0.0, |timing| f64::from(timing.get_time_for_beat_exact(0.0)));
     // Native broadcasts visit subscribers in pointer order. Neutral creation
     // identities reproduce that order without importing command results.
     context.message_actor_order = native_creation_order(trace)?;
-    context.compile_clock_inputs.push([origin, 0.0, 0.0]);
-    for frame in trace["update_frames"].as_array().ok_or("missing clock inputs")? {
-        let beat = number(frame, "beat")?;
-        if beat < 0.0 { continue; }
-        let music = number(frame, "seconds")?;
-        let previous = context.compile_clock_inputs.last().unwrap()[0];
-        let delta = f64::from((music as f32 - previous as f32)
-            / deadsync_song_lua::song_music_rate(&context));
-        if !music.is_finite() || !beat.is_finite() || !delta.is_finite() || delta < 0.0
-            || context.compile_clock_inputs.last().is_some_and(|previous| previous[0] >= music)
-        {
-            return Err("invalid generated compiler clock inputs".into());
-        }
-        context.compile_clock_inputs.push([music, beat, delta]);
-    }
-    if context.compile_clock_inputs.len() < 2 { return Err("missing active song clock inputs".into()); }
+    context.compile_clock_inputs = generated_foreground_clock_inputs(trace, &context)?;
     let compiled = deadsync_song_lua::playback::prepare_song_lua(
         &song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
@@ -5048,3 +5031,52 @@ pub(super) fn compile_generated(
 }
 
 pub(super) use interactive::{submitted_rows, row_matches, fully_clipped, native_depth_range};
+
+// The compiler timeline keeps its integer origin, but Actor::Update receives
+// Foreground's float delta. Mixing those origins can change effect color bytes.
+pub(super) fn generated_foreground_clock_inputs(
+    trace: &Value,
+    context: &deadsync_song_lua::SongLuaCompileContext,
+) -> Result<Vec<[f64; 3]>, String> {
+    let rate = deadsync_song_lua::song_music_rate(context);
+    let origin = context
+        .song_timing
+        .as_ref()
+        .map_or(0.0, |timing| timing.get_time_for_beat_exact(0.0));
+    let mut previous_actor_time = context
+        .song_timing
+        .as_ref()
+        .map_or(0.0, |timing| timing.get_song_time_for_beat(0.0, rate));
+    let mut inputs = vec![[f64::from(origin), 0.0, 0.0]];
+    for frame in trace["update_frames"]
+        .as_array()
+        .ok_or("missing clock inputs")?
+    {
+        let beat = number(frame, "beat")?;
+        if beat < 0.0 {
+            continue;
+        }
+        let music = number(frame, "seconds")?;
+        let previous = inputs.last().unwrap()[0];
+        if !music.is_finite() || !beat.is_finite() {
+            return Err(format!(
+                "nonfinite generated compiler clock at frame {}",
+                frame["sequence"]
+            ));
+        }
+        if music <= previous {
+            return Err(format!(
+                "unsupported native music clock at frame {}: {previous:.9} -> {music:.9} seconds; compiled tracks require an increasing clock",
+                frame["sequence"]
+            ));
+        }
+        // Foreground.cpp clamps activation deltas before undoing music rate.
+        let delta = (music as f32 - previous_actor_time).max(0.0) / rate;
+        inputs.push([music, beat, f64::from(delta)]);
+        previous_actor_time = music as f32;
+    }
+    if inputs.len() < 2 {
+        return Err("missing active song clock inputs".into());
+    }
+    Ok(inputs)
+}

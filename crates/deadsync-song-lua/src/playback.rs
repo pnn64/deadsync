@@ -1865,11 +1865,13 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
         && child.rot_y_deg.to_radians().abs() <= f32::EPSILON
         && (parent.skew_x.abs() > f32::EPSILON
             || parent.skew_y.abs() > f32::EPSILON
-            || child.skew_x.abs() > f32::EPSILON
-            || child.skew_y.abs() > f32::EPSILON
             || ((parent_scale_x - parent_scale_y).abs() > f32::EPSILON
                 && child.rot_z_deg.abs() > f32::EPSILON
                 && !parent_prefix_scale));
+    // A child's own shear does not require decomposition when the parent can
+    // retain the native rotation/scale order. Decomposing it moves some shear
+    // into rotation and scale, which also transforms the alignment translation
+    // even though Actor::BeginDraw applies that translation before skew.
     child.scale_factors = if !affine_2d
         && [
             parent.rot_x_deg,

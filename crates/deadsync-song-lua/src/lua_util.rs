@@ -6921,7 +6921,19 @@ pub fn make_actor_add_f32_method(
         };
         let captured = if live_actor_playback(lua) { None }
             else { actor_current_capture_block(lua, &actor)?.get::<Option<f32>>(key)? };
-        let current = match live_destination_scalar(lua, &actor, key) {
+        // Spin advances and wraps current rotation without rewriting capture
+        // fields. Relative setters must use the actual back tween/current pose.
+        let rotation = lua.app_data_ref::<ActorTweenReplays>().and_then(|replays| {
+            let replay = replays.0.get(&(actor.to_pointer() as usize))?;
+            let dest = replay.queue.back().map_or(&replay.current, |step| &step.to);
+            match key {
+                "rot_x_deg" => Some(dest.rot_x_deg),
+                "rot_y_deg" => Some(dest.rot_y_deg),
+                "rot_z_deg" => Some(dest.rot_z_deg),
+                _ => None,
+            }
+        });
+        let current = match rotation.or_else(|| live_destination_scalar(lua, &actor, key)) {
             Some(value) => value,
             None => captured.or(actor.get::<Option<f32>>(state_key.as_ref())?).unwrap_or(0.0),
         };
@@ -11962,7 +11974,7 @@ pub(crate) fn begin_tween_replay<Kind>(
     // their existing identity keys and baked replay data; retaining fresh Rust
     // Table handles in each capture map exhausts Lua 5.1's auxiliary stack.
     for (&pointer, startup) in states.iter().filter(|(_, state)| !state.steps.is_empty()) {
-        let current = overlays
+        let mut current = overlays
             .iter()
             .find(|overlay| overlay.table.to_pointer() as usize == pointer)
             .map_or_else(
@@ -11998,6 +12010,14 @@ pub(crate) fn begin_tween_replay<Kind>(
                 opt1,
                 command: startup.commands.get(index).cloned().flatten(),
             });
+        }
+        // The zero-delta startup update can advance external-clock spin.
+        // Preserve that current pose, while queued destinations remain the
+        // states captured by Init/On before that update.
+        if let Some(overlay) = overlays.iter().find(|o| o.table.to_pointer() as usize == pointer)
+            && let Ok(Some(rotation)) = spin_render_pose(&overlay.table)
+        {
+            [current.rot_x_deg, current.rot_y_deg, current.rot_z_deg] = rotation;
         }
         replays.insert(
             pointer,

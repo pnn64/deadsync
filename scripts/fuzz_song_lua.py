@@ -311,6 +311,22 @@ def build_runner(oracle, folder):
     return executables[0]
 
 
+def unsupported_native_clock(data):
+    previous = None
+    for frame in data.get("update_frames", []):
+        if frame["beat"] < 0:
+            continue
+        seconds = frame["seconds"]
+        if not math.isfinite(seconds) or not math.isfinite(frame["beat"]):
+            raise ValueError("nonfinite native frame clock")
+        if previous is not None and seconds <= previous:
+            return (f"native music clock is not increasing at frame {frame['sequence']}: "
+                    f"{previous:.9f} -> {seconds:.9f} seconds; compiled tracks require an "
+                    "increasing clock. Replay this case to capture a new input schedule.")
+        previous = seconds
+    return None
+
+
 def evaluate_case(case_dir, case, output, args):
     output.mkdir(parents=True, exist_ok=False)
     simfile = case_dir / "song.sm"
@@ -358,6 +374,12 @@ def evaluate_case(case_dir, case, output, args):
             else:
                 # The compiled comparison performs full native capture validation.
                 complete = data.get("dropped_events") == 0 and not data.get("runtime_errors")
+                clock_error = unsupported_native_clock(data) if complete else None
+                if clock_error:
+                    result.update(status="oracle_unsupported", error=clock_error,
+                                  failure_summary=clock_error, report=str(trace))
+                    write_json(output / "result.json", result)
+                    return result
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             result.update(status="oracle_error", error=f"invalid capture report: {error}")
             write_json(output / "result.json", result)
