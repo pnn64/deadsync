@@ -402,6 +402,12 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         Request::EnableArrowCloud(enabled) => {
             config::runtime_update::update_enable_arrowcloud(enabled)
         }
+        Request::EnableGolf(enabled) => {
+            if config::runtime::get().enable_golf != enabled {
+                config::runtime_update::update_enable_golf(enabled);
+                deadsync_score::runtime_invalidate_golf_leaderboards();
+            }
+        }
         Request::SubmitArrowCloudFails(enabled) => {
             config::runtime_update::update_submit_arrowcloud_fails(enabled)
         }

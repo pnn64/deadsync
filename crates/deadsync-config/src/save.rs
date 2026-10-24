@@ -455,6 +455,7 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         show_srpg_shop: cfg.show_srpg_shop,
         srpg_shop_folder: cfg.srpg_shop_folder,
         enable_arrowcloud: cfg.enable_arrowcloud,
+        enable_golf: cfg.enable_golf,
         enable_boogiestats: cfg.enable_boogiestats,
         submit_arrowcloud_fails: cfg.submit_arrowcloud_fails,
         show_arrowcloud_result_dialogs: cfg.show_arrowcloud_result_dialogs,

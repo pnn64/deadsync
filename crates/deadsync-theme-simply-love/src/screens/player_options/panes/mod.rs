@@ -88,6 +88,7 @@ pub(super) fn build_rows(
     play_style: profile_data::PlayStyle,
     persisted_player_idx: usize,
     scorebox_available: bool,
+    golf_enabled: bool,
 ) -> RowMap {
     match pane {
         OptionsPane::Main => build_main_rows(
@@ -109,7 +110,7 @@ pub(super) fn build_rows(
             smx_judge_pack_names,
             return_screen,
         ),
-        OptionsPane::Advanced => build_advanced_rows(return_screen, scorebox_available),
+        OptionsPane::Advanced => build_advanced_rows(return_screen, scorebox_available, golf_enabled),
         OptionsPane::Uncommon => build_uncommon_rows(return_screen),
     }
 }

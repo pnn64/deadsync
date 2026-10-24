@@ -1560,12 +1560,22 @@ pub fn init(view: OptionsInitView) -> State {
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::GsBoxLeaderboards,
-        if cfg.select_music_scorebox_cycle_golf && !(cfg.select_music_scorebox_cycle_itg || cfg.select_music_scorebox_cycle_ex || cfg.select_music_scorebox_cycle_hard_ex || cfg.select_music_scorebox_cycle_tournaments) { 4 } else { scorebox_cycle_cursor_index(
-            cfg.select_music_scorebox_cycle_itg,
-            cfg.select_music_scorebox_cycle_ex,
-            cfg.select_music_scorebox_cycle_hard_ex,
-            cfg.select_music_scorebox_cycle_tournaments,
-        ) },
+        if cfg.enable_golf
+            && cfg.select_music_scorebox_cycle_golf
+            && !(cfg.select_music_scorebox_cycle_itg
+                || cfg.select_music_scorebox_cycle_ex
+                || cfg.select_music_scorebox_cycle_hard_ex
+                || cfg.select_music_scorebox_cycle_tournaments)
+        {
+            4
+        } else {
+            scorebox_cycle_cursor_index(
+                cfg.select_music_scorebox_cycle_itg,
+                cfg.select_music_scorebox_cycle_ex,
+                cfg.select_music_scorebox_cycle_hard_ex,
+                cfg.select_music_scorebox_cycle_tournaments,
+            )
+        },
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
@@ -1614,6 +1624,12 @@ pub fn init(view: OptionsInitView) -> State {
         ARROWCLOUD_OPTIONS_ROWS,
         SubRowId::EnableArrowCloud,
         yes_no_choice_index(cfg.enable_arrowcloud),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::EnableGolf,
+        yes_no_choice_index(cfg.enable_golf),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,

@@ -252,6 +252,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.show_srpg_shop = loaded.show_srpg_shop;
     cfg.srpg_shop_folder = loaded.srpg_shop_folder;
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
+    cfg.enable_golf = loaded.enable_golf;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
     cfg.show_arrowcloud_result_dialogs = loaded.show_arrowcloud_result_dialogs;

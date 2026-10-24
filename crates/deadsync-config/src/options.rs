@@ -245,6 +245,7 @@ pub struct SystemOptions {
     pub show_srpg_shop: bool,
     pub srpg_shop_folder: SrpgShopFolder,
     pub enable_arrowcloud: bool,
+    pub enable_golf: bool,
     pub enable_boogiestats: bool,
     pub submit_arrowcloud_fails: bool,
     pub show_arrowcloud_result_dialogs: bool,
@@ -314,6 +315,7 @@ impl Default for SystemOptions {
             show_srpg_shop: DEFAULT_SHOW_SRPG_SHOP,
             srpg_shop_folder: SrpgShopFolder::default(),
             enable_arrowcloud: DEFAULT_ENABLE_ARROWCLOUD,
+            enable_golf: false,
             enable_boogiestats: DEFAULT_ENABLE_BOOGIESTATS,
             submit_arrowcloud_fails: DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
             show_arrowcloud_result_dialogs: DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS,
@@ -622,6 +624,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "EnableArrowCloud"),
             default.enable_arrowcloud,
         ),
+        enable_golf: parse_u8_bool_or_default(
+            conf.get("Options", "EnableGolf"),
+            default.enable_golf,
+        ),
         enable_boogiestats: parse_u8_bool_or_default(
             conf.get("Options", "EnableBoogieStats"),
             default.enable_boogiestats,
@@ -885,6 +891,7 @@ pub fn push_system_course_option_lines(content: &mut String, options: SystemOpti
 
 pub fn push_system_online_option_lines(content: &mut String, options: SystemOptions) {
     push_bool(content, "EnableArrowCloud", options.enable_arrowcloud);
+    push_bool(content, "EnableGolf", options.enable_golf);
     push_bool(content, "EnableBoogieStats", options.enable_boogiestats);
     push_bool(content, "EnableGrooveStats", options.enable_groovestats);
     push_bool(content, "ShowSrpgShop", options.show_srpg_shop);
@@ -2685,6 +2692,7 @@ mod tests {
             show_srpg_shop: true,
             srpg_shop_folder: SrpgShopFolder::Unlocks,
             enable_arrowcloud: false,
+            enable_golf: false,
             enable_boogiestats: false,
             submit_arrowcloud_fails: false,
             show_arrowcloud_result_dialogs: true,
@@ -3191,6 +3199,7 @@ mod tests {
                 "CourseShowRandom=1\n",
                 "DefaultFailType=Immediate\n",
                 "EnableArrowCloud=1\n",
+                "EnableGolf=0\n",
                 "EnableBoogieStats=0\n",
                 "EnableGrooveStats=1\n",
                 "ShowSrpgShop=1\n",
@@ -3640,6 +3649,26 @@ mod tests {
         assert!(!loaded.chart_info_effective_bpm);
         assert!(loaded.chart_info_matrix_rating);
         assert_eq!(loaded.auto_screenshot_eval, AUTO_SS_FAILS | AUTO_SS_QUINTS);
+    }
+
+    #[test]
+    fn golf_master_switch_defaults_off_and_round_trips_independently() {
+        let defaults = SystemOptions::default();
+        assert!(!defaults.enable_golf);
+        let legacy = ini("[Options]\nSelectMusicShowGolfPars=1\nSelectMusicScoreboxCycleGolf=1\n");
+        assert!(!load_system_options(&legacy, defaults).enable_golf);
+        for enabled in [true, false] {
+            let options = SystemOptions {
+                enable_golf: enabled,
+                ..defaults
+            };
+            let mut text = String::from("[Options]\n");
+            push_system_online_option_lines(&mut text, options);
+            assert_eq!(
+                load_system_options(&ini(&text), defaults).enable_golf,
+                enabled
+            );
+        }
     }
 
     #[test]

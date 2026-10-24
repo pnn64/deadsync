@@ -781,12 +781,13 @@ pub(super) fn row_visibility(
         show_mini_indicator_position: mini_indicator_position_visible(row_map, active),
         show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
-        show_golf_options: active.iter().enumerate().any(|(i, &joined)| {
-            joined
-                && option_masks[i]
-                    .gameplay_extras
-                    .contains(GameplayExtrasMask::GOLF_SCORE)
-        }),
+        show_golf_options: policy.golf_enabled
+            && active.iter().enumerate().any(|(i, &joined)| {
+                joined
+                    && option_masks[i]
+                        .gameplay_extras
+                        .contains(GameplayExtrasMask::GOLF_SCORE)
+            }),
         show_crossover_cue_options: crossover_cue_options_visible(row_map, active),
         show_global_offset_shift: policy.allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),

@@ -296,6 +296,7 @@ pub struct PlayerOptionsPolicyView {
     pub smx_input: bool,
     pub smx_panel_lights: bool,
     pub scorebox_available: bool,
+    pub golf_enabled: bool,
     pub keyboard_features: bool,
     pub tournament_mode: bool,
 }
@@ -311,6 +312,7 @@ impl Default for PlayerOptionsPolicyView {
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: false,
+            golf_enabled: config.enable_golf,
             keyboard_features: config.keyboard_features,
             tournament_mode: config.tournament.enabled,
         }

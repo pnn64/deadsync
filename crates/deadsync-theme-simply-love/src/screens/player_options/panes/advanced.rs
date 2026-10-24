@@ -1281,7 +1281,11 @@ fn step_stats_extra_label(setting: &StepStatsExtra) -> String {
     }
 }
 
-pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: bool) -> RowMap {
+pub(super) fn build_advanced_rows(
+    return_screen: Screen,
+    scorebox_available: bool,
+    golf_enabled: bool,
+) -> RowMap {
     let pack_info_label = if return_screen == Screen::SelectCourse {
         tr("PlayerOptions", "StepStatisticsCourseBanner")
     } else {
@@ -1299,11 +1303,17 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
         gameplay_extras_choices
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
-    gameplay_extras_choices.push(tr("PlayerOptions", "GameplayExtrasGolfScore").to_string());
+    if golf_enabled {
+        gameplay_extras_choices.push(tr("PlayerOptions", "GameplayExtrasGolfScore").to_string());
+    }
     let mut gameplay_extras_binding = GAMEPLAY_EXTRAS;
     if !scorebox_available {
         let BitmaskBinding::Generic { writeback, .. } = &mut gameplay_extras_binding;
-        writeback.bit_mapping = BitMapping::Explicit(&[1, 2, 4, 8, 16, 32, 128]);
+        writeback.bit_mapping = BitMapping::Explicit(if golf_enabled {
+            &[1, 2, 4, 8, 16, 32, 128]
+        } else {
+            &[1, 2, 4, 8, 16, 32]
+        });
     }
     let column_flash_choices = vec![
         tr("PlayerOptions", "ColumnFlashBlueFantastic").to_string(),
@@ -1968,12 +1978,17 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
         lookup_key("PlayerOptions", "ResultsExtras"),
         lookup_key("PlayerOptionsHelp", "ResultsExtrasHelp"),
         RESULTS_EXTRAS,
-        vec![
-            tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string(),
-            tr("PlayerOptions", "ResultsExtrasScaleScatterplot").to_string(),
-            tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").to_string(),
-            tr("PlayerOptions", "ResultsExtrasGolf").to_string(),
-        ],
+        {
+            let mut choices = vec![
+                tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string(),
+                tr("PlayerOptions", "ResultsExtrasScaleScatterplot").to_string(),
+                tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").to_string(),
+            ];
+            if golf_enabled {
+                choices.push(tr("PlayerOptions", "ResultsExtrasGolf").to_string());
+            }
+            choices
+        },
     ));
     b.push(Row::cycle(
         RowId::ScatterplotMaxWindow,

@@ -249,7 +249,11 @@ A `save` directory is created inside the data directory to store your personal d
 
 ### Golf extras
 
-Golf features are optional and disabled by default:
+Golf features are optional and disabled by default. First enable
+**Options > Online Score Services > ArrowCloud Options > Enable Golf Features**.
+This master switch reveals the golf options below. Turning it off hides them
+and disables golf scoring, displays, and online boards while preserving saved
+player and Select Music choices.
 
 - **Player Options > Advanced Modifiers > Gameplay Extras > Golf Score** enables
   the native stroke counter. Its **Golf Display** setting selects golf charts only

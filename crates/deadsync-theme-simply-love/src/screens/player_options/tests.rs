@@ -66,6 +66,10 @@ pub(super) mod tests {
             player_side,
             joined,
             music_rate: 1.0,
+            policy: crate::views::PlayerOptionsPolicyView {
+                golf_enabled: true,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -93,6 +97,7 @@ pub(super) mod tests {
     ) -> super::super::RowVisibility {
         let mut policy = crate::views::PlayerOptionsPolicyView::default();
         policy.allow_per_player_global_offsets = allow_per_player_global_offsets;
+        policy.golf_enabled = true;
         super::super::row_visibility(row_map, active, masks, policy)
     }
 
@@ -5074,6 +5079,7 @@ pub(super) mod tests {
                 state.play_style,
                 state.persisted_player_idx,
                 state.policy.scorebox_available,
+                true,
             );
             (pane, map)
         })
@@ -5101,6 +5107,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         row_map
             .get(RowId::DataVisualizations)
@@ -5674,6 +5681,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
@@ -5734,6 +5742,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);
@@ -5795,6 +5804,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut display_row_map = super::build_rows(
             &state.song,
@@ -5812,6 +5822,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut main_row_map, &profile, P1, &mut masks);
@@ -5832,6 +5843,69 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn golf_master_switch_hides_player_choices_without_clearing_preferences() {
+        ensure_i18n();
+        let (state, _) = setup_state();
+        for enabled in [false, true] {
+            for scorebox in [false, true] {
+                let mut rows = panes::build_rows(
+                    &state.song,
+                    &state.speed_mod[P1],
+                    state.chart_steps_index,
+                    [0; 2],
+                    state.music_rate,
+                    OptionsPane::Advanced,
+                    &[],
+                    &[],
+                    &[],
+                    &[],
+                    Screen::SelectMusic,
+                    state.fixed_stepchart.as_ref(),
+                    state.play_style,
+                    state.persisted_player_idx,
+                    scorebox,
+                    enabled,
+                );
+                let mut preferences = PlayerOptionsData {
+                    show_golf_score: true,
+                    show_golf_results: true,
+                    ..Default::default()
+                };
+                let mut masks = [PlayerOptionMasks::default(); 2];
+                panes::apply_profile_defaults(&mut rows, &preferences, P1, &mut masks[P1]);
+                let visibility = super::super::row_visibility(
+                    &rows,
+                    [true, false],
+                    masks,
+                    crate::views::PlayerOptionsPolicyView {
+                        golf_enabled: enabled,
+                        ..Default::default()
+                    },
+                );
+                assert_eq!(visibility.show_golf_options, enabled);
+                assert_eq!(
+                    rows.get(RowId::GameplayExtras).unwrap().choices.len(),
+                    6 + usize::from(scorebox) + usize::from(enabled)
+                );
+                assert_eq!(
+                    rows.get(RowId::ResultsExtras).unwrap().choices.len(),
+                    3 + usize::from(enabled)
+                );
+                for id in [RowId::GameplayExtras, RowId::ResultsExtras] {
+                    let RowBehavior::Bitmask(BitmaskBinding::Generic { init, writeback }) =
+                        rows.get(id).unwrap().behavior
+                    else {
+                        panic!("extras must use a bitmask");
+                    };
+                    let bits = (init.get_active)(&masks[P1]) ^ 1;
+                    (writeback.project)(&mut masks[P1], &mut preferences, bits);
+                }
+                assert!(preferences.show_golf_score && preferences.show_golf_results);
+            }
+        }
+    }
+
+    #[test]
     fn golf_extras_are_opt_in_and_keep_independent_player_choices() {
         ensure_i18n();
         let (state, _assets) = setup_state();
@@ -5841,6 +5915,7 @@ pub(super) mod tests {
                 [0; 2], state.music_rate, OptionsPane::Advanced, &[], &[], &[], &[],
                 Screen::SelectMusic, state.fixed_stepchart.as_ref(), state.play_style,
                 state.persisted_player_idx, scorebox_available,
+                true,
             );
             let defaults = PlayerOptionsData::default();
             let mut masks = [PlayerOptionMasks::default(); 2];
@@ -5924,6 +5999,7 @@ pub(super) mod tests {
             state.play_style,
             state.persisted_player_idx,
             state.policy.scorebox_available,
+            true,
         );
         let mut masks = PlayerOptionMasks::default();
         panes::apply_profile_defaults(&mut row_map, &profile, P1, &mut masks);

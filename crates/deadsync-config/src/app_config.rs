@@ -337,6 +337,7 @@ pub struct Config {
     /// on disk per song.
     pub enable_replaygain: bool,
     pub enable_arrowcloud: bool,
+    pub enable_golf: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
     pub show_srpg_shop: bool,
@@ -571,6 +572,7 @@ impl Default for Config {
             rate_mod_preserves_pitch: audio.rate_mod_preserves_pitch,
             enable_replaygain: audio.enable_replaygain,
             enable_arrowcloud: system.enable_arrowcloud,
+            enable_golf: system.enable_golf,
             enable_boogiestats: system.enable_boogiestats,
             enable_groovestats: system.enable_groovestats,
             show_srpg_shop: system.show_srpg_shop,

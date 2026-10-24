@@ -43,7 +43,8 @@ pub fn fetch_player_leaderboards(
         warn!("ArrowCloud leaderboard fetch failed for chart {chart_hash}: {error}");
     }
 
-    if deadsync_config::runtime::get().select_music_scorebox_cycle_golf {
+    let config = deadsync_config::runtime::get();
+    if config.enable_golf && config.select_music_scorebox_cycle_golf {
         if let Some(key) = arrowcloud_api_key.filter(|key| !key.is_empty()) {
             match crate::golf::fetch_pane(chart_hash, key, max_entries) {
                 Ok(Some(pane)) => combined.fetched.data.panes.push(pane),

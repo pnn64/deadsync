@@ -251,6 +251,7 @@ pub enum ItemId {
 
     // ArrowCloud Options submenu
     AcEnable,
+    AcGolf,
     AcSubmitFails,
     AcResultDialogs,
     AcQrLogin,

@@ -215,6 +215,7 @@ pub(super) fn build_description_layout(
     s: f32,
     app_paths: &AppPathsView,
     smx_assignment_status: &str,
+    golf_enabled: bool,
 ) -> DescriptionLayout {
     let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
     let wrap_extra_pad = desc_wrap_extra_pad_unscaled() * s;
@@ -228,7 +229,12 @@ pub(super) fn build_description_layout(
 
     let mut blocks = Vec::new();
 
-    if item.help.is_empty() {
+    let help = if item.id == ItemId::SmScoreboxCycle && !golf_enabled {
+        &item.help[..1]
+    } else {
+        item.help
+    };
+    if help.is_empty() {
         // No help entries — show the item name as a paragraph fallback.
         let wrapped = wrap_miso_text(
             asset_manager,
@@ -241,7 +247,7 @@ pub(super) fn build_description_layout(
             text: Arc::from(wrapped),
         });
     } else {
-        for entry in item.help {
+        for entry in help {
             match entry {
                 HelpEntry::Paragraph(lkey) => {
                     let raw = lkey.get();
@@ -339,6 +345,7 @@ pub(super) fn description_layout<'a>(
             s,
             &state.app_paths,
             state.smx_assignment_status.as_str(),
+            golf_features_enabled(state),
         );
         *state.description_layout_cache.borrow_mut() = Some(layout);
     }

@@ -1,5 +1,14 @@
 use super::*;
 
+pub(super) fn golf_features_enabled(state: &State) -> bool {
+    get_choice_by_id(
+        &state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::EnableGolf,
+    )
+    .is_some_and(yes_no_from_choice)
+}
+
 /// Returns `true` when the given submenu row should be treated as disabled
 /// (non-interactive and visually dimmed). Add new cases here for any row
 /// that should be conditionally locked based on runtime state.
@@ -278,7 +287,9 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.id == SubRowId::ShowVideoBanners && !show_banners {
+                    if row.id == SubRowId::ShowGolfPars && !golf_features_enabled(state) {
+                        None
+                    } else if row.id == SubRowId::ShowVideoBanners && !show_banners {
                         None
                     } else if row.id == SubRowId::BreakdownStyle && !show_breakdown {
                         None

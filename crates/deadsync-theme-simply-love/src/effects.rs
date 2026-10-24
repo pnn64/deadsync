@@ -846,6 +846,7 @@ pub enum SimplyLoveOnlineConfigRequest {
     SeparateUnlocksByPlayer(bool),
     GrooveStatsQrLogin(SimplyLoveQrLoginPolicy),
     EnableArrowCloud(bool),
+    EnableGolf(bool),
     SubmitArrowCloudFails(bool),
     ShowArrowCloudResultDialogs(bool),
     ArrowCloudQrLogin(SimplyLoveQrLoginPolicy),

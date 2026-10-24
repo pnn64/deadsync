@@ -424,6 +424,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     let mut display_row_map = build_rows(
         &song,
@@ -441,6 +442,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     apply_judgment_palette_choices(
         &mut display_row_map,
@@ -464,6 +466,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     if policy.tournament_mode
         && let Some(row) = advanced_row_map.get_mut(RowId::FAPlusOptions)
@@ -488,6 +491,7 @@ fn init_state(
         play_style,
         persisted_player_idx,
         policy.scorebox_available,
+        policy.golf_enabled,
     );
     // Each `BitmaskBinding` lives on exactly one pane's row, and
     // `apply_derived_masks` is a pure function of `profile`, so calling

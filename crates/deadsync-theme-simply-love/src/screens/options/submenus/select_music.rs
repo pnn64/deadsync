@@ -668,7 +668,7 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
     choice_idx: usize,
 ) -> ThemeEffect {
     let bit = scorebox_cycle_bit_from_choice(choice_idx);
-    if bit == 0 {
+    if bit == 0 || (choice_idx == 4 && !golf_features_enabled(state)) {
         return ThemeEffect::None;
     }
     let mut mask = state.scorebox_cycle_mask;

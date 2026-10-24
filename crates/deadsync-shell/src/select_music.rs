@@ -329,13 +329,13 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
             test_input_shortcut: config.music_select_shortcut_test_input,
         },
         presentation: SelectMusicPresentationPolicyView {
-            show_golf_pars: config.select_music_show_golf_pars,
+            show_golf_pars: config.enable_golf && config.select_music_show_golf_pars,
             show_scorebox: config.show_select_music_scorebox,
             scorebox_cycle_enabled: config.select_music_scorebox_cycle_itg
                 || config.select_music_scorebox_cycle_ex
                 || config.select_music_scorebox_cycle_hard_ex
                 || config.select_music_scorebox_cycle_tournaments
-                || config.select_music_scorebox_cycle_golf,
+                || (config.enable_golf && config.select_music_scorebox_cycle_golf),
             scorebox_in_step_pane: config.select_music_scorebox_placement
                 == config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_stage_display: config.show_select_music_stage_display,
@@ -391,8 +391,11 @@ pub(crate) fn history_view() -> SelectMusicHistoryView {
 }
 
 pub(crate) fn prepare_init_view(mut view: SelectMusicInitView) -> SelectMusicInitView {
-    let refresh_golf = view.policy.presentation.show_golf_pars
-        || deadsync_profile::runtime_lock_profiles().iter().any(|p| p.show_golf_score || p.show_golf_results);
+    let refresh_golf = config::runtime::get().enable_golf
+        && (view.policy.presentation.show_golf_pars
+            || deadsync_profile::runtime_lock_profiles()
+                .iter()
+                .any(|p| p.show_golf_score || p.show_golf_results));
     if refresh_golf {
         let pack_dirs: HashSet<_> = view.song_packs.iter().flat_map(|pack| pack.songs.iter())
             .filter_map(|song| song.simfile_path.parent()?.parent()).collect();
@@ -557,6 +560,25 @@ mod tests {
         assert!(uncleared_event.failed);
         assert_eq!(uncleared_event.hundredths, 8345);
         assert_eq!(uncleared_event.itl_points, None);
+    }
+
+    #[test]
+    fn golf_master_switch_gates_saved_wheel_preferences() {
+        let mut config = config::app_config::Config {
+            select_music_show_golf_pars: true,
+            select_music_scorebox_cycle_golf: true,
+            select_music_scorebox_cycle_itg: false,
+            select_music_scorebox_cycle_ex: false,
+            select_music_scorebox_cycle_hard_ex: false,
+            select_music_scorebox_cycle_tournaments: false,
+            ..Default::default()
+        };
+        let disabled = policy_view(&config).presentation;
+        assert!(!disabled.show_golf_pars && !disabled.scorebox_cycle_enabled);
+        config.enable_golf = true;
+        let enabled = policy_view(&config).presentation;
+        assert!(enabled.show_golf_pars && enabled.scorebox_cycle_enabled);
+        assert!(config.select_music_show_golf_pars && config.select_music_scorebox_cycle_golf);
     }
 
     #[test]

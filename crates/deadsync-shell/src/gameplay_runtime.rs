@@ -91,7 +91,7 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
             ex: config.select_music_scorebox_cycle_ex,
             hard_ex: config.select_music_scorebox_cycle_hard_ex,
             tournaments: config.select_music_scorebox_cycle_tournaments,
-            golf: config.select_music_scorebox_cycle_golf,
+            golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
         },
         smx_profile_enabled: smx_profile_enabled(),
     }

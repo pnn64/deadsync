@@ -81,6 +81,13 @@ fn collect_row_choices<T: ChoiceText>(
     row_idx: usize,
 ) -> Vec<T> {
     if let Some(row) = rows.get(row_idx)
+        && kind == SubmenuKind::SelectMusic
+        && row.id == SubRowId::GsBoxLeaderboards
+        && !golf_features_enabled(state)
+    {
+        return choice_texts(&row.choices[..4]);
+    }
+    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Gameplay)
         && row.id == SubRowId::DefaultJudgmentPalette
     {

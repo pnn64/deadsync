@@ -207,6 +207,7 @@ pub enum SubRowId {
     GrooveStatsQrLogin,
     // ArrowCloud Options
     EnableArrowCloud,
+    EnableGolf,
     ArrowCloudSubmitFails,
     ArrowCloudResultDialogs,
     ArrowCloudQrLogin,

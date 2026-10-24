@@ -484,6 +484,10 @@ pub fn set_enable_arrowcloud(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.enable_arrowcloud, enabled)
 }
 
+pub fn set_enable_golf(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.enable_golf, enabled)
+}
+
 pub fn set_submit_arrowcloud_fails(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.submit_arrowcloud_fails, enabled)
 }
