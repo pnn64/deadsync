@@ -53,6 +53,7 @@ Examples:
   cargo run -p deadsync-theme-simply-love --example export_gameplay -- --size 640x480@16:9
 
 Outputs: <destination>/<resolution-and-aspect>/<layout>/gameplay[-reverse].png
+and gameplay-hmr[-reverse].png, shown side by side in the gallery.
 and an index.html gallery. Settings and sample song data are isolated.";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -332,7 +333,8 @@ fn export(
     let mut gallery = String::from(
         "<!doctype html><meta charset=\"utf-8\"><title>Simply Love gameplay layouts</title>\
         <style>body{background:#181818;color:#eee;font:16px sans-serif}img{max-width:100%;height:auto}\
-        figure{margin:24px 0}a{color:#8cf}</style><h1>Simply Love gameplay layouts</h1>\
+        .pair{display:flex;gap:12px;align-items:flex-start}.pair figure{flex:1;min-width:0;margin:24px 0}\
+        a{color:#8cf}</style><h1>Simply Love gameplay layouts</h1>\
         <p>Real gameplay rendering with synthetic sample data. Click an image for full resolution. \
         Aspect-dependent visibility rules are preserved.</p>",
     );
@@ -345,60 +347,66 @@ fn export(
         backend.resize(size.width, size.height);
         backend.set_default_projection(metrics.projection());
         for layout in &options.layouts {
-            let mut state = sample_state(
-                song.clone(),
-                logical_width,
-                logical_height,
-                layout,
-                options.reverse,
-            )?;
-            preload_noteskins(&state, &mut assets, &mut backend)?;
-            let context = CaptureTextures {
-                assets: &assets,
-                keys: RefCell::default(),
-            };
-            drop(compose(&mut state, &assets, &metrics, &context));
-            let missing: Vec<_> = context
-                .keys
-                .into_inner()
-                .into_iter()
-                .filter(|key| !assets.has_uploaded_texture_key(key))
-                .collect();
-            for key in missing {
-                load_texture(&mut assets, &mut backend, &key, false)?;
-            }
-            let frame = compose(&mut state, &assets, &metrics, assets.texture_context());
-            backend.request_screenshot();
-            backend.draw(&frame, assets.textures(), false)?;
-            let image = backend.capture_frame()?;
-            if image.dimensions() != (size.width, size.height) {
-                return Err(format!(
-                    "capture returned {:?}, expected {}x{}",
-                    image.dimensions(),
-                    size.width,
-                    size.height
-                )
-                .into());
-            }
-            let filename = if options.reverse {
-                "gameplay-reverse.png"
-            } else {
-                "gameplay.png"
-            };
             let folder = options.output.join(size.name()).join(layout);
             std::fs::create_dir_all(&folder)?;
-            let output = folder.join(filename);
-            image.save(&output)?;
-            println!("{}", output.display());
-            let url = format!("{}/{layout}/{filename}", size.name());
-            gallery.push_str(&format!(
-                "<figure><figcaption>{} - {}:{} - {layout}{}\
-                </figcaption><a href=\"{url}\"><img loading=\"lazy\" src=\"{url}\"></a></figure>",
-                size.name(),
-                size.aspect.0,
-                size.aspect.1,
-                if options.reverse { " (reverse)" } else { "" }
-            ));
+            gallery.push_str("<div class=\"pair\">");
+            for (show_scorebox, stem, mode_caption) in
+                [(true, "gameplay", ""), (false, "gameplay-hmr", " HMR")]
+            {
+                let mut state = sample_state(
+                    song.clone(),
+                    logical_width,
+                    logical_height,
+                    layout,
+                    options.reverse,
+                    show_scorebox,
+                )?;
+                preload_noteskins(&state, &mut assets, &mut backend)?;
+                let context = CaptureTextures {
+                    assets: &assets,
+                    keys: RefCell::default(),
+                };
+                drop(compose(&mut state, &assets, &metrics, &context));
+                let missing: Vec<_> = context
+                    .keys
+                    .into_inner()
+                    .into_iter()
+                    .filter(|key| !assets.has_uploaded_texture_key(key))
+                    .collect();
+                for key in missing {
+                    load_texture(&mut assets, &mut backend, &key, false)?;
+                }
+                let frame = compose(&mut state, &assets, &metrics, assets.texture_context());
+                backend.request_screenshot();
+                backend.draw(&frame, assets.textures(), false)?;
+                let image = backend.capture_frame()?;
+                if image.dimensions() != (size.width, size.height) {
+                    return Err(format!(
+                        "capture returned {:?}, expected {}x{}",
+                        image.dimensions(),
+                        size.width,
+                        size.height
+                    )
+                    .into());
+                }
+                let filename = format!(
+                    "{stem}{}.png",
+                    if options.reverse { "-reverse" } else { "" }
+                );
+                let output = folder.join(&filename);
+                image.save(&output)?;
+                println!("{}", output.display());
+                let url = format!("{}/{layout}/{filename}", size.name());
+                gallery.push_str(&format!(
+                    "<figure><figcaption>{} - {}:{} - {layout}{mode_caption}{}\
+                    </figcaption><a href=\"{url}\"><img loading=\"lazy\" src=\"{url}\"></a></figure>",
+                    size.name(),
+                    size.aspect.0,
+                    size.aspect.1,
+                    if options.reverse { " (reverse)" } else { "" }
+                ));
+            }
+            gallery.push_str("</div>");
         }
     }
     std::fs::write(options.output.join("index.html"), gallery)?;
@@ -406,7 +414,7 @@ fn export(
     backend.cleanup();
     println!(
         "Exported {} PNGs. Gallery: {}",
-        options.sizes.len() * options.layouts.len(),
+        options.sizes.len() * options.layouts.len() * 2,
         options.output.join("index.html").display()
     );
     Ok(())
@@ -478,7 +486,7 @@ fn pack_banner() -> image::RgbaImage {
     })
 }
 
-fn sample_profile(reverse: bool) -> profile::Profile {
+fn sample_profile(reverse: bool, show_scorebox: bool) -> profile::Profile {
     profile::Profile {
         step_statistics: profile::StepStatisticsMask::all_widgets(),
         step_stats_extra: profile::StepStatsExtra::ErrorStats,
@@ -496,7 +504,7 @@ fn sample_profile(reverse: bool) -> profile::Profile {
         live_timing_stats: true,
         live_timing_stats_mask: profile::LiveTimingStatsMask::all(),
         show_life_percent: true,
-        display_scorebox: true,
+        display_scorebox: show_scorebox,
         column_cues: true,
         measure_cues: true,
         column_countdown: true,
@@ -516,6 +524,7 @@ fn sample_state(
     height: f32,
     layout: &str,
     reverse: bool,
+    show_scorebox: bool,
 ) -> Result<gameplay::State> {
     let (play_style, side) = match layout {
         "p1" => (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P1),
@@ -540,7 +549,10 @@ fn sample_state(
         joined_sides: joined,
         ..Default::default()
     };
-    let profiles = [sample_profile(reverse), sample_profile(reverse)];
+    let profiles = [
+        sample_profile(reverse, show_scorebox),
+        sample_profile(reverse, show_scorebox),
+    ];
     let scroll = profiles.each_ref().map(|p| p.scroll_speed);
     let theme_style = match layout {
         "versus" => profile::PlayStyle::Versus,
@@ -578,11 +590,11 @@ fn sample_state(
             panes: vec![deadsync_score::LeaderboardPane {
                 name: "GrooveStats".into(),
                 entries: [
-                    ("1", 99.98, false),
-                    ("DeadSync", 99.94, true),
-                    ("StepStar", 99.82, false),
-                    ("Arrow", 99.65, false),
-                    ("Rhythm", 99.42, false),
+                    ("1", 9998.0, false),
+                    ("DeadSync", 9994.0, true),
+                    ("StepStar", 9982.0, false),
+                    ("Arrow", 9965.0, false),
+                    ("Rhythm", 9942.0, false),
                 ]
                 .into_iter()
                 .enumerate()

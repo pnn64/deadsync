@@ -1542,17 +1542,17 @@ pub fn push_step_stats(
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     let player_idx = step_stats_player_idx(state, player_side);
     let extra_actor_count = state.step_stats_extra_resolved[player_idx].actor_count();
-    actors.reserve(48 + extra_actor_count);
+    let mut pane_actors = Vec::with_capacity(48 + extra_actor_count);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
-        build_banner(actors, state, layout, wide, player_side);
+        build_banner(&mut pane_actors, state, layout, wide, player_side);
     }
     let show_pack_info = mask.pack_info_enabled();
     if show_pack_info {
-        build_pack_banner(actors, state, layout, player_side);
+        build_pack_banner(&mut pane_actors, state, layout, player_side);
     }
-    build_steps_info(actors, state, layout, player_side, show_pack_info);
+    build_steps_info(&mut pane_actors, state, layout, player_side, show_pack_info);
     step_stats_gifs::push_step_stats_extra(
-        actors,
+        &mut pane_actors,
         state,
         player_idx,
         crate::step_stats_gifs::GifRenderParams {
@@ -1566,7 +1566,7 @@ pub fn push_step_stats(
         },
     );
     build_side_pane(
-        actors,
+        &mut pane_actors,
         state,
         asset_manager,
         layout,
@@ -1576,11 +1576,33 @@ pub fn push_step_stats(
     );
     if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) {
         let player_idx = step_stats_player_idx(state, player_side);
+        build_holds_mines_rolls_pane(&mut pane_actors, state, asset_manager, layout, player_side);
         if state.profiles()[player_idx].display_scorebox {
-            build_scorebox_pane(actors, state, layout, wide, player_side);
-        } else {
-            build_holds_mines_rolls_pane(actors, state, asset_manager, layout, wide, player_side);
+            build_scorebox_pane(&mut pane_actors, state, layout, wide, player_side);
         }
+    }
+    push_step_stats_pane_background(actors, layout);
+    actors.push(Actor::Camera {
+        view_proj: step_stats_theme::pane_view_proj(screen_width(), screen_height()),
+        children: pane_actors,
+    });
+
+    let graph = step_stats_density_graph_rect(state, layout);
+    if mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
+        let graph_view = state.gameplay.density_graph_view();
+        if graph_view.graph_w > 0.0_f32 && graph_view.graph_h > 0.0_f32 {
+            push_density_graph_at(actors, state, player_idx, graph.x, graph.y);
+        }
+    }
+    if mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
+        push_peak_nps_on_graph(
+            actors,
+            state,
+            player_idx,
+            player_side,
+            graph,
+            song_info_text_zoom(layout),
+        );
     }
 }
 
@@ -1602,6 +1624,17 @@ fn step_stats_pane_layout(
     })
 }
 
+fn push_step_stats_pane_background(actors: &mut Vec<Actor>, layout: StepStatsPaneLayout) {
+    let pane_rect = step_stats_theme::pane_rect(layout, screen_height());
+    actors.push(act!(quad:
+        align(0.5, 0.5):
+        xy((pane_rect.left + pane_rect.right) * 0.5, (pane_rect.top + pane_rect.bottom) * 0.5):
+        zoomto(pane_rect.right - pane_rect.left, pane_rect.bottom - pane_rect.top):
+        diffuse(0.0, 0.0, 0.0, 0.95):
+        z(-80)
+    ));
+}
+
 pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center_x: f32) {
     let elapsed = state.gameplay.total_elapsed_in_screen();
     for player_idx in 0..state.num_players() {
@@ -1617,10 +1650,11 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         } else {
             -1.0
         };
-        let x = (x_sign * 94.0).mul_add(layout.banner_data_zoom, layout.sidepane_center_x);
+        let x = step_stats_theme::pane_anchor_x(layout, x_sign * 94.0 * layout.banner_data_zoom);
         let y = 37.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_center_y);
+        let mut heart_rate_actors = Vec::with_capacity(2);
         heart_rate::push(
-            actors,
+            &mut heart_rate_actors,
             reading,
             state.heart_rate_text.get(side_idx),
             elapsed,
@@ -1629,11 +1663,15 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
             layout.banner_data_zoom,
             72,
         );
+        actors.push(Actor::Camera {
+            view_proj: step_stats_theme::pane_view_proj(screen_width(), screen_height()),
+            children: heart_rate_actors,
+        });
     }
 }
 
 fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
-    step_stats_theme::song_info_text_zoom(layout, screen_width() / screen_height().max(1.0))
+    step_stats_theme::song_info_text_zoom(layout)
 }
 
 fn step_stats_density_graph_rect(state: &State, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
@@ -2400,10 +2438,8 @@ pub fn push_double_step_stats(
             actors,
             state,
             0,
-            profile_data::PlayerSide::P1,
             timing_label_x,
             156.0f32.mul_add(number_zoom, timing_label_x),
-            false,
             base_y,
             20.0 * number_zoom,
             label_zoom,
@@ -2512,16 +2548,6 @@ fn build_steps_info(
     show_song_info: bool,
 ) {
     actors.reserve(if layout.note_field_is_centered { 5 } else { 9 });
-
-    // Dark background for the Step Statistics side pane (Simply Love: DarkBackground.lua).
-    let pane_rect = step_stats_theme::pane_rect(layout, screen_height());
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy((pane_rect.left + pane_rect.right) * 0.5, (pane_rect.top + pane_rect.bottom) * 0.5):
-        zoomto(pane_rect.right - pane_rect.left, pane_rect.bottom - pane_rect.top):
-        diffuse(0.0, 0.0, 0.0, 0.95):
-        z(-80)
-    ));
     if !show_song_info {
         return;
     }
@@ -2544,7 +2570,7 @@ fn build_steps_info(
     let xoffset: f32 = if pnum == 1 { 285.0 } else { 0.0 };
     let mut yoffset: f32 = 0.0;
     let mut xvalues = 45.0;
-    let mut maxwidth = 320.0;
+    let mut maxwidth: f32 = 320.0;
     if note_field_is_centered {
         xvalues = 0.0;
         yoffset = -5.0;
@@ -2557,7 +2583,8 @@ fn build_steps_info(
         }
     }
 
-    let origin_x = ((x + xoffset) * pos_sign).mul_add(banner_data_zoom, layout.sidepane_center_x);
+    let origin_x =
+        step_stats_theme::pane_anchor_x(layout, (x + xoffset) * pos_sign * banner_data_zoom);
     let origin_y = (-8.0 + yoffset).mul_add(banner_data_zoom, layout.sidepane_center_y);
     let group_zoom = song_info_text_zoom(layout);
 
@@ -2576,6 +2603,8 @@ fn build_steps_info(
     }
 
     let values_x = origin_x + (xvalues * group_zoom);
+    let pane_right = layout.sidepane_center_x + layout.sidepane_width * 0.5;
+    let maxwidth = maxwidth.min((pane_right - values_x - 8.0).max(1.0));
     let y_song = (row_h * 1.0).mul_add(group_zoom, origin_y);
     actors.push(act!(text:
         font("miso"): settext(state.song_full_title.clone()):
@@ -2726,12 +2755,8 @@ fn build_holds_mines_rolls_pane(
     state: &State,
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: profile_data::PlayerSide,
 ) {
-    if !wide {
-        return;
-    }
     let player_idx = step_stats_player_idx(state, player_side);
     let frame = step_stats_theme::holds_mines_rolls_frame(layout, player_side);
 
@@ -2839,10 +2864,6 @@ fn build_scorebox_pane(
     wide: bool,
     player_side: profile_data::PlayerSide,
 ) {
-    if !wide {
-        return;
-    }
-
     let frame = step_stats_theme::scorebox_frame(layout, wide, player_side, state.num_players());
 
     gameplay_screen::push_scorebox_actors_for_side(
@@ -2860,10 +2881,8 @@ fn push_live_timing_stats_at(
     actors: &mut Vec<Actor>,
     state: &State,
     player_idx: usize,
-    player_side: profile_data::PlayerSide,
     label_x: f32,
     value_x: f32,
-    value_align_right: bool,
     first_y: f32,
     row_h: f32,
     zoom: f32,
@@ -2906,37 +2925,16 @@ fn push_live_timing_stats_at(
         let value = live_timing_value(stats, player_idx, index);
         row += 1;
 
-        if player_side == profile_data::PlayerSide::P1 {
-            actors.push(act!(text: font("miso"): settext(label):
-                align(0.0, 0.5): xy(label_x, y):
-                zoom(zoom): maxwidth(label_max_w): horizalign(left):
-                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-            ));
-            if value_align_right {
-                actors.push(act!(text: font("miso"): settext(value):
-                    align(1.0, 0.5): xy(value_x, y):
-                    zoom(zoom): horizalign(right):
-                    diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-                ));
-            } else {
-                actors.push(act!(text: font("miso"): settext(value):
-                    align(0.0, 0.5): xy(value_x, y):
-                    zoom(zoom): horizalign(left):
-                    diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-                ));
-            }
-        } else {
-            actors.push(act!(text: font("miso"): settext(label):
-                align(1.0, 0.5): xy(label_x, y):
-                zoom(zoom): maxwidth(label_max_w): horizalign(right):
-                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-            ));
-            actors.push(act!(text: font("miso"): settext(value):
-                align(1.0, 0.5): xy(value_x, y):
-                zoom(zoom): horizalign(right):
-                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-            ));
-        }
+        actors.push(act!(text: font("miso"): settext(label):
+            align(0.0, 0.5): xy(label_x, y):
+            zoom(zoom): maxwidth(label_max_w): horizalign(left):
+            diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+        ));
+        actors.push(act!(text: font("miso"): settext(value):
+            align(1.0, 0.5): xy(value_x, y):
+            zoom(zoom): horizalign(right):
+            diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+        ));
     }
 }
 
@@ -3391,10 +3389,8 @@ fn build_side_pane(
                 actors,
                 state,
                 player_idx,
-                player_side,
                 timing_label_anchor,
                 timing_value_anchor,
-                right_align_timing_values,
                 y_pos_remaining,
                 20.0,
                 text_zoom,
@@ -3403,26 +3399,5 @@ fn build_side_pane(
         }
             });
         });
-    }
-
-    // Density graph (Simply Love StepStatistics/DensityGraph.lua).
-    let graph = step_stats_density_graph_rect(state, layout);
-    if mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
-        let graph_view = state.gameplay.density_graph_view();
-        if graph_view.graph_w > 0.0_f32 && graph_view.graph_h > 0.0_f32 {
-            push_density_graph_at(actors, state, player_idx, graph.x, graph.y);
-        }
-    }
-
-    // Peak NPS sits on the graph corner and uses the same scale as song info text.
-    if mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
-        push_peak_nps_on_graph(
-            actors,
-            state,
-            player_idx,
-            player_side,
-            graph,
-            song_info_text_zoom(layout),
-        );
     }
 }
