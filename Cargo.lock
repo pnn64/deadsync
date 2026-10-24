@@ -2000,6 +2000,7 @@ dependencies = [
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
+ "deadlib-platform",
  "deadsync-noteskin",
  "deadsync-version",
  "flate2",

@@ -81,6 +81,14 @@ cargo run --profile local       # optimized, but faster to link than full releas
 cargo build --release           # fully optimized (LTO) build for benchmarking/play
 ```
 
+To create a macOS application that opens from Finder:
+```bash
+python3 scripts/build-macos-app.py --profile local
+open dist/DeadSync.app
+```
+See [macOS application bundles](docs/macos/app-bundle.md) for release packaging,
+embedded libraries, signing and user-data locations.
+
 Before the first run, grant **Input Monitoring** to your terminal (see the
 macOS run note under [Getting Started](#getting-started)) or the game won't
 receive keystrokes.
