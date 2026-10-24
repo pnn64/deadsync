@@ -9,8 +9,8 @@ use crate::navigation::{
     FadeCompletionEffect, NavigationTransitionStart, ProcessExitNavigationEffect,
     actor_transition_music_commands, apply_actor_entry_transition, apply_actor_fade_out_transition,
     apply_global_entry_transition, apply_global_fade_out_transition, course_plan_required,
-    fade_completion_plan, navigation_transition_effect_plan, process_exit_navigation_plan,
-    screen_change_plan, write_current_screen_file,
+    fade_completion_plan, navigation_transition_effect_plan, practice_music_rate_on_screen_change,
+    process_exit_navigation_plan, screen_change_plan, write_current_screen_file,
 };
 use crate::screen_flow::navigation_route_plan;
 use deadlib_present::actors::Actor;
@@ -118,6 +118,14 @@ impl App {
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
         let plan = screen_change_plan(prev, target);
+        if let Some(rate) = practice_music_rate_on_screen_change(
+            &mut self.state.session.pre_practice_music_rate,
+            target,
+            profile::get_session_snapshot().music_rate,
+        ) {
+            profile::set_session_music_rate(rate);
+            self.audio.set_music_rate(rate);
+        }
         if prev != target
             && matches!(
                 prev,

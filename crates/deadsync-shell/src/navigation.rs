@@ -212,6 +212,23 @@ pub fn screen_change_plan(previous: Screen, target: Screen) -> ScreenChangePlan 
     }
 }
 
+/// Keep Practice's temporary rate across editor options and chart reloads,
+/// then restore the preferred rate when leaving that flow.
+pub fn practice_music_rate_on_screen_change(
+    saved_rate: &mut Option<f32>,
+    target: Screen,
+    current_rate: f32,
+) -> Option<f32> {
+    match target {
+        Screen::Practice => {
+            saved_rate.get_or_insert(current_rate);
+            None
+        }
+        Screen::PlayerOptions => None,
+        _ => saved_rate.take(),
+    }
+}
+
 #[inline(always)]
 pub const fn course_plan_required(previous: Screen, target: Screen) -> bool {
     matches!(previous, Screen::SelectCourse)
@@ -803,6 +820,75 @@ mod tests {
                 clear_text_layout_cache: true,
             }
         );
+    }
+
+    #[test]
+    fn practice_exit_restores_the_preferred_music_rate() {
+        for preferred_rate in [1.0, 1.25] {
+            let mut saved_rate = None;
+            assert_eq!(
+                practice_music_rate_on_screen_change(
+                    &mut saved_rate,
+                    Screen::Practice,
+                    preferred_rate,
+                ),
+                None
+            );
+            assert_eq!(
+                practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.75),
+                Some(preferred_rate)
+            );
+            assert_eq!(saved_rate, None);
+        }
+    }
+
+    #[test]
+    fn practice_options_and_reload_keep_the_original_music_rate() {
+        let mut saved_rate = None;
+        practice_music_rate_on_screen_change(&mut saved_rate, Screen::Practice, 1.0);
+        for target in [Screen::PlayerOptions, Screen::Practice, Screen::Practice] {
+            assert_eq!(
+                practice_music_rate_on_screen_change(&mut saved_rate, target, 0.75),
+                None
+            );
+            assert_eq!(saved_rate, Some(1.0));
+        }
+        assert_eq!(
+            practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.75),
+            Some(1.0)
+        );
+    }
+
+    #[test]
+    fn leaving_practice_options_restores_rate_and_next_practice_captures_it_again() {
+        let mut saved_rate = None;
+        practice_music_rate_on_screen_change(&mut saved_rate, Screen::Practice, 1.0);
+        practice_music_rate_on_screen_change(&mut saved_rate, Screen::PlayerOptions, 0.75);
+        assert_eq!(
+            practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.5),
+            Some(1.0)
+        );
+        practice_music_rate_on_screen_change(&mut saved_rate, Screen::Practice, 1.25);
+        assert_eq!(
+            practice_music_rate_on_screen_change(&mut saved_rate, Screen::SelectMusic, 0.75),
+            Some(1.25)
+        );
+    }
+
+    #[test]
+    fn ordinary_player_options_and_gameplay_leave_music_rate_unchanged() {
+        let mut saved_rate = None;
+        for target in [
+            Screen::PlayerOptions,
+            Screen::Gameplay,
+            Screen::Evaluation,
+            Screen::SelectMusic,
+        ] {
+            assert_eq!(
+                practice_music_rate_on_screen_change(&mut saved_rate, target, 1.25),
+                None
+            );
+        }
     }
 
     #[test]
