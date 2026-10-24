@@ -158,6 +158,7 @@ mod renderer {
             "movement-input.lua",
             "update-only-input.lua",
             "fanout-input.lua",
+            "fanout-state-input.lua",
         ] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures")

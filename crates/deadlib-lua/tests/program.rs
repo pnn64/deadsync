@@ -380,6 +380,175 @@ fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_sto
 }
 
 #[test]
+fn batch_compilation_keeps_binding_bits_identity_errors_and_independent_state() {
+    fn owned(value: Datum<'_>) -> (u8, u64, Vec<u8>) {
+        match value {
+            Datum::Nil => (0, 0, vec![]),
+            Datum::Boolean(v) => (1, u64::from(v), vec![]),
+            Datum::Number(v) => (2, v.to_bits(), vec![]),
+            Datum::Bytes(v) => (3, 0, v.to_vec()),
+            Datum::Object(v) => (4, u64::from(v), vec![]),
+            Datum::Action(v) => (5, u64::from(v), vec![]),
+        }
+    }
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<program::Compiler<'static>>();
+    let (parameter, capture) = {
+        let lua = Lua::new();
+        let parameter: Function = lua.load("return function(e) return e end").eval().unwrap();
+        let capture: Function = lua
+            .load("local v={};return function() return v end")
+            .eval()
+            .unwrap();
+        (
+            program::dump(&parameter).unwrap(),
+            program::dump(&capture).unwrap(),
+        )
+    };
+    let bindings = Bindings {
+        cells: vec![Cell::Number(0.0), Cell::Number(-0.0)],
+        ..Bindings::default()
+    };
+    let compiler = program::Compiler::new(&bindings).unwrap();
+    let mut batch = compiler.batch();
+    let mut programs = Vec::new();
+    let cases = [
+        Binding::Literal(program::Literal::Nil),
+        Binding::Literal(program::Literal::Boolean(false)),
+        Binding::Literal(program::Literal::Boolean(true)),
+        Binding::Literal(program::Literal::Number(0.0)),
+        Binding::Literal(program::Literal::Number(-0.0)),
+        Binding::Literal(program::Literal::Number(f64::from_bits(
+            0x7ff8_0000_0000_1234,
+        ))),
+        Binding::Literal(program::Literal::Number(f64::from_bits(
+            0x7ff8_0000_0000_5678,
+        ))),
+        Binding::Literal(program::Literal::Bytes(b"\0\xffone".as_slice().into())),
+        Binding::Literal(program::Literal::Bytes(b"\0\xfftwo".as_slice().into())),
+        Binding::Object(11),
+        Binding::Object(12),
+        Binding::Cell(0),
+        Binding::Cell(1),
+        Binding::Input {
+            slot: 0,
+            types: Types::NUMBER,
+        },
+        Binding::Input {
+            slot: 1,
+            types: Types::NUMBER,
+        },
+        Binding::Input {
+            slot: 0,
+            types: Types::NIL | Types::NUMBER,
+        },
+    ];
+    for captured in [false, true] {
+        for binding in &cases {
+            let (bytes, args, upvalues) = if captured {
+                (&capture[..], vec![], vec![binding.clone()])
+            } else {
+                (&parameter[..], vec![binding.clone()], vec![])
+            };
+            let reference = compiler.compile_bytecode(bytes, &args, &upvalues).unwrap();
+            for _ in 0..2 {
+                let program = batch.compile_bytecode(bytes, &args, &upvalues).unwrap();
+                let input = [Datum::Number(-0.0), Datum::Number(0.25)];
+                let expected = owned(
+                    reference
+                        .machine()
+                        .run(&input, |_, _| panic!("no action"))
+                        .unwrap(),
+                );
+                assert_eq!(
+                    owned(
+                        program
+                            .machine()
+                            .run(&input, |_, _| panic!("no action"))
+                            .unwrap()
+                    ),
+                    expected
+                );
+                programs.push((program, expected));
+            }
+        }
+    }
+    let mut malformed = parameter.clone();
+    malformed[0] ^= 1;
+    assert!(matches!(
+        batch.compile_bytecode(&malformed, &[], &[]),
+        Err(program::CompileError::InvalidChunk)
+    ));
+    assert!(matches!(
+        batch.compile_bytecode(&capture, &[], &[]),
+        Err(program::CompileError::InvalidBindings("upvalue count"))
+    ));
+    let missing = batch
+        .compile_bytecode(
+            &parameter,
+            &[Binding::Input {
+                slot: 3,
+                types: Types::NUMBER,
+            }],
+            &[],
+        )
+        .unwrap();
+    assert_eq!(
+        missing.machine().run(&[], |_, _| panic!("no action")),
+        Err(program::RunError::MissingInput(3))
+    );
+    let mutating = {
+        let lua = Lua::new();
+        let callback: Function = lua
+            .load("local n=0;return function(e) n=n+e;return n end")
+            .eval()
+            .unwrap();
+        program::dump(&callback).unwrap()
+    };
+    let mut independent = Vec::new();
+    for _ in 0..2 {
+        independent.push(
+            batch
+                .compile_bytecode(
+                    &mutating,
+                    &[Binding::Input {
+                        slot: 0,
+                        types: Types::NUMBER,
+                    }],
+                    &[Binding::Cell(0)],
+                )
+                .unwrap()
+                .machine(),
+        );
+    }
+    drop(mutating);
+    drop(batch);
+    drop(compiler);
+    drop(bindings);
+    drop(parameter);
+    drop(capture);
+    for (index, input, expected) in [(0, 2.0, 2.0), (0, 3.0, 5.0), (1, 7.0, 7.0)] {
+        assert_eq!(
+            independent[index].run(&[Datum::Number(input)], |_, _| panic!("no action")),
+            Ok(Datum::Number(expected)),
+        );
+    }
+    for (program, expected) in programs {
+        assert_eq!(
+            owned(
+                program
+                    .machine()
+                    .run(&[Datum::Number(-0.0), Datum::Number(0.25)], |_, _| panic!(
+                        "no action"
+                    ))
+                    .unwrap()
+            ),
+            expected
+        );
+    }
+}
+
+#[test]
 fn identical_group_code_shares_storage_without_merging_execution_or_machine_state() {
     let closed = Arc::new(AtomicBool::new(false));
     let (mut group, mut separate, expected, unshared_payload) = {

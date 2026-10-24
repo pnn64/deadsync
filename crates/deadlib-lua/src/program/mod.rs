@@ -21,6 +21,8 @@
 //! its bytes or the program's owned constants without allocating.
 
 mod compile;
+mod batch;
+pub use batch::BatchCompiler;
 mod decode;
 mod dedup;
 mod strings;
@@ -375,6 +377,13 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
+    /// Reuse consecutive identical callback compilations under this fixed
+    /// schema. The bounded cache owns no Lua handles and requires mutable access;
+    /// this compiler retains its immutable, independently reusable interface.
+    pub fn batch(&self) -> BatchCompiler<'_, 'a> {
+        BatchCompiler::new(self)
+    }
+
     /// Reject duplicate object fields without executing authored code.
     pub fn new(bindings: &'a Bindings) -> Result<Self, CompileError> {
         Ok(Self {

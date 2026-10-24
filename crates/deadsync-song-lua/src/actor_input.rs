@@ -372,6 +372,7 @@ fn compile_with_updates(
     let mut lower = |bindings: &program::Bindings| {
         let mut programs = Vec::with_capacity(callback_count);
         let compiler = program::Compiler::new(bindings).ok()?;
+        let mut batch = (callback_count >= 8).then(|| compiler.batch());
         for (index, (callback, upvalues)) in callbacks().zip(&captures).enumerate() {
             let update_arguments;
             let arguments = if index < input_count {
@@ -387,13 +388,21 @@ fn compile_with_updates(
                 &update_arguments[..]
             };
             let program = if bytecode.is_empty() {
-                compiler.compile(callback, arguments, upvalues)
+                if let Some(batch) = &mut batch {
+                    batch.compile(callback, arguments, upvalues)
+                } else {
+                    compiler.compile(callback, arguments, upvalues)
+                }
             } else {
                 let bytes = &mut bytecode[index];
                 if bytes.is_none() {
                     *bytes = Some(program::dump(callback).ok()?);
                 }
-                compiler.compile_bytecode(bytes.as_ref()?, arguments, upvalues)
+                if let Some(batch) = &mut batch {
+                    batch.compile_bytecode(bytes.as_ref()?, arguments, upvalues)
+                } else {
+                    compiler.compile_bytecode(bytes.as_ref()?, arguments, upvalues)
+                }
             };
             programs.push(program.ok()?);
         }

@@ -44,6 +44,11 @@ pub(super) fn share(mut programs: Vec<Program>) -> Vec<Program> {
     let mut ids = HashMap::<&[u8], usize>::new();
     let mut mappings = Vec::with_capacity(programs.len());
     for program in &programs {
+        let identity = Arc::as_ptr(&program.0) as usize;
+        if mappings.iter().any(|(id, _)| *id == identity) {
+            mappings.push((identity, None));
+            continue;
+        }
         let mut mapping = Vec::with_capacity(program.0.strings.len());
         for bytes in program.0.strings.iter() {
             let id = if let Some(&id) = ids.get(bytes.as_ref()) {
@@ -56,18 +61,18 @@ pub(super) fn share(mut programs: Vec<Program>) -> Vec<Program> {
             };
             mapping.push(id);
         }
-        mappings.push(mapping);
+        mappings.push((identity, Some(mapping)));
     }
     drop(ids);
     let arena: Arc<[Box<[u8]>]> = arena.into();
     let mut rewritten = Vec::<(usize, Program)>::new();
-    for (program, mapping) in programs.iter_mut().zip(mappings) {
+    for (program, (identity, mapping)) in programs.iter_mut().zip(mappings) {
         // Keys are identities of still-owned input Arcs, never dereferenced.
-        let identity = Arc::as_ptr(&program.0) as usize;
         if let Some((_, existing)) = rewritten.iter().find(|(id, _)| *id == identity) {
             *program = existing.clone();
             continue;
         }
+        let mapping = mapping.expect("first occurrence has a string mapping");
         if Arc::get_mut(&mut program.0).is_none() {
             let code = &program.0;
             program.0 = Arc::new(Code {

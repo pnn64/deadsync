@@ -314,6 +314,12 @@ pub(super) fn lower_with(
         fields: vec![None; bindings.fields.len()],
         actions: Vec::new(),
     };
+    let constants: Vec<_> = prototype
+        .constants
+        .into_iter()
+        .map(|v| builder.literal(v))
+        .collect();
+    let constant_strings = builder.strings.len();
     let mut previous_bytes = None;
     for cell in &bindings.cells {
         let value = match cell {
@@ -329,7 +335,13 @@ pub(super) fn lower_with(
                         .strings
                         .get(*index)
                         .ok_or(CompileError::InvalidBindings("cell string index"))?;
-                    let value = builder.literal(Literal::Bytes(bytes.clone()));
+                    // Immutable literal storage can also seed a mutable cell;
+                    // the cell retains its own declared storage index.
+                    let value = builder.strings[..constant_strings]
+                        .iter()
+                        .position(|literal| literal == bytes)
+                        .map(Value::String)
+                        .unwrap_or_else(|| builder.literal(Literal::Bytes(bytes.clone())));
                     previous_bytes = Some((*index, value));
                     value
                 }
@@ -337,11 +349,6 @@ pub(super) fn lower_with(
         };
         builder.cells.push(value);
     }
-    let constants: Vec<_> = prototype
-        .constants
-        .into_iter()
-        .map(|v| builder.literal(v))
-        .collect();
     let upvalues = captures
         .iter()
         .map(|v| builder.binding(v))
