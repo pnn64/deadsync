@@ -7333,6 +7333,10 @@ pub struct PlayerOptionsData {
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
     pub score_display_mode: ScoreDisplayMode,
+    pub show_golf_score: bool,
+    pub golf_all_charts: bool,
+    pub golf_stroke_feedback: bool,
+    pub show_golf_results: bool,
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
     /// Pad-light brightness 0..=100 (gamma-mapped on send; 0 = off, 100 = full).
@@ -7489,6 +7493,10 @@ fn default_player_options() -> PlayerOptionsData {
         scatterplot_max_window: ScatterplotMaxWindow::Off,
         score_position: ScorePosition::Normal,
         score_display_mode: ScoreDisplayMode::Normal,
+        show_golf_score: false,
+        golf_all_charts: false,
+        golf_stroke_feedback: false,
+        show_golf_results: false,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         pad_light_brightness: PAD_LIGHT_BRIGHTNESS_DEFAULT,
@@ -7879,6 +7887,11 @@ where
     options.score_position = get("ScorePosition")
         .and_then(|s| ScorePosition::from_str(&s).ok())
         .unwrap_or(options.score_position);
+    options.show_golf_score = load_u8_bool(&mut get, "GolfScore", options.show_golf_score);
+    options.golf_all_charts = load_u8_bool(&mut get, "GolfAllCharts", options.golf_all_charts);
+    options.golf_stroke_feedback =
+        load_u8_bool(&mut get, "GolfStrokeFeedback", options.golf_stroke_feedback);
+    options.show_golf_results = load_u8_bool(&mut get, "GolfResults", options.show_golf_results);
     options.score_display_mode = get("ScoreDisplay")
         .or_else(|| get("ScoreDisplayMode"))
         .and_then(|s| ScoreDisplayMode::from_str(&s).ok())
@@ -8502,6 +8515,27 @@ pub fn append_player_options_section(
     );
     let _ = write!(content, "ScorePosition={}\n", options.score_position);
     let _ = write!(content, "ScoreDisplay={}\n", options.score_display_mode);
+    let _ = write!(
+        content,
+        "GolfScore={}\n",
+        i32::from(options.show_golf_score)
+    );
+    let _ = write!(
+        content,
+        "GolfAllCharts={}\n",
+        i32::from(options.golf_all_charts)
+    );
+    let _ = write!(
+        content,
+        "GolfStrokeFeedback={}\n",
+        i32::from(options.golf_stroke_feedback)
+    );
+    let _ = write!(
+        content,
+        "GolfResults={}\n",
+        i32::from(options.show_golf_results)
+    );
+
     let _ = write!(
         content,
         "CustomFantasticWindow={}\n",
@@ -9210,6 +9244,10 @@ pub struct Profile {
     pub scatterplot_max_window: ScatterplotMaxWindow,
     pub score_position: ScorePosition,
     pub score_display_mode: ScoreDisplayMode,
+    pub show_golf_score: bool,
+    pub golf_all_charts: bool,
+    pub golf_stroke_feedback: bool,
+    pub show_golf_results: bool,
     // Custom blue Fantastic window in milliseconds (1..22), shared by FA+ W0 and H.EX split.
     pub custom_fantastic_window: bool,
     pub custom_fantastic_window_ms: u8,
@@ -9422,6 +9460,10 @@ impl Default for Profile {
             scatterplot_max_window: player_options.scatterplot_max_window,
             score_position: player_options.score_position,
             score_display_mode: player_options.score_display_mode,
+            show_golf_score: player_options.show_golf_score,
+            golf_all_charts: player_options.golf_all_charts,
+            golf_stroke_feedback: player_options.golf_stroke_feedback,
+            show_golf_results: player_options.show_golf_results,
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             pad_light_brightness: player_options.pad_light_brightness,
@@ -10394,6 +10436,10 @@ impl Profile {
             scatterplot_max_window: self.scatterplot_max_window,
             score_position: self.score_position,
             score_display_mode: self.score_display_mode,
+            show_golf_score: self.show_golf_score,
+            golf_all_charts: self.golf_all_charts,
+            golf_stroke_feedback: self.golf_stroke_feedback,
+            show_golf_results: self.show_golf_results,
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             pad_light_brightness: self.pad_light_brightness,
@@ -10541,6 +10587,10 @@ impl Profile {
         self.scatterplot_max_window = options.scatterplot_max_window;
         self.score_position = options.score_position;
         self.score_display_mode = options.score_display_mode;
+        self.show_golf_score = options.show_golf_score;
+        self.golf_all_charts = options.golf_all_charts;
+        self.golf_stroke_feedback = options.golf_stroke_feedback;
+        self.show_golf_results = options.show_golf_results;
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.pad_light_brightness = options.pad_light_brightness;
@@ -14893,6 +14943,42 @@ ApiKey = gs-key
         );
         assert_eq!(ScorePosition::from_str("top"), Ok(ScorePosition::Normal));
         assert!(ScorePosition::from_str("middle").is_err());
+    }
+
+    #[test]
+    fn golf_options_default_off_and_round_trip_independently() {
+        let defaults = PlayerOptionsData::default();
+        assert!(
+            !defaults.show_golf_score
+                && !defaults.golf_all_charts
+                && !defaults.golf_stroke_feedback
+                && !defaults.show_golf_results
+        );
+        let options = PlayerOptionsData {
+            show_golf_score: true,
+            golf_all_charts: true,
+            golf_stroke_feedback: true,
+            show_golf_results: true,
+            ..defaults.clone()
+        };
+        let mut text = String::new();
+        append_player_options_section(&mut text, "PlayerOptionsSingles", &options);
+        let values: std::collections::HashMap<_, _> = text
+            .lines()
+            .filter_map(|line| line.split_once('='))
+            .collect();
+        let loaded = load_player_options_section(
+            true,
+            |key| values.get(key).map(|s| s.to_string()),
+            &defaults,
+        )
+        .unwrap();
+        assert_eq!(loaded, options);
+        let mut profile = Profile::default();
+        profile.set_current_player_options(options.clone());
+        assert_eq!(profile.current_player_options(), options);
+        let legacy = load_player_options_section(true, |_| None, &defaults).unwrap();
+        assert!(!legacy.show_golf_score && !legacy.show_golf_results);
     }
 
     #[test]

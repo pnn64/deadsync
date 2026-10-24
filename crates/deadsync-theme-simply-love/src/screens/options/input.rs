@@ -1058,6 +1058,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::WheelItlPoints => crate::SimplyLoveSelectMusicConfigRequest::WheelItlPoints(
                 yes_no_from_choice(new_index),
             ),
+            SubRowId::ShowGolfPars => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowGolfPars(new_index == 1)
+            }
             SubRowId::NewPackBadge => crate::SimplyLoveSelectMusicConfigRequest::NewPackMode(
                 select_music_new_pack_mode_from_choice(new_index),
             ),

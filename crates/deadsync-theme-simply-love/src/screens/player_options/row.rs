@@ -66,6 +66,8 @@ pub enum RowId {
     MiniIndicatorColor,
     MiniIndicatorPosition,
     GameplayExtras,
+    GolfDisplay,
+    GolfStrokeFeedback,
     ColumnFlashJudgments,
     ColumnFlashBrightness,
     ColumnFlashSize,
@@ -1129,6 +1131,8 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::ComboColorMode
         || id == RowId::CarryCombo
         || id == RowId::GameplayExtras
+        || id == RowId::GolfDisplay
+        || id == RowId::GolfStrokeFeedback
         || id == RowId::ColumnFlashJudgments
         || id == RowId::ColumnFlashBrightness
         || id == RowId::ColumnFlashSize

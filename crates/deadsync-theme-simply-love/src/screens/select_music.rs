@@ -14016,6 +14016,7 @@ pub fn push_actors(
             song_text_color: None,
             song_text_color_overrides: None,
             show_pack_sync: presentation.pack_ini_offsets,
+            show_golf_pars: presentation.show_golf_pars,
             show_music_wheel_grades: state.policy.wheel.show_grades,
             show_music_wheel_lamps: state.policy.wheel.show_lamps,
             itl_rank_mode: state.policy.wheel.itl_rank_mode,

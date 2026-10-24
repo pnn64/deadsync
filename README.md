@@ -247,6 +247,43 @@ A `save` directory is created inside the data directory to store your personal d
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
+### Golf extras
+
+Golf features are optional and disabled by default:
+
+- **Player Options > Advanced Modifiers > Gameplay Extras > Golf Score** enables
+  the native stroke counter. Its **Golf Display** setting selects golf charts only
+  (charts with an authored par) or all charts. **Stroke Feedback** enables ACE and
+  penalty flashes. Each player saves these choices independently.
+- **Player Options > Advanced Modifiers > Results Extras > Golf Results** adds a
+  golf evaluation pane, independently of the gameplay counter.
+- **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
+- **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
+  enables the online event board alongside the other selectable leaderboards.
+
+The native display uses the supplied `GolfScoring.lua` curved formula: errors
+below 5 ms are free, hits are rounded to whole raw strokes individually, and
+misses, dropped holds/rolls, and hit mines cost 100 raw strokes each. One displayed
+stroke is 1,000 raw strokes; lower is better. Normal ITG/EX/HardEX scoring and
+ArrowCloud submissions continue alongside it. The online golf board shows
+ArrowCloud's server-calculated event scores, whose formula may differ from the
+native display.
+
+Pack authors can place `Golf.ini` beside the pack's song folders:
+
+```ini
+[Song Folder]
+Par=2.1
+
+[Song Folder:Challenge]
+Par=4
+```
+
+Section names use the actual song folder name; a difficulty-specific entry takes
+precedence over the song-wide entry. Pars are already in displayed strokes.
+`Golf.ini` never enables a feature by itself. Metadata refreshes when the library
+reloads and when entering Select Music with golf extras enabled.
+
 ### Custom sound packs
 
 DeadSync supports zmod-style "drop in a folder, play a random one" custom

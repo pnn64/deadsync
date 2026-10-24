@@ -306,6 +306,24 @@ const DENSITY_GRAPH_BACKGROUND: ChoiceBinding<bool> = ChoiceBinding::<bool> {
         },
     }),
 };
+const GOLF_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.golf_all_charts = v;
+        Outcome::persisted()
+    },
+    init: Some(CycleInit {
+        from_profile: |p| usize::from(p.golf_all_charts),
+    }),
+};
+const GOLF_STROKE_FEEDBACK: ChoiceBinding<bool> = ChoiceBinding::<bool> {
+    apply: |p, v| {
+        p.golf_stroke_feedback = v;
+        Outcome::persisted()
+    },
+    init: Some(CycleInit {
+        from_profile: |p| usize::from(p.golf_stroke_feedback),
+    }),
+};
 const SMX_FSR_DISPLAY: ChoiceBinding<bool> = ChoiceBinding::<bool> {
     apply: |p, v| {
         p.smx_fsr_display = v;
@@ -614,6 +632,9 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             if p.display_scorebox {
                 bits.insert(GameplayExtrasMask::DISPLAY_SCOREBOX);
             }
+            if p.show_golf_score {
+                bits.insert(GameplayExtrasMask::GOLF_SCORE);
+            }
             u32::from(bits.bits())
         },
         get_active: |m| u32::from(m.gameplay_extras.bits()),
@@ -637,6 +658,7 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             p.live_timing_stats = mask.contains(GameplayExtrasMask::LIVE_TIMING_STATS);
             p.column_countdown = mask.contains(GameplayExtrasMask::COLUMN_COUNTDOWN);
             p.display_scorebox = mask.contains(GameplayExtrasMask::DISPLAY_SCOREBOX);
+            p.show_golf_score = mask.contains(GameplayExtrasMask::GOLF_SCORE);
             let mut more = GameplayExtrasMoreMask::empty();
             if p.column_cues {
                 more.insert(GameplayExtrasMoreMask::COLUMN_CUES);
@@ -646,7 +668,7 @@ const GAMEPLAY_EXTRAS: BitmaskBinding = BitmaskBinding::Generic {
             }
             m.gameplay_extras_more = more;
         },
-        bit_mapping: BitMapping::Sequential { width: 7 },
+        bit_mapping: BitMapping::Sequential { width: 8 },
         sync_visibility: true,
     },
 };
@@ -892,6 +914,7 @@ const RESULTS_EXTRAS: BitmaskBinding = fanout_bitmask_binding!(
         (TRACK_EARLY_JUDGMENTS, track_early_judgments),
         (SCALE_SCATTERPLOT, scale_scatterplot),
         (DIM_POST_FAIL_SCATTER, dim_post_fail_scatter),
+        (GOLF_RESULTS, show_golf_results),
     ],
     sync_visibility = false,
 );
@@ -1276,6 +1299,12 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
         gameplay_extras_choices
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }
+    gameplay_extras_choices.push(tr("PlayerOptions", "GameplayExtrasGolfScore").to_string());
+    let mut gameplay_extras_binding = GAMEPLAY_EXTRAS;
+    if !scorebox_available {
+        let BitmaskBinding::Generic { writeback, .. } = &mut gameplay_extras_binding;
+        writeback.bit_mapping = BitMapping::Explicit(&[1, 2, 4, 8, 16, 32, 128]);
+    }
     let column_flash_choices = vec![
         tr("PlayerOptions", "ColumnFlashBlueFantastic").to_string(),
         tr("PlayerOptions", "ColumnFlashWhiteFantastic").to_string(),
@@ -1535,8 +1564,28 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
         RowId::GameplayExtras,
         lookup_key("PlayerOptions", "GameplayExtras"),
         lookup_key("PlayerOptionsHelp", "GameplayExtrasHelp"),
-        GAMEPLAY_EXTRAS,
+        gameplay_extras_binding,
         gameplay_extras_choices,
+    ));
+    b.push(Row::cycle(
+        RowId::GolfDisplay,
+        lookup_key("PlayerOptions", "GolfDisplay"),
+        lookup_key("PlayerOptionsHelp", "GolfDisplayHelp"),
+        CycleBinding::Bool(GOLF_DISPLAY),
+        vec![
+            tr("PlayerOptions", "GolfChartsOnly").to_string(),
+            tr("PlayerOptions", "GolfAllCharts").to_string(),
+        ],
+    ));
+    b.push(Row::cycle(
+        RowId::GolfStrokeFeedback,
+        lookup_key("PlayerOptions", "GolfStrokeFeedback"),
+        lookup_key("PlayerOptionsHelp", "GolfStrokeFeedbackHelp"),
+        CycleBinding::Bool(GOLF_STROKE_FEEDBACK),
+        vec![
+            tr("Common", "Off").to_string(),
+            tr("Common", "On").to_string(),
+        ],
     ));
     b.push(Row::bitmask(
         RowId::ColumnFlashJudgments,
@@ -1923,6 +1972,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen, scorebox_available: boo
             tr("PlayerOptions", "ResultsExtrasTrackEarlyJudgments").to_string(),
             tr("PlayerOptions", "ResultsExtrasScaleScatterplot").to_string(),
             tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").to_string(),
+            tr("PlayerOptions", "ResultsExtrasGolf").to_string(),
         ],
     ));
     b.push(Row::cycle(

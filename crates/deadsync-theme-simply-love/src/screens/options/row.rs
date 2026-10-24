@@ -168,6 +168,7 @@ pub enum SubRowId {
     WheelShowFails,
     WheelItlPoints,
     NewPackBadge,
+    ShowGolfPars,
     FolderStats,
     ShowPatternInfo,
     StepArtistBox,

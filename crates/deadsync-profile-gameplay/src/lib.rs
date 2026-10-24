@@ -1052,6 +1052,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         self.crossover_cue_brackets
     }
 
+    fn golf_scoring_enabled(&self) -> bool {
+        self.show_golf_score || self.show_golf_results
+    }
+
     fn nps_graph_at_top(&self) -> bool {
         self.nps_graph_at_top
     }

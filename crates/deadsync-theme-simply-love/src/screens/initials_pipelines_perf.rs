@@ -341,5 +341,7 @@ fn test_player_summary(
         show_fa_plus_pane: true,
         track_early_judgments: true,
         dim_post_fail_scatter: true,
+        golf_score: None,
+        golf_par: None,
     }
 }

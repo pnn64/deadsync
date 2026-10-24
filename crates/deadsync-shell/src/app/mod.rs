@@ -754,6 +754,7 @@ const fn scorebox_pane_filter(
         ex: config.select_music_scorebox_cycle_ex,
         hard_ex: config.select_music_scorebox_cycle_hard_ex,
         tournaments: config.select_music_scorebox_cycle_tournaments,
+        golf: config.select_music_scorebox_cycle_golf,
     }
 }
 
@@ -3597,6 +3598,7 @@ impl App {
                 MusicWheelSlotRuntimeRequest::Song {
                     song,
                     chart_hashes,
+                    golf_pars,
                     lua_submit_allowed,
                     has_edit,
                     is_srpg_event,
@@ -3608,6 +3610,7 @@ impl App {
                     view.has_edit = has_edit;
                     view.is_srpg_event = is_srpg_event;
                     view.sync_pref = sync_pref;
+                    view.golf_pars = golf_pars;
                     for side_idx in 0..2 {
                         if !joined[side_idx] {
                             continue;
@@ -11769,6 +11772,8 @@ mod tests {
             show_fa_plus_pane: false,
             track_early_judgments: false,
             dim_post_fail_scatter: true,
+            golf_score: None,
+            golf_par: None,
             disabled_timing_windows: [false; 5],
             machine_records: Vec::new(),
             machine_record_highlight_rank: None,
@@ -11964,6 +11969,8 @@ mod tests {
             show_fa_plus_pane: true,
             track_early_judgments: true,
             dim_post_fail_scatter: true,
+            golf_score: None,
+            golf_par: None,
         }
     }
 

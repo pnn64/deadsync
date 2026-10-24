@@ -2665,6 +2665,7 @@ pub fn push_actors(
             song_text_color: Some(COURSE_WHEEL_SONG_TEXT_COLOR),
             song_text_color_overrides: Some(&state.course_text_color_overrides),
             show_pack_sync: false,
+            show_golf_pars: false,
             show_music_wheel_grades: true,
             show_music_wheel_lamps: true,
             itl_rank_mode: deadsync_config::theme::SelectMusicItlRankMode::None,

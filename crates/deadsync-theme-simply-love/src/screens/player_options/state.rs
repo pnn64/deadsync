@@ -122,6 +122,7 @@ bitflags! {
         const LIVE_TIMING_STATS     = 1 << 4;
         const COLUMN_COUNTDOWN      = 1 << 5;
         const DISPLAY_SCOREBOX      = 1 << 6;
+        const GOLF_SCORE            = 1 << 7;
     }
 }
 
@@ -141,6 +142,7 @@ bitflags! {
         const TRACK_EARLY_JUDGMENTS = 1 << 0;
         const SCALE_SCATTERPLOT     = 1 << 1;
         const DIM_POST_FAIL_SCATTER = 1 << 2;
+        const GOLF_RESULTS         = 1 << 3;
     }
 }
 

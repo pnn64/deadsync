@@ -29,6 +29,7 @@ pub(super) struct RowVisibility {
     pub(super) show_mini_indicator_position: bool,
     pub(super) show_column_flash_judgments: bool,
     pub(super) show_live_timing_stats: bool,
+    pub(super) show_golf_options: bool,
     pub(super) show_crossover_cue_options: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
@@ -42,6 +43,9 @@ pub(super) struct RowVisibility {
 
 #[inline(always)]
 pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bool {
+    if id == RowId::GolfDisplay || id == RowId::GolfStrokeFeedback {
+        return visibility.show_golf_options;
+    }
     if id == RowId::DataVisualizations {
         return visibility.show_data_visualizations;
     }
@@ -177,6 +181,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
 
 #[inline(always)]
 pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
+    if id == RowId::GolfDisplay || id == RowId::GolfStrokeFeedback {
+        return Some(RowId::GameplayExtras);
+    }
     if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
         return Some(RowId::MeasureCounter);
     }
@@ -774,6 +781,12 @@ pub(super) fn row_visibility(
         show_mini_indicator_position: mini_indicator_position_visible(row_map, active),
         show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
+        show_golf_options: active.iter().enumerate().any(|(i, &joined)| {
+            joined
+                && option_masks[i]
+                    .gameplay_extras
+                    .contains(GameplayExtrasMask::GOLF_SCORE)
+        }),
         show_crossover_cue_options: crossover_cue_options_visible(row_map, active),
         show_global_offset_shift: policy.allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),

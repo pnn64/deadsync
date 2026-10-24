@@ -1736,6 +1736,11 @@ where
             self.tap_row_judgment_callback = Some(callback);
         }
         record_player_live_timing_stats(&mut self.players_runtime.players[player], &final_judgment);
+        if self.profiles_runtime.profiles[player].golf_scoring_enabled() {
+            self.players_runtime.players[player].golf_taps.record_tap(
+                (final_judgment.grade != JudgeGrade::Miss).then_some(final_judgment.time_error_ms),
+            );
+        }
         if plan.record_display_window_counts {
             self.progress.window_counts.record_judgment(
                 player,

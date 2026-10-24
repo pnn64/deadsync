@@ -60,7 +60,7 @@ use deadsync_theme::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 
-pub const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
+pub const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 5;
 pub const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
 pub const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 pub const SHOW_STATS_MODE_MAX: u8 = 3;
@@ -1133,6 +1133,8 @@ pub struct SelectMusicOptions {
     pub scorebox_cycle_ex: bool,
     pub scorebox_cycle_hard_ex: bool,
     pub scorebox_cycle_tournaments: bool,
+    pub scorebox_cycle_golf: bool,
+    pub show_golf_pars: bool,
     pub chart_info_peak_nps: bool,
     pub chart_info_effective_bpm: bool,
     pub chart_info_matrix_rating: bool,
@@ -1178,6 +1180,8 @@ impl Default for SelectMusicOptions {
             scorebox_cycle_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX,
             scorebox_cycle_hard_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
             scorebox_cycle_tournaments: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+            scorebox_cycle_golf: false,
+            show_golf_pars: false,
             chart_info_peak_nps: DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
             chart_info_effective_bpm: DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
             chart_info_matrix_rating: DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING,
@@ -1350,6 +1354,14 @@ pub fn load_select_music_options(
             conf.get("Options", "SelectMusicScoreboxCycleHardEx"),
             default.scorebox_cycle_hard_ex,
         ),
+        scorebox_cycle_golf: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicScoreboxCycleGolf"),
+            default.scorebox_cycle_golf,
+        ),
+        show_golf_pars: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicShowGolfPars"),
+            default.show_golf_pars,
+        ),
         scorebox_cycle_tournaments: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicScoreboxCycleTournaments"),
             default.scorebox_cycle_tournaments,
@@ -1488,6 +1500,12 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         select.step_artist_box_mode.as_str(),
     );
     push_bool(content, "SelectMusicScorebox", select.show_scorebox);
+    push_bool(
+        content,
+        "SelectMusicScoreboxCycleGolf",
+        select.scorebox_cycle_golf,
+    );
+    push_bool(content, "SelectMusicShowGolfPars", select.show_golf_pars);
     push_line(
         content,
         "SelectMusicScoreboxPlacement",
@@ -2647,6 +2665,8 @@ mod tests {
             scorebox_cycle_ex: false,
             scorebox_cycle_hard_ex: false,
             scorebox_cycle_tournaments: false,
+            scorebox_cycle_golf: false,
+            show_golf_pars: false,
             chart_info_peak_nps: true,
             chart_info_effective_bpm: true,
             chart_info_matrix_rating: false,
@@ -3623,6 +3643,25 @@ mod tests {
     }
 
     #[test]
+    fn golf_select_music_options_default_off_and_persist() {
+        let defaults = default_select_music_options();
+        assert!(!defaults.show_golf_pars && !defaults.scorebox_cycle_golf);
+        let mut options = defaults;
+        options.show_golf_pars = true;
+        options.scorebox_cycle_golf = true;
+        let mut text = String::from("[Options]\n");
+        push_select_music_option_lines(
+            &mut text,
+            SelectMusicSaveOptions {
+                select_music: options,
+                separate_unlocks_by_player: false,
+            },
+        );
+        let loaded = load_select_music_options(&ini(&text), defaults);
+        assert!(loaded.show_golf_pars && loaded.scorebox_cycle_golf);
+    }
+
+    #[test]
     fn writes_select_music_option_lines() {
         let mut content = String::new();
         let mut select_music = default_select_music_options();
@@ -3670,6 +3709,8 @@ mod tests {
                 "SelectMusicPatternInfo=Auto\n",
                 "SelectMusicStepArtistBox=Default\n",
                 "SelectMusicScorebox=0\n",
+                "SelectMusicScoreboxCycleGolf=0\n",
+                "SelectMusicShowGolfPars=0\n",
                 "SelectMusicScoreboxPlacement=Auto\n",
                 "SelectMusicScoreboxCycleItg=1\n",
                 "SelectMusicScoreboxCycleEx=0\n",
@@ -3829,7 +3870,8 @@ mod tests {
         assert_eq!(scorebox_cycle_cursor_index(false, false, true, true), 2);
         assert_eq!(scorebox_cycle_bit_from_choice(0), 0b0001);
         assert_eq!(scorebox_cycle_bit_from_choice(3), 0b1000);
-        assert_eq!(scorebox_cycle_bit_from_choice(4), 0);
+        assert_eq!(scorebox_cycle_bit_from_choice(4), 0b10000);
+        assert_eq!(scorebox_cycle_bit_from_choice(5), 0);
     }
 
     #[test]

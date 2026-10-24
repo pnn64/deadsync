@@ -466,13 +466,14 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
         } else {
             "GrooveStats".to_string()
         };
+        let is_golf = pane.is_some_and(|p| score_data::scorebox_pane_kind(p) == score_data::ScoreboxPaneKind::Golf);
         let show_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_ex && !p.disabled);
         let show_itg_arrowcloud = !side.loading
             && side.error_text.is_none()
             && pane
-                .is_some_and(|p| p.is_arrowcloud() && !p.is_ex && !p.is_hard_ex() && !p.disabled);
+                .is_some_and(|p| p.is_arrowcloud() && !is_golf && !p.is_ex && !p.is_hard_ex() && !p.disabled);
         let show_hard_ex = !side.loading
             && side.error_text.is_none()
             && pane.is_some_and(|p| p.is_hard_ex() && !p.disabled);
@@ -603,7 +604,7 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
                 if let Some(entry) = display_entries.as_ref().and_then(|entries| entries.get(i)) {
                     rank = format!("{}.", entry.rank);
                     name.clone_from(&entry.name);
-                    score = format!("{:.2}%", entry.score / 100.0);
+                    score = if is_golf { format!("{:.2}", entry.score / 1000.0) } else { format!("{:.2}%", entry.score / 100.0) };
                     date = score_data::format_leaderboard_date(&entry.date);
 
                     if entry.is_rival || entry.is_self {

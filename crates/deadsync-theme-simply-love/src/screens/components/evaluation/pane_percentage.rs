@@ -172,6 +172,7 @@ fn pane_percentage_actor(
     let mut children = Vec::with_capacity(child_capacity);
 
     match pane {
+        EvalPane::Golf => {}
         EvalPane::Timing => {}
         EvalPane::TimingEx => {}
         EvalPane::TimingHardEx => {}

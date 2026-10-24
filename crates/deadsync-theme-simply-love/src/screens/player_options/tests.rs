@@ -5143,7 +5143,8 @@ pub(super) mod tests {
             .expect("Results Extras row present")
             .choices;
 
-        assert_eq!(choices.len(), 3);
+        assert_eq!(choices.len(), 4);
+        assert_eq!(choices[3].as_ref(), crate::i18n::tr("PlayerOptions", "ResultsExtrasGolf").as_ref());
         assert_eq!(
             choices[2].as_ref(),
             crate::i18n::tr("PlayerOptions", "ResultsExtrasDimPostFailScatter").as_ref()
@@ -5828,6 +5829,39 @@ pub(super) mod tests {
             RowId::Spacing,
             &format!("{}%", super::SPACING_PERCENT_MAX),
         );
+    }
+
+    #[test]
+    fn golf_extras_are_opt_in_and_keep_independent_player_choices() {
+        ensure_i18n();
+        let (state, _assets) = setup_state();
+        for scorebox_available in [false, true] {
+            let mut rows = panes::build_rows(
+                &state.song, &state.speed_mod[P1], state.chart_steps_index,
+                [0; 2], state.music_rate, OptionsPane::Advanced, &[], &[], &[], &[],
+                Screen::SelectMusic, state.fixed_stepchart.as_ref(), state.play_style,
+                state.persisted_player_idx, scorebox_available,
+            );
+            let defaults = PlayerOptionsData::default();
+            let mut masks = [PlayerOptionMasks::default(); 2];
+            panes::apply_profile_defaults(&mut rows, &defaults, P1, &mut masks[P1]);
+            panes::apply_profile_defaults(&mut rows, &defaults, P2, &mut masks[P2]);
+            let visibility = row_visibility(&rows, [true, true], masks, false);
+            assert!(!visibility.show_golf_options);
+            assert!(!masks[P1].gameplay_extras.contains(GameplayExtrasMask::GOLF_SCORE));
+            let p2 = PlayerOptionsData { show_golf_score: true, golf_all_charts: true, golf_stroke_feedback: true, show_golf_results: true, ..defaults };
+            panes::apply_profile_defaults(&mut rows, &p2, P2, &mut masks[P2]);
+            let visibility = row_visibility(&rows, [true, true], masks, false);
+            assert!(visibility.show_golf_options);
+            assert!(!masks[P1].gameplay_extras.contains(GameplayExtrasMask::GOLF_SCORE));
+            assert!(masks[P2].gameplay_extras.contains(GameplayExtrasMask::GOLF_SCORE));
+            let extras = rows.get(RowId::GameplayExtras).unwrap();
+            let golf_index = extras.choices.iter().position(|choice| choice.as_str() == "Golf Score").unwrap();
+            let RowBehavior::Bitmask(BitmaskBinding::Generic { writeback, .. }) = &extras.behavior else { panic!("extras must be a bitmask") };
+            assert_eq!(writeback.bit_mapping.bit_for_choice(golf_index), Some(u32::from(GameplayExtrasMask::GOLF_SCORE.bits())));
+            assert_eq!(rows.get(RowId::GolfDisplay).unwrap().selected_choice_index, [0, 1]);
+            assert_eq!(rows.get(RowId::GolfStrokeFeedback).unwrap().selected_choice_index, [0, 1]);
+        }
     }
 
     #[test]

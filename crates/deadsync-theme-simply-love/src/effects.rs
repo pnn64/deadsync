@@ -598,6 +598,7 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     WheelShowFails(bool),
     WheelItlPoints(bool),
     NewPackMode(NewPackMode),
+    ShowGolfPars(bool),
     ShowFolderStats(bool),
     PatternInfoMode(SelectMusicPatternInfoMode),
     StepArtistBoxMode(SelectMusicStepArtistBoxMode),

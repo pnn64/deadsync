@@ -208,6 +208,7 @@ pub enum ItemId {
     SmWheelShowFails,
     SmWheelItlPoints,
     SmNewPackBadge,
+    SmGolfPars,
     SmFolderStats,
     SmPatternInfo,
     SmStepArtistBox,

@@ -670,6 +670,7 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
     Song {
         song: &'a Arc<deadsync_chart::SongData>,
         chart_hashes: [Option<&'a str>; 2],
+        golf_pars: [Option<f64>; 2],
         lua_submit_allowed: [bool; 2],
         has_edit: bool,
         is_srpg_event: bool,
@@ -723,6 +724,7 @@ pub struct MusicWheelSideRuntimeView {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MusicWheelSlotRuntimeView {
+    pub golf_pars: [Option<f64>; 2],
     pub sides: [MusicWheelSideRuntimeView; 2],
     pub lua_submit_allowed: [bool; 2],
     pub has_edit: bool,
@@ -734,6 +736,7 @@ impl Default for MusicWheelSlotRuntimeView {
     fn default() -> Self {
         Self {
             sides: Default::default(),
+            golf_pars: [None; 2],
             lua_submit_allowed: [false; 2],
             has_edit: false,
             is_srpg_event: false,
@@ -1378,6 +1381,7 @@ impl Default for SelectMusicInteractionPolicyView {
 /// Shell-prepared visibility and layout policy for Select Music composition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicPresentationPolicyView {
+    pub show_golf_pars: bool,
     pub show_scorebox: bool,
     pub scorebox_cycle_enabled: bool,
     pub scorebox_in_step_pane: bool,
@@ -1398,6 +1402,7 @@ pub struct SelectMusicPresentationPolicyView {
 impl Default for SelectMusicPresentationPolicyView {
     fn default() -> Self {
         Self {
+            show_golf_pars: false,
             show_scorebox: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
             scorebox_cycle_enabled:
                 deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG

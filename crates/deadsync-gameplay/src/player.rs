@@ -114,6 +114,9 @@ pub struct PlayerRuntime {
     pub mines_hit_for_score: u32,
     pub mines_avoided: u32,
     pub hands_holding_count_for_stats: i32,
+    pub golf_taps: deadsync_rules::golf::GolfScore,
+    pub golf_feedback: Option<(u32, f32)>,
+    pub golf_feedback_total: deadsync_rules::golf::GolfScore,
     pub failed_ex_score_inputs: Option<ExScoreInputs>,
     pub course_submit_life: Option<deadsync_rules::life::LifeMeter>,
 
@@ -270,6 +273,9 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         mines_hit_for_score: 0,
         mines_avoided: 0,
         hands_holding_count_for_stats: 0,
+        golf_taps: deadsync_rules::golf::GolfScore::default(),
+        golf_feedback: None,
+        golf_feedback_total: deadsync_rules::golf::GolfScore::default(),
         failed_ex_score_inputs: None,
         course_submit_life: None,
         life_history: Vec::with_capacity(caps.life_history),
@@ -1023,3 +1029,14 @@ pub const COLUMN_FLASH_MISS_DURATION: f32 = 0.16;
 pub const COLUMN_FLASH_JUDGMENT_DURATION: f32 = 0.33;
 pub const COMBO_HUNDRED_MILESTONE_DURATION: f32 = 0.6;
 pub const COMBO_THOUSAND_MILESTONE_DURATION: f32 = 0.7;
+
+impl PlayerRuntime {
+    #[must_use]
+    pub fn golf_score(&self) -> deadsync_rules::golf::GolfScore {
+        self.golf_taps.with_penalties(
+            self.holds_resolved_for_score.saturating_sub(self.holds_held_for_score),
+            self.rolls_resolved_for_score.saturating_sub(self.rolls_held_for_score),
+            self.mines_hit_for_score,
+        )
+    }
+}

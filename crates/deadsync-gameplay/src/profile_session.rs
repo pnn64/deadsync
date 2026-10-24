@@ -132,6 +132,7 @@ pub(crate) const fn gameplay_error_hud_active(options: GameplayErrorBarOptions) 
 }
 
 pub trait GameplayProfileData: Clone {
+    fn golf_scoring_enabled(&self) -> bool { false }
     fn insert_mask_bits(&self) -> u8;
     fn remove_mask_bits(&self) -> u8;
     fn holds_mask_bits(&self) -> u8;

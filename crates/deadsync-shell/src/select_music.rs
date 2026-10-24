@@ -329,11 +329,13 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
             test_input_shortcut: config.music_select_shortcut_test_input,
         },
         presentation: SelectMusicPresentationPolicyView {
+            show_golf_pars: config.select_music_show_golf_pars,
             show_scorebox: config.show_select_music_scorebox,
             scorebox_cycle_enabled: config.select_music_scorebox_cycle_itg
                 || config.select_music_scorebox_cycle_ex
                 || config.select_music_scorebox_cycle_hard_ex
-                || config.select_music_scorebox_cycle_tournaments,
+                || config.select_music_scorebox_cycle_tournaments
+                || config.select_music_scorebox_cycle_golf,
             scorebox_in_step_pane: config.select_music_scorebox_placement
                 == config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_stage_display: config.show_select_music_stage_display,
@@ -389,6 +391,14 @@ pub(crate) fn history_view() -> SelectMusicHistoryView {
 }
 
 pub(crate) fn prepare_init_view(mut view: SelectMusicInitView) -> SelectMusicInitView {
+    let refresh_golf = view.policy.presentation.show_golf_pars
+        || deadsync_profile::runtime_lock_profiles().iter().any(|p| p.show_golf_score || p.show_golf_results);
+    if refresh_golf {
+        let pack_dirs: HashSet<_> = view.song_packs.iter().flat_map(|pack| pack.songs.iter())
+            .filter_map(|song| song.simfile_path.parent()?.parent()).collect();
+        for dir in pack_dirs { deadsync_simfile::golf::load_pack(dir); }
+    }
+
     view.history = history_view();
     view
 }

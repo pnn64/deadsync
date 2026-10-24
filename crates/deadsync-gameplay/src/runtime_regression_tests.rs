@@ -28,6 +28,7 @@ mod runtime_regression_tests {
         mini_indicator_options: GameplayMiniIndicatorOptions,
         target_score: GameplayTargetScoreSetting,
         density_graph: bool,
+        golf_enabled: bool,
         combo_milestones_enabled: bool,
     }
 
@@ -52,6 +53,7 @@ mod runtime_regression_tests {
                 mini_indicator_options: GameplayMiniIndicatorOptions::default(),
                 target_score: GameplayTargetScoreSetting::default(),
                 density_graph: false,
+                golf_enabled: false,
                 combo_milestones_enabled: true,
             }
         }
@@ -78,6 +80,7 @@ mod runtime_regression_tests {
     }
 
     impl GameplayProfileData for TestProfile {
+        fn golf_scoring_enabled(&self) -> bool { self.golf_enabled }
         fn insert_mask_bits(&self) -> u8 {
             0
         }
@@ -3310,6 +3313,32 @@ mod runtime_regression_tests {
         assert!(player.error_bar_avg_ticks.iter().all(Option::is_none));
         assert!(player.error_bar_avg_samples.is_empty());
         assert!(player.error_bar_long_avg_samples.is_empty());
+    }
+
+    #[test]
+    fn golf_scores_chords_once_and_leaves_disabled_player_untouched() {
+        for enabled in [false, true] {
+            let p1 = TestProfile { golf_enabled: enabled, ..TestProfile::default() };
+            let mut state = regression_state_with_profiles([p1, TestProfile::default()]);
+            let row = 48;
+            state.chart_runtime.notes = vec![test_note(0, row, NoteType::Hold), test_note(1, row, NoteType::Tap)];
+            state.chart_runtime.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0); 2];
+            state.chart_runtime.row_entries = vec![test_row_entry_with_times(&state.chart_runtime.notes, &state.chart_runtime.note_time_cache_ns, row, vec![0, 1])];
+            state.chart_runtime.row_indices.row_entry_ranges = [(0, 1), (0, 0)];
+            state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
+            for (note, error) in [(0, 23.0), (1, 50.0)] {
+                state.set_final_note_result(note, Judgment { time_error_ms: error, time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(error, 1.0), grade: JudgeGrade::Great, window: Some(TimingWindow::W3), miss_because_held: false });
+            }
+            state.finalize_row_judgment(0, row, 0, false);
+            let taps = state.players()[0].golf_taps;
+            assert_eq!(taps.judged_rows, u32::from(enabled));
+            assert_eq!(taps.raw_strokes, if enabled { 30 } else { 0 });
+            assert_eq!(state.players()[1].golf_taps.raw_strokes, 0);
+            // Resolving the hold tail adds no second head tap.
+            state.players_runtime.players[0].holds_resolved_for_score = 1;
+            assert_eq!(state.players()[0].golf_score().raw_strokes, taps.raw_strokes + 100);
+            assert_eq!(state.players()[0].golf_score().judged_rows, taps.judged_rows);
+        }
     }
 
     #[test]

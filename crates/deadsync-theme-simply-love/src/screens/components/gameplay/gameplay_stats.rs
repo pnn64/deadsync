@@ -1935,6 +1935,13 @@ pub fn push_versus_step_stats(
             let score_percent = state.display_gameplay_itg_score_percent(player_idx, score_mode);
             (score_percent, [1.0, 1.0, 1.0, 1.0])
         };
+        let golf = super::golf::score(state, player_idx);
+        let score_value = if let Some((score, _)) = golf {
+            score_color = super::golf::COLOR;
+            score.displayed()
+        } else {
+            score_value
+        };
         score_color[3] *= score_alphas[player_idx];
         let x = center_x + if player_idx == 0 { -7.0 } else { 65.0 };
         push_score_counter(
@@ -1952,7 +1959,15 @@ pub fn push_versus_step_stats(
             },
         );
 
-        if player_profile.show_hard_ex_score
+        super::golf::push_details(
+            actors,
+            state,
+            player_idx,
+            [x, screen_center_y() - 150.0],
+            0.25,
+        );
+        if golf.is_none()
+            && player_profile.show_hard_ex_score
             && let Some(ex_score) = &ex_score
         {
             let hard_ex_percent =

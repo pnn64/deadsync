@@ -143,6 +143,8 @@ pub(crate) fn evaluation_view(
                 show_fa_plus_pane: player.show_fa_plus_pane,
                 track_early_judgments: player.track_early_judgments,
                 dim_post_fail_scatter: player.dim_post_fail_scatter,
+                golf_score: player.golf_score,
+                golf_par: player.golf_par,
                 disabled_timing_windows: prof.timing_windows.disabled_windows(),
                 machine_records,
                 machine_record_highlight_rank,

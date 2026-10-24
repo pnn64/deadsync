@@ -140,6 +140,16 @@ where
     }
 
     pub fn finish_gameplay_if_ready(&mut self, trace_enabled: bool) -> Option<GameplayAction> {
+        let now = self.total_elapsed_in_screen();
+        for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            if !self.profiles_runtime.profiles[player].golf_scoring_enabled() { continue; }
+            let p = &mut self.players_runtime.players[player];
+            let current = p.golf_score();
+            if current != p.golf_feedback_total {
+                p.golf_feedback = Some((current.raw_strokes.saturating_sub(p.golf_feedback_total.raw_strokes).min(u64::from(u32::MAX)) as u32, now));
+                p.golf_feedback_total = current;
+            }
+        }
         // Match ITG's end-of-song ordering: resolve the frame's late taps, hold
         // ends, and misses before leaving gameplay, otherwise the last frame can
         // cut to evaluation before final judgments land.

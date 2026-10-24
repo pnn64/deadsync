@@ -1035,6 +1035,7 @@ where
     report_load_progress(&mut progress, 0, total_songs, "", "");
 
     for pack in packs {
+        crate::golf::load_pack(&pack.dir);
         let pack_display = pack
             .dir
             .file_name()
