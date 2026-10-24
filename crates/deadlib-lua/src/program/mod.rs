@@ -347,15 +347,20 @@ pub fn compile(function: &Function, bindings: &Bindings) -> Result<Program, Comp
 /// or [`Compiler::compile_bytecode`]. Native closures are rejected. Compilation
 /// separately checks the Lua 5.1 header, instructions and binding contracts.
 pub fn dump(function: &Function) -> Result<Vec<u8>, CompileError> {
-    if function.environment().is_none() {
-        return Err(CompileError::Unsupported {
+    let mut bytes = Vec::new();
+    dump_into(function, &mut bytes)?;
+    Ok(bytes)
+}
+
+fn dump_into(function: &Function, bytes: &mut Vec<u8>) -> Result<(), CompileError> {
+    match function.try_dump_into::<true>(false, bytes) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(CompileError::Unsupported {
             pc: 0,
             reason: "native closure",
-        });
+        }),
+        Err(error) => Err(CompileError::Dump(error.to_string())),
     }
-    function
-        .try_dump(false)
-        .map_err(|error| CompileError::Dump(error.to_string()))
 }
 
 /// Safely decode and compile a Lua 5.1 dump. These bytes are never loaded into

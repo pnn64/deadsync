@@ -549,6 +549,91 @@ fn batch_compilation_keeps_binding_bits_identity_errors_and_independent_state() 
 }
 
 #[test]
+fn repeated_function_dumps_keep_bytes_native_errors_and_detached_results() {
+    let closed = Arc::new(AtomicBool::new(false));
+    let programs = {
+        let lua = Lua::new();
+        lua.set_app_data(Dropped(closed.clone()));
+        let large: Function = lua
+            .load(format!(
+                "return function(e) return '\\000\\255{}' end",
+                "x".repeat(4096)
+            ))
+            .eval()
+            .unwrap();
+        let small: Function = lua
+            .load("return function(e) return e+0.25 end")
+            .eval()
+            .unwrap();
+        let native = lua
+            .create_function(|_, ()| -> mlua::Result<()> {
+                panic!("dumping must not execute a native callback")
+            })
+            .unwrap();
+        let environment = lua.create_table().unwrap();
+        let metatable = lua.create_table().unwrap();
+        metatable.set("__index", native.clone()).unwrap();
+        environment.set_metatable(Some(metatable)).unwrap();
+        assert!(large.set_environment(environment).unwrap());
+        let bindings = Bindings::default();
+        let compiler = program::Compiler::new(&bindings).unwrap();
+        let mut batch = compiler.batch();
+        let arguments = [Binding::Input {
+            slot: 0,
+            types: Types::NUMBER,
+        }];
+        let mut programs = Vec::new();
+        for round in 0..16 {
+            for function in [&large, &small] {
+                let bytes = program::dump(function).unwrap();
+                assert_eq!(bytes, function.dump(false));
+                for _ in 0..2 {
+                    let program = batch.compile(function, &arguments, &[]).unwrap();
+                    let input = f64::from(round) * 0.5;
+                    let expected = match function.call::<Value>(input).unwrap() {
+                        Value::String(value) => (Some(value.as_bytes().to_vec()), 0),
+                        Value::Number(value) => (None, value.to_bits()),
+                        value => panic!("unexpected authored result: {value:?}"),
+                    };
+                    programs.push((program, input, expected));
+                }
+                assert!(native.dump(false).is_empty());
+                assert!(matches!(
+                    program::dump(&native),
+                    Err(program::CompileError::Unsupported {
+                        pc: 0,
+                        reason: "native closure"
+                    })
+                ));
+                assert!(matches!(
+                    batch.compile(&native, &[], &[]),
+                    Err(program::CompileError::Unsupported {
+                        pc: 0,
+                        reason: "native closure"
+                    })
+                ));
+                assert_eq!(program::dump(function).unwrap(), bytes);
+            }
+        }
+        lua.gc_collect().unwrap();
+        programs
+    };
+    assert!(closed.load(Ordering::SeqCst));
+    for (program, input, (bytes, bits)) in programs {
+        let mut machine = program.machine();
+        let inputs = [Datum::Number(input)];
+        let result = machine
+            .run(&inputs, |_, _| panic!("no action"))
+            .unwrap();
+        match (bytes, result) {
+            (Some(bytes), Datum::Bytes(actual)) => assert_eq!(actual, bytes),
+            (None, Datum::Number(actual)) => assert_eq!(actual.to_bits(), bits),
+            pair => panic!("different detached result: {pair:?}"),
+        }
+    }
+}
+
+#[test]
 fn identical_group_code_shares_storage_without_merging_execution_or_machine_state() {
     let closed = Arc::new(AtomicBool::new(false));
     let (mut group, mut separate, expected, unshared_payload) = {

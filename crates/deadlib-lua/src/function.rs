@@ -577,6 +577,20 @@ impl Function {
     // Like `dump`, but returns an error if stack growth or dumping fails.
     #[cfg(not(feature = "luau"))]
     pub(crate) fn try_dump(&self, strip: bool) -> Result<Vec<u8>> {
+        let mut data = Vec::new();
+        self.try_dump_into::<false>(strip, &mut data)?;
+        Ok(data)
+    }
+
+    // Replace the buffer contents, retaining its allocation for repeated dumps.
+    // LUA_ONLY preserves the compiler's former environment probe stack check
+    // and returns false for native closures without creating an environment ref.
+    #[cfg(not(feature = "luau"))]
+    pub(crate) fn try_dump_into<const LUA_ONLY: bool>(
+        &self,
+        strip: bool,
+        data: &mut Vec<u8>,
+    ) -> Result<bool> {
         unsafe extern "C-unwind" fn writer(
             _state: *mut ffi::lua_State,
             buf: *const c_void,
@@ -592,20 +606,30 @@ impl Function {
             0
         }
 
+        data.clear();
         let lua = self.0.lua.lock();
         let state = lua.state();
-        let mut data: Vec<u8> = Vec::new();
+        // SAFETY: the function stays rooted under the lock and StackGuard
+        // restores the caller's top. lua_dump calls writer synchronously and
+        // never retains the pointer to the exclusively borrowed Vec.
         unsafe {
             let _sg = StackGuard::new(state);
             // Lua 5.5 allocates an auxiliary table while dumping
             let protect = cfg!(feature = "lua55") && !lua.unlikely_memory_error();
-            check_stack(state, if protect { 4 } else { 1 })?;
+            if LUA_ONLY {
+                assert_stack(state, 1);
+            } else {
+                check_stack(state, if protect { 4 } else { 1 })?;
+            }
 
             lua.push_ref(&self.0);
             if ffi::lua_iscfunction(state, -1) != 0 {
-                return Ok(data);
+                return Ok(false);
             }
-            let data_ptr = &mut data as *mut Vec<u8> as *mut c_void;
+            if LUA_ONLY && protect {
+                check_stack(state, 3)?;
+            }
+            let data_ptr = data as *mut Vec<u8> as *mut c_void;
             let status = protect_lua_mem!(state, if protect, 1, 0, |state| {
                 ffi::lua_dump(state, writer, data_ptr, strip as i32)
             })?;
@@ -614,7 +638,7 @@ impl Function {
             }
         }
 
-        Ok(data)
+        Ok(true)
     }
 
     /// Retrieves recorded coverage information about this Lua function including inner calls.

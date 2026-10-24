@@ -279,9 +279,41 @@ fn test_function_dump() -> Result<()> {
     let concat_lua = lua
         .load(r#"function(arg1, arg2) return arg1 .. arg2 end"#)
         .eval::<Function>()?;
-    let concat = lua.load(concat_lua.dump(false)).into_function()?;
-
-    assert_eq!(concat.call::<String>(("foo", "bar"))?, "foobar");
+    for strip in [false, true] {
+        let concat = lua.load(concat_lua.dump(strip)).into_function()?;
+        assert_eq!(concat.call::<String>(("foo", "bar"))?, "foobar");
+        let native = lua.create_function(|_, ()| -> Result<()> {
+            panic!("dumping must not execute a native callback")
+        })?;
+        assert!(native.dump(strip).is_empty());
+        lua.exec_raw_lua(|raw| {
+            let state = raw.state();
+            // SAFETY: raw holds the owning Lua lock; these calls only read
+            // the live stack top before and after the safe dump operations.
+            let top = unsafe { mlua::ffi::lua_gettop(state) };
+            for _ in 0..16 {
+                assert!(!concat_lua.dump(strip).is_empty());
+                assert_eq!(unsafe { mlua::ffi::lua_gettop(state) }, top);
+                assert!(native.dump(strip).is_empty());
+                assert_eq!(unsafe { mlua::ffi::lua_gettop(state) }, top);
+                #[cfg(feature = "lua51")]
+                {
+                    assert_eq!(
+                        mlua::program::dump(&concat_lua).unwrap(),
+                        concat_lua.dump(false)
+                    );
+                    assert!(matches!(
+                        mlua::program::dump(&native),
+                        Err(mlua::program::CompileError::Unsupported {
+                            pc: 0,
+                            reason: "native closure"
+                        })
+                    ));
+                    assert_eq!(unsafe { mlua::ffi::lua_gettop(state) }, top);
+                }
+            }
+        });
+    }
 
     Ok(())
 }

@@ -14,14 +14,20 @@ struct Entry {
 /// identities, cell/input indices and type contracts. Only the last successful
 /// request is retained. Programs share immutable code; each machine still gets
 /// independent state, or an explicit group supplies its shared cell store.
+/// Dump and key buffer capacities are reused until this batch is dropped.
 pub struct BatchCompiler<'compiler, 'schema> {
     compiler: &'compiler Compiler<'schema>,
     last: Option<Entry>,
+    scratch: Vec<u8>,
 }
 
 impl<'compiler, 'schema> BatchCompiler<'compiler, 'schema> {
     pub(super) fn new(compiler: &'compiler Compiler<'schema>) -> Self {
-        Self { compiler, last: None }
+        Self {
+            compiler,
+            last: None,
+            scratch: Vec::new(),
+        }
     }
 
     /// Dump without execution, then compile or reuse the last identical request.
@@ -31,7 +37,13 @@ impl<'compiler, 'schema> BatchCompiler<'compiler, 'schema> {
         arguments: &[Binding],
         upvalues: &[Binding],
     ) -> Result<Program, CompileError> {
-        self.lower(Cow::Owned(dump(function)?), arguments, upvalues)
+        let mut bytes = std::mem::take(&mut self.scratch);
+        let result = match dump_into(function, &mut bytes) {
+            Ok(()) => self.lower(&bytes, arguments, upvalues),
+            Err(error) => Err(error),
+        };
+        self.scratch = bytes;
+        result
     }
 
     /// Validate/compile bytes, reusing only an exactly matching successful request.
@@ -41,25 +53,26 @@ impl<'compiler, 'schema> BatchCompiler<'compiler, 'schema> {
         arguments: &[Binding],
         upvalues: &[Binding],
     ) -> Result<Program, CompileError> {
-        self.lower(Cow::Borrowed(bytes), arguments, upvalues)
+        self.lower(bytes, arguments, upvalues)
     }
 
     fn lower(
         &mut self,
-        bytes: Cow<'_, [u8]>,
+        bytes: &[u8],
         arguments: &[Binding],
         upvalues: &[Binding],
     ) -> Result<Program, CompileError> {
         if let Some(last) = &self.last
-            && last.bytes == bytes.as_ref()
+            && last.bytes == bytes
             && same(&last.arguments, arguments)
             && same(&last.upvalues, upvalues)
         {
             return Ok(last.program.clone());
         }
-        let program = self.compiler.compile_bytecode(&bytes, arguments, upvalues)?;
+        let program = self.compiler.compile_bytecode(bytes, arguments, upvalues)?;
         if let Some(last) = &mut self.last {
-            last.bytes = bytes.into_owned();
+            last.bytes.clear();
+            last.bytes.extend_from_slice(bytes);
             last.arguments.clear();
             last.arguments.extend_from_slice(arguments);
             last.upvalues.clear();
@@ -67,7 +80,7 @@ impl<'compiler, 'schema> BatchCompiler<'compiler, 'schema> {
             last.program = program.clone();
         } else {
             self.last = Some(Entry {
-                bytes: bytes.into_owned(),
+                bytes: bytes.to_vec(),
                 arguments: arguments.to_vec(),
                 upvalues: upvalues.to_vec(),
                 program: program.clone(),
