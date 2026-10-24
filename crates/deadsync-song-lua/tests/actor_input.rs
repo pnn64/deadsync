@@ -67,6 +67,111 @@ fn event(index: usize) -> SongLuaInputEvent<'static> {
 }
 
 #[test]
+fn mixed_capture_counts_keep_bindings_aliases_and_ordered_writes_after_scene_destruction() {
+    let (mut scene, _directory) = scene(
+        r#"
+        return Def.ActorFrame {
+            OnCommand=function(self)
+                local lamp=self:GetChild('Lamp')
+                local shared={x=32,order=0}
+                local alias=shared
+                local other={lit=false}
+                local screen=SCREENMAN:GetTopScreen()
+                screen:AddInputCallback(function(e) return false end)
+                screen:AddInputCallback(function(e)
+                    if shared.order>=100 then shared.order=0 end
+                    shared.order=shared.order*10+1
+                    return false
+                end)
+                screen:AddInputCallback(function(e)
+                    if shared.order>=100 then shared.order=0 end
+                    shared.order=shared.order*10+2
+                    shared.x=shared.x+e.DeviceInput.level
+                    lamp:visible(e.DeviceInput.down):x(shared.x)
+                    return false
+                end)
+                screen:AddInputCallback(function(e)
+                    if alias.order>=100 then alias.order=0 end
+                    alias.order=alias.order*10+3
+                    alias.x=alias.x-e.DeviceInput.level
+                    other.lit=not other.lit
+                    lamp:y(alias.x):visible(other.lit)
+                    return false
+                end)
+            end,
+            Def.Quad {Name='Lamp',InitCommand=function(self) self:xy(32,20):zoomto(12,12) end}
+        }
+    "#,
+    );
+    let mut native = scene.compile_actor_inputs().unwrap();
+    let actor = native
+        .states()
+        .iter()
+        .position(|s| s.x == 32.0 && s.y == 20.0)
+        .unwrap();
+    let mut expected = Vec::new();
+    for index in 0..64 {
+        let mut input = event(index);
+        input.level = (index % 4) as f32 * 0.25;
+        let (handled, output) = scene.input(&input).unwrap();
+        assert!(!handled && output.errors.is_empty());
+        let snapshot = scene.compile_actor_inputs().unwrap();
+        let order = snapshot
+            .scalar_states()
+            .find_map(|(_, key, value)| match value {
+                SongLuaInputScalar::Number(value) if key == b"order" => Some(value as u32),
+                _ => None,
+            })
+            .unwrap();
+        let mut actions = Vec::new();
+        let mut x = 32.0f32;
+        for callback in [order / 100, order / 10 % 10, order % 10] {
+            match callback {
+                1 => {}
+                2 => {
+                    x += input.level;
+                    actions.push(SongLuaActorInputAction::Visible {
+                        actor,
+                        visible: input.down,
+                    });
+                    actions.push(SongLuaActorInputAction::X {
+                        actor,
+                        bits: x.to_bits(),
+                    });
+                }
+                3 => {
+                    x -= input.level;
+                    actions.push(SongLuaActorInputAction::Y {
+                        actor,
+                        bits: x.to_bits(),
+                    });
+                    actions.push(SongLuaActorInputAction::Visible {
+                        actor,
+                        visible: index % 2 == 0,
+                    });
+                }
+                _ => panic!("authored callback order {order}"),
+            }
+        }
+        expected.push((
+            scene.states().to_vec(),
+            scalar_values(snapshot.scalar_states()),
+            actions,
+        ));
+    }
+    drop(scene);
+    for (index, (states, scalars, actions)) in expected.into_iter().enumerate() {
+        let mut input = event(index);
+        input.level = (index % 4) as f32 * 0.25;
+        let mut actual = Vec::new();
+        assert!(!native.input_with_actions(&input, |action| actual.push(action)));
+        assert_eq!(actual, actions);
+        assert_eq!(native.states(), states);
+        assert_eq!(scalar_values(native.scalar_states()), scalars);
+    }
+}
+
+#[test]
 fn native_actor_actions_match_real_lua_state_and_continue_after_scene_destruction() {
     let (mut scene, _file) = scene(include_str!("fixtures/actor-input.lua"));
     let mut native = scene

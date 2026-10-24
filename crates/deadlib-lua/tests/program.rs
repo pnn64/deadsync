@@ -380,6 +380,242 @@ fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_sto
 }
 
 #[test]
+fn identical_group_code_shares_storage_without_merging_execution_or_machine_state() {
+    let closed = Arc::new(AtomicBool::new(false));
+    let (mut group, mut separate, expected, unshared_payload) = {
+        let lua = Lua::new();
+        lua.set_app_data(Dropped(closed.clone()));
+        let f: Function = lua
+            .load(
+                "local s={total=0};return function(delta) s.total=s.total+delta;return s.total end",
+            )
+            .eval()
+            .unwrap();
+        let bindings = Bindings {
+            arguments: vec![Binding::Input {
+                slot: 0,
+                types: Types::NUMBER,
+            }],
+            upvalues: vec![Binding::Object(1)],
+            cells: vec![Cell::Number(0.0)],
+            fields: vec![property(1, "total", 0)],
+            ..Bindings::default()
+        };
+        let programs = (0..16)
+            .map(|_| program::compile(&f, &bindings).unwrap())
+            .collect::<Vec<_>>();
+        let unshared_payload = programs
+            .iter()
+            .map(program::Program::retained_bytes)
+            .sum::<usize>();
+        let separate = programs[7].machine();
+        let group = program::Group::new(programs).unwrap();
+        let mut expected = Vec::new();
+        for step in 0..16 {
+            let delta = [-0.0, 0.25, -0.5, 0.125][step % 4];
+            for index in 0..16 {
+                expected.push((index, delta, f.call::<f64>(delta).unwrap().to_bits()));
+            }
+        }
+        (group, separate, expected, unshared_payload)
+    };
+    assert!(closed.load(Ordering::SeqCst));
+    assert_eq!(group.len(), 16);
+    assert!(group.retained_bytes() < unshared_payload);
+    for (index, delta, bits) in expected {
+        let Datum::Number(value) = group
+            .run(index, &[Datum::Number(delta)], |_, _| panic!("no action"))
+            .unwrap()
+            .unwrap()
+        else {
+            panic!("number")
+        };
+        assert_eq!(value.to_bits(), bits);
+        let Some(Datum::Number(cell)) = group.cell(0) else {
+            panic!("number cell")
+        };
+        assert_eq!(cell.to_bits(), bits);
+    }
+    assert_eq!(
+        separate
+            .run(&[Datum::Number(1.0)], |_, _| panic!("no action"))
+            .unwrap(),
+        Datum::Number(1.0)
+    );
+}
+
+#[test]
+fn shared_group_code_keeps_mutable_byte_arena_indices_after_vm_destruction() {
+    let closed = Arc::new(AtomicBool::new(false));
+    let (mut group, expected) = {
+        let lua = Lua::new();
+        lua.set_app_data(Dropped(closed.clone()));
+        let f:Function=lua.load("local s={mode='idle'};return function(e) if e then s.mode='armed' else s.mode='idle' end;return s.mode end").eval().unwrap();
+        let bindings = Bindings {
+            arguments: vec![Binding::Input {
+                slot: 0,
+                types: Types::BOOLEAN,
+            }],
+            upvalues: vec![Binding::Object(1)],
+            cells: vec![Cell::Bytes(0)],
+            strings: vec![b"idle".as_slice().into()],
+            fields: vec![property(1, "mode", 0)],
+            ..Bindings::default()
+        };
+        let programs = (0..16)
+            .map(|_| program::compile(&f, &bindings).unwrap())
+            .collect::<Vec<_>>();
+        let group = program::Group::new(programs).unwrap();
+        let expected = (0..64)
+            .map(|step| {
+                let input = step % 3 == 0;
+                let value = f.call::<mlua::String>(input).unwrap();
+                (input, value.as_bytes().to_vec())
+            })
+            .collect::<Vec<_>>();
+        (group, expected)
+    };
+    assert!(closed.load(Ordering::SeqCst));
+    for (step, (input, expected)) in expected.into_iter().enumerate() {
+        assert_eq!(
+            group
+                .run(step % 16, &[Datum::Boolean(input)], |_, _| panic!(
+                    "no action"
+                ))
+                .unwrap()
+                .unwrap(),
+            Datum::Bytes(&expected)
+        );
+        assert_eq!(group.cell(0), Some(Datum::Bytes(&expected)));
+    }
+}
+
+#[test]
+fn group_code_sharing_preserves_independent_cells_constants_and_object_ids() {
+    let closed = Arc::new(AtomicBool::new(false));
+    let (mut independent, mut constants, expected) = {
+        let lua = Lua::new();
+        lua.set_app_data(Dropped(closed.clone()));
+        let mut programs = Vec::new();
+        for index in 0..16 {
+            let f: Function = lua.load("local s={total=0};return function(delta) s.total=s.total+delta;return s.total end").eval().unwrap();
+            programs.push(
+                program::compile(
+                    &f,
+                    &Bindings {
+                        arguments: vec![Binding::Input {
+                            slot: 0,
+                            types: Types::NUMBER,
+                        }],
+                        upvalues: vec![Binding::Object(index as u32 + 1)],
+                        cells: vec![Cell::Number(0.0); 16],
+                        fields: vec![property(index as u32 + 1, "total", index)],
+                        ..Bindings::default()
+                    },
+                )
+                .unwrap(),
+            );
+        }
+        let independent = program::Group::new(programs).unwrap();
+        let objects = [lua.create_table().unwrap(), lua.create_table().unwrap()];
+        let mut programs = Vec::new();
+        let mut expected = Vec::new();
+        for index in 0..16 {
+            let (value, binding, bits, bytes, object) = match index % 8 {
+                kind @ 0..=3 => {
+                    let bits = [
+                        0x8000_0000_0000_0000,
+                        0,
+                        0x7ff8_0000_0000_1234,
+                        0x7ff8_0000_0000_5678,
+                    ][kind];
+                    let value = f64::from_bits(bits);
+                    (
+                        Value::Number(value),
+                        Binding::Literal(program::Literal::Number(value)),
+                        Some(bits),
+                        None,
+                        None,
+                    )
+                }
+                kind @ 4..=5 => {
+                    let bytes = if kind == 4 {
+                        &b"\0\xffalpha"[..]
+                    } else {
+                        &b"\0\xffbeta"[..]
+                    };
+                    (
+                        Value::String(lua.create_string(bytes).unwrap()),
+                        Binding::Literal(program::Literal::Bytes(bytes.into())),
+                        None,
+                        Some(bytes.to_vec()),
+                        None,
+                    )
+                }
+                kind => {
+                    let id = kind as u32 + 35;
+                    (
+                        Value::Table(objects[kind - 6].clone()),
+                        Binding::Object(id),
+                        None,
+                        None,
+                        Some(id),
+                    )
+                }
+            };
+            lua.globals().set("N", value).unwrap();
+            let f: Function = lua
+                .load("local n=N;return function() return n end")
+                .eval()
+                .unwrap();
+            if let Some(bits) = bits {
+                assert_eq!(f.call::<f64>(()).unwrap().to_bits(), bits);
+            }
+            programs.push(
+                program::compile(
+                    &f,
+                    &Bindings {
+                        upvalues: vec![binding],
+                        ..Bindings::default()
+                    },
+                )
+                .unwrap(),
+            );
+            expected.push((bits, bytes, object));
+        }
+        (
+            independent,
+            program::Group::new(programs).unwrap(),
+            expected,
+        )
+    };
+    assert!(closed.load(Ordering::SeqCst));
+    for delta in [0.25, -0.5] {
+        for index in 0..16 {
+            assert_eq!(
+                independent
+                    .run(index, &[Datum::Number(delta)], |_, _| panic!("no action"))
+                    .unwrap()
+                    .unwrap(),
+                Datum::Number(if delta > 0.0 { 0.25 } else { -0.25 })
+            );
+        }
+    }
+    for (index, (bits, bytes, object)) in expected.into_iter().enumerate() {
+        match constants
+            .run(index, &[], |_, _| panic!("no action"))
+            .unwrap()
+            .unwrap()
+        {
+            Datum::Number(value) => assert_eq!(Some(value.to_bits()), bits),
+            Datum::Bytes(value) => assert_eq!(Some(value.to_vec()), bytes),
+            Datum::Object(value) => assert_eq!(Some(value), object),
+            other => panic!("constant {other:?}"),
+        }
+    }
+}
+
+#[test]
 fn grouped_callbacks_share_actual_cells_and_survive_loading_vm_destruction() {
     let dropped = Arc::new(AtomicBool::new(false));
     let (mut group, expected) = {

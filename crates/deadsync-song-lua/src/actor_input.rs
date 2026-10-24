@@ -185,9 +185,11 @@ fn compile_with_updates(
     if !crate::lua_util::can_compile_actor_input(lua) {
         return None;
     }
-    let mut callbacks = crate::input::functions(lua)?;
-    let input_count = callbacks.len();
-    callbacks.extend(updates.iter().map(|(function, _)| function.clone()));
+    let inputs = crate::input::functions(lua)?;
+    let input_count = inputs.len();
+    let callback_count = input_count + updates.len();
+    // The snapshot roots inputs; the caller already roots every update function.
+    let callbacks = || inputs.iter().chain(updates.iter().map(|(function, _)| function));
     let tables = actors
         .iter()
         .chain(tracked.iter().map(|(_, table, _)| table))
@@ -211,8 +213,8 @@ fn compile_with_updates(
     let mut state_ids = FxHashMap::<usize, u32>::default();
     let mut byte_fields = Vec::new();
     let mut pending = updates.iter().map(|(_, actor)| *actor).collect::<Vec<_>>();
-    let mut captures = Vec::with_capacity(callbacks.len());
-    for callback in &callbacks {
+    let mut captures = Vec::with_capacity(callback_count);
+    for callback in callbacks() {
         let mut upvalues = Vec::new();
         let mut supported = true;
         callback
@@ -365,12 +367,12 @@ fn compile_with_updates(
     let mut bytecode = if byte_fields.is_empty() {
         Vec::new()
     } else {
-        (0..callbacks.len()).map(|_| None).collect::<Vec<_>>()
+        (0..callback_count).map(|_| None).collect::<Vec<_>>()
     };
     let mut lower = |bindings: &program::Bindings| {
-        let mut programs = Vec::with_capacity(callbacks.len());
+        let mut programs = Vec::with_capacity(callback_count);
         let compiler = program::Compiler::new(bindings).ok()?;
-        for (index, (callback, upvalues)) in callbacks.iter().zip(&captures).enumerate() {
+        for (index, (callback, upvalues)) in callbacks().zip(&captures).enumerate() {
             let update_arguments;
             let arguments = if index < input_count {
                 &bindings.arguments[..]

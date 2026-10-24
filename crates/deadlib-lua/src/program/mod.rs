@@ -22,6 +22,7 @@
 
 mod compile;
 mod decode;
+mod dedup;
 mod strings;
 use strings::Strings;
 
@@ -35,7 +36,7 @@ use std::{
 };
 
 /// A set of accepted native value types.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Types(u8);
 impl Types {
     pub const NIL: Self = Self(1);
@@ -198,7 +199,7 @@ impl Datum<'_> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Value {
     Nil,
     Boolean(bool),
@@ -230,13 +231,13 @@ impl Value {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Source {
     Value(Value),
     Cell(usize),
     Input(usize, Types),
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Operand {
     Register(usize),
     Value(Value),
@@ -250,7 +251,7 @@ impl Operand {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Op {
     Unreachable,
     Load {
@@ -484,7 +485,7 @@ impl Machine {
             &mut self.registers,
             inputs,
             emit,
-            |value| datum(value, &self.program.0, inputs),
+            datum,
         )
     }
 
@@ -501,7 +502,7 @@ impl Machine {
             &mut self.registers,
             inputs,
             emit,
-            Value::truthy,
+            |value, _, _| value.truthy(),
         )
     }
 }
@@ -529,6 +530,9 @@ impl Group {
             if first.0.cells.iter().any(|v| matches!(v, Value::String(_))) {
                 programs = strings::share(programs);
             }
+        }
+        if programs.len() >= 8 {
+            dedup::code(&mut programs);
         }
         let initial = programs.first().map_or(&[][..], |p| p.0.cells.as_ref());
         let cells = initial.to_vec().into_boxed_slice();
@@ -573,7 +577,7 @@ impl Group {
             &mut self.registers[..program.0.registers],
             inputs,
             emit,
-            |value| datum(value, &program.0, inputs),
+            datum,
         ))
     }
 
@@ -592,7 +596,7 @@ impl Group {
             &mut self.registers[..program.0.registers],
             inputs,
             emit,
-            Value::truthy,
+            |value, _, _| value.truthy(),
         ))
     }
 
@@ -636,7 +640,7 @@ fn execute<'a, R>(
     registers: &mut [Value],
     inputs: &'a [Datum<'a>],
     mut emit: impl FnMut(u32, Arguments<'_>),
-    finish: impl FnOnce(Value) -> R,
+    finish: impl FnOnce(Value, &'a Code, &'a [Datum<'a>]) -> R,
 ) -> Result<R, RunError> {
     if code.clear_registers {
         registers.fill(Value::Nil);
@@ -736,14 +740,14 @@ fn execute<'a, R>(
                     },
                 );
                 if tail {
-                    return Ok(finish(result));
+                    return Ok(finish(result, code, inputs));
                 }
                 if let Some(dst) = dst {
                     registers[dst] = result;
                 }
             }
             Op::Return(source) => {
-                return Ok(finish(source.map_or(Value::Nil, |i| registers[i])));
+                return Ok(finish(source.map_or(Value::Nil, |i| registers[i]), code, inputs));
             }
         }
     }
