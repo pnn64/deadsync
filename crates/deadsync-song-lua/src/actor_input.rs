@@ -11,7 +11,19 @@ pub use update::SongLuaCompiledActorInteractions;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SongLuaActorInputAction {
     /// Actor indices address overlays first, followed by tracked actors.
-    Visible { actor: usize, visible: bool },
+    Visible {
+        actor: usize,
+        visible: bool,
+    },
+    /// The exact f32 bits written by the authored numeric setter.
+    X {
+        actor: usize,
+        bits: u32,
+    },
+    Y {
+        actor: usize,
+        bits: u32,
+    },
 }
 
 /// Primitive state captured from a raw scalar table.
@@ -70,12 +82,36 @@ impl SongLuaCompiledActorInputs {
     ) -> bool {
         self.callbacks
             .run(index, values, |tag, args| {
-                let Some(Datum::Boolean(visible)) = args.get(1) else {
-                    unreachable!("verified visible(boolean) action")
-                };
-                let actor = tag as usize;
-                self.states[actor].visible = visible;
-                observe(SongLuaActorInputAction::Visible { actor, visible });
+                let actor = (tag >> 2) as usize;
+                match tag & 3 {
+                    0 => {
+                        let Some(Datum::Boolean(visible)) = args.get(1) else {
+                            unreachable!("verified visible(boolean) action")
+                        };
+                        self.states[actor].visible = visible;
+                        observe(SongLuaActorInputAction::Visible { actor, visible });
+                    }
+                    axis @ 1..=2 => {
+                        let Some(Datum::Number(value)) = args.get(1) else {
+                            unreachable!("verified position(number) action")
+                        };
+                        let value = value as f32;
+                        if axis == 1 {
+                            self.states[actor].x = value;
+                            observe(SongLuaActorInputAction::X {
+                                actor,
+                                bits: value.to_bits(),
+                            });
+                        } else {
+                            self.states[actor].y = value;
+                            observe(SongLuaActorInputAction::Y {
+                                actor,
+                                bits: value.to_bits(),
+                            });
+                        }
+                    }
+                    _ => unreachable!("verified setter tag"),
+                }
             })
             .expect("input registry index")
             .expect("complete typed input frame")
@@ -167,7 +203,10 @@ fn compile_with_updates(
     if indices.len() != tables.len() || actors.len() != states.len() {
         return None;
     }
-    u32::try_from(tables.len()).ok()?.checked_add(2)?;
+    u32::try_from(tables.len())
+        .ok()?
+        .checked_mul(4)?
+        .checked_add(2)?;
     let mut bindings = crate::input::compiled::bindings();
     let first_state_object = u32::try_from(tables.len()).ok()?.checked_add(2)?;
     let mut state_ids = FxHashMap::<usize, u32>::default();
@@ -260,33 +299,60 @@ fn compile_with_updates(
             continue;
         }
         visited[index] = true;
-        let Some(target) = crate::actor_classes::visible_target(lua, tables[index]).ok()? else {
-            continue;
-        };
-        let &target = indices.get(&target)?;
-        // A copied setter writes its captured target, not the receiver.
-        if target != index
-            && let Some(mt) = tables[target].metatable()
+        let targets = crate::actor_classes::setter_targets(lua, tables[index]).ok()?;
+        let mut motion = None;
+        'method: for (requested, selected) in
+            crate::actor_methods::Setter::ALL.into_iter().zip(targets)
         {
-            match mt.raw_get::<InspectionValue>("__newindex").ok()? {
-                InspectionValue::Nil => {}
-                InspectionValue::Function(method)
-                    if crate::actor_methods::identity(lua, &method).ok()?
-                        == Some(crate::actor_methods::Method::Assign) => {}
-                _ => return None,
+            let Some((setter, pointer)) = selected else {
+                continue;
+            };
+            let Some(&target) = indices.get(&pointer) else {
+                continue;
+            };
+            if setter != crate::actor_methods::Setter::Visible {
+                let ready = match motion {
+                    Some((previous, ready)) if previous == target => ready,
+                    _ => {
+                        let ready =
+                            crate::lua_util::can_compile_actor_position(lua, tables[target]);
+                        motion = Some((target, ready));
+                        ready
+                    }
+                };
+                if !ready {
+                    continue;
+                }
             }
+            // A copied setter writes and returns its captured target.
+            if target != index
+                && let Some(mt) = tables[target].metatable()
+            {
+                match mt.raw_get::<InspectionValue>("__newindex").ok()? {
+                    InspectionValue::Nil => {}
+                    InspectionValue::Function(method)
+                        if crate::actor_methods::identity(lua, &method).ok()?
+                            == Some(crate::actor_methods::Method::Assign) => {}
+                    _ => continue 'method,
+                }
+            }
+            pending.push(target);
+            let receiver = index as u32 + 2;
+            let (opcode, types) = match setter {
+                crate::actor_methods::Setter::Visible => (0, Types::BOOLEAN),
+                crate::actor_methods::Setter::X => (1, Types::NUMBER),
+                crate::actor_methods::Setter::Y => (2, Types::NUMBER),
+            };
+            bindings.fields.push(Field {
+                object: receiver,
+                name: requested.name().as_bytes().into(),
+                value: FieldValue::Action(Action {
+                    tag: ((target as u32) << 2) | opcode,
+                    parameters: vec![Parameter::Object(receiver), Parameter::Type(types)],
+                    result: Some(Binding::Object(target as u32 + 2)),
+                }),
+            });
         }
-        pending.push(target);
-        let receiver = index as u32 + 2;
-        bindings.fields.push(Field {
-            object: receiver,
-            name: b"visible".as_slice().into(),
-            value: FieldValue::Action(Action {
-                tag: target as u32,
-                parameters: vec![Parameter::Object(receiver), Parameter::Type(Types::BOOLEAN)],
-                result: Some(Binding::Object(target as u32 + 2)),
-            }),
-        });
     }
     // Reuse the complete schema. Only each callback's capture vector changes.
     let lower = |bindings: &program::Bindings| {

@@ -105,6 +105,7 @@ fn native_actor_actions_match_real_lua_state_and_continue_after_scene_destructio
                 .iter()
                 .map(|action| match action {
                     SongLuaActorInputAction::Visible { visible, .. } => *visible,
+                    _ => panic!("visibility fixture emitted a position action"),
                 })
                 .collect::<Vec<_>>(),
             expected_values
@@ -115,6 +116,7 @@ fn native_actor_actions_match_real_lua_state_and_continue_after_scene_destructio
                 SongLuaActorInputAction::Visible {
                     actor: match actions[1] {
                         SongLuaActorInputAction::Visible { actor, .. } => actor,
+                        _ => panic!("visibility fixture emitted a position action"),
                     },
                     visible: index % 4 < 2
                 }
@@ -444,6 +446,244 @@ fn stateful_event(index: usize) -> SongLuaInputEvent<'static> {
         [-0.0, 0.25, 0.5, 1.0, f32::from_bits(0x7fc0_1234)][index % 5]
     };
     input
+}
+
+fn position_bits(states: &[SongLuaOverlayState]) -> (Vec<(u32, u32)>, Vec<SongLuaOverlayState>) {
+    let bits = states
+        .iter()
+        .map(|s| (s.x.to_bits(), s.y.to_bits()))
+        .collect();
+    let rest = states
+        .iter()
+        .map(|s| {
+            let mut s = *s;
+            s.x = 0.0;
+            s.y = 0.0;
+            s
+        })
+        .collect();
+    (bits, rest)
+}
+
+#[test]
+fn authored_movement_shares_real_input_and_timer_state_and_runs_after_vm_destruction() {
+    let (mut scene, _directory) = scene(include_str!("fixtures/movement-input.lua"));
+    assert!(scene.compile_actor_inputs().is_some());
+    let mut native = scene
+        .compile_actor_interactions()
+        .expect("native position setters");
+    let number = |snapshot: &SongLuaCompiledActorInteractions, key: &[u8]| {
+        snapshot
+            .scalar_states()
+            .find_map(|(_, name, value)| {
+                if name == key {
+                    match value {
+                        SongLuaInputScalar::Number(v) => Some(v),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .unwrap()
+    };
+    let active = |snapshot: &SongLuaCompiledActorInteractions| {
+        snapshot
+            .scalar_states()
+            .any(|(_, name, value)| name == b"active" && value == SongLuaInputScalar::Boolean(true))
+    };
+    let mut expected = Vec::new();
+    let mut seconds = 0.0;
+    for index in 0..120 {
+        let input = stateful_event(index);
+        let (handled, out) = scene.input(&input).unwrap();
+        assert!(out.errors.is_empty());
+        let snapshot = scene.compile_actor_interactions().unwrap();
+        let actions = match input.game_button {
+            "Left" | "Right" => vec![
+                SongLuaActorInputAction::X {
+                    actor: 2,
+                    bits: (number(&snapshot, b"x") as f32).to_bits(),
+                },
+                SongLuaActorInputAction::Y {
+                    actor: 2,
+                    bits: (number(&snapshot, b"y") as f32).to_bits(),
+                },
+                SongLuaActorInputAction::Visible {
+                    actor: 2,
+                    visible: input.game_button == "Right",
+                },
+            ],
+            _ => vec![],
+        };
+        expected.push((
+            Some(handled),
+            0.0,
+            position_bits(scene.states()),
+            scalar_values(snapshot.scalar_states()),
+            actions,
+        ));
+        let before = number(&snapshot, b"moves");
+        let was_active = active(&snapshot);
+        let delta = [0.03125, 1.0 / 60.0, 0.0, -0.0, 0.125, 0.001][index % 6];
+        seconds += delta;
+        let out = scene
+            .update(SongLuaLiveFrame {
+                delta_seconds: delta,
+                screen_seconds: seconds,
+                music_seconds: seconds,
+                beat: seconds * 2.0,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(out.errors.is_empty(), "{:?}", out.errors);
+        let snapshot = scene.compile_actor_interactions().unwrap();
+        let mut actions = Vec::new();
+        if number(&snapshot, b"moves") != before {
+            actions.push(SongLuaActorInputAction::Y {
+                actor: 2,
+                bits: (number(&snapshot, b"y") as f32).to_bits(),
+            });
+            if was_active && !active(&snapshot) {
+                actions.push(SongLuaActorInputAction::Visible {
+                    actor: 2,
+                    visible: false,
+                });
+            }
+        }
+        expected.push((
+            None,
+            delta,
+            position_bits(scene.states()),
+            scalar_values(snapshot.scalar_states()),
+            actions,
+        ));
+    }
+    drop(scene);
+    for (step, (handled, delta, states, cells, writes)) in expected.into_iter().enumerate() {
+        let mut actions = Vec::new();
+        if let Some(handled) = handled {
+            assert_eq!(
+                native.input_with_actions(&stateful_event(step / 2), |a| actions.push(a)),
+                handled
+            );
+        } else {
+            native.update_with_actions(delta, |a| actions.push(a));
+        }
+        assert_eq!(position_bits(native.states()), states, "state {step}");
+        assert_eq!(scalar_values(native.scalar_states()), cells, "cells {step}");
+        assert_eq!(actions, writes, "actions {step}");
+    }
+}
+
+#[test]
+fn copied_position_setters_keep_target_axis_return_identity_and_numeric_bits() {
+    for (copy, actor) in [("b.__songlua_bound_methods.y", 2), ("Actor.y", 1)] {
+        let source = format!(
+            "return Def.ActorFrame{{OnCommand=function(self)local a=self:GetChild('A');local b=self:GetChild('B');rawset(a,'x',{copy});SCREENMAN:GetTopScreen():AddInputCallback(function(e)return a:x(e.DeviceInput.level):x(e.DeviceInput.level+1) end)end,Def.Quad{{Name='A'}},Def.Quad{{Name='B'}}}}"
+        );
+        let (mut scene, _file) = self::scene(&source);
+        let mut native = scene.compile_actor_inputs().unwrap();
+        for index in 0..40 {
+            let mut input = stateful_event(index);
+            input.level = match index {
+                7 => f32::INFINITY,
+                8 => f32::NEG_INFINITY,
+                9 => f32::MAX,
+                _ => input.level,
+            };
+            let (handled, out) = scene.input(&input).unwrap();
+            assert!(out.errors.is_empty());
+            let mut actions = Vec::new();
+            assert_eq!(
+                native.input_with_actions(&input, |a| actions.push(a)),
+                handled
+            );
+            assert_eq!(
+                position_bits(native.states()),
+                position_bits(scene.states())
+            );
+            let first = SongLuaActorInputAction::Y {
+                actor,
+                bits: input.level.to_bits(),
+            };
+            let bits = ((f64::from(input.level) + 1.0) as f32).to_bits();
+            let second = if actor == 2 {
+                SongLuaActorInputAction::X { actor, bits }
+            } else {
+                SongLuaActorInputAction::Y { actor, bits }
+            };
+            assert_eq!(actions, vec![first, second]);
+        }
+    }
+}
+
+#[test]
+fn update_receiver_position_writes_use_the_actor_inventory_identity() {
+    let source = "return Def.ActorFrame{OnCommand=function(self)SCREENMAN:GetTopScreen():AddInputCallback(function(e)return false end)end,Def.ActorFrame{Name='Mover',OnCommand=function(self)self:SetUpdateFunction(function(actor,dt)actor:x(dt*10):y(-dt*5)end)end}}";
+    let (mut scene, _file) = self::scene(source);
+    let mut native = scene.compile_actor_interactions().unwrap();
+    let mut expected = Vec::new();
+    let mut seconds = 0.0;
+    for index in 0..30 {
+        let delta = [0.03125, 1.0 / 60.0, 0.0, -0.0, 0.001][index % 5];
+        seconds += delta;
+        let out = scene
+            .update(SongLuaLiveFrame {
+                delta_seconds: delta,
+                screen_seconds: seconds,
+                music_seconds: seconds,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(out.errors.is_empty());
+        expected.push((delta, position_bits(scene.states())));
+    }
+    drop(scene);
+    for (delta, expected) in expected {
+        native.update(delta);
+        assert_eq!(position_bits(native.states()), expected);
+    }
+}
+
+#[test]
+fn movement_rejects_replaced_methods_coercions_and_active_pose_owners_without_execution() {
+    let template = include_str!("fixtures/movement-input.lua");
+    for mutation in [
+        "local old=mover.x; mover.x=function(...) return old(...) end",
+        "local old=Actor.x;Actor.x=function(...) return old(...) end",
+        "mover.__songlua_bound_methods.y=function() error('must not run') end",
+        "mover:linear(2):x(80)",
+        "mover:wag()",
+    ] {
+        let source = template.replace(
+            "local alias = state",
+            &format!("local alias = state;{mutation}"),
+        );
+        let (scene, _file) = self::scene(&source);
+        assert!(
+            scene.compile_actor_inputs().is_none(),
+            "input-only: {mutation}"
+        );
+        assert!(scene.compile_actor_interactions().is_none(), "{mutation}");
+    }
+    for replacement in [
+        "mover:x(event.GameButton)",
+        "mover:x('1')",
+        "mover:x(nil)",
+        "mover:GetX()",
+    ] {
+        let source = template.replace("mover:x(state.x):y(state.y):visible(true)", replacement);
+        let (scene, _file) = self::scene(&source);
+        assert!(
+            scene.compile_actor_inputs().is_none(),
+            "input-only: {replacement}"
+        );
+        assert!(
+            scene.compile_actor_interactions().is_none(),
+            "{replacement}"
+        );
+    }
 }
 
 #[test]

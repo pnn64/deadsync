@@ -17,6 +17,7 @@ mod actor_classes;
 mod actor_input;
 pub use actor_input::{SongLuaActorInputAction, SongLuaCompiledActorInputs, SongLuaCompiledActorInteractions, SongLuaInputScalar};
 mod actor_methods;
+mod actor_method_name;
 mod callback_args;
 mod cmd;
 mod compat;

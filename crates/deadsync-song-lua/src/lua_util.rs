@@ -6905,8 +6905,14 @@ pub fn make_actor_capture_f32_method(
     key: &'static str,
     probe_name: Option<&'static str>,
 ) -> mlua::Result<Function> {
+    let setter = if crate::live::active(lua) { match key {
+        "x" => Some(crate::actor_methods::Setter::X),
+        "y" => Some(crate::actor_methods::Setter::Y),
+        _ => None,
+    }} else { None };
+    let target = setter.map(|_| actor.to_pointer() as usize);
     let actor = actor.clone();
-    lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+    let function = lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
         if let Some(probe_name) = probe_name {
             record_probe_method_call(lua, &actor, probe_name)?;
         }
@@ -6914,7 +6920,11 @@ pub fn make_actor_capture_f32_method(
             capture_block_set_f32(lua, &actor, key, value)?;
         }
         Ok(actor.clone())
-    })
+    })?;
+    if let Some((setter, target)) = setter.zip(target) {
+        crate::actor_methods::register(lua, &function, crate::actor_methods::Method::Bound(setter, target))?;
+    }
+    Ok(function)
 }
 
 pub fn make_actor_add_f32_method(
@@ -7143,7 +7153,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
     })?;
     if crate::live::active(lua) {
         crate::actor_methods::register(lua, &visible,
-            crate::actor_methods::Method::VisibleBound(actor.to_pointer() as usize))?;
+            crate::actor_methods::Method::Bound(crate::actor_methods::Setter::Visible, actor.to_pointer() as usize))?;
     }
     actor.set("visible", visible)?;
     actor.set(
@@ -7854,32 +7864,8 @@ end
 }
 
 pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
-    actor.set(
-        "x",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-                record_probe_method_call(lua, &actor, "x")?;
-                if let Some(value) = value.and_then(read_actor_scalar_f32) {
-                    capture_block_set_f32(lua, &actor, "x", value)?;
-                }
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
-    actor.set(
-        "y",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-                record_probe_method_call(lua, &actor, "y")?;
-                if let Some(value) = value.and_then(read_actor_scalar_f32) {
-                    capture_block_set_f32(lua, &actor, "y", value)?;
-                }
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
+    actor.set("x", make_actor_capture_f32_method(lua, actor, "x", Some("x"))?)?;
+    actor.set("y", make_actor_capture_f32_method(lua, actor, "y", Some("y"))?)?;
     actor.set(
         "fov",
         lua.create_function({
@@ -11739,6 +11725,30 @@ pub(crate) struct LiveActorPlayback;
 
 fn live_actor_playback(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveActorPlayback>().is_some()
+}
+
+// Position writes target the actual current pose only with no tween/effect
+// owner that can alter it outside the compiled callback unit.
+pub(crate) fn can_compile_actor_position(lua: &Lua, actor: &Table) -> bool {
+    use mlua::InspectionValue;
+    if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_some() { return false; }
+    if !lua.app_data_ref::<ActorTweenReplays>().is_some_and(|replays|
+        replays.0.get(&(actor.to_pointer() as usize)).is_some_and(|replay| replay.queue.is_empty())) {
+        return false;
+    }
+    for key in ["__songlua_command_queue", "__songlua_state_spin"] {
+        match actor.raw_get::<InspectionValue>(key) {
+            Ok(InspectionValue::Nil) => {},
+            Ok(InspectionValue::Table(table)) if key == "__songlua_command_queue" && table.raw_len() == 0 => {},
+            _ => return false,
+        }
+    }
+    match actor.raw_get::<InspectionValue>("__songlua_state_effect_mode") {
+        Ok(InspectionValue::Nil) => {},
+        Ok(InspectionValue::Bytes(mode)) if mode.as_ref() == b"none" => {},
+        _ => return false,
+    }
+    actor.raw_get::<Option<bool>>("__songlua_state_rainbow").is_ok_and(|value| !value.unwrap_or(false))
 }
 
 pub(crate) fn can_compile_actor_input(lua: &Lua) -> bool {

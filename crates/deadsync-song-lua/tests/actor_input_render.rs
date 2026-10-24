@@ -155,6 +155,7 @@ mod renderer {
             "stateful-input.lua",
             "timed-input.lua",
             "state-machine-input.lua",
+            "movement-input.lua",
         ] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures")

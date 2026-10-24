@@ -541,8 +541,10 @@ pub(crate) fn forward(lua: &Lua, class: &Table, name: &'static str) -> mlua::Res
             method.call::<ForwardResults>(args)
         }
     })?;
-    if name == "visible" && crate::live::active(lua) {
-        crate::actor_methods::register(lua, &function, crate::actor_methods::Method::VisibleForward)?;
+    if crate::live::active(lua)
+        && let Some(setter) = crate::actor_methods::Setter::ALL.into_iter().find(|setter| setter.name() == name)
+    {
+        crate::actor_methods::register(lua, &function, crate::actor_methods::Method::Forward(setter))?;
     }
     class.set(name, function)
 }
@@ -601,23 +603,7 @@ fn is_core(kind: &str) -> bool {
     )
 }
 
-fn method_name_flags(lua: &Lua, name: &mlua::LuaString) -> mlua::Result<(bool, bool)> {
-    // SAFETY: the checked string stays rooted at base+1. Only validated flags
-    // leave the read scope; neither borrowed bytes nor a pointer escape.
-    unsafe {
-        crate::raw_vm::with_read_stack(lua, 1, |raw, base| {
-            raw.push(name)?;
-            let mut len = 0;
-            let data = mlua::ffi::lua_tolstring(raw.state(), base + 1, &mut len);
-            let bytes = std::slice::from_raw_parts(data.cast::<u8>(), len);
-            let text = std::str::from_utf8(bytes).map_err(|error| mlua::Error::FromLuaConversionError {
-                from: "string", to: "&str".into(), message: Some(error.to_string()),
-            })?;
-            Ok((!text.starts_with("__songlua_") && !text.ends_with("Command"),
-                matches!(text, "SetUpdateFunction" | "SetDrawFunction" | "GetDrawFunction")))
-        })
-    }
-}
+use crate::actor_method_name::flags as method_name_flags;
 
 // Lua 5.1 gives every Lua closure a table environment; C functions have none.
 pub(crate) fn bind(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -680,36 +666,40 @@ pub(crate) fn assign(lua: &Lua, (actor, key, value): (Table, Value, Value)) -> m
     actor.raw_set(key, value)
 }
 
-/// Resolve an authenticated visibility method without running authored lookup
+/// Resolve authenticated scalar setters without running authored lookup
 /// code. Context/state ownership remains the compiler host's responsibility.
-pub(crate) fn visible_target(lua: &Lua, actor: &Table) -> mlua::Result<Option<usize>> {
-    use crate::actor_methods::{self, Method};
+pub(crate) fn setter_targets(
+    lua: &Lua,
+    actor: &Table,
+) -> mlua::Result<[Option<(crate::actor_methods::Setter, usize)>; 3]> {
+    use crate::actor_methods::{self, Method, Setter};
     use mlua::InspectionValue as V;
+    let mut selected = [None; 3];
+    let mut inherit = [false; 3];
     let mt = actor.metatable();
-    if let Some(mt) = &mt {
+    let lookup = if let Some(mt) = &mt {
         match mt.raw_get::<V>("__newindex")? {
             V::Nil => {}
             V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Assign) => {}
-            _ => return Ok(None),
+            _ => return Ok([None; 3]),
         }
         match mt.raw_get::<V>("__index")? {
-            V::Nil => {}
-            V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Lookup) => {}
-            _ => return Ok(None),
+            V::Nil => false,
+            V::Function(f) if actor_methods::identity(lua, &f)? == Some(Method::Lookup) => true,
+            _ => return Ok([None; 3]),
+        }
+    } else {
+        false
+    };
+    for (index, setter) in Setter::ALL.into_iter().enumerate() {
+        match actor.raw_get::<V>(setter.name())? {
+            V::Function(f) => selected[index] = actor_methods::identity(lua, &f)?,
+            V::Nil => inherit[index] = lookup,
+            _ => {}
         }
     }
-    let method = match actor.raw_get::<V>("visible")? {
-        V::Function(f) => actor_methods::identity(lua, &f)?,
-        V::Nil => {
-            let Some(mt) = mt else {
-                return Ok(None);
-            };
-            let V::Function(lookup) = mt.raw_get::<V>("__index")? else {
-                return Ok(None);
-            };
-            if actor_methods::identity(lua, &lookup)? != Some(Method::Lookup) {
-                return Ok(None);
-            }
+    if inherit.iter().any(|value| *value) {
+        let inherited = (|| -> mlua::Result<Option<[Option<Method>; 3]>> {
             let kind = match actor.raw_get::<V>("__songlua_actor_type")? {
                 V::Nil => "Actor".to_owned(),
                 V::Bytes(kind) => match String::from_utf8(kind.into_vec()) {
@@ -718,8 +708,6 @@ pub(crate) fn visible_target(lua: &Lua, actor: &Table) -> mlua::Result<Option<us
                 },
                 _ => return Ok(None),
             };
-            // Unlinked classes have additional fallback rules. They remain on
-            // the ordinary path until their complete inventory is supported.
             if !is_core(&kind) {
                 return Ok(None);
             }
@@ -727,23 +715,25 @@ pub(crate) fn visible_target(lua: &Lua, actor: &Table) -> mlua::Result<Option<us
                 return Ok(None);
             };
             let mut seen = smallvec::SmallVec::<[usize; 8]>::new();
-            let mut selected = None;
+            let mut found = [None; 3];
+            let mut pending = inherit;
             loop {
                 let identity = class.to_pointer() as usize;
                 if seen.len() == 64 || seen.contains(&identity) {
                     return Ok(None);
                 }
                 seen.push(identity);
-                if selected.is_none() {
-                    match class.raw_get::<V>("visible")? {
+                for (index, setter) in Setter::ALL.into_iter().enumerate() {
+                    if !pending[index] {
+                        continue;
+                    }
+                    match class.raw_get::<V>(setter.name())? {
                         V::Function(f) => {
-                            selected = actor_methods::identity(lua, &f)?;
-                            if selected.is_none() {
-                                return Ok(None);
-                            }
+                            found[index] = actor_methods::identity(lua, &f)?;
+                            pending[index] = false;
                         }
                         V::Nil => {}
-                        _ => return Ok(None),
+                        _ => pending[index] = false,
                     }
                 }
                 let Some(mt) = class.metatable() else {
@@ -755,26 +745,39 @@ pub(crate) fn visible_target(lua: &Lua, actor: &Table) -> mlua::Result<Option<us
                     _ => return Ok(None),
                 }
             }
-            selected
-        }
-        _ => return Ok(None),
-    };
-    match method {
-        Some(Method::VisibleBound(target)) => Ok(Some(target)),
-        Some(Method::VisibleForward) => {
-            let V::Table(methods) = actor.raw_get::<V>(METHODS_KEY)? else {
-                return Ok(None);
-            };
-            let V::Function(bound) = methods.raw_get::<V>("visible")? else {
-                return Ok(None);
-            };
-            match actor_methods::identity(lua, &bound)? {
-                Some(Method::VisibleBound(target)) => Ok(Some(target)),
-                _ => Ok(None),
+            Ok(Some(found))
+        })()?;
+        if let Some(inherited) = inherited {
+            for index in 0..3 {
+                if inherit[index] {
+                    selected[index] = inherited[index];
+                }
             }
         }
-        _ => Ok(None),
     }
+    let mut forwards = [None; 3];
+    if selected
+        .iter()
+        .any(|method| matches!(method, Some(Method::Forward(_))))
+        && let V::Table(methods) = actor.raw_get::<V>(METHODS_KEY)?
+    {
+        for setter in Setter::ALL {
+            if !selected.contains(&Some(Method::Forward(setter))) {
+                continue;
+            }
+            if let V::Function(bound) = methods.raw_get::<V>(setter.name())?
+                && let Some(Method::Bound(operation, target)) =
+                    actor_methods::identity(lua, &bound)?
+            {
+                forwards[setter as usize] = Some((operation, target));
+            }
+        }
+    }
+    Ok(selected.map(|method| match method {
+        Some(Method::Bound(setter, target)) => Some((setter, target)),
+        Some(Method::Forward(setter)) => forwards[setter as usize],
+        _ => None,
+    }))
 }
 
 #[cfg(test)]

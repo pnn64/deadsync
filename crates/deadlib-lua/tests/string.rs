@@ -4,6 +4,38 @@ use std::collections::HashSet;
 use mlua::{Lua, LuaString, Result};
 
 #[test]
+fn scoped_bytes_keep_binary_strings_rooted_during_reentrant_collection() -> Result<()> {
+    let lua = Lua::new();
+    let expected = [0, 255, b'x'].repeat(4096);
+    let name = lua.create_string(&expected)?;
+    let alias = name.clone();
+    let count = name.inspect_bytes(&lua, |bytes| -> Result<usize> {
+        drop(alias);
+        lua.load("collectgarbage('collect')").exec()?;
+        assert_eq!(bytes, expected);
+        name.inspect_bytes(&lua, |nested| assert_eq!(nested, expected));
+        Ok(bytes.len())
+    })?;
+    assert_eq!(count, expected.len());
+    assert_eq!(name.as_bytes(), expected);
+    Ok(())
+}
+
+#[test]
+fn scoped_bytes_release_locks_on_unwind_and_reject_foreign_contexts() -> Result<()> {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    let lua = Lua::new();
+    let other = Lua::new();
+    let name = lua.create_string("rooted")?;
+    assert!(catch_unwind(AssertUnwindSafe(|| name.inspect_bytes(&lua, |_| panic!("probe")))).is_err());
+    assert!(catch_unwind(AssertUnwindSafe(|| name.inspect_bytes(&other, |_| ()))).is_err());
+    assert_eq!(lua.load("return 17").eval::<i32>()?, 17);
+    assert_eq!(other.load("return 29").eval::<i32>()?, 29);
+    name.inspect_bytes(&lua, |bytes| assert_eq!(bytes, b"rooted"));
+    Ok(())
+}
+
+#[test]
 fn test_string_compare() {
     let lua = Lua::new();
 

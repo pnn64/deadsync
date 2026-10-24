@@ -113,6 +113,39 @@ impl LuaString {
         BorrowedBytes::from(self)
     }
 
+    /// Inspect immutable bytes while borrowing an existing Lua context.
+    ///
+    /// The string remains rooted by `self`, and `lua` keeps its VM alive. No
+    /// reference or state handle is cloned, and the callback cannot return a
+    /// borrow of the byte view. The VM lock is held through the callback;
+    /// reentrant Lua calls and collection are supported.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `lua` belongs to a different main Lua state.
+    ///
+    /// ```compile_fail
+    /// # use mlua::{Lua, Result};
+    /// # fn main() -> Result<()> {
+    /// let lua = Lua::new();
+    /// let name = lua.create_string("name")?;
+    /// let escaped = name.inspect_bytes(&lua, |bytes| bytes);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline]
+    pub fn inspect_bytes<R>(&self, lua: &Lua, inspect: impl FnOnce(&[u8]) -> R) -> R {
+        let raw = lua.lock();
+        assert!(
+            raw.weak() == &self.0.lua,
+            "Lua instance passed Value created from a different main Lua state"
+        );
+        // SAFETY: the checked context and its lock keep this VM alive. The
+        // borrowed ValueRef pins its immutable string in the auxiliary thread.
+        // The higher-ranked callback cannot let this temporary view escape.
+        inspect(unsafe { self.bytes_in(&raw) })
+    }
+
     /// Get the bytes that make up this string, including the trailing null byte.
     pub fn as_bytes_with_nul(&self) -> BorrowedBytes {
         let BorrowedBytes { buf, vref, _lua } = BorrowedBytes::from(self);
@@ -126,20 +159,27 @@ impl LuaString {
         let lua = self.0.lua.upgrade();
         let slice = {
             let rawlua = lua.lock();
-            let ref_thread = rawlua.ref_thread();
-
-            mlua_debug_assert!(
-                ffi::lua_type(ref_thread, self.0.index) == ffi::LUA_TSTRING,
-                "string ref is not string type"
-            );
-
-            // This will not trigger a 'm' error, because the reference is guaranteed to be of
-            // string type
-            let mut size = 0;
-            let data = ffi::lua_tolstring(ref_thread, self.0.index, &mut size);
-            slice::from_raw_parts(data as *const u8, size)
+            // SAFETY: this string's own upgraded context is locked, and the
+            // returned Lua handle keeps the VM alive after the lock is released.
+            self.bytes_in(&rawlua)
         };
         (slice, lua)
+    }
+
+    // SAFETY: raw must be this string's live, locked VM. The caller must retain
+    // its context as long as the returned bytes are used. ValueRef roots self.
+    #[inline]
+    unsafe fn bytes_in(&self, raw: &crate::state::RawLua) -> &[u8] {
+        let ref_thread = raw.ref_thread();
+        mlua_debug_assert!(
+            ffi::lua_type(ref_thread, self.0.index) == ffi::LUA_TSTRING,
+            "string ref is not string type"
+        );
+        let mut size = 0;
+        // SAFETY: the caller supplies this rooted string's live VM; tolstring
+        // reads an existing string and cannot allocate or run Lua code.
+        let data = unsafe { ffi::lua_tolstring(ref_thread, self.0.index, &mut size) };
+        unsafe { slice::from_raw_parts(data as *const u8, size) }
     }
 
     /// Converts this Lua string to a generic C pointer.
