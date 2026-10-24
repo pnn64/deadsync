@@ -1,0 +1,53 @@
+//! Copyable register values and VM-owned object identities.
+
+/// The identity of an interned byte string in its originating VM.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct StringId(pub(crate) u32);
+
+/// The identity of a table in its originating VM.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TableId(pub(crate) u32);
+
+/// The identity of a Lua closure in its originating VM.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct FunctionId(pub(crate) u32);
+
+/// A Lua register value. Object handles belong to the VM that produced them.
+///
+/// Numbers use IEEE 754 binary64, including signed zero, infinities, and NaNs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Value {
+    /// Absence of a value.
+    Nil,
+    /// A boolean.
+    Boolean(bool),
+    /// A Lua 5.1 number.
+    Number(f64),
+    /// An interned, arbitrary byte string.
+    String(StringId),
+    /// A table identity.
+    Table(TableId),
+    /// A Lua closure identity.
+    Function(FunctionId),
+    /// A native function's numeric dispatch ID.
+    Native(u32),
+}
+
+impl Value {
+    /// Test Lua truthiness; only `nil` and `false` are false.
+    pub fn is_truthy(self) -> bool {
+        !matches!(self, Self::Nil | Self::Boolean(false))
+    }
+
+    /// Return the Lua type name.
+    pub fn type_name(self) -> &'static str {
+        match self {
+            Self::Nil => "nil",
+            Self::Boolean(_) => "boolean",
+            Self::Number(_) => "number",
+            Self::String(_) => "string",
+            Self::Table(_) => "table",
+            Self::Function(_) | Self::Native(_) => "function",
+        }
+    }
+}

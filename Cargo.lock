@@ -1267,6 +1267,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-lua"
+version = "0.1.0"
+dependencies = [
+ "deadlib-lua-legacy",
+]
+
+[[package]]
 name = "deadlib-lua-legacy"
 version = "0.12.2"
 dependencies = [

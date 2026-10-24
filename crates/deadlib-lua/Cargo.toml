@@ -1,0 +1,20 @@
+[package]
+name = "deadlib-lua"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent Rust Lua compiler and register interpreter for DeadSync"
+repository = "https://github.com/pnn64/deadsync"
+
+[dependencies]
+
+[dev-dependencies]
+lua_reference = { package = "deadlib-lua-legacy", path = "../deadlib-lua-legacy", features = ["lua51", "vendored"] }
+
+[[bench]]
+name = "baseline"
+harness = false
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

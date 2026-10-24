@@ -42,6 +42,7 @@ members = [
     "crates/deadsync-online",
     "crates/deadlib-assets",
     "crates/deadlib-bincode",
+    "crates/deadlib-lua",
     "crates/deadlib-lua-legacy",
     "crates/deadlib-lua-legacy/mlua-sys",
     "crates/deadlib-lua-legacy/mlua_derive",
