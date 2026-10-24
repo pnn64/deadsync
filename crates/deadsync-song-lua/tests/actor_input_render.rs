@@ -150,7 +150,7 @@ mod renderer {
             backend.draw(frame, textures, false).unwrap();
             backend.capture_frame().unwrap()
         }
-        for fixture in ["actor-input.lua", "stateful-input.lua"] {
+        for fixture in ["actor-input.lua", "stateful-input.lua", "timed-input.lua"] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures")
                 .join(fixture);
@@ -178,8 +178,9 @@ mod renderer {
             )
             .unwrap();
             let mut scene = compiled[0].live_scene.take().unwrap();
-            let mut native = scene.compile_actor_inputs().unwrap();
+            let mut native = scene.compile_actor_interactions().unwrap();
             let mut visible_frames = 0;
+            let mut reference = Vec::new();
             for index in 0..30 {
                 let input = SongLuaInputEvent {
                     player: Some(index % 2),
@@ -200,19 +201,40 @@ mod renderer {
                     is_joystick: false,
                     is_mouse: false,
                 };
-                assert_eq!(native.input(&input), scene.input(&input).unwrap().0);
+                let (handled, output) = scene.input(&input).unwrap();
+                assert!(output.errors.is_empty());
+                let delta = [1.0 / 60.0, 0.03125, 0.0, 0.125][index % 4];
+                let output = scene
+                    .update(deadsync_song_lua::SongLuaLiveFrame {
+                        delta_seconds: delta,
+                        beat: index as f64 / 30.0,
+                        music_seconds: index as f64 / 60.0,
+                        screen_seconds: index as f64 / 60.0,
+                        ..Default::default()
+                    })
+                    .unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
                 let before = frame(&compiled[0].overlays, scene.states());
+                let before_pixels = pixels(&mut backend, &before, &textures);
+                visible_frames +=
+                    usize::from(before_pixels.pixels().any(|p| p.0[..3] != [0, 0, 0]));
+                reference.push((input, delta, handled, before, before_pixels));
+            }
+            assert!(visible_frames > 0, "fixture must draw visible gameplay");
+            drop(scene);
+            for (index, (input, delta, handled, before, before_pixels)) in
+                reference.into_iter().enumerate()
+            {
+                assert_eq!(native.input(&input), handled);
+                native.update(delta);
                 let after = frame(&compiled[0].overlays, native.states());
                 assert_eq!(
                     deadlib_render_core::frame_compare::compare_render_frames(&before, &after),
                     Ok(())
                 );
-                let before = pixels(&mut backend, &before, &textures);
                 let after = pixels(&mut backend, &after, &textures);
-                assert_eq!(before.as_raw(), after.as_raw(), "input {index}");
-                visible_frames += usize::from(before.pixels().any(|p| p.0[..3] != [0, 0, 0]));
+                assert_eq!(before_pixels.as_raw(), after.as_raw(), "input {index}");
             }
-            assert!(visible_frames > 0, "fixture must draw visible gameplay");
         }
         backend.cleanup();
     }

@@ -15,7 +15,7 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 mod actions;
 mod actor_classes;
 mod actor_input;
-pub use actor_input::{SongLuaActorInputAction, SongLuaCompiledActorInputs, SongLuaInputScalar};
+pub use actor_input::{SongLuaActorInputAction, SongLuaCompiledActorInputs, SongLuaCompiledActorInteractions, SongLuaInputScalar};
 mod actor_methods;
 mod callback_args;
 mod cmd;

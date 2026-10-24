@@ -43,6 +43,7 @@ struct Call<'a> {
 }
 struct Builder<'a> {
     bindings: &'a Bindings,
+    index: &'a Fields,
     strings: Vec<Box<[u8]>>,
     cells: Vec<Value>,
     fields: Vec<Option<Resolved>>,
@@ -96,10 +97,8 @@ impl Builder<'_> {
             return Err(unsupported(pc, "dynamic field key"));
         };
         let index = self
-            .bindings
-            .fields
-            .iter()
-            .position(|field| field.object == object && field.name == self.strings[key])
+            .index
+            .find(&self.bindings.fields, object, &self.strings[key])
             .ok_or_else(|| unsupported(pc, "unbound object field"))?;
         if let Some(field) = self.fields[index] {
             return Ok(field);
@@ -223,13 +222,70 @@ pub(super) fn lower(prototype: Prototype<'_>, bindings: &Bindings) -> Result<Pro
     if prototype.upvalues != bindings.upvalues.len() {
         return Err(CompileError::InvalidBindings("upvalue count"));
     }
-    for (index, field) in bindings.fields.iter().enumerate() {
-        if bindings.fields[..index]
-            .iter()
-            .any(|f| f.object == field.object && f.name == field.name)
-        {
-            return Err(CompileError::InvalidBindings("duplicate object field"));
+    let fields = Fields::new(&bindings.fields)?;
+    lower_with(
+        prototype,
+        bindings,
+        &bindings.arguments,
+        &bindings.upvalues,
+        &fields,
+    )
+}
+
+pub(super) struct Fields(Vec<usize>);
+impl Fields {
+    pub(super) fn new(fields: &[Field]) -> Result<Self, CompileError> {
+        // Small schemas benefit from contiguous scans without another allocation.
+        let mut order = Vec::new();
+        if fields.len() < 32 {
+            for (index, field) in fields.iter().enumerate() {
+                if fields[..index]
+                    .iter()
+                    .any(|f| f.object == field.object && f.name == field.name)
+                {
+                    return Err(CompileError::InvalidBindings("duplicate object field"));
+                }
+            }
+        } else {
+            order.extend(0..fields.len());
+            order.sort_unstable_by(|&a, &b| {
+                (fields[a].object, &fields[a].name).cmp(&(fields[b].object, &fields[b].name))
+            });
+            if order.windows(2).any(|pair| {
+                fields[pair[0]].object == fields[pair[1]].object
+                    && fields[pair[0]].name == fields[pair[1]].name
+            }) {
+                return Err(CompileError::InvalidBindings("duplicate object field"));
+            }
         }
+        Ok(Self(order))
+    }
+
+    fn find(&self, fields: &[Field], object: u32, name: &[u8]) -> Option<usize> {
+        if self.0.is_empty() {
+            fields
+                .iter()
+                .position(|field| field.object == object && field.name.as_ref() == name)
+        } else {
+            self.0
+                .binary_search_by(|&index| {
+                    (fields[index].object, fields[index].name.as_ref()).cmp(&(object, name))
+                })
+                .ok()
+                .map(|index| self.0[index])
+        }
+    }
+}
+
+pub(super) fn lower_with(
+    prototype: Prototype<'_>,
+    bindings: &Bindings,
+    arguments: &[Binding],
+    captures: &[Binding],
+    fields: &Fields,
+) -> Result<Program, CompileError> {
+    if prototype.upvalues != captures.len() {
+        return Err(CompileError::InvalidBindings("upvalue count"));
     }
     let cells = bindings
         .cells
@@ -241,6 +297,7 @@ pub(super) fn lower(prototype: Prototype<'_>, bindings: &Bindings) -> Result<Pro
         .collect();
     let mut builder = Builder {
         bindings,
+        index: fields,
         strings: Vec::new(),
         cells,
         fields: vec![None; bindings.fields.len()],
@@ -251,8 +308,7 @@ pub(super) fn lower(prototype: Prototype<'_>, bindings: &Bindings) -> Result<Pro
         .into_iter()
         .map(|v| builder.literal(v))
         .collect();
-    let upvalues = bindings
-        .upvalues
+    let upvalues = captures
         .iter()
         .map(|v| builder.binding(v))
         .collect::<Result<Vec<_>, _>>()?;
@@ -260,7 +316,7 @@ pub(super) fn lower(prototype: Prototype<'_>, bindings: &Bindings) -> Result<Pro
     // Lua 5.1 clears non-parameter registers on entry and can omit LOADNIL.
     let mut first = vec![Symbol::Constant(Value::Nil); prototype.registers];
     for (index, symbol) in first.iter_mut().take(prototype.parameters).enumerate() {
-        let source = match bindings.arguments.get(index) {
+        let source = match arguments.get(index) {
             Some(v) => builder.binding(v)?,
             None => Source::Value(Value::Nil),
         };

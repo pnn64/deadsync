@@ -321,16 +321,19 @@ impl fmt::Debug for Program {
 
 /// Compile a Lua closure using a validated native schema.
 pub fn compile(function: &Function, bindings: &Bindings) -> Result<Program, CompileError> {
+    compile_bytecode(&dump(function)?, bindings)
+}
+
+fn dump(function: &Function) -> Result<Vec<u8>, CompileError> {
     if function.environment().is_none() {
         return Err(CompileError::Unsupported {
             pc: 0,
             reason: "native closure",
         });
     }
-    let bytes = function
+    function
         .try_dump(false)
-        .map_err(|error| CompileError::Dump(error.to_string()))?;
-    compile_bytecode(&bytes, bindings)
+        .map_err(|error| CompileError::Dump(error.to_string()))
 }
 
 /// Safely decode and compile a Lua 5.1 dump. These bytes are never loaded into
@@ -338,6 +341,53 @@ pub fn compile(function: &Function, bindings: &Bindings) -> Result<Program, Comp
 /// opcodes and noncanonical constants are rejected.
 pub fn compile_bytecode(bytes: &[u8], bindings: &Bindings) -> Result<Program, CompileError> {
     compile::lower(decode::decode(bytes)?, bindings)
+}
+
+/// A reusable, borrowed field schema for compiling related callbacks.
+///
+/// Object fields are validated once. Larger schemas use a sorted index instead
+/// of repeating linear field searches. Cells and environment come from this
+/// schema; each call supplies its own arguments and captures. Programs own all
+/// resulting code/data and do not borrow this compiler or retain Lua handles.
+pub struct Compiler<'a> {
+    bindings: &'a Bindings,
+    fields: compile::Fields,
+}
+
+impl<'a> Compiler<'a> {
+    /// Reject duplicate object fields without executing authored code.
+    pub fn new(bindings: &'a Bindings) -> Result<Self, CompileError> {
+        Ok(Self {
+            bindings,
+            fields: compile::Fields::new(&bindings.fields)?,
+        })
+    }
+
+    /// Compile using these argument/capture bindings in upvalue index order.
+    pub fn compile(
+        &self,
+        function: &Function,
+        arguments: &[Binding],
+        upvalues: &[Binding],
+    ) -> Result<Program, CompileError> {
+        self.compile_bytecode(&dump(function)?, arguments, upvalues)
+    }
+
+    /// Compile a checked Lua 5.1 dump against the same immutable field schema.
+    pub fn compile_bytecode(
+        &self,
+        bytes: &[u8],
+        arguments: &[Binding],
+        upvalues: &[Binding],
+    ) -> Result<Program, CompileError> {
+        compile::lower_with(
+            decode::decode(bytes)?,
+            self.bindings,
+            arguments,
+            upvalues,
+            &self.fields,
+        )
+    }
 }
 
 impl Program {

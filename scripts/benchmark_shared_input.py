@@ -36,7 +36,7 @@ def main():
     paths += [Path(__file__).resolve(), root / "crates/deadlib-lua/examples/grouped_program.rs",
               root / "crates/deadsync-song-lua/examples/input_frames.rs",
               root / "crates/deadsync-song-lua/examples/actor_input.rs",
-              root / "crates/deadsync-song-lua/tests/perf/input_frame_2354.rs",
+              root / "crates/deadsync-song-lua/tests/perf/input_frame_2355.rs",
               root / "crates/deadsync-song-lua/tests/fixtures/actor-input.lua",
               root / "crates/deadsync-song-lua/tests/fixtures/stateful-input.lua"]
     sources = {p.relative_to(root).as_posix(): sha(p) for p in paths}

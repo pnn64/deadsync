@@ -127,6 +127,10 @@ name = "grouped_program"
 required-features = ["lua51"]
 
 [[example]]
+name = "prepared_schema"
+required-features = ["lua51"]
+
+[[example]]
 name = "serde"
 required-features = ["serde"]
 

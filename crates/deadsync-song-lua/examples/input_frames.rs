@@ -1,6 +1,6 @@
 //! Paired production/frozen frame construction; no Lua execution in the timer.
 use std::hint::black_box;
-#[path = "../tests/perf/input_frame_2354.rs"]
+#[path = "../tests/perf/input_frame_2355.rs"]
 mod before;
 #[path = "../src/input.rs"]
 mod input;

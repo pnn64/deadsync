@@ -1086,6 +1086,15 @@ impl SongLuaLiveScene {
         crate::actor_input::compile(&self.lua, &self.actors, &self.states, &self.tracked)
     }
 
+    /// Snapshot input and authored-root update callbacks into one native unit.
+    /// Captured scalar tables are shared across both callback kinds. This owner
+    /// is independent of later live-scene lifecycle work; it does not replace
+    /// the scene's host updates, queued commands, drawing or foreground timing.
+    pub fn compile_actor_interactions(&self) -> Option<crate::SongLuaCompiledActorInteractions> {
+        if self.ended { return None; }
+        crate::actor_input::update::compile(&self.lua, &self.root, &self.actors, &self.states, &self.tracked)
+    }
+
     /// Independent ModsGroup timer inputs, observed before the next screen update.
     #[cfg(feature = "test-support")]
     pub fn set_option_clock_deltas(&mut self, deltas: [f32; LUA_PLAYERS + 1]) {

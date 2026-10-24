@@ -48,6 +48,97 @@ struct Row {
 }
 
 #[test]
+fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_storage() {
+    for count in [4, 31, 32, 65, 256] {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let (mut ordinary, mut prepared) = {
+            let lua = Lua::new();
+            lua.set_app_data(Dropped(dropped.clone()));
+            let callback:Function=lua.load("local t={held=false};return function(e)t.held=not t.held;return e['\\255\\000value'] end").eval().unwrap();
+            let mut bindings = Bindings {
+                arguments: vec![Binding::Object(0)],
+                upvalues: vec![Binding::Object(2)],
+                cells: vec![Cell::Boolean(false)],
+                fields: vec![
+                    property(2, "held", 0),
+                    Field {
+                        object: 0,
+                        name: Box::from(&b"\xff\0value"[..]),
+                        value: FieldValue::Value(Binding::Input {
+                            slot: 0,
+                            types: Types::NUMBER,
+                        }),
+                    },
+                ],
+                ..Bindings::default()
+            };
+            for index in bindings.fields.len()..count {
+                bindings.fields.push(Field {
+                    object: index as u32,
+                    name: format!("unused{index}").into_bytes().into_boxed_slice(),
+                    value: FieldValue::Value(Binding::Literal(program::Literal::Nil)),
+                });
+            }
+            bindings.fields.rotate_left(count / 2);
+            let bytes = callback.dump(false);
+            let normal = program::compile(&callback, &bindings).unwrap();
+            let compiler = program::Compiler::new(&bindings).unwrap();
+            let current = compiler
+                .compile_bytecode(&bytes, &bindings.arguments, &bindings.upvalues)
+                .unwrap();
+            assert_eq!(
+                compiler
+                    .compile(&callback, &bindings.arguments, &[])
+                    .unwrap_err()
+                    .to_string(),
+                program::compile(
+                    &callback,
+                    &Bindings {
+                        upvalues: vec![],
+                        ..bindings.clone()
+                    }
+                )
+                .unwrap_err()
+                .to_string()
+            );
+            drop(compiler);
+            bindings.fields.push(bindings.fields[0].clone());
+            assert!(matches!(
+                program::Compiler::new(&bindings),
+                Err(program::CompileError::InvalidBindings(
+                    "duplicate object field"
+                ))
+            ));
+            assert!(matches!(
+                program::compile(&callback, &bindings),
+                Err(program::CompileError::InvalidBindings(
+                    "duplicate object field"
+                ))
+            ));
+            (normal.machine(), current.machine())
+        };
+        assert!(dropped.load(Ordering::SeqCst));
+        for bits in [
+            0,
+            1,
+            (-0.0f64).to_bits(),
+            f64::INFINITY.to_bits(),
+            0x7ff8_0000_0000_1234,
+        ] {
+            let inputs = [Datum::Number(f64::from_bits(bits))];
+            let a = ordinary.run(&inputs, |_, _| panic!("no actions")).unwrap();
+            let b = prepared.run(&inputs, |_, _| panic!("no actions")).unwrap();
+            let (Datum::Number(a), Datum::Number(b)) = (a, b) else {
+                panic!("number result")
+            };
+            assert_eq!(a.to_bits(), bits);
+            assert_eq!(a.to_bits(), b.to_bits());
+            assert_eq!(ordinary.cell(0), prepared.cell(0));
+        }
+    }
+}
+
+#[test]
 fn grouped_callbacks_share_actual_cells_and_survive_loading_vm_destruction() {
     let dropped = Arc::new(AtomicBool::new(false));
     let (mut group, expected) = {

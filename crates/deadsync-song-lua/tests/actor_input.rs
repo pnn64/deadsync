@@ -227,8 +227,13 @@ fn copied_setter_rejects_custom_assignment_on_its_actual_mutation_target() {
 }
 
 fn scalars(native: &SongLuaCompiledActorInputs) -> Vec<(usize, Vec<u8>, u64)> {
-    let mut values = native
-        .scalar_states()
+    scalar_values(native.scalar_states())
+}
+
+fn scalar_values<'a>(
+    rows: impl Iterator<Item = (usize, &'a [u8], SongLuaInputScalar)>,
+) -> Vec<(usize, Vec<u8>, u64)> {
+    let mut values = rows
         .map(|(table, key, value)| {
             (
                 table,
@@ -242,6 +247,180 @@ fn scalars(native: &SongLuaCompiledActorInputs) -> Vec<(usize, Vec<u8>, u64)> {
         .collect::<Vec<_>>();
     values.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
     values
+}
+
+#[test]
+fn input_and_update_callbacks_share_timers_rates_hibernation_and_postorder_without_a_vm() {
+    for (rate, child_rate, sleep) in [
+        ("1.25", "0.5", "0.0625"),
+        ("0.25", "2", "0"),
+        ("0.3", "0.7", "0.2"),
+    ] {
+        let source = include_str!("fixtures/timed-input.lua")
+            .replace("SetUpdateRate(1.25)", &format!("SetUpdateRate({rate})"))
+            .replace(
+                "SetUpdateRate(0.5)",
+                &format!("SetUpdateRate({child_rate})"),
+            )
+            .replace("hibernate(0.0625)", &format!("hibernate({sleep})"));
+        let (mut scene, _directory) = scene(&source);
+        let mut native = scene
+            .compile_actor_interactions()
+            .expect("input and update unit");
+        let mut expected = Vec::new();
+        let active = |snapshot: &SongLuaCompiledActorInteractions| {
+            snapshot.scalar_states().any(|(_, key, value)| {
+                key == b"active" && value == SongLuaInputScalar::Boolean(true)
+            })
+        };
+        for index in 0..90 {
+            let input = stateful_event(index);
+            let (handled, output) = scene.input(&input).unwrap();
+            assert!(output.errors.is_empty());
+            let snapshot = scene.compile_actor_interactions().unwrap();
+            let was_active = active(&snapshot);
+            expected.push((
+                Some(handled),
+                0.0,
+                scene.states().to_vec(),
+                scalar_values(snapshot.scalar_states()),
+                match input.game_button {
+                    "Right" => vec![SongLuaActorInputAction::Visible {
+                        actor: 2,
+                        visible: true,
+                    }],
+                    "Left" => vec![SongLuaActorInputAction::Visible {
+                        actor: 2,
+                        visible: false,
+                    }],
+                    _ => vec![],
+                },
+            ));
+            let delta = [0.03125, 1.0 / 60.0, 0.0, -0.0, 0.125, 0.001][index % 6];
+            let output = scene
+                .update(SongLuaLiveFrame {
+                    delta_seconds: delta,
+                    beat: index as f64 / 30.0,
+                    music_seconds: index as f64 / 60.0,
+                    screen_seconds: index as f64 / 60.0,
+                    ..Default::default()
+                })
+                .unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            let snapshot = scene.compile_actor_interactions().unwrap();
+            expected.push((
+                None,
+                delta,
+                scene.states().to_vec(),
+                scalar_values(snapshot.scalar_states()),
+                if was_active && !active(&snapshot) {
+                    vec![SongLuaActorInputAction::Visible {
+                        actor: 2,
+                        visible: false,
+                    }]
+                } else {
+                    vec![]
+                },
+            ));
+        }
+        drop(scene);
+        for (step, (handled, delta, states, cells, expected_actions)) in
+            expected.into_iter().enumerate()
+        {
+            let mut actions = Vec::new();
+            if let Some(handled) = handled {
+                assert_eq!(
+                    native.input_with_actions(&stateful_event(step / 2), |a| actions.push(a)),
+                    handled
+                );
+            } else {
+                native.update_with_actions(delta, |a| actions.push(a));
+            }
+            assert_eq!(
+                actions, expected_actions,
+                "ordered writes after step {step}"
+            );
+            assert_eq!(native.states(), states, "authored states after step {step}");
+            assert_eq!(
+                scalar_values(native.scalar_states()),
+                cells,
+                "scalar bits after step {step}"
+            );
+        }
+    }
+}
+
+#[test]
+fn update_unit_rejects_unlowered_queues_effects_globals_and_callback_changes() {
+    let template = include_str!("fixtures/timed-input.lua");
+    for statement in ["self:linear(10):x(100)", "self:rainbow()", "self:spin()"] {
+        let source = template.replace(
+            "self:SetUpdateRate(1.25)",
+            &format!("self:SetUpdateRate(1.25);{statement}"),
+        );
+        let (scene, _directory) = scene(&source);
+        assert!(scene.compile_actor_interactions().is_none(), "{statement}");
+    }
+    for statement in [
+        "shared.root_delta = _G.changed",
+        "if delta > 0 then self:SetUpdateFunction(nil) end",
+        "lamp:zoom(delta)",
+    ] {
+        let source = template.replace("shared.root_delta = delta", statement);
+        let (scene, _directory) = scene(&source);
+        assert!(scene.compile_actor_interactions().is_none(), "{statement}");
+    }
+}
+
+#[test]
+fn traversal_tables_outside_render_inventory_cannot_alias_mutable_scalar_cells() {
+    let source = r#"return Def.ActorFrame {
+        OnCommand=function(self)
+            local state={__songlua_update_rate=1}
+            local screen=SCREENMAN:GetTopScreen()
+            local prepare
+            prepare=function(event)
+                if event.GameButton=='Install' then
+                    rawset(self,1,state)
+                    self:SetUpdateRate(1)
+                elseif event.GameButton=='Freeze' then
+                    for key in pairs(state) do state[key]=nil end
+                    state.__songlua_update_rate=1
+                    screen:RemoveInputCallback(prepare)
+                end
+                return false
+            end
+            screen:AddInputCallback(prepare)
+            screen:AddInputCallback(function(event)
+                if event.GameButton=='Change' then
+                    state.__songlua_update_rate=state.__songlua_update_rate+1
+                end
+                return false
+            end)
+        end
+    }"#;
+    let (mut scene, _directory) = scene(source);
+    let mut input = event(0);
+    input.game_button = "Install";
+    assert!(scene.input(&input).unwrap().1.errors.is_empty());
+    let output = scene
+        .update(SongLuaLiveFrame {
+            delta_seconds: 0.1,
+            screen_seconds: 0.1,
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    input.game_button = "Freeze";
+    assert!(scene.input(&input).unwrap().1.errors.is_empty());
+    assert!(
+        scene.compile_actor_inputs().is_some(),
+        "input-only copying remains supported"
+    );
+    assert!(
+        scene.compile_actor_interactions().is_none(),
+        "the same table is owned by the timing traversal"
+    );
 }
 
 fn stateful_event(index: usize) -> SongLuaInputEvent<'static> {

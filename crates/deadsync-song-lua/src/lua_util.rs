@@ -13376,6 +13376,53 @@ fn compile_update_jobs(lua: &Lua, root: &Table) -> mlua::Result<SongLuaCompileUp
         .unwrap_or_default())
 }
 
+/// Copy only the authored root's existing traversal, without executing lookups
+/// or rebuilding a plan that authored code may have invalidated.
+pub(crate) fn callback_update_jobs(lua: &Lua, root: &Value) -> Option<Vec<crate::actor_input::update::SourceJob>> {
+    use crate::actor_input::update::SourceJob;
+    use mlua::InspectionValue;
+    let Value::Table(root) = root else { return None; };
+    let plan = lua.app_data_ref::<SongLuaCompileUpdatePlan>()?;
+    let first = plan.jobs.iter().position(|job| matches!(job, SongLuaCompileUpdateJob::Enter { actor, parent: None, .. } if actor == root))?;
+    let last = first + plan.jobs[first..].iter().position(|job| matches!(job, SongLuaCompileUpdateJob::Callback { actor, .. } if actor == root))?;
+    let mut slots = FxHashMap::default();
+    let mut result = Vec::new();
+    for job in &plan.jobs[first..=last] {
+        match job {
+            SongLuaCompileUpdateJob::Enter { actor, parent, delta_source } => {
+                let index = slots.len();
+                if slots.insert(actor.to_pointer() as usize, index).is_some() { return None; }
+                let parent = match parent { Some(parent) => Some(*slots.get(&(parent.to_pointer() as usize))?), None => None };
+                let wrappers = match delta_source {
+                    SongLuaCompileParentDelta::Children => false,
+                    SongLuaCompileParentDelta::Wrappers => true,
+                    SongLuaCompileParentDelta::NoteColumns => return None,
+                };
+                result.push(SourceJob::Enter { actor: actor.clone(), parent, wrappers });
+            }
+            SongLuaCompileUpdateJob::Advance { actor, recurring: false, .. } => {
+                if lua.app_data_ref::<ActorTweenReplays>().is_some_and(|replays| replays.0.get(&(actor.to_pointer() as usize)).is_some_and(|replay| !replay.queue.is_empty())) { return None; }
+                for key in ["__songlua_command_queue", "__songlua_state_spin"] {
+                    match actor.raw_get::<InspectionValue>(key).ok()? {
+                        InspectionValue::Nil => {},
+                        InspectionValue::Table(table) if key == "__songlua_command_queue" && table.raw_len() == 0 => {},
+                        _ => return None,
+                    }
+                }
+                match actor.raw_get::<InspectionValue>("__songlua_state_effect_mode").ok()? {
+                    InspectionValue::Nil => {},
+                    InspectionValue::Bytes(mode) if mode.as_ref() == b"none" => {},
+                    _ => return None,
+                }
+                if actor.raw_get::<Option<bool>>("__songlua_state_rainbow").ok()?.unwrap_or(false) { return None; }
+            }
+            SongLuaCompileUpdateJob::Callback { actor, .. } => result.push(SourceJob::Callback { actor: actor.clone(), slot: *slots.get(&(actor.to_pointer() as usize))? }),
+            _ => return None,
+        }
+    }
+    Some(result)
+}
+
 // mlua Table clones share one auxiliary stack reference. Keep one retained
 // handle per actor across the live registry and update jobs, instead of reading
 // the same Lua object into a new auxiliary reference at every tree traversal.

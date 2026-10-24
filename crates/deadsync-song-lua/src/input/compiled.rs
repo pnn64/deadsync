@@ -99,60 +99,56 @@ pub(crate) fn bindings() -> Bindings {
     }
 }
 
-enum Name {
-    Static(&'static [u8]),
-    Formatted(SmallVec<[u8; 64]>),
-}
-
-impl std::ops::Deref for Name {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        match self {
-            Self::Static(value) => value,
-            Self::Formatted(value) => value,
-        }
-    }
-}
-
 pub(crate) struct Frame {
-    controller: Option<Name>,
-    player: Option<Name>,
+    controller: SmallVec<[u8; 64]>,
+    player: SmallVec<[u8; 64]>,
 }
 
 impl Frame {
     pub fn new(input: &SongLuaInputEvent<'_>) -> Self {
-        fn name(prefix: &[u8], common: [&'static [u8]; 2], index: Option<usize>) -> Option<Name> {
-            index.map(|index| {
-                if let Some(value) = common.get(index) {
-                    return Name::Static(value);
-                }
+        fn name(prefix: &[u8], index: Option<usize>) -> SmallVec<[u8; 64]> {
+            if let Some(index) = index.filter(|&index| index >= 2) {
                 let mut bytes = SmallVec::from_slice(prefix);
                 let mut number = itoa::Buffer::new();
                 bytes.extend_from_slice(number.format(index + 1).as_bytes());
-                Name::Formatted(bytes)
-            })
+                bytes
+            } else {
+                SmallVec::new()
+            }
         }
         Self {
-            controller: name(
-                b"GameController_",
-                [b"GameController_1", b"GameController_2"],
-                input.controller,
-            ),
-            player: name(
-                b"PlayerNumber_P",
-                [b"PlayerNumber_P1", b"PlayerNumber_P2"],
-                input.player,
-            ),
+            controller: name(b"GameController_", input.controller),
+            player: name(b"PlayerNumber_P", input.player),
         }
     }
 
     pub fn values<'a>(&'a self, input: &'a SongLuaInputEvent<'_>) -> [Datum<'a>; 13] {
+        fn name<'a>(
+            index: Option<usize>,
+            common: [&'static [u8]; 2],
+            formatted: &'a [u8],
+        ) -> Datum<'a> {
+            match index {
+                None => Datum::Nil,
+                Some(0) => Datum::Bytes(common[0]),
+                Some(1) => Datum::Bytes(common[1]),
+                Some(_) => Datum::Bytes(formatted),
+            }
+        }
         [
             Datum::Bytes(input.button.as_bytes()),
             Datum::Bytes(input.game_button.as_bytes()),
             Datum::Bytes(input.kind.native_name().as_bytes()),
-            self.controller.as_deref().map_or(Datum::Nil, Datum::Bytes),
-            self.player.as_deref().map_or(Datum::Nil, Datum::Bytes),
+            name(
+                input.controller,
+                [b"GameController_1", b"GameController_2"],
+                &self.controller,
+            ),
+            name(
+                input.player,
+                [b"PlayerNumber_P1", b"PlayerNumber_P2"],
+                &self.player,
+            ),
             Datum::Bytes(input.device.as_bytes()),
             Datum::Bytes(input.device_button.as_bytes()),
             Datum::Number(f64::from(input.level)),

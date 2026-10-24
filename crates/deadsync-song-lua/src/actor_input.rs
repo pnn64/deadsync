@@ -4,6 +4,9 @@ use mlua::program::{self, Action, Binding, Datum, Field, FieldValue, Group, Para
 use mlua::{InspectionValue, Lua, Table};
 use rustc_hash::FxHashMap;
 
+pub(crate) mod update;
+pub use update::SongLuaCompiledActorInteractions;
+
 /// An authored native actor write, in callback execution order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SongLuaActorInputAction {
@@ -28,6 +31,7 @@ pub enum SongLuaInputScalar {
 
 pub struct SongLuaCompiledActorInputs {
     callbacks: Group,
+    input_count: usize,
     scalar_fields: Box<[(usize, Box<[u8]>)]>,
     states: Box<[SongLuaOverlayState]>,
     overlay_count: usize,
@@ -49,25 +53,32 @@ impl SongLuaCompiledActorInputs {
     ) -> bool {
         let frame = crate::input::compiled::Frame::new(input);
         let values = frame.values(input);
-        for index in 0..self.callbacks.len() {
-            let handled = self
-                .callbacks
-                .run(index, &values, |tag, args| {
-                    let Some(Datum::Boolean(visible)) = args.get(1) else {
-                        unreachable!("verified visible(boolean) action")
-                    };
-                    let actor = tag as usize;
-                    self.states[actor].visible = visible;
-                    observe(SongLuaActorInputAction::Visible { actor, visible });
-                })
-                .expect("input registry index")
-                .expect("complete typed input frame")
-                .is_truthy();
-            if handled {
+        for index in 0..self.input_count {
+            if self.run(index, &values, &mut observe) {
                 return true;
             }
         }
         false
+    }
+
+    fn run(
+        &mut self,
+        index: usize,
+        values: &[Datum<'_>],
+        mut observe: impl FnMut(SongLuaActorInputAction),
+    ) -> bool {
+        self.callbacks
+            .run(index, values, |tag, args| {
+                let Some(Datum::Boolean(visible)) = args.get(1) else {
+                    unreachable!("verified visible(boolean) action")
+                };
+                let actor = tag as usize;
+                self.states[actor].visible = visible;
+                observe(SongLuaActorInputAction::Visible { actor, visible });
+            })
+            .expect("input registry index")
+            .expect("complete typed input frame")
+            .is_truthy()
     }
 
     /// Overlay states, using the live scene's original overlay indices.
@@ -121,10 +132,23 @@ pub(crate) fn compile(
     states: &[SongLuaOverlayState],
     tracked: &[(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)],
 ) -> Option<SongLuaCompiledActorInputs> {
+    compile_with_updates(lua, actors, states, tracked, &[], &[])
+}
+
+fn compile_with_updates(
+    lua: &Lua,
+    actors: &[Table],
+    states: &[SongLuaOverlayState],
+    tracked: &[(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)],
+    updates: &[(mlua::Function, usize)],
+    traversal: &[update::SourceJob],
+) -> Option<SongLuaCompiledActorInputs> {
     if !crate::lua_util::can_compile_actor_input(lua) {
         return None;
     }
-    let callbacks = crate::input::functions(lua)?;
+    let mut callbacks = crate::input::functions(lua)?;
+    let input_count = callbacks.len();
+    callbacks.extend(updates.iter().map(|(function, _)| function.clone()));
     let tables = actors
         .iter()
         .chain(tracked.iter().map(|(_, table, _)| table))
@@ -144,7 +168,7 @@ pub(crate) fn compile(
     let first_state_object = u32::try_from(tables.len()).ok()?.checked_add(2)?;
     let mut state_ids = FxHashMap::<usize, u32>::default();
     let mut scalar_fields = Vec::new();
-    let mut pending = Vec::new();
+    let mut pending = updates.iter().map(|(_, actor)| *actor).collect::<Vec<_>>();
     let mut captures = Vec::with_capacity(callbacks.len());
     for callback in &callbacks {
         let mut upvalues = Vec::new();
@@ -159,6 +183,12 @@ pub(crate) fn compile(
                 let object = if let Some(&index) = indices.get(&pointer) {
                     pending.push(index);
                     index as u32 + 2
+                } else if traversal.iter().any(|job| matches!(job, update::SourceJob::Enter { actor, .. } if actor.to_pointer() as usize == pointer)) {
+                    // Timing fields belong to the frozen traversal. A table
+                    // outside the render inventory must not enter a second,
+                    // mutable scalar store through a captured alias.
+                    supported = false;
+                    return Ok(());
                 } else if let Some(&object) = state_ids.get(&pointer) {
                     object
                 } else {
@@ -256,12 +286,26 @@ pub(crate) fn compile(
     }
     // Reuse the complete schema. Only each callback's capture vector changes.
     let mut programs = Vec::with_capacity(callbacks.len());
-    for (callback, upvalues) in callbacks.iter().zip(captures) {
-        bindings.upvalues = upvalues;
-        programs.push(program::compile(callback, &bindings).ok()?);
+    let compiler = program::Compiler::new(&bindings).ok()?;
+    for (index, (callback, upvalues)) in callbacks.iter().zip(captures).enumerate() {
+        let update_arguments;
+        let arguments = if index < input_count {
+            &bindings.arguments[..]
+        } else {
+            update_arguments = [
+                Binding::Object(updates[index - input_count].1 as u32 + 2),
+                Binding::Input {
+                    slot: 0,
+                    types: Types::NUMBER,
+                },
+            ];
+            &update_arguments[..]
+        };
+        programs.push(compiler.compile(callback, arguments, &upvalues).ok()?);
     }
     Some(SongLuaCompiledActorInputs {
         callbacks: Group::new(programs).ok()?,
+        input_count,
         scalar_fields: scalar_fields.into_boxed_slice(),
         states: states
             .iter()
