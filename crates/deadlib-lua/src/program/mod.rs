@@ -318,6 +318,7 @@ struct Code {
     cells: Box<[Value]>,
     parameters: Box<[Source]>,
     registers: usize,
+    clear_registers: bool,
 }
 
 /// Immutable compiled callback. It contains Rust-owned code/data and no Lua
@@ -483,6 +484,24 @@ impl Machine {
             &mut self.registers,
             inputs,
             emit,
+            |value| datum(value, &self.program.0, inputs),
+        )
+    }
+
+    /// Execute with the same effects and input checks as [`Self::run`], returning
+    /// Lua truthiness directly instead of a [`Datum`].
+    pub fn run_truthy(
+        &mut self,
+        inputs: &[Datum<'_>],
+        emit: impl FnMut(u32, Arguments<'_>),
+    ) -> Result<bool, RunError> {
+        execute(
+            &self.program.0,
+            &mut self.cells,
+            &mut self.registers,
+            inputs,
+            emit,
+            Value::truthy,
         )
     }
 }
@@ -554,6 +573,26 @@ impl Group {
             &mut self.registers[..program.0.registers],
             inputs,
             emit,
+            |value| datum(value, &program.0, inputs),
+        ))
+    }
+
+    /// Execute one program and return Lua truthiness without converting its
+    /// result to a [`Datum`]. Index checks, effects and input errors match [`Self::run`].
+    pub fn run_truthy(
+        &mut self,
+        index: usize,
+        inputs: &[Datum<'_>],
+        emit: impl FnMut(u32, Arguments<'_>),
+    ) -> Option<Result<bool, RunError>> {
+        let program = self.programs.get(index)?;
+        Some(execute(
+            &program.0,
+            &mut self.cells,
+            &mut self.registers[..program.0.registers],
+            inputs,
+            emit,
+            Value::truthy,
         ))
     }
 
@@ -589,14 +628,19 @@ impl Group {
     }
 }
 
-fn execute<'a>(
+// Keep the result projection inside the interpreter so predicates return bool
+// directly, without carrying an intermediate Value/Datum across this boundary.
+fn execute<'a, R>(
     code: &'a Code,
     cells: &mut [Value],
     registers: &mut [Value],
     inputs: &'a [Datum<'a>],
     mut emit: impl FnMut(u32, Arguments<'_>),
-) -> Result<Datum<'a>, RunError> {
-    registers.fill(Value::Nil);
+    finish: impl FnOnce(Value) -> R,
+) -> Result<R, RunError> {
+    if code.clear_registers {
+        registers.fill(Value::Nil);
+    }
     for (dst, source) in code.parameters.iter().enumerate() {
         registers[dst] = read(*source, cells, inputs)?;
     }
@@ -692,14 +736,14 @@ fn execute<'a>(
                     },
                 );
                 if tail {
-                    return Ok(datum(result, code, inputs));
+                    return Ok(finish(result));
                 }
                 if let Some(dst) = dst {
                     registers[dst] = result;
                 }
             }
             Op::Return(source) => {
-                return Ok(datum(source.map_or(Value::Nil, |i| registers[i]), code, inputs));
+                return Ok(finish(source.map_or(Value::Nil, |i| registers[i])));
             }
         }
     }

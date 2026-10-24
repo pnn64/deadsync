@@ -81,7 +81,7 @@ impl SongLuaCompiledActorInputs {
         mut observe: impl FnMut(SongLuaActorInputAction),
     ) -> bool {
         self.callbacks
-            .run(index, values, |tag, args| {
+            .run_truthy(index, values, |tag, args| {
                 let actor = (tag >> 2) as usize;
                 match tag & 3 {
                     0 => {
@@ -115,7 +115,6 @@ impl SongLuaCompiledActorInputs {
             })
             .expect("input registry index")
             .expect("complete typed input frame")
-            .is_truthy()
     }
 
     /// Overlay states, using the live scene's original overlay indices.

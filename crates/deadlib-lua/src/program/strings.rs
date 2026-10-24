@@ -75,6 +75,7 @@ pub(super) fn share(mut programs: Vec<Program>) -> Vec<Program> {
                 cells: code.cells.clone(),
                 parameters: code.parameters.clone(),
                 registers: code.registers,
+                clear_registers: code.clear_registers,
                 strings: Strings::Shared(arena.clone()),
             });
         }

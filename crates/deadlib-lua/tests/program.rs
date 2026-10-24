@@ -1074,6 +1074,115 @@ fn reusable_dumps_keep_byte_state_rebinding_independent_of_the_loading_vm() {
 }
 
 #[test]
+fn truthiness_execution_matches_lua_after_vm_destruction_and_keeps_input_errors() {
+    let closed = Arc::new(AtomicBool::new(false));
+    let (programs, cases) = {
+        let lua = Lua::new();
+        let marker = Dropped(closed.clone());
+        lua.globals()
+            .set(
+                "close_marker",
+                lua.create_function(move |_, ()| {
+                    let _ = &marker;
+                    Ok(())
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let callback: Function = lua.load("return function(e) return e end").eval().unwrap();
+        let truth: Function = lua
+            .load("return function(e) return not not e end")
+            .eval()
+            .unwrap();
+        let cases = [
+            (Datum::Nil, Value::Nil),
+            (Datum::Boolean(false), Value::Boolean(false)),
+            (Datum::Boolean(true), Value::Boolean(true)),
+            (Datum::Number(-0.0), Value::Number(-0.0)),
+            (Datum::Number(f64::NAN), Value::Number(f64::NAN)),
+            (
+                Datum::Bytes(b""),
+                Value::String(lua.create_string(b"").unwrap()),
+            ),
+            (
+                Datum::Bytes(b"\xff\0"),
+                Value::String(lua.create_string(b"\xff\0").unwrap()),
+            ),
+        ]
+        .into_iter()
+        .map(|(input, value)| (input, truth.call::<bool>(value).unwrap()))
+        .collect::<Vec<_>>();
+        let programs = [
+            Binding::Input {
+                slot: 0,
+                types: Types::NIL | Types::BOOLEAN | Types::NUMBER | Types::BYTES,
+            },
+            Binding::Object(42),
+            Binding::Literal(program::Literal::Nil),
+        ]
+        .into_iter()
+        .map(|argument| {
+            program::compile(
+                &callback,
+                &Bindings {
+                    arguments: vec![argument],
+                    ..Bindings::default()
+                },
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+        (programs, cases)
+    };
+    assert!(closed.load(Ordering::SeqCst));
+    let mut machine = programs[0].machine();
+    let mut group = program::Group::new(programs.clone()).unwrap();
+    let mut reference = program::Group::new(programs).unwrap();
+    for _ in 0..3 {
+        for &(input, expected) in &cases {
+            assert_eq!(
+                machine.run_truthy(&[input], |_, _| panic!("no action")),
+                Ok(expected)
+            );
+            assert_eq!(
+                group.run_truthy(0, &[input], |_, _| panic!("no action")),
+                Some(Ok(expected))
+            );
+            assert_eq!(
+                reference
+                    .run(0, &[input], |_, _| panic!("no action"))
+                    .unwrap()
+                    .unwrap()
+                    .is_truthy(),
+                expected
+            );
+            assert_eq!(
+                group.run_truthy(1, &[], |_, _| panic!("no action")),
+                Some(Ok(true))
+            );
+            assert_eq!(
+                group.run_truthy(2, &[], |_, _| panic!("no action")),
+                Some(Ok(false))
+            );
+        }
+    }
+    for (input, expected) in [
+        (&[][..], program::RunError::MissingInput(0)),
+        (&[Datum::Object(1)][..], program::RunError::InputType(0)),
+    ] {
+        assert_eq!(
+            machine.run_truthy(input, |_, _| panic!("no action")),
+            Err(expected)
+        );
+        assert_eq!(
+            group.run_truthy(0, input, |_, _| panic!("no action")),
+            Some(Err(expected))
+        );
+    }
+    assert_eq!(group.run_truthy(3, &[], |_, _| panic!("no action")), None);
+}
+
+#[test]
 fn equal_scalar_values_do_not_merge_distinct_captured_cells() {
     let lua = Lua::new();
     let callback: Function = lua

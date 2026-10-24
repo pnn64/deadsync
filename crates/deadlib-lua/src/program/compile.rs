@@ -180,11 +180,15 @@ impl Builder<'_> {
 fn unsupported(pc: usize, reason: &'static str) -> CompileError {
     CompileError::Unsupported { pc, reason }
 }
-fn reg(symbols: &[Symbol], index: usize, pc: usize) -> Result<Symbol, CompileError> {
+fn reg(clear: &mut bool, symbols: &[Symbol], index: usize, pc: usize) -> Result<Symbol, CompileError> {
     let value = *symbols.get(index).ok_or(CompileError::InvalidChunk)?;
     if value == Symbol::Unknown {
         return Err(unsupported(pc, "unproven register value"));
     }
+    // Every path that can read an implicit entry nil keeps NIL in its type
+    // union. Conservatively retain clearing for all possibly-nil reads,
+    // including values explicitly assigned nil or loaded from nullable inputs.
+    *clear |= value.types().is_some_and(|types| types.0 & Types::NIL.0 != 0);
     Ok(value)
 }
 fn set(symbols: &mut [Symbol], index: usize, value: Symbol) -> Result<(), CompileError> {
@@ -192,6 +196,7 @@ fn set(symbols: &mut [Symbol], index: usize, value: Symbol) -> Result<(), Compil
     Ok(())
 }
 fn rk(
+    clear: &mut bool,
     symbols: &[Symbol],
     constants: &[Value],
     index: usize,
@@ -201,7 +206,7 @@ fn rk(
         let value = *constants.get(index & 255).ok_or(CompileError::InvalidChunk)?;
         Ok((Operand::Value(value), Symbol::Constant(value)))
     } else {
-        Ok((Operand::Register(index), reg(symbols, index, pc)?))
+        Ok((Operand::Register(index), reg(clear, symbols, index, pc)?))
     }
 }
 fn require(symbol: Symbol, types: Types, pc: usize) -> Result<(), CompileError> {
@@ -355,6 +360,7 @@ pub(super) fn lower_with(
     let mut states = vec![None; prototype.code.len()];
     states[0] = Some(first);
     let mut ops = vec![Op::Unreachable; prototype.code.len()];
+    let mut clear_registers = false;
     for (pc, word) in prototype.code.into_iter().enumerate() {
         let opcode = (word & 63) as u8;
         if !matches!(opcode,0..=9|11..=15|18|19|22..=30) {
@@ -370,7 +376,7 @@ pub(super) fn lower_with(
         let mut next = Some(pc + 1);
         ops[pc] = match opcode {
             0 => {
-                let v = reg(&symbols, b, pc)?;
+                let v = reg(&mut clear_registers, &symbols, b, pc)?;
                 set(&mut symbols, a, v)?;
                 Op::Move { dst: a, source: b }
             }
@@ -424,7 +430,7 @@ pub(super) fn lower_with(
                         Symbol::Constant(*constants.get(bx).ok_or(CompileError::InvalidChunk)?),
                     )
                 } else {
-                    (reg(&symbols, b, pc)?, rk(&symbols, &constants, c, pc)?.1)
+                    (reg(&mut clear_registers, &symbols, b, pc)?, rk(&mut clear_registers, &symbols, &constants, c, pc)?.1)
                 };
                 let field = builder.field(object, key, pc)?;
                 set(&mut symbols, a, builder.field_symbol(field))?;
@@ -439,7 +445,7 @@ pub(super) fn lower_with(
                     (
                         *upvalues.get(b).ok_or(CompileError::InvalidChunk)?,
                         Operand::Register(a),
-                        reg(&symbols, a, pc)?,
+                        reg(&mut clear_registers, &symbols, a, pc)?,
                     )
                 } else {
                     let (object, key, source, symbol) = if opcode == 7 {
@@ -450,13 +456,13 @@ pub(super) fn lower_with(
                             Symbol::Object(object),
                             Symbol::Constant(*constants.get(bx).ok_or(CompileError::InvalidChunk)?),
                             Operand::Register(a),
-                            reg(&symbols, a, pc)?,
+                            reg(&mut clear_registers, &symbols, a, pc)?,
                         )
                     } else {
-                        let (source, symbol) = rk(&symbols, &constants, c, pc)?;
+                        let (source, symbol) = rk(&mut clear_registers, &symbols, &constants, c, pc)?;
                         (
-                            reg(&symbols, a, pc)?,
-                            rk(&symbols, &constants, b, pc)?.1,
+                            reg(&mut clear_registers, &symbols, a, pc)?,
+                            rk(&mut clear_registers, &symbols, &constants, b, pc)?.1,
                             source,
                             symbol,
                         )
@@ -468,8 +474,8 @@ pub(super) fn lower_with(
                 Op::Write { cell, source }
             }
             11 => {
-                let receiver = reg(&symbols, b, pc)?;
-                let field = builder.field(receiver, rk(&symbols, &constants, c, pc)?.1, pc)?;
+                let receiver = reg(&mut clear_registers, &symbols, b, pc)?;
+                let field = builder.field(receiver, rk(&mut clear_registers, &symbols, &constants, c, pc)?.1, pc)?;
                 let Resolved::Action(action) = field else {
                     return Err(unsupported(pc, "unbound method"));
                 };
@@ -482,8 +488,8 @@ pub(super) fn lower_with(
                 }
             }
             12..=15 => {
-                let (left, lt) = rk(&symbols, &constants, b, pc)?;
-                let (right, rt) = rk(&symbols, &constants, c, pc)?;
+                let (left, lt) = rk(&mut clear_registers, &symbols, &constants, b, pc)?;
+                let (right, rt) = rk(&mut clear_registers, &symbols, &constants, c, pc)?;
                 require(lt, Types::NUMBER, pc)?;
                 require(rt, Types::NUMBER, pc)?;
                 set(&mut symbols, a, Symbol::Scalar(Types::NUMBER))?;
@@ -495,12 +501,12 @@ pub(super) fn lower_with(
                 }
             }
             18 => {
-                require(reg(&symbols, b, pc)?, Types::NUMBER, pc)?;
+                require(reg(&mut clear_registers, &symbols, b, pc)?, Types::NUMBER, pc)?;
                 set(&mut symbols, a, Symbol::Scalar(Types::NUMBER))?;
                 Op::Neg { dst: a, source: b }
             }
             19 => {
-                reg(&symbols, b, pc)?;
+                reg(&mut clear_registers, &symbols, b, pc)?;
                 set(&mut symbols, a, Symbol::Scalar(Types::BOOLEAN))?;
                 Op::Not { dst: a, source: b }
             }
@@ -515,8 +521,8 @@ pub(super) fn lower_with(
                 if a > 1 {
                     return Err(CompileError::InvalidChunk);
                 }
-                let (left, lt) = rk(&symbols, &constants, b, pc)?;
-                let (right, rt) = rk(&symbols, &constants, c, pc)?;
+                let (left, lt) = rk(&mut clear_registers, &symbols, &constants, b, pc)?;
+                let (right, rt) = rk(&mut clear_registers, &symbols, &constants, c, pc)?;
                 let types = if opcode == 23 {
                     Types::PRIMITIVE
                 } else {
@@ -537,7 +543,7 @@ pub(super) fn lower_with(
                     return Err(CompileError::InvalidChunk);
                 }
                 let source = if opcode == 26 { a } else { b };
-                let value = reg(&symbols, source, pc)?;
+                let value = reg(&mut clear_registers, &symbols, source, pc)?;
                 edge(&mut states, pc, pc + 2, Cow::Borrowed(&symbols))?;
                 if opcode == 27 {
                     set(&mut symbols, a, value)?;
@@ -552,7 +558,7 @@ pub(super) fn lower_with(
                 if b == 0 || (opcode == 28 && !matches!(c, 1 | 2)) {
                     return Err(unsupported(pc, "variable call arity"));
                 }
-                let Symbol::Action(id) = reg(&symbols, a, pc)? else {
+                let Symbol::Action(id) = reg(&mut clear_registers, &symbols, a, pc)? else {
                     return Err(unsupported(pc, "unbound call target"));
                 };
                 let call = &builder.actions[id];
@@ -560,7 +566,7 @@ pub(super) fn lower_with(
                     return Err(unsupported(pc, "action arity"));
                 }
                 for (offset, parameter) in call.parameters.iter().enumerate() {
-                    let symbol = reg(&symbols, a + 1 + offset, pc)?;
+                    let symbol = reg(&mut clear_registers, &symbols, a + 1 + offset, pc)?;
                     match *parameter {
                         Parameter::Type(types) => require(symbol, types, pc)?,
                         Parameter::Object(id) if symbol == Symbol::Object(id) => {}
@@ -599,7 +605,7 @@ pub(super) fn lower_with(
                 }
                 if b > 1 {
                     for index in a..a + b - 1 {
-                        reg(&symbols, index, pc)?;
+                        reg(&mut clear_registers, &symbols, index, pc)?;
                     }
                 }
                 next = None;
@@ -617,5 +623,6 @@ pub(super) fn lower_with(
         cells: builder.cells.into_boxed_slice(),
         parameters: parameters.into_boxed_slice(),
         registers: prototype.registers,
+        clear_registers,
     })))
 }

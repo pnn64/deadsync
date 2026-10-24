@@ -39,11 +39,10 @@ impl SongLuaCompiledInput {
 
     pub(super) fn evaluate_frame(&mut self, values: &[Datum<'_>]) -> bool {
         self.0
-            .run(values, |_, _| {
+            .run_truthy(values, |_, _| {
                 unreachable!("input-only schema has no actions")
             })
             .expect("complete typed input frame")
-            .is_truthy()
     }
 }
 

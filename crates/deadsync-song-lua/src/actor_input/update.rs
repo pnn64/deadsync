@@ -83,7 +83,8 @@ impl SongLuaCompiledActorInteractions {
         delta_seconds: f64,
         mut observe: impl FnMut(SongLuaActorInputAction),
     ) {
-        self.deltas.fill(Delta::default());
+        // The frozen plan enters each parent and slot before any read. Every
+        // Enter overwrites both fields, including paused/hibernating slots.
         for job in &self.jobs {
             match *job {
                 Job::Enter(slot) => {
