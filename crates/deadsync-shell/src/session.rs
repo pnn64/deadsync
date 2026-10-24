@@ -18,6 +18,8 @@ pub struct SessionState<EvaluationPage> {
     pub combo_carry: [u32; MAX_PLAYERS],
     pub gameplay_restart_count: u32,
     pub restart_pending: bool,
+    /// Preferred rate to restore after Practice and its editor options close.
+    pub pre_practice_music_rate: Option<f32>,
     pub course_run: Option<CourseRunState>,
     pub course_stage_eval_pages: Vec<EvaluationPage>,
     pub course_eval_pages: Vec<EvaluationPage>,
@@ -37,6 +39,7 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
             combo_carry,
             gameplay_restart_count: 0,
             restart_pending: false,
+            pre_practice_music_rate: None,
             course_run: None,
             course_stage_eval_pages: Vec::new(),
             course_eval_pages: Vec::new(),
@@ -116,6 +119,7 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
         self.played_stages.clear();
         self.course_individual_stage_indices.clear();
         self.combo_carry = combo_carry;
+        self.pre_practice_music_rate = None;
         self.clear_course_runtime();
         self.last_course_wheel_path = None;
         self.last_course_wheel_difficulty_name = None;
@@ -134,6 +138,7 @@ mod tests {
         assert!(state.session_start_time.is_none());
         assert!(state.played_stages.is_empty());
         assert_eq!(state.gameplay_restart_count, 0);
+        assert!(state.pre_practice_music_rate.is_none());
     }
 
     #[test]
@@ -164,12 +169,14 @@ mod tests {
         let mut state = SessionState::<usize>::new(4, [1, 2]);
         state.session_start_time = Some(Instant::now());
         state.course_stage_eval_pages.push(1);
+        state.pre_practice_music_rate = Some(1.25);
         state.last_course_wheel_path = Some(PathBuf::from("course.crs"));
         state.last_course_wheel_difficulty_name = Some("Hard".to_string());
         state.reset_for_menu([8, 13]);
         assert!(state.session_start_time.is_none());
         assert_eq!(state.combo_carry, [8, 13]);
         assert!(state.course_stage_eval_pages.is_empty());
+        assert!(state.pre_practice_music_rate.is_none());
         assert!(state.last_course_wheel_path.is_none());
         assert!(state.last_course_wheel_difficulty_name.is_none());
     }
