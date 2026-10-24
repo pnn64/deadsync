@@ -99,6 +99,28 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
 ```
 
+## Test fixtures
+
+Test fixtures live in [deadsync-tests](https://github.com/pnn64/deadsync-tests),
+mounted as a Git submodule at `tests/fixtures`. Initialize the pinned fixture
+revision before compiling or running tests, examples, or benchmarks (Python
+3.11 or newer is required to restore split archives):
+
+```sh
+git submodule update --init tests/fixtures
+python scripts/prepare_test_fixtures.py
+```
+
+Normal game builds do not need the fixture submodule.
+
+Archives over 50 MB are stored as parts of at most 48,000,000 bytes. The Python
+command verifies each part and restores the exact archives locally; restored
+files are ignored by Git. Run both commands again after fixture updates.
+
+When updating fixtures, commit and push changes in `tests/fixtures` first, then
+commit the updated submodule pointer in this repository. Test runners and fixture
+maintenance scripts stay in this repository; their existing paths still work.
+
 ## Full song Lua tests
 
 Run a full song Lua fixture with live progress and a final comparison tally:
@@ -109,7 +131,7 @@ cargo test --test full_song_lua -- --list
 ```
 
 Fixtures are consolidated under `tests/fixtures/full_song_lua` and compressed at
-zstd level 22. See its [fixture guide](tests/fixtures/full_song_lua/README.md) for
+zstd level 22. See its [fixture guide](https://github.com/pnn64/deadsync-tests/blob/main/full_song_lua/README.md) for
 selection, corpus runs, and reference maintenance.
 
 ## Getting Started
