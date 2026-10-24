@@ -821,24 +821,28 @@ pub fn leaderboard_pane(
 }
 
 #[must_use]
-pub fn arrowcloud_hard_ex_leaderboard_pane(
+pub fn arrowcloud_leaderboard_pane(
+    kind: ArrowCloudPaneKind,
     entries: Vec<LeaderboardEntry>,
     personalized: bool,
 ) -> LeaderboardPane {
     LeaderboardPane {
         name: "ArrowCloud".to_string(),
         entries,
-        is_ex: false,
+        is_ex: kind == ArrowCloudPaneKind::Ex,
         disabled: false,
         personalized,
-        arrowcloud_kind: Some(ArrowCloudPaneKind::HardEx),
+        arrowcloud_kind: Some(kind),
     }
 }
 
 #[inline(always)]
 #[must_use]
-pub fn arrowcloud_empty_hard_ex_leaderboard_pane() -> LeaderboardPane {
-    arrowcloud_hard_ex_leaderboard_pane(Vec::new(), false)
+pub fn arrowcloud_hard_ex_leaderboard_pane(
+    entries: Vec<LeaderboardEntry>,
+    personalized: bool,
+) -> LeaderboardPane {
+    arrowcloud_leaderboard_pane(ArrowCloudPaneKind::HardEx, entries, personalized)
 }
 
 #[derive(Debug, Clone)]

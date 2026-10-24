@@ -1,5 +1,6 @@
 use super::*;
 use crate::{paired_bench, perf};
+use deadsync_score::arrowcloud_target_user_ids;
 use std::hint::black_box;
 
 mod original {
