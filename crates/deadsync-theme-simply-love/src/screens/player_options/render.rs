@@ -287,7 +287,6 @@ pub fn push_actors(
     let total_rows = state.pane().row_map.len();
     let row_titles = state.row_titles[state.current_pane.index()].titles.as_ref();
     debug_assert_eq!(row_titles.len(), total_rows);
-    let frame_h = ROW_HEIGHT;
     let (fallback_y0, fallback_row_step) = row_layout_params();
     let row_alpha_cutoff: f32 = 0.001;
     // Make row frame LEFT and WIDTH exactly match the help box.
@@ -336,6 +335,7 @@ pub fn push_actors(
             .pane()
             .row_map
             .row(state.pane().row_map.id_at(item_idx));
+        let frame_h = ROW_HEIGHT + (row_layout_slots(row.id) - 1) as f32 * fallback_row_step;
         let active_bg = deadlib_present::color::rgba_hex("#333333");
         let inactive_bg_base = deadlib_present::color::rgba_hex("#071016");
         let bg_color = if is_active {
@@ -733,7 +733,8 @@ pub(super) fn draw_multi_select_underlines(
 ) {
     let line_thickness = underline_thickness();
     let offset = underline_offset();
-    let underline_base_y = text_h.mul_add(0.5, current_row_y) + offset;
+    let scale = inline_choice_scale(row);
+    let underline_base_y = (text_h * scale).mul_add(0.5, current_row_y) + offset;
     let underline_y = |player_idx: usize| {
         if active[P1] && active[P2] {
             (player_idx as f32).mul_add(line_thickness + 1.0, underline_base_y)
@@ -749,8 +750,11 @@ pub(super) fn draw_multi_select_underlines(
         let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
         line_color[3] *= a;
         while let Some(idx) = take_active_choice(&mut mask) {
-            if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
-                let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+            if x_offsets.get(idx).is_some() {
+                let [offset_x, offset_y] = inline_choice_position(row, idx);
+                let sel_x = choice_left_x + offset_x;
+                let underline_y = underline_y + offset_y;
+                let draw_w = widths.get(idx).copied().unwrap_or(40.0) * scale;
                 let underline_w = draw_w.ceil();
                 actors.push(act!(quad:
                     align(0.0, 0.5):
@@ -895,7 +899,7 @@ pub(super) fn draw_inline_choices(
     show_arcade_next_row: bool,
     choice_inner_left: f32,
 ) {
-    let value_zoom = INLINE_CHOICE_VALUE_ZOOM;
+    let value_zoom = INLINE_CHOICE_VALUE_ZOOM * inline_choice_scale(rc.row);
     let next_row_item = show_arcade_next_row
         .then(|| arcade_next_row_layout(rc.fc.state, rc.item_idx, rc.fc.asset_manager));
     debug_assert!(
@@ -962,16 +966,15 @@ pub(super) fn draw_inline_choices(
         ));
     }
     for (idx, text) in rc.row.choices.iter().enumerate() {
-        let x = x_offsets
-            .get(idx)
-            .map_or(choice_inner_left, |offset| choice_inner_left + offset);
+        let [offset_x, offset_y] = inline_choice_position(rc.row, idx);
+        let x = choice_inner_left + offset_x;
         let color_rgba = if rc.is_active {
             [1.0, 1.0, 1.0, rc.a]
         } else {
             rc.sl_gray
         };
         actors.push(act!(text: font("miso"): settext(text.clone()):
-            align(0.0, 0.5): xy(x, rc.current_row_y): zoom(value_zoom):
+            align(0.0, 0.5): xy(x, rc.current_row_y + offset_y): zoom(value_zoom):
             diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
             z(Z_ROW_FOREGROUND)
         ));

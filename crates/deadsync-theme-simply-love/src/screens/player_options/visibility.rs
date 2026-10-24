@@ -812,15 +812,17 @@ pub(super) fn is_row_visible(row_map: &RowMap, row_idx: usize, visibility: RowVi
         .is_some_and(|row| row_visible_with_flags(row.id, visibility))
 }
 
-pub(super) fn count_visible_rows(row_map: &RowMap, visibility: RowVisibility) -> usize {
+pub(super) fn count_visible_row_slots(row_map: &RowMap, visibility: RowVisibility) -> usize {
     row_map
         .display_order()
         .iter()
         .filter_map(|&id| row_map.get(id))
         .filter(|row| row_visible_with_flags(row.id, visibility))
-        .count()
+        .map(|row| row_layout_slots(row.id))
+        .sum()
 }
 
+/// The first layout slot occupied by a visible row (wrapped rows occupy two).
 pub(super) fn row_to_visible_index(
     row_map: &RowMap,
     row_idx: usize,
@@ -835,7 +837,7 @@ pub(super) fn row_to_visible_index(
     let mut pos = 0usize;
     for i in 0..row_idx {
         if is_row_visible(row_map, i, visibility) {
-            pos += 1;
+            pos += row_layout_slots(row_map.id_at(i));
         }
     }
     Some(pos)
@@ -925,7 +927,7 @@ pub(super) fn parent_anchor_visible_index(
             .get(id)
             .is_some_and(|row| row_visible_with_flags(row.id, visibility))
         {
-            visible_index += 1;
+            visible_index += row_layout_slots(id);
         }
     }
     None

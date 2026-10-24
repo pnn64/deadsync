@@ -10,7 +10,7 @@ pub(super) mod tests {
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
         NavDirection, NumericBinding, NumericInit, OptionsPane, P1, P2, PlayerOptionMasks, Row,
         RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, append_pending_effects,
-        compute_row_window, count_visible_rows, effective_scroll_speed_with_alt,
+        compute_row_window, count_visible_row_slots, effective_scroll_speed_with_alt,
         handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
         init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
         judgment_tilt_options_visible, multi_select_mask, on_start_press, player_option_column_x,
@@ -378,7 +378,7 @@ pub(super) mod tests {
         assert!(is_row_visible(row_map, 0, visibility));
         assert!(!is_row_visible(row_map, 1, visibility));
 
-        let visible_rows = count_visible_rows(row_map, visibility);
+        let visible_rows = count_visible_row_slots(row_map, visibility);
         let window = compute_row_window(visible_rows, [0, 0], active);
         let mut visible_idx = 0;
         let (parent_f_pos, parent_hidden) =
@@ -3371,6 +3371,365 @@ pub(super) mod tests {
         assert!((cursor.0 - expected_x).abs() < 0.001);
         assert!(cursor.2 > row.choice_widths[last_choice]);
         assert!(cursor.3 > row.choice_height);
+    }
+
+    #[test]
+    fn gameplay_extras_wrap_and_keep_every_toggle_reachable() {
+        use super::super::*;
+        use deadlib_present::space;
+        ensure_i18n();
+        for (width, pixels) in [
+            (480.0, (640, 640)),
+            (600.0, (1280, 1024)),
+            (640.0, (640, 480)),
+            (640.0, (800, 600)),
+            (768.0, (1280, 800)),
+            (854.0, (1280, 720)),
+            (854.0, (1920, 1080)),
+        ] {
+            space::set_current_metrics(space::Metrics::centered(width, 480.0));
+            space::set_current_window_px(pixels.0, pixels.1);
+            for arcade in [false, true] {
+                for active in [[true, false], [false, true], [true, true]] {
+                    let mut view = test_init_view_for(
+                        if active == [true, true] {
+                            PlayStyle::Versus
+                        } else {
+                            PlayStyle::Single
+                        },
+                        if active == [false, true] {
+                            PlayerSide::P2
+                        } else {
+                            PlayerSide::P1
+                        },
+                        active,
+                    );
+                    view.policy.arcade_navigation = arcade;
+                    view.policy.scorebox_available = true;
+                    let (mut state, mut assets) = setup_state_with(view);
+                    let font_path =
+                        deadsync_assets::resolve_asset_path("assets/fonts/miso/_miso light.ini");
+                    let asset_root = font_path
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .to_path_buf();
+                    let font = deadlib_assets::parse_font_with_asset_context(&font_path, &[asset_root])
+                        .unwrap()
+                        .font;
+                    assets.register_font("miso", font);
+                    apply_pane(&mut state, OptionsPane::Advanced);
+                    prepare_presentation(&mut state, &assets);
+                    let row_idx = state
+                        .pane()
+                        .row_map
+                        .display_order()
+                        .iter()
+                        .position(|&id| id == RowId::GameplayExtras)
+                        .unwrap();
+                    let row = state.pane().row_map.get_at(row_idx).unwrap();
+                    assert_eq!(row.choices.len(), 8);
+                    let split = inline_choice_line_break(row);
+                    assert!(split > 0 && split < row.choices.len());
+                    let left = inline_choice_left_x_for_row(&state, row_idx);
+                    let right = (widescale(13.0, 30.666) + widescale(614.0, 792.0)).min(width - 13.0);
+                    let scale = inline_choice_scale(row);
+                    for i in 0..row.choices.len() {
+                        let [x, y] = inline_choice_position(row, i);
+                        assert!(
+                            left + x + row.choice_widths[i] * scale + INLINE_SPACING <= right + 0.001,
+                            "choice {} must fit at {width}: x={x}",
+                            row.choices[i].as_str()
+                        );
+                        assert_eq!(y.is_sign_positive(), i >= split);
+                    }
+                    state.pane_mut().selected_row = [row_idx; 2];
+                    for mask in &mut state.option_masks {
+                        mask.gameplay_extras = GameplayExtrasMask::empty();
+                    }
+                    for player in active_player_indices(active) {
+                        state.pane_mut().arcade_row_focus[player] = false;
+                        state
+                            .pane_mut()
+                            .row_map
+                            .get_mut(RowId::GameplayExtras)
+                            .unwrap()
+                            .selected_choice_index[player] = 0;
+                        sync_inline_intent_from_row(&mut state, player, row_idx);
+                        for i in 0..8 {
+                            assert_eq!(
+                                focused_inline_choice_index(&state, player, row_idx),
+                                Some(i)
+                            );
+                            let cursor = cursor_dest_for_player(&state, &assets, player).unwrap();
+                            let row = state.pane().row_map.get_at(row_idx).unwrap();
+                            let [x, y] = inline_choice_position(row, i);
+                            assert!(
+                                (cursor.0 - (left + x + row.choice_widths[i] * scale * 0.5)).abs()
+                                    < 0.001
+                            );
+                            assert!(
+                                (cursor.1 - (state.pane().row_tweens[row_idx].to_y + y)).abs() < 0.001
+                            );
+                            commit_inline_focus_selection(&mut state, player, row_idx);
+                            assert!(super::super::choice::toggle_bitmask_row_generic(
+                                &mut state,
+                                player,
+                                RowId::GameplayExtras
+                            ));
+                            assert!(
+                                multi_select_mask(
+                                    &state,
+                                    state.pane().row_map.get_at(row_idx).unwrap(),
+                                    player
+                                )
+                                .unwrap()
+                                    & (1 << i)
+                                    != 0
+                            );
+                            if i < 7 {
+                                assert!(move_inline_focus(&mut state, player, 1, NavWrap::Clamp));
+                            }
+                        }
+                        assert!(state.player_options[player].show_golf_score);
+                    }
+                    let row = state.pane().row_map.get_at(row_idx).unwrap();
+                    let mut underlines = Vec::new();
+                    draw_multi_select_underlines(
+                        &mut underlines,
+                        &state,
+                        row,
+                        active,
+                        left,
+                        &row.choice_offsets,
+                        &row.choice_widths,
+                        200.0,
+                        row.choice_height,
+                        1.0,
+                    );
+                    assert_eq!(
+                        underlines.len(),
+                        8 * active.into_iter().filter(|v| *v).count()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn gameplay_extras_double_height_fits_scrolling_for_both_players() {
+        use super::super::*;
+        use deadlib_present::space;
+        ensure_i18n();
+        space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+        let (mut state, assets) = setup_versus_state();
+        apply_pane(&mut state, OptionsPane::Advanced);
+        prepare_presentation(&mut state, &assets);
+        let rows = &state.pane().row_map;
+        let extras = rows
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::GameplayExtras)
+            .unwrap();
+        let visibility =
+            super::super::row_visibility(rows, state.active, state.option_masks, state.policy);
+        let (_, step) = row_layout_params();
+        for p1 in 0..rows.len() {
+            for p2 in 0..rows.len() {
+                if !is_row_visible(rows, p1, visibility) || !is_row_visible(rows, p2, visibility) {
+                    continue;
+                }
+                let tweens = init_row_tweens(
+                    rows,
+                    [p1, p2],
+                    state.active,
+                    state.option_masks,
+                    state.policy,
+                );
+                for player_row in [p1, p2] {
+                    assert_eq!(
+                        tweens[player_row].to_a, 1.0,
+                        "selected row must be fully visible: {p1}, {p2}"
+                    );
+                }
+                let mut bottom = 0.0_f32;
+                for (i, tween) in tweens.iter().enumerate().filter(|(_, t)| t.to_a > 0.0) {
+                    let height = ROW_HEIGHT + (row_layout_slots(rows.id_at(i)) - 1) as f32 * step;
+                    assert!(
+                        tween.to_y - height * 0.5 >= bottom - 0.01,
+                        "rows overlap at {p1}, {p2}: {i}"
+                    );
+                    bottom = tween.to_y + height * 0.5;
+                    assert!(bottom < 404.0, "row must remain above help box");
+                }
+                if p1 == extras || p2 == extras {
+                    assert_eq!(tweens[extras].to_a, 1.0);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    #[ignore = "renders review images in a hidden GPU window"]
+    #[allow(deprecated)]
+    fn golf_layout_preview_across_resolutions() {
+        use super::super::*;
+        use crate::screens::components::gameplay::{
+            golf,
+            score_counter::{ScoreCounterParams, push_score_counter},
+        };
+        use deadlib_present::{actors::TextAlign, compose::build_screen_with_texture_context, space};
+        use deadlib_render_core::{BackendType, PresentModePolicy};
+        use deadsync_config::theme::MachineFont;
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        ensure_i18n();
+        let metrics = space::Metrics::centered(854.0, 480.0);
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(1920, 1080);
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()
+            .unwrap();
+        let window = event_loop
+            .create_window(
+                winit::window::Window::default_attributes()
+                    .with_visible(false)
+                    .with_inner_size(winit::dpi::PhysicalSize::new(1920, 1080)),
+            )
+            .unwrap();
+        let mut backend = deadlib_render::create_backend(
+            BackendType::VulkanWgpu,
+            Arc::new(window),
+            metrics.projection(),
+            false,
+            PresentModePolicy::Immediate,
+            false,
+            true,
+        )
+        .unwrap();
+        let mut assets = AssetManager::new();
+        deadsync_assets::load_initial_assets(
+            &mut assets,
+            &mut backend,
+            deadsync_theme::ThemeAssetManifest {
+                fonts: &crate::resources::FONT_ASSETS,
+                textures: std::iter::empty(),
+                texture_needs_repeat_sampler: crate::resources::texture_needs_repeat_sampler,
+            },
+        )
+        .unwrap();
+        let output = std::env::var_os("DEADSYNC_GOLF_CAPTURE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::temp_dir().join("deadsync-golf-preview"));
+        std::fs::create_dir_all(&output).unwrap();
+        let mut capture = |name: &str,
+                           actors: &[deadlib_present::actors::Actor],
+                           metrics: &space::Metrics,
+                           width: u32,
+                           height: u32| {
+            backend.resize(width, height);
+            backend.set_default_projection(metrics.projection());
+            let frame = build_screen_with_texture_context(
+                actors,
+                [0.0, 0.0, 0.0, 1.0],
+                metrics,
+                assets.fonts(),
+                0.0,
+                assets.texture_context(),
+            );
+            backend.request_screenshot();
+            backend.draw(&frame, assets.textures(), false).unwrap();
+            backend
+                .capture_frame()
+                .unwrap()
+                .save(output.join(name))
+                .unwrap();
+        };
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        view.policy.scorebox_available = true;
+        let (mut state, _) = setup_state_with(view);
+        apply_pane(&mut state, OptionsPane::Advanced);
+        prepare_presentation(&mut state, &assets);
+        let extras = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::GameplayExtras)
+            .unwrap();
+        state.pane_mut().selected_row = [extras; 2];
+        state.option_masks[P1].gameplay_extras =
+            GameplayExtrasMask::COLUMN_CUES | GameplayExtrasMask::GOLF_SCORE;
+        state.option_masks[P2].gameplay_extras =
+            GameplayExtrasMask::LIVE_TIMING_STATS | GameplayExtrasMask::GOLF_SCORE;
+        for (logical_width, width, height) in [
+            (854.0, 1920, 1080),
+            (640.0, 640, 480),
+            (600.0, 1280, 1024),
+            (480.0, 640, 640),
+        ] {
+            let menu_metrics = space::Metrics::centered(logical_width, 480.0);
+            space::set_current_metrics(menu_metrics);
+            space::set_current_window_px(width, height);
+            state.pane_mut().row_tweens = init_row_tweens(
+                &state.pane().row_map,
+                [extras; 2],
+                state.active,
+                state.option_masks,
+                state.policy,
+            );
+            for (player, choice) in [(P1, 2), (P2, 7)] {
+                state
+                    .pane_mut()
+                    .row_map
+                    .get_mut(RowId::GameplayExtras)
+                    .unwrap()
+                    .selected_choice_index[player] = choice;
+                state.pane_mut().inline_choice_x[player] = f32::NAN;
+                let (x, y, w, h) = cursor_dest_for_player(&state, &assets, player).unwrap();
+                state.pane_mut().cursor_from[player] = CursorRect { x, y, w, h };
+                state.pane_mut().cursor_to[player] = CursorRect { x, y, w, h };
+                state.pane_mut().cursor_t[player] = 1.0;
+                state.pane_mut().cursor_initialized[player] = true;
+            }
+            capture(
+                &format!("gameplay-extras-{width}x{height}.png"),
+                &get_actors(&state, &assets),
+                &menu_metrics,
+                width,
+                height,
+            );
+        }
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(1920, 1080);
+        let mut actors = Vec::new();
+        for (side, badge_x, score_x, strokes) in [
+            (PlayerSide::P1, 84.5, 228.4, 6),
+            (PlayerSide::P2, 769.5, 737.5, 0),
+        ] {
+            golf::push_par_badge(&mut actors, MachineFont::Wendy, Some(3.0), [badge_x, 56.0]);
+            push_score_counter(
+                &mut actors,
+                assets.fonts(),
+                ScoreCounterParams {
+                    value: 0.35,
+                    font: "wendy_monospace_numbers",
+                    position: [score_x, 56.0],
+                    align: [1.0, 1.0],
+                    text_align: TextAlign::Right,
+                    zoom: 0.5,
+                    color: golf::COLOR,
+                    z: 90,
+                },
+            );
+            golf::push_feedback(&mut actors, strokes, 0.0, side, [score_x, 56.0], 0.5);
+        }
+        capture("golf-hud-1080p.png", &actors, &metrics, 1920, 1080);
+        println!("Golf previews: {}", output.display());
     }
 
     #[test]

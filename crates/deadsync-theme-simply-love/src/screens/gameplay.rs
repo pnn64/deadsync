@@ -4945,6 +4945,12 @@ pub fn frame_layers<'a>(
                     diff_x,
                 );
                 let chart = &state.charts()[player_idx];
+                if let Some((_, par)) = crate::screens::components::gameplay::golf::score(state, player_idx) {
+                    crate::screens::components::gameplay::golf::push_par_badge(
+                        actors, state.machine_font(), par, [diff_x, y],
+                    );
+                    return;
+                }
                 let difficulty_color = color::difficulty_rgba_with_scheme(
                     &chart.difficulty,
                     state.active_color_index(),
