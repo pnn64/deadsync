@@ -193,7 +193,9 @@ impl AppDirs {
 
     fn runtime_root_from_exe_path(exe_path: &std::path::Path) -> PathBuf {
         #[cfg(target_os = "macos")]
-        if let Some(resources) = deadlib_platform::runtime_dir::app_bundle_resources_from_exe(exe_path) {
+        if let Some(resources) =
+            deadlib_platform::runtime_dir::app_bundle_resources_from_exe(exe_path)
+        {
             return resources;
         }
         let exe_dir = exe_path

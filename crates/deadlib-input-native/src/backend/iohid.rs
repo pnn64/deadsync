@@ -761,7 +761,9 @@ pub fn run(
         let opened = IOHIDManagerOpen(manager, 0) == 0;
         KEYBOARD_MANAGER_OPEN.store(opened, Ordering::Release);
         if !keyboard_backend_active() {
-            log::warn!("Raw keyboard input unavailable; using focused window keyboard events. Input Monitoring permission is optional.");
+            log::warn!(
+                "Raw keyboard input unavailable; using focused window keyboard events. Input Monitoring permission is optional."
+            );
         }
 
         let set = IOHIDManagerCopyDevices(manager);
