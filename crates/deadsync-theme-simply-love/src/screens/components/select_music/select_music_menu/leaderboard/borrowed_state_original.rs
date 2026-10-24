@@ -34,13 +34,9 @@ pub(super) fn apply_leaderboard_side_snapshot(
         return;
     }
 
-    let mut panes = snapshot.data.map_or_else(Vec::new, |data| {
-        data.panes
-            .iter()
-            .filter(|pane| should_show_overlay_pane(pane))
-            .cloned()
-            .collect()
-    });
+    let mut panes = snapshot
+        .data
+        .map_or_else(Vec::new, |data| data.panes.clone());
     if let Some(machine) = side.machine_pane.clone() {
         panes.push(machine);
     }

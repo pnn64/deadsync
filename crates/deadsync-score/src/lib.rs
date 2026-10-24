@@ -9099,7 +9099,7 @@ mod tests {
     }
 
     #[test]
-    fn arrowcloud_hard_ex_pane_helpers_set_stable_metadata() {
+    fn arrowcloud_pane_helpers_set_stable_metadata() {
         let pane = arrowcloud_hard_ex_leaderboard_pane(vec![entry(9980.0)], true);
         assert_eq!(pane.name, "ArrowCloud");
         assert!(pane.personalized);
@@ -9108,11 +9108,19 @@ mod tests {
         assert!(pane.is_hard_ex());
         assert_eq!(pane.entries.len(), 1);
 
-        let empty = arrowcloud_empty_hard_ex_leaderboard_pane();
-        assert!(empty.entries.is_empty());
-        assert!(!empty.personalized);
-        assert!(empty.is_arrowcloud());
-        assert!(empty.is_hard_ex());
+        let itg = arrowcloud_leaderboard_pane(ArrowCloudPaneKind::Itg, Vec::new(), false);
+        assert!(itg.entries.is_empty());
+        assert!(!itg.personalized);
+        assert!(!itg.is_ex);
+        assert!(itg.is_arrowcloud());
+        assert!(!itg.is_hard_ex());
+        assert_eq!(scorebox_pane_kind(&itg), ScoreboxPaneKind::Gs);
+
+        let ex = arrowcloud_leaderboard_pane(ArrowCloudPaneKind::Ex, Vec::new(), true);
+        assert!(ex.is_ex);
+        assert!(ex.personalized);
+        assert!(!ex.is_hard_ex());
+        assert_eq!(scorebox_pane_kind(&ex), ScoreboxPaneKind::Ex);
     }
 
     #[test]

@@ -105,11 +105,6 @@ fn gs_machine_pane(entries: Vec<score_data::LeaderboardEntry>) -> score_data::Le
     }
 }
 
-#[inline(always)]
-fn should_show_overlay_pane(pane: &score_data::LeaderboardPane) -> bool {
-    !pane.is_arrowcloud() || pane.is_hard_ex() || pane.personalized || !pane.entries.is_empty()
-}
-
 fn gs_error_text(error: &str) -> String {
     let lower = error.to_ascii_lowercase();
     if lower.contains("timed out") || lower.contains("timeout") {
@@ -153,13 +148,12 @@ fn apply_leaderboard_side_snapshot(
         )
     });
 
-    let mut panes = snapshot.data.map_or_else(Vec::new, |data| {
-        data.panes
-            .iter()
-            .filter(|pane| should_show_overlay_pane(pane))
-            .cloned()
-            .collect()
-    });
+    // Every pane the shell delivers is shown. ArrowCloud already applies the
+    // signed-in player's board preferences server-side, so an empty board here
+    // is one the player asked for and should read "No Scores", not vanish.
+    let mut panes = snapshot
+        .data
+        .map_or_else(Vec::new, |data| data.panes.clone());
     if let Some(machine) = side.machine_pane.clone() {
         panes.push(machine);
     }
@@ -864,17 +858,45 @@ mod tests {
     }
 
     #[test]
-    fn empty_arrowcloud_hard_ex_pane_is_still_shown() {
-        let pane = score_data::LeaderboardPane {
-            name: "ArrowCloud".to_string(),
-            entries: Vec::new(),
-            is_ex: false,
-            disabled: false,
-            personalized: false,
-            arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::HardEx),
-        };
+    fn overlay_keeps_every_server_pane_including_empty_ones() {
+        let mut side = LeaderboardSideState::default();
+        let snapshot = score_data::CachedPlayerLeaderboardData::ready(
+            score_data::PlayerLeaderboardData {
+                panes: vec![
+                    score_data::LeaderboardPane {
+                        name: "ArrowCloud".to_string(),
+                        entries: Vec::new(),
+                        is_ex: true,
+                        disabled: false,
+                        personalized: false,
+                        arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::Ex),
+                    },
+                    score_data::LeaderboardPane {
+                        name: "ArrowCloud".to_string(),
+                        entries: Vec::new(),
+                        is_ex: false,
+                        disabled: false,
+                        personalized: false,
+                        arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::Itg),
+                    },
+                ],
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            },
+        );
 
-        assert!(should_show_overlay_pane(&pane));
+        apply_leaderboard_side_snapshot(&mut side, snapshot);
+
+        let kinds: Vec<_> = side.panes.iter().map(|pane| pane.arrowcloud_kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                Some(score_data::ArrowCloudPaneKind::Ex),
+                Some(score_data::ArrowCloudPaneKind::Itg),
+            ],
+            "server order and empty preferred boards are preserved"
+        );
     }
 
     #[test]
