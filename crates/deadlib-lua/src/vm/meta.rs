@@ -29,19 +29,19 @@ impl Vm {
     }
     pub(super) fn metatable(&self, value: Value) -> Option<TableId> {
         match value {
-            Value::Table(id) => self.tables.get(id.0 as usize).and_then(|t| t.metatable),
+            Value::Table(id) => self.tables.get(id.0).and_then(|t| t.metatable),
             _ => self.type_metatables[Self::type_slot(value)],
         }
     }
     pub(super) fn set_metatable(&mut self, value: Value, table: Option<TableId>) {
         match value {
-            Value::Table(id) => self.tables[id.0 as usize].metatable = table,
+            Value::Table(id) => self.tables[slot_index(id.0)].metatable = table,
             _ => self.type_metatables[Self::type_slot(value)] = table,
         }
     }
     pub(super) fn metafield(&self, value: Value, event: Meta) -> Value {
         self.metatable(value).map_or(Value::Nil, |mt| {
-            self.tables[mt.0 as usize].get(Value::String(self.meta_names[event as usize]))
+            self.tables[slot_index(mt.0)].get(Value::String(self.meta_names[event as usize]))
         })
     }
     fn binary_handler(&self, left: Value, right: Value, event: Meta) -> Value {
@@ -68,7 +68,7 @@ impl Vm {
     ) -> Result<(), Error> {
         for _ in 0..100 {
             let handler = if let Value::Table(id) = target {
-                let value = self.tables[id.0 as usize].get(key);
+                let value = self.tables[slot_index(id.0)].get(key);
                 if value != Value::Nil {
                     self.registers[result] = value;
                     return Ok(());
@@ -107,12 +107,12 @@ impl Vm {
             let handler = if let Value::Table(id) = target {
                 // Lua checks invalid keys before consulting __newindex on tables.
                 if key == Value::Nil || matches!(key,Value::Number(n) if n.is_nan()) {
-                    return self.tables[id.0 as usize].set(key, value);
+                    return self.raw_set(id, key, value);
                 }
-                let old = self.tables[id.0 as usize].get(key);
+                let old = self.tables[slot_index(id.0)].get(key);
                 let handler = self.metafield(target, Meta::NewIndex);
                 if old != Value::Nil || handler == Value::Nil {
-                    return self.tables[id.0 as usize].set(key, value);
+                    return self.raw_set(id, key, value);
                 }
                 handler
             } else {
@@ -192,7 +192,7 @@ impl Vm {
     }
     pub(super) fn length(&mut self, value: Value, result: usize) -> Result<(), Error> {
         let n = match value {
-            Value::Table(id) => self.tables[id.0 as usize].len(),
+            Value::Table(id) => self.tables[slot_index(id.0)].len(),
             Value::String(id) => self.string_bytes(id).unwrap_or_default().len(),
             _ => {
                 let handler = self.binary_handler(value, Value::Nil, Meta::Len);

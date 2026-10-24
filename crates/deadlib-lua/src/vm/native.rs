@@ -9,8 +9,7 @@ impl Vm {
         } else {
             wanted as usize
         };
-        self.registers
-            .resize(self.registers.len().max(call + wanted), Value::Nil);
+        self.resize_registers(self.registers.len().max(call + wanted));
         if wanted > actual {
             self.registers[call + actual..call + wanted].fill(Value::Nil);
         }
@@ -34,8 +33,7 @@ impl Vm {
                     format!("attempt to call a {} value", target.type_name()),
                 ));
             }
-            self.registers
-                .resize(self.registers.len().max(call + count + 2), Value::Nil);
+            self.resize_registers(self.registers.len().max(call + count + 2));
             self.registers.copy_within(call..call + count + 1, call + 1);
             self.registers[call] = handler;
             count += 1;
@@ -68,8 +66,8 @@ impl Vm {
                     return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
                 }
                 let base = self.registers.len();
-                self.registers.resize(base + count.max(2) + 4, Value::Nil);
-                self.frames.push(Frame {
+                self.resize_registers(base + count.max(2) + 4);
+                self.push_record(Frame {
                     function: FrameKind::Native(id),
                     pc: 0,
                     base,
@@ -82,7 +80,7 @@ impl Vm {
                     },
                     barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
                     vararg_start: call + 1,
-                    vararg_count: count,
+                    vararg_count: count as u32,
                     tail_calls: 0,
                 });
                 Ok(None)
@@ -93,7 +91,7 @@ impl Vm {
                 }
                 let index = self.frames.len();
                 let base = self.registers.len();
-                self.frames.push(Frame {
+                self.push_record(Frame {
                     function: FrameKind::Native(id),
                     pc: 0,
                     base,
@@ -102,7 +100,7 @@ impl Vm {
                     wanted: frame_wanted(wanted),
                     barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
                     vararg_start: call + 1,
-                    vararg_count: count,
+                    vararg_count: count as u32,
                     tail_calls: 0,
                 });
                 let previous = self.active_native.replace(index);
@@ -129,7 +127,7 @@ impl Vm {
         function: Value,
         args: &[Value],
         result: usize,
-        continuation: u32,
+        continuation: u64,
     ) -> Result<(), Error> {
         if self.frames.len() >= 10000 {
             return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
@@ -137,7 +135,7 @@ impl Vm {
         let base = self.registers.len();
         self.registers.push(function);
         self.registers.extend_from_slice(args);
-        self.frames.push(Frame {
+        self.push_record(Frame {
             function: FrameKind::Native(continuation),
             pc: 1,
             base,
@@ -180,14 +178,14 @@ impl Vm {
             let value = self.intern(error.message().as_bytes());
             self.located_error(value, 1)
         };
-        if matches!(frame.function, FrameKind::Native(XPCALL)) && frame.pc == 1 {
+        if matches!(frame.function, FrameKind::Native(XPCALL)) && frame.pc() == 1 {
             self.frames[index].pc = 3;
             let handler = self.registers[frame.vararg_start + 1];
             if matches!(handler, Value::Function(_) | Value::Native(_)) {
                 // Preserve faulting frames until the error handler has returned.
                 let base = self.registers.len();
                 self.registers.extend_from_slice(&[handler, value]);
-                self.frames.push(Frame {
+                self.push_record(Frame {
                     function: FrameKind::Native(CONT_HANDLER),
                     pc: 1,
                     base,
@@ -210,7 +208,7 @@ impl Vm {
                 return Ok(true);
             }
         }
-        let value = if frame.pc == 3 || matches!(frame.function, FrameKind::Native(XPCALL)) {
+        let value = if frame.pc() == 3 || matches!(frame.function, FrameKind::Native(XPCALL)) {
             self.intern(b"error in error handling")
         } else {
             value
@@ -218,7 +216,7 @@ impl Vm {
         self.protected_failure(index, value);
         Ok(true)
     }
-    pub(super) fn step_native(&mut self, id: u32, frame: Frame) -> Result<Option<usize>, Error> {
+    pub(super) fn step_native(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let index = self.frames.len() - 1;
         match id {
@@ -235,16 +233,12 @@ impl Vm {
                 Ok(None)
             }
             PCALL | XPCALL => {
-                if frame.pc == 0 {
+                if frame.pc() == 0 {
                     let minimum = if id == XPCALL { 2 } else { 1 };
-                    if frame.vararg_count < minimum {
+                    if frame.argc() < minimum {
                         return Err(Error::new(ErrorKind::Runtime, 0, "value expected"));
                     }
-                    let count = if id == XPCALL {
-                        0
-                    } else {
-                        frame.vararg_count - 1
-                    };
+                    let count = if id == XPCALL { 0 } else { frame.argc() - 1 };
                     self.registers
                         .copy_within(frame.vararg_start..frame.vararg_start + count + 1, base);
                     self.frames[index].pc = 1;
@@ -252,10 +246,9 @@ impl Vm {
                         self.finish_call(base, actual, OPEN);
                     }
                     Ok(None)
-                } else if frame.pc == 1 {
+                } else if frame.pc() == 1 {
                     let count = self.top - base;
-                    self.registers
-                        .resize(self.registers.len().max(base + count + 1), Value::Nil);
+                    self.resize_registers(self.registers.len().max(base + count + 1));
                     self.registers.copy_within(base..base + count, base + 1);
                     self.registers[base] = Value::Boolean(true);
                     Ok(self.return_frame(frame, base, count + 1))
@@ -264,8 +257,8 @@ impl Vm {
                 }
             }
             TOSTRING => {
-                if frame.pc == 0 {
-                    if frame.vararg_count == 0 {
+                if frame.pc() == 0 {
+                    if frame.argc() == 0 {
                         return Err(Error::new(ErrorKind::Runtime, 0, "value expected"));
                     }
                     let value = self.registers[frame.vararg_start];
@@ -299,9 +292,11 @@ impl Vm {
             Value::Nil => self.intern(b"nil"),
             Value::Boolean(b) => self.intern(if b { b"true" } else { b"false" }),
             Value::Table(id) => self.intern(format!("table: 0x{:x}", id.0).as_bytes()),
-            Value::Function(id) => self.intern(format!("function: 0x{:x}", id.0).as_bytes()),
+            Value::Function(id) => {
+                self.intern(format!("function: 0x{:x}", u128::from(id.0) << 1).as_bytes())
+            }
             Value::Native(id) => {
-                self.intern(format!("function: 0x{:x}", u64::from(id) + (1u64 << 32)).as_bytes())
+                self.intern(format!("function: 0x{:x}", (u128::from(id) << 1) | 1).as_bytes())
             }
             Value::Thread(id) => self.intern(format!("thread: 0x{:x}", id.0).as_bytes()),
         }
@@ -309,14 +304,14 @@ impl Vm {
     fn print_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let index = self.frames.len() - 1;
-        if frame.pc == 0 {
+        if frame.pc() == 0 {
             self.frames[index].pc = 1;
             let key = self.intern(b"tostring");
             self.get_table(Value::Table(self.globals), key, base + 1)?;
             return Ok(None);
         }
-        let completed = frame.pc.saturating_sub(2);
-        if frame.pc >= 2 {
+        let completed = frame.pc().saturating_sub(2);
+        if frame.pc() >= 2 {
             let value = self.registers[base + 2];
             let value = match value {
                 Value::String(_) => value,
@@ -332,7 +327,7 @@ impl Vm {
             let Value::String(id) = value else {
                 unreachable!("print string conversion");
             };
-            let bytes = &self.strings.bytes[id.0 as usize];
+            let bytes = &self.strings.bytes[slot_index(id.0)];
             let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
             if let Some(output) = &mut self.output {
                 if completed != 0 {
@@ -347,8 +342,8 @@ impl Vm {
                 stdout.write_all(bytes).map_err(io_error)?;
             }
         }
-        let next = if frame.pc == 1 { 0 } else { completed + 1 };
-        if next >= frame.vararg_count {
+        let next = if frame.pc() == 1 { 0 } else { completed + 1 };
+        if next >= frame.argc() {
             if let Some(output) = &mut self.output {
                 output.push(b'\n');
             } else {
@@ -358,7 +353,7 @@ impl Vm {
         }
         self.registers[base + 2] = self.registers[base + 1];
         self.registers[base + 3] = self.registers[frame.vararg_start + next];
-        self.frames[index].pc = next + 2;
+        self.frames[index].pc = (next + 2) as u32;
         if let Some(actual) = self.start_call(base + 2, 1, 1, false)? {
             self.finish_call(base + 2, actual, 1);
         }
@@ -415,10 +410,10 @@ impl Vm {
         let FrameKind::Lua(function) = frame.function else {
             return value;
         };
-        let closure = &self.functions[function.0 as usize];
+        let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program].data;
         let prototype = &program.prototypes[closure.prototype];
-        let line = prototype.lines[frame.pc.saturating_sub(1).min(prototype.lines.len() - 1)];
+        let line = prototype.lines[frame.pc().saturating_sub(1).min(prototype.lines.len() - 1)];
         let mut bytes = crate::bytecode::chunk_id(&program.name);
         bytes.extend_from_slice(format!(":{line}: ").as_bytes());
         bytes.extend_from_slice(
@@ -430,7 +425,10 @@ impl Vm {
     }
 }
 impl Vm {
-    pub(super) fn native(&mut self, id: u32, base: usize, count: usize) -> Result<usize, Error> {
+    pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        if matches!(id, COLLECT_GARBAGE | GC_INFO) {
+            return self.gc_native(id, base, count);
+        }
         if (threads::CO_CREATE..=threads::CO_YIELD).contains(&id) {
             return self.coroutine_native(id, base, count);
         }
@@ -525,7 +523,11 @@ impl Vm {
                     return Err(bad(count, "value"));
                 }
                 let (t, k, v) = (arg(self, 0), arg(self, 1), arg(self, 2));
-                self.table_mut(t)?.set(k, v)?;
+                self.table(t)?;
+                let Value::Table(id) = t else {
+                    unreachable!("validated table")
+                };
+                self.raw_set(id, k, v)?;
                 t
             }
             7 => {
@@ -574,8 +576,7 @@ impl Vm {
                     ));
                 }
                 let results = results as usize;
-                self.registers
-                    .resize(self.registers.len().max(base + results), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + results));
                 for i in 0..results {
                     let v = self.table(t)?.get(Value::Number(start + i as f64));
                     self.registers[base + i] = v;
@@ -585,8 +586,7 @@ impl Vm {
             NEXT | PAIRS_NEXT => {
                 let next = self.table(arg(self, 0))?.next(arg(self, 1))?;
                 if let Some((key, value)) = next {
-                    self.registers
-                        .resize(self.registers.len().max(base + 2), Value::Nil);
+                    self.resize_registers(self.registers.len().max(base + 2));
                     self.registers[base] = key;
                     self.registers[base + 1] = value;
                     return Ok(2);
@@ -596,8 +596,7 @@ impl Vm {
             PAIRS | IPAIRS => {
                 let table = arg(self, 0);
                 self.table(table)?;
-                self.registers
-                    .resize(self.registers.len().max(base + 3), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + 3));
                 self.registers[base] =
                     Value::Native(if id == PAIRS { PAIRS_NEXT } else { IPAIRS_STEP });
                 self.registers[base + 1] = table;
@@ -617,8 +616,7 @@ impl Vm {
                 if value == Value::Nil {
                     return Ok(0);
                 }
-                self.registers
-                    .resize(self.registers.len().max(base + 2), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + 2));
                 self.registers[base] = Value::Number(f64::from(next));
                 self.registers[base + 1] = value;
                 return Ok(2);
@@ -630,7 +628,7 @@ impl Vm {
                 let target = arg(self, 0);
                 if id == DEBUG_GET_ENV {
                     match target {
-                        Value::Function(id) => Value::Table(self.functions[id.0 as usize].env),
+                        Value::Function(id) => Value::Table(self.functions[slot_index(id.0)].env),
                         Value::Native(id) => Value::Table(self.native_environment(id)),
                         Value::Thread(id) => Value::Table(self.thread_environment(id)),
                         _ => Value::Nil,
@@ -640,7 +638,7 @@ impl Vm {
                         return Err(bad(1, "table"));
                     };
                     match target {
-                        Value::Function(id) => self.functions[id.0 as usize].env = env,
+                        Value::Function(id) => self.functions[slot_index(id.0)].env = env,
                         Value::Native(id) => self.set_native_environment(id, env),
                         Value::Thread(id) => self.set_thread_environment(id, env),
                         _ => {
@@ -684,14 +682,14 @@ impl Vm {
                 };
                 match (id, function) {
                     (GET_ENV, FrameKind::Lua(id)) => {
-                        Value::Table(self.functions[id.0 as usize].env)
+                        Value::Table(self.functions[slot_index(id.0)].env)
                     }
                     (GET_ENV, FrameKind::Native(_)) => Value::Table(self.globals),
                     (SET_ENV, FrameKind::Lua(id)) => {
                         let Value::Table(env) = arg(self, 1) else {
                             unreachable!("environment type checked");
                         };
-                        self.functions[id.0 as usize].env = env;
+                        self.functions[slot_index(id.0)].env = env;
                         Value::Function(id)
                     }
                     _ => {
@@ -721,8 +719,7 @@ impl Vm {
                             format!(":{}: {}", error.line(), error.message()).as_bytes(),
                         );
                         let value = self.intern(&message);
-                        self.registers
-                            .resize(self.registers.len().max(base + 2), Value::Nil);
+                        self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Nil;
                         self.registers[base + 1] = value;
                         return Ok(2);

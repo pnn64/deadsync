@@ -1,16 +1,16 @@
 //! Raw table operations and resumable traversal and sorting callbacks.
 use super::*;
 
-pub(super) const TAB_FIRST: u32 = 96;
-pub(super) const TAB_CONCAT: u32 = 96;
-pub(super) const TAB_FOREACH: u32 = 97;
-pub(super) const TAB_FOREACHI: u32 = 98;
-pub(super) const TAB_GETN: u32 = 99;
-pub(super) const TAB_MAXN: u32 = 100;
-pub(super) const TAB_INSERT: u32 = 101;
-pub(super) const TAB_REMOVE: u32 = 102;
-pub(super) const TAB_SETN: u32 = 103;
-pub(super) const TAB_SORT: u32 = 104;
+pub(super) const TAB_FIRST: u64 = 96;
+pub(super) const TAB_CONCAT: u64 = 96;
+pub(super) const TAB_FOREACH: u64 = 97;
+pub(super) const TAB_FOREACHI: u64 = 98;
+pub(super) const TAB_GETN: u64 = 99;
+pub(super) const TAB_MAXN: u64 = 100;
+pub(super) const TAB_INSERT: u64 = 101;
+pub(super) const TAB_REMOVE: u64 = 102;
+pub(super) const TAB_SETN: u64 = 103;
+pub(super) const TAB_SORT: u64 = 104;
 
 #[derive(Clone, Copy, Debug)]
 enum SortStage {
@@ -36,6 +36,17 @@ pub(super) struct Sort {
     j: i64,
     pivot: Value,
     saved: [Value; 2],
+}
+impl Sort {
+    pub(super) fn roots(&self) -> [Value; 5] {
+        [
+            Value::Table(self.table),
+            self.comparator,
+            self.pivot,
+            self.saved[0],
+            self.saved[1],
+        ]
+    }
 }
 
 fn failure(message: impl Into<Box<str>>) -> Error {
@@ -63,8 +74,8 @@ impl Vm {
         .enumerate()
         {
             let name = self.intern(name);
-            self.tables[table.0 as usize]
-                .set(name, Value::Native(TAB_FIRST + i as u32))
+            self.tables[slot_index(table.0)]
+                .set(name, Value::Native(TAB_FIRST + i as u64))
                 .expect("table names are valid");
         }
         self.set_global(b"table", Value::Table(table))
@@ -78,16 +89,15 @@ impl Vm {
         }
     }
     fn raw_index(&self, table: TableId, index: i64) -> Value {
-        self.tables[table.0 as usize].get(key(index))
+        self.tables[slot_index(table.0)].get(key(index))
     }
     fn set_index(&mut self, table: TableId, index: i64, value: Value) {
-        self.tables[table.0 as usize]
-            .set(key(index), value)
+        self.raw_set(table, key(index), value)
             .expect("finite integer is a valid key");
     }
     pub(super) fn table_native(
         &mut self,
-        id: u32,
+        id: u64,
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
@@ -102,14 +112,14 @@ impl Vm {
             None
         };
         let table = self.table_argument(base, count)?;
-        let len = self.tables[table.0 as usize].len() as i64;
+        let len = self.tables[slot_index(table.0)].len() as i64;
         let value = match id {
             TAB_GETN => Value::Number(len as f64),
             TAB_SETN => return Err(failure("'setn' is obsolete")),
             TAB_MAXN => {
                 let mut maximum = 0.0f64;
                 let mut current = Value::Nil;
-                while let Some((k, _)) = self.tables[table.0 as usize].next(current)? {
+                while let Some((k, _)) = self.tables[slot_index(table.0)].next(current)? {
                     if let Value::Number(n) = k {
                         maximum = maximum.max(n);
                     }
@@ -166,12 +176,12 @@ impl Vm {
                 }
                 for index in first..=last {
                     if index != first {
-                        output.extend_from_slice(&self.strings.bytes[separator.0 as usize]);
+                        output.extend_from_slice(&self.strings.bytes[slot_index(separator.0)]);
                     }
                     let v = self.raw_index(table, index);
                     match v {
                         Value::String(id) => {
-                            output.extend_from_slice(&self.strings.bytes[id.0 as usize])
+                            output.extend_from_slice(&self.strings.bytes[slot_index(id.0)])
                         }
                         Value::Number(n) => output.extend_from_slice(format_number(n).as_bytes()),
                         _ => {
@@ -189,13 +199,13 @@ impl Vm {
         self.registers[base] = value;
         Ok(1)
     }
-    pub(super) fn foreach_step(&mut self, id: u32, frame: Frame) -> Result<Option<usize>, Error> {
+    pub(super) fn foreach_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let owner = self.frames.len() - 1;
         let args = frame.vararg_start - 1;
-        let table = self.table_argument(args, frame.vararg_count)?;
-        let callback = self.argument(args, frame.vararg_count, 1);
-        if frame.pc == 0 {
+        let table = self.table_argument(args, frame.argc())?;
+        let callback = self.argument(args, frame.argc(), 1);
+        if frame.pc() == 0 {
             if !matches!(callback, Value::Function(_) | Value::Native(_)) {
                 return Err(failure("bad argument #2 (function expected)"));
             }
@@ -204,7 +214,7 @@ impl Vm {
             } else {
                 Value::Nil
             };
-            self.registers[base + 4] = key(self.tables[table.0 as usize].len() as i64);
+            self.registers[base + 4] = key(self.tables[slot_index(table.0)].len() as i64);
             self.frames[owner].pc = 1;
         } else if self.registers[base] != Value::Nil {
             return Ok(self.return_frame(frame, base, 1));
@@ -225,7 +235,7 @@ impl Vm {
                 ))
             }
         } else {
-            self.tables[table.0 as usize].next(self.registers[base + 3])?
+            self.tables[slot_index(table.0)].next(self.registers[base + 3])?
         };
         let Some((k, v)) = pair else {
             return Ok(self.return_frame(frame, base, 0));
@@ -306,9 +316,9 @@ impl Vm {
     pub(super) fn sort_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;
-        let index = if frame.pc == 0 {
+        let index = if frame.pc() == 0 {
             let args = frame.vararg_start - 1;
-            let count = frame.vararg_count;
+            let count = frame.argc();
             let table = self.table_argument(args, count)?;
             let comparator = self.argument(args, count, 1);
             if !matches!(
@@ -317,7 +327,7 @@ impl Vm {
             ) {
                 return Err(failure("bad argument #2 (function expected)"));
             }
-            let len = self.tables[table.0 as usize].len() as i64;
+            let len = self.tables[slot_index(table.0)].len() as i64;
             let index = self.sorts.len();
             let mut ranges = [(0, 0); 32];
             ranges[0] = (1, len);
@@ -335,10 +345,10 @@ impl Vm {
                 pivot: Value::Nil,
                 saved: [Value::Nil; 2],
             });
-            self.frames[owner].pc = index + 1;
+            self.frames[owner].pc = (index + 1) as u32;
             index
         } else {
-            frame.pc - 1
+            frame.pc() - 1
         };
         loop {
             let sort = &self.sorts[index];

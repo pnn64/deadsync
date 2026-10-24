@@ -57,14 +57,31 @@ no recursive interpreter entry. Lua 5.1 C-call yield restrictions and inherited
 resume-depth limits are checked against the reference. An instruction quota
 covers all resumed threads and restores the main context after an abort.
 
-GC, userdata, other standard libraries, complete diagnostic text and
+An iterative tracing collector reclaims cyclic tables, strings, closures, code,
+native closures, cells and unreachable threads. Lua 5.1 weak tables keep strings
+strong and do not use later dialects' ephemeron rules. Collection traces native
+continuations and compiler register maps, and closes surviving cells before
+freeing their thread. Object slots carry generations so stale handles cannot
+alias reused slots. `collectgarbage`, `gcinfo`, automatic pressure checks and
+`Vm::collect_garbage` are available. Each cycle currently completes atomically;
+`step` accumulates a work budget before running a complete cycle. Incremental
+pauses, userdata and finalization remain unfinished.
+
+Host copies of `Value` do not keep objects alive. Use `Vm::pin`, `rooted` and
+`unpin` for values retained across executions or collections. Root handles check
+VM ownership and generations; ordinary object handles must stay in their
+originating VM. A live host `Program` retains its per-VM entry closure/environment,
+while escaped Lua closures retain their code independently. `Vm::heap_stats`
+reports object counts and capacity-based memory estimates, including reusable
+storage. These are not process RSS or exact allocator peaks.
+
+Userdata, finalizers, other standard libraries, complete diagnostic text and
 debug metadata, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
-work limits. Thread collection, debug stack inspection and hooks remain open. Heap
-objects live until VM drop. Handles must remain in their originating VM. The API
-and bytecode are provisional. The CLI accepts a file, stdin or `-e source`.
+work limits. Debug stack inspection and hooks remain open. The API and bytecode
+are provisional. The CLI accepts a file, stdin or `-e source`.
 
 ```sh
 cargo test -p deadlib-lua
@@ -80,9 +97,9 @@ as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: all twelve reference probes pass; the Rust engine
-passes unchanged `locals.lua`, `vararg.lua` and `pm.lua`, while other probes reach
+currently exits unsuccessfully: all thirteen reference probes pass; the Rust engine
+passes unchanged `locals.lua`, `nextvar.lua`, `vararg.lua` and `pm.lua`, while other probes reach
 missing functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-24-rust-lua-coroutines.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-gc.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

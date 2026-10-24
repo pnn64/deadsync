@@ -14,7 +14,7 @@ import urllib.request
 URL = "https://www.lua.org/tests/lua5.1-tests.tar.gz"
 SHA256 = "49e4ca6561f82ea605908c5041ab5fad66ed9930fa0686675bd51b02767f18ad"
 FILES = ["constructs.lua", "locals.lua", "calls.lua", "events.lua", "nextvar.lua",
-         "literals.lua", "closure.lua", "vararg.lua", "strings.lua", "pm.lua", "sort.lua", "math.lua"]
+         "literals.lua", "closure.lua", "vararg.lua", "strings.lua", "pm.lua", "sort.lua", "math.lua", "gc.lua"]
 
 
 def main() -> None:
@@ -24,6 +24,11 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=60)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
+    sources = list((root / "crates/deadlib-lua").rglob("*.rs"))
+    sources += [root / "crates/deadlib-lua/Cargo.toml", Path(__file__).resolve()]
+    def source_hashes() -> dict[str, str]:
+        return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(sources)}
+    before = source_hashes()
     cache = root / "target/lua-reference-suites"
     cache.mkdir(parents=True, exist_ok=True)
     archive = cache / "lua5.1-tests.tar.gz"
@@ -60,12 +65,12 @@ def main() -> None:
             row[engine]["seconds"] = time.monotonic() - started
         results.append(row)
         print(filename, "reference=" + row["reference"]["status"], "rust=" + row["rust"]["status"], flush=True)
-    sources = list((root / "crates/deadlib-lua").rglob("*.rs"))
-    sources += [root / "crates/deadlib-lua/Cargo.toml", Path(__file__).resolve()]
+    if before != source_hashes():
+        raise SystemExit("sources changed during suite probes; results cannot be attributed")
     result = dict(suite_url=URL, suite_sha256=SHA256, bootstrap="_U=true; function Message(s) print(s) end",
                   command=command, results=results, instruction_limit=100_000_000,
                   file_timeout_seconds=args.timeout,
-                  source_hashes={p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(sources)},
+                  source_hashes=before,
                   limitations="Files are independent probes, not all.lua, the complete suite, or internal C API tests. No tests are removed or rewritten.")
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -13,6 +13,7 @@
 
 #![forbid(unsafe_code)]
 
+mod arena;
 mod bytecode;
 mod compiler;
 mod error;
@@ -32,7 +33,7 @@ pub use error::{Error, ErrorKind};
 #[doc(inline)]
 pub use value::{FunctionId, StringId, TableId, ThreadId, Value};
 #[doc(inline)]
-pub use vm::Vm;
+pub use vm::{HeapStats, Root, Vm};
 
 /// Compile Lua 5.1 source into verified, VM-independent bytecode.
 ///

@@ -50,6 +50,8 @@ def main() -> None:
         raise SystemExit("sources changed during benchmark; results cannot be attributed")
     samples = []
     reference_heap = {}
+    reference_collected_heap = {}
+    rust_heap = {}
     metadata = {}
     for line in run.stdout.splitlines():
         fields = line.split("\t")
@@ -61,6 +63,12 @@ def main() -> None:
                                 rust_allocated_bytes_total=int(size)))
         elif fields[0] == "reference_live_heap_bytes":
             reference_heap[fields[1]] = int(fields[2])
+        elif fields[0] == "reference_after_collect_heap_bytes":
+            reference_collected_heap[fields[1]] = int(fields[2])
+        elif fields[0] == "rust_heap_estimate":
+            _, name, phase, live, reserved, peak, collections, reclaimed = fields
+            rust_heap.setdefault(name, {})[phase] = dict(live_bytes=int(live), reserved_bytes=int(reserved),
+                observed_peak_reserved_bytes=int(peak), collections=int(collections), reclaimed_objects=int(reclaimed))
         elif len(fields) == 2:
             metadata[fields[0]] = fields[1]
     ratios = {}
@@ -72,8 +80,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired measurements for {name}")
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 16:
-        raise SystemExit(f"expected 16 workload measurements, received {len(ratios)}")
+    if len(ratios) != 18 or len(rust_heap) != 18 or len(reference_collected_heap) != 18:
+        raise SystemExit(f"expected 18 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         build_and_run_seconds=time.time() - started,
@@ -87,7 +95,8 @@ def main() -> None:
                        for p in sorted(sources)},
         median_paired_rust_over_lua51=ratios, samples=samples,
         reference_live_heap_bytes=reference_heap, metadata=metadata,
-        missing_metrics=["Rust live/peak heap", "process peak RSS", "native C allocation counts",
+        rust_heap_estimates=rust_heap, reference_after_collect_heap_bytes=reference_collected_heap,
+        missing_metrics=["exact Rust allocator live/peak heap", "process peak RSS", "native C allocation counts",
                          "per-thread CPU cycles", "other Rust engines", "full standard-library workloads"],
     )
     output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

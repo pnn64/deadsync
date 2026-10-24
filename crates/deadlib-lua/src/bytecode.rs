@@ -105,6 +105,8 @@ pub(crate) enum Upvalue {
 pub(crate) struct Prototype {
     pub code: Box<[Instruction]>,
     pub lines: Box<[u32]>,
+    pub gc_live: Box<[u32]>,
+    pub gc_maps: Box<[[u64; 4]]>,
     pub constants: Box<[Constant]>,
     pub registers: u16,
     pub params: u16,
@@ -121,9 +123,15 @@ pub(crate) struct ProgramData {
 }
 
 /// Verified bytecode and immutable constants, independent of any runtime heap.
+///
+/// While the host holds a program or its clones, each VM that loaded it retains
+/// its entry closure and function environment. Dropping the last host copy makes
+/// those bindings collectible; escaped Lua closures still retain their code.
 #[derive(Clone, Debug)]
 pub struct Program {
     pub(crate) data: Arc<ProgramData>,
+    // Runtime code owners do not keep the host's VM binding alive.
+    pub(crate) lifetime: Arc<()>,
 }
 
 impl Program {
@@ -139,6 +147,7 @@ impl Program {
 
     pub(crate) fn new(prototypes: Vec<Prototype>, entry: u32, name: &[u8]) -> Self {
         Self {
+            lifetime: Arc::new(()),
             data: Arc::new(ProgramData {
                 prototypes: prototypes.into_boxed_slice(),
                 entry,
@@ -185,6 +194,14 @@ impl Prototype {
             || self.params > self.registers
             || self.upvalues.len() > 60
             || self.lines.len() != self.code.len()
+            || self.gc_live.len() != self.code.len()
+            || self.gc_live.iter().any(|&m| {
+                (m as u16 as usize) >= self.gc_maps.len()
+                    || ((m >> 16) as usize) >= self.gc_maps.len()
+            })
+            || self.gc_maps.iter().any(|mask| {
+                (usize::from(self.registers)..256).any(|r| mask[r / 64] & (1u64 << (r % 64)) != 0)
+            })
             || self.code.is_empty()
         {
             return Err(fail(0, "invalid program layout"));
@@ -352,6 +369,22 @@ mod tests {
                 c: 0,
             };
             assert!(p.verify().is_err());
+        }
+    }
+
+    #[test]
+    fn verifier_rejects_corrupt_collector_metadata() {
+        let good = crate::compile(b"local t={};return t").unwrap();
+        for corrupt in 0..3 {
+            let mut p = good.clone();
+            let data = Arc::make_mut(&mut p.data);
+            let prototype = &mut data.prototypes[data.entry as usize];
+            match corrupt {
+                0 => prototype.gc_live = Box::new([]),
+                1 => prototype.gc_live[0] = u32::MAX,
+                _ => prototype.gc_maps[0][3] = 1u64 << 63,
+            }
+            assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }
     }
 }

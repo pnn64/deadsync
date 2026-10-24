@@ -91,6 +91,12 @@ pub(crate) struct Pattern {
     pub anchored: bool,
 }
 
+impl Pattern {
+    pub fn heap_bytes(&self) -> usize {
+        std::mem::size_of_val(self.code.as_ref()) + std::mem::size_of_val(self.sets.as_ref())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Alternative {
     Once,
@@ -125,6 +131,11 @@ impl Default for Work {
             count: 0,
             steps: 0,
         }
+    }
+}
+impl Work {
+    pub fn heap_bytes(&self) -> usize {
+        self.choices.capacity() * std::mem::size_of::<Choice>()
     }
 }
 fn error(message: &str) -> Error {

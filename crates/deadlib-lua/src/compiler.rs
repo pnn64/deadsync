@@ -6,6 +6,7 @@ use crate::{
     lexer::Kind,
     parser::{Ast, Block, Expr, ExprId, Stmt},
 };
+use std::collections::HashMap;
 
 struct Local<'a> {
     name: &'a [u8],
@@ -23,6 +24,10 @@ enum Target {
 struct Function<'a> {
     code: Vec<Instruction>,
     lines: Vec<u32>,
+    gc_live: Vec<u32>,
+    gc_maps: Vec<[u64; 4]>,
+    gc_index: HashMap<[u64; 4], u16>,
+    live: [u64; 4],
     constants: Vec<Constant>,
     locals: Vec<Local<'a>>,
     upvalues: Vec<(&'a [u8], Upvalue)>,
@@ -72,6 +77,8 @@ impl<'a> Compiler<'a> {
         self.prototypes.push(Prototype {
             code: f.code.into_boxed_slice(),
             lines: f.lines.into_boxed_slice(),
+            gc_live: f.gc_live.into_boxed_slice(),
+            gc_maps: f.gc_maps.into_boxed_slice(),
             constants: f.constants.into_boxed_slice(),
             registers: f.max.max(1),
             params: f.params,
@@ -166,13 +173,83 @@ impl<'a> Compiler<'a> {
         u8::try_from(start)
             .map_err(|_| self.error(ErrorKind::Limit, "function needs too many registers"))
     }
+    fn reset(&mut self, next: u16) {
+        self.function.next = next;
+        let word = usize::from(next) / 64;
+        let bit = next % 64;
+        if word < 4 {
+            self.function.live[word] &= (1u64 << bit) - 1;
+            self.function.live[word + 1..].fill(0);
+        }
+    }
+    fn live_register(&mut self, register: u16) {
+        if register < 256 {
+            self.function.live[usize::from(register) / 64] |= 1u64 << (register % 64);
+        }
+    }
+    fn live_map(&mut self) -> Result<u16, Error> {
+        let mask = self.function.live;
+        if let Some(&index) = self.function.gc_index.get(&mask) {
+            return Ok(index);
+        }
+        let index = u16::try_from(self.function.gc_maps.len())
+            .map_err(|_| self.error(ErrorKind::Limit, "too many GC register maps"))?;
+        self.function.gc_maps.push(mask);
+        self.function.gc_index.insert(mask, index);
+        Ok(index)
+    }
     fn emit(&mut self, op: Op, a: u8, b: u16, c: u32) -> Result<usize, Error> {
         let pc = self.function.code.len();
         if pc >= u32::MAX as usize {
             return Err(self.error(ErrorKind::Limit, "function has too many instructions"));
         }
+        let before = self.live_map()?;
+        match op {
+            Op::Load
+            | Op::Move
+            | Op::GetGlobal
+            | Op::NewTable
+            | Op::Closure
+            | Op::GetUpvalue
+            | Op::GetTable
+            | Op::Add
+            | Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Mod
+            | Op::Pow
+            | Op::Neg
+            | Op::Not
+            | Op::Len
+            | Op::Concat
+            | Op::Eq
+            | Op::Ne
+            | Op::Lt
+            | Op::Le
+            | Op::Gt
+            | Op::Ge => self.live_register(u16::from(a)),
+            Op::Call | Op::TailCall | Op::Vararg => {
+                let saved = self.function.next;
+                self.reset(u16::from(a));
+                self.function.next = saved;
+                let count = if c == OPEN || op == Op::TailCall {
+                    1
+                } else {
+                    c as u16
+                };
+                for r in u16::from(a)..u16::from(a) + count {
+                    self.live_register(r);
+                }
+            }
+            Op::ForLoop => self.live_register(u16::from(a) + 3),
+            _ => {}
+        }
+        let after = self.live_map()?;
         self.function.code.push(Instruction { op, a, b, c });
         self.function.lines.push(self.line);
+        self.function
+            .gc_live
+            .push(u32::from(before) | (u32::from(after) << 16));
         Ok(pc)
     }
     fn patch(&mut self, pc: usize) {
@@ -212,6 +289,7 @@ impl<'a> Compiler<'a> {
             return Err(self.error(ErrorKind::Limit, "too many local variables"));
         }
         self.function.locals.push(Local { name, reg });
+        self.live_register(u16::from(reg));
         Ok(())
     }
     fn block(&mut self, block: &Block) -> Result<(), Error> {
@@ -227,7 +305,7 @@ impl<'a> Compiler<'a> {
         self.block(body)?;
         self.close(saved.1)?;
         self.function.locals.truncate(saved.0);
-        self.function.next = saved.1;
+        self.reset(saved.1);
         Ok(())
     }
     fn finish_loop(&mut self) {
@@ -274,7 +352,7 @@ impl<'a> Compiler<'a> {
         match stmt {
             Stmt::Local(names, values) => {
                 let base = self.values(values, names.len())?;
-                self.function.next = u16::from(base) + names.len() as u16;
+                self.reset(u16::from(base) + names.len() as u16);
                 for (i, name) in names.iter().enumerate() {
                     self.bind(name, (usize::from(base) + i) as u8)?;
                 }
@@ -337,7 +415,7 @@ impl<'a> Compiler<'a> {
                     if let Some((function, method, args)) = call {
                         let dst = self.alloc(1)?;
                         self.call(function, method, args, dst, TAIL)?;
-                        self.function.next = saved;
+                        self.reset(saved);
                         return Ok(());
                     }
                 }
@@ -365,7 +443,7 @@ impl<'a> Compiler<'a> {
                 let r = self.alloc(1)?;
                 self.expr(*cond, r)?;
                 let done = self.emit(Op::JumpFalse, r, 0, 0)?;
-                self.function.next = saved;
+                self.reset(saved);
                 self.function.loops.push((saved, Vec::new()));
                 self.scope(body)?;
                 self.emit(Op::Jump, 0, 0, start)?;
@@ -390,7 +468,7 @@ impl<'a> Compiler<'a> {
                     let r = self.alloc(1)?;
                     self.expr(*cond, r)?;
                     let skip = self.emit(Op::JumpFalse, r, 0, 0)?;
-                    self.function.next = saved;
+                    self.reset(saved);
                     self.scope(body)?;
                     exits.push(self.emit(Op::Jump, 0, 0, 0)?);
                     self.patch(skip);
@@ -454,7 +532,7 @@ impl<'a> Compiler<'a> {
             }
             Stmt::ForIn(names, values, body) => {
                 let base = self.values(values, 3)?;
-                self.function.next = u16::from(base) + 3;
+                self.reset(u16::from(base) + 3);
                 let results = self.alloc(names.len().max(3) as u16)?;
                 let test = self.alloc(1)?;
                 let head = self.function.code.len() as u32;
@@ -479,7 +557,7 @@ impl<'a> Compiler<'a> {
                 self.finish_loop();
             }
         }
-        self.function.next = saved;
+        self.reset(saved);
         Ok(())
     }
 
@@ -570,7 +648,7 @@ impl<'a> Compiler<'a> {
                 )?;
             }
         }
-        self.function.next = saved;
+        self.reset(saved);
         Ok(())
     }
 
@@ -663,7 +741,7 @@ impl<'a> Compiler<'a> {
                         self.expr(*key, regs)?;
                         self.expr(*value, regs + 1)?;
                         self.emit(Op::SetTable, table, u16::from(regs), u32::from(regs + 1))?;
-                        self.function.next = u16::from(regs);
+                        self.reset(u16::from(regs));
                     } else {
                         let reg = self.alloc(1)?;
                         let open = i + 1 == fields.len() && self.multiple(*value);
@@ -678,7 +756,7 @@ impl<'a> Compiler<'a> {
                             )?;
                             flushed += u32::from(pending);
                             pending = 0;
-                            self.function.next = u16::from(table) + 1;
+                            self.reset(u16::from(table) + 1);
                         }
                     }
                 }
@@ -701,7 +779,7 @@ impl<'a> Compiler<'a> {
             }
             Expr::Vararg => self.expr_results(id, dst, 1)?,
         }
-        self.function.next = saved;
+        self.reset(saved);
         self.depth -= 1;
         Ok(())
     }

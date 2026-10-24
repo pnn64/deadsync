@@ -9,7 +9,7 @@ enum Key {
     String(StringId),
     Table(TableId),
     Function(FunctionId),
-    Native(u32),
+    Native(u64),
     Thread(ThreadId),
 }
 
@@ -42,11 +42,11 @@ impl Key {
         let (bits, tag) = match self {
             Self::Boolean(v) => (u64::from(v), 1),
             Self::Number(v) => (v, 2),
-            Self::String(v) => (u64::from(v.0), 3),
-            Self::Table(v) => (u64::from(v.0), 4),
-            Self::Function(v) => (u64::from(v.0), 5),
-            Self::Native(v) => (u64::from(v), 6),
-            Self::Thread(v) => (u64::from(v.0), 7),
+            Self::String(v) => (v.0, 3),
+            Self::Table(v) => (v.0, 4),
+            Self::Function(v) => (v.0, 5),
+            Self::Native(v) => (v, 6),
+            Self::Thread(v) => (v.0, 7),
         };
         let mut h = bits
             ^ (tag as u64)
@@ -85,6 +85,24 @@ pub(crate) struct Table {
 }
 
 impl Table {
+    pub fn heap_bytes(&self) -> usize {
+        self.array.capacity() * std::mem::size_of::<Value>()
+            + self.entries.capacity() * std::mem::size_of::<Entry>()
+            + self.slots.capacity() * 4
+    }
+    pub fn pairs(&self) -> impl Iterator<Item = (Value, Value)> + '_ {
+        self.array
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| **v != Value::Nil)
+            .map(|(i, v)| (Value::Number((i + 1) as f64), *v))
+            .chain(
+                self.entries
+                    .iter()
+                    .filter(|e| e.value != Value::Nil)
+                    .map(|e| (e.key.value(), e.value)),
+            )
+    }
     fn slot(&self, key: Key) -> Option<(usize, Option<usize>)> {
         if self.slots.is_empty() {
             return None;

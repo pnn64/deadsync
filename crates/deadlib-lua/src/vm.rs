@@ -7,17 +7,20 @@ use crate::{
     table::Table,
 };
 use std::{collections::HashMap, sync::Arc};
+mod gc;
 mod math;
 mod meta;
 mod native;
 mod strings;
 mod tables;
 mod threads;
+use crate::arena::{Arena, index as slot_index};
+pub use gc::{HeapStats, Root};
 use native::format_number;
 
 #[derive(Debug, Default)]
 struct Strings {
-    bytes: Vec<Box<[u8]>>,
+    bytes: Arena<Box<[u8]>>,
     buckets: Vec<u32>,
 }
 
@@ -40,16 +43,16 @@ impl Strings {
         while self.buckets[slot] != 0 {
             let id = self.buckets[slot] - 1;
             if self.bytes[id as usize].as_ref() == bytes {
-                return Some(StringId(id));
+                return self.bytes.key(id as usize).map(StringId);
             }
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
         None
     }
     fn add(&mut self, bytes: Box<[u8]>) -> StringId {
-        if (self.bytes.len() + 1) * 4 >= self.buckets.len() * 3 {
+        if (self.bytes.live_len() + 1) * 4 >= self.buckets.len() * 3 {
             let mut buckets = vec![0; (self.buckets.len() * 2).max(16)];
-            for (id, text) in self.bytes.iter().enumerate() {
+            for (id, text) in self.bytes.entries() {
                 let mut slot = Self::hash(text) & (buckets.len() - 1);
                 while buckets[slot] != 0 {
                     slot = (slot + 1) & (buckets.len() - 1);
@@ -62,17 +65,16 @@ impl Strings {
         while self.buckets[slot] != 0 {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
-        let id =
-            u32::try_from(self.bytes.len()).expect("Lua string arena exhausted addressable memory");
-        self.bytes.push(bytes);
-        self.buckets[slot] = id + 1;
+        self.bytes.note_alloc(bytes.len());
+        let id = self.bytes.insert(bytes);
+        self.buckets[slot] = slot_index(id) as u32 + 1;
         StringId(id)
     }
     fn intern(&mut self, bytes: &[u8]) -> StringId {
         self.find(bytes).unwrap_or_else(|| self.add(bytes.into()))
     }
     fn substring(&mut self, id: StringId, range: std::ops::Range<usize>) -> StringId {
-        let bytes = &self.bytes[id.0 as usize][range];
+        let bytes = &self.bytes[slot_index(id.0)][range];
         if let Some(id) = self.find(bytes) {
             return id;
         }
@@ -84,6 +86,7 @@ impl Strings {
 #[derive(Debug)]
 struct LoadedProgram {
     data: Arc<ProgramData>,
+    owner: std::sync::Weak<()>,
     constants: Box<[Box<[Value]>]>,
     entry: FunctionId,
 }
@@ -103,29 +106,31 @@ enum Cell {
 }
 
 // Numeric native IDs are shared by globals and the explicit continuation frames.
-const NEXT: u32 = 9;
-const PAIRS: u32 = 10;
-const IPAIRS: u32 = 11;
-const IPAIRS_STEP: u32 = 12;
-const GET_META: u32 = 13;
-const SET_META: u32 = 14;
-const PCALL: u32 = 15;
-const XPCALL: u32 = 16;
-const TOSTRING: u32 = 17;
-const PRINT: u32 = 18;
-const DEBUG_GET_META: u32 = 19;
-const DEBUG_SET_META: u32 = 20;
-const PAIRS_NEXT: u32 = 21;
-const GET_ENV: u32 = 22;
-const SET_ENV: u32 = 23;
-const LOAD_STRING: u32 = 24;
-const DEBUG_GET_ENV: u32 = 25;
-const DEBUG_SET_ENV: u32 = 26;
-const CONT_RAW: u32 = 128;
-const CONT_BOOL: u32 = 129;
-const CONT_NOT: u32 = 130;
-const CONT_IGNORE: u32 = 131;
-const CONT_HANDLER: u32 = 132;
+const NEXT: u64 = 9;
+const PAIRS: u64 = 10;
+const IPAIRS: u64 = 11;
+const IPAIRS_STEP: u64 = 12;
+const GET_META: u64 = 13;
+const SET_META: u64 = 14;
+const PCALL: u64 = 15;
+const XPCALL: u64 = 16;
+const TOSTRING: u64 = 17;
+const PRINT: u64 = 18;
+const DEBUG_GET_META: u64 = 19;
+const DEBUG_SET_META: u64 = 20;
+const PAIRS_NEXT: u64 = 21;
+const GET_ENV: u64 = 22;
+const SET_ENV: u64 = 23;
+const LOAD_STRING: u64 = 24;
+const DEBUG_GET_ENV: u64 = 25;
+const DEBUG_SET_ENV: u64 = 26;
+const COLLECT_GARBAGE: u64 = 27;
+const GC_INFO: u64 = 28;
+const CONT_RAW: u64 = 128;
+const CONT_BOOL: u64 = 129;
+const CONT_NOT: u64 = 130;
+const CONT_IGNORE: u64 = 131;
+const CONT_HANDLER: u64 = 132;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -147,8 +152,9 @@ enum Meta {
     Call,
     ToString,
     Protected,
+    Mode,
 }
-const META_NAMES: [&[u8]; 17] = [
+const META_NAMES: [&[u8]; 18] = [
     b"__index",
     b"__newindex",
     b"__add",
@@ -166,18 +172,19 @@ const META_NAMES: [&[u8]; 17] = [
     b"__call",
     b"__tostring",
     b"__metatable",
+    b"__mode",
 ];
 
 #[derive(Clone, Copy, Debug)]
 enum FrameKind {
     Lua(FunctionId),
-    Native(u32),
+    Native(u64),
 }
 
 #[derive(Clone, Copy, Debug)]
 struct Frame {
     function: FrameKind,
-    pc: usize,
+    pc: u32,
     base: usize,
     stack_start: usize,
     result: usize,
@@ -185,8 +192,16 @@ struct Frame {
     // C-boundary depth at entry, including this frame when it is native.
     barriers: u16,
     vararg_start: usize,
-    vararg_count: usize,
+    vararg_count: u32,
     tail_calls: u32,
+}
+impl Frame {
+    fn pc(self) -> usize {
+        self.pc as usize
+    }
+    fn argc(self) -> usize {
+        self.vararg_count as usize
+    }
 }
 
 const FRAME_OPEN: u16 = u16::MAX;
@@ -202,35 +217,40 @@ const _: () = assert!(std::mem::size_of::<Frame>() == 64);
 
 /// A Lua state with persistent globals and reusable contiguous register storage.
 ///
-/// Object values must only be used with the VM that produced them. The current
-/// collector is not implemented; heap objects remain alive until the VM is dropped.
+/// Object values must only be used with the VM that produced them. Pin values
+/// with [`Self::pin`] when the host needs them across executions or collections.
 #[derive(Debug)]
 pub struct Vm {
     registers: Vec<Value>,
-    programs: Vec<LoadedProgram>,
-    functions: Vec<Closure>,
-    upvalues: Vec<Cell>,
+    programs: Arena<LoadedProgram>,
+    functions: Arena<Closure>,
+    upvalues: Arena<Cell>,
     open_upvalues: Vec<u32>,
     frames: Vec<Frame>,
     strings: Strings,
-    tables: Vec<Table>,
+    tables: Arena<Table>,
     globals: TableId,
     top: usize,
     budget: Option<u64>,
     type_metatables: [Option<TableId>; 7],
-    meta_names: [StringId; 17],
+    meta_names: [StringId; 18],
     output: Option<Vec<u8>>,
     active_native: Option<usize>,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
     pattern_work: crate::pattern::Work,
-    native_closures: Vec<threads::NativeClosure>,
-    native_envs: HashMap<u32, TableId>,
+    native_closures: Arena<threads::NativeClosure>,
+    native_envs: HashMap<u64, TableId>,
     substitutions: Vec<strings::Substitution>,
     sorts: Vec<tables::Sort>,
     buffers: Vec<Vec<u8>>,
-    threads: Vec<threads::Thread>,
+    threads: Arena<threads::Thread>,
+    main: ThreadId,
+    initial_globals: TableId,
     thread: ThreadId,
     transition: Option<threads::Transition>,
+    gc: gc::Collector,
+    roots: Arena<Value>,
+    identity: u64,
 }
 
 impl Default for Vm {
@@ -242,32 +262,41 @@ impl Default for Vm {
 impl Vm {
     /// Create a state with the currently implemented base and math functions.
     pub fn new() -> Self {
+        let mut tables = Arena::default();
+        let globals = TableId(tables.insert(Table::default()));
+        let mut threads = Arena::default();
+        let main = ThreadId(threads.insert(threads::Thread::main(globals)));
         let mut vm = Self {
             registers: Vec::new(),
-            programs: Vec::new(),
-            functions: Vec::new(),
-            upvalues: Vec::new(),
+            programs: Arena::default(),
+            functions: Arena::default(),
+            upvalues: Arena::default(),
             open_upvalues: Vec::new(),
             frames: Vec::new(),
             strings: Strings::default(),
-            tables: vec![Table::default()],
-            globals: TableId(0),
+            tables,
+            globals,
             top: 0,
             budget: None,
             type_metatables: [None; 7],
-            meta_names: [StringId(0); 17],
+            meta_names: [StringId(0); 18],
             output: None,
             active_native: None,
             patterns: HashMap::new(),
             pattern_work: crate::pattern::Work::default(),
-            native_closures: Vec::new(),
+            native_closures: Arena::default(),
             native_envs: HashMap::new(),
             substitutions: Vec::new(),
             sorts: Vec::new(),
             buffers: Vec::new(),
-            threads: vec![threads::Thread::main()],
-            thread: ThreadId(0),
+            threads,
+            thread: main,
+            main,
+            initial_globals: globals,
             transition: None,
+            gc: gc::Collector::default(),
+            roots: Arena::default(),
+            identity: gc::new_vm_identity(),
         };
         for (id, name) in [
             b"assert".as_slice(),
@@ -283,7 +312,7 @@ impl Vm {
         .iter()
         .enumerate()
         {
-            vm.set_global(name, Value::Native(id as u32))
+            vm.set_global(name, Value::Native(id as u64))
                 .expect("base library names are valid");
         }
         vm.meta_names = META_NAMES.map(|name| vm.strings.intern(name));
@@ -300,6 +329,8 @@ impl Vm {
             (GET_ENV, b"getfenv"),
             (SET_ENV, b"setfenv"),
             (LOAD_STRING, b"loadstring"),
+            (COLLECT_GARBAGE, b"collectgarbage"),
+            (GC_INFO, b"gcinfo"),
         ] {
             vm.set_global(name, Value::Native(id))
                 .expect("base library names are valid");
@@ -312,13 +343,13 @@ impl Vm {
             (DEBUG_SET_ENV, b"setfenv"),
         ] {
             let key = vm.intern(name);
-            vm.tables[debug.0 as usize]
+            vm.tables[slot_index(debug.0)]
                 .set(key, Value::Native(id))
                 .expect("debug library names are valid");
         }
         vm.set_global(b"debug", Value::Table(debug))
             .expect("debug name is valid");
-        vm.set_global(b"_G", Value::Table(TableId(0)))
+        vm.set_global(b"_G", Value::Table(globals))
             .expect("global table name is valid");
         let version = vm.intern(b"Lua 5.1");
         vm.set_global(b"_VERSION", version)
@@ -327,6 +358,7 @@ impl Vm {
         vm.open_strings();
         vm.open_tables();
         vm.open_threads();
+        vm.reset_gc_debt();
         vm
     }
 
@@ -364,30 +396,49 @@ impl Vm {
 
     /// Borrow bytes for a string identity produced by this VM.
     pub fn string_bytes(&self, id: StringId) -> Option<&[u8]> {
-        self.strings.bytes.get(id.0 as usize).map(AsRef::as_ref)
+        self.strings.bytes.get(id.0).map(AsRef::as_ref)
     }
 
     /// Read a global variable; absent variables have value `nil`.
     pub fn global(&mut self, name: &[u8]) -> Value {
         let k = self.intern(name);
-        self.tables[self.globals.0 as usize].get(k)
+        self.tables[slot_index(self.globals.0)].get(k)
     }
 
     /// Set a global variable.
     ///
     /// # Errors
-    /// Returns an error for an invalid table key.
+    /// Returns an error for an invalid or collected object handle.
     pub fn set_global(&mut self, name: &[u8], value: Value) -> Result<(), Error> {
+        self.validate_value(value)?;
         let k = self.intern(name);
-        self.tables[self.globals.0 as usize].set(k, value)
+        self.raw_set(self.globals, k, value)
+    }
+
+    fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
+        let table = &mut self.tables[slot_index(id.0)];
+        let before = table.heap_bytes();
+        table.set(key, value)?;
+        let growth = table.heap_bytes().saturating_sub(before);
+        if growth != 0 {
+            self.tables.note_alloc(growth);
+            self.gc.pending = true;
+        }
+        Ok(())
+    }
+    fn resize_registers(&mut self, len: usize) {
+        let before = self.registers.capacity();
+        self.registers.resize(len, Value::Nil);
+        self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
+    }
+    fn push_record(&mut self, frame: Frame) {
+        let before = self.frames.capacity();
+        self.frames.push(frame);
+        self.gc_note_control((self.frames.capacity() - before) * std::mem::size_of::<Frame>());
     }
 
     fn new_table(&mut self) -> TableId {
-        let id = TableId(
-            u32::try_from(self.tables.len()).expect("Lua table arena exhausted addressable memory"),
-        );
-        self.tables.push(Table::default());
-        id
+        TableId(self.tables.insert(Table::default()))
     }
     fn number(&self, value: Value) -> Option<f64> {
         match value {
@@ -410,19 +461,7 @@ impl Vm {
     }
     fn table(&self, value: Value) -> Result<&Table, Error> {
         if let Value::Table(id) = value
-            && let Some(t) = self.tables.get(id.0 as usize)
-        {
-            return Ok(t);
-        }
-        Err(Error::new(
-            ErrorKind::Runtime,
-            0,
-            format!("attempt to index a {} value", value.type_name()),
-        ))
-    }
-    fn table_mut(&mut self, value: Value) -> Result<&mut Table, Error> {
-        if let Value::Table(id) = value
-            && let Some(t) = self.tables.get_mut(id.0 as usize)
+            && let Some(t) = self.tables.get(id.0)
         {
             return Ok(t);
         }
@@ -434,12 +473,23 @@ impl Vm {
     }
 
     fn load(&mut self, program: &Program) -> FunctionId {
-        if let Some(p) = self
+        let cached = self
             .programs
-            .iter()
-            .find(|p| Arc::ptr_eq(&p.data, &program.data))
-        {
-            return p.entry;
+            .entries()
+            .find(|(_, p)| Arc::ptr_eq(&p.data, &program.data))
+            .map(|(index, p)| (index, p.entry));
+        if let Some((index, old_entry)) = cached {
+            if self.functions.contains(old_entry.0) {
+                return old_entry;
+            }
+            let entry = FunctionId(self.functions.insert(Closure {
+                program: index,
+                prototype: program.data.entry as usize,
+                upvalues: Box::default(),
+                env: self.globals,
+            }));
+            self.programs[index].entry = entry;
+            return entry;
         }
         let mut constants = Vec::with_capacity(program.data.prototypes.len());
         for prototype in &program.data.prototypes {
@@ -454,18 +504,21 @@ impl Vm {
             }
             constants.push(values.into_boxed_slice());
         }
-        let entry = FunctionId(self.functions.len() as u32);
-        self.functions.push(Closure {
-            program: self.programs.len(),
+        let index = slot_index(self.programs.insert(LoadedProgram {
+            data: Arc::clone(&program.data),
+            owner: Arc::downgrade(&program.lifetime),
+            constants: constants.into_boxed_slice(),
+            entry: FunctionId(0),
+        }));
+        let bytes = gc::program_bytes(&self.programs[index]);
+        self.programs.note_alloc(bytes);
+        let entry = FunctionId(self.functions.insert(Closure {
+            program: index,
             prototype: program.data.entry as usize,
             upvalues: Box::default(),
             env: self.globals,
-        });
-        self.programs.push(LoadedProgram {
-            data: Arc::clone(&program.data),
-            constants: constants.into_boxed_slice(),
-            entry,
-        });
+        }));
+        self.programs[index].entry = entry;
         entry
     }
 
@@ -477,8 +530,7 @@ impl Vm {
         {
             return id;
         }
-        let id = self.upvalues.len() as u32;
-        self.upvalues.push(Cell::Open(self.thread, register));
+        let id = slot_index(self.upvalues.insert(Cell::Open(self.thread, register))) as u32;
         self.open_upvalues.push(id);
         id
     }
@@ -512,7 +564,7 @@ impl Vm {
                 "Lua call stack limit exceeded",
             ));
         }
-        let closure = &self.functions[function.0 as usize];
+        let closure = &self.functions[slot_index(function.0)];
         let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
         let (registers, params, compat_arg) = (
             usize::from(proto.registers),
@@ -520,7 +572,7 @@ impl Vm {
             proto.compat_arg,
         );
         let base = self.registers.len();
-        self.registers.resize(base + registers, Value::Nil);
+        self.resize_registers(base + registers);
         self.registers
             .copy_within(call + 1..call + 1 + count.min(params), base);
         let vararg_count = count.saturating_sub(params);
@@ -528,16 +580,17 @@ impl Vm {
         if compat_arg {
             let t = self.new_table();
             for i in 0..vararg_count {
-                self.tables[t.0 as usize].set(
+                self.raw_set(
+                    t,
                     Value::Number((i + 1) as f64),
                     self.registers[vararg_start + i],
                 )?;
             }
             let n = self.intern(b"n");
-            self.tables[t.0 as usize].set(n, Value::Number(vararg_count as f64))?;
+            self.raw_set(t, n, Value::Number(vararg_count as f64))?;
             self.registers[base + params] = Value::Table(t);
         }
-        self.frames.push(Frame {
+        self.push_record(Frame {
             function: FrameKind::Lua(function),
             pc: 0,
             base,
@@ -546,7 +599,7 @@ impl Vm {
             wanted: frame_wanted(wanted),
             barriers: self.frames.last().map_or(0, |f| f.barriers),
             vararg_start,
-            vararg_count,
+            vararg_count: vararg_count as u32,
             tail_calls: 0,
         });
         self.top = base;
@@ -556,7 +609,7 @@ impl Vm {
     fn tail_frame(&mut self, function: FunctionId, call: usize, count: usize) -> Result<(), Error> {
         let frame = *self.frames.last().expect("tail call has an active frame");
         self.close_upvalues(frame.base);
-        let closure = &self.functions[function.0 as usize];
+        let closure = &self.functions[slot_index(function.0)];
         let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
         let (registers, params, compat_arg) = (
             usize::from(proto.registers),
@@ -568,7 +621,7 @@ impl Vm {
         let base = frame.stack_start + extras;
         let end = base + registers;
         let scratch = self.registers.len().max(end);
-        self.registers.resize(scratch + count, Value::Nil);
+        self.resize_registers(scratch + count);
         self.registers
             .copy_within(call + 1..call + 1 + count, scratch);
         self.registers[frame.stack_start..end].fill(Value::Nil);
@@ -582,13 +635,14 @@ impl Vm {
         if compat_arg {
             let t = self.new_table();
             for i in 0..extras {
-                self.tables[t.0 as usize].set(
+                self.raw_set(
+                    t,
                     Value::Number((i + 1) as f64),
                     self.registers[frame.stack_start + i],
                 )?;
             }
             let n = self.intern(b"n");
-            self.tables[t.0 as usize].set(n, Value::Number(extras as f64))?;
+            self.raw_set(t, n, Value::Number(extras as f64))?;
             self.registers[base + params] = Value::Table(t);
         }
         *self
@@ -599,7 +653,7 @@ impl Vm {
             pc: 0,
             base,
             vararg_start: frame.stack_start,
-            vararg_count: extras,
+            vararg_count: extras as u32,
             tail_calls: frame.tail_calls.saturating_add(1),
             ..frame
         };
@@ -611,6 +665,8 @@ impl Vm {
         self.close_upvalues(frame.base);
         if self.frames.len() == 1 {
             self.registers.copy_within(source..source + count, 0);
+            self.registers.truncate(count);
+            self.top = count;
             self.frames.clear();
             return Some(count);
         }
@@ -619,8 +675,7 @@ impl Vm {
         } else {
             frame.wanted as usize
         };
-        self.registers
-            .resize(self.registers.len().max(frame.result + wanted), Value::Nil);
+        self.resize_registers(self.registers.len().max(frame.result + wanted));
         let copied = count.min(wanted);
         self.registers
             .copy_within(source..source + copied, frame.result);
@@ -639,13 +694,12 @@ impl Vm {
     /// borrow the register storage until the next mutation of the VM.
     pub fn execute(&mut self, program: &Program) -> Result<&[Value], Error> {
         let function = self.load(program);
-        let closure = &self.functions[function.0 as usize];
+        let closure = &self.functions[slot_index(function.0)];
         let entry = &self.programs[closure.program].data.prototypes[closure.prototype];
         self.registers.clear();
-        self.registers
-            .resize(usize::from(entry.registers), Value::Nil);
+        self.resize_registers(usize::from(entry.registers));
         self.frames.clear();
-        self.frames.push(Frame {
+        self.push_record(Frame {
             function: FrameKind::Lua(function),
             pc: 0,
             base: 0,
@@ -666,7 +720,7 @@ impl Vm {
                 Err(error) if error.kind() == ErrorKind::Runtime => {
                     match self.catch_error(&error, error_line) {
                         Ok(true) => continue,
-                        Ok(false) if self.thread != ThreadId(0) => {
+                        Ok(false) if self.thread != self.main => {
                             self.fail_thread(&error, &mut error_line);
                             continue;
                         }
@@ -674,7 +728,7 @@ impl Vm {
                         Err(next) => break Err(next),
                     }
                 }
-                Ok(count) if self.thread != ThreadId(0) => {
+                Ok(count) if self.thread != self.main => {
                     self.finish_thread(0, count, false, false, &mut error_line);
                     continue;
                 }
@@ -710,6 +764,7 @@ impl Vm {
 
     fn run(&mut self, budget: &mut Option<u64>, error_line: &mut u32) -> Result<usize, Error> {
         'frames: loop {
+            self.maybe_gc();
             let frame_index = self.frames.len() - 1;
             let frame = self.frames[frame_index];
             let function = match frame.function {
@@ -734,14 +789,14 @@ impl Vm {
                 }
                 FrameKind::Lua(id) => id,
             };
-            let closure = &self.functions[function.0 as usize];
+            let closure = &self.functions[slot_index(function.0)];
             let (program_index, proto_index, env) =
                 (closure.program, closure.prototype, closure.env);
             // Hold immutable code independently of VM-vector growth during native calls.
             // Shared ownership is acquired once on frame entry, never per instruction/value.
             let data = Arc::clone(&self.programs[program_index].data);
             let prototype = &data.prototypes[proto_index];
-            let mut pc = frame.pc;
+            let mut pc = frame.pc();
             let base = frame.base;
             loop {
                 Self::charge(budget)?;
@@ -751,7 +806,7 @@ impl Vm {
                 let a = base + usize::from(i.a);
                 let b = base + usize::from(i.b);
                 let c = i.c as usize;
-                self.frames[frame_index].pc = pc;
+                self.frames[frame_index].pc = pc as u32;
                 match i.op {
                     Op::Load => {
                         self.registers[a] = self.programs[program_index].constants[proto_index][c]
@@ -760,8 +815,7 @@ impl Vm {
                         let count = self.top.checked_sub(b).ok_or_else(|| {
                             Error::new(ErrorKind::Runtime, 0, "invalid open result range")
                         })?;
-                        self.registers
-                            .resize(self.registers.len().max(a + count), Value::Nil);
+                        self.resize_registers(self.registers.len().max(a + count));
                         self.registers.copy_within(b..b + count, a);
                         self.top = a + count;
                     }
@@ -779,6 +833,7 @@ impl Vm {
                     Op::NewTable => {
                         let id = self.new_table();
                         self.registers[a] = Value::Table(id);
+                        self.maybe_gc();
                     }
                     Op::SetList => {
                         let count = if i.b == OPEN_ARGS {
@@ -789,8 +844,14 @@ impl Vm {
                         let table = self.registers[a];
                         for offset in 0..count {
                             let value = self.registers[a + 1 + offset];
-                            self.table_mut(table)?
-                                .set(Value::Number((c + offset) as f64), value)?;
+                            self.table(table)?;
+                            let Value::Table(id) = table else {
+                                unreachable!("validated table")
+                            };
+                            self.raw_set(id, Value::Number((c + offset) as f64), value)?;
+                        }
+                        if self.gc.pending {
+                            self.maybe_gc();
                         }
                     }
                     Op::Closure => {
@@ -804,33 +865,33 @@ impl Vm {
                             upvalues.push(match capture {
                                 Upvalue::Local(r) => self.capture_register(base + usize::from(r)),
                                 Upvalue::Outer(u) => {
-                                    self.functions[function.0 as usize].upvalues[usize::from(u)]
+                                    self.functions[slot_index(function.0)].upvalues[usize::from(u)]
                                 }
                             });
                         }
-                        let id = FunctionId(self.functions.len() as u32);
-                        self.functions.push(Closure {
+                        self.functions.note_alloc(upvalues.len() * 4);
+                        let id = FunctionId(self.functions.insert(Closure {
                             program: program_index,
                             prototype: c,
                             upvalues: upvalues.into_boxed_slice(),
                             env,
-                        });
+                        }));
                         self.registers[a] = Value::Function(id);
+                        self.maybe_gc();
                     }
                     Op::GetUpvalue => {
-                        let id = self.functions[function.0 as usize].upvalues[c] as usize;
+                        let id = self.functions[slot_index(function.0)].upvalues[c] as usize;
                         self.registers[a] = self.cell_value(id);
                     }
                     Op::SetUpvalue => {
-                        let id = self.functions[function.0 as usize].upvalues[c] as usize;
+                        let id = self.functions[slot_index(function.0)].upvalues[c] as usize;
                         self.set_cell(id, self.registers[a]);
                     }
                     Op::Close => self.close_upvalues(a),
                     Op::Vararg => {
-                        let wanted = if i.c == OPEN { frame.vararg_count } else { c };
-                        let copied = wanted.min(frame.vararg_count);
-                        self.registers
-                            .resize(self.registers.len().max(a + wanted), Value::Nil);
+                        let wanted = if i.c == OPEN { frame.argc() } else { c };
+                        let copied = wanted.min(frame.argc());
+                        self.resize_registers(self.registers.len().max(a + wanted));
                         self.registers
                             .copy_within(frame.vararg_start..frame.vararg_start + copied, a);
                         self.registers[a + copied..a + wanted].fill(Value::Nil);
@@ -840,9 +901,9 @@ impl Vm {
                         let target = self.registers[b];
                         let key = self.registers[base + c];
                         if let Value::Table(id) = target
-                            && self.tables[id.0 as usize].metatable.is_none()
+                            && self.tables[slot_index(id.0)].metatable.is_none()
                         {
-                            self.registers[a] = self.tables[id.0 as usize].get(key);
+                            self.registers[a] = self.tables[slot_index(id.0)].get(key);
                         } else {
                             self.get_table(target, key, a)?;
                         }
@@ -852,11 +913,14 @@ impl Vm {
                         let key = self.registers[b];
                         let value = self.registers[base + c];
                         if let Value::Table(id) = target
-                            && self.tables[id.0 as usize].metatable.is_none()
+                            && self.tables[slot_index(id.0)].metatable.is_none()
                         {
-                            self.tables[id.0 as usize].set(key, value)?;
+                            self.raw_set(id, key, value)?;
                         } else {
                             self.set_table(target, key, value)?;
+                        }
+                        if self.gc.pending && self.frames.len() == frame_index + 1 {
+                            self.maybe_gc();
                         }
                     }
                     Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
@@ -884,7 +948,10 @@ impl Vm {
                         }
                     }
                     Op::Concat => {
-                        self.concatenate(self.registers[b], self.registers[base + c], a)?
+                        self.concatenate(self.registers[b], self.registers[base + c], a)?;
+                        if self.frames.len() == frame_index + 1 {
+                            self.maybe_gc();
+                        }
                     }
                     Op::Neg => {
                         if let Value::Number(x) = self.registers[b] {
@@ -956,7 +1023,7 @@ impl Vm {
                         } else {
                             usize::from(i.b)
                         };
-                        self.frames[frame_index].pc = pc;
+                        self.frames[frame_index].pc = pc as u32;
                         let Some(actual) = self.start_call(
                             a,
                             count,
@@ -989,7 +1056,7 @@ impl Vm {
                         continue 'frames;
                     }
                 }
-                self.frames[frame_index].pc = pc;
+                self.frames[frame_index].pc = pc as u32;
                 if self.frames.len() != frame_index + 1 {
                     continue 'frames;
                 }

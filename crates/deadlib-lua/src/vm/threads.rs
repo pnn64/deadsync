@@ -1,12 +1,12 @@
 //! Shared-heap Lua threads with vector context switches and an explicit scheduler.
 use super::*;
 
-pub(super) const CO_CREATE: u32 = 80;
-pub(super) const CO_RESUME: u32 = 81;
-pub(super) const CO_RUNNING: u32 = 82;
-pub(super) const CO_STATUS: u32 = 83;
-pub(super) const CO_WRAP: u32 = 84;
-pub(super) const CO_YIELD: u32 = 85;
+pub(super) const CO_CREATE: u64 = 80;
+pub(super) const CO_RESUME: u64 = 81;
+pub(super) const CO_RUNNING: u64 = 82;
+pub(super) const CO_STATUS: u64 = 83;
+pub(super) const CO_WRAP: u64 = 84;
+pub(super) const CO_YIELD: u64 = 85;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Status {
@@ -45,27 +45,27 @@ pub(super) enum Transition {
 
 #[derive(Debug)]
 pub(super) struct Thread {
-    registers: Vec<Value>,
-    frames: Vec<Frame>,
-    open_upvalues: Vec<u32>,
-    globals: TableId,
-    top: usize,
-    active_native: Option<usize>,
-    substitutions: Vec<strings::Substitution>,
-    sorts: Vec<tables::Sort>,
-    entry: Option<FunctionId>,
-    status: Status,
-    resumer: Option<ThreadId>,
-    depth: u16,
-    line: u32,
+    pub(super) registers: Vec<Value>,
+    pub(super) frames: Vec<Frame>,
+    pub(super) open_upvalues: Vec<u32>,
+    pub(super) globals: TableId,
+    pub(super) top: usize,
+    pub(super) active_native: Option<usize>,
+    pub(super) substitutions: Vec<strings::Substitution>,
+    pub(super) sorts: Vec<tables::Sort>,
+    pub(super) entry: Option<FunctionId>,
+    pub(super) status: Status,
+    pub(super) resumer: Option<ThreadId>,
+    pub(super) depth: u16,
+    pub(super) line: u32,
 }
 impl Thread {
-    pub fn main() -> Self {
+    pub fn main(globals: TableId) -> Self {
         Self {
             registers: Vec::new(),
             frames: Vec::new(),
             open_upvalues: Vec::new(),
-            globals: TableId(0),
+            globals,
             top: 0,
             active_native: None,
             substitutions: Vec::new(),
@@ -82,7 +82,7 @@ impl Thread {
             entry: Some(entry),
             globals,
             status: Status::Suspended,
-            ..Self::main()
+            ..Self::main(globals)
         }
     }
 }
@@ -106,45 +106,44 @@ impl Vm {
         .enumerate()
         {
             let name = self.intern(name);
-            self.tables[table.0 as usize]
-                .set(name, Value::Native(CO_CREATE + i as u32))
+            self.tables[slot_index(table.0)]
+                .set(name, Value::Native(CO_CREATE + i as u64))
                 .expect("coroutine names are valid");
         }
         self.set_global(b"coroutine", Value::Table(table))
             .expect("coroutine name is valid");
     }
     pub(super) fn new_native(&mut self, kind: NativeKind) -> Result<Value, Error> {
-        let id = u32::try_from(self.native_closures.len())
-            .ok()
-            .and_then(|n| n.checked_add(strings::ITERATOR_FIRST))
-            .ok_or_else(|| Error::new(ErrorKind::Limit, 0, "native closure arena exhausted"))?;
         let env = self
             .frames
             .last()
             .map_or(self.globals, |frame| match frame.function {
-                FrameKind::Lua(id) => self.functions[id.0 as usize].env,
+                FrameKind::Lua(id) => self.functions[slot_index(id.0)].env,
                 FrameKind::Native(id) => self.native_environment(id),
             });
-        self.native_closures.push(NativeClosure { env, kind });
+        let id = self.native_closures.insert(NativeClosure { env, kind });
         Ok(Value::Native(id))
     }
-    pub(super) fn is_wrapper(&self, id: u32) -> bool {
+    pub(super) fn is_wrapper(&self, id: u64) -> bool {
         id >= strings::ITERATOR_FIRST
             && self
                 .native_closures
-                .get((id - strings::ITERATOR_FIRST) as usize)
+                .get(id)
                 .is_some_and(|c| matches!(c.kind, NativeKind::Wrap(_)))
     }
-    pub(super) fn native_environment(&self, id: u32) -> TableId {
+    pub(super) fn native_environment(&self, id: u64) -> TableId {
         if id >= strings::ITERATOR_FIRST {
-            self.native_closures[(id - strings::ITERATOR_FIRST) as usize].env
+            self.native_closures[slot_index(id)].env
         } else {
-            self.native_envs.get(&id).copied().unwrap_or(TableId(0))
+            self.native_envs
+                .get(&id)
+                .copied()
+                .unwrap_or(self.initial_globals)
         }
     }
-    pub(super) fn set_native_environment(&mut self, id: u32, env: TableId) {
+    pub(super) fn set_native_environment(&mut self, id: u64, env: TableId) {
         if id >= strings::ITERATOR_FIRST {
-            self.native_closures[(id - strings::ITERATOR_FIRST) as usize].env = env;
+            self.native_closures[slot_index(id)].env = env;
         } else {
             self.native_envs.insert(id, env);
         }
@@ -153,14 +152,14 @@ impl Vm {
         if id == self.thread {
             self.globals
         } else {
-            self.threads[id.0 as usize].globals
+            self.threads[slot_index(id.0)].globals
         }
     }
     pub(super) fn set_thread_environment(&mut self, id: ThreadId, env: TableId) {
         if id == self.thread {
             self.globals = env;
         } else {
-            self.threads[id.0 as usize].globals = env;
+            self.threads[slot_index(id.0)].globals = env;
         }
     }
     pub(super) fn cell_value(&self, id: usize) -> Value {
@@ -170,7 +169,7 @@ impl Vm {
                 if thread == self.thread {
                     self.registers[register]
                 } else {
-                    self.threads[thread.0 as usize].registers[register]
+                    self.threads[slot_index(thread.0)].registers[register]
                 }
             }
         }
@@ -182,7 +181,7 @@ impl Vm {
                 if thread == self.thread {
                     self.registers[register] = value;
                 } else {
-                    self.threads[thread.0 as usize].registers[register] = value;
+                    self.threads[slot_index(thread.0)].registers[register] = value;
                 }
             }
         }
@@ -190,7 +189,7 @@ impl Vm {
     // Active vectors stay directly in Vm for ordinary dispatch. Switching swaps
     // ownership with the inactive thread slots; it never copies stack contents.
     fn exchange_thread(&mut self, id: ThreadId, line: &mut u32) {
-        let state = &mut self.threads[id.0 as usize];
+        let state = &mut self.threads[slot_index(id.0)];
         std::mem::swap(&mut self.registers, &mut state.registers);
         std::mem::swap(&mut self.frames, &mut state.frames);
         std::mem::swap(&mut self.open_upvalues, &mut state.open_upvalues);
@@ -211,7 +210,7 @@ impl Vm {
             None => {}
             Some(Transition::Resume(id)) => {
                 self.switch_thread(id, line);
-                if let Some(entry) = self.threads[id.0 as usize].entry.take() {
+                if let Some(entry) = self.threads[slot_index(id.0)].entry.take() {
                     self.push_frame(entry, 0, self.top, OPEN)?;
                 }
             }
@@ -230,11 +229,11 @@ impl Vm {
         line: &mut u32,
     ) {
         let id = self.thread;
-        let parent = self.threads[id.0 as usize]
+        let parent = self.threads[slot_index(id.0)]
             .resumer
             .take()
             .expect("resumed coroutine has a parent");
-        let caller = &mut self.threads[parent.0 as usize];
+        let caller = &mut self.threads[slot_index(parent.0)];
         let frame = caller
             .frames
             .last_mut()
@@ -253,7 +252,7 @@ impl Vm {
         caller.top = base + prefix + count;
         frame.pc = if failed { 3 } else { 2 };
         caller.status = Status::Running;
-        self.threads[id.0 as usize].status = if suspended {
+        self.threads[slot_index(id.0)].status = if suspended {
             Status::Suspended
         } else {
             Status::Dead
@@ -276,9 +275,9 @@ impl Vm {
     }
     pub(super) fn abort_threads(&mut self, line: &mut u32) {
         self.transition = None;
-        while self.thread != ThreadId(0) {
+        while self.thread != self.main {
             let id = self.thread;
-            let parent = self.threads[id.0 as usize]
+            let parent = self.threads[slot_index(id.0)]
                 .resumer
                 .take()
                 .expect("active thread has a resumer");
@@ -286,14 +285,14 @@ impl Vm {
             self.frames.clear();
             self.trim_substitutions();
             self.sorts.clear();
-            self.threads[id.0 as usize].status = Status::Dead;
+            self.threads[slot_index(id.0)].status = Status::Dead;
             self.switch_thread(parent, line);
         }
         self.threads[0].status = Status::Running;
     }
     pub(super) fn coroutine_native(
         &mut self,
-        id: u32,
+        id: u64,
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
@@ -302,11 +301,7 @@ impl Vm {
                 let Value::Function(entry) = self.argument(base, count, 0) else {
                     return Err(runtime("bad argument #1 (Lua function expected)"));
                 };
-                let thread = ThreadId(
-                    u32::try_from(self.threads.len())
-                        .map_err(|_| Error::new(ErrorKind::Limit, 0, "thread arena exhausted"))?,
-                );
-                self.threads.push(Thread::new(entry, self.globals));
+                let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
                 if id == CO_WRAP {
                     self.new_native(NativeKind::Wrap(thread))?
                 } else {
@@ -314,7 +309,7 @@ impl Vm {
                 }
             }
             CO_RUNNING => {
-                if self.thread == ThreadId(0) {
+                if self.thread == self.main {
                     Value::Nil
                 } else {
                     Value::Thread(self.thread)
@@ -327,7 +322,7 @@ impl Vm {
                 let status = if thread == self.thread {
                     Status::Running
                 } else {
-                    self.threads[thread.0 as usize].status
+                    self.threads[slot_index(thread.0)].status
                 };
                 self.intern(status.name())
             }
@@ -336,12 +331,12 @@ impl Vm {
         self.registers[base] = result;
         Ok(1)
     }
-    pub(super) fn coroutine_step(&mut self, id: u32, frame: Frame) -> Result<Option<usize>, Error> {
+    pub(super) fn coroutine_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let owner = self.frames.len() - 1;
         if id == CO_YIELD {
-            if frame.pc == 0 {
-                if self.thread == ThreadId(0) || frame.barriers > 1 {
+            if frame.pc() == 0 {
+                if self.thread == self.main || frame.barriers > 1 {
                     let message = "attempt to yield across metamethod/C-call boundary";
                     let value = self.intern(message.as_bytes());
                     return Err(Error::raised(value, message));
@@ -349,19 +344,19 @@ impl Vm {
                 self.frames[owner].pc = 1;
                 self.transition = Some(Transition::Yield {
                     source: frame.vararg_start,
-                    count: frame.vararg_count,
+                    count: frame.argc(),
                 });
                 return Ok(None);
             }
             return Ok(self.return_frame(frame, base, self.top - base));
         }
         let wrapped = id != CO_RESUME;
-        if frame.pc >= 2 {
-            if wrapped && frame.pc == 3 {
+        if frame.pc() >= 2 {
+            if wrapped && frame.pc() == 3 {
                 let value = self.located_error(self.registers[base], 1);
                 let message = match value {
                     Value::String(s) => {
-                        String::from_utf8_lossy(&self.strings.bytes[s.0 as usize]).into_owned()
+                        String::from_utf8_lossy(&self.strings.bytes[slot_index(s.0)]).into_owned()
                     }
                     _ => format!("error object is a {} value", value.type_name()),
                 };
@@ -370,15 +365,12 @@ impl Vm {
             return Ok(self.return_frame(frame, base, self.top - base));
         }
         let thread = if wrapped {
-            let NativeKind::Wrap(thread) =
-                self.native_closures[(id - strings::ITERATOR_FIRST) as usize].kind
-            else {
+            let NativeKind::Wrap(thread) = self.native_closures[slot_index(id)].kind else {
                 unreachable!("native wrapper kind")
             };
             thread
         } else {
-            let Value::Thread(thread) =
-                self.argument(frame.vararg_start - 1, frame.vararg_count, 0)
+            let Value::Thread(thread) = self.argument(frame.vararg_start - 1, frame.argc(), 0)
             else {
                 return Err(runtime("bad argument #1 (coroutine expected)"));
             };
@@ -387,7 +379,7 @@ impl Vm {
         let status = if thread == self.thread {
             Status::Running
         } else {
-            self.threads[thread.0 as usize].status
+            self.threads[slot_index(thread.0)].status
         };
         // A resumed thread inherits the caller's C-call count. Suspended native
         // callbacks and tag-method continuations each add one boundary; ordinary
@@ -415,7 +407,7 @@ impl Vm {
                 )
             })
             .count();
-        let depth = usize::from(self.threads[self.thread.0 as usize].depth) + boundaries;
+        let depth = usize::from(self.threads[slot_index(self.thread.0)].depth) + boundaries;
         if status != Status::Suspended || depth >= 199 {
             let message = if status != Status::Suspended {
                 format!(
@@ -427,11 +419,11 @@ impl Vm {
             };
             if status == Status::Suspended
                 && depth >= 199
-                && self.threads[thread.0 as usize].entry.is_some()
+                && self.threads[slot_index(thread.0)].entry.is_some()
             {
                 // lua_resume's initial-stack overflow error replaces the entry
                 // function; auxresume removes that error, leaving a dead thread.
-                let state = &mut self.threads[thread.0 as usize];
+                let state = &mut self.threads[slot_index(thread.0)];
                 state.entry = None;
                 state.registers.clear();
                 state.status = Status::Dead;
@@ -448,10 +440,11 @@ impl Vm {
             return Ok(None);
         }
         let offset = usize::from(!wrapped);
-        let count = frame.vararg_count - offset;
+        let count = frame.argc() - offset;
         let args =
             &self.registers[frame.vararg_start + offset..frame.vararg_start + offset + count];
-        let state = &mut self.threads[thread.0 as usize];
+        let state = &mut self.threads[slot_index(thread.0)];
+        let capacity = state.registers.capacity();
         if let Some(entry) = state.entry {
             state.registers.clear();
             state.registers.push(Value::Function(entry));
@@ -472,7 +465,9 @@ impl Vm {
         state.resumer = Some(self.thread);
         state.status = Status::Running;
         state.depth = (depth + 1) as u16;
-        self.threads[self.thread.0 as usize].status = Status::Normal;
+        let growth = (state.registers.capacity() - capacity) * std::mem::size_of::<Value>();
+        self.threads.note_alloc(growth);
+        self.threads[slot_index(self.thread.0)].status = Status::Normal;
         self.frames[owner].pc = 1;
         self.transition = Some(Transition::Resume(thread));
         Ok(None)

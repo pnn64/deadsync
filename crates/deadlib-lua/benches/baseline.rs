@@ -198,6 +198,18 @@ fn main() {
             1000.0,
             30,
         ),
+        (
+            "gc_cycles",
+            "local s=0;for i=1,5000 do local t={i};t.self=t;s=s+t[1] end;collectgarbage();return s",
+            12502500.0,
+            20,
+        ),
+        (
+            "gc_weak_values",
+            "local w=setmetatable({},{__mode='v'});for i=1,3000 do w[i]={i} end;collectgarbage();return next(w)==nil and 1 or 0",
+            1.0,
+            20,
+        ),
     ] {
         let source = source.as_bytes();
         let program = compile(source).unwrap();
@@ -275,12 +287,30 @@ fn main() {
             "reference_live_heap_bytes\t{name}\t{}",
             reference.used_memory()
         );
+        for (phase, stats) in [
+            ("before_collect", vm.heap_stats()),
+            ("after_collect", vm.collect_garbage()),
+        ] {
+            println!(
+                "rust_heap_estimate\t{name}\t{phase}\t{}\t{}\t{}\t{}\t{}",
+                stats.live_bytes,
+                stats.reserved_bytes,
+                stats.peak_reserved_bytes,
+                stats.collections,
+                stats.reclaimed_objects
+            );
+        }
+        reference.gc_collect().unwrap();
+        println!(
+            "reference_after_collect_heap_bytes\t{name}\t{}",
+            reference.used_memory()
+        );
     }
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!(
         "allocation_scope\tRust GlobalAlloc only; native C malloc excluded; totals cover all iterations in each row"
     );
     println!(
-        "limitations\tNo Rust GC yet; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary"
+        "limitations\tAtomic tracing GC; heap numbers are capacity-based estimates, not RSS or exact allocator peaks; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary"
     );
 }

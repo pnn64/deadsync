@@ -2,8 +2,8 @@
 use super::*;
 use std::cell::Cell;
 
-pub(super) const MATH_FIRST: u32 = 32;
-pub(super) const MATH_LAST: u32 = 59;
+pub(super) const MATH_FIRST: u64 = 32;
+pub(super) const MATH_LAST: u64 = 59;
 
 // The Windows CRT used by the reference keeps rand/srand state per OS thread,
 // shared by Lua states on that thread. This stream is portable and deterministic;
@@ -98,8 +98,8 @@ impl Vm {
         .enumerate()
         {
             let key = self.intern(name);
-            self.tables[table.0 as usize]
-                .set(key, Value::Native(MATH_FIRST + i as u32))
+            self.tables[slot_index(table.0)]
+                .set(key, Value::Native(MATH_FIRST + i as u64))
                 .expect("math names are valid");
         }
         for (name, value) in [
@@ -108,7 +108,7 @@ impl Vm {
             (b"huge", Value::Number(f64::INFINITY)),
         ] {
             let key = self.intern(name);
-            self.tables[table.0 as usize]
+            self.tables[slot_index(table.0)]
                 .set(key, value)
                 .expect("math names are valid");
         }
@@ -121,7 +121,7 @@ impl Vm {
     }
     pub(super) fn math_native(
         &mut self,
-        id: u32,
+        id: u64,
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
@@ -201,16 +201,14 @@ impl Vm {
                 } else {
                     (x - integral).copysign(x)
                 };
-                self.registers
-                    .resize(self.registers.len().max(base + 2), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + 2));
                 self.registers[base] = Value::Number(integral);
                 self.registers[base + 1] = Value::Number(fraction);
                 return Ok(2);
             }
             56 => {
                 let (fraction, exponent) = frexp(x);
-                self.registers
-                    .resize(self.registers.len().max(base + 2), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + 2));
                 self.registers[base] = Value::Number(fraction);
                 self.registers[base + 1] = Value::Number(f64::from(exponent));
                 return Ok(2);
@@ -235,7 +233,7 @@ impl Vm {
         if !(2..=36).contains(&radix) {
             return Err(fail("bad argument #2 (base out of range)"));
         }
-        let text = &self.strings.bytes[string.0 as usize];
+        let text = &self.strings.bytes[slot_index(string.0)];
         let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
         let whitespace = |c: &u8| matches!(c, 9..=13 | 32);
         let first = text

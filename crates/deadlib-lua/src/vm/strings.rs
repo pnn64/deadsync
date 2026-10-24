@@ -2,22 +2,22 @@
 use super::*;
 use crate::pattern::{Capture, Matched, Pattern};
 
-pub(super) const STR_FIRST: u32 = 64;
-pub(super) const STR_LEN: u32 = 64;
-pub(super) const STR_SUB: u32 = 65;
-pub(super) const STR_REP: u32 = 66;
-pub(super) const STR_REVERSE: u32 = 67;
-pub(super) const STR_BYTE: u32 = 68;
-pub(super) const STR_CHAR: u32 = 69;
-pub(super) const STR_LOWER: u32 = 70;
-pub(super) const STR_UPPER: u32 = 71;
-pub(super) const STR_FIND: u32 = 72;
-pub(super) const STR_MATCH: u32 = 73;
-pub(super) const STR_GMATCH: u32 = 74;
-pub(super) const STR_GSUB: u32 = 75;
-pub(super) const STR_FORMAT: u32 = 76;
-pub(super) const STR_DUMP: u32 = 77;
-pub(super) const ITERATOR_FIRST: u32 = 256;
+pub(super) const STR_FIRST: u64 = 64;
+pub(super) const STR_LEN: u64 = 64;
+pub(super) const STR_SUB: u64 = 65;
+pub(super) const STR_REP: u64 = 66;
+pub(super) const STR_REVERSE: u64 = 67;
+pub(super) const STR_BYTE: u64 = 68;
+pub(super) const STR_CHAR: u64 = 69;
+pub(super) const STR_LOWER: u64 = 70;
+pub(super) const STR_UPPER: u64 = 71;
+pub(super) const STR_FIND: u64 = 72;
+pub(super) const STR_MATCH: u64 = 73;
+pub(super) const STR_GMATCH: u64 = 74;
+pub(super) const STR_GSUB: u64 = 75;
+pub(super) const STR_FORMAT: u64 = 76;
+pub(super) const STR_DUMP: u64 = 77;
+pub(super) const ITERATOR_FIRST: u64 = 1u64 << 32;
 
 #[derive(Debug)]
 pub(super) struct MatchIterator {
@@ -37,6 +37,23 @@ pub(super) struct Substitution {
     output: Vec<u8>,
     matched: Option<Matched>,
     done: bool,
+}
+impl Substitution {
+    pub(super) fn roots(&self) -> [Value; 3] {
+        [
+            Value::String(self.source),
+            Value::String(self.pattern),
+            self.replacement,
+        ]
+    }
+    pub(super) fn heap_bytes(&self) -> usize {
+        self.output.capacity()
+    }
+}
+impl MatchIterator {
+    pub(super) fn roots(&self) -> [Value; 2] {
+        [Value::String(self.source), Value::String(self.pattern)]
+    }
 }
 
 fn relative(index: i64, len: usize) -> i64 {
@@ -84,18 +101,18 @@ impl Vm {
         .enumerate()
         {
             let key = self.intern(name);
-            self.tables[table.0 as usize]
-                .set(key, Value::Native(STR_FIRST + i as u32))
+            self.tables[slot_index(table.0)]
+                .set(key, Value::Native(STR_FIRST + i as u64))
                 .expect("string names are valid");
         }
         let key = self.intern(b"gfind");
-        self.tables[table.0 as usize]
+        self.tables[slot_index(table.0)]
             .set(key, Value::Native(STR_GMATCH))
             .expect("string names are valid");
         self.set_global(b"string", Value::Table(table))
             .expect("string name is valid");
         let mt = self.new_table();
-        self.tables[mt.0 as usize]
+        self.tables[slot_index(mt.0)]
             .set(
                 Value::String(self.meta_names[Meta::Index as usize]),
                 Value::Table(table),
@@ -142,7 +159,7 @@ impl Vm {
     fn prepare_pattern(&mut self, id: StringId, anchor: bool) {
         self.patterns
             .entry((id, anchor))
-            .or_insert_with(|| Pattern::compile(&self.strings.bytes[id.0 as usize], anchor));
+            .or_insert_with(|| Pattern::compile(&self.strings.bytes[slot_index(id.0)], anchor));
     }
     fn capture_value(&mut self, source: StringId, capture: Capture) -> Result<Value, Error> {
         if capture.position() {
@@ -165,8 +182,7 @@ impl Vm {
         } else {
             usize::from(matched.count)
         };
-        self.registers
-            .resize(self.registers.len().max(base + count), Value::Nil);
+        self.resize_registers(self.registers.len().max(base + count));
         for index in 0..count {
             let capture = matched.capture(index)?;
             self.registers[base + index] = self.capture_value(source, capture)?;
@@ -175,7 +191,7 @@ impl Vm {
     }
     pub(super) fn string_native(
         &mut self,
-        id: u32,
+        id: u64,
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
@@ -202,7 +218,7 @@ impl Vm {
             return Ok(1);
         }
         let source = self.string_argument(base, count, 0)?;
-        let len = self.strings.bytes[source.0 as usize].len();
+        let len = self.strings.bytes[slot_index(source.0)].len();
         let value = match id {
             STR_LEN => Value::Number(len as f64),
             STR_SUB | STR_BYTE => {
@@ -235,9 +251,8 @@ impl Vm {
                     Value::String(self.strings.substring(source, range))
                 } else {
                     let count = range.len();
-                    self.registers
-                        .resize(self.registers.len().max(base + count), Value::Nil);
-                    for (i, &byte) in self.strings.bytes[source.0 as usize][range]
+                    self.resize_registers(self.registers.len().max(base + count));
+                    for (i, &byte) in self.strings.bytes[slot_index(source.0)][range]
                         .iter()
                         .enumerate()
                     {
@@ -260,13 +275,13 @@ impl Vm {
                     .try_reserve_exact(size)
                     .map_err(|_| Error::new(ErrorKind::Limit, 0, "string length overflow"))?;
                 for _ in 0..repeat {
-                    bytes.extend_from_slice(&self.strings.bytes[source.0 as usize]);
+                    bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
                 }
                 self.finish_buffer(bytes)
             }
             STR_REVERSE | STR_LOWER | STR_UPPER => {
                 let mut bytes = self.take_buffer(len);
-                let text = &self.strings.bytes[source.0 as usize];
+                let text = &self.strings.bytes[slot_index(source.0)];
                 if id == STR_REVERSE {
                     bytes.extend(text.iter().rev().copied());
                 } else {
@@ -285,13 +300,13 @@ impl Vm {
                 let start = relative(self.integer_argument(base, count, 2, Some(1))?, len)
                     .saturating_sub(1)
                     .clamp(0, len as i64) as usize;
-                let raw = self.strings.bytes[pattern.0 as usize].as_ref();
+                let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
                 let c_pattern = &raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())];
                 let plain = id == STR_FIND
                     && (self.argument(base, count, 3).is_truthy()
                         || !c_pattern.iter().any(|b| b"^$*+?.([%-".contains(b)));
                 if plain {
-                    let text = &self.strings.bytes[source.0 as usize];
+                    let text = &self.strings.bytes[slot_index(source.0)];
                     let found = if raw.is_empty() {
                         Some(start)
                     } else {
@@ -302,8 +317,7 @@ impl Vm {
                     };
                     if let Some(pos) = found {
                         let end = pos + raw.len();
-                        self.registers
-                            .resize(self.registers.len().max(base + 2), Value::Nil);
+                        self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Number((pos + 1) as f64);
                         self.registers[base + 1] = Value::Number(end as f64);
                         return Ok(2);
@@ -312,7 +326,7 @@ impl Vm {
                 } else {
                     self.prepare_pattern(pattern, true);
                     let found = self.patterns[&(pattern, true)].find(
-                        &self.strings.bytes[source.0 as usize],
+                        &self.strings.bytes[slot_index(source.0)],
                         start,
                         &mut self.pattern_work,
                     )?;
@@ -321,8 +335,7 @@ impl Vm {
                             return self.capture_results(base, source, found, true);
                         }
                         let n = self.capture_results(base + 2, source, found, false)?;
-                        self.registers
-                            .resize(self.registers.len().max(base + 2), Value::Nil);
+                        self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Number((found.start + 1) as f64);
                         self.registers[base + 1] = Value::Number(found.end as f64);
                         return Ok(n + 2);
@@ -344,18 +357,18 @@ impl Vm {
         self.registers[base] = value;
         Ok(1)
     }
-    pub(super) fn match_iterator(&mut self, id: u32, base: usize) -> Result<usize, Error> {
-        let index = (id - ITERATOR_FIRST) as usize;
+    pub(super) fn match_iterator(&mut self, id: u64, base: usize) -> Result<usize, Error> {
+        let index = slot_index(id);
         let Some(threads::NativeClosure {
             kind: threads::NativeKind::Match(iter),
             ..
-        }) = self.native_closures.get(index)
+        }) = self.native_closures.get(id)
         else {
             return Err(Error::new(ErrorKind::Runtime, 0, "unknown native closure"));
         };
         let (source, pattern, position) = (iter.source, iter.pattern, iter.position);
         let found = self.patterns[&(pattern, false)].find(
-            &self.strings.bytes[source.0 as usize],
+            &self.strings.bytes[slot_index(source.0)],
             position,
             &mut self.pattern_work,
         )?;
@@ -382,7 +395,7 @@ impl Vm {
     fn substitution_advance(&mut self, index: usize) {
         let state = &mut self.substitutions[index];
         let matched = state.matched.take().expect("substitution has a match");
-        let source = &self.strings.bytes[state.source.0 as usize];
+        let source = &self.strings.bytes[slot_index(state.source.0)];
         if matched.end > matched.start {
             state.cursor = matched.end;
         } else if state.cursor < source.len() {
@@ -399,7 +412,7 @@ impl Vm {
         let state = &self.substitutions[index];
         let found = state.matched.expect("substitution has a match");
         let source = state.source;
-        let text = &self.strings.bytes[text.0 as usize];
+        let text = &self.strings.bytes[slot_index(text.0)];
         let mut pos = 0;
         let bytes = &mut self.substitutions[index].output;
         while pos < text.len() {
@@ -413,7 +426,7 @@ impl Vm {
             pos += 1;
             if c == b'0' {
                 bytes.extend_from_slice(
-                    &self.strings.bytes[source.0 as usize][found.start..found.end],
+                    &self.strings.bytes[slot_index(source.0)][found.start..found.end],
                 );
             } else if c.is_ascii_digit() {
                 let capture = found.capture(usize::from(c - b'1'))?;
@@ -421,7 +434,7 @@ impl Vm {
                     bytes.extend_from_slice(format_number((capture.start + 1) as f64).as_bytes());
                 } else {
                     bytes.extend_from_slice(
-                        &self.strings.bytes[source.0 as usize][capture.range()?],
+                        &self.strings.bytes[slot_index(source.0)][capture.range()?],
                     );
                 }
             } else {
@@ -433,9 +446,9 @@ impl Vm {
     pub(super) fn substitute_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;
-        let index = if frame.pc == 0 {
+        let index = if frame.pc() == 0 {
             let args = frame.vararg_start - 1;
-            let argc = frame.vararg_count;
+            let argc = frame.argc();
             let source = self.string_argument(args, argc, 0)?;
             let pattern = self.string_argument(args, argc, 1)?;
             let mut replacement = self.argument(args, argc, 2);
@@ -448,7 +461,7 @@ impl Vm {
             ) {
                 return Err(bad(2, "string/function/table expected"));
             }
-            let len = self.strings.bytes[source.0 as usize].len();
+            let len = self.strings.bytes[slot_index(source.0)].len();
             let maximum =
                 self.integer_argument(args, argc, 3, Some(len.saturating_add(1) as i64))? as i32;
             self.prepare_pattern(pattern, true);
@@ -466,19 +479,19 @@ impl Vm {
                 matched: None,
                 done: false,
             });
-            self.frames[owner].pc = (index + 1) << 1;
+            self.frames[owner].pc = ((index + 1) << 1) as u32;
             index
         } else {
-            (frame.pc >> 1) - 1
+            (frame.pc() >> 1) - 1
         };
-        if frame.pc & 1 != 0 {
+        if frame.pc() & 1 != 0 {
             let value = self.registers[base];
             let state = &self.substitutions[index];
             if !value.is_truthy() {
                 let matched = state.matched.expect("substitution has a match");
                 let source = state.source;
                 self.substitutions[index].output.extend_from_slice(
-                    &self.strings.bytes[source.0 as usize][matched.start..matched.end],
+                    &self.strings.bytes[slot_index(source.0)][matched.start..matched.end],
                 );
             } else {
                 let string = match value {
@@ -494,10 +507,10 @@ impl Vm {
                 };
                 self.substitutions[index]
                     .output
-                    .extend_from_slice(&self.strings.bytes[string.0 as usize]);
+                    .extend_from_slice(&self.strings.bytes[slot_index(string.0)]);
             }
             self.substitution_advance(index);
-            self.frames[owner].pc = (index + 1) << 1;
+            self.frames[owner].pc = ((index + 1) << 1) as u32;
         }
         if self.substitutions[index].done
             || self.substitutions[index].count >= self.substitutions[index].maximum
@@ -513,7 +526,7 @@ impl Vm {
             );
             state
                 .output
-                .extend_from_slice(&self.strings.bytes[state.source.0 as usize][state.cursor..]);
+                .extend_from_slice(&self.strings.bytes[slot_index(state.source.0)][state.cursor..]);
             self.registers[base] = self.finish_buffer(state.output);
             self.registers[base + 1] = Value::Number(f64::from(state.count));
             return Ok(self.return_frame(frame, base, 2));
@@ -523,7 +536,7 @@ impl Vm {
             (state.source, state.pattern, state.cursor, state.replacement);
         Pattern::reset(&mut self.pattern_work);
         let found = self.patterns[&(pattern, true)].match_at(
-            &self.strings.bytes[source.0 as usize],
+            &self.strings.bytes[slot_index(source.0)],
             cursor,
             &mut self.pattern_work,
         )?;
@@ -552,7 +565,7 @@ impl Vm {
             }
         } else {
             let state = &mut self.substitutions[index];
-            let source = &self.strings.bytes[source.0 as usize];
+            let source = &self.strings.bytes[slot_index(source.0)];
             if cursor < source.len() {
                 state.output.push(source[cursor]);
                 state.cursor += 1;
@@ -567,11 +580,11 @@ impl Vm {
     }
     fn string_format(&mut self, base: usize, count: usize) -> Result<usize, Error> {
         let id = self.string_argument(base, count, 0)?;
-        let mut output = self.take_buffer(self.strings.bytes[id.0 as usize].len());
+        let mut output = self.take_buffer(self.strings.bytes[slot_index(id.0)].len());
         let mut pos = 0;
         let mut arg = 0;
-        while pos < self.strings.bytes[id.0 as usize].len() {
-            let bytes = &self.strings.bytes[id.0 as usize];
+        while pos < self.strings.bytes[slot_index(id.0)].len() {
+            let bytes = &self.strings.bytes[slot_index(id.0)];
             let c = bytes[pos];
             pos += 1;
             if c != b'%' {
@@ -591,7 +604,7 @@ impl Vm {
             match spec.conversion {
                 b's' | b'q' => {
                     let text = self.string_argument(base, count, arg)?;
-                    let bytes = &self.strings.bytes[text.0 as usize];
+                    let bytes = &self.strings.bytes[slot_index(text.0)];
                     if spec.conversion == b'q' {
                         crate::format::quote(bytes, &mut output);
                     } else {
