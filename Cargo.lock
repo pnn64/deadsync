@@ -1984,6 +1984,7 @@ dependencies = [
  "serde_json",
  "smallvec",
  "strsim",
+ "tempfile",
  "twox-hash",
  "unicode-normalization",
  "winit",

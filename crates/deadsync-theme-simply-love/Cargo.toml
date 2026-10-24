@@ -54,6 +54,7 @@ deadlib-render = { path = "../deadlib-render" }
 deadsync-notefield = { path = "../deadsync-notefield" }
 serde_json = "1.0.151"
 winit = "0.30.13"
+tempfile = "3.27.0"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -1,0 +1,797 @@
+//! Export the real Simply Love gameplay presentation without changing player settings.
+use deadlib_assets::AssetManager;
+use deadlib_present::{
+    actors::Actor,
+    compose::{self, ComposeScratch, TextLayoutCache},
+    space::{self, Metrics},
+    texture::{TextureContext, TextureMeta},
+};
+use deadlib_render::{Backend, BackendType, PresentModePolicy, RenderFrame, TextureHandle};
+use deadsync_gameplay::{
+    GameplayInputPlayStyle, GameplayInputPlayerSide, GameplaySession, GameplayViewport,
+};
+use deadsync_profile as profile;
+use deadsync_theme_simply_love::{self as theme, screens::gameplay, views::GameplayInitView};
+use std::{
+    cell::RefCell,
+    collections::BTreeSet,
+    error::Error,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+const PRESETS: &[(&str, u32, u32)] = &[
+    ("vga", 640, 480),
+    ("svga", 800, 600),
+    ("xga", 1024, 768),
+    ("720p", 1280, 720),
+    ("1080p", 1920, 1080),
+    ("16-10", 1920, 1200),
+    ("1440p", 2560, 1440),
+    ("ultrawide", 2560, 1080),
+    ("uwqhd", 3440, 1440),
+    ("portrait", 1080, 1920),
+];
+const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
+const HELP: &str = "\
+Export Simply Love gameplay PNGs (requires a desktop and Vulkan-capable GPU).
+
+cargo run -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
+
+  --list-presets         List built-in resolution presets and exit
+  --preset NAME          Select a preset; repeat to select several (default: all)
+  --size WxH[@A:B]       Add a custom size, optionally overriding display aspect
+  --layout NAME          p1, p2, versus, double; repeat (default: all four)
+  --reverse             Use reverse scrolling
+  --output PATH         Destination (default: target/gameplay-exports)
+  --help                Show this help
+
+Examples:
+  cargo run -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p
+  cargo run -p deadsync-theme-simply-love --example export_gameplay -- --size 640x480@16:9
+
+Outputs: <destination>/<resolution-and-aspect>/<layout>/gameplay[-reverse].png
+and an index.html gallery. Settings and sample song data are isolated.";
+
+#[derive(Clone, Debug, PartialEq)]
+struct Size {
+    width: u32,
+    height: u32,
+    aspect: (u32, u32),
+}
+
+impl Size {
+    fn new(width: u32, height: u32, aspect: (u32, u32)) -> Result<Self> {
+        if width == 0 || height == 0 || width > 8192 || height > 8192 {
+            return Err("image dimensions must be between 1 and 8192 pixels".into());
+        }
+        if aspect.0 == 0 || aspect.1 == 0 {
+            return Err("aspect ratio components must be positive".into());
+        }
+        let ratio = aspect.0 as f64 / aspect.1 as f64;
+        if !(0.25..=8.0).contains(&ratio) {
+            return Err("display aspect ratio must be between 1:4 and 8:1".into());
+        }
+        let divisor = gcd(aspect.0, aspect.1);
+        Ok(Self {
+            width,
+            height,
+            aspect: (aspect.0 / divisor, aspect.1 / divisor),
+        })
+    }
+
+    fn parse(text: &str) -> Result<Self> {
+        let (pixels, aspect) = text
+            .split_once('@')
+            .map_or((text, None), |(p, a)| (p, Some(a)));
+        let (width, height) = pair(pixels, 'x')?;
+        Self::new(
+            width,
+            height,
+            aspect
+                .map(|a| pair(a, ':'))
+                .transpose()?
+                .unwrap_or((width, height)),
+        )
+    }
+
+    fn name(&self) -> String {
+        format!(
+            "{}x{}-{}x{}",
+            self.width, self.height, self.aspect.0, self.aspect.1
+        )
+    }
+}
+
+fn gcd(mut a: u32, mut b: u32) -> u32 {
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    a
+}
+
+fn pair(text: &str, separator: char) -> Result<(u32, u32)> {
+    let (a, b) = text
+        .split_once(separator)
+        .ok_or_else(|| format!("invalid dimensions/aspect: {text}"))?;
+    Ok((a.parse()?, b.parse()?))
+}
+
+struct Options {
+    sizes: Vec<Size>,
+    layouts: Vec<String>,
+    reverse: bool,
+    output: PathBuf,
+}
+
+fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
+    let mut args = args.into_iter();
+    let mut options = Options {
+        sizes: Vec::new(),
+        layouts: Vec::new(),
+        reverse: false,
+        output: PathBuf::from("target").join("gameplay-exports"),
+    };
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--help" | "-h" => {
+                println!("{HELP}");
+                return Ok(None);
+            }
+            "--list-presets" => {
+                for &(name, w, h) in PRESETS {
+                    let d = gcd(w, h);
+                    println!("{name:12} {w:4}x{h:<4} {}:{}", w / d, h / d);
+                }
+                return Ok(None);
+            }
+            "--reverse" => options.reverse = true,
+            "--preset" | "--size" | "--layout" | "--output" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| format!("{arg} requires a value"))?;
+                match arg.as_str() {
+                    "--preset" => {
+                        let &(_, w, h) =
+                            PRESETS.iter().find(|p| p.0 == value).ok_or_else(|| {
+                                format!("unknown preset '{value}'; use --list-presets")
+                            })?;
+                        options.sizes.push(Size::new(w, h, (w, h))?);
+                    }
+                    "--size" => options.sizes.push(Size::parse(&value)?),
+                    "--layout" => {
+                        if !LAYOUTS.contains(&value.as_str()) {
+                            return Err(format!(
+                                "unknown layout '{value}'; use p1, p2, versus or double"
+                            )
+                            .into());
+                        }
+                        if !options.layouts.contains(&value) {
+                            options.layouts.push(value);
+                        }
+                    }
+                    "--output" => options.output = PathBuf::from(value),
+                    _ => unreachable!(),
+                }
+            }
+            _ => return Err(format!("unknown option '{arg}'; use --help").into()),
+        }
+    }
+    if options.sizes.is_empty() {
+        options.sizes = PRESETS
+            .iter()
+            .map(|&(_, w, h)| Size::new(w, h, (w, h)))
+            .collect::<Result<_>>()?;
+    }
+    let mut unique = Vec::new();
+    for size in options.sizes {
+        if !unique.contains(&size) {
+            unique.push(size);
+        }
+    }
+    options.sizes = unique;
+    if options.layouts.is_empty() {
+        options.layouts = LAYOUTS.iter().map(|s| s.to_string()).collect();
+    }
+    Ok(Some(options))
+}
+
+struct Logger;
+impl log::Log for Logger {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        metadata.level() <= log::Level::Warn
+    }
+    fn log(&self, record: &log::Record<'_>) {
+        if self.enabled(record.metadata()) {
+            eprintln!("{}: {}", record.level(), record.args());
+        }
+    }
+    fn flush(&self) {}
+}
+
+fn main() -> Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        return std::thread::Builder::new()
+            .name("gameplay-export".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| run().map_err(|error| error.to_string()))?
+            .join()
+            .map_err(|_| "gameplay export thread panicked")?
+            .map_err(Into::into);
+    }
+    #[cfg(not(target_os = "windows"))]
+    run()
+}
+
+fn run() -> Result<()> {
+    let Some(options) = options(std::env::args().skip(1))? else {
+        return Ok(());
+    };
+    log::set_logger(&Logger).map_err(|e| e.to_string())?;
+    log::set_max_level(log::LevelFilter::Warn);
+    let isolated = tempfile::tempdir()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+    let dirs = deadsync_config::dirs::AppDirs {
+        data_dir: isolated.path().to_path_buf(),
+        cache_dir: isolated.path().join("cache"),
+        exe_dir: root.to_path_buf(),
+        portable: false,
+    };
+    dirs.ensure_dirs_exist();
+    deadsync_assets::init_paths(dirs.asset_paths(None))?;
+    theme::i18n::init_for_tests();
+    deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())?;
+    deadsync_profile::app_runtime::init_paths(
+        dirs.profiles_root(),
+        dirs.default_player_options_path(),
+        dirs.pad_config_path(),
+    )?;
+    deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
+        song_cache: dirs.song_cache_dir(),
+        extra_songs: Vec::new(),
+        extra_courses: Vec::new(),
+        autogen_courses: dirs.courses_dir(),
+        song_movies: Vec::new(),
+        random_movies: Vec::new(),
+        bg_animations: Vec::new(),
+    })?;
+    let simfile = sample_song(isolated.path())?;
+    let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
+        &simfile, 0.0,
+    )?);
+    let mut event_loop_builder = winit::event_loop::EventLoop::builder();
+    #[cfg(target_os = "windows")]
+    {
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        event_loop_builder.with_any_thread(true);
+    }
+    let event_loop = event_loop_builder.build()?;
+    #[expect(
+        deprecated,
+        reason = "batch screenshots use a hidden window without an interactive loop"
+    )]
+    let window = Arc::new(
+        event_loop.create_window(
+            winit::window::Window::default_attributes()
+                .with_title("Simply Love gameplay exporter")
+                .with_visible(false)
+                .with_inner_size(winit::dpi::PhysicalSize::new(640, 480)),
+        )?,
+    );
+    export(&options, song, window)
+}
+
+fn export(
+    options: &Options,
+    song: Arc<deadsync_chart::SongData>,
+    window: Arc<winit::window::Window>,
+) -> Result<()> {
+    let mut backend = deadlib_render::create_backend(
+        BackendType::VulkanWgpu,
+        window,
+        Metrics::centered(640.0, 480.0).projection(),
+        false,
+        PresentModePolicy::Immediate,
+        false,
+        true,
+    )?;
+    let mut assets = AssetManager::new();
+    deadsync_assets::load_initial_assets(&mut assets, &mut backend, theme::asset_manifest())?;
+    std::fs::create_dir_all(&options.output)?;
+    let mut gallery = String::from(
+        "<!doctype html><meta charset=\"utf-8\"><title>Simply Love gameplay layouts</title>\
+        <style>body{background:#181818;color:#eee;font:16px sans-serif}img{max-width:100%;height:auto}\
+        figure{margin:24px 0}a{color:#8cf}</style><h1>Simply Love gameplay layouts</h1>\
+        <p>Real gameplay rendering with synthetic sample data. Click an image for full resolution. \
+        Aspect-dependent visibility rules are preserved.</p>",
+    );
+    let filename = if options.reverse {
+        "gameplay-reverse.png"
+    } else {
+        "gameplay.png"
+    };
+    for size in &options.sizes {
+        let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
+        let metrics = Metrics::centered(logical_width, 480.0);
+        space::set_current_metrics(metrics);
+        space::set_current_window_px(size.width, size.height);
+        backend.resize(size.width, size.height);
+        backend.set_default_projection(metrics.projection());
+        for layout in &options.layouts {
+            let mut state = sample_state(song.clone(), logical_width, layout, options.reverse)?;
+            preload_noteskins(&state, &mut assets, &mut backend)?;
+            let context = CaptureTextures {
+                assets: &assets,
+                keys: RefCell::default(),
+            };
+            drop(compose(&mut state, &assets, &metrics, &context));
+            let missing: Vec<_> = context
+                .keys
+                .into_inner()
+                .into_iter()
+                .filter(|key| !assets.has_uploaded_texture_key(key))
+                .collect();
+            for key in missing {
+                load_texture(&mut assets, &mut backend, &key, false)?;
+            }
+            let frame = compose(&mut state, &assets, &metrics, assets.texture_context());
+            backend.request_screenshot();
+            backend.draw(&frame, assets.textures(), false)?;
+            let image = backend.capture_frame()?;
+            if image.dimensions() != (size.width, size.height) {
+                return Err(format!(
+                    "capture returned {:?}, expected {}x{}",
+                    image.dimensions(),
+                    size.width,
+                    size.height
+                )
+                .into());
+            }
+            let folder = options.output.join(size.name()).join(layout);
+            std::fs::create_dir_all(&folder)?;
+            let output = folder.join(filename);
+            image.save(&output)?;
+            println!("{}", output.display());
+            let url = format!("{}/{layout}/{filename}", size.name());
+            gallery.push_str(&format!(
+                "<figure><figcaption>{} - {}:{} - {layout}{}\
+                </figcaption><a href=\"{url}\"><img loading=\"lazy\" src=\"{url}\"></a></figure>",
+                size.name(),
+                size.aspect.0,
+                size.aspect.1,
+                if options.reverse { " (reverse)" } else { "" }
+            ));
+        }
+    }
+    std::fs::write(options.output.join("index.html"), gallery)?;
+    backend.dispose_textures(&mut assets.take_textures());
+    backend.cleanup();
+    println!(
+        "Exported {} PNGs. Gallery: {}",
+        options.sizes.len() * options.layouts.len(),
+        options.output.join("index.html").display()
+    );
+    Ok(())
+}
+
+fn sample_song(directory: &Path) -> Result<PathBuf> {
+    let banner = image::RgbaImage::from_fn(512, 160, |x, y| {
+        image::Rgba([40 + (x / 4) as u8, 40 + (y / 2) as u8, 150, 255])
+    });
+    banner.save(directory.join("banner.png"))?;
+    let mut sm = String::from(
+        "#TITLE:Simply Love Layout Preview;#SUBTITLE:All HUD widgets;#ARTIST:DeadSync;\
+        #BPMS:0=150;#OFFSET:0;#BANNER:banner.png;\n",
+    );
+    for (style, columns) in [("dance-single", 4), ("dance-double", 8)] {
+        sm.push_str(&format!(
+            "#NOTES:{style}:Layout Preview:Challenge:14:0,0,0,0,0:\n"
+        ));
+        for measure in 0..96 {
+            if measure != 0 {
+                sm.push_str(",\n");
+            }
+            for row in 0..16 {
+                let mut notes = vec![b'0'; columns];
+                if measure % 12 < 8 || row % 4 == 0 {
+                    notes[(row + measure) % columns] = b'1';
+                    if row % 8 == 0 {
+                        notes[(row + measure + 2) % columns] = b'1';
+                    }
+                }
+                sm.push_str(std::str::from_utf8(&notes)?);
+                sm.push('\n');
+            }
+        }
+        sm.push_str(";\n");
+    }
+    let path = directory.join("preview.sm");
+    std::fs::write(&path, sm)?;
+    Ok(path)
+}
+
+fn sample_profile(reverse: bool) -> profile::Profile {
+    profile::Profile {
+        step_statistics: profile::StepStatisticsMask::all_widgets(),
+        step_stats_extra: profile::StepStatsExtra::ErrorStats,
+        show_fa_plus_window: true,
+        show_ex_score: true,
+        show_fa_plus_pane: true,
+        error_bar_active_mask: profile::ErrorBarMask::all(),
+        error_bar: profile::ErrorBarStyle::Colorful,
+        error_bar_text: true,
+        error_ms_display: true,
+        center_tick: true,
+        error_bar_multi_tick: true,
+        short_average_error_bar_enabled: true,
+        long_error_bar_enabled: true,
+        live_timing_stats: true,
+        live_timing_stats_mask: profile::LiveTimingStatsMask::all(),
+        show_life_percent: true,
+        display_scorebox: true,
+        column_cues: true,
+        measure_cues: true,
+        column_countdown: true,
+        broken_run: true,
+        run_timer: true,
+        mini_indicator: profile::MiniIndicator::SubtractiveScoring,
+        measure_counter: profile::MeasureCounter::Sixteenth,
+        measure_lines: profile::MeasureLines::Measure,
+        reverse_scroll: reverse,
+        ..Default::default()
+    }
+}
+
+fn sample_state(
+    song: Arc<deadsync_chart::SongData>,
+    width: f32,
+    layout: &str,
+    reverse: bool,
+) -> Result<gameplay::State> {
+    let (play_style, side) = match layout {
+        "p1" => (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P1),
+        "p2" => (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P2),
+        "versus" => (GameplayInputPlayStyle::Versus, GameplayInputPlayerSide::P1),
+        "double" => (GameplayInputPlayStyle::Double, GameplayInputPlayerSide::P1),
+        _ => return Err(format!("invalid layout {layout}").into()),
+    };
+    let chart_index = usize::from(play_style == GameplayInputPlayStyle::Double);
+    let payload = Arc::new(
+        deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[chart_index], 0.0)?.remove(0),
+    );
+    let chart = Arc::new(song.charts[chart_index].clone());
+    let joined = match layout {
+        "p2" => [false, true],
+        "versus" => [true, true],
+        _ => [true, false],
+    };
+    let session = GameplaySession {
+        play_style,
+        player_side: side,
+        joined_sides: joined,
+        ..Default::default()
+    };
+    let profiles = [sample_profile(reverse), sample_profile(reverse)];
+    let scroll = profiles.each_ref().map(|p| p.scroll_speed);
+    let theme_style = match layout {
+        "versus" => profile::PlayStyle::Versus,
+        "double" => profile::PlayStyle::Double,
+        _ => profile::PlayStyle::Single,
+    };
+    let theme_side = if layout == "p2" {
+        profile::PlayerSide::P2
+    } else {
+        profile::PlayerSide::P1
+    };
+    let mut init = GameplayInitView::default();
+    init.runtime.play_style = theme_style;
+    init.runtime.player_side = theme_side;
+    init.runtime.joined = joined;
+    init.hud.play_style = theme_style;
+    init.hud.player_side = theme_side;
+    init.hud.p1.joined = joined[0];
+    init.hud.p2.joined = joined[1];
+    let mut state = gameplay::init(
+        song,
+        [chart.clone(), chart],
+        [payload.clone(), payload],
+        GameplayViewport::new(width, 480.0),
+        session,
+        Default::default(),
+        5,
+        1.0,
+        scroll,
+        profiles,
+        None,
+        None,
+        None,
+        Arc::from("EVENT"),
+        None,
+        None,
+        None,
+        None,
+        None,
+        [deadsync_gameplay::CourseLifeConfig::Bar; 2],
+        false,
+        None,
+        None,
+        [0; 2],
+        Default::default(),
+        init,
+    );
+    state.boundary.total_elapsed_in_screen = 32.05;
+    state.set_current_music_time_ns(32_050_000_000);
+    for player in 0..state.num_players() {
+        let runtime = &mut state.players_runtime.players[player];
+        runtime.combo = 234 + player as u32 * 17;
+        runtime.judgment_counts = [216, 12, 4, 1, 0, 1];
+        runtime.scoring_counts = runtime.judgment_counts;
+        runtime.earned_grade_points = 450;
+        runtime.current_possible_points = 468;
+        runtime.life = 0.87 - player as f32 * 0.08;
+        runtime.calories_burned = 42.5;
+        for sample in 0..234 {
+            let offset = [-7.0, 19.0, 31.0, 58.0, 110.0, 150.0, 0.0][sample % 7];
+            let (grade, window) = match sample % 7 {
+                0 | 1 => (
+                    deadsync_rules::judgment::JudgeGrade::Fantastic,
+                    Some(deadsync_rules::judgment::TimingWindow::W1),
+                ),
+                2 => (
+                    deadsync_rules::judgment::JudgeGrade::Excellent,
+                    Some(deadsync_rules::judgment::TimingWindow::W2),
+                ),
+                3 => (
+                    deadsync_rules::judgment::JudgeGrade::Great,
+                    Some(deadsync_rules::judgment::TimingWindow::W3),
+                ),
+                4 => (
+                    deadsync_rules::judgment::JudgeGrade::Decent,
+                    Some(deadsync_rules::judgment::TimingWindow::W4),
+                ),
+                5 => (
+                    deadsync_rules::judgment::JudgeGrade::WayOff,
+                    Some(deadsync_rules::judgment::TimingWindow::W5),
+                ),
+                _ => (deadsync_rules::judgment::JudgeGrade::Miss, None),
+            };
+            let judgment = deadsync_rules::judgment::Judgment {
+                time_error_ms: offset,
+                time_error_music_ns: (offset * 1_000_000.0) as i64,
+                grade,
+                window,
+                miss_because_held: false,
+            };
+            state
+                .progress
+                .window_counts
+                .record_judgment(player, &judgment, 15.0);
+            deadsync_rules::timing::record_live_timing_stats(
+                &mut state.players_runtime.players[player].live_timing_stats,
+                &judgment,
+            );
+        }
+        for offset in [-12.0, 7.0, -3.0, 19.0, -7.0] {
+            let judgment = deadsync_rules::judgment::Judgment {
+                time_error_ms: offset,
+                time_error_music_ns: (offset * 1_000_000.0) as i64,
+                grade: deadsync_rules::judgment::JudgeGrade::Fantastic,
+                window: Some(deadsync_rules::judgment::TimingWindow::W1),
+                miss_because_held: false,
+            };
+            state.set_last_judgment(player, judgment);
+            state.error_bar_register_tap(player, &judgment, 32.05);
+            state.trigger_tap_judgment_explosion(player, 1, &judgment);
+        }
+    }
+    gameplay::set_heart_rate_view(
+        &mut state,
+        (1, 1),
+        gameplay::HeartRateView {
+            players: std::array::from_fn(|p| gameplay::HeartRatePlayerView {
+                configured: true,
+                connected: true,
+                bpm: Some(156 + p as u16 * 8),
+                max_heart_rate: 190,
+            }),
+        },
+    );
+    Ok(state)
+}
+
+fn load_texture(
+    assets: &mut AssetManager,
+    backend: &mut Backend,
+    key: &str,
+    model: bool,
+) -> Result<()> {
+    if assets.has_uploaded_texture_key(key) || assets.load_generated_texture(backend, key, None)? {
+        return Ok(());
+    }
+    assets
+        .load_texture(
+            backend,
+            &deadsync_assets::textures::texture_decode_job(key, model),
+        )
+        .map_err(|e| format!("cannot load capture texture '{key}': {e}"))?;
+    Ok(())
+}
+
+fn preload_noteskins(
+    state: &gameplay::State,
+    assets: &mut AssetManager,
+    backend: &mut Backend,
+) -> Result<()> {
+    let mut keys = BTreeSet::new();
+    for skin in [
+        &state.noteskin_assets.noteskin,
+        &state.noteskin_assets.mine_noteskin,
+        &state.noteskin_assets.receptor_noteskin,
+        &state.noteskin_assets.tap_explosion_noteskin,
+    ]
+    .into_iter()
+    .flat_map(|set| set.iter().flatten())
+    {
+        skin.for_each_slot(|slot| {
+            for slot in std::iter::once(slot).chain(slot.model_additive.as_deref()) {
+                keys.insert((slot.texture_key().to_owned(), slot.model.is_some()));
+                for key in slot.model_texture_keys.iter() {
+                    keys.insert((key.to_string(), true));
+                }
+            }
+        });
+    }
+    for (key, model) in keys {
+        load_texture(assets, backend, &key, model)?;
+    }
+    Ok(())
+}
+
+struct CaptureTextures<'a> {
+    assets: &'a AssetManager,
+    keys: RefCell<BTreeSet<String>>,
+}
+impl TextureContext for CaptureTextures<'_> {
+    fn texture_registry_generation(&self) -> u64 {
+        self.assets.texture_context().revision()
+    }
+    fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
+        self.assets.texture_context().texture_dims(key)
+    }
+    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
+        self.assets.texture_context().sprite_sheet_dims(key)
+    }
+    fn texture_handle(&self, key: &str) -> TextureHandle {
+        self.keys.borrow_mut().insert(key.to_owned());
+        self.assets.texture_context().texture_handle(key)
+    }
+}
+
+fn compose(
+    state: &mut gameplay::State,
+    assets: &AssetManager,
+    metrics: &Metrics,
+    textures: &impl TextureContext,
+) -> RenderFrame {
+    let mut actors: Vec<Actor> = Vec::new();
+    let mut song = state.song_scratch.take().expect("song scratch");
+    let mut hud = state.frame_scratch.take().expect("HUD scratch");
+    let view = gameplay::ActorViewOverride::default();
+    let visual = Default::default();
+    let segments = deadsync_song_lua::playback::compose_frame(
+        &mut actors,
+        &state.gameplay,
+        &state.song_media,
+        &mut song,
+        assets,
+        deadsync_song_lua::playback::FrameOptions {
+            play_style: state.gameplay.setup.session.play_style,
+            player_side: state.gameplay.setup.session.player_side,
+            hide_song_bg: [false; 2],
+            notefield: view.notefield,
+            hide_gameplay_hud: false,
+            apply_attacks: true,
+            show_song_visuals: true,
+        },
+        gameplay::frame_layers(state, &mut hud, assets, view, visual),
+        |request, cameras, field, flat, hud, hud_flat| {
+            gameplay::draw_field(
+                state, assets, view, 32.05, visual, request, cameras, field, flat, hud, hud_flat,
+            )
+        },
+    );
+    state.song_scratch = Some(song);
+    state.frame_scratch = Some(hud);
+    compose::build_passes(
+        segments.segments(state.song_frame(), &actors),
+        state.render_targets(),
+        [0.0, 0.0, 0.0, 1.0],
+        metrics,
+        assets.fonts(),
+        32.05,
+        &mut TextLayoutCache::default(),
+        &mut ComposeScratch::default(),
+        textures,
+        Some(state.actor_resources()),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sizes_validate_pixels_and_normalize_aspect() {
+        assert_eq!(Size::parse("1920x1080").unwrap().aspect, (16, 9));
+        assert_eq!(Size::parse("640x480@16:9").unwrap().aspect, (16, 9));
+        for invalid in [
+            "0x480",
+            "1920x0",
+            "9000x480",
+            "640x480@0:9",
+            "640x480@16:0",
+            "640x480@100:1",
+            "640",
+            "640x480@nan",
+            "640x480x2",
+        ] {
+            assert!(Size::parse(invalid).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn default_exports_all_presets_and_layouts() {
+        let options = options(Vec::new()).unwrap().unwrap();
+        assert_eq!(options.sizes.len(), PRESETS.len());
+        assert_eq!(options.layouts.len(), LAYOUTS.len());
+        assert!(!options.reverse);
+    }
+
+    #[test]
+    fn custom_selections_replace_defaults_and_deduplicate() {
+        let args = [
+            "--preset",
+            "720p",
+            "--size",
+            "1280x720",
+            "--size",
+            "640x480@16:9",
+            "--layout",
+            "p2",
+            "--layout",
+            "p2",
+            "--reverse",
+        ];
+        let options = options(args.map(String::from)).unwrap().unwrap();
+        assert_eq!(options.sizes.len(), 2);
+        assert_eq!(options.layouts, ["p2"]);
+        assert!(options.reverse);
+    }
+
+    #[test]
+    fn invalid_options_fail_explicitly() {
+        for args in [
+            vec!["--preset", "unknown"],
+            vec!["--layout", "unknown"],
+            vec!["--size"],
+            vec!["--unknown"],
+        ] {
+            assert!(options(args.into_iter().map(String::from)).is_err());
+        }
+    }
+
+    #[test]
+    fn gameplay_widgets_are_enabled_without_hiding_notes_or_scores() {
+        let profile = sample_profile(false);
+        assert_eq!(
+            profile.step_statistics,
+            profile::StepStatisticsMask::all_widgets()
+        );
+        assert_eq!(profile.error_bar_active_mask, profile::ErrorBarMask::all());
+        assert!(profile.live_timing_stats && profile.show_life_percent && profile.show_ex_score);
+        assert!(!profile.hide_score && !profile.hide_combo && !profile.hide_lifebar);
+    }
+}
