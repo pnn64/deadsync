@@ -46,6 +46,7 @@ enum Resolved {
 }
 struct Call<'a> {
     tag: u32,
+    receiver: u32,
     parameters: &'a [Parameter],
     result: Value,
 }
@@ -137,6 +138,7 @@ impl Builder<'_> {
                 }
                 self.actions.push(Call {
                     tag: action.tag,
+                    receiver: object,
                     parameters: &action.parameters,
                     result,
                 });
@@ -562,7 +564,10 @@ pub(super) fn lower_with(
                     match *parameter {
                         Parameter::Type(types) => require(symbol, types, pc)?,
                         Parameter::Object(id) if symbol == Symbol::Object(id) => {}
-                        Parameter::Object(_) => return Err(unsupported(pc, "unproven action receiver")),
+                        Parameter::Receiver if symbol == Symbol::Object(call.receiver) => {}
+                        Parameter::Object(_) | Parameter::Receiver => {
+                            return Err(unsupported(pc, "unproven action receiver"));
+                        }
                     }
                 }
                 let dst = (opcode == 28 && c == 2).then_some(a);

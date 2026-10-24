@@ -16,14 +16,14 @@ impl Drop for Dropped {
 fn input(name: &str, slot: usize, types: Types) -> Field {
     Field {
         object: 0,
-        name: name.as_bytes().into(),
+        name: name.as_bytes().to_vec().into(),
         value: FieldValue::Value(Binding::Input { slot, types }),
     }
 }
 fn property(object: u32, name: &str, cell: usize) -> Field {
     Field {
         object,
-        name: name.as_bytes().into(),
+        name: name.as_bytes().to_vec().into(),
         value: FieldValue::Value(Binding::Cell(cell)),
     }
 }
@@ -33,7 +33,7 @@ fn visible() -> Field {
         name: b"visible".as_slice().into(),
         value: FieldValue::Action(Action {
             tag: 7,
-            parameters: vec![Parameter::Object(1), Parameter::Type(Types::BOOLEAN)],
+            parameters: vec![Parameter::Object(1), Parameter::Type(Types::BOOLEAN)].into(),
             result: Some(Binding::Object(1)),
         }),
     }
@@ -104,10 +104,10 @@ fn shared_byte_cells_keep_pool_meaning_copy_semantics_and_binary_bytes_after_vm_
                 property(2, "copy", 1),
                 Field {
                     object: 1,
-                    name: Box::from(&b"mode"[..]),
+                    name: b"mode".as_slice().into(),
                     value: FieldValue::Action(Action {
                         tag: 7,
-                        parameters: vec![Parameter::Object(1), Parameter::Type(Types::BYTES)],
+                        parameters: vec![Parameter::Object(1), Parameter::Type(Types::BYTES)].into(),
                         result: Some(Binding::Literal(program::Literal::Bytes(Box::from(
                             &b"result"[..],
                         )))),
@@ -304,7 +304,7 @@ fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_sto
                     property(2, "held", 0),
                     Field {
                         object: 0,
-                        name: Box::from(&b"\xff\0value"[..]),
+                        name: b"\xff\0value".as_slice().into(),
                         value: FieldValue::Value(Binding::Input {
                             slot: 0,
                             types: Types::NUMBER,
@@ -316,7 +316,7 @@ fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_sto
             for index in bindings.fields.len()..count {
                 bindings.fields.push(Field {
                     object: index as u32,
-                    name: format!("unused{index}").into_bytes().into_boxed_slice(),
+                    name: format!("unused{index}").into_bytes().into(),
                     value: FieldValue::Value(Binding::Literal(program::Literal::Nil)),
                 });
             }
@@ -954,6 +954,123 @@ fn method_chains_tail_calls_and_receiver_identity_are_verified() {
         program::compile(&callback, &bindings).is_err(),
         "a different method receiver must not inherit a bound action tag"
     );
+}
+
+#[test]
+fn shared_signatures_check_each_field_receiver_and_preserve_distinct_return_objects() {
+    const PARAMETERS: &[Parameter] = &[Parameter::Receiver, Parameter::Type(Types::NUMBER)];
+    for borrowed in [false, true] {
+        let lua = Lua::new();
+        let callback: Function = lua
+            .load("local a={};return function(e) return a:step(e):step(-e) end")
+            .eval()
+            .unwrap();
+        let mut bindings = Bindings {
+            arguments: vec![Binding::Input {
+                slot: 0,
+                types: Types::NUMBER,
+            }],
+            upvalues: vec![Binding::Object(7)],
+            fields: [(7, 9, 1), (9, 7, 2)]
+                .map(|(object, result, tag)| Field {
+                    object,
+                    name: b"step".as_slice().into(),
+                    value: FieldValue::Action(Action {
+                        tag,
+                        parameters: if borrowed {
+                            PARAMETERS.into()
+                        } else {
+                            PARAMETERS.to_vec().into()
+                        },
+                        result: Some(Binding::Object(result)),
+                    }),
+                })
+                .into(),
+            ..Bindings::default()
+        };
+        let mut machine = program::compile(&callback, &bindings).unwrap().machine();
+        let wrong: Function = lua
+            .load("local a={};return function(e) return a.step(e,1) end")
+            .eval()
+            .unwrap();
+        bindings.arguments = vec![Binding::Object(9)];
+        assert!(program::compile(&wrong, &bindings).is_err());
+        drop(wrong);
+        drop(callback);
+        drop(bindings);
+        drop(lua);
+        let mut actions = Vec::new();
+        assert_eq!(
+            machine
+                .run(&[Datum::Number(-0.0)], |tag, args| {
+                    let Some(Datum::Number(value)) = args.get(1) else {
+                        panic!("numeric argument")
+                    };
+                    let Some(Datum::Object(receiver)) = args.get(0) else {
+                        panic!("object receiver")
+                    };
+                    actions.push((tag, receiver, value.to_bits()));
+                })
+                .unwrap(),
+            Datum::Object(7)
+        );
+        assert_eq!(
+            actions,
+            vec![
+                (1, 7, (-0.0f64).to_bits()),
+                (2, 9, 0.0f64.to_bits()),
+            ]
+        );
+    }
+}
+
+#[test]
+fn reusable_dumps_keep_byte_state_rebinding_independent_of_the_loading_vm() {
+    let lua = Lua::new();
+    let callback: Function = lua
+        .load("local s={};return function() s.mode='armed';return s.mode end")
+        .eval()
+        .unwrap();
+    let bytes = program::dump(&callback).unwrap();
+    let native = lua.create_function(|_, ()| Ok(())).unwrap();
+    assert!(matches!(
+        program::dump(&native),
+        Err(program::CompileError::Unsupported {
+            reason: "native closure",
+            ..
+        })
+    ));
+    drop(native);
+    drop(callback);
+    drop(lua);
+    let mut bindings = Bindings {
+        upvalues: vec![Binding::Object(3)],
+        fields: vec![Field {
+            object: 3,
+            name: b"mode".as_slice().into(),
+            value: FieldValue::Value(Binding::Literal(program::Literal::Bytes(
+                b"idle".as_slice().into(),
+            ))),
+        }],
+        ..Bindings::default()
+    };
+    assert!(program::compile_bytecode(&bytes, &bindings).is_err());
+    bindings.fields[0].value = FieldValue::Value(Binding::Cell(0));
+    bindings.cells.push(Cell::Bytes(0));
+    bindings.strings.push(b"idle".as_slice().into());
+    let mut machine = program::Compiler::new(&bindings)
+        .unwrap()
+        .compile_bytecode(&bytes, &[], &bindings.upvalues)
+        .unwrap()
+        .machine();
+    drop(bytes);
+    drop(bindings);
+    for _ in 0..3 {
+        assert_eq!(
+            machine.run(&[], |_, _| panic!("no action")).unwrap(),
+            Datum::Bytes(b"armed")
+        );
+    }
 }
 
 #[test]

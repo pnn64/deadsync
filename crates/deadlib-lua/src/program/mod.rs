@@ -27,6 +27,7 @@ use strings::Strings;
 
 use crate::Function;
 use std::{
+    borrow::Cow,
     fmt,
     mem::{size_of, size_of_val},
     ops::{BitOr, BitOrAssign},
@@ -95,7 +96,8 @@ pub enum Binding {
 #[derive(Clone, Debug)]
 pub struct Action {
     pub tag: u32,
-    pub parameters: Vec<Parameter>,
+    /// Fixed signatures may borrow static storage instead of allocating per field.
+    pub parameters: Cow<'static, [Parameter]>,
     /// None means no return values. Only literal and object bindings are accepted.
     pub result: Option<Binding>,
 }
@@ -106,6 +108,9 @@ pub struct Action {
 pub enum Parameter {
     Type(Types),
     Object(u32),
+    /// The identity of the object defining this action's field. This constraint
+    /// checks the supplied argument, independently of the action's return object.
+    Receiver,
 }
 
 /// A field may be a value, a mutable cell, or a bound host action.
@@ -119,7 +124,8 @@ pub enum FieldValue {
 #[derive(Clone, Debug)]
 pub struct Field {
     pub object: u32,
-    pub name: Box<[u8]>,
+    /// Static schema keys can be borrowed; captured or generated keys are owned.
+    pub name: Cow<'static, [u8]>,
     pub value: FieldValue,
 }
 
@@ -332,7 +338,11 @@ pub fn compile(function: &Function, bindings: &Bindings) -> Result<Program, Comp
     compile_bytecode(&dump(function)?, bindings)
 }
 
-fn dump(function: &Function) -> Result<Vec<u8>, CompileError> {
+/// Copy a Lua closure's bytecode without executing it. The returned bytes retain
+/// no Lua handles and may be reused with different schemas via [`compile_bytecode`]
+/// or [`Compiler::compile_bytecode`]. Native closures are rejected. Compilation
+/// separately checks the Lua 5.1 header, instructions and binding contracts.
+pub fn dump(function: &Function) -> Result<Vec<u8>, CompileError> {
     if function.environment().is_none() {
         return Err(CompileError::Unsupported {
             pc: 0,

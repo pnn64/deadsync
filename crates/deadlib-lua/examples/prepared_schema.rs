@@ -34,7 +34,7 @@ fn main() {
             fields: vec![
                 Field {
                     object: 0,
-                    name: Box::from(&b"button"[..]),
+                    name: b"button".as_slice().into(),
                     value: FieldValue::Value(Binding::Input {
                         slot: 0,
                         types: Types::BYTES,
@@ -42,7 +42,7 @@ fn main() {
                 },
                 Field {
                     object: 1,
-                    name: Box::from(&b"held"[..]),
+                    name: b"held".as_slice().into(),
                     value: FieldValue::Value(Binding::Cell(0)),
                 },
             ],
@@ -51,7 +51,7 @@ fn main() {
         for index in bindings.fields.len()..field_count {
             bindings.fields.push(Field {
                 object: index as u32,
-                name: format!("unused{index}").into_bytes().into_boxed_slice(),
+                name: format!("unused{index}").into_bytes().into(),
                 value: FieldValue::Value(Binding::Literal(program::Literal::Nil)),
             });
         }

@@ -21,7 +21,7 @@ fn pin() {}
 fn field(object: u32, name: &str, value: Binding) -> Field {
     Field {
         object,
-        name: name.as_bytes().into(),
+        name: name.as_bytes().to_vec().into(),
         value: FieldValue::Value(value),
     }
 }

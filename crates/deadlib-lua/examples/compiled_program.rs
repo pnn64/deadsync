@@ -119,7 +119,7 @@ fn lower(live: &Live) -> Machine {
                 name: b"visible".as_slice().into(),
                 value: FieldValue::Action(Action {
                     tag: 0,
-                    parameters: vec![Parameter::Object(1), Parameter::Type(Types::BOOLEAN)],
+                    parameters: vec![Parameter::Object(1), Parameter::Type(Types::BOOLEAN)].into(),
                     result: Some(Binding::Object(1)),
                 }),
             },

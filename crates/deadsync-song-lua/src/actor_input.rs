@@ -260,7 +260,7 @@ fn compile_with_updates(
                                 byte_fields.push(bindings.fields.len());
                                 bindings.fields.push(Field {
                                     object,
-                                    name,
+                                    name: name.into_vec().into(),
                                     value: FieldValue::Value(Binding::Literal(
                                         program::Literal::Bytes(value),
                                     )),
@@ -277,7 +277,7 @@ fn compile_with_updates(
                         bindings.cells.push(cell);
                         bindings.fields.push(Field {
                             object,
-                            name,
+                            name: name.into_vec().into(),
                             value: FieldValue::Value(Binding::Cell(index)),
                         });
                         Ok(())
@@ -338,24 +338,37 @@ fn compile_with_updates(
             }
             pending.push(target);
             let receiver = index as u32 + 2;
-            let (opcode, types) = match setter {
-                crate::actor_methods::Setter::Visible => (0, Types::BOOLEAN),
-                crate::actor_methods::Setter::X => (1, Types::NUMBER),
-                crate::actor_methods::Setter::Y => (2, Types::NUMBER),
+            let (opcode, parameters): (_, &'static [Parameter]) = match setter {
+                crate::actor_methods::Setter::Visible => {
+                    (0, &[Parameter::Receiver, Parameter::Type(Types::BOOLEAN)])
+                }
+                crate::actor_methods::Setter::X => {
+                    (1, &[Parameter::Receiver, Parameter::Type(Types::NUMBER)])
+                }
+                crate::actor_methods::Setter::Y => {
+                    (2, &[Parameter::Receiver, Parameter::Type(Types::NUMBER)])
+                }
             };
             bindings.fields.push(Field {
                 object: receiver,
                 name: requested.name().as_bytes().into(),
                 value: FieldValue::Action(Action {
                     tag: ((target as u32) << 2) | opcode,
-                    parameters: vec![Parameter::Object(receiver), Parameter::Type(types)],
+                    parameters: parameters.into(),
                     result: Some(Binding::Object(target as u32 + 2)),
                 }),
             });
         }
     }
     // Reuse the complete schema. Only each callback's capture vector changes.
-    let lower = |bindings: &program::Bindings| {
+    // Retain dumps only when byte-state specialization can require a retry.
+    // Populate on demand so an earlier rejection still avoids later Lua reads.
+    let mut bytecode = if byte_fields.is_empty() {
+        Vec::new()
+    } else {
+        (0..callbacks.len()).map(|_| None).collect::<Vec<_>>()
+    };
+    let mut lower = |bindings: &program::Bindings| {
         let mut programs = Vec::with_capacity(callbacks.len());
         let compiler = program::Compiler::new(bindings).ok()?;
         for (index, (callback, upvalues)) in callbacks.iter().zip(&captures).enumerate() {
@@ -372,7 +385,16 @@ fn compile_with_updates(
                 ];
                 &update_arguments[..]
             };
-            programs.push(compiler.compile(callback, arguments, upvalues).ok()?);
+            let program = if bytecode.is_empty() {
+                compiler.compile(callback, arguments, upvalues)
+            } else {
+                let bytes = &mut bytecode[index];
+                if bytes.is_none() {
+                    *bytes = Some(program::dump(callback).ok()?);
+                }
+                compiler.compile_bytecode(bytes.as_ref()?, arguments, upvalues)
+            };
+            programs.push(program.ok()?);
         }
         Some(programs)
     };
@@ -412,7 +434,9 @@ fn compile_with_updates(
         if let FieldValue::Value(Binding::Cell(index)) = &field.value {
             scalar_fields[*index] = (
                 field.object.checked_sub(first_state_object)? as usize,
-                std::mem::take(&mut field.name),
+                std::mem::take(&mut field.name)
+                    .into_owned()
+                    .into_boxed_slice(),
             );
         }
     }
