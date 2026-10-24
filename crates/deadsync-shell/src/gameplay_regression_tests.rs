@@ -844,6 +844,55 @@ mod tests {
         )
     }
 
+    #[test]
+    fn lua_submission_uses_the_current_compile_for_both_services() {
+        std::thread::Builder::new()
+            .name("lua-submission-eligibility".into())
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+                    true, false, || {
+                    space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
+                    space::set_current_window_px(640, 480);
+                    let dir = tempfile::tempdir().unwrap();
+                    let simfile = dir.path().join("song.ssc");
+                    fs::write(&simfile, "#TITLE:Lua submission regression;\n#BPMS:0=120;\n#FGCHANGES:0=default.lua=1=0=0=1;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n1000\n0100\n0010\n0001\n;\n").unwrap();
+                    for succeeds in [true, false, true] {
+                        fs::write(dir.path().join("default.lua"), if succeeds {
+                            "return Def.ActorFrame{}"
+                        } else {
+                            "return ???"
+                        }).unwrap();
+                        let profiles = std::array::from_fn(|_| profile_data::Profile {
+                            groovestats_is_pad_player: true,
+                            ..Default::default()
+                        });
+                        let mut state = build_test_state(&simfile,
+                            GameplayViewport::new(640.0, 480.0), GameplaySession::default(), profiles);
+                        state.progress.stage.song_completed_naturally = true;
+                        assert!(state.song().has_lua);
+                        assert!(!deadsync_score::lua_chart_submit_allowed(&state.charts()[0].short_hash));
+                        assert_eq!(state.mods.song_lua_compile_succeeded, succeeds);
+                        let arrowcloud = deadsync_online::arrowcloud::gameplay_submit_player_from_runtime(
+                            &state.gameplay, 0, profile_data::PlayerSide::P1, None, |_| false, "Test",
+                        );
+                        assert_eq!(arrowcloud.lua_submit_allowed, succeeds);
+                        let groovestats = deadsync_online::groovestats::gameplay_submit_player_from_runtime(
+                            &state.gameplay, 0, profile_data::PlayerSide::P1, None, None, |_| false, true,
+                        );
+                        assert_eq!(groovestats.invalid_reason.is_none(), succeeds,
+                            "{:?}", groovestats.invalid_reason);
+                        let evaluation = deadsync_online::groovestats::eval_state_from_runtime(
+                            &state.gameplay, 0, |_| false, false, true,
+                        );
+                        assert_eq!(evaluation.valid, succeeds, "{:?}", evaluation.reason_lines);
+                        assert_eq!(deadsync_profile_gameplay::groovestats_eval_state_from_app_runtime(
+                            &state.gameplay, 0).valid, succeeds);
+                    }
+                });
+            }).unwrap().join().unwrap();
+    }
+
     fn set_fixture_time(state: &mut screen_gameplay::State, music_time: f32) {
         state.boundary.total_elapsed_in_screen = 10.0;
         state.set_current_music_time_ns(deadsync_core::song_time::song_time_ns_from_seconds(

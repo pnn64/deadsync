@@ -987,6 +987,9 @@ impl State {
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
+        if !self.song_lua_output.errors.is_empty() {
+            self.gameplay.mods.song_lua_compile_succeeded = false;
+        }
         scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
         self.song_lua = Some(scene);
         Ok(())
@@ -1017,6 +1020,9 @@ impl State {
     /// The shell drains sounds and requests once after each gameplay frame.
     /// Broadcast listeners have already run in the retained Lua scene.
     pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
+        if !self.song_lua_output.errors.is_empty() {
+            self.gameplay.mods.song_lua_compile_succeeded = false;
+        }
         std::mem::take(&mut self.song_lua_output)
     }
 
@@ -1843,6 +1849,7 @@ pub fn init(
     state.hide_song_intro = startup.hide_in;
     if let Some(scene) = live_scene {
         if let Err(error) = state.attach_song_lua(scene) {
+            state.gameplay.mods.song_lua_compile_succeeded = false;
             log::warn!("Cannot attach prepared song Lua: {error}");
         }
     }

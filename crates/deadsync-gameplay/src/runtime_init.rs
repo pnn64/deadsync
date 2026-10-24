@@ -770,6 +770,7 @@ where
     let notefield_song_position: [BeatInfo; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_info_from_time_ns(init_music_time_ns)
     });
+    let song_lua_compile_succeeded = build_song_lua_runtime.song_lua_compile_succeeded();
     let (song_lua_mask_windows, song_lua_ease_windows, song_lua_visuals) = build_song_lua_runtime
         .build_song_lua_runtime(build_song_lua_runtime_window_build(
             song.title.as_str(),
@@ -1223,6 +1224,7 @@ where
             profiles: player_profiles,
         },
         mods: GameplayModRuntimeState {
+            song_lua_compile_succeeded,
             expand_seconds: [0.0; MAX_PLAYERS],
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),

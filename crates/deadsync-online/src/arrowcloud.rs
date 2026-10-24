@@ -2635,7 +2635,8 @@ where
         ex_percent: gs.stage_ex_score_percent(player_idx).clamp(0.0, 100.0),
         hard_ex_percent: gs.stage_hard_ex_score_percent(player_idx).clamp(0.0, 100.0),
         song_has_lua: gs.song().has_lua,
-        lua_submit_allowed: lua_submit_allowed(chart_hash.as_str()),
+        lua_submit_allowed: gs.mods.song_lua_compile_succeeded
+            || lua_submit_allowed(chart_hash.as_str()),
         song_completed_naturally: outcome.song_completed_naturally,
         is_failing: outcome.is_failing,
         life: outcome.life,

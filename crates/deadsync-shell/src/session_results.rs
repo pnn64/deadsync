@@ -58,7 +58,8 @@ pub(crate) fn evaluation_view(
             outcome.fail_time.is_some(),
         );
         let chart_hash = gs.charts()[player_idx].short_hash.as_str();
-        let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
+        let lua_submit_allowed = gs.mods.song_lua_compile_succeeded
+            || score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
         let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
         let expected_groovestats_submit = policy.enable_groovestats
             && passed

@@ -247,6 +247,15 @@ A `save` directory is created inside the data directory to store your personal d
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
+### Lua chart score submission
+
+Lua charts can submit scores when all declared song Lua compiles without errors
+for the current play, alongside the existing chart allowlist. Missing layers,
+failed compilation, partial captures, or Lua errors during play do not grant
+automatic approval. This result is never saved against the chart hash, since
+the Lua files can change independently of the notes. Other submission rules
+(such as autoplay, disqualifying modifiers, and course eligibility) still apply.
+
 ### Golf extras
 
 Golf features are optional and disabled by default. First enable

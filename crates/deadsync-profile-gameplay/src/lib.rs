@@ -757,7 +757,8 @@ where
         ),
         deadsync_score::GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
-            lua_submit_allowed: deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
+            lua_submit_allowed: gs.mods.song_lua_compile_succeeded
+                || deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
             song_completed_naturally: outcome.song_completed_naturally,
             is_failing: outcome.is_failing,
             life: outcome.life,
