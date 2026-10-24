@@ -19,11 +19,11 @@ performance JSON keeps its recorded measurement provenance.
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
 | Independent compiler/interpreter | Byte lexer, flat AST arenas, register compiler, verifier, literal folding, VM and CLI exist. Complete reference-suite coverage remains open. |
-| Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations and environments. Full diagnostics, debug metadata and broader numeric/resource edge cases remain open. |
+| Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Full diagnostics, debug metadata and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and numeric IDs; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host handle provenance and reclamation remain open. |
 | Garbage collection | Unimplemented. Requires roots, cyclic graph tracing, weak tables, finalization, pressure tests and collector controls. |
-| Coroutines | Unimplemented. Requires resumable frames, native yield/resume boundaries, protected calls and per-thread state. |
-| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments and dynamic compilation. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting and the 5.1 math function set exist. Complete base, coroutine, I/O, OS, package/require, debug, binary dumps and broader numeric/diagnostic compatibility remain open. |
+| Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity and quota recovery are tested. Thread reclamation, debug stacks/hooks, full diagnostics and broader resource tests remain open. |
+| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments and dynamic compilation. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Complete base, I/O, OS, package/require, debug, binary dumps and broader numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
 | Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
 | Lua 5.2–5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
@@ -34,20 +34,22 @@ performance JSON keeps its recorded measurement provenance.
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
-Next work should finish the standalone engine: standard libraries, coroutines,
-collection and userdata, complete diagnostics/debug behavior, binary loading and
+Next work should finish the standalone engine: collection and userdata,
+remaining standard libraries, complete diagnostics/debug behavior, binary loading and
 caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 37 differential/adversarial integration tests, verifier mutation tests and
+crate, 47 differential/adversarial integration tests, verifier mutation tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
 radix conversion cases. Sort tests compare comparator
 traces across all permutations through length six, callback mutations, nested
-sorting, errors and metatables.
-The [official suite report](testing/2026-10-24-rust-lua-math-suite.md) identifies the
+sorting, errors and metatables. Coroutine generation exercises 300 resume sequences
+and recursive generators, alongside nested resumers, native callbacks, environments,
+failed/suspended thread cells, result arity, C-call limits and quota recovery.
+The [official suite report](testing/2026-10-24-rust-lua-coroutines.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38–13.51 times the reference duration. Subsequent
@@ -55,7 +57,8 @@ execution ratios of 2.38–13.51 times the reference duration. Subsequent
 recorded ratios of 2.57–6.63 with expanded semantics. The latest
 [string/table measurements](performance/2026-10-24-rust-lua-stdlib.md) add six
 workloads and confirm zero warmed allocation events for pattern search and
-replacement workloads. Substantial speed work and broader measurements remain
+replacement workloads. The [coroutine measurements](performance/2026-10-24-rust-lua-coroutines.md)
+add resume, wrap and deep-yield scripts. Substantial speed work and broader measurements remain
 after the language/compatibility gates.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
@@ -73,6 +76,21 @@ shared by Lua states on each OS thread, as in the Windows CRT; erroring random
 calls still advance it. Other CRT random streams are not emulated. Differential
 checks pin the Windows MSVC/C-locale reference and do not establish cross-libm
 transcendental equivalence.
+
+Coroutine switches transfer ownership of vectors without copying stack contents.
+Open cells include their owning thread ID. Active registers remain direct VM
+fields, and shared-heap references do not adjust reference counts. Yield-boundary
+depth is inherited in call frames; fixed result counts use 16 bits and retain an
+open-result sentinel. A compile-time assertion keeps frames at 64 bytes on 64-bit
+targets; values remain 16 bytes in measurements. The global instruction budget
+covers coroutine execution and aborts active resumer chains before restoring main.
+
+The collector must trace active/normal/suspended stacks and native continuation
+state. Surviving closures can reference cells in otherwise unreachable threads;
+collecting such a thread must close those cells without retaining the entire
+thread through its cell-owner ID. Failed thread frames remain available for later
+debug inspection. These requirements are not yet implemented or validated by GC
+tests. Commit each verified milestone while keeping unrelated edits separate.
 
 ## Reference contract
 

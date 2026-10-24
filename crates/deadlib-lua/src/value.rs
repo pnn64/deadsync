@@ -12,6 +12,10 @@ pub struct TableId(pub(crate) u32);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionId(pub(crate) u32);
 
+/// The identity of a Lua thread in its originating VM, including the main thread.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ThreadId(pub(crate) u32);
+
 /// A Lua register value. Object handles belong to the VM that produced them.
 ///
 /// Numbers use IEEE 754 binary64, including signed zero, infinities, and NaNs.
@@ -29,6 +33,8 @@ pub enum Value {
     Table(TableId),
     /// A Lua closure identity.
     Function(FunctionId),
+    /// A coroutine or main-thread identity.
+    Thread(ThreadId),
     /// A native function's numeric dispatch ID.
     Native(u32),
 }
@@ -48,6 +54,7 @@ impl Value {
             Self::String(_) => "string",
             Self::Table(_) => "table",
             Self::Function(_) | Self::Native(_) => "function",
+            Self::Thread(_) => "thread",
         }
     }
 }

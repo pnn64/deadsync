@@ -1,7 +1,7 @@
 //! Register dispatch, interned byte strings, and native Lua tables.
 
 use crate::{
-    Error, ErrorKind, FunctionId, Program, StringId, TableId, Value,
+    Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, Value,
     bytecode::{Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
     lexer::parse_number,
     table::Table,
@@ -12,6 +12,7 @@ mod meta;
 mod native;
 mod strings;
 mod tables;
+mod threads;
 use native::format_number;
 
 #[derive(Debug, Default)]
@@ -97,7 +98,7 @@ struct Closure {
 
 #[derive(Debug)]
 enum Cell {
-    Open(usize),
+    Open(ThreadId, usize),
     Closed(Value),
 }
 
@@ -118,6 +119,8 @@ const PAIRS_NEXT: u32 = 21;
 const GET_ENV: u32 = 22;
 const SET_ENV: u32 = 23;
 const LOAD_STRING: u32 = 24;
+const DEBUG_GET_ENV: u32 = 25;
+const DEBUG_SET_ENV: u32 = 26;
 const CONT_RAW: u32 = 128;
 const CONT_BOOL: u32 = 129;
 const CONT_NOT: u32 = 130;
@@ -178,11 +181,24 @@ struct Frame {
     base: usize,
     stack_start: usize,
     result: usize,
-    wanted: u32,
+    wanted: u16,
+    // C-boundary depth at entry, including this frame when it is native.
+    barriers: u16,
     vararg_start: usize,
     vararg_count: usize,
     tail_calls: u32,
 }
+
+const FRAME_OPEN: u16 = u16::MAX;
+fn frame_wanted(wanted: u32) -> u16 {
+    if wanted == OPEN {
+        FRAME_OPEN
+    } else {
+        u16::try_from(wanted).expect("verified result count fits a frame")
+    }
+}
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<Frame>() == 64);
 
 /// A Lua state with persistent globals and reusable contiguous register storage.
 ///
@@ -201,16 +217,20 @@ pub struct Vm {
     globals: TableId,
     top: usize,
     budget: Option<u64>,
-    type_metatables: [Option<TableId>; 6],
+    type_metatables: [Option<TableId>; 7],
     meta_names: [StringId; 17],
     output: Option<Vec<u8>>,
     active_native: Option<usize>,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
     pattern_work: crate::pattern::Work,
-    match_iterators: Vec<strings::MatchIterator>,
+    native_closures: Vec<threads::NativeClosure>,
+    native_envs: HashMap<u32, TableId>,
     substitutions: Vec<strings::Substitution>,
     sorts: Vec<tables::Sort>,
     buffers: Vec<Vec<u8>>,
+    threads: Vec<threads::Thread>,
+    thread: ThreadId,
+    transition: Option<threads::Transition>,
 }
 
 impl Default for Vm {
@@ -234,16 +254,20 @@ impl Vm {
             globals: TableId(0),
             top: 0,
             budget: None,
-            type_metatables: [None; 6],
+            type_metatables: [None; 7],
             meta_names: [StringId(0); 17],
             output: None,
             active_native: None,
             patterns: HashMap::new(),
             pattern_work: crate::pattern::Work::default(),
-            match_iterators: Vec::new(),
+            native_closures: Vec::new(),
+            native_envs: HashMap::new(),
             substitutions: Vec::new(),
             sorts: Vec::new(),
             buffers: Vec::new(),
+            threads: vec![threads::Thread::main()],
+            thread: ThreadId(0),
+            transition: None,
         };
         for (id, name) in [
             b"assert".as_slice(),
@@ -284,6 +308,8 @@ impl Vm {
         for (id, name) in [
             (DEBUG_GET_META, b"getmetatable".as_slice()),
             (DEBUG_SET_META, b"setmetatable"),
+            (DEBUG_GET_ENV, b"getfenv"),
+            (DEBUG_SET_ENV, b"setfenv"),
         ] {
             let key = vm.intern(name);
             vm.tables[debug.0 as usize]
@@ -300,6 +326,7 @@ impl Vm {
         vm.open_math();
         vm.open_strings();
         vm.open_tables();
+        vm.open_threads();
         vm
     }
 
@@ -446,12 +473,12 @@ impl Vm {
         if let Some(&id) = self
             .open_upvalues
             .iter()
-            .find(|&&id| matches!(self.upvalues[id as usize], Cell::Open(r) if r == register))
+            .find(|&&id| matches!(self.upvalues[id as usize], Cell::Open(_,r) if r == register))
         {
             return id;
         }
         let id = self.upvalues.len() as u32;
-        self.upvalues.push(Cell::Open(register));
+        self.upvalues.push(Cell::Open(self.thread, register));
         self.open_upvalues.push(id);
         id
     }
@@ -460,7 +487,7 @@ impl Vm {
         let mut i = 0;
         while i < self.open_upvalues.len() {
             let id = self.open_upvalues[i] as usize;
-            if let Cell::Open(r) = self.upvalues[id]
+            if let Cell::Open(_, r) = self.upvalues[id]
                 && r >= base
             {
                 self.upvalues[id] = Cell::Closed(self.registers[r]);
@@ -516,7 +543,8 @@ impl Vm {
             base,
             stack_start: base,
             result: call,
-            wanted,
+            wanted: frame_wanted(wanted),
+            barriers: self.frames.last().map_or(0, |f| f.barriers),
             vararg_start,
             vararg_count,
             tail_calls: 0,
@@ -586,7 +614,7 @@ impl Vm {
             self.frames.clear();
             return Some(count);
         }
-        let wanted = if frame.wanted == OPEN {
+        let wanted = if frame.wanted == FRAME_OPEN {
             count
         } else {
             frame.wanted as usize
@@ -623,7 +651,8 @@ impl Vm {
             base: 0,
             stack_start: 0,
             result: 0,
-            wanted: OPEN,
+            wanted: FRAME_OPEN,
+            barriers: 0,
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
@@ -637,20 +666,30 @@ impl Vm {
                 Err(error) if error.kind() == ErrorKind::Runtime => {
                     match self.catch_error(&error, error_line) {
                         Ok(true) => continue,
+                        Ok(false) if self.thread != ThreadId(0) => {
+                            self.fail_thread(&error, &mut error_line);
+                            continue;
+                        }
                         Ok(false) => break Err(error),
                         Err(next) => break Err(next),
                     }
                 }
+                Ok(count) if self.thread != ThreadId(0) => {
+                    self.finish_thread(0, count, false, false, &mut error_line);
+                    continue;
+                }
                 result => break result,
             }
         };
+        let result = result.map_err(|error| error.at_line(error_line));
+        self.abort_threads(&mut error_line);
         self.close_upvalues(0);
         self.frames.clear();
         self.trim_substitutions();
         self.sorts.clear();
         match result {
             Ok(count) => Ok(&self.registers[..count]),
-            Err(error) => Err(error.at_line(error_line)),
+            Err(error) => Err(error),
         }
     }
 
@@ -690,6 +729,7 @@ impl Vm {
                     if let Some(count) = result? {
                         return Ok(count);
                     }
+                    self.apply_transition(error_line)?;
                     continue;
                 }
                 FrameKind::Lua(id) => id,
@@ -779,17 +819,11 @@ impl Vm {
                     }
                     Op::GetUpvalue => {
                         let id = self.functions[function.0 as usize].upvalues[c] as usize;
-                        self.registers[a] = match self.upvalues[id] {
-                            Cell::Open(r) => self.registers[r],
-                            Cell::Closed(v) => v,
-                        };
+                        self.registers[a] = self.cell_value(id);
                     }
                     Op::SetUpvalue => {
                         let id = self.functions[function.0 as usize].upvalues[c] as usize;
-                        match &mut self.upvalues[id] {
-                            Cell::Open(r) => self.registers[*r] = self.registers[a],
-                            Cell::Closed(v) => *v = self.registers[a],
-                        }
+                        self.set_cell(id, self.registers[a]);
                     }
                     Op::Close => self.close_upvalues(a),
                     Op::Vararg => {

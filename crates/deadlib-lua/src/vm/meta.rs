@@ -24,6 +24,7 @@ impl Vm {
             Value::String(_) => 3,
             Value::Function(_) | Value::Native(_) => 4,
             Value::Table(_) => 5,
+            Value::Thread(_) => 6,
         }
     }
     pub(super) fn metatable(&self, value: Value) -> Option<TableId> {

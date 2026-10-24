@@ -174,6 +174,30 @@ fn main() {
             12900.0,
             20,
         ),
+        (
+            "coroutine_resume",
+            "local co=coroutine.create(function()for i=1,1000 do coroutine.yield(i) end;return 0 end);local s=0;for i=1,1001 do local ok,n=coroutine.resume(co);assert(ok);s=s+n end;return s",
+            500500.0,
+            30,
+        ),
+        (
+            "coroutine_wrap",
+            "local f=coroutine.wrap(function()for i=1,1000 do coroutine.yield(i) end;return 0 end);local s=0;for i=1,1001 do s=s+f() end;return s",
+            500500.0,
+            30,
+        ),
+        (
+            "coroutine_deep_yield",
+            "local function f(n)if n==0 then for i=1,1000 do coroutine.yield(i) end;return 0 end;return f(n-1)+0 end;local c=coroutine.create(function()return f(128)end);local s=0;for i=1,1001 do local ok,n=coroutine.resume(c);assert(ok);s=s+n end;return s",
+            500500.0,
+            30,
+        ),
+        (
+            "coroutine_reuse",
+            "if not cachedco then cachedco=coroutine.create(function()while true do coroutine.yield(1) end end) end;local s=0;for i=1,1000 do local ok,n=coroutine.resume(cachedco);assert(ok);s=s+n end;return s",
+            1000.0,
+            30,
+        ),
     ] {
         let source = source.as_bytes();
         let program = compile(source).unwrap();
