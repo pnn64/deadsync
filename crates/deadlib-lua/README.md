@@ -33,7 +33,7 @@ Native callbacks and metamethods use explicit continuation frames.
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv` and `loadstring`.
-The Lua 5.1 `math` function set and debug-metatable subset are available. Binary
+The Lua 5.1 `math` function set and debug metatable/environment subsets are available. Binary
 decomposition/scaling preserve signed zero and round subnormals once. The random
 stream matches the MSVC reference, including per-OS-thread state shared by VMs;
 other CRT random sequences are not emulated. `compile_named` assigns
@@ -49,12 +49,20 @@ removal, size queries, traversal callbacks and sorting. Sort comparison order an
 callback mutations are checked against the reference. Scratch buffers are reused
 across calls; nested native callbacks keep separate continuation state.
 
-Coroutines, GC, userdata, other standard libraries, complete diagnostic text and
+Coroutines provide `create`, `resume`, `running`, `status`, `wrap` and `yield`.
+Each thread owns its register/frame vectors and environment; threads share the
+heap, closures and object identity. Open upvalues can read and write suspended,
+normal and failed thread stacks. Resume/yield uses an explicit scheduler with
+no recursive interpreter entry. Lua 5.1 C-call yield restrictions and inherited
+resume-depth limits are checked against the reference. An instruction quota
+covers all resumed threads and restores the main context after an abort.
+
+GC, userdata, other standard libraries, complete diagnostic text and
 debug metadata, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
-work limits. Heap
+work limits. Thread collection, debug stack inspection and hooks remain open. Heap
 objects live until VM drop. Handles must remain in their originating VM. The API
 and bytecode are provisional. The CLI accepts a file, stdin or `-e source`.
 
@@ -76,5 +84,5 @@ currently exits unsuccessfully: all twelve reference probes pass; the Rust engin
 passes unchanged `locals.lua`, `vararg.lua` and `pm.lua`, while other probes reach
 missing functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-24-rust-lua-math-suite.md) and
+[suite report](../../docs/testing/2026-10-24-rust-lua-coroutines.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

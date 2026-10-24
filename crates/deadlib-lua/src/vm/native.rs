@@ -60,7 +60,9 @@ impl Vm {
                         | tables::TAB_FOREACH
                         | tables::TAB_FOREACHI
                         | tables::TAB_SORT
-                ) =>
+                        | threads::CO_RESUME
+                        | threads::CO_YIELD
+                ) || self.is_wrapper(id) =>
             {
                 if self.frames.len() >= 10000 {
                     return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
@@ -73,7 +75,12 @@ impl Vm {
                     base,
                     stack_start: base,
                     result: call,
-                    wanted: if tail { OPEN } else { wanted },
+                    wanted: if tail {
+                        FRAME_OPEN
+                    } else {
+                        frame_wanted(wanted)
+                    },
+                    barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
                     vararg_start: call + 1,
                     vararg_count: count,
                     tail_calls: 0,
@@ -92,7 +99,8 @@ impl Vm {
                     base,
                     stack_start: base,
                     result: call,
-                    wanted,
+                    wanted: frame_wanted(wanted),
+                    barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
                     vararg_start: call + 1,
                     vararg_count: count,
                     tail_calls: 0,
@@ -136,6 +144,7 @@ impl Vm {
             stack_start: base,
             result,
             wanted: if continuation == CONT_IGNORE { 0 } else { 1 },
+            barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
@@ -185,6 +194,7 @@ impl Vm {
                     stack_start: base,
                     result: 0,
                     wanted: 1,
+                    barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
                     vararg_start: index,
                     vararg_count: 0,
                     tail_calls: 0,
@@ -277,6 +287,8 @@ impl Vm {
             strings::STR_GSUB => self.substitute_step(frame),
             tables::TAB_FOREACH | tables::TAB_FOREACHI => self.foreach_step(id, frame),
             tables::TAB_SORT => self.sort_step(frame),
+            threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
+            id if self.is_wrapper(id) => self.coroutine_step(id, frame),
             _ => unreachable!("native continuation ID"),
         }
     }
@@ -291,6 +303,7 @@ impl Vm {
             Value::Native(id) => {
                 self.intern(format!("function: 0x{:x}", u64::from(id) + (1u64 << 32)).as_bytes())
             }
+            Value::Thread(id) => self.intern(format!("thread: 0x{:x}", id.0).as_bytes()),
         }
     }
     fn print_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
@@ -418,6 +431,9 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u32, base: usize, count: usize) -> Result<usize, Error> {
+        if (threads::CO_CREATE..=threads::CO_YIELD).contains(&id) {
+            return self.coroutine_native(id, base, count);
+        }
         if (math::MATH_FIRST..=math::MATH_LAST).contains(&id) {
             return self.math_native(id, base, count);
         }
@@ -606,6 +622,37 @@ impl Vm {
                 self.registers[base] = Value::Number(f64::from(next));
                 self.registers[base + 1] = value;
                 return Ok(2);
+            }
+            DEBUG_GET_ENV | DEBUG_SET_ENV => {
+                if count == 0 {
+                    return Err(bad(0, "value"));
+                }
+                let target = arg(self, 0);
+                if id == DEBUG_GET_ENV {
+                    match target {
+                        Value::Function(id) => Value::Table(self.functions[id.0 as usize].env),
+                        Value::Native(id) => Value::Table(self.native_environment(id)),
+                        Value::Thread(id) => Value::Table(self.thread_environment(id)),
+                        _ => Value::Nil,
+                    }
+                } else {
+                    let Value::Table(env) = arg(self, 1) else {
+                        return Err(bad(1, "table"));
+                    };
+                    match target {
+                        Value::Function(id) => self.functions[id.0 as usize].env = env,
+                        Value::Native(id) => self.set_native_environment(id, env),
+                        Value::Thread(id) => self.set_thread_environment(id, env),
+                        _ => {
+                            return Err(Error::new(
+                                ErrorKind::Runtime,
+                                0,
+                                "'setfenv' cannot change environment of given object",
+                            ));
+                        }
+                    }
+                    target
+                }
             }
             GET_ENV | SET_ENV => {
                 if id == SET_ENV && !matches!(arg(self, 1), Value::Table(_)) {

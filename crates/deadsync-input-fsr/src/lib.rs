@@ -179,6 +179,16 @@ impl Monitor {
             None => self.smx.set_active(active),
         }
     }
+
+    /// Retry deferred FSRio saves independently of the configuration UI.
+    pub fn poll_pending_saves(&mut self) {
+        self.fsrio.poll_pending_saves();
+    }
+
+    /// Persist pending FSRio edits before a clean shutdown.
+    pub fn flush_pending_saves(&mut self) {
+        self.fsrio.flush_pending_saves();
+    }
 }
 
 #[cfg(not(any(
@@ -244,6 +254,10 @@ mod unsupported {
         }
 
         pub fn set_active(&mut self, _active: bool) {}
+
+        pub fn poll_pending_saves(&mut self) {}
+
+        pub fn flush_pending_saves(&mut self) {}
 
         pub fn write_debug_dump(&mut self, path: &Path) -> Result<(), String> {
             let mut out = String::new();

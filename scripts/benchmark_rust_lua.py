@@ -72,8 +72,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired measurements for {name}")
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 12:
-        raise SystemExit(f"expected 12 workload measurements, received {len(ratios)}")
+    if len(ratios) != 16:
+        raise SystemExit(f"expected 16 workload measurements, received {len(ratios)}")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         build_and_run_seconds=time.time() - started,

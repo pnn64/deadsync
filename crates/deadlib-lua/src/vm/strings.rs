@@ -333,16 +333,11 @@ impl Vm {
             STR_GMATCH => {
                 let pattern = self.string_argument(base, count, 1)?;
                 self.prepare_pattern(pattern, false);
-                let id = ITERATOR_FIRST
-                    + u32::try_from(self.match_iterators.len()).map_err(|_| {
-                        Error::new(ErrorKind::Limit, 0, "too many pattern iterators")
-                    })?;
-                self.match_iterators.push(MatchIterator {
+                self.new_native(threads::NativeKind::Match(MatchIterator {
                     source,
                     pattern,
                     position: 0,
-                });
-                Value::Native(id)
+                }))?
             }
             _ => unreachable!("string native ID"),
         };
@@ -351,7 +346,11 @@ impl Vm {
     }
     pub(super) fn match_iterator(&mut self, id: u32, base: usize) -> Result<usize, Error> {
         let index = (id - ITERATOR_FIRST) as usize;
-        let Some(iter) = self.match_iterators.get(index) else {
+        let Some(threads::NativeClosure {
+            kind: threads::NativeKind::Match(iter),
+            ..
+        }) = self.native_closures.get(index)
+        else {
             return Err(Error::new(ErrorKind::Runtime, 0, "unknown native closure"));
         };
         let (source, pattern, position) = (iter.source, iter.pattern, iter.position);
@@ -361,8 +360,10 @@ impl Vm {
             &mut self.pattern_work,
         )?;
         if let Some(found) = found {
-            self.match_iterators[index].position =
-                found.end + usize::from(found.end == found.start);
+            let threads::NativeKind::Match(iter) = &mut self.native_closures[index].kind else {
+                unreachable!("pattern iterator kind")
+            };
+            iter.position = found.end + usize::from(found.end == found.start);
             self.capture_results(base, source, found, true)
         } else {
             Ok(0)

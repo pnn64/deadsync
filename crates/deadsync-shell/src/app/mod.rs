@@ -4507,6 +4507,7 @@ impl App {
         let update_started = Instant::now();
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
+        self.fsr_monitor.poll_pending_saves();
         let smx_screen_work = smx_runtime::screen_work(
             self.state.screens.current_screen,
             self.fsr_pads_active,
@@ -11061,6 +11062,8 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.apply_pending_pad_config_commands();
+        self.fsr_monitor.flush_pending_saves();
         if let Err(error) = self.state.shell.fullscreen_state.restore() {
             warn!("Failed to restore desktop on exit: {error}");
         }
