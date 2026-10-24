@@ -43,6 +43,19 @@ pub struct StepStatsGraphRect {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StepStatsPaneRect {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+#[must_use]
+pub fn step_stats_aspect_enabled(screen_w: f32, screen_h: f32) -> bool {
+    screen_h > 0.0 && screen_w >= screen_h
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StepStatsSpritePlacement {
     pub x: f32,
     pub y: f32,
@@ -105,6 +118,37 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         is_ultrawide,
         banner_data_zoom,
     }
+}
+
+#[must_use]
+pub fn pane_rect(layout: StepStatsPaneLayout, screen_h: f32) -> StepStatsPaneRect {
+    StepStatsPaneRect {
+        left: layout.sidepane_center_x - layout.sidepane_width * 0.5,
+        top: 0.0,
+        right: layout.sidepane_center_x + layout.sidepane_width * 0.5,
+        bottom: screen_h.max(0.0),
+    }
+}
+
+#[must_use]
+pub fn judgment_count_center_x(
+    layout: StepStatsPaneLayout,
+    player_side: PlayerSide,
+    wide: bool,
+    num_players: usize,
+) -> f32 {
+    let side_sign = match player_side {
+        PlayerSide::P1 => 1.0,
+        PlayerSide::P2 => -1.0,
+    };
+    let local_x = if layout.is_ultrawide && num_players > 1 {
+        154.0 * side_sign
+    } else if layout.note_field_is_centered && wide {
+        -156.0 * side_sign
+    } else {
+        -(if wide { 204.0 } else { 152.0 }) * side_sign
+    };
+    layout.sidepane_center_x + local_x * layout.banner_data_zoom
 }
 
 #[must_use]

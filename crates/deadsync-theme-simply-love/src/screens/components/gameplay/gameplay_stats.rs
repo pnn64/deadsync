@@ -1531,6 +1531,9 @@ pub fn push_step_stats(
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,
 ) {
+    if !step_stats_theme::step_stats_aspect_enabled(screen_width(), screen_height()) {
+        return;
+    }
     let wide = is_wide();
     let mask = step_stats_mask(state, player_side);
     if mask.is_empty() {
@@ -1539,15 +1542,15 @@ pub fn push_step_stats(
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     let player_idx = step_stats_player_idx(state, player_side);
     let extra_actor_count = state.step_stats_extra_resolved[player_idx].actor_count();
-    actors.reserve((if wide { 48 } else { 1 }) + extra_actor_count);
+    actors.reserve(48 + extra_actor_count);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
         build_banner(actors, state, layout, wide, player_side);
     }
     let show_pack_info = mask.pack_info_enabled();
     if show_pack_info {
-        build_pack_banner(actors, state, layout, wide, player_side);
+        build_pack_banner(actors, state, layout, player_side);
     }
-    build_steps_info(actors, state, layout, wide, player_side, show_pack_info);
+    build_steps_info(actors, state, layout, player_side, show_pack_info);
     step_stats_gifs::push_step_stats_extra(
         actors,
         state,
@@ -2482,12 +2485,8 @@ fn build_pack_banner(
     actors: &mut Vec<Actor>,
     state: &State,
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: profile_data::PlayerSide,
 ) {
-    if !wide {
-        return;
-    }
     let Some(pack_key) = state.pack_banner_key.as_ref() else {
         return;
     };
@@ -2509,20 +2508,17 @@ fn build_steps_info(
     actors: &mut Vec<Actor>,
     state: &State,
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: profile_data::PlayerSide,
     show_song_info: bool,
 ) {
-    if !wide {
-        return;
-    }
     actors.reserve(if layout.note_field_is_centered { 5 } else { 9 });
 
     // Dark background for the Step Statistics side pane (Simply Love: DarkBackground.lua).
+    let pane_rect = step_stats_theme::pane_rect(layout, screen_height());
     actors.push(act!(quad:
         align(0.5, 0.5):
-        xy(layout.sidepane_center_x, screen_center_y()):
-        zoomto(layout.sidepane_width, screen_height()):
+        xy((pane_rect.left + pane_rect.right) * 0.5, (pane_rect.top + pane_rect.bottom) * 0.5):
+        zoomto(pane_rect.right - pane_rect.left, pane_rect.bottom - pane_rect.top):
         diffuse(0.0, 0.0, 0.0, 0.95):
         z(-80)
     ));
@@ -2953,24 +2949,14 @@ fn build_side_pane(
     player_side: profile_data::PlayerSide,
     mask: profile_data::StepStatisticsMask,
 ) {
-    if !wide {
-        return;
-    }
-
-    let x_sign = match player_side {
-        profile_data::PlayerSide::P1 => 1.0,
-        profile_data::PlayerSide::P2 => -1.0,
-    };
     let player_idx = step_stats_player_idx(state, player_side);
-    let judgments_local_x = if layout.is_ultrawide && state.num_players() > 1 {
-        154.0 * x_sign
-    } else if layout.note_field_is_centered && wide {
-        -156.0 * x_sign
+    let x_sign = if player_side == profile_data::PlayerSide::P1 {
+        1.0
     } else {
-        -widescale(152.0, 204.0) * x_sign
+        -1.0
     };
     let final_judgments_center_x =
-        layout.sidepane_center_x + (judgments_local_x * layout.banner_data_zoom);
+        step_stats_theme::judgment_count_center_x(layout, player_side, wide, state.num_players());
     let final_judgments_center_y = layout.sidepane_center_y;
     let parent_local_zoom = 0.8;
     let final_text_base_zoom = layout.banner_data_zoom * parent_local_zoom;
@@ -3421,7 +3407,7 @@ fn build_side_pane(
 
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
     let graph = step_stats_density_graph_rect(state, layout);
-    if wide && mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
+    if mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
         let graph_view = state.gameplay.density_graph_view();
         if graph_view.graph_w > 0.0_f32 && graph_view.graph_h > 0.0_f32 {
             push_density_graph_at(actors, state, player_idx, graph.x, graph.y);
@@ -3429,7 +3415,7 @@ fn build_side_pane(
     }
 
     // Peak NPS sits on the graph corner and uses the same scale as song info text.
-    if wide && mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
+    if mask.contains(profile_data::StepStatisticsMask::PEAK_NPS) {
         push_peak_nps_on_graph(
             actors,
             state,
