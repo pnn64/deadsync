@@ -1,5 +1,10 @@
 # Source provenance
 
+The fork was subsequently moved to `crates/deadlib-lua-legacy`. Its Cargo
+packages now use `deadlib-lua-legacy`, `deadlib-lua-legacy-sys`, and
+`deadlib-lua-legacy-derive`; Rust import names and runtime sources are retained.
+The historical import details below describe the original package names.
+
 The initial fork was copied directly from the tracked working-tree files in
 `C:/GitHub/mlua` (`../mlua` relative to the DeadSync checkout) on 2026-10-23.
 No source was downloaded from GitHub or crates.io for this import. All tracked

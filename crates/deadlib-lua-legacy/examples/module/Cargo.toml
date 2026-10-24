@@ -1,8 +1,13 @@
 [package]
-name = "module_loader"
+name = "rust_module"
 version = "0.0.0"
 authors = ["Aleksandr Orlenko <zxteam@pm.me>"]
 edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[workspace]
 
 [features]
 lua55 = ["mlua/lua55"]
@@ -11,7 +16,6 @@ lua53 = ["mlua/lua53"]
 lua52 = ["mlua/lua52"]
 lua51 = ["mlua/lua51"]
 luajit = ["mlua/luajit"]
-vendored = ["mlua/vendored"]
 
 [dependencies]
-mlua = { package = "deadlib-lua", path = "../../.." }
+mlua = { package = "deadlib-lua-legacy", path = "../..", features = ["module"] }

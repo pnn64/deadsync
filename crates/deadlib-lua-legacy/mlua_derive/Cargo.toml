@@ -1,5 +1,5 @@
 [package]
-name = "deadlib-lua-derive"
+name = "deadlib-lua-legacy-derive"
 version = "0.12.2"
 authors = ["Aleksandr Orlenko <zxteam@pm.me>"]
 rust-version = "1.88"

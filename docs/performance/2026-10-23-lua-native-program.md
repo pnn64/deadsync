@@ -5,7 +5,7 @@ This pass adds a reusable Lua 5.1 callback compiler and measures three improveme
 
 ## Changes and ownership
 
-1. `deadlib-lua::program` lowers callbacks into owned native instructions, direct field/cell slots and host action tags. Runtime inputs remain new data on every invocation. Branches, short-circuit expressions, ordered actions, aliased table fields and mutable scalar captures execute after the loading VM has been destroyed. Reusable register storage and borrowed action arguments eliminate runtime Lua calls, locks, handles, argument collections and event-table allocations. The library has no DeadSync actor names, input field names or theme policy.
+1. `deadlib-lua-legacy::program` lowers callbacks into owned native instructions, direct field/cell slots and host action tags. Runtime inputs remain new data on every invocation. Branches, short-circuit expressions, ordered actions, aliased table fields and mutable scalar captures execute after the loading VM has been destroyed. Reusable register storage and borrowed action arguments eliminate runtime Lua calls, locks, handles, argument collections and event-table allocations. The library has no DeadSync actor names, input field names or theme policy.
 2. `Function::for_each_upvalue_as` permits direct typed inspection under the existing batch lock/root/stack guard. `InspectionValue` copies string bytes directly into owned storage instead of allocating a temporary Lua reference handle and then copying. It preserves ordinary numeric bits and classifies unsupported values without decoding dormant caught-panic userdata. Tables/functions retain owning handles during inspection. The existing `for_each_upvalue` retains checked `Value` conversion semantics.
 3. The native compiler passes register-type state to a single successor by ownership. It clones only when a control-flow fork needs another state; joins merge into existing storage. This removes 12–25 temporary vector allocations per measured callback compared with the initial copying implementation. Both compiler binaries use the same inspection API and harness; their recorded source manifests differ only in `program/compile.rs`.
 
@@ -85,9 +85,9 @@ The next integration must authenticate actual actor methods and object identitie
 ## Reproduction
 
 ```powershell
-cargo test -p deadlib-lua --no-default-features --features lua51,vendored,send --test inspection --test program --test upvalues --release --locked -j 2 --config profile.release.lto=false
-cargo test -p deadlib-lua --no-default-features --features lua54,vendored,send --test inspection --test upvalues --release --locked -j 2 --config profile.release.lto=false
-cargo build -p deadlib-lua --no-default-features --features lua51,vendored,send --example compiled_program --release --locked -j 2 --config profile.release.lto=false
+cargo test -p deadlib-lua-legacy --no-default-features --features lua51,vendored,send --test inspection --test program --test upvalues --release --locked -j 2 --config profile.release.lto=false
+cargo test -p deadlib-lua-legacy --no-default-features --features lua54,vendored,send --test inspection --test upvalues --release --locked -j 2 --config profile.release.lto=false
+cargo build -p deadlib-lua-legacy --no-default-features --features lua51,vendored,send --example compiled_program --release --locked -j 2 --config profile.release.lto=false
 cargo build -p deadsync-song-lua --example native_scene_audit --example compile_pipeline --release --locked -j 2 --config profile.release.lto=false
 python scripts/benchmark_native_lua.py --before-flow <copying-compiler.exe> --after-flow <ownership-compiler.exe> --out <paired> --pairs 3
 python scripts/benchmark_song_lua_pipeline.py --suite state_boundaries --before <previous-pass.exe> --after <current.exe> --out <song> --pairs 3 --samples 5 --reverse-first

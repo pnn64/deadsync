@@ -42,9 +42,9 @@ members = [
     "crates/deadsync-online",
     "crates/deadlib-assets",
     "crates/deadlib-bincode",
-    "crates/deadlib-lua",
-    "crates/deadlib-lua/mlua-sys",
-    "crates/deadlib-lua/mlua_derive",
+    "crates/deadlib-lua-legacy",
+    "crates/deadlib-lua-legacy/mlua-sys",
+    "crates/deadlib-lua-legacy/mlua_derive",
     "crates/deadlib-platform",
     "crates/deadlib-present",
     "crates/deadsync-profile",
@@ -195,10 +195,10 @@ opt-level = 3
 [profile.dev.package.deadsync-song-lua]
 opt-level = 3
 
-[profile.dev.package.deadlib-lua]
+[profile.dev.package.deadlib-lua-legacy]
 opt-level = 3
 
-[profile.dev.package.deadlib-lua-sys]
+[profile.dev.package.deadlib-lua-legacy-sys]
 opt-level = 3
 
 [profile.local]
@@ -218,6 +218,6 @@ perf = { level = "warn", priority = -1 }
 inline_always = "allow"
 
 [workspace.dependencies]
-mlua = { package = "deadlib-lua", version = "=0.12.2", path = "crates/deadlib-lua" }
+mlua = { package = "deadlib-lua-legacy", version = "=0.12.2", path = "crates/deadlib-lua-legacy" }
 serde_json = "1.0.151"
 windows-core = "0.100.0"

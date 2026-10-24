@@ -31,9 +31,9 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     binaries = {name: getattr(args, name).resolve() for name in ("before_actor", "after_actor", "group", "frames")}
     binary_hashes = {name: sha(path) for name, path in binaries.items()}
-    paths = [p for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin")
+    paths = [p for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin")
              for p in (root / "crates" / crate / "src").rglob("*.rs")]
-    paths += [Path(__file__).resolve(), root / "crates/deadlib-lua/examples/grouped_program.rs",
+    paths += [Path(__file__).resolve(), root / "crates/deadlib-lua-legacy/examples/grouped_program.rs",
               root / "crates/deadsync-song-lua/examples/input_frames.rs",
               root / "crates/deadsync-song-lua/examples/actor_input.rs",
               root / "crates/deadsync-song-lua/tests/perf/input_frame_2355.rs",

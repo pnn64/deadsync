@@ -6,7 +6,7 @@ Song input dispatch now uses the generic native compiler for eligible input-only
 
 ## Changes and ownership
 
-1. `SongLuaCompiledInput` binds the actual screen input schema to `deadlib-lua::program`. Qualifying callbacks have no captures, global access, calls or event writes. Input reads, local variables, primitive expressions and branches compile to a Rust-owned machine. The screen evaluates a native prefix in its existing function-pointer order. A truthy result stops dispatch; a false prefix continues into Lua. Once Lua runs, every remaining callback uses its shared mutable event, including callbacks that also have compiled representations. Dynamic registration, deferred removal, duplicate identity and weak-reference rooting retain their existing behavior. Reentrant dispatch and debug hooks use the Lua path. Normal gameplay input remains independent of callback return values.
+1. `SongLuaCompiledInput` binds the actual screen input schema to `deadlib-lua-legacy::program`. Qualifying callbacks have no captures, global access, calls or event writes. Input reads, local variables, primitive expressions and branches compile to a Rust-owned machine. The screen evaluates a native prefix in its existing function-pointer order. A truthy result stops dispatch; a false prefix continues into Lua. Once Lua runs, every remaining callback uses its shared mutable event, including callbacks that also have compiled representations. Dynamic registration, deferred removal, duplicate identity and weak-reference rooting retain their existing behavior. Reentrant dispatch and debug hooks use the Lua path. Normal gameplay input remains independent of callback return values.
 2. `Table::raw_set_many` writes pairs sequentially under one VM lock and table root. Each key/value conversion and write finishes before requesting the next pair. Fallback event construction uses two batches for its fresh parent/device tables. It keeps the original insertion order, nil writes, capacities, coercions and string formatting order. No intermediate value collection or new game-side unsafe access is introduced.
 3. The ordered callback registry uses a sorted contiguous vector. The usual next callback advances by index. It first verifies that the prior identity still occupies its previous position; after additions, nested removals or screen replacement, a partition search repairs the position. This removes repeated BTreeMap range searches while retaining actual function-pointer order and changes made during dispatch. Registration/removal uses binary search and retains the original deferred-removal rules.
 
@@ -91,10 +91,10 @@ A VM-free actor interaction still needs authenticated native method bindings and
 ## Reproduction
 
 ```powershell
-cargo test -p deadlib-lua --no-default-features --features lua51,vendored,send --test raw_set_many --test program --release --locked -j 2 --config profile.release.lto=false
-cargo test -p deadlib-lua --no-default-features --features lua54,vendored,send --test raw_set_many --release --locked -j 2 --config profile.release.lto=false
+cargo test -p deadlib-lua-legacy --no-default-features --features lua51,vendored,send --test raw_set_many --test program --release --locked -j 2 --config profile.release.lto=false
+cargo test -p deadlib-lua-legacy --no-default-features --features lua54,vendored,send --test raw_set_many --release --locked -j 2 --config profile.release.lto=false
 cargo test -p deadsync-song-lua --test compiled_input --release --locked -j 2 --config profile.release.lto=false
-cargo build -p deadlib-lua --no-default-features --features lua51,vendored,send --example compiled_program --release --locked -j 2 --config profile.release.lto=false
+cargo build -p deadlib-lua-legacy --no-default-features --features lua51,vendored,send --example compiled_program --release --locked -j 2 --config profile.release.lto=false
 cargo build -p deadsync-song-lua --example input_dispatch --example native_scene_audit --example compile_pipeline --release --locked -j 2 --config profile.release.lto=false
 python scripts/benchmark_input_dispatch.py --dispatch <input_dispatch.exe> --audit-before <baseline-audit.exe> --audit-after <current-audit.exe> --out <paired> --pairs 3
 python scripts/benchmark_song_lua_pipeline.py --suite state_boundaries --before <baseline-pipeline.exe> --after <current-pipeline.exe> --out <complete> --pairs 2 --samples 3

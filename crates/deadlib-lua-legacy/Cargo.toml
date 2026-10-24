@@ -1,11 +1,11 @@
 [package]
-name = "deadlib-lua"
+name = "deadlib-lua-legacy"
 version = "0.12.2" # remember to update mlua_derive
 authors = ["Aleksandr Orlenko <zxteam@pm.me>", "kyren <catherine@kyju.org>"]
 rust-version = "1.88"
 edition = "2024"
 repository = "https://github.com/pnn64/deadsync"
-documentation = "https://docs.rs/deadlib-lua"
+documentation = "https://docs.rs/deadlib-lua-legacy"
 readme = "README.md"
 keywords = ["lua", "luajit", "luau", "async", "scripting"]
 categories = ["api-bindings", "asynchronous"]
@@ -47,7 +47,7 @@ userdata-wrappers = ["parking_lot/send_guard"]
 serialize = ["serde"]
 
 [dependencies]
-mlua_derive = { package = "deadlib-lua-derive", version = "=0.12.2", optional = true, path = "mlua_derive" }
+mlua_derive = { package = "deadlib-lua-legacy-derive", version = "=0.12.2", optional = true, path = "mlua_derive" }
 bstr = { version = "1.0", features = ["std"], default-features = false }
 either = "1.0"
 num-traits = { version = "0.2.14" }
@@ -61,7 +61,7 @@ anyhow = { version = "1.0", optional = true }
 inventory = { version = "0.3", optional = true }
 libc = "0.2"
 
-ffi = { package = "deadlib-lua-sys", version = "0.13.0", path = "mlua-sys" }
+ffi = { package = "deadlib-lua-legacy-sys", version = "0.13.0", path = "mlua-sys" }
 
 [dev-dependencies]
 trybuild = "1.0"

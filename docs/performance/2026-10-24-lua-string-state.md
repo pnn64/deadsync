@@ -8,7 +8,7 @@ Three retained changes:
 2. The Game binder transfers captured scalar-field keys from the consumed schema into final runtime metadata after lowering. This removes a key clone per cell and the temporary metadata vector's growth/shrink work while preserving cell order.
 3. The timing binder collects non-rendered traversal identities during the lookup it already performs. Capture validation checks these cached integers instead of repeatedly locking Lua and reading every traversal Table's identity. Known rendered actors retain their opaque actor binding; unrendered timing tables still cannot become mutable scalar stores through an alias.
 
-Generic cells, compiler verification and constant arenas belong to deadlib-lua. Actor inventories, fields, update order and method compatibility stay in deadsync-song-lua. No engine unsafe code or theme changes were added. Existing numeric operations and register clearing remain unchanged.
+Generic cells, compiler verification and constant arenas belong to deadlib-lua-legacy. Actor inventories, fields, update order and method compatibility stay in deadsync-song-lua. No engine unsafe code or theme changes were added. Existing numeric operations and register clearing remain unchanged.
 
 ## Measurement
 

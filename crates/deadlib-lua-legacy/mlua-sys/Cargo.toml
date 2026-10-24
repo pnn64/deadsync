@@ -1,11 +1,11 @@
 [package]
-name = "deadlib-lua-sys"
+name = "deadlib-lua-legacy-sys"
 version = "0.13.0"
 authors = ["Aleksandr Orlenko <zxteam@pm.me>"]
 rust-version = "1.88"
 edition = "2024"
 repository = "https://github.com/pnn64/deadsync"
-documentation = "https://docs.rs/deadlib-lua-sys"
+documentation = "https://docs.rs/deadlib-lua-legacy-sys"
 readme = "README.md"
 categories = ["external-ffi-bindings"]
 license = "MIT"

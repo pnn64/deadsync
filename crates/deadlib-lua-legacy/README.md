@@ -1,6 +1,10 @@
-# deadlib-lua
+# deadlib-lua-legacy
 
-`deadlib-lua` is DeadSync's maintained fork of mlua, starting from the local
+The existing implementation is retained here while the independent
+[`deadlib-lua`](../deadlib-lua/README.md) engine is developed. All production
+consumers use this legacy package through the workspace's `mlua` alias.
+
+`deadlib-lua-legacy` is DeadSync's maintained fork of mlua, starting from the local
 mlua 0.12.2 checkout with DeadSync's first two optimization commits included.
 It provides Rust bindings to Lua, LuaJIT and Luau. The initial import retains
 the upstream API, features, tests, examples and benchmarks.
@@ -14,9 +18,9 @@ copyright and license notices are preserved in [`LICENSE`](LICENSE).
 
 | Package | Rust crate | Purpose |
 |---|---|---|
-| `deadlib-lua` | `mlua` | High level Rust API |
-| `deadlib-lua-sys` | `mlua_sys` | Lua FFI and VM build integration |
-| `deadlib-lua-derive` | `mlua_derive` | Optional procedural macros |
+| `deadlib-lua-legacy` | `mlua` | High level Rust API |
+| `deadlib-lua-legacy-sys` | `mlua_sys` | Lua FFI and VM build integration |
+| `deadlib-lua-legacy-derive` | `mlua_derive` | Optional procedural macros |
 
 The internal directory and Rust crate names are retained to keep existing code
 and macro output compatible. The fork keeps its MIT license and Rust 1.88 MSRV.
@@ -37,10 +41,10 @@ The workspace's patched `vendor/lua-src` remains the source of the vendored VM.
 Run from the DeadSync workspace root:
 
 ```sh
-cargo test -p deadlib-lua --features lua51,vendored,send,async,serde,macros,anyhow,userdata-wrappers
+cargo test -p deadlib-lua-legacy --features lua51,vendored,send,async,serde,macros,anyhow,userdata-wrappers
 cargo test -p deadsync-song-lua --lib
 cargo check -p deadsync-theme-simply-love
-cargo bench -p deadlib-lua --bench hot_paths --features lua51,vendored,send
+cargo bench -p deadlib-lua-legacy --bench hot_paths --features lua51,vendored,send
 ```
 
 Select one VM feature at a time. Engine builds use Lua 5.1; the other upstream

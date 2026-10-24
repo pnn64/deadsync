@@ -46,7 +46,7 @@ def main():
     binaries = {name: getattr(args, name).resolve() for name in ("dispatch", "audit_before", "audit_after")}
     hashes = {key: sha(path) for key, path in binaries.items()}
     paths = [Path(__file__).resolve(), root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml"]
-    for crate in ("deadlib-lua", "deadsync-song-lua"):
+    for crate in ("deadlib-lua-legacy", "deadsync-song-lua"):
         for directory in ("src", "examples"):
             paths += list((root / "crates" / crate / directory).rglob("*.rs"))
     paths += [root / name for name in ("tests/support/song_lua_metrics.rs",

@@ -8,7 +8,7 @@ Baseline: `a5761fc7bb8ee7c50a1a048654451ed8fbca8354` (0.5.2361). Result: 0.5.236
 2. The generic interpreter passes its existing code/input references into the result projection. Ordinary value returns use the zero-capture `datum` function item rather than a closure carrying duplicate references. Predicate projections remain zero-capture. This removes intermediate context storage without changing the public APIs.
 3. Generic groups of at least eight callbacks intern identical immutable code. Fingerprints select candidates, then complete operations, parameters, initial cells, register metadata and string-pool equality must match. Hash collisions can leave code unshared but cannot merge unequal code. Callback slots and executions remain separate, and mutable state/cell indices are not merged. Shared byte arenas are fingerprinted once.
 
-Generic result conversion and immutable code sharing remain in deadlib-lua. Actor schemas, callback ordering, capture ownership and rendering fixtures remain in deadsync-song-lua. No noteskin/theme policy moved. No production unsafe code was added. This pass improves the existing native subset; it does not expand the accepted authored language or whole-scene ownership.
+Generic result conversion and immutable code sharing remain in deadlib-lua-legacy. Actor schemas, callback ordering, capture ownership and rendering fixtures remain in deadsync-song-lua. No noteskin/theme policy moved. No production unsafe code was added. This pass improves the existing native subset; it does not expand the accepted authored language or whole-scene ownership.
 
 ## Measurement and rejected layout
 

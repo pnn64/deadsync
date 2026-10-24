@@ -1,6 +1,6 @@
-# deadlib-lua-sys
+# deadlib-lua-legacy-sys
 
-Low level Lua, LuaJIT and Luau FFI bindings for [`deadlib-lua`](../README.md),
+Low level Lua, LuaJIT and Luau FFI bindings for [`deadlib-lua-legacy`](../README.md),
 imported from the same local mlua checkout. The Rust crate name remains
 `mlua_sys`, and `links = "lua"` is retained.
 

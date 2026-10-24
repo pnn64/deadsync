@@ -8,7 +8,7 @@ Three retained changes:
 2. Normalization reuses its consumed Vec of Programs. Each original entry is replaced in place, including repeated Program aliases, and the same allocation becomes the Group's boxed program list. This removes the temporary result Vec and its allocation, element copies and separate destruction. Overcapacity may still require shrinking when converting to a boxed slice.
 3. During mutable-byte schema promotion, the Song binder reuses the last initial byte entry when its contents match. Generic lowering reuses the last compiled initial byte value when the schema references that same entry again. Each mutable cell keeps its own index and writes; only immutable bytes are shared. Index comparison keeps distinct-vocabulary preparation linear and avoids repeatedly comparing byte contents in every compiled callback.
 
-Generic code ownership, normalization and initial-cell lowering remain in deadlib-lua. Captured table schemas and promotion remain in deadsync-song-lua. No engine unsafe code or theme implementation changed. The interpreter source is unchanged from the baseline. These changes improve the existing VM-free representation; they do not install it into default Scene ownership.
+Generic code ownership, normalization and initial-cell lowering remain in deadlib-lua-legacy. Captured table schemas and promotion remain in deadsync-song-lua. No engine unsafe code or theme implementation changed. The interpreter source is unchanged from the baseline. These changes improve the existing VM-free representation; they do not install it into default Scene ownership.
 
 ## Method
 

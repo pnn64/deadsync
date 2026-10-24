@@ -46,9 +46,9 @@ def main():
     binaries = {key: getattr(args, key).resolve() for key in ("before_flow", "after_flow")}
     hashes = {key: sha(path) for key, path in binaries.items()}
     paths = [Path(__file__).resolve(), root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml",
-             root / "crates/deadlib-lua/Cargo.toml", root / "tests/support/song_lua_metrics.rs",
-             root / "crates/deadlib-lua/examples/compiled_program.rs"]
-    paths += list((root / "crates/deadlib-lua/src").rglob("*.rs"))
+             root / "crates/deadlib-lua-legacy/Cargo.toml", root / "tests/support/song_lua_metrics.rs",
+             root / "crates/deadlib-lua-legacy/examples/compiled_program.rs"]
+    paths += list((root / "crates/deadlib-lua-legacy/src").rglob("*.rs"))
     sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
     records, flow, memory = [], [], []
     for pair in range(args.pairs):

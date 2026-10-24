@@ -1267,14 +1267,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadlib-lua"
+name = "deadlib-lua-legacy"
 version = "0.12.2"
 dependencies = [
  "anyhow",
  "bstr",
  "criterion",
- "deadlib-lua-derive",
- "deadlib-lua-sys",
+ "deadlib-lua-legacy-derive",
+ "deadlib-lua-legacy-sys",
  "either",
  "erased-serde",
  "futures-util",
@@ -1299,7 +1299,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadlib-lua-derive"
+name = "deadlib-lua-legacy-derive"
 version = "0.12.2"
 dependencies = [
  "proc-macro2",
@@ -1308,7 +1308,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadlib-lua-sys"
+name = "deadlib-lua-legacy-sys"
 version = "0.13.0"
 dependencies = [
  "cc",
@@ -1703,7 +1703,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "deadlib-bincode",
- "deadlib-lua",
+ "deadlib-lua-legacy",
  "hashbrown 0.17.1",
  "image",
  "log",
@@ -1901,7 +1901,7 @@ dependencies = [
  "chrono",
  "deadlib-assets",
  "deadlib-audio-decode",
- "deadlib-lua",
+ "deadlib-lua-legacy",
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
@@ -1949,7 +1949,7 @@ dependencies = [
  "chrono",
  "deadlib-assets",
  "deadlib-input-native",
- "deadlib-lua",
+ "deadlib-lua-legacy",
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render",

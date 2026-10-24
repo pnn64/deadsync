@@ -8,7 +8,7 @@ Baseline source: `c846a687e148949e1ae6e46500bee866a0e97673` (0.5.2360). Result: 
 2. Native update traversal no longer clears the complete delta buffer before its Enter jobs. The frozen plan rejects duplicate slots and requires each parent/slot to exist before child/callback references. Every Enter overwrites both delta fields, including paused/hibernating paths. Rate, rounding, wake behavior and traversal order remain unchanged.
 3. The interpreter applies a private generic result projection at its return points. New Machine/Group `run_truthy` methods return a boolean directly, avoiding intermediate Value/Datum result returns. Ordinary `run` preserves its existing value API. DeadSync uses the predicate API for closed screen inputs and actor input/update callbacks. Action order, static results and error propagation use the same executor.
 
-Compiler analysis, register policy and predicate execution stay in deadlib-lua. Frozen traversal and gameplay callers stay in deadsync-song-lua. Noteskin/theme policy did not move. No new production unsafe code was added. The new standalone SDK benchmark uses the existing Windows thread-affinity pattern.
+Compiler analysis, register policy and predicate execution stay in deadlib-lua-legacy. Frozen traversal and gameplay callers stay in deadsync-song-lua. Noteskin/theme policy did not move. No new production unsafe code was added. The new standalone SDK benchmark uses the existing Windows thread-affinity pattern.
 
 ## Methods and prior regression check
 

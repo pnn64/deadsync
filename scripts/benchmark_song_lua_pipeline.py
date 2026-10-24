@@ -117,7 +117,7 @@ def main():
         if missing:
             parser.error(f"Unknown workload(s) in this suite: {', '.join(sorted(missing))}")
     args.out.mkdir(parents=True, exist_ok=True)
-    paths = [path for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin")
+    paths = [path for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin")
              for path in (root / "crates" / crate / "src").rglob("*.rs")]
     paths += [root / name for name in sorted({case[2] for case in cases})]
     paths += [root / name for name in ["Cargo.toml", "Cargo.lock", ".cargo/config.toml",

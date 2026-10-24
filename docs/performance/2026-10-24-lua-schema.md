@@ -4,11 +4,11 @@ Baseline source: `819cd9189eddfca017bfdb1f9579636f404847ac` (0.5.2359). Result: 
 
 ## Changes and ownership
 
-1. `deadlib-lua::program::Field::name` uses `Cow<'static, [u8]>`. Static input and actor method names borrow their bytes; inspected state keys remain owned and transfer into scalar metadata without another allocation. Binary keys and duplicate-field checks retain byte semantics. The wider key descriptor increases schema-vector requested bytes.
+1. `deadlib-lua-legacy::program::Field::name` uses `Cow<'static, [u8]>`. Static input and actor method names borrow their bytes; inspected state keys remain owned and transfer into scalar metadata without another allocation. Binary keys and duplicate-field checks retain byte semantics. The wider key descriptor increases schema-vector requested bytes.
 2. `Action::parameters` also permits static borrowed slices. The generic `Parameter::Receiver` constraint checks the identity of the object defining the action field; it is independent of the static return object. DeadSync shares visibility/numeric setter signatures across actors, including copied setters.
 3. `program::dump` exposes the existing checked closure-dump operation. DeadSync lazily retains each demanded callback dump when captured byte fields can require a mutable-cell retry, then reuses those bytes. Callbacks after an earlier rejection remain unread. Numeric-only schemas allocate no cache.
 
-Generic storage, receiver checking and reusable dump support belong to deadlib-lua. Actor fields, tags, movement eligibility and schema retry policy stay in deadsync-song-lua. No noteskin or theme policy moved. No new production unsafe code was added. Struct-literal schema callers now use `.into()` for owned names/signatures; repository examples were updated.
+Generic storage, receiver checking and reusable dump support belong to deadlib-lua-legacy. Actor fields, tags, movement eligibility and schema retry policy stay in deadsync-song-lua. No noteskin or theme policy moved. No new production unsafe code was added. Struct-literal schema callers now use `.into()` for owned names/signatures; repository examples were updated.
 
 ## Individual preparation changes
 
