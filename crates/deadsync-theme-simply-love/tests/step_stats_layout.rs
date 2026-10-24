@@ -1,6 +1,7 @@
 use deadsync_profile::PlayerSide;
 use deadsync_theme_simply_love::step_stats::{
-    StepStatsPaneParams, density_graph_rect, judgment_count_center_x, pane_layout, pane_rect,
+    STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsPaneParams, density_graph_rect,
+    judgment_count_center_x, pane_layout, pane_rect, song_banner_placement,
     step_stats_aspect_enabled,
 };
 
@@ -39,6 +40,7 @@ fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
             });
             let sidepane = pane_rect(layout, screen_h);
             let graph = density_graph_rect(0.0, layout);
+            let banner = song_banner_placement(layout, wide, player_side, 1);
             let note_field = Rect {
                 left: playfield_center_x - 128.0,
                 right: playfield_center_x + 128.0,
@@ -48,6 +50,12 @@ fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
             assert!(count_center_x >= sidepane.left && count_center_x <= sidepane.right);
             assert!(graph.x >= sidepane.left && graph.x + graph.w <= sidepane.right);
             assert!(graph.y + 105.0 <= sidepane.bottom);
+            let banner_half_w = STEP_STATS_BANNER_W * banner.zoom * 0.5;
+            let banner_half_h = STEP_STATS_BANNER_H * banner.zoom * 0.5;
+            assert!(banner.x - banner_half_w >= sidepane.left);
+            assert!(banner.x + banner_half_w <= sidepane.right);
+            assert!(banner.y - banner_half_h >= sidepane.top);
+            assert!(banner.y + banner_half_h <= sidepane.bottom);
             assert!(sidepane.right <= note_field.left || sidepane.left >= note_field.right);
             match player_side {
                 PlayerSide::P1 => assert!(count_center_x > screen_center_x),
