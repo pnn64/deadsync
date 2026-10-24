@@ -23,14 +23,14 @@ performance JSON keeps its recorded measurement provenance.
 | Object model and memory | Copyable tags and numeric IDs; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host handle provenance and reclamation remain open. |
 | Garbage collection | Unimplemented. Requires roots, cyclic graph tracing, weak tables, finalization, pressure tests and collector controls. |
 | Coroutines | Unimplemented. Requires resumable frames, native yield/resume boundaries, protected calls and per-thread state. |
-| Standard libraries | Expanded base library includes iteration, metatables, protected calls, output, environments and dynamic compilation. String byte operations, patterns, replacement callbacks, formatting and raw table operations/traversal/sorting exist. Complete base, coroutine, math, I/O, OS, package/require, debug and binary string dumps remain open. |
+| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments and dynamic compilation. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting and the 5.1 math function set exist. Complete base, coroutine, I/O, OS, package/require, debug, binary dumps and broader numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
 | Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
 | Lua 5.2–5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records eleven reference passes and three unchanged Rust passes (`locals.lua`, `vararg.lua`, `pm.lua`); other files reach missing functions. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records twelve reference passes and three unchanged Rust passes (`locals.lua`, `vararg.lua`, `pm.lua`); other files reach missing functions. Math now reaches I/O, and sort reaches `os.clock`. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,13 +40,14 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 31 differential/adversarial integration tests, verifier mutation tests and
+crate, 37 differential/adversarial integration tests, verifier mutation tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
-4,000 byte-pattern cases and 2,000 float formats. Sort tests compare comparator
+4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
+radix conversion cases. Sort tests compare comparator
 traces across all permutations through length six, callback mutations, nested
 sorting, errors and metatables.
-The [official suite report](testing/2026-10-24-rust-lua-stdlib-suite.md) identifies the
+The [official suite report](testing/2026-10-24-rust-lua-math-suite.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38–13.51 times the reference duration. Subsequent
@@ -64,6 +65,14 @@ Their values and cached patterns must become collector roots or weak caches when
 GC is added. Library error text, numeric conversions, resource behavior and
 non-C locales still need broader validation; current coverage is not a complete
 standard-library compatibility claim.
+
+The math library uses bit-based `frexp`/`ldexp`, including subnormal tie rounding,
+and preserves `modf` result arity and signed zero. Radix conversions follow the
+platform unsigned-long width and saturation. The pinned MSVC random stream is
+shared by Lua states on each OS thread, as in the Windows CRT; erroring random
+calls still advance it. Other CRT random streams are not emulated. Differential
+checks pin the Windows MSVC/C-locale reference and do not establish cross-libm
+transcendental equivalence.
 
 ## Reference contract
 

@@ -418,6 +418,9 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u32, base: usize, count: usize) -> Result<usize, Error> {
+        if (math::MATH_FIRST..=math::MATH_LAST).contains(&id) {
+            return self.math_native(id, base, count);
+        }
         if (strings::STR_FIRST..=strings::STR_DUMP).contains(&id) {
             return self.string_native(id, base, count);
         }
@@ -488,19 +491,7 @@ impl Vm {
                 }
                 self.intern(arg(self, 0).type_name().as_bytes())
             }
-            3 => {
-                if count == 0 {
-                    return Err(bad(0, "value"));
-                }
-                if count >= 2 && arg(self, 1) != Value::Nil {
-                    return Err(Error::new(
-                        ErrorKind::Unsupported,
-                        0,
-                        "tonumber bases are not implemented yet",
-                    ));
-                }
-                self.number(arg(self, 0)).map_or(Value::Nil, Value::Number)
-            }
+            3 => self.tonumber_native(base, count)?,
             4 => {
                 if count < 2 {
                     return Err(bad(count, "value"));
@@ -729,35 +720,6 @@ impl Vm {
                 } else {
                     target
                 }
-            }
-            32..=45 => {
-                let x = self.number(arg(self, 0)).ok_or_else(|| bad(0, "number"))?;
-                let y = |vm: &Self| vm.number(arg(vm, 1)).ok_or_else(|| bad(1, "number"));
-                Value::Number(match id {
-                    32 => x.abs(),
-                    33 => x.floor(),
-                    34 => x.ceil(),
-                    35 => x.sqrt(),
-                    36 => x.sin(),
-                    37 => x.cos(),
-                    38 => x.tan(),
-                    39 => x.exp(),
-                    40 => x.ln(),
-                    41 => x.log10(),
-                    42 => x.powf(y(self)?),
-                    45 => x % y(self)?,
-                    43 | 44 => {
-                        let mut value = x;
-                        for i in 1..count {
-                            let n = self.number(arg(self, i)).ok_or_else(|| bad(i, "number"))?;
-                            if if id == 43 { n < value } else { n > value } {
-                                value = n;
-                            }
-                        }
-                        value
-                    }
-                    _ => unreachable!("math dispatch range"),
-                })
             }
             _ => {
                 return Err(Error::new(

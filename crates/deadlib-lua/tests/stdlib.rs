@@ -258,3 +258,113 @@ fn generated_float_formats_match_reference_bytes() {
         compare(source.as_bytes());
     }
 }
+
+#[test]
+fn extended_math_preserves_bits_and_multiple_result_arity() {
+    for source in [
+        "return math.asin(0.25),math.acos(0.75),math.atan(1),math.atan2(-0,-1),math.sinh(3),math.cosh(-3),math.tanh(0.5)",
+        "return math.deg(0.25),math.rad(-90),math.mod==math.fmod,math.mod(-9,4)",
+        "return math.modf(-3.25),math.modf(-3),math.modf(-0.5),math.modf(-1/0)",
+        "return math.frexp(0),math.frexp(-0.0),math.frexp(1),math.frexp(-3),math.frexp(1/0)",
+        "return math.ldexp(1,-1074),math.ldexp(1.5,-1074),math.ldexp(1.75,-1074),math.ldexp(-1.5,-1075),math.ldexp(1,1024)",
+        "local a,b=math.modf(-1/0);local c,d=math.frexp(1/0);return a,b,c,d",
+        "local a,b=math.modf(0/0);local c,d=math.frexp(0/0);return a,b,c,d",
+        "return math.ldexp('1.5','2'),math.min(0/0,1),math.max(1,0/0),math.log(8,2)",
+        "local z=0;z=-z;local a,b=math.modf(z);local c,d=math.frexp(z);return a,b,c,d,math.ldexp(z,2147483647),math.ldexp(1,-2147483648)",
+    ] {
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn radix_conversions_follow_platform_unsigned_long_width() {
+    for source in [
+        "return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)",
+        "return tonumber('-ff',16),tonumber('+0xff',16),tonumber('0Xff',16),tonumber('-10000000000000000000000000000',16)",
+        "return tonumber('',8),tonumber('  ',9),tonumber('99',8),tonumber('fFfa',15),tonumber('0x',16),tonumber('0x12',36)",
+        "return tonumber('12\\0x',16),tonumber('12 \\0x',16),tonumber(123,16),tonumber({},10),tonumber('2',nil)",
+        "return tonumber('\\v12\\v',16),tonumber('\\v12\\v'),tonumber('12\\0tail'),tonumber('12 \\0tail'),tonumber('\\0')",
+    ] {
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn seeded_random_matches_the_msvc_reference_stream() {
+    for source in [
+        "math.randomseed(1);return math.random(),math.random(),math.random(),math.random(3),math.random(-10,10)",
+        "math.randomseed(-1);return math.random(),math.random(),math.random(),select('#',math.randomseed(0)),math.random()",
+        "math.randomseed(0);local s=0;for i=1,10000 do s=s+math.random(-100,100) end;return s,math.random()",
+        "math.randomseed(19);local a=pcall(math.random,0);local b=pcall(math.random,2,1);local c=pcall(math.random,1,2,3);return a,b,c,math.random()",
+        "math.randomseed(23);local a=pcall(math.random,'bad');return a,math.random(),math.random(-2147483648,2147483647)",
+    ] {
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn generated_binary_scaling_rounds_subnormals_once() {
+    let mut seed = 0x18f7042cc8f41592u64;
+    for _ in 0..2000 {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        let mut bits = seed;
+        if (bits >> 52) & 2047 == 2047 {
+            bits ^= 1u64 << 52;
+        }
+        let value = f64::from_bits(bits);
+        let exponent = ((seed >> 17) % 4401) as i32 - 2200;
+        let source =
+            format!("local a,b=math.frexp({value:e});return a,b,math.ldexp({value:e},{exponent})");
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn generated_radix_conversions_include_overflow_and_invalid_digits() {
+    let mut seed = 0x51765aa839e05a81u64;
+    for _ in 0..2000 {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        let radix = 2 + (seed >> 6) % 35;
+        let len = (seed as usize % 45) + 1;
+        let mut bytes = Vec::with_capacity(len + 5);
+        bytes.extend_from_slice(if seed & 1 == 0 { b"\x0b-" } else { b"\t+" });
+        for i in 0..len {
+            let digit = ((seed.rotate_left(i as u32) as u8) % 37) as usize;
+            bytes.push(b"0123456789abcdefghijklmnopqrstuvwxyz!"[digit]);
+        }
+        bytes.extend_from_slice(b"\r\x0b");
+        compare(format!("return tonumber({},{radix})", quoted(&bytes)).as_bytes());
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn random_state_is_shared_between_vms_on_the_same_os_thread() {
+    let source: &[u8] = b"return math.random()";
+    let program = compile(source).unwrap();
+    let mut a = Vm::new();
+    let mut b = Vm::new();
+    a.execute(&compile(b"math.randomseed(123)").unwrap())
+        .unwrap();
+    let actual = [
+        a.execute(&program).unwrap()[0],
+        b.execute(&program).unwrap()[0],
+        a.execute(&program).unwrap()[0],
+    ];
+    let a = Lua::new();
+    let b = Lua::new();
+    a.load("math.randomseed(123)").exec().unwrap();
+    let expected = [
+        a.load(source).eval::<f64>().unwrap(),
+        b.load(source).eval::<f64>().unwrap(),
+        a.load(source).eval::<f64>().unwrap(),
+    ];
+    for (actual, expected) in actual.into_iter().zip(expected) {
+        assert_eq!(actual, Value::Number(expected));
+    }
+}

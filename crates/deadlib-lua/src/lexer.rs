@@ -390,9 +390,10 @@ impl<'a> Lexer<'a> {
 }
 
 pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
     let text = std::str::from_utf8(bytes)
         .ok()?
-        .trim_matches(|c: char| c.is_ascii_whitespace());
+        .trim_matches(|c: char| matches!(c, '\t'..='\r' | ' '));
     let (negative, unsigned) = if let Some(s) = text.strip_prefix('-') {
         (true, s)
     } else {

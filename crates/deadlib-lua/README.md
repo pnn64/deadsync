@@ -30,10 +30,13 @@ error values; `xpcall` handlers run before faulting frames are unwound. Function
 environments and dynamically compiled chunks preserve shared state and identity.
 Native callbacks and metamethods use explicit continuation frames.
 
-Base functions include `assert`, `error`, `type`, default-base `tonumber`, raw
+Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv` and `loadstring`.
-Numeric `math` and debug-metatable subsets are available. `compile_named` assigns
+The Lua 5.1 `math` function set and debug-metatable subset are available. Binary
+decomposition/scaling preserve signed zero and round subnormals once. The random
+stream matches the MSVC reference, including per-OS-thread state shared by VMs;
+other CRT random sequences are not emulated. `compile_named` assigns
 chunk names for error locations. `print` writes to stdout unless capture is
 enabled through `Vm::set_output_capture`.
 
@@ -69,9 +72,9 @@ as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: all eleven reference probes pass; the Rust engine
+currently exits unsuccessfully: all twelve reference probes pass; the Rust engine
 passes unchanged `locals.lua`, `vararg.lua` and `pm.lua`, while other probes reach
 missing functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-24-rust-lua-stdlib-suite.md) and
+[suite report](../../docs/testing/2026-10-24-rust-lua-math-suite.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

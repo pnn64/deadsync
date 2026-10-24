@@ -7,6 +7,7 @@ use crate::{
     table::Table,
 };
 use std::{collections::HashMap, sync::Arc};
+mod math;
 mod meta;
 mod native;
 mod strings;
@@ -296,45 +297,7 @@ impl Vm {
         let version = vm.intern(b"Lua 5.1");
         vm.set_global(b"_VERSION", version)
             .expect("version name is valid");
-        let math = vm.new_table();
-        for (i, name) in [
-            b"abs".as_slice(),
-            b"floor",
-            b"ceil",
-            b"sqrt",
-            b"sin",
-            b"cos",
-            b"tan",
-            b"exp",
-            b"log",
-            b"log10",
-            b"pow",
-            b"min",
-            b"max",
-            b"fmod",
-        ]
-        .iter()
-        .enumerate()
-        {
-            let k = vm.intern(name);
-            vm.tables[math.0 as usize]
-                .set(k, Value::Native(32 + i as u32))
-                .expect("math names are valid");
-        }
-        let pi = vm.intern(b"pi");
-        let mod_name = vm.intern(b"mod");
-        vm.tables[math.0 as usize]
-            .set(mod_name, Value::Native(45))
-            .expect("math names are valid");
-        vm.tables[math.0 as usize]
-            .set(pi, Value::Number(std::f64::consts::PI))
-            .expect("math names are valid");
-        let huge = vm.intern(b"huge");
-        vm.tables[math.0 as usize]
-            .set(huge, Value::Number(f64::INFINITY))
-            .expect("math names are valid");
-        vm.set_global(b"math", Value::Table(math))
-            .expect("math name is valid");
+        vm.open_math();
         vm.open_strings();
         vm.open_tables();
         vm
