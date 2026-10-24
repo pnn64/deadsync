@@ -336,20 +336,22 @@ fn export(
         <p>Real gameplay rendering with synthetic sample data. Click an image for full resolution. \
         Aspect-dependent visibility rules are preserved.</p>",
     );
-    let filename = if options.reverse {
-        "gameplay-reverse.png"
-    } else {
-        "gameplay.png"
-    };
     for size in &options.sizes {
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
-        let metrics = Metrics::centered(logical_width, 480.0);
+        let logical_height = 480.0;
+        let metrics = Metrics::centered(logical_width, logical_height);
         space::set_current_metrics(metrics);
         space::set_current_window_px(size.width, size.height);
         backend.resize(size.width, size.height);
         backend.set_default_projection(metrics.projection());
         for layout in &options.layouts {
-            let mut state = sample_state(song.clone(), logical_width, layout, options.reverse)?;
+            let mut state = sample_state(
+                song.clone(),
+                logical_width,
+                logical_height,
+                layout,
+                options.reverse,
+            )?;
             preload_noteskins(&state, &mut assets, &mut backend)?;
             let context = CaptureTextures {
                 assets: &assets,
@@ -378,6 +380,11 @@ fn export(
                 )
                 .into());
             }
+            let filename = if options.reverse {
+                "gameplay-reverse.png"
+            } else {
+                "gameplay.png"
+            };
             let folder = options.output.join(size.name()).join(layout);
             std::fs::create_dir_all(&folder)?;
             let output = folder.join(filename);
@@ -434,6 +441,14 @@ fn sample_song(directory: &Path) -> Result<(PathBuf, PathBuf, String)> {
                     if row % 8 == 0 {
                         notes[(row + measure + 2) % columns] = b'1';
                     }
+                }
+                match (measure, row) {
+                    (0, 4) => notes[0] = b'2',
+                    (0, 8) => notes[0] = b'3',
+                    (0, 12) => notes[1] = b'M',
+                    (1, 4) => notes[0] = b'4',
+                    (1, 6) => notes[0] = b'3',
+                    _ => {}
                 }
                 sm.push_str(std::str::from_utf8(&notes)?);
                 sm.push('\n');
@@ -498,6 +513,7 @@ fn sample_profile(reverse: bool) -> profile::Profile {
 fn sample_state(
     song: Arc<deadsync_chart::SongData>,
     width: f32,
+    height: f32,
     layout: &str,
     reverse: bool,
 ) -> Result<gameplay::State> {
@@ -544,11 +560,60 @@ fn sample_state(
     init.hud.player_side = theme_side;
     init.hud.p1.joined = joined[0];
     init.hud.p2.joined = joined[1];
+    let scorebox_profile = deadsync_score::GameplayScoreboxProfileSnapshot::new(
+        true,
+        true,
+        true,
+        String::new(),
+        String::new(),
+        false,
+        "DeadSync".into(),
+        None,
+        None,
+        false,
+    );
+    init.scores.scorebox_profiles = [scorebox_profile.clone(), scorebox_profile];
+    let scorebox_snapshot =
+        deadsync_score::CachedPlayerLeaderboardData::ready(deadsync_score::PlayerLeaderboardData {
+            panes: vec![deadsync_score::LeaderboardPane {
+                name: "GrooveStats".into(),
+                entries: [
+                    ("1", 99.98, false),
+                    ("DeadSync", 99.94, true),
+                    ("StepStar", 99.82, false),
+                    ("Arrow", 99.65, false),
+                    ("Rhythm", 99.42, false),
+                ]
+                .into_iter()
+                .enumerate()
+                .map(
+                    |(index, (name, score, is_self))| deadsync_score::LeaderboardEntry {
+                        rank: index as u32 + 1,
+                        name: name.into(),
+                        machine_tag: None,
+                        score,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self,
+                        is_fail: false,
+                    },
+                )
+                .collect(),
+                is_ex: true,
+                disabled: false,
+                personalized: true,
+                arrowcloud_kind: None,
+            }],
+            srpg_self_score: None,
+            itl_self_score: None,
+            itl_self_rank: None,
+        });
+    init.scores.scorebox_snapshots = [Some(scorebox_snapshot.clone()), Some(scorebox_snapshot)];
     let mut state = gameplay::init(
         song,
         [chart.clone(), chart],
         [payload.clone(), payload],
-        GameplayViewport::new(width, 480.0),
+        GameplayViewport::new(width, height),
         session,
         Default::default(),
         5,
