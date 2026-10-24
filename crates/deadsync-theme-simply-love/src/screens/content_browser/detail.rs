@@ -86,7 +86,7 @@ fn push_fact_table(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, left
         }
         let y = lo::det_tab_y(row);
         actors.push(act!(text:
-            font("miso"): settext(label):
+            font("miso"): settext(super::localization::text(&label)):
             align(0.0, 0.5): xy(lo::DET_TAB_X, y): zoom(0.46): horizalign(left):
             maxwidth(lo::DET_TAB_VX - lo::DET_TAB_X - 6.0):
             diffuse(0.52, 0.52, 0.52, 1.0): z(Z_TEXT)
@@ -143,10 +143,10 @@ fn facts(state: &State, pack: &PackInfo) -> [(&'static str, String); 8] {
     // guess from the catalogue's one coarse column, which is what made a pack
     // with a whole doubles set in it report "Singles".
     let style = match page.and_then(PackPage::style_label) {
-        Some(label) => label.to_owned(),
+        Some(label) => super::localization::text(label).to_string(),
         None => match pack.pack_type.as_deref().filter(|v| meaningful(v)) {
-            Some(kind) if kind.eq_ignore_ascii_case("keyboard") => "Keyboard".to_owned(),
-            _ if super::state::is_dedicated_doubles(state, pack) => "Doubles".to_owned(),
+            Some(kind) if kind.eq_ignore_ascii_case("keyboard") => crate::i18n::tr("ContentBrowser", "MessageKeyboard").to_string(),
+            _ if super::state::is_dedicated_doubles(state, pack) => crate::i18n::tr("ContentBrowser", "MessageDoubles").to_string(),
             _ => unknown(),
         },
     };
@@ -157,7 +157,7 @@ fn facts(state: &State, pack: &PackInfo) -> [(&'static str, String); 8] {
     // is Null, so a stock install applies no pack correction at all. Saying
     // otherwise here told a player their old ITG-synced packs were handled
     // when they were about to play nine milliseconds early.
-    let sync = smo_sync_of(pack).short().to_owned();
+    let sync = super::localization::text(smo_sync_of(pack).short()).to_string();
     let added = details
         .and_then(|d| d.date_added.as_deref())
         .map_or_else(unknown, |date| format_date(date, false));
@@ -167,7 +167,7 @@ fn facts(state: &State, pack: &PackInfo) -> [(&'static str, String); 8] {
             let mut names = page.authors[..shown].join(", ");
             if page.authors.len() > shown {
                 names.reserve_exact(" and more".len());
-                names.push_str(" and more");
+                names.push_str(&super::localization::text(" and more"));
             }
             names
         }
@@ -199,7 +199,7 @@ fn push_download_status(
 
     let (text, rgba, fraction) = match install_for(state, pack) {
         Some(install) => match install.phase {
-            InstallPhase::Queued => ("queued".to_owned(), META_RGBA, None),
+            InstallPhase::Queued => (crate::i18n::tr("ContentBrowser", "MessageQueued").to_string(), META_RGBA, None),
             InstallPhase::Downloading => {
                 let fraction = if install.total_bytes > 0 {
                     install.downloaded_bytes as f64 / install.total_bytes as f64
@@ -207,29 +207,21 @@ fn push_download_status(
                     0.0
                 };
                 (
-                    format!(
-                        "downloading  {}%   ({} / {})",
-                        (fraction * 100.0) as u32,
-                        format_bytes(install.downloaded_bytes),
-                        format_bytes(install.total_bytes)
-                    ),
+                    crate::i18n::tr_fmt("ContentBrowser", "MessageDownloading", &[("arg0", &((fraction * 100.0) as u32).to_string()), ("arg1", &(format_bytes(install.downloaded_bytes)).to_string()), ("arg2", &(format_bytes(install.total_bytes)).to_string())]).to_string(),
                     [0.78, 0.78, 0.78, 1.0],
                     Some(fraction as f32),
                 )
             }
-            InstallPhase::Extracting => ("installing...".to_owned(), accent, Some(1.0)),
-            InstallPhase::Installed => ("installed".to_owned(), INSTALLED_NOW, None),
+            InstallPhase::Extracting => (crate::i18n::tr("ContentBrowser", "MessageInstallingca20fb").to_string(), accent, Some(1.0)),
+            InstallPhase::Installed => (crate::i18n::tr("ContentBrowser", "MessageInstalleda51a6c").to_string(), INSTALLED_NOW, None),
             InstallPhase::Error => (
-                format!(
-                    "download failed: {}",
-                    install.message.as_deref().unwrap_or("unknown error")
-                ),
+                crate::i18n::tr_fmt("ContentBrowser", "MessageDownloadFailed", &[("arg0", &(install.message.as_deref().unwrap_or("unknown error")).to_string())]).to_string(),
                 ERROR_RGBA,
                 None,
             ),
         },
         None if is_installed(state, pack) => (
-            "already in your library".to_owned(),
+            crate::i18n::tr("ContentBrowser", "MessageAlreadyInYourLibrary").to_string(),
             [0.78, 0.78, 0.78, 1.0],
             None,
         ),
@@ -298,7 +290,7 @@ fn push_histogram(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, cx: f
 
     if let Some((low, high)) = page.difficulty_span() {
         actors.push(act!(text:
-            font("miso"): settext(format!("charts per difficulty  ({low} - {high})")):
+            font("miso"): settext(crate::i18n::tr_fmt("ContentBrowser", "MessageChartsPerDifficultyLowHigh", &[("low", &(low).to_string()), ("high", &(high).to_string())]).to_string()):
             align(0.5, 0.5): xy(cx, lo::BHIST_Y + 24.0): zoom(0.5): horizalign(center):
             maxwidth(left_w): diffuse(0.6, 0.6, 0.6, 1.0): z(Z_TEXT)
         ));
@@ -316,7 +308,7 @@ fn push_song_list(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo) {
     push_download_button(actors, state, pack, x, w);
 
     let header = match page {
-        Some(page) if page.songs.is_empty() => "This pack lists no songs".to_owned(),
+        Some(page) if page.songs.is_empty() => crate::i18n::tr("ContentBrowser", "MessageThisPackListsNoSongs").to_string(),
         Some(page) => {
             // After the count, as the original's header carries it: what the
             // last preview or song request came to, else what the sample is
@@ -346,11 +338,7 @@ fn push_song_list(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo) {
                         install_line(pack.id, &song.title, artist)
                     })
                 });
-            let mut header = format!(
-                "Songs  {} of {}",
-                (state.song_pick + 1).min(page.songs.len()),
-                page.songs.len()
-            );
+            let mut header = crate::i18n::tr_fmt("ContentBrowser", "MessageSongsOf", &[("arg0", &((state.song_pick + 1).min(page.songs.len())).to_string()), ("arg1", &(page.songs.len()).to_string())]).to_string();
             if let Some(status) = status {
                 header.push_str("   -   ");
                 header.push_str(&status);
@@ -358,8 +346,8 @@ fn push_song_list(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo) {
             header
         }
         None => match state.page.phase {
-            PagePhase::Error => "Could not load this pack's song list".to_owned(),
-            _ => format!("Loading song list{}", spinner::ellipsis()),
+            PagePhase::Error => crate::i18n::tr("ContentBrowser", "MessageCouldNotLoadThisPackSSongList").to_string(),
+            _ => crate::i18n::tr_fmt("ContentBrowser", "MessageLoadingSongList", &[("arg0", &(spinner::ellipsis()).to_string())]).to_string(),
         },
     };
     actors.push(act!(text:
@@ -374,7 +362,7 @@ fn push_song_list(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo) {
         // filling in rather than as a blank half of the screen.
         if state.page.phase == PagePhase::Error {
             actors.push(act!(text:
-                font("miso"): settext("SELECT to try again".to_owned()):
+                font("miso"): settext(crate::i18n::tr("ContentBrowser", "RetryHint")):
                 align(0.0, 0.5): xy(x, lo::SONG_TOP + 20.0): zoom(0.5): horizalign(left):
                 diffuse(1.0, 1.0, 1.0, 0.5): z(Z_TEXT)
             ));
@@ -647,7 +635,7 @@ fn push_download_button(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo,
         diffuse(icon[0], icon[1], icon[2], icon[3]): z(Z_TEXT)
     ));
     actors.push(act!(text:
-        font("miso"): settext(label):
+        font("miso"): settext(super::localization::text(&label)):
         align(0.0, 0.5): xy(button_x + 30.0, lo::DL_BTN_Y): zoom(0.5): horizalign(left):
         maxwidth(lo::DL_BTN_W - 40.0):
         diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_TEXT)
@@ -658,25 +646,25 @@ fn push_download_button(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo,
 pub(super) fn download_label(state: &State, pack: &PackInfo) -> (String, bool) {
     if let Some(install) = install_for(state, pack) {
         return match install.phase {
-            InstallPhase::Queued => ("QUEUED".to_owned(), false),
+            InstallPhase::Queued => (crate::i18n::tr("ContentBrowser", "MessageQUEUED").to_string(), false),
             InstallPhase::Downloading => {
                 let pct = if install.total_bytes > 0 {
                     (install.downloaded_bytes as f64 / install.total_bytes as f64 * 100.0) as u32
                 } else {
                     0
                 };
-                (format!("DOWNLOADING   {pct}%"), false)
+                (crate::i18n::tr_fmt("ContentBrowser", "MessageDOWNLOADINGPct", &[("pct", &(pct).to_string())]).to_string(), false)
             }
-            InstallPhase::Extracting => ("INSTALLING...".to_owned(), false),
-            InstallPhase::Installed => ("INSTALLED - RELOAD SONGS".to_owned(), false),
-            InstallPhase::Error => ("DOWNLOAD FAILED - RETRY".to_owned(), true),
+            InstallPhase::Extracting => (crate::i18n::tr("ContentBrowser", "MessageINSTALLING").to_string(), false),
+            InstallPhase::Installed => (crate::i18n::tr("ContentBrowser", "MessageINSTALLEDRELOADSONGS").to_string(), false),
+            InstallPhase::Error => (crate::i18n::tr("ContentBrowser", "MessageDOWNLOADFAILEDRETRY").to_string(), true),
         };
     }
     if is_installed(state, pack) {
-        return ("IN YOUR LIBRARY".to_owned(), false);
+        return (crate::i18n::tr("ContentBrowser", "MessageINYOURLIBRARY").to_string(), false);
     }
     (
-        format!("DOWNLOAD PACK   {}", format_bytes(pack.size_bytes)),
+        crate::i18n::tr_fmt("ContentBrowser", "MessageDOWNLOADPACK", &[("arg0", &(format_bytes(pack.size_bytes)).to_string())]).to_string(),
         true,
     )
 }

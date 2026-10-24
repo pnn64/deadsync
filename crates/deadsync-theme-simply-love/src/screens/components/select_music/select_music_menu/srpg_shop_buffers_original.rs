@@ -108,7 +108,7 @@ pub(super) fn push_bulk_detail(
         diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
     ));
     actors.push(act!(text:
-        font(bold_font): settext("DOWNLOAD ALL SONGS"):
+        font(bold_font): settext(crate::i18n::tr("SrpgShop", "DownloadAll")):
         align(0.0, 0.5): xy(x + 4.0, cy - 99.0): zoom(0.34): maxwidth(260.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
@@ -118,7 +118,7 @@ pub(super) fn push_bulk_detail(
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 6): horizalign(left)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Queue every owned song in this shop that is not already present in the selected shop folder."):
+        font("miso"): settext(crate::i18n::tr("SrpgShop", "DownloadAllHelp")):
         align(0.0, 0.0): xy(x + 4.0, cy - 35.0): zoom(0.66):
         wrapwidthpixels(395.0): maxwidth(260.0):
         diffuse(0.92, 0.92, 0.92, 1.0): z(Z + 6): horizalign(left)

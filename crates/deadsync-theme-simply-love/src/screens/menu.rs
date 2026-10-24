@@ -279,7 +279,7 @@ fn credit_text(state: &State) -> Arc<str> {
     {
         return Arc::clone(text);
     }
-    let text: Arc<str> = Arc::from(format!("CREDITS {}", state.runtime_view.credits));
+    let text: Arc<str> = Arc::from(crate::i18n::tr_fmt("UiMessages", "CREDITS", &[("arg0", &(state.runtime_view.credits).to_string())]).to_string());
     *state.credit_text_cache.borrow_mut() = Some((state.runtime_view.credits, Arc::clone(&text)));
     text
 }

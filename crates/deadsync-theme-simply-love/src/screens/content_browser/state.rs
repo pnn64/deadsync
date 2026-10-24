@@ -1104,10 +1104,10 @@ pub(super) fn downloads_active(state: &State) -> bool {
 pub fn finish_pack_deletion(state: &mut State, result: Result<usize, String>) {
     state.removing = None;
     state.remove_result = Some(match result {
-        Ok(0) => "nothing was deleted".to_owned(),
-        Ok(1) => "deleted 1 song folder".to_owned(),
-        Ok(count) => format!("deleted {count} song folders"),
-        Err(error) => format!("could not delete: {error}"),
+        Ok(0) => crate::i18n::tr("ContentBrowser", "MessageNothingWasDeleted").to_string(),
+        Ok(1) => crate::i18n::tr("ContentBrowser", "MessageDeleted1SongFolder").to_string(),
+        Ok(count) => crate::i18n::tr_fmt("ContentBrowser", "MessageDeletedCountSongFolders", &[("count", &(count).to_string())]).to_string(),
+        Err(error) => crate::i18n::tr_fmt("ContentBrowser", "MessageCouldNotDeleteError", &[("error", &(error).to_string())]).to_string(),
     });
     state.installed_cursor = state
         .installed_cursor
@@ -1617,7 +1617,7 @@ pub(super) fn year_at(slot: usize) -> Option<u16> {
 pub(super) fn year_label(slot: usize) -> String {
     match year_at(slot) {
         Some(year) => year.to_string(),
-        None => "OLDER".to_owned(),
+        None => crate::i18n::tr("ContentBrowser", "MessageOLDER").to_string(),
     }
 }
 

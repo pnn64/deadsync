@@ -866,7 +866,7 @@ pub(super) fn push_score_import_pack_picker_actors(
             font("miso"):
             zoom(0.9):
             maxwidth(list_w):
-            settext("No packs installed"):
+            settext(crate::i18n::tr("OptionsScoreImport", "NoPacksInstalled")):
             diffuse(1.0, 1.0, 1.0, 0.85):
             z(692):
             horizalign(center)

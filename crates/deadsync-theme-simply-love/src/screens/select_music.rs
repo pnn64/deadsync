@@ -5154,8 +5154,8 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
             let active = applied.is_some_and(|a| a.preset && a.name == preset);
             let star = if active { "* " } else { "" };
             items.push(select_music_menu::pad_profile_item(
-                format!("{star}{prefix}Sensitivity"),
-                preset.to_string(),
+                format!("{star}{prefix}{}", tr("SelectMusicMenu", "Sensitivity")),
+                tr("SelectMusicMenu", preset).to_string(),
                 *p2,
                 true,
                 preset,
@@ -5165,9 +5165,9 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         for c in &state.pad_profiles[*slot] {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
-            let default = if c.is_default { " (default)" } else { "" };
+            let default = if c.is_default { format!(" ({})", tr("Common", "Default")) } else { String::new() };
             items.push(select_music_menu::pad_profile_item(
-                format!("{star}{prefix}Pad Profile"),
+                format!("{star}{prefix}{}", tr("SelectMusicMenu", "PadProfile")),
                 format!("{}{default}", c.name),
                 *p2,
                 false,

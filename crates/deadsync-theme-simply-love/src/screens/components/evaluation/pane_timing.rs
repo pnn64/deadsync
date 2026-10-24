@@ -293,12 +293,12 @@ fn timing_pane_actor(
 
     // Early/Late text
     let early_late_y = topbar_height + 11.0;
-    children.push(act!(text: font(machine_font_key_for_text(machine_font, FontRole::Header, "Early")): settext("Early"):
+    children.push(act!(text: font(machine_font_key_for_text(machine_font, FontRole::Header, "Early")): settext(crate::i18n::tr("Gameplay", "EarlyLabel")):
         align(0.0, 0.0): xy(10.0, early_late_y):
         zoom(0.3):
         diffusealpha(early_alpha)
     ));
-    children.push(act!(text: font(machine_font_key_for_text(machine_font, FontRole::Header, "Late")): settext("Late"):
+    children.push(act!(text: font(machine_font_key_for_text(machine_font, FontRole::Header, "Late")): settext(crate::i18n::tr("Gameplay", "LateLabel")):
         align(1.0, 0.0): xy(pane_width - 10.0, early_late_y):
         zoom(0.3): horizalign(right)
     ));

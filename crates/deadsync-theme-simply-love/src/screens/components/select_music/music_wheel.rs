@@ -1085,7 +1085,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         let color = lerp_color(NEW_BADGE_COLOR, NEW_BADGE_COLOR_PEAK, pulse_t);
                         actors.push(act!(text:
                             font("miso"):
-                            settext("NEW"):
+                            settext(crate::i18n::tr("SelectMusic", "NewBadge")):
                             align(1.0, 0.5):
                             xy(highlight_left_world + pack_count_x_local - widescale(30.0, 40.0), y_center_item):
                             zoom(0.6):
