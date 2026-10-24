@@ -14,13 +14,16 @@
 //! live Lua must not observe or change their former storage. A group binds
 //! the same host-established cell indices across its programs. Actions cannot change
 //! inputs or native cells indirectly, and must have the declared static return.
-//! Mutable cells keep one fixed boolean or number type. String/number coercion,
+//! Mutable cells keep one fixed primitive type. Byte cells store only compiled
+//! constants or values copied from other byte cells. String/number coercion,
 //! dynamic lookup, object equality, loops and general Lua calls are unsupported.
 //! An input frame is immutable for a complete call. Action arguments borrow
 //! its bytes or the program's owned constants without allocating.
 
 mod compile;
 mod decode;
+mod strings;
+use strings::Strings;
 
 use crate::Function;
 use std::{
@@ -72,6 +75,9 @@ pub enum Literal {
 pub enum Cell {
     Boolean(bool),
     Number(f64),
+    /// Initial bytes at this index in `Bindings::strings`. Runtime writes must
+    /// come from compiled constants or other byte cells, never borrowed inputs.
+    Bytes(usize),
 }
 
 /// Source of a parameter, capture or bound field.
@@ -124,6 +130,8 @@ pub struct Bindings {
     pub arguments: Vec<Binding>,
     pub upvalues: Vec<Binding>,
     pub cells: Vec<Cell>,
+    /// Owned initial byte values referenced by `Cell::Bytes`.
+    pub strings: Vec<Box<[u8]>>,
     pub fields: Vec<Field>,
     pub environment: Option<u32>,
 }
@@ -300,7 +308,7 @@ enum Op {
 
 struct Code {
     ops: Box<[Op]>,
-    strings: Box<[Box<[u8]>]>,
+    strings: Strings,
     cells: Box<[Value]>,
     parameters: Box<[Source]>,
     registers: usize,
@@ -402,12 +410,14 @@ impl Program {
 
     /// Owned code/data payload, excluding allocator bookkeeping and Arc counters.
     pub fn retained_bytes(&self) -> usize {
+        self.code_bytes() + self.0.strings.retained_bytes()
+    }
+
+    fn code_bytes(&self) -> usize {
         size_of::<Code>()
             + size_of_val(self.0.ops.as_ref())
             + size_of_val(self.0.cells.as_ref())
             + size_of_val(self.0.parameters.as_ref())
-            + size_of_val(self.0.strings.as_ref())
-            + self.0.strings.iter().map(|s| s.len()).sum::<usize>()
     }
 }
 
@@ -482,11 +492,16 @@ pub struct Group {
 
 impl Group {
     /// Consume programs using the same host-established cell layout.
-    pub fn new(programs: Vec<Program>) -> Result<Self, CompileError> {
-        let initial = programs.first().map_or(&[][..], |p| p.0.cells.as_ref());
-        if programs.iter().any(|p| p.0.cells.as_ref() != initial) {
-            return Err(CompileError::InvalidBindings("shared cell layout"));
+    pub fn new(mut programs: Vec<Program>) -> Result<Self, CompileError> {
+        if let Some(first) = programs.first() {
+            if programs.iter().any(|p| !strings::same_cells(&first.0, &p.0)) {
+                return Err(CompileError::InvalidBindings("shared cell layout"));
+            }
+            if first.0.cells.iter().any(|v| matches!(v, Value::String(_))) {
+                programs = strings::share(programs);
+            }
         }
+        let initial = programs.first().map_or(&[][..], |p| p.0.cells.as_ref());
         let cells = initial.to_vec().into_boxed_slice();
         let registers =
             vec![Value::Nil; programs.iter().map(|p| p.0.registers).max().unwrap_or(0)].into_boxed_slice();
@@ -509,6 +524,7 @@ impl Group {
         self.cells.get(index).map(|value| match *value {
             Value::Boolean(value) => Datum::Boolean(value),
             Value::Number(bits) => Datum::Number(f64::from_bits(bits)),
+            Value::String(index) => Datum::Bytes(&self.programs[0].0.strings[index]),
             _ => unreachable!("verified scalar cell"),
         })
     }
@@ -547,7 +563,18 @@ impl Group {
                         .iter()
                         .any(|other| Arc::ptr_eq(&other.0, &program.0))
                 })
-                .map(|(_, program)| program.retained_bytes())
+                .map(|(_, program)| program.code_bytes())
+                .sum::<usize>()
+            + self
+                .programs
+                .iter()
+                .enumerate()
+                .filter(|(index, program)| {
+                    !self.programs[..*index].iter().any(|other| {
+                        Arc::ptr_eq(&other.0, &program.0) || other.0.strings.shared_with(&program.0.strings)
+                    })
+                })
+                .map(|(_, program)| program.0.strings.retained_bytes())
                 .sum::<usize>()
     }
 }

@@ -68,7 +68,7 @@ fn frame(index: usize, seconds: f64) -> SongLuaLiveFrame {
         ..Default::default()
     }
 }
-fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, u64)> {
+fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, serde_json::Value)> {
     let mut result = owner
         .scalar_states()
         .map(|(table, key, value)| {
@@ -76,8 +76,9 @@ fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, u64
                 table,
                 key.to_vec(),
                 match value {
-                    SongLuaInputScalar::Boolean(v) => u64::from(v),
-                    SongLuaInputScalar::Number(v) => v.to_bits(),
+                    SongLuaInputScalar::Boolean(v) => u64::from(v).into(),
+                    SongLuaInputScalar::Number(v) => v.to_bits().into(),
+                    SongLuaInputScalar::Bytes(v) => serde_json::json!({"bytes":v}),
                 },
             )
         })
@@ -88,7 +89,12 @@ fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, u64
 fn main() {
     pin();
     let report = std::env::args().nth(1).expect("timed_input REPORT");
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/timed-input.lua");
+    let path = std::env::args()
+        .nth(2)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/timed-input.lua")
+        });
     let mut scene = load(&path);
     let mut native = scene
         .compile_actor_interactions()
@@ -120,7 +126,12 @@ fn main() {
     }
     let memory = serde_json::json!({"native_payload_bytes":native.retained_bytes(),"current_lua_allocator_bytes":scene.lua_memory_bytes(),"scope":"Native input/update code, scalar cells, actor states and schedule payload. Allocator/Arc bookkeeping excluded; Lua bytes include pending garbage without forced GC and exclude Rust payload."});
     let mut rows = Vec::new();
-    for sample in 0..10 {
+    let runtime_samples = if std::env::args().nth(3).as_deref() == Some("prepare") {
+        0
+    } else {
+        10
+    };
+    for sample in 0..runtime_samples {
         let mut expected = None;
         for current in [sample % 2 == 0, sample % 2 != 0] {
             let measure = metrics::Measurement::start();

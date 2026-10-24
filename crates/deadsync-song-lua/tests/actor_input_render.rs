@@ -150,7 +150,12 @@ mod renderer {
             backend.draw(frame, textures, false).unwrap();
             backend.capture_frame().unwrap()
         }
-        for fixture in ["actor-input.lua", "stateful-input.lua", "timed-input.lua"] {
+        for fixture in [
+            "actor-input.lua",
+            "stateful-input.lua",
+            "timed-input.lua",
+            "state-machine-input.lua",
+        ] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures")
                 .join(fixture);

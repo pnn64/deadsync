@@ -16,9 +16,10 @@ pub enum SongLuaActorInputAction {
 
 /// Primitive state captured from a raw scalar table.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SongLuaInputScalar {
+pub enum SongLuaInputScalar<'a> {
     Boolean(bool),
     Number(f64),
+    Bytes(&'a [u8]),
 }
 
 /// A closed snapshot of screen input callbacks and their actor states.
@@ -98,7 +99,9 @@ impl SongLuaCompiledActorInputs {
 
     /// Captured scalar cells by table identity ordinal and byte key. Distinct
     /// tables keep distinct ordinals even when their initial values are equal.
-    pub fn scalar_states(&self) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar)> + '_ {
+    pub fn scalar_states(
+        &self,
+    ) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar<'_>)> + '_ {
         self.scalar_fields
             .iter()
             .enumerate()
@@ -106,6 +109,7 @@ impl SongLuaCompiledActorInputs {
                 let value = match self.callbacks.cell(index).expect("bound scalar cell") {
                     Datum::Boolean(value) => SongLuaInputScalar::Boolean(value),
                     Datum::Number(value) => SongLuaInputScalar::Number(value),
+                    Datum::Bytes(value) => SongLuaInputScalar::Bytes(value),
                     _ => unreachable!("scalar table cell"),
                 };
                 (*table, key.as_ref(), value)
@@ -141,7 +145,7 @@ fn compile_with_updates(
     states: &[SongLuaOverlayState],
     tracked: &[(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)],
     updates: &[(mlua::Function, usize)],
-    traversal: &[update::SourceJob],
+    reserved: &[usize],
 ) -> Option<SongLuaCompiledActorInputs> {
     if !crate::lua_util::can_compile_actor_input(lua) {
         return None;
@@ -167,7 +171,7 @@ fn compile_with_updates(
     let mut bindings = crate::input::compiled::bindings();
     let first_state_object = u32::try_from(tables.len()).ok()?.checked_add(2)?;
     let mut state_ids = FxHashMap::<usize, u32>::default();
-    let mut scalar_fields = Vec::new();
+    let mut byte_fields = Vec::new();
     let mut pending = updates.iter().map(|(_, actor)| *actor).collect::<Vec<_>>();
     let mut captures = Vec::with_capacity(callbacks.len());
     for callback in &callbacks {
@@ -183,7 +187,7 @@ fn compile_with_updates(
                 let object = if let Some(&index) = indices.get(&pointer) {
                     pending.push(index);
                     index as u32 + 2
-                } else if traversal.iter().any(|job| matches!(job, update::SourceJob::Enter { actor, .. } if actor.to_pointer() as usize == pointer)) {
+                } else if reserved.contains(&pointer) {
                     // Timing fields belong to the frozen traversal. A table
                     // outside the render inventory must not enter a second,
                     // mutable scalar store through a captured alias.
@@ -214,6 +218,7 @@ fn compile_with_updates(
                             InspectionValue::Integer(value) => program::Cell::Number(value as f64),
                             InspectionValue::Number(value) => program::Cell::Number(value),
                             InspectionValue::Bytes(value) => {
+                                byte_fields.push(bindings.fields.len());
                                 bindings.fields.push(Field {
                                     object,
                                     name,
@@ -231,7 +236,6 @@ fn compile_with_updates(
                         };
                         let index = bindings.cells.len();
                         bindings.cells.push(cell);
-                        scalar_fields.push((ordinal, name.clone()));
                         bindings.fields.push(Field {
                             object,
                             name,
@@ -285,23 +289,61 @@ fn compile_with_updates(
         });
     }
     // Reuse the complete schema. Only each callback's capture vector changes.
-    let mut programs = Vec::with_capacity(callbacks.len());
-    let compiler = program::Compiler::new(&bindings).ok()?;
-    for (index, (callback, upvalues)) in callbacks.iter().zip(captures).enumerate() {
-        let update_arguments;
-        let arguments = if index < input_count {
-            &bindings.arguments[..]
-        } else {
-            update_arguments = [
-                Binding::Object(updates[index - input_count].1 as u32 + 2),
-                Binding::Input {
-                    slot: 0,
-                    types: Types::NUMBER,
-                },
-            ];
-            &update_arguments[..]
-        };
-        programs.push(compiler.compile(callback, arguments, &upvalues).ok()?);
+    let lower = |bindings: &program::Bindings| {
+        let mut programs = Vec::with_capacity(callbacks.len());
+        let compiler = program::Compiler::new(bindings).ok()?;
+        for (index, (callback, upvalues)) in callbacks.iter().zip(&captures).enumerate() {
+            let update_arguments;
+            let arguments = if index < input_count {
+                &bindings.arguments[..]
+            } else {
+                update_arguments = [
+                    Binding::Object(updates[index - input_count].1 as u32 + 2),
+                    Binding::Input {
+                        slot: 0,
+                        types: Types::NUMBER,
+                    },
+                ];
+                &update_arguments[..]
+            };
+            programs.push(compiler.compile(callback, arguments, upvalues).ok()?);
+        }
+        Some(programs)
+    };
+    // Keep existing immutable-byte specializations, including constant field
+    // names. Only a rejected body needs the mutable byte-cell schema retry.
+    let programs = if let Some(programs) = lower(&bindings) {
+        programs
+    } else {
+        if byte_fields.is_empty() {
+            return None;
+        }
+        for field_index in byte_fields {
+            let cell = bindings.cells.len();
+            let FieldValue::Value(Binding::Literal(program::Literal::Bytes(value))) =
+                std::mem::replace(
+                    &mut bindings.fields[field_index].value,
+                    FieldValue::Value(Binding::Cell(cell)),
+                )
+            else {
+                unreachable!("captured byte literal")
+            };
+            let index = bindings.strings.len();
+            bindings.strings.push(value);
+            bindings.cells.push(program::Cell::Bytes(index));
+        }
+        lower(&bindings)?
+    };
+    // Every cell belongs to a raw captured table. Transfer its schema key
+    // after lowering, preserving cell order without a second key allocation.
+    let mut scalar_fields = vec![(0usize, Box::<[u8]>::default()); bindings.cells.len()];
+    for field in &mut bindings.fields {
+        if let FieldValue::Value(Binding::Cell(index)) = &field.value {
+            scalar_fields[*index] = (
+                field.object.checked_sub(first_state_object)? as usize,
+                std::mem::take(&mut field.name),
+            );
+        }
     }
     Some(SongLuaCompiledActorInputs {
         callbacks: Group::new(programs).ok()?,

@@ -226,21 +226,29 @@ fn copied_setter_rejects_custom_assignment_on_its_actual_mutation_target() {
     );
 }
 
-fn scalars(native: &SongLuaCompiledActorInputs) -> Vec<(usize, Vec<u8>, u64)> {
+#[derive(Debug, PartialEq, Eq)]
+enum ScalarBits {
+    Boolean(bool),
+    Number(u64),
+    Bytes(Vec<u8>),
+}
+
+fn scalars(native: &SongLuaCompiledActorInputs) -> Vec<(usize, Vec<u8>, ScalarBits)> {
     scalar_values(native.scalar_states())
 }
 
 fn scalar_values<'a>(
-    rows: impl Iterator<Item = (usize, &'a [u8], SongLuaInputScalar)>,
-) -> Vec<(usize, Vec<u8>, u64)> {
+    rows: impl Iterator<Item = (usize, &'a [u8], SongLuaInputScalar<'a>)>,
+) -> Vec<(usize, Vec<u8>, ScalarBits)> {
     let mut values = rows
         .map(|(table, key, value)| {
             (
                 table,
                 key.to_vec(),
                 match value {
-                    SongLuaInputScalar::Boolean(value) => u64::from(value),
-                    SongLuaInputScalar::Number(value) => value.to_bits(),
+                    SongLuaInputScalar::Boolean(value) => ScalarBits::Boolean(value),
+                    SongLuaInputScalar::Number(value) => ScalarBits::Number(value.to_bits()),
+                    SongLuaInputScalar::Bytes(value) => ScalarBits::Bytes(value.to_vec()),
                 },
             )
         })
@@ -436,6 +444,148 @@ fn stateful_event(index: usize) -> SongLuaInputEvent<'static> {
         [-0.0, 0.25, 0.5, 1.0, f32::from_bits(0x7fc0_1234)][index % 5]
     };
     input
+}
+
+#[test]
+fn string_modes_share_transitions_across_inputs_updates_and_distinct_equal_cells_without_lua() {
+    let (mut scene, _directory) = scene(include_str!("fixtures/state-machine-input.lua"));
+    let mut native = scene
+        .compile_actor_interactions()
+        .expect("finite byte-state interaction");
+    assert_eq!(native.scalar_states().count(), 6);
+    let mode = |unit: &SongLuaCompiledActorInteractions| {
+        unit.scalar_states()
+            .find_map(|(_, key, v)| {
+                if key == b"mode" {
+                    match v {
+                        SongLuaInputScalar::Bytes(v) => Some(v.to_vec()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .unwrap()
+    };
+    let mut expected = Vec::new();
+    let mut seconds = 0.0;
+    for index in 0..120 {
+        let input = stateful_event(index);
+        let (handled, out) = scene.input(&input).unwrap();
+        assert!(out.errors.is_empty());
+        let snapshot = scene.compile_actor_interactions().unwrap();
+        let before = mode(&snapshot);
+        let actions = match input.game_button {
+            "Right" => vec![SongLuaActorInputAction::Visible {
+                actor: 2,
+                visible: before == b"armed",
+            }],
+            "Left" => vec![SongLuaActorInputAction::Visible {
+                actor: 2,
+                visible: false,
+            }],
+            _ => vec![],
+        };
+        expected.push((
+            Some(handled),
+            0.0,
+            scene.states().to_vec(),
+            scalar_values(snapshot.scalar_states()),
+            actions,
+        ));
+        let delta = [0.03125, 1.0 / 60.0, 0.0, -0.0, 0.125, 0.001][index % 6];
+        seconds += delta;
+        let out = scene
+            .update(SongLuaLiveFrame {
+                delta_seconds: delta,
+                screen_seconds: seconds,
+                music_seconds: seconds,
+                beat: seconds * 2.0,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(out.errors.is_empty());
+        let snapshot = scene.compile_actor_interactions().unwrap();
+        let actions = if before == b"armed" && mode(&snapshot) == b"cooldown" {
+            vec![SongLuaActorInputAction::Visible {
+                actor: 2,
+                visible: false,
+            }]
+        } else {
+            vec![]
+        };
+        expected.push((
+            None,
+            delta,
+            scene.states().to_vec(),
+            scalar_values(snapshot.scalar_states()),
+            actions,
+        ));
+    }
+    drop(scene);
+    for (step, (handled, delta, states, cells, expected_actions)) in
+        expected.into_iter().enumerate()
+    {
+        let mut actions = Vec::new();
+        if let Some(handled) = handled {
+            assert_eq!(
+                native.input_with_actions(&stateful_event(step / 2), |a| actions.push(a)),
+                handled
+            );
+        } else {
+            native.update_with_actions(delta, |a| actions.push(a));
+        }
+        assert_eq!(native.states(), states, "states at{step}");
+        assert_eq!(
+            scalar_values(native.scalar_states()),
+            cells,
+            "cells at{step}"
+        );
+        assert_eq!(actions, expected_actions, "actions at{step}");
+        assert!(
+            native
+                .scalar_states()
+                .any(|(_, key, value)| key == b"decoy"
+                    && value == SongLuaInputScalar::Bytes(b"idle"))
+        );
+    }
+}
+
+#[test]
+fn readonly_byte_specialization_survives_and_transient_byte_writes_keep_fallback() {
+    let template = include_str!("fixtures/actor-input.lua");
+    let source = template
+        .replace(
+            "local alias = left",
+            "local alias = left;local descriptor={method='visible'}",
+        )
+        .replace(
+            "left:visible(event.DeviceInput.down)",
+            "left[descriptor.method](left,event.DeviceInput.down)",
+        );
+    let (mut scene, _directory) = scene(&source);
+    let mut native = scene
+        .compile_actor_inputs()
+        .expect("constant byte field remains specialized");
+    for index in 0..12 {
+        assert_eq!(
+            native.input(&event(index)),
+            scene.input(&event(index)).unwrap().0
+        );
+        assert_eq!(native.states(), scene.states());
+    }
+    for replacement in ["shared.mode = event.GameButton", "shared.mode = 17"] {
+        let source = include_str!("fixtures/state-machine-input.lua").replacen(
+            "shared.mode = \"armed\"",
+            replacement,
+            1,
+        );
+        let (scene, _directory) = self::scene(&source);
+        assert!(
+            scene.compile_actor_interactions().is_none(),
+            "{replacement}"
+        );
+    }
 }
 
 #[test]

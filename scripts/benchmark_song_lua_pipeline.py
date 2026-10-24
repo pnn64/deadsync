@@ -24,7 +24,7 @@ def main():
                         help="Measure only the named workload; may be repeated")
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs", "state_boundaries", "shared_inputs", "timed_inputs"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs", "state_boundaries", "shared_inputs", "timed_inputs", "string_states"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -85,6 +85,14 @@ def main():
             ("offline_basic", "offline", "tests/fixtures/song_lua/basic.lua"),
             ("live_timed_inputs", "live", "crates/deadsync-song-lua/tests/fixtures/timed-input.lua"),
             ("live_shared_inputs", "live", "crates/deadsync-song-lua/tests/fixtures/stateful-input.lua"),
+            ("offline_state_boundaries", "offline", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+            ("live_state_boundaries", "live", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+        ]
+    if args.suite == "string_states":
+        cases = [
+            ("offline_basic", "offline", "tests/fixtures/song_lua/basic.lua"),
+            ("live_string_states", "live", "crates/deadsync-song-lua/tests/fixtures/state-machine-input.lua"),
+            ("live_timed_inputs", "live", "crates/deadsync-song-lua/tests/fixtures/timed-input.lua"),
             ("offline_state_boundaries", "offline", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
             ("live_state_boundaries", "live", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
         ]

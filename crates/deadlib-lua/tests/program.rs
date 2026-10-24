@@ -48,6 +48,199 @@ struct Row {
 }
 
 #[test]
+fn shared_byte_cells_keep_pool_meaning_copy_semantics_and_binary_bytes_after_vm_destruction() {
+    let dropped = Arc::new(AtomicBool::new(false));
+    let (mut group, mut separate, expected) = {
+        let lua = Lua::new();
+        lua.set_app_data(Dropped(dropped.clone()));
+        let actions = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
+        let actor = lua.create_table().unwrap();
+        actor
+            .set(
+                "mode",
+                lua.create_function({
+                    let actions = actions.clone();
+                    move |lua, (_, value): (Table, mlua::LuaString)| {
+                        actions.lock().unwrap().push(value.as_bytes().to_vec());
+                        lua.create_string(b"result")
+                    }
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        let factory: Function = lua
+            .load(
+                r#"return function(actor)
+            local state={mode='idle',copy='idle'}
+            return function(e)
+                local old=state.mode
+                if e.button=='Right' then state.mode='\000armed'
+                elseif e.button=='Empty' then state.mode='' end
+                state.copy=old
+                actor:mode(state.mode)
+                return state.mode
+            end,function(e)
+                if state.mode=='\000armed' then state.mode='\255done' end
+                return actor:mode(state.mode)
+            end,function(e)
+                local old=state.mode
+                state.mode='idle'
+                state.copy=old
+                return state.copy
+            end,state
+        end"#,
+            )
+            .eval()
+            .unwrap();
+        let (a, b, c, state): (Function, Function, Function, Table) =
+            factory.call(actor.clone()).unwrap();
+        let mut bindings = Bindings {
+            arguments: vec![Binding::Object(0)],
+            cells: vec![Cell::Bytes(0), Cell::Bytes(0)],
+            strings: vec![Box::from(&b"idle"[..])],
+            fields: vec![
+                input("button", 0, Types::BYTES),
+                property(2, "mode", 0),
+                property(2, "copy", 1),
+                Field {
+                    object: 1,
+                    name: Box::from(&b"mode"[..]),
+                    value: FieldValue::Action(Action {
+                        tag: 7,
+                        parameters: vec![Parameter::Object(1), Parameter::Type(Types::BYTES)],
+                        result: Some(Binding::Literal(program::Literal::Bytes(Box::from(
+                            &b"result"[..],
+                        )))),
+                    }),
+                },
+            ],
+            ..Bindings::default()
+        };
+        let mut programs = Vec::new();
+        for callback in [&a, &b, &c] {
+            bindings.upvalues.clear();
+            callback
+                .for_each_upvalue_as::<mlua::InspectionValue>(|_, _, value| {
+                    let mlua::InspectionValue::Table(table) = value else {
+                        panic!("table capture")
+                    };
+                    let object = if table.to_pointer() == actor.to_pointer() {
+                        1
+                    } else {
+                        assert_eq!(table.to_pointer(), state.to_pointer());
+                        2
+                    };
+                    bindings.upvalues.push(Binding::Object(object));
+                    Ok(())
+                })
+                .unwrap();
+            programs.push(program::compile(callback, &bindings).unwrap());
+        }
+        let separate = programs[0].machine();
+        let single = program::Group::new(vec![programs[0].clone()])
+            .unwrap()
+            .retained_bytes();
+        let repeated = program::Group::new(vec![programs[0].clone(); 32])
+            .unwrap()
+            .retained_bytes();
+        assert!(
+            repeated < single * 2,
+            "identical code and byte arenas remain shared"
+        );
+        // An external machine and a repeated code Arc must retain their own
+        // original pools while the group normalizes constants across callbacks.
+        programs.push(programs[0].clone());
+        let group = program::Group::new(programs).unwrap();
+        let mut expected = Vec::new();
+        for index in 0..24 {
+            let event = lua.create_table().unwrap();
+            event
+                .set("button", ["Right", "Left", "Empty"][index % 3])
+                .unwrap();
+            for callback in [&a, &b, &c] {
+                let result = callback
+                    .call::<mlua::LuaString>(event.clone())
+                    .unwrap()
+                    .as_bytes()
+                    .to_vec();
+                expected.push((
+                    result,
+                    state
+                        .get::<mlua::LuaString>("mode")
+                        .unwrap()
+                        .as_bytes()
+                        .to_vec(),
+                    state
+                        .get::<mlua::LuaString>("copy")
+                        .unwrap()
+                        .as_bytes()
+                        .to_vec(),
+                    std::mem::take(&mut *actions.lock().unwrap()),
+                ));
+            }
+        }
+        (group, separate, expected)
+    };
+    assert!(dropped.load(Ordering::SeqCst));
+    for (step, (result, mode, copy, expected_actions)) in expected.into_iter().enumerate() {
+        let inputs = [Datum::Bytes(
+            [b"Right".as_slice(), b"Left", b"Empty"][(step / 3) % 3],
+        )];
+        let mut actions = Vec::new();
+        let actual = group
+            .run(step % 3, &inputs, |tag, args| {
+                assert_eq!(tag, 7);
+                let Some(Datum::Bytes(bytes)) = args.get(1) else {
+                    panic!("byte action")
+                };
+                actions.push(bytes.to_vec());
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(actual, Datum::Bytes(&result));
+        assert_eq!(actions, expected_actions);
+        assert_eq!(group.cell(0), Some(Datum::Bytes(&mode)));
+        assert_eq!(group.cell(1), Some(Datum::Bytes(&copy)));
+    }
+    assert_eq!(separate.cell(0), Some(Datum::Bytes(b"idle")));
+    assert_eq!(
+        separate.run(&[Datum::Bytes(b"Right")], |_, _| {}).unwrap(),
+        Datum::Bytes(b"\0armed")
+    );
+    assert_eq!(separate.cell(1), Some(Datum::Bytes(b"idle")));
+}
+
+#[test]
+fn byte_cells_reject_transient_inputs_type_changes_and_incompatible_initial_contents() {
+    let lua = Lua::new();
+    let mut bindings = Bindings {
+        arguments: vec![Binding::Object(0)],
+        upvalues: vec![Binding::Object(2)],
+        cells: vec![Cell::Bytes(0)],
+        strings: vec![Box::from(&b"initial"[..])],
+        fields: vec![input("button", 0, Types::BYTES), property(2, "mode", 0)],
+        ..Bindings::default()
+    };
+    for source in ["state.mode=e.button", "state.mode=17"] {
+        let f: Function = lua
+            .load(format!("local state={{}};return function(e){source} end"))
+            .eval()
+            .unwrap();
+        assert!(program::compile(&f, &bindings).is_err(), "{source}");
+    }
+    let f:Function=lua.load("local state={};return function(e)local next=state.mode;if e.button=='Right' then next='next' end;state.mode=next;return next end").eval().unwrap();
+    let a = program::compile(&f, &bindings).unwrap();
+    bindings.strings[0] = Box::from(&b"different"[..]);
+    let b = program::compile(&f, &bindings).unwrap();
+    assert!(program::Group::new(vec![a, b]).is_err());
+    bindings.cells[0] = Cell::Bytes(usize::MAX);
+    assert!(matches!(
+        program::compile(&f, &bindings),
+        Err(program::CompileError::InvalidBindings("cell string index"))
+    ));
+}
+
+#[test]
 fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_storage() {
     for count in [4, 31, 32, 65, 256] {
         let dropped = Arc::new(AtomicBool::new(false));

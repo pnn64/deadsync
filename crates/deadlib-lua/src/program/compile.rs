@@ -7,6 +7,7 @@ enum Symbol {
     Unknown,
     Constant(Value),
     Scalar(Types),
+    StableBytes,
     Object(u32),
     Action(usize),
 }
@@ -16,6 +17,7 @@ impl Symbol {
             Self::Unknown => None,
             Self::Constant(v) => Some(v.types()),
             Self::Scalar(t) => Some(t),
+            Self::StableBytes => Some(Types::BYTES),
             Self::Object(_) => Some(Types::OBJECT),
             Self::Action(_) => Some(Types::ACTION),
         }
@@ -24,10 +26,16 @@ impl Symbol {
         if self == other {
             return self;
         }
+        if self.stable_bytes() && other.stable_bytes() {
+            return Self::StableBytes;
+        }
         match (self.types(), other.types()) {
             (Some(a), Some(b)) if Types::PRIMITIVE.accepts(a | b) => Self::Scalar(a | b),
             _ => Self::Unknown,
         }
+    }
+    fn stable_bytes(self) -> bool {
+        matches!(self, Self::StableBytes | Self::Constant(Value::String(_)))
     }
 }
 
@@ -85,6 +93,7 @@ impl Builder<'_> {
         match source {
             Source::Value(Value::Object(id)) => Symbol::Object(id),
             Source::Value(v) => Symbol::Constant(v),
+            Source::Cell(i) if matches!(self.cells[i], Value::String(_)) => Symbol::StableBytes,
             Source::Cell(i) => Symbol::Scalar(self.cells[i].types()),
             Source::Input(_, types) => Symbol::Scalar(types),
         }
@@ -158,6 +167,9 @@ impl Builder<'_> {
             .is_some_and(|t| self.cells[index].types().accepts(t))
         {
             return Err(unsupported(pc, "cell type change"));
+        }
+        if matches!(self.cells[index], Value::String(_)) && !value.stable_bytes() {
+            return Err(unsupported(pc, "transient bytes in cell"));
         }
         Ok(index)
     }
@@ -287,22 +299,28 @@ pub(super) fn lower_with(
     if prototype.upvalues != captures.len() {
         return Err(CompileError::InvalidBindings("upvalue count"));
     }
-    let cells = bindings
-        .cells
-        .iter()
-        .map(|c| match c {
-            Cell::Boolean(v) => Value::Boolean(*v),
-            Cell::Number(v) => Value::Number(v.to_bits()),
-        })
-        .collect();
     let mut builder = Builder {
         bindings,
         index: fields,
         strings: Vec::new(),
-        cells,
+        cells: Vec::with_capacity(bindings.cells.len()),
         fields: vec![None; bindings.fields.len()],
         actions: Vec::new(),
     };
+    for cell in &bindings.cells {
+        let value = match cell {
+            Cell::Boolean(v) => Value::Boolean(*v),
+            Cell::Number(v) => Value::Number(v.to_bits()),
+            Cell::Bytes(index) => builder.literal(Literal::Bytes(
+                bindings
+                    .strings
+                    .get(*index)
+                    .ok_or(CompileError::InvalidBindings("cell string index"))?
+                    .clone(),
+            )),
+        };
+        builder.cells.push(value);
+    }
     let constants: Vec<_> = prototype
         .constants
         .into_iter()
@@ -581,7 +599,7 @@ pub(super) fn lower_with(
     }
     Ok(Program(Arc::new(Code {
         ops: ops.into_boxed_slice(),
-        strings: builder.strings.into_boxed_slice(),
+        strings: Strings::Unique(builder.strings.into_boxed_slice()),
         cells: builder.cells.into_boxed_slice(),
         parameters: parameters.into_boxed_slice(),
         registers: prototype.registers,
