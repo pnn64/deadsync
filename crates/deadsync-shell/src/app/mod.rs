@@ -3447,7 +3447,7 @@ impl App {
         ScoreboxSideView {
             joined: player.joined,
             chart_hash,
-            groovestats_active: player.leaderboard.gs_active,
+            online_active: player.leaderboard.online_active(),
             show_ex_score: player.leaderboard.show_ex_score,
             pane_filter,
             display_name: Arc::clone(&player.display_name),

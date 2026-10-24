@@ -2620,6 +2620,8 @@ fn music_profile_fields_match(
             && view.player_initials.as_ref() == profile.player_initials
             && leaderboard.display_scorebox == profile.display_scorebox
             && leaderboard.gs_active == (enable_groovestats && view.joined && !api_key.is_empty())
+            && leaderboard.ac_active
+                == (enable_arrowcloud && view.joined && !arrowcloud_api_key.is_empty())
             && leaderboard.show_ex_score == profile.show_ex_score
             && leaderboard.api_key() == api_key
             && leaderboard.arrowcloud_api_key() == arrowcloud_api_key
@@ -11096,6 +11098,7 @@ mod tests {
             scorebox_profile_snapshot(&profile, true, true, true, true, Some("profile-1".into()));
         assert!(snapshot.display_scorebox);
         assert!(snapshot.gs_active);
+        assert!(snapshot.ac_active);
         assert!(snapshot.show_ex_score);
         assert_eq!(snapshot.api_key(), "gs-key");
         assert_eq!(snapshot.arrowcloud_api_key(), "ac-key");
@@ -11108,6 +11111,8 @@ mod tests {
         let disabled =
             scorebox_profile_snapshot(&profile, true, false, false, true, Some("profile-1".into()));
         assert!(!disabled.gs_active);
+        assert!(!disabled.ac_active);
+        assert!(!disabled.online_active());
         assert!(!disabled.include_arrowcloud());
     }
 

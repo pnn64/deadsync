@@ -311,7 +311,9 @@ fn score_init_view(
             runtime_profiles[player].mini_indicator == profile_data::MiniIndicator::RivalScoring;
         rival_score_types[side_idx] =
             wants_rival.then_some(runtime_profiles[player].mini_indicator_score_type);
-        if (profile.display_scorebox || wants_rival) && profile.gs_active && !chart_hash.is_empty()
+        if (profile.display_scorebox || wants_rival)
+            && profile.online_active()
+            && !chart_hash.is_empty()
         {
             scorebox_snapshots[side_idx] = scores::get_or_fetch_player_leaderboards_for_profile(
                 chart_hash,
@@ -384,7 +386,7 @@ pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntim
         let profile = gameplay::scorebox_profile_for_side(state, side);
         let rival_score_type = gameplay::rival_score_type_for_side(state, side);
         if (!profile.display_scorebox && rival_score_type.is_none())
-            || !profile.gs_active
+            || !profile.online_active()
             || !gameplay::scorebox_snapshot_for_side(state, side)
                 .is_some_and(|snapshot| snapshot.loading)
         {

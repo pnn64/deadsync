@@ -227,7 +227,7 @@ pub fn show_leaderboard_overlay(
 
     let mut p1 = LeaderboardSideState {
         joined: p1_joined,
-        loading: p1_joined && chart_hash_p1.is_some() && scorebox_p1.groovestats_active,
+        loading: p1_joined && chart_hash_p1.is_some() && scorebox_p1.online_active,
         machine_pane: Some(gs_machine_pane(Vec::new())),
         chart_hash: chart_hash_p1,
         scorebox: scorebox_p1,
@@ -235,7 +235,7 @@ pub fn show_leaderboard_overlay(
     };
     let mut p2 = LeaderboardSideState {
         joined: p2_joined,
-        loading: p2_joined && chart_hash_p2.is_some() && scorebox_p2.groovestats_active,
+        loading: p2_joined && chart_hash_p2.is_some() && scorebox_p2.online_active,
         machine_pane: Some(gs_machine_pane(Vec::new())),
         chart_hash: chart_hash_p2,
         scorebox: scorebox_p2,
@@ -935,7 +935,7 @@ mod tests {
             [
                 ScoreboxSideView {
                     joined: true,
-                    groovestats_active: true,
+                    online_active: true,
                     ..Default::default()
                 },
                 crate::views::ScoreboxSideView::default(),

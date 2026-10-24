@@ -151,7 +151,7 @@ impl GameplayScoreboxPlan {
         filter: score_data::SelectMusicScoreboxFilter,
         palette: JudgmentPalette,
     ) -> Self {
-        if !profile.display_scorebox || !profile.gs_active {
+        if !profile.display_scorebox || !profile.online_active() {
             return Self::default();
         }
         Self {
@@ -501,7 +501,7 @@ fn build_select_music_scorebox_view(
         show_rivals: false,
     };
 
-    if !show_rivals || !runtime.groovestats_active || !chart_matches {
+    if !show_rivals || !runtime.online_active || !chart_matches {
         return view;
     }
     let filter = runtime.pane_filter;
@@ -1239,8 +1239,7 @@ pub fn push_select_music_scorebox_actors(
     zoom: f32,
     elapsed_seconds: f32,
 ) {
-    if !show_scorebox || !runtime.groovestats_active || runtime.chart_hash.as_deref() != chart_hash
-    {
+    if !show_scorebox || !runtime.online_active || runtime.chart_hash.as_deref() != chart_hash {
         return;
     }
     if chart_hash.is_none() {

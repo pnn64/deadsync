@@ -1597,7 +1597,10 @@ pub fn player_leaderboard_snapshot_from_entry(
 #[derive(Debug, Clone, Default)]
 pub struct GameplayScoreboxProfileSnapshot {
     pub display_scorebox: bool,
+    /// `GrooveStats` (or `BoogieStats`) can serve this side: enabled, joined, keyed.
     pub gs_active: bool,
+    /// `ArrowCloud` can serve this side: enabled, joined, keyed.
+    pub ac_active: bool,
     pub show_ex_score: bool,
     api_key: String,
     arrowcloud_api_key: String,
@@ -1613,6 +1616,7 @@ impl GameplayScoreboxProfileSnapshot {
     pub const fn new(
         display_scorebox: bool,
         gs_active: bool,
+        ac_active: bool,
         show_ex_score: bool,
         api_key: String,
         arrowcloud_api_key: String,
@@ -1625,6 +1629,7 @@ impl GameplayScoreboxProfileSnapshot {
         Self {
             display_scorebox,
             gs_active,
+            ac_active,
             show_ex_score,
             api_key,
             arrowcloud_api_key,
@@ -1634,6 +1639,13 @@ impl GameplayScoreboxProfileSnapshot {
             auto_profile_id,
             should_auto_populate,
         }
+    }
+
+    /// Whether any online leaderboard service can serve this side.
+    #[inline(always)]
+    #[must_use]
+    pub const fn online_active(&self) -> bool {
+        self.gs_active || self.ac_active
     }
 
     #[inline(always)]
@@ -1706,6 +1718,7 @@ pub fn scorebox_snapshot(
     GameplayScoreboxProfileSnapshot::new(
         display_scorebox,
         enable_groovestats && side_joined && !api_key.is_empty(),
+        include_arrowcloud && side_joined,
         show_ex_score,
         api_key,
         arrowcloud_api_key,
@@ -1723,7 +1736,7 @@ pub fn player_leaderboard_cache_key(
     profile_snapshot: &GameplayScoreboxProfileSnapshot,
 ) -> Option<PlayerLeaderboardCacheKey> {
     let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile_snapshot.gs_active {
+    if chart_hash.is_empty() || !profile_snapshot.online_active() {
         return None;
     }
 
@@ -1742,7 +1755,7 @@ pub fn player_leaderboard_cache_key_ref<'a>(
     profile_snapshot: &'a GameplayScoreboxProfileSnapshot,
 ) -> Option<PlayerLeaderboardCacheKeyRef<'a>> {
     let chart_hash = chart_hash.trim();
-    if chart_hash.is_empty() || !profile_snapshot.gs_active {
+    if chart_hash.is_empty() || !profile_snapshot.online_active() {
         return None;
     }
     Some(PlayerLeaderboardCacheKeyRef {

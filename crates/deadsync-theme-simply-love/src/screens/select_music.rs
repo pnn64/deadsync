@@ -12027,14 +12027,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                     .map(|ix| song.charts[ix].short_hash.as_str());
 
                 if show_select_music_leaderboards {
-                    let gs_active = state.scoreboxes
+                    let online_active = state.scoreboxes
                         [profile_data::player_side_index(profile_data::PlayerSide::P2)]
-                    .groovestats_active;
+                    .online_active;
                     if let Some(effect) = maybe_refresh_select_music_leaderboard(
                         &mut state.last_refreshed_leaderboard_hash_p2,
                         profile_data::PlayerSide::P2,
                         desired_hash_p2,
-                        gs_active,
+                        online_active,
                     ) {
                         pending_effect =
                             Some(prepend_pending_effect(pending_effect.take(), effect));
@@ -12070,13 +12070,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                 } else {
                     state.session.player_side
                 };
-                let gs_active = state.scoreboxes[profile_data::player_side_index(primary_side)]
-                    .groovestats_active;
+                let online_active = state.scoreboxes
+                    [profile_data::player_side_index(primary_side)]
+                .online_active;
                 if let Some(effect) = maybe_refresh_select_music_leaderboard(
                     &mut state.last_refreshed_leaderboard_hash,
                     primary_side,
                     desired_hash_p1,
-                    gs_active,
+                    online_active,
                 ) {
                     pending_effect = Some(prepend_pending_effect(pending_effect.take(), effect));
                 }
@@ -12299,12 +12300,12 @@ fn maybe_refresh_select_music_leaderboard(
     last_refreshed_hash: &mut Option<String>,
     side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
-    groovestats_active: bool,
+    online_active: bool,
 ) -> Option<ThemeEffect> {
     let Some(chart_hash) = chart_hash else {
         return None;
     };
-    if last_refreshed_hash.as_deref() == Some(chart_hash) || !groovestats_active {
+    if last_refreshed_hash.as_deref() == Some(chart_hash) || !online_active {
         return None;
     }
     *last_refreshed_hash = Some(chart_hash.to_string());
@@ -13562,8 +13563,8 @@ pub fn push_actors(
                      meter: Arc<str>,
                      chart: Option<&ChartData>| {
         let scorebox_runtime = &state.scoreboxes[profile_data::player_side_index(side)];
-        let gs_active = scorebox_runtime.groovestats_active;
-        let show_rivals = gs_active && presentation.show_scorebox && scorebox_cycle_enabled;
+        let online_active = scorebox_runtime.online_active;
+        let show_rivals = online_active && presentation.show_scorebox && scorebox_cycle_enabled;
         let show_ex_score = scorebox_runtime.show_ex_score;
 
         let chart_hash = chart.map(|c| c.short_hash.as_str());
@@ -14163,13 +14164,16 @@ pub fn push_actors(
         let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
             40.0f32.mul_add(-scorebox_zoom, pane_layout.pane_top) - pane_to_tech_gap;
-        let p1_gs = state.scoreboxes[profile_data::player_side_index(profile_data::PlayerSide::P1)]
-            .groovestats_active;
-        let p2_gs = state.scoreboxes[profile_data::player_side_index(profile_data::PlayerSide::P2)]
-            .groovestats_active;
-        let both_gs_versus = is_versus && p1_gs && p2_gs;
+        let p1_online = state.scoreboxes
+            [profile_data::player_side_index(profile_data::PlayerSide::P1)]
+        .online_active;
+        let p2_online = state.scoreboxes
+            [profile_data::player_side_index(profile_data::PlayerSide::P2)]
+        .online_active;
+        let both_online_versus = is_versus && p1_online && p2_online;
         let force_step_pane = presentation.scorebox_in_step_pane;
-        let use_pane_scorebox = both_gs_versus || force_step_pane || (is_versus && !is_wide());
+        let use_pane_scorebox =
+            both_online_versus || force_step_pane || (is_versus && !is_wide());
         let mut push_scorebox = |side: profile_data::PlayerSide,
                                  center_x: f32,
                                  center_y: f32,
@@ -14254,13 +14258,13 @@ pub fn push_actors(
                 );
             }
         } else if is_versus {
-            // A sole GS box belongs beside the wheel; the opposite slot overlaps chart UI.
-            let sole_gs_side = match (p1_gs, p2_gs) {
+            // A sole scorebox belongs beside the wheel; the opposite slot overlaps chart UI.
+            let sole_online_side = match (p1_online, p2_online) {
                 (true, false) => Some(profile_data::PlayerSide::P1),
                 (false, true) => Some(profile_data::PlayerSide::P2),
                 _ => None,
             };
-            if let Some(side) = sole_gs_side {
+            if let Some(side) = sole_online_side {
                 push_scorebox(
                     side,
                     scorebox_center_wheel,
@@ -15313,7 +15317,7 @@ mod tests {
             state.scoreboxes[side_idx] = crate::views::ScoreboxSideView {
                 joined: true,
                 chart_hash: Some(chart_hash),
-                groovestats_active: true,
+                online_active: true,
                 leaderboards: Some(ready_gs_leaderboards()),
                 ..Default::default()
             };
@@ -16549,7 +16553,7 @@ mod tests {
         state.scoreboxes[0] = crate::views::ScoreboxSideView {
             joined: true,
             chart_hash: Some(chart_hash),
-            groovestats_active: true,
+            online_active: true,
             leaderboards: Some(ready_gs_leaderboards()),
             ..Default::default()
         };
@@ -17047,7 +17051,7 @@ mod tests {
                 }),
                 scoreboxes: Some([
                     crate::views::ScoreboxSideView {
-                        groovestats_active: true,
+                        online_active: true,
                         ..Default::default()
                     },
                     crate::views::ScoreboxSideView::default(),
@@ -17057,8 +17061,8 @@ mod tests {
                 ready_song_reload_dirs: Some(vec![std::path::PathBuf::from("Songs/Unlocks")]),
             },
         );
-        assert!(state.scoreboxes[0].groovestats_active);
-        assert!(!state.scoreboxes[1].groovestats_active);
+        assert!(state.scoreboxes[0].online_active);
+        assert!(!state.scoreboxes[1].online_active);
         assert!(state.unlock_downloads_available);
         assert_eq!(state.downloads.len(), 1);
         assert_eq!(state.ready_song_reload_dirs.len(), 1);
@@ -17118,7 +17122,7 @@ mod tests {
             "unchanged wheel snapshot stays retained"
         );
         assert!(
-            state.scoreboxes[0].groovestats_active,
+            state.scoreboxes[0].online_active,
             "unchanged scorebox snapshot stays retained"
         );
         assert_eq!(

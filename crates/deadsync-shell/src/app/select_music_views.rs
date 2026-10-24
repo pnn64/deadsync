@@ -542,7 +542,7 @@ impl App {
                             } else {
                                 Vec::new()
                             };
-                            let leaderboards = if player.leaderboard.gs_active {
+                            let leaderboards = if player.leaderboard.online_active() {
                                 chart_hash.and_then(|hash| {
                                     scores::get_or_fetch_player_leaderboards_for_profile(
                                         hash,
