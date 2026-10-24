@@ -3362,29 +3362,15 @@ fn build_side_pane(
                 ));
             }
 
-            let max_time_label_offset = label_offset_total.max(label_offset_remaining);
-            let timing_gap = 104.0 * layout.banner_data_zoom;
-            let timing_value_gap = 156.0 * layout.banner_data_zoom;
-            let timing_label_anchor = if player_side == profile_data::PlayerSide::P1 {
-                time_x + max_time_label_offset + timing_gap
-            } else if layout.note_field_is_centered {
-                time_x - max_time_label_offset - timing_gap
-            } else {
-                // SL OffsetCalc.lua P2 anchors live timing to the left of Time.lua.
-                // Keep the non-centered P2 pane from drifting back into duration text.
-                160.0f32.mul_add(-layout.banner_data_zoom, time_x - max_time_label_offset)
-            };
-            let right_align_timing_values = layout.note_field_is_centered
-                && !layout.is_ultrawide
-                && player_side == profile_data::PlayerSide::P1;
-            let timing_value_anchor = if right_align_timing_values {
-                18.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_width.mul_add(0.5, layout.sidepane_center_x))
-            } else if player_side == profile_data::PlayerSide::P2 && !layout.note_field_is_centered
-            {
-                95.0f32.mul_add(-layout.banner_data_zoom, time_x - max_time_label_offset)
-            } else {
-                timing_label_anchor + timing_value_gap
-            };
+            let scorebox_frame = step_stats_theme::scorebox_frame(
+                layout,
+                wide,
+                player_side,
+                state.num_players(),
+            );
+            let half_scorebox_width = crate::scorebox::SCOREBOX_W * scorebox_frame.zoom * 0.5;
+            let timing_label_anchor = scorebox_frame.center_x - half_scorebox_width;
+            let timing_value_anchor = scorebox_frame.center_x + half_scorebox_width;
             push_live_timing_stats_at(
                 actors,
                 state,

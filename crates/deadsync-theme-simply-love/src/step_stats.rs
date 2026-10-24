@@ -425,7 +425,7 @@ mod tests {
         assert_eq!(layout.sidepane_center_y, 440.0);
         assert!(layout.note_field_is_centered);
         assert!(!layout.is_ultrawide);
-        assert_eq!(layout.banner_data_zoom, 1.0);
+        assert_eq!(layout.banner_data_zoom, 0.925);
     }
 
     #[test]
@@ -482,12 +482,15 @@ mod tests {
     }
 
     #[test]
-    fn song_info_zoom_tracks_uniform_banner_data_scale() {
-        let mut layout = pane_layout(base_params());
-        assert_eq!(song_info_text_zoom(layout), 0.9);
+    fn song_info_zoom_tracks_banner_data_scale() {
+        let layout = pane_layout(base_params());
+        assert_eq!(song_info_text_zoom(layout), 0.8325);
 
-        layout.note_field_is_centered = false;
-        assert_eq!(song_info_text_zoom(layout), 0.75);
+        let mut params = base_params();
+        params.playfield_center_x = 600.0;
+        let off_center_layout = pane_layout(params);
+        assert_eq!(off_center_layout.banner_data_zoom, 1.0);
+        assert_eq!(song_info_text_zoom(off_center_layout), 0.75);
     }
 
     #[test]
