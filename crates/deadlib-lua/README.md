@@ -21,6 +21,11 @@ upvalue cells across executions. Registers and call frames are contiguous
 vectors. Calls use an explicit frame stack; tail calls reuse the frame. Values
 are copyable enum tags with numeric object handles.
 
+Fixed-source compilation uses a resumable byte scanner. It preserves token and
+string-decoding state across append-only input chunks, including split escapes,
+numbers, long delimiters and CR/LF pairs. Reader-based `load` still requires parser
+resumption and its protected callback boundary; it is not yet available.
+
 Current Lua 5.1 coverage includes byte strings and lexical syntax, expressions,
 assignments, blocks, conditionals, numeric/generic loops, table constructors,
 functions, upvalues, recursion, varargs, methods, tail calls and multiple results.

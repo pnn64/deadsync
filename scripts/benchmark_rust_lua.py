@@ -82,6 +82,17 @@ def main() -> None:
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
     if len(ratios) != 20 or len(rust_heap) != 20 or len(reference_collected_heap) != 20:
         raise SystemExit(f"expected 20 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
+    compile_ratios = {}
+    for name in sorted({s["workload"] for s in samples if s["workload"].startswith("frontend_")}):
+        rust = {s["sample"]: s["ns_per_iteration"] for s in samples
+                if s["metric"] == "compile_drop" and s["engine"] == "rust" and s["workload"] == name}
+        official = {s["sample"]: s["ns_per_iteration"] for s in samples
+                    if s["metric"] == "compile_drop" and s["engine"] == "lua51" and s["workload"] == name}
+        if len(rust) != 5 or rust.keys() != official.keys():
+            raise SystemExit(f"missing paired compilation measurements for {name}")
+        compile_ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
+    if len(compile_ratios) != 6:
+        raise SystemExit(f"expected 6 frontend scaling measurements, received {len(compile_ratios)}")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         build_and_run_seconds=time.time() - started,
@@ -94,6 +105,7 @@ def main() -> None:
         source_hashes={p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                        for p in sorted(sources)},
         median_paired_rust_over_lua51=ratios, samples=samples,
+        median_paired_compile_rust_over_lua51=compile_ratios,
         reference_live_heap_bytes=reference_heap, metadata=metadata,
         rust_heap_estimates=rust_heap, reference_after_collect_heap_bytes=reference_collected_heap,
         missing_metrics=["exact Rust allocator live/peak heap", "process peak RSS", "native C allocation counts",

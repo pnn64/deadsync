@@ -18,7 +18,7 @@ performance JSON keeps its recorded measurement provenance.
 | Requirement | Evidence and remaining work |
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Byte lexer, flat AST arenas, register compiler, verifier, literal folding, VM and CLI exist. Complete reference-suite coverage remains open. |
+| Independent compiler/interpreter | Resumable byte scanner, flat AST arenas, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source compilation shares the scanner; reader loading still needs parser resumption and a protected callback boundary. Complete reference-suite coverage remains open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Full diagnostics, debug metadata and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 69 differential/adversarial integration tests, arena/verifier mutation tests and
+crate, 69 differential/adversarial integration tests, eight scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -78,6 +78,12 @@ do not establish complete Lua compatibility or performance parity.
 The [userdata measurements](performance/2026-10-25-rust-lua-userdata.md) add proxy
 construction and finalizer dispatch, bringing the harness to twenty workloads.
 Host full collection now returns a result so Lua finalizer errors propagate.
+
+The [scanner validation](testing/2026-10-25-rust-lua-stream-lexer.md) covers all
+two-way splits of representative lexical input, one-byte input, 2,000 generated
+binary inputs and long partial tokens. The [frontend measurements](performance/2026-10-25-rust-lua-stream-lexer.md)
+add fixed-source compilation scaling from 10 KB to 1 MB. Lua reader APIs remain
+unfinished; lexer resumption alone does not establish their call/error ordering.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.
