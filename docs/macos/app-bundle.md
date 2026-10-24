@@ -42,8 +42,12 @@ Apple Silicon and Intel applications must each be built with compatible librarie
 Configuration, profiles, added songs and scores remain in
 `~/Library/Application Support/deadsync`; caches remain in
 `~/Library/Caches/deadsync`. Do not put user data or `portable.txt` inside the
-application. Enable Input Monitoring for **DeadSync** in System Settings →
-Privacy & Security when prompted. Restart the application after granting access.
+application. Keyboard navigation and play work without Input Monitoring: when
+raw IOHID keyboard access is denied or unavailable, the game uses keyboard events
+from its focused window. To use hardware-timestamped keyboard input, optionally
+enable Input Monitoring for **DeadSync** in System Settings → Privacy & Security
+and restart the application. Raw keyboard events are ignored while the window is
+inactive, including in Debug logs.
 
 ## Package an existing build
 
