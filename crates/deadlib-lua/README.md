@@ -32,7 +32,7 @@ Native callbacks and metamethods use explicit continuation frames.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
-`pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv` and `loadstring`.
+`pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, `loadstring` and `newproxy`.
 The Lua 5.1 `math` function set and debug metatable/environment subsets are available. Binary
 decomposition/scaling preserve signed zero and round subnormals once. The random
 stream matches the MSVC reference, including per-OS-thread state shared by VMs;
@@ -65,7 +65,18 @@ freeing their thread. Object slots carry generations so stale handles cannot
 alias reused slots. `collectgarbage`, `gcinfo`, automatic pressure checks and
 `Vm::collect_garbage` are available. Each cycle currently completes atomically;
 `step` accumulates a work budget before running a complete cycle. Incremental
-pauses, userdata and finalization remain unfinished.
+pauses remain unfinished.
+
+Full userdata has byte storage, independent identity, a metatable and an
+environment. `newproxy` follows Lua 5.1's weak registry of valid metatables.
+Finalizers run once in reverse creation order through explicit continuation
+frames, support resurrection and nested collection, and retain arbitrary Lua
+error objects. Weak values clear before finalization while weak keys survive
+until a later cycle. VM destruction finalizes existing reachable userdata and
+continues after Lua errors. Instruction limits cover finalizer execution.
+Hosts can allocate userdata with `Vm::new_userdata` and borrow its byte storage.
+`Vm::collect_garbage` returns `Result<HeapStats, Error>` so finalizer failures
+can propagate; pending finalizers remain available to later collection.
 
 Host copies of `Value` do not keep objects alive. Use `Vm::pin`, `rooted` and
 `unpin` for values retained across executions or collections. Root handles check
@@ -75,7 +86,7 @@ while escaped Lua closures retain their code independently. `Vm::heap_stats`
 reports object counts and capacity-based memory estimates, including reusable
 storage. These are not process RSS or exact allocator peaks.
 
-Userdata, finalizers, other standard libraries, complete diagnostic text and
+Other standard libraries, light userdata, complete diagnostic text and
 debug metadata, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
@@ -98,8 +109,9 @@ crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
 currently exits unsuccessfully: all thirteen reference probes pass; the Rust engine
-passes unchanged `locals.lua`, `nextvar.lua`, `vararg.lua` and `pm.lua`, while other probes reach
+passes unchanged `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`
+and `gc.lua`, while other probes reach
 missing functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-gc.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-userdata.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

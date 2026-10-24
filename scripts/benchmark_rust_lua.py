@@ -66,9 +66,9 @@ def main() -> None:
         elif fields[0] == "reference_after_collect_heap_bytes":
             reference_collected_heap[fields[1]] = int(fields[2])
         elif fields[0] == "rust_heap_estimate":
-            _, name, phase, live, reserved, peak, collections, reclaimed = fields
+            _, name, phase, live, reserved, peak, collections, reclaimed, userdata = fields
             rust_heap.setdefault(name, {})[phase] = dict(live_bytes=int(live), reserved_bytes=int(reserved),
-                observed_peak_reserved_bytes=int(peak), collections=int(collections), reclaimed_objects=int(reclaimed))
+                observed_peak_reserved_bytes=int(peak), collections=int(collections), reclaimed_objects=int(reclaimed), userdata=int(userdata))
         elif len(fields) == 2:
             metadata[fields[0]] = fields[1]
     ratios = {}
@@ -80,8 +80,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired measurements for {name}")
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 18 or len(rust_heap) != 18 or len(reference_collected_heap) != 18:
-        raise SystemExit(f"expected 18 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
+    if len(ratios) != 20 or len(rust_heap) != 20 or len(reference_collected_heap) != 20:
+        raise SystemExit(f"expected 20 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         build_and_run_seconds=time.time() - started,

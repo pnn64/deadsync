@@ -25,17 +25,20 @@ impl Vm {
             Value::Function(_) | Value::Native(_) => 4,
             Value::Table(_) => 5,
             Value::Thread(_) => 6,
+            Value::Userdata(_) => 7,
         }
     }
     pub(super) fn metatable(&self, value: Value) -> Option<TableId> {
         match value {
             Value::Table(id) => self.tables.get(id.0).and_then(|t| t.metatable),
+            Value::Userdata(id) => self.userdata.get(id.0).and_then(|u| u.metatable),
             _ => self.type_metatables[Self::type_slot(value)],
         }
     }
     pub(super) fn set_metatable(&mut self, value: Value, table: Option<TableId>) {
         match value {
             Value::Table(id) => self.tables[slot_index(id.0)].metatable = table,
+            Value::Userdata(id) => self.userdata[slot_index(id.0)].metatable = table,
             _ => self.type_metatables[Self::type_slot(value)] = table,
         }
     }
@@ -217,7 +220,12 @@ impl Vm {
         result: usize,
     ) -> Result<(), Error> {
         if matches!(op, Op::Eq | Op::Ne) {
-            if left != right && matches!((left, right), (Value::Table(_), Value::Table(_))) {
+            if left != right
+                && matches!(
+                    (left, right),
+                    (Value::Table(_), Value::Table(_)) | (Value::Userdata(_), Value::Userdata(_))
+                )
+            {
                 let handler = self.shared_handler(left, right, Meta::Eq);
                 if handler != Value::Nil {
                     return self.meta_call(

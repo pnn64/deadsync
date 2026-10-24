@@ -31,7 +31,7 @@ pub use bytecode::Program;
 #[doc(inline)]
 pub use error::{Error, ErrorKind};
 #[doc(inline)]
-pub use value::{FunctionId, StringId, TableId, ThreadId, Value};
+pub use value::{FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{HeapStats, Root, Vm};
 

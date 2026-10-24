@@ -263,6 +263,7 @@ impl Vm {
         self.switch_thread(parent, line);
     }
     pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) {
+        self.discard_finalizers(0);
         let value = error.value().unwrap_or_else(|| {
             let value = self.intern(error.message().as_bytes());
             self.located_error(value, 1)
@@ -282,6 +283,7 @@ impl Vm {
                 .take()
                 .expect("active thread has a resumer");
             self.close_upvalues(0);
+            self.discard_finalizers(0);
             self.frames.clear();
             self.trim_substitutions();
             self.sorts.clear();
@@ -403,6 +405,7 @@ impl Vm {
                             | CONT_NOT
                             | CONT_IGNORE
                             | CONT_HANDLER
+                            | CONT_GC
                     )
                 )
             })

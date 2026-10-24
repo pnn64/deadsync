@@ -116,7 +116,7 @@ fn roots_reject_release_and_foreign_vm_and_keep_values_alive() {
     let value = vm.execute(&compile(b"return {n=7}").unwrap()).unwrap()[0];
     let root = vm.pin(value).unwrap();
     vm.execute(&compile(b"return nil").unwrap()).unwrap();
-    vm.collect_garbage();
+    vm.collect_garbage().unwrap();
     assert!(foreign.rooted(root).is_err());
     assert_eq!(vm.rooted(root).unwrap(), value);
     vm.set_global(b"t", value).unwrap();
@@ -128,7 +128,7 @@ fn roots_reject_release_and_foreign_vm_and_keep_values_alive() {
     vm.unpin(root).unwrap();
     assert!(vm.unpin(root).is_err());
     assert!(vm.rooted(root).is_err());
-    vm.collect_garbage();
+    vm.collect_garbage().unwrap();
     assert!(vm.set_global(b"stale", value).is_err());
     let next = vm.execute(&compile(b"return {}").unwrap()).unwrap()[0];
     assert_ne!(next, value);
@@ -137,7 +137,7 @@ fn roots_reject_release_and_foreign_vm_and_keep_values_alive() {
         unreachable!()
     };
     vm.execute(&compile(b"return nil").unwrap()).unwrap();
-    vm.collect_garbage();
+    vm.collect_garbage().unwrap();
     assert_eq!(vm.string_bytes(id), None);
     let r2 = vm.pin(Value::Number(3.0)).unwrap();
     assert_ne!(root, r2);
@@ -151,7 +151,7 @@ fn repeated_collection_reclaims_programs_and_bounds_object_slots() {
     let mut maximum = 0;
     for _ in 0..12 {
         vm.execute(&program).unwrap();
-        let stats = vm.collect_garbage();
+        let stats = vm.collect_garbage().unwrap();
         maximum = maximum.max(stats.reserved_bytes);
         assert!(stats.tables < 20);
         assert!(stats.functions < 10);
@@ -171,15 +171,15 @@ fn host_program_bindings_survive_collection_without_pinning_loadstring_caches() 
     let mut b = Vm::new();
     assert_eq!(a.execute(&program).unwrap(), &[Value::Number(1.0)]);
     assert_eq!(b.execute(&program).unwrap(), &[Value::Number(1.0)]);
-    a.collect_garbage();
-    b.collect_garbage();
+    a.collect_garbage().unwrap();
+    b.collect_garbage().unwrap();
     assert_eq!(a.execute(&program).unwrap(), &[Value::Number(2.0)]);
     assert_eq!(b.execute(&program).unwrap(), &[Value::Number(2.0)]);
     drop(program);
     a.execute(&compile(b"return nil").unwrap()).unwrap();
     b.execute(&compile(b"return nil").unwrap()).unwrap();
-    assert_eq!(a.collect_garbage().programs, 0);
-    assert_eq!(b.collect_garbage().programs, 0);
+    assert_eq!(a.collect_garbage().unwrap().programs, 0);
+    assert_eq!(b.collect_garbage().unwrap().programs, 0);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn automatic_collection_handles_opcode_only_churn_and_large_live_arrays() {
         &[Value::Number(50_005_000.0)]
     );
     assert!(vm.heap_stats().tables >= 10_000);
-    assert!(vm.collect_garbage().tables < 20);
+    assert!(vm.collect_garbage().unwrap().tables < 20);
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn native_handles_cannot_restore_collected_environments() {
     let native = vm.global(b"assert");
     vm.execute(&compile(b"debug.setmetatable('',nil);setfenv(0,{});return nil").unwrap())
         .unwrap();
-    vm.collect_garbage();
+    vm.collect_garbage().unwrap();
     assert!(vm.pin(native).is_err());
     assert!(vm.set_global(b"stale", native).is_err());
 }

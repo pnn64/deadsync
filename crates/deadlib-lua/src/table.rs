@@ -1,6 +1,6 @@
 //! Array storage and indexed hash entries with deletion-safe linear iteration.
 
-use crate::{Error, ErrorKind, FunctionId, StringId, TableId, ThreadId, Value};
+use crate::{Error, ErrorKind, FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Key {
@@ -11,6 +11,7 @@ enum Key {
     Function(FunctionId),
     Native(u64),
     Thread(ThreadId),
+    Userdata(UserdataId),
 }
 
 impl Key {
@@ -25,6 +26,7 @@ impl Key {
             Value::Function(v) => Self::Function(v),
             Value::Native(v) => Self::Native(v),
             Value::Thread(v) => Self::Thread(v),
+            Value::Userdata(v) => Self::Userdata(v),
         })
     }
     fn value(self) -> Value {
@@ -36,6 +38,7 @@ impl Key {
             Self::Function(v) => Value::Function(v),
             Self::Native(v) => Value::Native(v),
             Self::Thread(v) => Value::Thread(v),
+            Self::Userdata(v) => Value::Userdata(v),
         }
     }
     fn hash(self) -> usize {
@@ -47,6 +50,7 @@ impl Key {
             Self::Function(v) => (v.0, 5),
             Self::Native(v) => (v, 6),
             Self::Thread(v) => (v.0, 7),
+            Self::Userdata(v) => (v.0, 8),
         };
         let mut h = bits
             ^ (tag as u64)

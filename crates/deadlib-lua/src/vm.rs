@@ -1,7 +1,7 @@
 //! Register dispatch, interned byte strings, and native Lua tables.
 
 use crate::{
-    Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, Value,
+    Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, UserdataId, Value,
     bytecode::{Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
     lexer::parse_number,
     table::Table,
@@ -14,6 +14,7 @@ mod native;
 mod strings;
 mod tables;
 mod threads;
+mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{HeapStats, Root};
 use native::format_number;
@@ -126,11 +127,13 @@ const DEBUG_GET_ENV: u64 = 25;
 const DEBUG_SET_ENV: u64 = 26;
 const COLLECT_GARBAGE: u64 = 27;
 const GC_INFO: u64 = 28;
+const NEW_PROXY: u64 = 29;
 const CONT_RAW: u64 = 128;
 const CONT_BOOL: u64 = 129;
 const CONT_NOT: u64 = 130;
 const CONT_IGNORE: u64 = 131;
 const CONT_HANDLER: u64 = 132;
+const CONT_GC: u64 = 133;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -153,8 +156,9 @@ enum Meta {
     ToString,
     Protected,
     Mode,
+    Gc,
 }
-const META_NAMES: [&[u8]; 18] = [
+const META_NAMES: [&[u8]; 19] = [
     b"__index",
     b"__newindex",
     b"__add",
@@ -173,6 +177,7 @@ const META_NAMES: [&[u8]; 18] = [
     b"__tostring",
     b"__metatable",
     b"__mode",
+    b"__gc",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -232,8 +237,8 @@ pub struct Vm {
     globals: TableId,
     top: usize,
     budget: Option<u64>,
-    type_metatables: [Option<TableId>; 7],
-    meta_names: [StringId; 18],
+    type_metatables: [Option<TableId>; 8],
+    meta_names: [StringId; 19],
     output: Option<Vec<u8>>,
     active_native: Option<usize>,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
@@ -251,6 +256,9 @@ pub struct Vm {
     gc: gc::Collector,
     roots: Arena<Value>,
     identity: u64,
+    userdata: Arena<userdata::Userdata>,
+    proxy_metatables: std::collections::HashSet<TableId>,
+    userdata_order: u64,
 }
 
 impl Default for Vm {
@@ -260,7 +268,7 @@ impl Default for Vm {
 }
 
 impl Vm {
-    /// Create a state with the currently implemented base and math functions.
+    /// Create a state with the currently implemented Lua 5.1 libraries.
     pub fn new() -> Self {
         let mut tables = Arena::default();
         let globals = TableId(tables.insert(Table::default()));
@@ -278,8 +286,8 @@ impl Vm {
             globals,
             top: 0,
             budget: None,
-            type_metatables: [None; 7],
-            meta_names: [StringId(0); 18],
+            type_metatables: [None; 8],
+            meta_names: [StringId(0); 19],
             output: None,
             active_native: None,
             patterns: HashMap::new(),
@@ -297,6 +305,9 @@ impl Vm {
             gc: gc::Collector::default(),
             roots: Arena::default(),
             identity: gc::new_vm_identity(),
+            userdata: Arena::default(),
+            proxy_metatables: std::collections::HashSet::new(),
+            userdata_order: 0,
         };
         for (id, name) in [
             b"assert".as_slice(),
@@ -331,6 +342,7 @@ impl Vm {
             (LOAD_STRING, b"loadstring"),
             (COLLECT_GARBAGE, b"collectgarbage"),
             (GC_INFO, b"gcinfo"),
+            (NEW_PROXY, b"newproxy"),
         ] {
             vm.set_global(name, Value::Native(id))
                 .expect("base library names are valid");
@@ -712,6 +724,20 @@ impl Vm {
             tail_calls: 0,
         });
         self.top = 0;
+        let result = self.drive();
+        self.close_upvalues(0);
+        self.discard_finalizers(0);
+        self.frames.clear();
+        self.trim_substitutions();
+        self.sorts.clear();
+        match result {
+            Ok(count) => Ok(&self.registers[..count]),
+            Err(error) => Err(error),
+        }
+    }
+
+    // Shared entry driver for source execution and host-requested finalization.
+    fn drive(&mut self) -> Result<usize, Error> {
         let mut error_line = 0;
         let mut budget = self.budget;
         let result = loop {
@@ -737,14 +763,7 @@ impl Vm {
         };
         let result = result.map_err(|error| error.at_line(error_line));
         self.abort_threads(&mut error_line);
-        self.close_upvalues(0);
-        self.frames.clear();
-        self.trim_substitutions();
-        self.sorts.clear();
-        match result {
-            Ok(count) => Ok(&self.registers[..count]),
-            Err(error) => Err(error),
-        }
+        result
     }
 
     #[inline]

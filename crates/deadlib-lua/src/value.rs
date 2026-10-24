@@ -16,6 +16,10 @@ pub struct FunctionId(pub(crate) u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ThreadId(pub(crate) u64);
 
+/// The identity of full userdata in its originating VM.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct UserdataId(pub(crate) u64);
+
 /// A Lua register value. Object handles belong to the VM that produced them.
 ///
 /// Numbers use IEEE 754 binary64, including signed zero, infinities, and NaNs.
@@ -37,6 +41,8 @@ pub enum Value {
     Function(FunctionId),
     /// A coroutine or main-thread identity.
     Thread(ThreadId),
+    /// A full userdata identity with VM-owned byte storage.
+    Userdata(UserdataId),
     /// A native function's numeric dispatch ID.
     Native(u64),
 }
@@ -57,6 +63,7 @@ impl Value {
             Self::Table(_) => "table",
             Self::Function(_) | Self::Native(_) => "function",
             Self::Thread(_) => "thread",
+            Self::Userdata(_) => "userdata",
         }
     }
 }

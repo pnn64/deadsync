@@ -80,6 +80,13 @@ impl<T> Arena<T> {
         self.marks[slot / 64] &= !(1u64 << (slot % 64));
         value
     }
+    pub fn get_mut(&mut self, key: u64) -> Option<&mut T> {
+        let slot = index(key);
+        if self.generations.get(slot).copied() != Some((key >> 32) as u32) {
+            return None;
+        }
+        self.values.get_mut(slot)?.as_mut()
+    }
     pub fn mark(&mut self, key: u64) -> bool {
         if !self.contains(key) {
             return false;

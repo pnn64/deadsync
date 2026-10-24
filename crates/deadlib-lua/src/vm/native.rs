@@ -51,6 +51,7 @@ impl Vm {
                 if matches!(
                     id,
                     PCALL
+                        | COLLECT_GARBAGE
                         | XPCALL
                         | TOSTRING
                         | PRINT
@@ -156,6 +157,7 @@ impl Vm {
     fn protected_failure(&mut self, index: usize, value: Value) {
         let frame = self.frames[index];
         self.close_upvalues(frame.base);
+        self.discard_finalizers(index + 1);
         self.frames.truncate(index + 1);
         self.trim_substitutions();
         self.trim_sorts();
@@ -220,6 +222,8 @@ impl Vm {
         let base = frame.base;
         let index = self.frames.len() - 1;
         match id {
+            COLLECT_GARBAGE => self.collect_step(frame),
+            CONT_GC => self.finalizer_step(frame),
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {
                 if matches!(id, CONT_BOOL | CONT_NOT) {
                     self.registers[base] =
@@ -299,6 +303,7 @@ impl Vm {
                 self.intern(format!("function: 0x{:x}", (u128::from(id) << 1) | 1).as_bytes())
             }
             Value::Thread(id) => self.intern(format!("thread: 0x{:x}", id.0).as_bytes()),
+            Value::Userdata(id) => self.intern(format!("userdata: 0x{:x}", id.0).as_bytes()),
         }
     }
     fn print_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
@@ -426,6 +431,9 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        if id == NEW_PROXY {
+            return self.proxy_native(base, count);
+        }
         if matches!(id, COLLECT_GARBAGE | GC_INFO) {
             return self.gc_native(id, base, count);
         }
@@ -631,6 +639,7 @@ impl Vm {
                         Value::Function(id) => Value::Table(self.functions[slot_index(id.0)].env),
                         Value::Native(id) => Value::Table(self.native_environment(id)),
                         Value::Thread(id) => Value::Table(self.thread_environment(id)),
+                        Value::Userdata(id) => Value::Table(self.userdata[slot_index(id.0)].env),
                         _ => Value::Nil,
                     }
                 } else {
@@ -641,6 +650,7 @@ impl Vm {
                         Value::Function(id) => self.functions[slot_index(id.0)].env = env,
                         Value::Native(id) => self.set_native_environment(id, env),
                         Value::Thread(id) => self.set_thread_environment(id, env),
+                        Value::Userdata(id) => self.userdata[slot_index(id.0)].env = env,
                         _ => {
                             return Err(Error::new(
                                 ErrorKind::Runtime,

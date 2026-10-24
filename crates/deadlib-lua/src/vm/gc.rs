@@ -41,6 +41,8 @@ pub struct HeapStats {
     pub programs: usize,
     /// Live shared upvalue cells.
     pub upvalues: usize,
+    /// Live full userdata objects.
+    pub userdata: usize,
     /// Completed tracing cycles.
     pub collections: u64,
     /// Total arena objects reclaimed by completed cycles.
@@ -67,7 +69,7 @@ pub(super) struct Collector {
     last_live: usize,
     threshold: usize,
     credit: usize,
-    collections: u64,
+    pub(super) collections: u64,
     reclaimed: u64,
     peak: usize,
     work: Vec<Trace>,
@@ -75,6 +77,10 @@ pub(super) struct Collector {
     natives: [u64; 4],
     control_allocated: usize,
     pub(super) pending: bool,
+    pub(super) finalizers: std::collections::VecDeque<UserdataId>,
+    pub(super) candidates: Vec<(u64, UserdataId)>,
+    pub(super) running: usize,
+    pub(super) closing: bool,
 }
 impl Default for Collector {
     fn default() -> Self {
@@ -93,6 +99,10 @@ impl Default for Collector {
             natives: [0; 4],
             control_allocated: 0,
             pending: false,
+            finalizers: std::collections::VecDeque::new(),
+            candidates: Vec::new(),
+            running: 0,
+            closing: false,
         }
     }
 }
@@ -179,10 +189,16 @@ fn frames_roots(
                 let proto = &vm.programs[closure.program].data.prototypes[closure.prototype];
                 let pc = frame.pc().saturating_sub(1).min(proto.code.len() - 1);
                 let maps = proto.gc_live[pc];
-                let map = if i + 1 < frames.len() {
-                    maps as u16 as usize
-                } else {
+                // Finalization interrupts an already completed opcode. Its
+                // destination/results are live, unlike an outstanding Lua call.
+                let interrupt = frames
+                    .get(i + 1)
+                    .filter(|f| matches!(f.function, FrameKind::Native(CONT_GC)));
+                let completed = frame.pc() != 0 && (i + 1 == frames.len() || interrupt.is_some());
+                let map = if completed {
                     (maps >> 16) as usize
+                } else {
+                    maps as u16 as usize
                 };
                 for (word, &bits) in proto.gc_maps[map].iter().enumerate() {
                     let mut bits = bits;
@@ -196,13 +212,14 @@ fn frames_roots(
                     }
                 }
                 let instruction = proto.code[pc];
-                if i + 1 == frames.len()
+                if completed
                     && ((matches!(instruction.op, Op::Call | Op::Vararg | Op::Move)
                         && instruction.c == OPEN)
                         || instruction.op == Op::TailCall)
                 {
                     let start = frame.base + usize::from(instruction.a);
-                    let end = top.min(cutoff).min(registers.len());
+                    let frame_top = interrupt.map_or(top, |f| f.result);
+                    let end = frame_top.min(cutoff).min(registers.len());
                     work.extend(
                         registers[start.min(end)..end]
                             .iter()
@@ -212,6 +229,15 @@ fn frames_roots(
                 }
             }
             FrameKind::Native(id) => {
+                if id == CONT_GC && frame.wanted == FRAME_OPEN {
+                    work.extend(
+                        registers
+                            .iter()
+                            .take(frame.result)
+                            .copied()
+                            .filter_map(edge),
+                    );
+                }
                 if !(CONT_RAW..strings::ITERATOR_FIRST).contains(&id) {
                     work.push(Trace::Value(Value::Native(id)));
                 }
@@ -250,9 +276,10 @@ impl Vm {
             Value::Table(id) => self.tables.contains(id.0),
             Value::Function(id) => self.functions.contains(id.0),
             Value::Thread(id) => self.threads.contains(id.0),
+            Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=28|32..=59|64..=77|80..=85|96..=104)
+                matches!(id,0..=29|32..=59|64..=77|80..=85|96..=104)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
@@ -310,6 +337,7 @@ impl Vm {
             .map(|f| f.upvalues.len() * 4)
             .sum::<usize>();
         payload += self.programs.iter().map(program_bytes).sum::<usize>();
+        payload += self.userdata.iter().map(|u| u.bytes.len()).sum::<usize>();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()
             + self.frames.capacity() * std::mem::size_of::<Frame>()
             + self.open_upvalues.capacity() * 4
@@ -335,6 +363,9 @@ impl Vm {
             // capacity-based estimates include payloads and one control byte.
             + self.patterns.capacity() * (std::mem::size_of::<((StringId, bool), crate::pattern::Pattern)>() + 1)
             + self.native_envs.capacity() * (std::mem::size_of::<(u64, TableId)>() + 1);
+        control += self.proxy_metatables.capacity() * (std::mem::size_of::<TableId>() + 1);
+        control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
+            + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<Box<[u8]>>()
             + self.tables.live_len() * std::mem::size_of::<Table>()
             + self.functions.live_len() * std::mem::size_of::<Closure>()
@@ -343,6 +374,8 @@ impl Vm {
             + self.native_closures.live_len() * std::mem::size_of::<threads::NativeClosure>()
             + self.programs.live_len() * std::mem::size_of::<LoadedProgram>()
             + self.roots.live_len() * std::mem::size_of::<Value>();
+        let objects =
+            objects + self.userdata.live_len() * std::mem::size_of::<userdata::Userdata>();
         let storage = self.strings.bytes.storage_bytes()
             + self.tables.storage_bytes()
             + self.functions.storage_bytes()
@@ -351,6 +384,7 @@ impl Vm {
             + self.native_closures.storage_bytes()
             + self.programs.storage_bytes()
             + self.roots.storage_bytes();
+        let storage = storage + self.userdata.storage_bytes();
         let reserved = payload + control + storage;
         self.gc.peak = self.gc.peak.max(reserved);
         HeapStats {
@@ -364,6 +398,7 @@ impl Vm {
             native_closures: self.native_closures.live_len(),
             programs: self.programs.live_len(),
             upvalues: self.upvalues.live_len(),
+            userdata: self.userdata.live_len(),
             collections: self.gc.collections,
             reclaimed_objects: self.gc.reclaimed,
         }
@@ -377,6 +412,7 @@ impl Vm {
         self.native_closures.allocated = 0;
         self.programs.allocated = 0;
         self.roots.allocated = 0;
+        self.userdata.allocated = 0;
         self.gc.control_allocated = 0;
         self.gc.pending = false;
         self.gc.last_live = self.heap_stats().live_bytes;
@@ -397,13 +433,20 @@ impl Vm {
             .saturating_add(self.threads.allocated)
             .saturating_add(self.native_closures.allocated)
             .saturating_add(self.programs.allocated)
+            .saturating_add(self.userdata.allocated)
             .saturating_add(self.gc.control_allocated)
     }
     pub(super) fn maybe_gc(&mut self) {
         self.gc.pending = false;
-        if !self.gc.stopped && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
+        if !self.gc.stopped
+            && self.gc.running == 0
+            && !self.gc.closing
+            && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
         {
-            self.collect_garbage();
+            self.collect_cycle();
+            if !self.gc.finalizers.is_empty() {
+                self.push_finalizers(false);
+            }
         }
     }
     fn table_mode(&self, table: &Table) -> (bool, bool) {
@@ -425,6 +468,7 @@ impl Vm {
             Value::Table(id) => self.tables.marked(id.0),
             Value::Function(id) => self.functions.marked(id.0),
             Value::Thread(id) => self.threads.marked(id.0),
+            Value::Userdata(id) => self.userdata.marked(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.marked(id),
             Value::Native(id) => {
                 id < 256 && self.gc.natives[id as usize / 64] & (1u64 << (id % 64)) != 0
@@ -479,44 +523,12 @@ impl Vm {
             work.extend(job.roots().into_iter().filter_map(edge));
         }
     }
-    /// Run a complete tracing collection. Host values that must survive need a root.
-    /// The current collector completes each cycle atomically at VM safe points.
-    pub fn collect_garbage(&mut self) -> HeapStats {
-        self.heap_stats();
-        self.strings.bytes.clear_marks();
-        self.tables.clear_marks();
-        self.functions.clear_marks();
-        self.upvalues.clear_marks();
-        self.threads.clear_marks();
-        self.native_closures.clear_marks();
-        self.programs.clear_marks();
-        self.gc.natives.fill(0);
-        let mut work = std::mem::take(&mut self.gc.work);
-        work.clear();
-        work.push(Trace::Value(Value::Thread(self.main)));
-        work.push(Trace::Value(Value::Thread(self.thread)));
-        work.extend(
-            self.meta_names
-                .iter()
-                .copied()
-                .map(|s| Trace::Value(Value::String(s))),
-        );
-        work.extend(
-            self.type_metatables
-                .iter()
-                .flatten()
-                .copied()
-                .map(|t| Trace::Value(Value::Table(t))),
-        );
-        work.extend(self.roots.iter().copied().filter_map(edge));
-        // A live host Program retains its mutable per-VM entry binding. Internal
-        // code ownership by escaped Lua closures does not pin unused entries.
-        work.extend(
-            self.programs
-                .iter()
-                .filter(|p| p.owner.strong_count() != 0)
-                .map(|p| Trace::Value(Value::Function(p.entry))),
-        );
+    fn marked_weak_value(&self, value: Value, key: bool) -> bool {
+        self.marked_value(value)
+            && (key
+                || !matches!(value, Value::Userdata(id) if self.userdata[slot_index(id.0)].finalized))
+    }
+    fn trace_graph(&mut self, work: &mut Vec<Trace>) {
         while let Some(item) = work.pop() {
             match item {
                 Trace::Value(Value::String(id)) => {
@@ -547,9 +559,18 @@ impl Vm {
                         work.extend(f.upvalues.iter().map(|&i| Trace::Cell(i as usize)));
                     }
                 }
+                Trace::Value(Value::Userdata(id)) => {
+                    if self.userdata.mark(id.0) {
+                        let u = &self.userdata[slot_index(id.0)];
+                        work.push(Trace::Value(Value::Table(u.env)));
+                        if let Some(mt) = u.metatable {
+                            work.push(Trace::Value(Value::Table(mt)));
+                        }
+                    }
+                }
                 Trace::Value(Value::Thread(id)) => {
                     if self.threads.mark(id.0) {
-                        self.trace_thread(id, &mut work);
+                        self.trace_thread(id, work);
                     }
                 }
                 Trace::Value(Value::Native(id)) => {
@@ -594,6 +615,56 @@ impl Vm {
                 _ => {}
             }
         }
+    }
+    pub(super) fn collect_cycle(&mut self) -> HeapStats {
+        self.heap_stats();
+        self.strings.bytes.clear_marks();
+        self.tables.clear_marks();
+        self.functions.clear_marks();
+        self.upvalues.clear_marks();
+        self.threads.clear_marks();
+        self.native_closures.clear_marks();
+        self.programs.clear_marks();
+        self.userdata.clear_marks();
+        self.gc.natives.fill(0);
+        let mut work = std::mem::take(&mut self.gc.work);
+        work.clear();
+        work.push(Trace::Value(Value::Thread(self.main)));
+        work.push(Trace::Value(Value::Thread(self.thread)));
+        work.extend(
+            self.meta_names
+                .iter()
+                .copied()
+                .map(|s| Trace::Value(Value::String(s))),
+        );
+        work.extend(
+            self.type_metatables
+                .iter()
+                .flatten()
+                .copied()
+                .map(|t| Trace::Value(Value::Table(t))),
+        );
+        work.extend(self.roots.iter().copied().filter_map(edge));
+        // A live host Program retains its mutable per-VM entry binding. Internal
+        // code ownership by escaped Lua closures does not pin unused entries.
+        work.extend(
+            self.programs
+                .iter()
+                .filter(|p| p.owner.strong_count() != 0)
+                .map(|p| Trace::Value(Value::Function(p.entry))),
+        );
+        self.trace_graph(&mut work);
+        // Pending callbacks preserve their graphs only after discovering newly
+        // finalizable userdata, including graphs attached after a callback error.
+        self.separate_userdata(false);
+        work.extend(
+            self.gc
+                .finalizers
+                .iter()
+                .copied()
+                .map(|id| Trace::Value(Value::Userdata(id))),
+        );
+        self.trace_graph(&mut work);
         let mut erase = std::mem::take(&mut self.gc.erase);
         erase.clear();
         for (i, t) in self.tables.entries() {
@@ -601,7 +672,9 @@ impl Vm {
                 let (wk, wv) = self.table_mode(t);
                 if wk || wv {
                     for (k, v) in t.pairs() {
-                        if (wk && !self.marked_value(k)) || (wv && !self.marked_value(v)) {
+                        if (wk && !self.marked_weak_value(k, true))
+                            || (wv && !self.marked_weak_value(v, false))
+                        {
                             erase.push((i, k));
                         }
                     }
@@ -628,6 +701,9 @@ impl Vm {
             + sweep(&mut self.native_closures)
             + sweep(&mut self.programs)
             + sweep(&mut self.strings.bytes);
+        let reclaimed = reclaimed + sweep(&mut self.userdata);
+        self.proxy_metatables
+            .retain(|id| self.tables.contains(id.0));
         self.strings.rebuild();
         self.patterns
             .retain(|(id, _), _| self.strings.bytes.contains(id.0));
@@ -682,7 +758,7 @@ impl Vm {
                 Value::Number(0.0)
             }
             b"collect" => {
-                self.collect_garbage();
+                self.collect_cycle();
                 Value::Number(0.0)
             }
             b"count" => Value::Number(self.heap_stats().live_bytes as f64 / 1024.0),
@@ -705,7 +781,7 @@ impl Vm {
                 self.gc.credit = self.gc.credit.saturating_add(bytes.max(1));
                 let complete = self.gc.credit >= self.heap_stats().live_bytes;
                 if complete {
-                    self.collect_garbage();
+                    self.collect_cycle();
                 }
                 Value::Boolean(complete)
             }

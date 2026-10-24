@@ -210,6 +210,18 @@ fn main() {
             1.0,
             20,
         ),
+        (
+            "userdata_proxy",
+            "local p=newproxy(true);local m=getmetatable(p);local n=0;for i=1,5000 do local u=newproxy(p);if getmetatable(u)==m then n=n+1 end end;collectgarbage();return n",
+            5000.0,
+            20,
+        ),
+        (
+            "userdata_finalize",
+            "collectgarbage('stop');local n=0;local p=newproxy(true);getmetatable(p).__gc=function()n=n+1 end;for i=1,3000 do newproxy(p)end;p=nil;collectgarbage();collectgarbage('restart');return n",
+            3001.0,
+            20,
+        ),
     ] {
         let source = source.as_bytes();
         let program = compile(source).unwrap();
@@ -289,15 +301,16 @@ fn main() {
         );
         for (phase, stats) in [
             ("before_collect", vm.heap_stats()),
-            ("after_collect", vm.collect_garbage()),
+            ("after_collect", vm.collect_garbage().unwrap()),
         ] {
             println!(
-                "rust_heap_estimate\t{name}\t{phase}\t{}\t{}\t{}\t{}\t{}",
+                "rust_heap_estimate\t{name}\t{phase}\t{}\t{}\t{}\t{}\t{}\t{}",
                 stats.live_bytes,
                 stats.reserved_bytes,
                 stats.peak_reserved_bytes,
                 stats.collections,
-                stats.reclaimed_objects
+                stats.reclaimed_objects,
+                stats.userdata
             );
         }
         reference.gc_collect().unwrap();
