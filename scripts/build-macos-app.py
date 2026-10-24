@@ -213,9 +213,12 @@ def make_app(args):
     if args.zip:
         arch = "universal" if len(architectures) > 1 else next(iter(architectures))
         archive = output.parent / f"deadsync-v{version}-{arch}-macos-app.zip"
-        if archive.exists():
-            raise RuntimeError(f"Archive exists: {archive}")
-        run("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", output, archive)
+        if archive.exists() and not args.replace:
+            raise RuntimeError(f"Archive exists; pass --replace to rebuild it: {archive}")
+        with tempfile.TemporaryDirectory(prefix=".deadsync-zip-", dir=output.parent) as temporary:
+            staged_archive = Path(temporary) / archive.name
+            run("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", output, staged_archive)
+            staged_archive.replace(archive)
         checksum = archive.with_suffix(archive.suffix + ".sha256")
         hasher = hashlib.sha256()
         with archive.open("rb") as stream:
