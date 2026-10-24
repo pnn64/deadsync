@@ -212,8 +212,13 @@ fn line(
     rgba: [f32; 4],
 ) {
     let (x, y) = f.point(lx, ly);
+    let text: TextContent = text.into();
+    let text = match text {
+        TextContent::Static(label) => TextContent::Shared(super::localization::text(label)),
+        other => other,
+    };
     let actor = act!(text:
-        font(font): settext(text.into()):
+        font(font): settext(text):
         align(0.5, 0.5): xy(x, y): zoomx(zoom * f.sx): zoomy(zoom * f.sy):
         maxwidth(max_w * f.sx): horizalign(center):
         diffuse(rgba[0], rgba[1], rgba[2], rgba[3] * f.alpha): z(Z)
@@ -245,7 +250,7 @@ fn scaled(rgb: [f32; 4], by: f32) -> [f32; 3] {
 
 fn content(text: Cow<'static, str>) -> TextContent {
     match text {
-        Cow::Borrowed(text) => TextContent::Static(text),
+        Cow::Borrowed(text) => TextContent::Shared(super::localization::text(text)),
         Cow::Owned(text) => TextContent::Owned(text),
     }
 }
@@ -316,7 +321,7 @@ fn push_options(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4]) {
                     [0.55, 0.55, 0.58, 1.0]
                 };
                 actors.push(act!(text:
-                    font("miso"): settext("RESET OPTIONS"):
+                    font("miso"): settext(crate::i18n::tr("ContentBrowser", "ResetOptions")):
                     align(1.0, 0.5): xy(lo::RIP_PANEL_X + lo::RIP_PANEL_W - 4.0, y - 6.0):
                     zoom(0.4): horizalign(right):
                     diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z)
@@ -334,7 +339,7 @@ fn push_options(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4]) {
                     diffuse(band[0], band[1], band[2], band[3]): z(Z)
                 ));
                 actors.push(act!(text:
-                    font("miso"): settext(row.label()):
+                    font("miso"): settext(super::localization::text(row.label())):
                     align(0.0, 0.5): xy(value_x, y - 9.0): zoom(0.38): horizalign(left):
                     diffuse(0.6, 0.6, 0.6, 1.0): z(Z)
                 ));
@@ -431,7 +436,7 @@ fn push_button(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4], y: f32,
             )),
         }
         actors.push(act!(text:
-            font("wendy"): settext(label):
+            font("wendy"): settext(super::localization::text(&label)):
             align(0.0, 0.5): xy(x0 + 40.0, y): zoom(0.42): maxwidth(half - 46.0):
             horizalign(left):
             diffuse(ink, ink, ink, 1.0): z(Z)
@@ -931,7 +936,7 @@ fn push_card_info(
     let lines = fitted.map_or(1, |(_, lines)| lines);
     let title_h = lines as f32 * MISO_LINE * rip::TITLE_ZOOM;
     let credit: Option<TextContent> = if failed {
-        Some(TextContent::Static("could not be downloaded"))
+        Some(TextContent::Shared(super::localization::text("could not be downloaded")))
     } else {
         text.credit
             .as_ref()
@@ -1062,15 +1067,15 @@ fn push_picker(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4], w: f32,
         Pick::Authors => "CHOOSE AUTHORS",
     };
     actors.push(act!(text:
-        font("wendy"): settext(title):
+        font("wendy"): settext(super::localization::text(&title)):
         align(0.0, 0.5): xy(cx - BOX_W / 2.0 + 14.0, top + 20.0): zoom(0.4): horizalign(left):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z)
     ));
     let chosen = rip::pick_chosen(rip);
     let tally = match (chosen, pick) {
-        (0, Pick::Eras) => TextContent::Static("any era"),
-        (0, Pick::Authors) => TextContent::Static("anyone"),
-        (n, _) => TextContent::Owned(format!("{n} chosen")),
+        (0, Pick::Eras) => TextContent::Shared(super::localization::text("any era")),
+        (0, Pick::Authors) => TextContent::Shared(super::localization::text("anyone")),
+        (n, _) => TextContent::Owned(crate::i18n::tr_fmt("ContentBrowser", "MessageNChosen", &[("n", &(n).to_string())]).to_string()),
     };
     actors.push(act!(text:
         font("miso"): settext(tally):
@@ -1108,7 +1113,7 @@ fn push_picker(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4], w: f32,
         }
         let (label, note) = match pick {
             Pick::Eras => (
-                TextContent::Static(Era::ALL.get(at).map_or("", |era| era.label())),
+                TextContent::Shared(super::localization::text(Era::ALL.get(at).map_or("", |era| era.label()))),
                 None,
             ),
             Pick::Authors => match rip.author_rows.get(at) {
@@ -1159,7 +1164,7 @@ fn push_picker(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4], w: f32,
     }
 
     actors.push(act!(text:
-        font("miso"): settext("&START; choose    &SELECT; clear    &BACK; done"):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "ChooseClearDoneHint")):
         align(0.5, 0.5): xy(cx, top + box_h - 16.0): zoom(0.45): horizalign(center):
         diffuse(0.85, 0.85, 0.88, 1.0): z(Z)
     ));
@@ -1209,7 +1214,7 @@ pub(super) fn push_prompt(
         diffuse(0.0, 0.0, 0.0, 1.0): z(Z_MODAL_PANEL + 1)
     ));
     actors.push(act!(text:
-        font("miso"): settext(prompt.kind.question()):
+        font("miso"): settext(super::localization::text(prompt.kind.question())):
         align(0.5, 0.5): xy(cx, cy - 64.0): zoom(1.0): maxwidth((box_w - 40.0).min(600.0)):
         horizalign(center):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z_MODAL_TEXT)
@@ -1234,7 +1239,7 @@ pub(super) fn push_prompt(
         ));
     }
     actors.push(act!(text:
-        font("miso"): settext("type, then ENTER or START to keep it    ESCAPE or BACK to cancel"):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "KeepNameHint")):
         align(0.5, 0.5): xy(cx, answer_cy + ANSWER_H * 0.5 + 18.0): zoom(0.5):
         horizalign(center):
         diffuse(0.75, 0.75, 0.75, 1.0): z(Z_MODAL_TEXT)

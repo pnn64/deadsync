@@ -227,15 +227,15 @@ fn push_reload_dialog(
         "NEW CONTENT INSTALLED"
     };
     actors.push(act!(text:
-        font("wendy"): settext(title.to_owned()):
+        font("wendy"): settext(super::localization::text(&title)):
         align(0.5, 0.5): xy(cx, cy - 50.0): zoom(0.5): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_MODAL_TEXT)
     ));
 
     if prompt.reloading {
         let line = match prompt.progress.as_ref() {
-            Some((done, total, pack)) => format!("{done} of {total} songs  -  {pack}"),
-            None => "Starting...".to_owned(),
+            Some((done, total, pack)) => crate::i18n::tr_fmt("ContentBrowser", "MessageDoneOfTotalSongsPack", &[("done", &(done).to_string()), ("total", &(total).to_string()), ("pack", &(pack).to_string())]).to_string(),
+            None => crate::i18n::tr("ContentBrowser", "MessageStarting").to_string(),
         };
         spinner::with_label(
             actors,
@@ -263,10 +263,10 @@ fn push_reload_dialog(
     let pack_word = if packs == 1 { "pack" } else { "packs" };
     let song_word = if songs == 1 { "song" } else { "songs" };
     let added = match (packs, songs) {
-        (0, 0) => "Library changed.".to_owned(),
-        (0, _) => format!("{songs} {song_word} added."),
-        (_, 0) => format!("{packs} {pack_word} added."),
-        _ => format!("{packs} {pack_word} and {songs} {song_word} added."),
+        (0, 0) => crate::i18n::tr("ContentBrowser", "MessageLibraryChanged").to_string(),
+        (0, _) => crate::i18n::tr_fmt("ContentBrowser", "MessageSongsSongWordAdded", &[("songs", &(songs).to_string()), ("song_word", &super::localization::text(&(song_word).to_string()).to_string())]).to_string(),
+        (_, 0) => crate::i18n::tr_fmt("ContentBrowser", "MessagePacksPackWordAdded", &[("packs", &(packs).to_string()), ("pack_word", &super::localization::text(&(pack_word).to_string()).to_string())]).to_string(),
+        _ => crate::i18n::tr_fmt("ContentBrowser", "MessagePacksPackWordAndSongsSongWordAdded", &[("packs", &(packs).to_string()), ("pack_word", &super::localization::text(&(pack_word).to_string()).to_string()), ("songs", &(songs).to_string()), ("song_word", &super::localization::text(&(song_word).to_string()).to_string())]).to_string(),
     };
     actors.push(act!(text:
         font("miso"): settext(added):
@@ -274,7 +274,7 @@ fn push_reload_dialog(
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z_MODAL_TEXT)
     ));
     actors.push(act!(text:
-        font("miso"): settext(format!("Reload songs now so the new {what} shows up?")):
+        font("miso"): settext(crate::i18n::tr_fmt("ContentBrowser", "MessageReloadSongsNowSoTheNewWhatShowsUp", &[("what", &super::localization::text(&(what).to_string()).to_string())]).to_string()):
         align(0.5, 0.5): xy(cx, cy - 8.0): zoom(0.5): horizalign(center):
         maxwidth(panel_w - 40.0):
         diffuse(0.85, 0.85, 0.85, 1.0): z(Z_MODAL_TEXT)
@@ -297,13 +297,13 @@ fn push_reload_dialog(
             diffuse(plate[0], plate[1], plate[2], plate[3]): z(Z_MODAL_PANEL + 2)
         ));
         actors.push(act!(text:
-            font("miso"): settext(label.to_owned()):
+            font("miso"): settext(super::localization::text(&label)):
             align(0.5, 0.5): xy(x, cy + 24.0): zoom(0.58): horizalign(center):
             diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_MODAL_TEXT)
         ));
     }
     actors.push(act!(text:
-        font("miso"): settext("LEFT/RIGHT choose    START go    BACK cancel".to_owned()):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "ChooseGoBackHint")):
         align(0.5, 0.5): xy(cx, cy + 56.0): zoom(0.5): horizalign(center):
         diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
         z(Z_MODAL_TEXT)
@@ -379,12 +379,12 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
     );
 
     let title = match dialog.step {
-        SyncStep::Choose => "SYNC THIS PACK".to_owned(),
-        SyncStep::ConfirmShift => format!("SHIFT {from} TO {to}?"),
-        SyncStep::Working { .. } => format!("SHIFTING {from} TO {to}"),
+        SyncStep::Choose => crate::i18n::tr("ContentBrowser", "MessageSYNCTHISPACK").to_string(),
+        SyncStep::ConfirmShift => crate::i18n::tr_fmt("ContentBrowser", "MessageSHIFTFromTOTo", &[("from", &(from).to_string()), ("to", &(to).to_string())]).to_string(),
+        SyncStep::Working { .. } => crate::i18n::tr_fmt("ContentBrowser", "MessageSHIFTINGFromTOTo", &[("from", &(from).to_string()), ("to", &(to).to_string())]).to_string(),
     };
     actors.push(act!(text:
-        font("wendy"): settext(title):
+        font("wendy"): settext(super::localization::text(&title)):
         align(0.5, 0.5): xy(cx, top + 24.0): zoom(0.46): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_MODAL_TEXT)
     ));
@@ -405,16 +405,16 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
     };
     let hint = |actors: &mut Vec<Actor>, text: &str| {
         actors.push(act!(text:
-            font("miso"): settext(text.to_owned()):
+            font("miso"): settext(super::localization::text(text)):
             align(0.5, 0.5): xy(cx, top + panel_h - 18.0): zoom(0.5): horizalign(center):
             diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
             z(Z_MODAL_TEXT)
         ));
     };
     let songs = if dialog.songs == 1 {
-        "1 song".to_owned()
+        crate::i18n::tr("ContentBrowser", "Message1Song").to_string()
     } else {
-        format!("{} songs", dialog.songs)
+        crate::i18n::tr_fmt("ContentBrowser", "MessageSongs", &[("arg0", &(dialog.songs).to_string())]).to_string()
     };
 
     match dialog.step {
@@ -431,7 +431,7 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
             body_line(
                 actors,
                 top + 124.0,
-                format!("{songs}, {SHIFT_MS} ms {way} each"),
+                crate::i18n::tr_fmt("ContentBrowser", "MessageSongsSHIFTMSMsWayEach", &[("songs", &(songs).to_string()), ("SHIFT_MS", &(SHIFT_MS).to_string()), ("way", &super::localization::text(&(way).to_string()).to_string())]).to_string(),
                 [0.75, 0.75, 0.75, 1.0],
             );
             return;
@@ -440,21 +440,19 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
             body_line(
                 actors,
                 top + 82.0,
-                format!("Every offset in {songs} moves {SHIFT_MS} ms {way}."),
+                crate::i18n::tr_fmt("ContentBrowser", "MessageEveryOffsetInSongsMovesSHIFTMSMsWay", &[("songs", &(songs).to_string()), ("SHIFT_MS", &(SHIFT_MS).to_string()), ("way", &super::localization::text(&(way).to_string()).to_string())]).to_string(),
                 [0.86, 0.86, 0.86, 1.0],
             );
             body_line(
                 actors,
                 top + 104.0,
-                format!(
-                    "Each simfile keeps a .old copy of itself, and the pack is recorded as {to}"
-                ),
+                crate::i18n::tr_fmt("ContentBrowser", "MessageEachSimfileKeepsAOldCopyOfItselfAnd", &[("to", &(to).to_string())]).to_string(),
                 [0.66, 0.66, 0.66, 1.0],
             );
             body_line(
                 actors,
                 top + 120.0,
-                "in its Pack.ini, so the same shift is never made twice.".to_owned(),
+                crate::i18n::tr("ContentBrowser", "MessageInItsPackIniSoTheSameShiftIs").to_string(),
                 [0.66, 0.66, 0.66, 1.0],
             );
             hint(actors, "START shift    BACK go back");
@@ -478,7 +476,7 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
     body_line(
         actors,
         top + 68.0,
-        format!("{songs}   -   {declares}   -   {}", smo.short()),
+        format!("{songs}   -   {}   -   {}", super::localization::text(declares), super::localization::text(smo.short())),
         [0.7, 0.7, 0.7, 1.0],
     );
 
@@ -488,28 +486,23 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
         let picked = offer == dialog.action;
         let (label, blurb) = match offer {
             SyncAction::Measure => (
-                "MEASURE WITH NULL-OR-DIE".to_owned(),
-                "measure every song against its music, review the offsets, then save".to_owned(),
+                crate::i18n::tr("ContentBrowser", "MessageMEASUREWITHNULLORDIE").to_string(),
+                crate::i18n::tr("ContentBrowser", "MessageMeasureEverySongAgainstItsMusicReviewTheOffsets").to_string(),
             ),
             SyncAction::Shift => (
-                format!("SHIFT {from} TO {to}"),
+                crate::i18n::tr_fmt("ContentBrowser", "MessageSHIFTFromTOTo01428e", &[("from", &(from).to_string()), ("to", &(to).to_string())]).to_string(),
                 if to_null {
-                    format!(
-                        "move every offset {SHIFT_MS} ms later, for a pack synced the old ITG way"
-                    )
+                    crate::i18n::tr_fmt("ContentBrowser", "MessageMoveEveryOffsetSHIFTMSMsLaterForA", &[("SHIFT_MS", &(SHIFT_MS).to_string())]).to_string()
                 } else {
-                    format!("move every offset {SHIFT_MS} ms earlier and record the pack as ITG")
+                    crate::i18n::tr_fmt("ContentBrowser", "MessageMoveEveryOffsetSHIFTMSMsEarlierAndRecord", &[("SHIFT_MS", &(SHIFT_MS).to_string())]).to_string()
                 },
             ),
             SyncAction::PackIni => (
-                format!(
-                    "RECORD IN PACK.INI ONLY:   {}",
-                    if dialog.record == SyncPref::Itg {
+                crate::i18n::tr_fmt("ContentBrowser", "MessageRECORDINPACKINIONLY", &[("arg0", &(if dialog.record == SyncPref::Itg {
                         "< ITG >"
                     } else {
                         "< NULL >"
-                    }
-                ),
+                    }).to_string())]).to_string(),
                 "leave the simfiles alone; the engine applies it while Pack.ini Offsets is on"
                     .to_owned(),
             ),
@@ -549,12 +542,12 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
     // What the choice leaves behind -- or why there is no choice at all.
     let (note, rgba) = if let PackCheck::Refused(reason) = &dialog.check {
         (
-            format!("Its sync cannot be changed here: {reason}."),
+            crate::i18n::tr_fmt("ContentBrowser", "MessageItsSyncCannotBeChangedHereReason", &[("reason", &(reason).to_string())]).to_string(),
             [0.97, 0.78, 0.30, 1.0],
         )
     } else if !dialog.usable() {
         (
-            "Checking the pack's folder...".to_owned(),
+            crate::i18n::tr("ContentBrowser", "MessageCheckingThePackSFolder").to_string(),
             [0.6, 0.6, 0.6, 1.0],
         )
     } else {
@@ -564,9 +557,9 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
                     .to_owned()
             }
             SyncAction::Shift => {
-                format!("Each simfile keeps a .old copy, and the pack is then recorded as {to}.")
+                crate::i18n::tr_fmt("ContentBrowser", "MessageEachSimfileKeepsAOldCopyAndThePack", &[("to", &(to).to_string())]).to_string()
             }
-            SyncAction::PackIni => "Only the Pack.ini changes.".to_owned(),
+            SyncAction::PackIni => crate::i18n::tr("ContentBrowser", "MessageOnlyThePackIniChanges").to_string(),
         };
         (note, [0.6, 0.6, 0.6, 1.0])
     };
@@ -609,7 +602,7 @@ fn push_remove_confirm(actors: &mut Vec<Actor>, state: &State, name: &str, w: f3
     );
 
     actors.push(act!(text:
-        font("wendy"): settext("DELETE THIS PACK?".to_owned()):
+        font("wendy"): settext(crate::i18n::tr("ContentBrowser", "DeletePackTitle")):
         align(0.5, 0.5): xy(cx, cy - 46.0): zoom(0.5): horizalign(center):
         diffuse(1.0, 0.62, 0.62, 1.0): z(Z_MODAL_TEXT)
     ));
@@ -626,15 +619,13 @@ fn push_remove_confirm(actors: &mut Vec<Actor>, state: &State, name: &str, w: f3
         .map_or(0, |entry| entry.songs);
     actors.push(act!(text:
         font("miso"):
-        settext(format!(
-            "{songs} song folders will be deleted from this machine. This cannot be undone."
-        )):
+        settext(crate::i18n::tr_fmt("ContentBrowser", "MessageSongsSongFoldersWillBeDeletedFromThisMachine", &[("songs", &(songs).to_string())]).to_string()):
         align(0.5, 0.5): xy(cx, cy + 14.0): zoom(0.5): horizalign(center):
         maxwidth(panel_w - 40.0):
         diffuse(0.88, 0.88, 0.88, 1.0): z(Z_MODAL_TEXT)
     ));
     actors.push(act!(text:
-        font("miso"): settext("START delete    BACK keep it".to_owned()):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "DeletePackHint")):
         align(0.5, 0.5): xy(cx, cy + 48.0): zoom(0.55): horizalign(center):
         diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
         z(Z_MODAL_TEXT)
@@ -646,7 +637,7 @@ fn push_header(actors: &mut Vec<Actor>, w: f32) {
     // Wendy at 0.6, left-aligned at (10, 15) -- the theme's own header text,
     // reproduced here because the browser is a screen rather than an overlay.
     actors.push(act!(text:
-        font("wendy"): settext("Find Content"):
+        font("wendy"): settext(crate::i18n::tr("ContentBrowser", "Title")):
         align(0.0, 0.5): xy(10.0, 15.0): zoom(0.6): horizalign(left):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z_TEXT)
     ));
@@ -659,7 +650,7 @@ fn push_header(actors: &mut Vec<Actor>, w: f32) {
 fn push_too_narrow(actors: &mut Vec<Actor>, w: f32, h: f32) {
     actors.push(act!(text:
         font("miso"):
-        settext("The content browser is built for a widescreen display.".to_owned()):
+        settext(crate::i18n::tr("ContentBrowser", "WidescreenRequired")):
         align(0.5, 0.5): xy(w * 0.5, h * 0.5): zoom(0.7): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8): z(Z_TEXT)
     ));
@@ -708,7 +699,7 @@ fn push_search_field(actors: &mut Vec<Actor>, state: &State, asset_manager: &Ass
     let lit = blink.is_multiple_of(2);
     let max_w = field_w - 200.0;
     let (line, alpha) = if state.query.is_empty() {
-        ("Search packs, chart authors and songs".to_owned(), 0.5)
+        (crate::i18n::tr("ContentBrowser", "MessageSearchPacksChartAuthorsAndSongs").to_string(), 0.5)
     } else {
         (state.query.clone(), 1.0)
     };
@@ -811,7 +802,7 @@ fn push_tabs(actors: &mut Vec<Actor>, state: &State) {
             diffuse(icon_ink[0], icon_ink[1], icon_ink[2], icon_ink[3]): z(Z_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext(entry.label()):
+            font("miso"): settext(super::localization::text(entry.label())):
             align(0.0, 0.5): xy(x + lo::TAB_LABEL_INSET, lo::TABS_Y): zoom(lo::TAB_LABEL_ZOOM):
             maxwidth(lo::TAB_W - lo::TAB_LABEL_INSET - 4.0): horizalign(left):
             diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_TEXT)
@@ -858,14 +849,14 @@ fn push_readout(actors: &mut Vec<Actor>, state: &State, w: f32) {
 /// The original's branches, in the original's order -- first match wins.
 fn readout_text(state: &State) -> String {
     match tab(state) {
-        Tab::Installed => format!("{} installed", state.installed.len()),
+        Tab::Installed => crate::i18n::tr_fmt("ContentBrowser", "MessageInstalled", &[("arg0", &(state.installed.len()).to_string())]).to_string(),
         // The rip stage has its own heading, and nothing to count or page.
         Tab::Rip => String::new(),
         // Never a status here. The year view says it is indexing with the
         // progress bar beside this line, and a second indicator that flips
         // between "indexing..." and a count reads as a glitch rather than as
         // progress.
-        Tab::Years => format!("{} packs", commify(state.results.len())),
+        Tab::Years => crate::i18n::tr_fmt("ContentBrowser", "MessagePacks", &[("arg0", &(commify(state.results.len())).to_string())]).to_string(),
         // The doubles view is not paged and has two counts, so it reports
         // neither here; its columns say how long they are themselves.
         Tab::Doubles if state.query.is_empty() => String::new(),
@@ -881,24 +872,15 @@ fn readout_text(state: &State) -> String {
             } else {
                 ""
             };
-            format!(
-                "{}{more} results for {:?}{still}",
-                commify(state.results.len()),
-                state.query
-            )
+            crate::i18n::tr_fmt("ContentBrowser", "MessageMoreResultsForStill", &[("arg0", &(commify(state.results.len())).to_string()), ("more", &(more).to_string()), ("arg1", &format!("{:?}", state.query)), ("still", &(still).to_string())]).to_string()
         }
         _ if state.snapshot.phase == CatalogPhase::Loading => {
-            format!("loading{}", spinner::ellipsis())
+            crate::i18n::tr_fmt("ContentBrowser", "MessageLoading", &[("arg0", &(spinner::ellipsis()).to_string())]).to_string()
         }
         // Nor a count over skeleton rows, which is a count of what is not
         // on screen yet.
         _ if state.results.is_empty() || awaiting_order(state) => String::new(),
-        _ => format!(
-            "Page {}/{}   -   {} packs",
-            list_page(state) + 1,
-            total_pages(state),
-            commify(state.results.len())
-        ),
+        _ => crate::i18n::tr_fmt("ContentBrowser", "MessagePagePacks", &[("arg0", &(list_page(state) + 1).to_string()), ("arg1", &(total_pages(state)).to_string()), ("arg2", &(commify(state.results.len())).to_string())]).to_string(),
     }
 }
 
@@ -944,7 +926,7 @@ fn push_context_band(actors: &mut Vec<Actor>, state: &State, w: f32) {
         diffuse(1.0, 1.0, 1.0, 0.05): z(Z_PANEL)
     ));
     actors.push(act!(text:
-        font("wendy"): settext(title):
+        font("wendy"): settext(super::localization::text(&title)):
         align(0.0, 0.5): xy(lo::BAND_TITLE_X, lo::BAND_TITLE_Y): zoom(0.42): horizalign(left):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_TEXT)
     ));
@@ -957,19 +939,14 @@ fn push_context_band(actors: &mut Vec<Actor>, state: &State, w: f32) {
         if busy && tab(state) == Tab::Beginner {
             // The count matters here: the walk reads about four packs for
             // every one it keeps, so "checking..." alone reads as stuck.
-            format!(
-                "{blurb}  Checking pack {} of {}{}",
-                state.beginner.checked.max(1),
-                state.beginner.candidates.max(1),
-                spinner::ellipsis()
-            )
+            crate::i18n::tr_fmt("ContentBrowser", "MessageBlurbCheckingPackOf", &[("blurb", &super::localization::text(&(blurb).to_string()).to_string()), ("arg0", &(state.beginner.checked.max(1)).to_string()), ("arg1", &(state.beginner.candidates.max(1)).to_string()), ("arg2", &(spinner::ellipsis()).to_string())]).to_string()
         } else if busy {
-            format!("{blurb}  Checking packs{}", spinner::ellipsis())
+            crate::i18n::tr_fmt("ContentBrowser", "MessageBlurbCheckingPacks", &[("blurb", &super::localization::text(&(blurb).to_string()).to_string()), ("arg0", &(spinner::ellipsis()).to_string())]).to_string()
         } else {
-            format!("{blurb}  {} found.", band_count(state))
+            crate::i18n::tr_fmt("ContentBrowser", "MessageBlurbFound", &[("blurb", &super::localization::text(&(blurb).to_string()).to_string()), ("arg0", &(band_count(state)).to_string())]).to_string()
         }
     } else {
-        format!("{:?} {blurb}", state.query)
+        format!("{:?} {}", state.query, super::localization::text(blurb))
     };
     actors.push(act!(text:
         font("miso"): settext(subtitle):
@@ -1101,10 +1078,10 @@ fn push_year_strip(actors: &mut Vec<Actor>, state: &State, w: f32) {
 /// reader was trying to read it.
 fn year_header(state: &State) -> String {
     let slice = match year_at(state.year_slot) {
-        Some(year) => format!("PACKS ADDED TO SMO IN {year}"),
-        None => format!("PACKS ADDED TO SMO BEFORE {}", lo::YEAR_FLOOR),
+        Some(year) => crate::i18n::tr_fmt("ContentBrowser", "MessagePACKSADDEDTOSMOINYear", &[("year", &(year).to_string())]).to_string(),
+        None => crate::i18n::tr_fmt("ContentBrowser", "MessagePACKSADDEDTOSMOBEFORE", &[("arg0", &(lo::YEAR_FLOOR).to_string())]).to_string(),
     };
-    format!("{slice}   {} packs", commify(state.results.len()))
+    crate::i18n::tr_fmt("ContentBrowser", "MessageSlicePacks", &[("slice", &(slice).to_string()), ("arg0", &(commify(state.results.len())).to_string())]).to_string()
 }
 
 /// How far through the catalogue the details walk has got.
@@ -1129,7 +1106,7 @@ fn push_featured(actors: &mut Vec<Actor>, state: &State, w: f32) {
     let card_w = lo::feat_card_w();
 
     actors.push(act!(text:
-        font("miso"): settext(featured_heading(state).to_owned()):
+        font("miso"): settext(super::localization::text(featured_heading(state))):
         align(0.0, 0.5): xy(lo::LIST_X, lo::FEAT_LABEL_Y): zoom(0.55): horizalign(left):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_TEXT)
     ));
@@ -1419,12 +1396,12 @@ fn push_more_mark(
 ) {
     let (label, rgba) = if finding {
         (
-            format!("finding more{}", spinner::ellipsis()),
+            crate::i18n::tr_fmt("ContentBrowser", "MessageFindingMore", &[("arg0", &(spinner::ellipsis()).to_string())]).to_string(),
             [0.6, 0.6, 0.6, 1.0],
         )
     } else {
         (
-            "&MENUDOWN; more".to_owned(),
+            crate::i18n::tr("ContentBrowser", "MessageMENUDOWNMore").to_string(),
             [accent[0], accent[1], accent[2], 1.0],
         )
     };
@@ -1457,7 +1434,7 @@ fn push_empty_state(actors: &mut Vec<Actor>, state: &State, top: f32) {
             .snapshot
             .message
             .clone()
-            .unwrap_or_else(|| "could not reach stepmaniaonline.net".to_owned());
+            .unwrap_or_else(|| crate::i18n::tr("ContentBrowser", "MessageCouldNotReachStepmaniaonlineNet").to_string());
         actors.push(act!(text:
             font("miso"): settext(message):
             align(0.0, 0.5): xy(lo::LIST_X, top + lo::ROW_H): zoom(0.55):
@@ -1465,7 +1442,7 @@ fn push_empty_state(actors: &mut Vec<Actor>, state: &State, top: f32) {
             diffuse(ERROR_RGBA[0], ERROR_RGBA[1], ERROR_RGBA[2], ERROR_RGBA[3]): z(Z_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext("SELECT to try again".to_owned()):
+            font("miso"): settext(crate::i18n::tr("ContentBrowser", "RetryHint")):
             align(0.0, 0.5): xy(lo::LIST_X, top + lo::ROW_H + 22.0): zoom(0.5): horizalign(left):
             diffuse(1.0, 1.0, 1.0, 0.5): z(Z_TEXT)
         ));
@@ -1500,7 +1477,7 @@ fn push_empty_state(actors: &mut Vec<Actor>, state: &State, top: f32) {
         "nothing matches that search"
     };
     actors.push(act!(text:
-        font("miso"): settext(message.to_owned()):
+        font("miso"): settext(super::localization::text(&message)):
         align(0.0, 0.5): xy(lo::LIST_X, top + lo::ROW_H): zoom(0.55): horizalign(left):
         diffuse(1.0, 1.0, 1.0, 0.55): z(Z_TEXT)
     ));
@@ -1563,12 +1540,12 @@ fn meta_line(state: &State, pack: &PackInfo) -> String {
             + why.map_or(0, |why| why.len() + "  -  ".len()),
     );
     if pack.song_count > 0 {
-        write!(line, "{} songs  -  ", pack.song_count).expect("writing to String cannot fail");
+        write!(line, "{}", crate::i18n::tr_fmt("ContentBrowser", "MessageSongse409b6", &[("arg0", &(pack.song_count).to_string())]).to_string()).expect("writing to String cannot fail");
     }
     line.push_str(&bytes);
     if let Some(date) = date {
-        line.push_str("  -  added ");
-        line.push_str(&date);
+        line.push(' ');
+        line.push_str(&crate::i18n::tr_fmt("ContentBrowser", "MessageAdded7e1639", &[("arg0", &date)]));
     }
     // Keep an empty explanation's separator too, just as the joined fields did.
     if let Some(why) = why {
@@ -1608,7 +1585,7 @@ pub(super) fn format_date(iso: &str, short: bool) -> String {
         return iso.to_owned();
     };
     let name = if short { &name[..3] } else { name };
-    format!("{name} {day}, {year}")
+    crate::i18n::tr_fmt("ContentBrowser", "MessageNameDayYear", &[("name", &super::localization::text(&(name).to_string()).to_string()), ("day", &(day).to_string()), ("year", &(year).to_string())]).to_string()
 }
 
 /// The original's `FormatBytes`: two decimals for GB, one for MB.
@@ -1617,11 +1594,11 @@ pub(super) fn format_bytes(bytes: u64) -> String {
     const GB: f64 = MB * 1024.0;
     let bytes = bytes as f64;
     if bytes >= GB {
-        format!("{:.2} GB", bytes / GB)
+        crate::i18n::tr_fmt("ContentBrowser", "Message2GB", &[("arg0", &format!("{:.2}", bytes / GB))]).to_string()
     } else if bytes >= MB {
-        format!("{:.1} MB", bytes / MB)
+        crate::i18n::tr_fmt("ContentBrowser", "Message1MB", &[("arg0", &format!("{:.1}", bytes / MB))]).to_string()
     } else {
-        format!("{:.0} KB", bytes / 1024.0)
+        crate::i18n::tr_fmt("ContentBrowser", "Message0KB", &[("arg0", &format!("{:.0}", bytes / 1024.0))]).to_string()
     }
 }
 
@@ -1655,7 +1632,7 @@ fn push_type_badge(actors: &mut Vec<Actor>, state: &State, pack: &PackInfo, list
     };
 
     actors.push(act!(text:
-        font("miso"): settext(text):
+        font("miso"): settext(super::localization::text(text)):
         align(0.0, 0.5):
         xy(lo::LIST_X + list_w - lo::ROW_TYPE_BADGE_INSET, y + lo::ROW_BADGE_Y):
         zoom(0.5): maxwidth(40.0): horizalign(left):
@@ -1674,7 +1651,7 @@ pub(super) fn push_status_badge(
     let accent = accent(state);
     let (text, rgba) = if let Some(install) = install_for(state, pack) {
         match install.phase {
-            InstallPhase::Queued => (TextContent::Static("queued"), META_RGBA),
+            InstallPhase::Queued => (TextContent::Shared(super::localization::text("queued")), META_RGBA),
             InstallPhase::Downloading => {
                 let pct = if install.total_bytes > 0 {
                     (install.downloaded_bytes as f64 / install.total_bytes as f64 * 100.0) as u32
@@ -1687,12 +1664,12 @@ pub(super) fn push_status_badge(
                     accent,
                 )
             }
-            InstallPhase::Extracting => (TextContent::Static("Installing"), accent),
-            InstallPhase::Installed => (TextContent::Static("Installed"), INSTALLED_NOW),
-            InstallPhase::Error => (TextContent::Static("Error"), ERROR_RGBA),
+            InstallPhase::Extracting => (TextContent::Shared(super::localization::text("Installing")), accent),
+            InstallPhase::Installed => (TextContent::Shared(super::localization::text("Installed")), INSTALLED_NOW),
+            InstallPhase::Error => (TextContent::Shared(super::localization::text("Error")), ERROR_RGBA),
         }
     } else if is_installed(state, pack) {
-        (TextContent::Static("In Library"), IN_LIBRARY)
+        (TextContent::Shared(super::localization::text("In Library")), IN_LIBRARY)
     } else {
         return;
     };
@@ -1806,7 +1783,7 @@ fn push_doubles(actors: &mut Vec<Actor>, state: &State) {
                 "Nothing here."
             };
             actors.push(act!(text:
-                font("miso"): settext(message.to_owned()):
+                font("miso"): settext(super::localization::text(&message)):
                 align(0.0, 0.5): xy(x + 4.0, top + 14.0): zoom(0.5): horizalign(left):
                 maxwidth(width - 12.0):
                 diffuse(0.55, 0.55, 0.55, 1.0): z(Z_TEXT)
@@ -1847,14 +1824,10 @@ fn push_installed(actors: &mut Vec<Actor>, state: &State, w: f32) {
     let focused = state.zone == Zone::Installed;
     let window = installed_page(state) * lo::INST_ROWS;
 
-    let mut heading = format!("{} PACKS IN YOUR LIBRARY", state.installed.len());
+    let mut heading = crate::i18n::tr_fmt("ContentBrowser", "MessagePACKSINYOURLIBRARY", &[("arg0", &(state.installed.len()).to_string())]).to_string();
     if state.installed.len() > lo::INST_ROWS {
         heading.push_str(
-            format!(
-                "   PAGE {}/{}",
-                installed_page(state) + 1,
-                installed_pages(state)
-            )
+            crate::i18n::tr_fmt("ContentBrowser", "MessagePAGE", &[("arg0", &(installed_page(state) + 1).to_string()), ("arg1", &(installed_pages(state)).to_string())]).to_string()
             .as_str(),
         );
     }
@@ -1867,7 +1840,7 @@ fn push_installed(actors: &mut Vec<Actor>, state: &State, w: f32) {
 
     if state.installed.is_empty() {
         actors.push(act!(text:
-            font("miso"): settext("No song packs found in your Songs folder.".to_owned()):
+            font("miso"): settext(crate::i18n::tr("ContentBrowser", "NoInstalledPacks")):
             align(0.5, 0.5): xy(w * 0.5, lo::INST_TOP + 60.0): zoom(0.6): horizalign(center):
             diffuse(0.7, 0.7, 0.7, 1.0): z(Z_TEXT)
         ));
@@ -1937,11 +1910,11 @@ fn push_installed(actors: &mut Vec<Actor>, state: &State, w: f32) {
         ));
 
         // What the game knows for certain, then what the catalogue adds.
-        let mut detail = format!("{} songs", entry.songs);
+        let mut detail = crate::i18n::tr_fmt("ContentBrowser", "MessageSongs", &[("arg0", &(entry.songs).to_string())]).to_string();
         if let Some(pack) = known {
             detail.push_str(format!("  -  {}", format_bytes(pack.size_bytes)).as_str());
             if let Some(date) = details_for(state, pack).and_then(|d| d.date_added.as_deref()) {
-                detail.push_str(format!("  -  added {}", format_date(date, true)).as_str());
+                detail.push_str(crate::i18n::tr_fmt("ContentBrowser", "MessageAdded7e1639", &[("arg0", &(format_date(date, true)).to_string())]).to_string().as_str());
             }
         }
         actors.push(act!(text:
@@ -1961,7 +1934,7 @@ fn push_installed(actors: &mut Vec<Actor>, state: &State, w: f32) {
             SyncPref::Default => ("sync: not set", [0.45, 0.45, 0.45, 1.0]),
         };
         actors.push(act!(text:
-            font("miso"): settext(chip.to_owned()):
+            font("miso"): settext(super::localization::text(chip)):
             align(1.0, 0.5): xy(x + cell_w - 10.0, y + 20.0): zoom(0.4): horizalign(right):
             diffuse(chip_rgba[0], chip_rgba[1], chip_rgba[2], chip_rgba[3]): z(Z_BADGE)
         ));
@@ -1971,7 +1944,7 @@ fn push_installed(actors: &mut Vec<Actor>, state: &State, w: f32) {
     // partial delete is the case worth reading.
     if let Some(note) = state.remove_result.as_deref() {
         actors.push(act!(text:
-            font("miso"): settext(note.to_owned()):
+            font("miso"): settext(super::localization::text(note)):
             align(1.0, 0.5): xy(w - lo::LIST_X - 16.0, lo::FEAT_LABEL_Y + 14.0): zoom(0.45):
             horizalign(right): maxwidth(w * 0.5):
             diffuse(0.8, 0.8, 0.8, 1.0): z(Z_TEXT)
@@ -2067,20 +2040,20 @@ fn pane_lines(state: &State, pack: &PackInfo) -> [String; 5] {
     let details = details_for(state, pack);
     let page = page_for(state, pack);
 
-    let mut songs = format!("{} songs", pack.song_count);
+    let mut songs = crate::i18n::tr_fmt("ContentBrowser", "MessageSongs", &[("arg0", &(pack.song_count).to_string())]).to_string();
     if let Some(charts) = page.and_then(|p| p.chart_count.as_deref()) {
-        songs.push_str(format!("   -   {charts} charts").as_str());
+        songs.push_str(crate::i18n::tr_fmt("ContentBrowser", "MessageChartsCharts", &[("charts", &(charts).to_string())]).to_string().as_str());
     }
 
     let mut size = format_bytes(pack.size_bytes);
     if let Some((low, high)) = page.and_then(deadsync_online::pack_page::PackPage::difficulty_span)
     {
-        size.push_str(format!("   -   difficulty {low} - {high}").as_str());
+        size.push_str(crate::i18n::tr_fmt("ContentBrowser", "MessageDifficultyLowHigh", &[("low", &(low).to_string()), ("high", &(high).to_string())]).to_string().as_str());
     }
 
     let added = details
         .and_then(|d| d.date_added.as_deref())
-        .map(|date| format!("Added to SMO on {}", format_date(date, false)))
+        .map(|date| crate::i18n::tr_fmt("ContentBrowser", "MessageAddedToSMOOn", &[("arg0", &(format_date(date, false)).to_string())]).to_string())
         .unwrap_or_default();
 
     let authors = match page {
@@ -2090,18 +2063,18 @@ fn pane_lines(state: &State, pack: &PackInfo) -> [String; 5] {
             if page.authors.len() > shown {
                 names.push_str(", ...");
             }
-            format!("charts by {names}")
+            crate::i18n::tr_fmt("ContentBrowser", "MessageChartsByNames", &[("names", &(names).to_string())]).to_string()
         }
         Some(_) => String::new(),
         None if state.page.pack_id == pack.id => match state.page.phase {
-            PagePhase::Loading => format!("loading details{}", spinner::ellipsis()),
-            PagePhase::Error => "could not load details".to_owned(),
+            PagePhase::Loading => crate::i18n::tr_fmt("ContentBrowser", "MessageLoadingDetails", &[("arg0", &(spinner::ellipsis()).to_string())]).to_string(),
+            PagePhase::Error => crate::i18n::tr("ContentBrowser", "MessageCouldNotLoadDetails").to_string(),
             PagePhase::Idle | PagePhase::Ready => String::new(),
         },
         None => String::new(),
     };
 
-    let sync = format!("sync: {}", smo_sync_of(pack).short());
+    let sync = crate::i18n::tr_fmt("ContentBrowser", "MessageSync", &[("arg0", &super::localization::text(smo_sync_of(pack).short()).to_string())]).to_string();
 
     [songs, size, added, authors, sync]
 }
@@ -2158,7 +2131,7 @@ fn push_pane_histogram(
 
     if let Some((low, high)) = page.difficulty_span() {
         actors.push(act!(text:
-            font("miso"): settext(format!("charts per difficulty  ({low} - {high})")):
+            font("miso"): settext(crate::i18n::tr_fmt("ContentBrowser", "MessageChartsPerDifficultyLowHigh", &[("low", &(low).to_string()), ("high", &(high).to_string())]).to_string()):
             align(0.5, 0.5): xy(x + w * 0.5, baseline + 16.0): zoom(0.5): horizalign(center):
             maxwidth(w - 16.0):
             diffuse(0.6, 0.6, 0.6, 1.0): z(Z_TEXT)
@@ -2291,7 +2264,7 @@ fn push_footer(actors: &mut Vec<Actor>, state: &State, w: f32) {
     // corner it takes is a setting -- so a credit anchored to either one
     // overlaps it for half the people who see it.
     actors.push(act!(text:
-        font("miso"): settext("pack data from stepmaniaonline.net"):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "PackDataCredit")):
         align(0.5, 0.5): xy(w * 0.5, lo::VERSION_Y + 14.0): zoom(lo::VERSION_ZOOM):
         horizalign(center):
         diffuse(0.55, 0.55, 0.55, 0.75): z(Z_TEXT)
@@ -2345,7 +2318,7 @@ fn footer_hint(state: &State) -> String {
         Zone::Installed => "UP/DOWN  LEFT/RIGHT browse   START sync   SELECT delete",
         Zone::List => "UP/DOWN browse   LEFT/RIGHT page   START details   SELECT reload",
     };
-    format!("{body}   {exit}")
+    format!("{}   {}", super::localization::text(body), super::localization::text(exit))
 }
 
 // --- transitions --------------------------------------------------------------

@@ -310,7 +310,7 @@ fn push_overlay_unreserved(actors: &mut Vec<Actor>, p: RenderParams<'_>) {
     // Hint text below the menu
     actors.push(act!(text:
         font(machine_font_key(p.machine_font, FontRole::Bold)):
-        settext(HINT_TEXT):
+        settext(super::localized_label(&deadlib_present::actors::TextContent::Static(HINT_TEXT))):
         align(0.5, 0.5):
         xy(cx, cy + HINT_Y_OFFSET):
         zoom(0.29):
@@ -423,7 +423,7 @@ fn render_row(
             // Category label
             let mut label_actor = act!(text:
                 font(machine_font_key(machine_font, FontRole::Bold)):
-                settext(*label):
+                settext(super::localized_label(&deadlib_present::actors::TextContent::Static(label))):
                 align(0.0, 0.5):
                 xy(left_x + 27.0, y):
                 zoom(0.4):
@@ -486,7 +486,7 @@ fn render_item_text(
     if !item.top_label.as_str().is_empty() {
         let mut top = act!(text:
             font(machine_font_key(machine_font, FontRole::Normal)):
-            settext(item.top_label.clone()):
+            settext(super::localized_label(&item.top_label)):
             align(0.0, 1.0):
             xy(x, y - 5.0):
             zoom(0.58):
@@ -500,7 +500,7 @@ fn render_item_text(
     }
     let mut bottom = act!(text:
         font(machine_font_key(machine_font, FontRole::Bold)):
-        settext(item.bottom_label.clone()):
+        settext(super::localized_label(&item.bottom_label)):
         align(0.0, 0.5):
         xy(x, y + 4.0):
         zoom(0.36):

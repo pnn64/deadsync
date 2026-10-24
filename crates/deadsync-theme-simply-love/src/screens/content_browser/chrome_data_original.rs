@@ -129,7 +129,7 @@ pub(super) fn push_footer(actors: &mut Vec<Actor>, state: &State, w: f32) {
     // corner it takes is a setting -- so a credit anchored to either one
     // overlaps it for half the people who see it.
     actors.push(act!(text:
-        font("miso"): settext("pack data from stepmaniaonline.net".to_owned()):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "PackDataCredit")):
         align(0.5, 0.5): xy(w * 0.5, lo::VERSION_Y + 14.0): zoom(lo::VERSION_ZOOM):
         horizalign(center):
         diffuse(0.55, 0.55, 0.55, 0.75): z(Z_TEXT)

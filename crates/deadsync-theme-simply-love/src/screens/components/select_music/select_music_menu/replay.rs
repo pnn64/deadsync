@@ -304,7 +304,7 @@ fn push_replay_overlay_unreserved(
     ));
     actors.push(act!(text:
         font(machine_font_key(machine_font, FontRole::Header)):
-        settext("Play Replay"):
+        settext(crate::i18n::tr("SelectMusic", "PlayReplay")):
         align(0.5, 0.5):
         xy(pane_cx, header_y):
         zoom(0.5):
@@ -314,7 +314,7 @@ fn push_replay_overlay_unreserved(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(format!("{} Local Scores", overlay.entries.len())):
+        settext(crate::i18n::tr_fmt("UiMessages", "LocalScores", &[("arg0", &(overlay.entries.len()).to_string())]).to_string()):
         align(0.5, 0.5):
         xy(pane_cx, GS_LEADERBOARD_PANE_HEIGHT.mul_add(-0.5, pane_cy) - 24.0):
         zoom(0.8):
@@ -432,7 +432,7 @@ fn push_replay_overlay_unreserved(
 
     actors.push(act!(text:
         font("miso"):
-        settext("START: PLAY REPLAY    BACK/SELECT: CANCEL"):
+        settext(crate::i18n::tr("SelectMusic", "ReplayHelpText")):
         align(0.5, 0.5):
         xy(screen_center_x(), screen_height() - 50.0):
         zoom(1.1):
