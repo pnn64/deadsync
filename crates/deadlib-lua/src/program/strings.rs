@@ -39,7 +39,7 @@ pub(super) fn same_cells(a: &Code, b: &Code) -> bool {
 // block. Byte equality deduplicates immutable data; cell indices still retain
 // the host's declared storage identities. Ordinary bool/number groups bypass
 // this construction entirely.
-pub(super) fn share(programs: Vec<Program>) -> Vec<Program> {
+pub(super) fn share(mut programs: Vec<Program>) -> Vec<Program> {
     let mut arena = Vec::new();
     let mut ids = HashMap::<&[u8], usize>::new();
     let mut mappings = Vec::with_capacity(programs.len());
@@ -60,25 +60,25 @@ pub(super) fn share(programs: Vec<Program>) -> Vec<Program> {
     }
     drop(ids);
     let arena: Arc<[Box<[u8]>]> = arena.into();
-    let mut result = Vec::with_capacity(programs.len());
     let mut rewritten = Vec::<(usize, Program)>::new();
-    for (program, mapping) in programs.into_iter().zip(mappings) {
+    for (program, mapping) in programs.iter_mut().zip(mappings) {
         // Keys are identities of still-owned input Arcs, never dereferenced.
         let identity = Arc::as_ptr(&program.0) as usize;
         if let Some((_, existing)) = rewritten.iter().find(|(id, _)| *id == identity) {
-            result.push(existing.clone());
+            *program = existing.clone();
             continue;
         }
-        let mut code = match Arc::try_unwrap(program.0) {
-            Ok(code) => code,
-            Err(code) => Code {
+        if Arc::get_mut(&mut program.0).is_none() {
+            let code = &program.0;
+            program.0 = Arc::new(Code {
                 ops: code.ops.clone(),
                 cells: code.cells.clone(),
                 parameters: code.parameters.clone(),
                 registers: code.registers,
                 strings: Strings::Shared(arena.clone()),
-            },
-        };
+            });
+        }
+        let code = Arc::get_mut(&mut program.0).expect("unique rewritten code");
         fn value(v: &mut Value, mapping: &[usize]) {
             if let Value::String(id) = v {
                 *id = mapping[*id];
@@ -113,9 +113,7 @@ pub(super) fn share(programs: Vec<Program>) -> Vec<Program> {
             }
         }
         code.strings = Strings::Shared(arena.clone());
-        let program = Program(Arc::new(code));
         rewritten.push((identity, program.clone()));
-        result.push(program);
     }
-    result
+    programs
 }

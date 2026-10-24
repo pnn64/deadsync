@@ -241,6 +241,54 @@ fn byte_cells_reject_transient_inputs_type_changes_and_incompatible_initial_cont
 }
 
 #[test]
+fn borrowed_byte_values_reuse_storage_without_merging_cells_or_changing_equality() {
+    for count in [3, 16, 17, 64] {
+        let (mut machine, payload) = {
+            let lua = Lua::new();
+            let callback: Function = lua.load("local s={};return function(e)local same=s.a==s.b;s.a=e.down and 'next' or s.a;return same and s.b==e.button end").eval().unwrap();
+            let mut bindings = Bindings {
+                arguments: vec![Binding::Object(0)],
+                upvalues: vec![Binding::Object(1)],
+                cells: vec![Cell::Bytes(0); count],
+                strings: vec![Box::from(&b"idle"[..])],
+                fields: vec![
+                    input("button", 0, Types::BYTES),
+                    input("down", 1, Types::BOOLEAN),
+                    property(1, "a", 0),
+                    property(1, "b", 1),
+                ],
+                ..Bindings::default()
+            };
+            let repeated = program::compile(&callback, &bindings).unwrap();
+            bindings.strings = (0..count)
+                .map(|index| format!("{index:04}").into_bytes().into_boxed_slice())
+                .collect();
+            bindings.cells = (0..count).map(Cell::Bytes).collect();
+            let distinct = program::compile(&callback, &bindings).unwrap();
+            (
+                repeated.machine(),
+                (repeated.retained_bytes(), distinct.retained_bytes()),
+            )
+        };
+        assert!(payload.0 < payload.1);
+        for (button, down, expected) in [
+            (b"idle".as_slice(), false, true),
+            (b"idle", true, true),
+            (b"idle", false, false),
+            (b"next", false, false),
+        ] {
+            assert_eq!(
+                machine
+                    .run(&[Datum::Bytes(button), Datum::Boolean(down)], |_, _| {})
+                    .unwrap(),
+                Datum::Boolean(expected)
+            );
+            assert_eq!(machine.cell(1), Some(Datum::Bytes(b"idle")));
+        }
+    }
+}
+
+#[test]
 fn prepared_schemas_preserve_binary_fields_cells_errors_and_released_loading_storage() {
     for count in [4, 31, 32, 65, 256] {
         let dropped = Arc::new(AtomicBool::new(false));

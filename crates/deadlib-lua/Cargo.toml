@@ -131,6 +131,10 @@ name = "prepared_schema"
 required-features = ["lua51"]
 
 [[example]]
+name = "program_storage"
+required-features = ["lua51"]
+
+[[example]]
 name = "serde"
 required-features = ["serde"]
 

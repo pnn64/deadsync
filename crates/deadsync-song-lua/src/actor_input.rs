@@ -328,8 +328,13 @@ fn compile_with_updates(
             else {
                 unreachable!("captured byte literal")
             };
-            let index = bindings.strings.len();
-            bindings.strings.push(value);
+            let index = if bindings.strings.last().is_some_and(|bytes| *bytes == value) {
+                bindings.strings.len() - 1
+            } else {
+                let index = bindings.strings.len();
+                bindings.strings.push(value);
+                index
+            };
             bindings.cells.push(program::Cell::Bytes(index));
         }
         lower(&bindings)?

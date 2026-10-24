@@ -307,17 +307,26 @@ pub(super) fn lower_with(
         fields: vec![None; bindings.fields.len()],
         actions: Vec::new(),
     };
+    let mut previous_bytes = None;
     for cell in &bindings.cells {
         let value = match cell {
             Cell::Boolean(v) => Value::Boolean(*v),
             Cell::Number(v) => Value::Number(v.to_bits()),
-            Cell::Bytes(index) => builder.literal(Literal::Bytes(
-                bindings
-                    .strings
-                    .get(*index)
-                    .ok_or(CompileError::InvalidBindings("cell string index"))?
-                    .clone(),
-            )),
+            Cell::Bytes(index) => {
+                if let Some((previous, value)) = previous_bytes
+                    && previous == *index
+                {
+                    value
+                } else {
+                    let bytes = bindings
+                        .strings
+                        .get(*index)
+                        .ok_or(CompileError::InvalidBindings("cell string index"))?;
+                    let value = builder.literal(Literal::Bytes(bytes.clone()));
+                    previous_bytes = Some((*index, value));
+                    value
+                }
+            }
         };
         builder.cells.push(value);
     }
