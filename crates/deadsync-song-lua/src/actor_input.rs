@@ -5,6 +5,7 @@ use mlua::{InspectionValue, Lua, Table};
 use rustc_hash::FxHashMap;
 
 pub(crate) mod update;
+mod tables;
 pub use update::SongLuaCompiledActorInteractions;
 
 /// An authored native actor write, in callback execution order.
@@ -52,7 +53,8 @@ pub struct SongLuaCompiledActorInputs {
 }
 
 impl SongLuaCompiledActorInputs {
-    /// Execute an input and apply its actor writes without Lua or allocation.
+    /// Execute an input and apply its actor writes without Lua. First writes of
+    /// new Boolean-table keys may allocate native storage.
     pub fn input(&mut self, input: &SongLuaInputEvent<'_>) -> bool {
         self.input_with_actions(input, |_| {})
     }
@@ -149,6 +151,15 @@ impl SongLuaCompiledActorInputs {
                 };
                 (*table, key.as_ref(), value)
             })
+    }
+
+    /// Declared native table identities and their present Boolean entries.
+    /// Nil entries are absent; byte keys and false values remain exact.
+    pub fn boolean_states(&self) -> impl Iterator<Item = (u32, &[u8], bool)> + '_ {
+        self.callbacks.boolean_objects().flat_map(|object| {
+            self.callbacks.boolean_entries(object).into_iter().flatten()
+                .map(move |(key, value)| (object, key, value))
+        })
     }
 
     /// Native owned payload, excluding allocator and Arc bookkeeping.
@@ -249,6 +260,9 @@ fn compile_with_updates(
                         return Ok(());
                     };
                     state_ids.insert(pointer, object);
+                    if table.raw_len() > 0 {
+                        tables::capture_array(&table, object, first_state_object, &indices, reserved, &mut state_ids, &mut bindings)?;
+                    } else {
                     table.for_each::<InspectionValue, InspectionValue>(|key, value| {
                         let InspectionValue::Bytes(name) = key else {
                             return Err(mlua::Error::runtime("native input state needs byte keys"));
@@ -283,6 +297,7 @@ fn compile_with_updates(
                         });
                         Ok(())
                     })?;
+                    }
                     object
                 };
                 upvalues.push(Binding::Object(object));

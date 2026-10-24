@@ -10,6 +10,9 @@ enum Symbol {
     StableBytes,
     Object(u32),
     Action(usize),
+    BooleanTable,
+    BooleanTableArray(usize),
+    NumberRange(i32, i32),
 }
 impl Symbol {
     fn types(self) -> Option<Types> {
@@ -18,13 +21,17 @@ impl Symbol {
             Self::Constant(v) => Some(v.types()),
             Self::Scalar(t) => Some(t),
             Self::StableBytes => Some(Types::BYTES),
-            Self::Object(_) => Some(Types::OBJECT),
+            Self::Object(_) | Self::BooleanTable | Self::BooleanTableArray(_) => Some(Types::OBJECT),
+            Self::NumberRange(_, _) => Some(Types::NUMBER),
             Self::Action(_) => Some(Types::ACTION),
         }
     }
     fn merge(self, other: Self) -> Self {
         if self == other {
             return self;
+        }
+        if let (Some((a,b)), Some((c,d))) = (self.integer_range(), other.integer_range()) {
+            return Self::NumberRange(a.min(c), b.max(d));
         }
         if self.stable_bytes() && other.stable_bytes() {
             return Self::StableBytes;
@@ -36,6 +43,18 @@ impl Symbol {
     }
     fn stable_bytes(self) -> bool {
         matches!(self, Self::StableBytes | Self::Constant(Value::String(_)))
+    }
+
+    fn integer_range(self) -> Option<(i32, i32)> {
+        match self {
+            Self::NumberRange(a,b) => Some((a,b)),
+            Self::Constant(Value::Number(bits)) => {
+                let value = f64::from_bits(bits);
+                (value.is_finite() && value.fract() == 0.0 && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX))
+                    .then_some((value as i32, value as i32))
+            }
+            _ => None,
+        }
     }
 }
 
@@ -53,6 +72,7 @@ struct Call<'a> {
 struct Builder<'a> {
     bindings: &'a Bindings,
     index: &'a Fields,
+    tables: Option<&'a Arc<tables::Layout>>,
     strings: Vec<Box<[u8]>>,
     cells: Vec<Value>,
     fields: Vec<Option<Resolved>>,
@@ -75,7 +95,12 @@ impl Builder<'_> {
     fn binding(&mut self, binding: &Binding) -> Result<Source, CompileError> {
         Ok(match binding {
             Binding::Literal(v) => Source::Value(self.literal(v.clone())),
-            Binding::Object(id) => Source::Value(Value::Object(*id)),
+            Binding::Object(id) => Source::Value(
+                self.tables.and_then(|tables| {
+                    tables.index(*id).map(Value::BooleanTable)
+                        .or_else(|| tables.array_index(*id).map(Value::BooleanTableArray))
+                }).unwrap_or(Value::Object(*id))
+            ),
             Binding::Cell(id) => {
                 if *id >= self.cells.len() {
                     return Err(CompileError::InvalidBindings("cell index"));
@@ -92,6 +117,8 @@ impl Builder<'_> {
     }
     fn symbol(&self, source: Source) -> Symbol {
         match source {
+            Source::Value(Value::BooleanTable(_)) => Symbol::BooleanTable,
+            Source::Value(Value::BooleanTableArray(index)) => Symbol::BooleanTableArray(index),
             Source::Value(Value::Object(id)) => Symbol::Object(id),
             Source::Value(v) => Symbol::Constant(v),
             Source::Cell(i) if matches!(self.cells[i], Value::String(_)) => Symbol::StableBytes,
@@ -242,12 +269,14 @@ pub(super) fn lower(prototype: Prototype<'_>, bindings: &Bindings) -> Result<Pro
         return Err(CompileError::InvalidBindings("upvalue count"));
     }
     let fields = Fields::new(&bindings.fields)?;
+    let tables = tables::Layout::new(bindings)?;
     lower_with(
         prototype,
         bindings,
         &bindings.arguments,
         &bindings.upvalues,
         &fields,
+        tables.as_ref(),
     )
 }
 
@@ -302,6 +331,7 @@ pub(super) fn lower_with(
     arguments: &[Binding],
     captures: &[Binding],
     fields: &Fields,
+    tables: Option<&Arc<tables::Layout>>,
 ) -> Result<Program, CompileError> {
     if prototype.upvalues != captures.len() {
         return Err(CompileError::InvalidBindings("upvalue count"));
@@ -309,6 +339,7 @@ pub(super) fn lower_with(
     let mut builder = Builder {
         bindings,
         index: fields,
+        tables,
         strings: Vec::new(),
         cells: Vec::with_capacity(bindings.cells.len()),
         fields: vec![None; bindings.fields.len()],
@@ -439,15 +470,36 @@ pub(super) fn lower_with(
                 } else {
                     (reg(&mut clear_registers, &symbols, b, pc)?, rk(&mut clear_registers, &symbols, &constants, c, pc)?.1)
                 };
-                let field = builder.field(object, key, pc)?;
-                set(&mut symbols, a, builder.field_symbol(field))?;
-                Op::Load {
-                    dst: a,
-                    source: builder.field_source(field),
-                    skip: false,
+                if object == Symbol::BooleanTable {
+                    require(key, Types::BYTES, pc)?;
+                    let key = rk(&mut clear_registers, &symbols, &constants, c, pc)?.0;
+                    set(&mut symbols, a, Symbol::Scalar(Types::NIL | Types::BOOLEAN))?;
+                    Op::ReadBooleanTable { dst: a, table: b, key }
+                } else if let Symbol::BooleanTableArray(array) = object {
+                    let len = builder.tables.expect("array schema").array(array).len();
+                    let Some((min,max)) = key.integer_range() else { return Err(unsupported(pc, "unproven array index")); };
+                    if min < 1 || max as usize > len { return Err(unsupported(pc, "array index range")); }
+                    let key = rk(&mut clear_registers, &symbols, &constants, c, pc)?.0;
+                    set(&mut symbols, a, Symbol::BooleanTable)?;
+                    Op::ReadBooleanTableArray { dst: a, array, key }
+                } else {
+                    let field = builder.field(object, key, pc)?;
+                    set(&mut symbols, a, builder.field_symbol(field))?;
+                    Op::Load {
+                        dst: a,
+                        source: builder.field_source(field),
+                        skip: false,
+                    }
                 }
             }
             7 | 8 | 9 => {
+                if opcode == 9 && symbols.get(a) == Some(&Symbol::BooleanTable) {
+                    let (key, key_type) = rk(&mut clear_registers, &symbols, &constants, b, pc)?;
+                    let (source, value_type) = rk(&mut clear_registers, &symbols, &constants, c, pc)?;
+                    require(key_type, Types::BYTES, pc)?;
+                    require(value_type, Types::NIL | Types::BOOLEAN, pc)?;
+                    Op::WriteBooleanTable { table: a, key, source }
+                } else {
                 let (target, source, symbol) = if opcode == 8 {
                     (
                         *upvalues.get(b).ok_or(CompileError::InvalidChunk)?,
@@ -479,6 +531,7 @@ pub(super) fn lower_with(
                 };
                 let cell = builder.write(target, symbol, pc)?;
                 Op::Write { cell, source }
+                }
             }
             11 => {
                 let receiver = reg(&mut clear_registers, &symbols, b, pc)?;
@@ -627,6 +680,7 @@ pub(super) fn lower_with(
     Ok(Program(Arc::new(Code {
         ops: ops.into_boxed_slice(),
         strings: Strings::Unique(builder.strings.into_boxed_slice()),
+        tables: tables.cloned(),
         cells: builder.cells.into_boxed_slice(),
         parameters: parameters.into_boxed_slice(),
         registers: prototype.registers,

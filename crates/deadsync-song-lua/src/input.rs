@@ -76,12 +76,12 @@ impl Callbacks {
 #[derive(Default)]
 struct RequiresRuntime;
 
+pub(crate) const RUNTIME_REQUIRED: &str =
+    "song Lua registers input callbacks and requires runtime Lua (context.live = true)";
+
 pub(crate) fn require_offline_compatible(lua: &Lua) -> Result<(), String> {
     if lua.app_data_ref::<RequiresRuntime>().is_some() {
-        Err(
-            "song Lua registers input callbacks and requires runtime Lua (context.live = true)"
-                .into(),
-        )
+        Err(RUNTIME_REQUIRED.into())
     } else {
         Ok(())
     }

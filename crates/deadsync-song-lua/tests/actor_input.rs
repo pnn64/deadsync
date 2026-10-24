@@ -4,7 +4,12 @@ use std::{path::Path, sync::Arc};
 type Kind = SongLuaOverlayKind<(), (), deadlib_present::actors::TextAttribute>;
 
 fn scene(source: &str) -> (SongLuaLiveScene, tempfile::TempDir) {
+    scene_files(source, &[])
+}
+
+fn scene_files(source: &str, files: &[(&str, &str)]) -> (SongLuaLiveScene, tempfile::TempDir) {
     let directory = tempfile::tempdir().unwrap();
+    for (name, contents) in files { std::fs::write(directory.path().join(name), contents).unwrap(); }
     let path = directory.path().join("input.lua");
     std::fs::write(&path, source).unwrap();
     let mut context = SongLuaCompileContext::new(directory.path(), "actor input test");
@@ -21,6 +26,62 @@ fn scene(source: &str) -> (SongLuaLiveScene, tempfile::TempDir) {
     )
     .unwrap();
     (compiled[0].live_scene.take().unwrap(), directory)
+}
+
+#[test]
+fn original_fof_input_handler_preserves_two_player_state_after_scene_destruction() {
+    let source = "local controller=LoadActor('controller.lua');return Def.ActorFrame{OnCommand=function() SCREENMAN:GetTopScreen():AddInputCallback(controller.handle_input) end}";
+    let (mut live, _dir) = scene_files(
+        source,
+        &[(
+            "controller.lua",
+            include_str!("fixtures/fof-input-system.lua"),
+        )],
+    );
+    let mut native = live
+        .compile_actor_inputs()
+        .expect("original handler lowers without rewriting its body");
+    let mut expected = Vec::new();
+    for index in 0..96 {
+        let input = SongLuaInputEvent {
+            player: [Some(0), Some(1), None][(index / 3) % 3],
+            controller: Some(0),
+            button: ["Left", "Right", "Up", "Down", "Other"][index % 5],
+            game_button: "Other",
+            kind: [
+                SongLuaInputType::FirstPress,
+                SongLuaInputType::Release,
+                SongLuaInputType::Repeat,
+            ][index % 3],
+            device: "InputDevice_Key",
+            device_button: "Key_left",
+            level: 1.0,
+            z: 0,
+            down: true,
+            ago: 0.0,
+            is_joystick: false,
+            is_mouse: false,
+        };
+        let (handled, output) = live.input(&input).unwrap();
+        assert!(output.errors.is_empty());
+        let snapshot = live.compile_actor_inputs().unwrap();
+        let mut state = snapshot
+            .boolean_states()
+            .map(|(object, key, value)| (object, key.to_vec(), value))
+            .collect::<Vec<_>>();
+        state.sort();
+        expected.push((input, handled, state));
+    }
+    drop(live);
+    for (input, handled, expected) in expected {
+        assert_eq!(native.input(&input), handled);
+        let mut state = native
+            .boolean_states()
+            .map(|(object, key, value)| (object, key.to_vec(), value))
+            .collect::<Vec<_>>();
+        state.sort();
+        assert_eq!(state, expected);
+    }
 }
 
 fn tracked(

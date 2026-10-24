@@ -25,7 +25,7 @@ impl Strings {
 }
 
 pub(super) fn same_cells(a: &Code, b: &Code) -> bool {
-    a.cells.len() == b.cells.len()
+    a.tables == b.tables && a.cells.len() == b.cells.len()
         && a.cells
             .iter()
             .zip(&b.cells)
@@ -81,6 +81,7 @@ pub(super) fn share(mut programs: Vec<Program>) -> Vec<Program> {
                 parameters: code.parameters.clone(),
                 registers: code.registers,
                 clear_registers: code.clear_registers,
+                tables: code.tables.clone(),
                 strings: Strings::Shared(arena.clone()),
             });
         }
@@ -115,6 +116,13 @@ pub(super) fn share(mut programs: Vec<Program>) -> Vec<Program> {
                     operand(right, &mapping);
                 }
                 Op::Call { result, .. } => value(result, &mapping),
+                Op::ReadBooleanTable { key, .. } => {
+                    operand(key, &mapping);
+                }
+                Op::WriteBooleanTable { key, source, .. } => {
+                    operand(key, &mapping);
+                    operand(source, &mapping);
+                }
                 _ => {}
             }
         }

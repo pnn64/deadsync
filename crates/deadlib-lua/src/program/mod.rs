@@ -16,7 +16,8 @@
 //! inputs or native cells indirectly, and must have the declared static return.
 //! Mutable cells keep one fixed primitive type. Byte cells store only compiled
 //! constants or values copied from other byte cells. String/number coercion,
-//! dynamic lookup, object equality, loops and general Lua calls are unsupported.
+//! unbound dynamic lookup, object equality, loops and general Lua calls are unsupported.
+//! Explicit raw Boolean tables support byte-keyed reads, writes and nil removal.
 //! An input frame is immutable for a complete call. Action arguments borrow
 //! its bytes or the program's owned constants without allocating.
 
@@ -26,6 +27,8 @@ pub use batch::BatchCompiler;
 mod decode;
 mod dedup;
 mod strings;
+mod tables;
+pub use tables::{BooleanTable, BooleanTableArray};
 use strings::Strings;
 
 use crate::Function;
@@ -143,6 +146,10 @@ pub struct Bindings {
     pub strings: Vec<Box<[u8]>>,
     pub fields: Vec<Field>,
     pub environment: Option<u32>,
+    /// Raw byte-keyed Boolean/nil tables, identified independently of values.
+    pub boolean_tables: Vec<BooleanTable>,
+    /// Immutable one-based arrays referencing the declared Boolean tables.
+    pub boolean_table_arrays: Vec<BooleanTableArray>,
 }
 
 /// Rejection at compilation; no authored callback body has run.
@@ -210,6 +217,8 @@ enum Value {
     InputString(usize),
     Object(u32),
     Action(u32),
+    BooleanTable(usize),
+    BooleanTableArray(usize),
 }
 impl Value {
     fn types(self) -> Types {
@@ -218,7 +227,7 @@ impl Value {
             Self::Boolean(_) => Types::BOOLEAN,
             Self::Number(_) => Types::NUMBER,
             Self::String(_) | Self::InputString(_) => Types::BYTES,
-            Self::Object(_) => Types::OBJECT,
+            Self::Object(_) | Self::BooleanTable(_) | Self::BooleanTableArray(_) => Types::OBJECT,
             Self::Action(_) => Types::ACTION,
         }
     }
@@ -313,6 +322,9 @@ enum Op {
         tail: bool,
     },
     Return(Option<usize>),
+    ReadBooleanTable { dst: usize, table: usize, key: Operand },
+    WriteBooleanTable { table: usize, key: Operand, source: Operand },
+    ReadBooleanTableArray { dst: usize, array: usize, key: Operand },
 }
 
 struct Code {
@@ -322,6 +334,7 @@ struct Code {
     parameters: Box<[Source]>,
     registers: usize,
     clear_registers: bool,
+    tables: Option<Arc<tables::Layout>>,
 }
 
 /// Immutable compiled callback. It contains Rust-owned code/data and no Lua
@@ -379,6 +392,7 @@ pub fn compile_bytecode(bytes: &[u8], bindings: &Bindings) -> Result<Program, Co
 pub struct Compiler<'a> {
     bindings: &'a Bindings,
     fields: compile::Fields,
+    tables: Option<Arc<tables::Layout>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -394,6 +408,7 @@ impl<'a> Compiler<'a> {
         Ok(Self {
             bindings,
             fields: compile::Fields::new(&bindings.fields)?,
+            tables: tables::Layout::new(bindings)?,
         })
     }
 
@@ -420,6 +435,7 @@ impl<'a> Compiler<'a> {
             arguments,
             upvalues,
             &self.fields,
+            self.tables.as_ref(),
         )
     }
 }
@@ -431,12 +447,14 @@ impl Program {
             program: self.clone(),
             cells: self.0.cells.to_vec().into_boxed_slice(),
             registers: vec![Value::Nil; self.0.registers].into_boxed_slice(),
+            tables: self.0.tables.as_ref().map(|tables| tables.state()),
         }
     }
 
     /// Owned code/data payload, excluding allocator bookkeeping and Arc counters.
     pub fn retained_bytes(&self) -> usize {
         self.code_bytes() + self.0.strings.retained_bytes()
+            + self.0.tables.as_ref().map_or(0, |tables| tables.retained_bytes())
     }
 
     fn code_bytes(&self) -> usize {
@@ -465,12 +483,13 @@ impl<'a> Arguments<'a> {
     }
 }
 
-/// A callback's explicit state and scratch space. Calls allocate no engine
-/// storage; host actions may allocate according to the host's own policy.
+/// A callback's explicit state and scratch space. Scalar calls allocate no engine
+/// storage. A new Boolean-table key may allocate; host actions follow their own policy.
 pub struct Machine {
     program: Program,
     cells: Box<[Value]>,
     registers: Box<[Value]>,
+    tables: Option<Box<tables::State>>,
 }
 impl Machine {
     /// Owned payload including code/data once; excludes allocator bookkeeping.
@@ -479,11 +498,29 @@ impl Machine {
             + self.program.retained_bytes()
             + size_of_val(self.cells.as_ref())
             + size_of_val(self.registers.as_ref())
+            + self.tables.as_ref().map_or(0, |tables| tables.retained_bytes())
     }
 
     /// Observe a scalar cell without exposing mutable or Lua-backed storage.
     pub fn cell(&self, index: usize) -> Option<Datum<'_>> {
         self.cells.get(index).map(|v| datum(*v, &self.program.0, &[]))
+    }
+
+    /// Present Boolean value, or nil, in a declared table. None means no table.
+    pub fn boolean(&self, object: u32, key: &[u8]) -> Option<Option<bool>> {
+        let index = self.program.0.tables.as_ref()?.index(object)?;
+        Some(self.tables.as_ref()?.get(index, key))
+    }
+
+    /// Present entries only; iteration order is unspecified.
+    pub fn boolean_entries(&self, object: u32) -> Option<impl Iterator<Item = (&[u8], bool)>> {
+        let index = self.program.0.tables.as_ref()?.index(object)?;
+        Some(self.tables.as_ref()?.entries(index))
+    }
+
+    /// Opaque identities of the declared Boolean tables.
+    pub fn boolean_objects(&self) -> impl Iterator<Item = u32> + '_ {
+        self.program.0.tables.as_ref().into_iter().flat_map(|tables| tables.objects())
     }
 
     /// Execute against actual immutable inputs and emit host actions in authored
@@ -497,6 +534,7 @@ impl Machine {
             &self.program.0,
             &mut self.cells,
             &mut self.registers,
+            &mut self.tables,
             inputs,
             emit,
             datum,
@@ -514,6 +552,7 @@ impl Machine {
             &self.program.0,
             &mut self.cells,
             &mut self.registers,
+            &mut self.tables,
             inputs,
             emit,
             |value, _, _| value.truthy(),
@@ -532,6 +571,7 @@ pub struct Group {
     programs: Box<[Program]>,
     cells: Box<[Value]>,
     registers: Box<[Value]>,
+    tables: Option<Box<tables::State>>,
 }
 
 impl Group {
@@ -550,12 +590,14 @@ impl Group {
         }
         let initial = programs.first().map_or(&[][..], |p| p.0.cells.as_ref());
         let cells = initial.to_vec().into_boxed_slice();
+        let tables = programs.first().and_then(|p| p.0.tables.as_ref()).map(|tables| tables.state());
         let registers =
             vec![Value::Nil; programs.iter().map(|p| p.0.registers).max().unwrap_or(0)].into_boxed_slice();
         Ok(Self {
             programs: programs.into_boxed_slice(),
             cells,
             registers,
+            tables,
         })
     }
 
@@ -576,6 +618,23 @@ impl Group {
         })
     }
 
+    /// Present Boolean value, or nil, in the group's shared declared table.
+    pub fn boolean(&self, object: u32, key: &[u8]) -> Option<Option<bool>> {
+        let index = self.programs.first()?.0.tables.as_ref()?.index(object)?;
+        Some(self.tables.as_ref()?.get(index, key))
+    }
+
+    /// Present entries only; iteration order is unspecified.
+    pub fn boolean_entries(&self, object: u32) -> Option<impl Iterator<Item = (&[u8], bool)>> {
+        let index = self.programs.first()?.0.tables.as_ref()?.index(object)?;
+        Some(self.tables.as_ref()?.entries(index))
+    }
+
+    /// Opaque identities in the group's shared Boolean-table layout.
+    pub fn boolean_objects(&self) -> impl Iterator<Item = u32> + '_ {
+        self.programs.first().and_then(|p| p.0.tables.as_ref()).into_iter().flat_map(|tables| tables.objects())
+    }
+
     /// Execute one program. None means an invalid program index and has no
     /// effects. Input errors retain preceding writes/actions, as in Machine.
     pub fn run<'a>(
@@ -589,6 +648,7 @@ impl Group {
             &program.0,
             &mut self.cells,
             &mut self.registers[..program.0.registers],
+            &mut self.tables,
             inputs,
             emit,
             datum,
@@ -608,6 +668,7 @@ impl Group {
             &program.0,
             &mut self.cells,
             &mut self.registers[..program.0.registers],
+            &mut self.tables,
             inputs,
             emit,
             |value, _, _| value.truthy(),
@@ -621,6 +682,12 @@ impl Group {
             + size_of_val(self.programs.as_ref())
             + size_of_val(self.cells.as_ref())
             + size_of_val(self.registers.as_ref())
+            + self.tables.as_ref().map_or(0, |tables| tables.retained_bytes())
+            + self.programs.iter().enumerate().filter(|(index, program)| {
+                program.0.tables.as_ref().is_some_and(|tables| {
+                    !self.programs[..*index].iter().any(|other| other.0.tables.as_ref().is_some_and(|previous| Arc::ptr_eq(previous, tables)))
+                })
+            }).map(|(_, program)| program.0.tables.as_ref().unwrap().retained_bytes()).sum::<usize>()
             + self
                 .programs
                 .iter()
@@ -652,6 +719,7 @@ fn execute<'a, R>(
     code: &'a Code,
     cells: &mut [Value],
     registers: &mut [Value],
+    tables: &mut Option<Box<tables::State>>,
     inputs: &'a [Datum<'a>],
     mut emit: impl FnMut(u32, Arguments<'_>),
     finish: impl FnOnce(Value, &'a Code, &'a [Datum<'a>]) -> R,
@@ -675,6 +743,21 @@ fn execute<'a, R>(
             Op::Move { dst, source } => registers[dst] = registers[source],
             Op::Nil { first, last } => registers[first..=last].fill(Value::Nil),
             Op::Write { cell, source } => cells[cell] = source.get(registers),
+            Op::ReadBooleanTable { dst, table, key } => {
+                let Value::BooleanTable(index) = registers[table] else { unreachable!("verified table") };
+                let Datum::Bytes(key) = datum(key.get(registers), code, inputs) else { unreachable!("verified table key") };
+                registers[dst] = tables.as_ref().expect("verified table state").read(index, key);
+            }
+            Op::WriteBooleanTable { table, key, source } => {
+                let Value::BooleanTable(index) = registers[table] else { unreachable!("verified table") };
+                let Datum::Bytes(key) = datum(key.get(registers), code, inputs) else { unreachable!("verified table key") };
+                tables.as_mut().expect("verified table state").write(index, key, source.get(registers));
+            }
+            Op::ReadBooleanTableArray { dst, array, key } => {
+                let index = key.get(registers).number() as usize;
+                let table = code.tables.as_ref().expect("verified array layout").array(array)[index - 1];
+                registers[dst] = Value::BooleanTable(table);
+            }
             Op::Method {
                 dst,
                 receiver,
@@ -795,6 +878,8 @@ fn datum<'a>(v: Value, code: &'a Code, inputs: &'a [Datum<'a>]) -> Datum<'a> {
         Value::String(i) => Datum::Bytes(&code.strings[i]),
         Value::InputString(i) => inputs[i],
         Value::Object(i) => Datum::Object(i),
+        Value::BooleanTable(i) => Datum::Object(code.tables.as_ref().expect("verified table layout").object(i)),
+        Value::BooleanTableArray(i) => Datum::Object(code.tables.as_ref().expect("verified array layout").array_object(i)),
         Value::Action(i) => Datum::Action(i),
     }
 }

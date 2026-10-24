@@ -410,6 +410,9 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
 }
 
 /// Compile all song layers with one session, retaining the independent-layer fallback.
+///
+/// This entry point preserves the requested execution mode. Application loading
+/// may use [`prepare_song_lua_with_runtime_fallback`] for interactive sources.
 pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     song: &SongData,
     context: &crate::SongLuaCompileContext,
@@ -446,6 +449,36 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
             |primary_ix| compile_song_lua_separately(song, primary_ix, &context, &compile_song_lua),
         )
     })
+}
+
+/// Prefer compiled playback, retrying input-dependent sources as one live
+/// session. The first runtime update waits for the gameplay clock handoff.
+/// Other compiler errors retain the ordinary preparation behavior.
+pub fn prepare_song_lua_with_runtime_fallback<S: Clone + std::fmt::Debug>(
+    song: &SongData,
+    context: &crate::SongLuaCompileContext,
+    compile_song_lua: impl Fn(
+        &Path,
+        &crate::SongLuaCompileContext,
+    ) -> Result<CompiledSongLua<S>, String>,
+    compile_song_lua_layers: impl Fn(
+        &[&Path],
+        usize,
+        &crate::SongLuaCompileContext,
+    ) -> Result<Vec<CompiledSongLua<S>>, String>,
+) -> PreparedGameplaySongLua<S> {
+    prepare_song_lua(
+        song,
+        context,
+        |path, context| {
+            crate::runtime_fallback::compile(context, |context| compile_song_lua(path, context))
+        },
+        |paths, primary, context| {
+            crate::runtime_fallback::compile(context, |context| {
+                compile_song_lua_layers(paths, primary, context)
+            })
+        },
+    )
 }
 
 /// Load the same song's replacement screen while transferring its Lua VM.

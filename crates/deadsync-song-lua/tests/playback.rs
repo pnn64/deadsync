@@ -1,6 +1,10 @@
 // Compile the production playback source with asset fixtures in an integration
 // crate. This avoids the library-unit-test identity cycle through deadsync-assets.
 pub use deadsync_song_lua::*;
+#[path = "../src/input.rs"]
+mod input;
+#[path = "../src/runtime_fallback.rs"]
+mod runtime_fallback;
 #[path = "../src/actor_quaternion.rs"]
 mod actor_quaternion;
 pub mod playback {

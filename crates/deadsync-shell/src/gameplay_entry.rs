@@ -322,9 +322,8 @@ pub fn song_lua_context(
     Ok(context)
 }
 
-/// Compile song Lua on the load worker into Rust playback data. Gameplay
-/// consumes the baked tracks and draws without retaining the compiler VM.
-/// Live scenes remain available through explicit diagnostic contexts.
+/// Prepare compiled song playback on the load worker, retaining authored Lua
+/// when input callbacks require runtime execution.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -353,7 +352,7 @@ pub fn prepare_song_lua(
             return PreparedGameplaySongLua::default();
         }
     };
-    deadsync_song_lua::playback::prepare_song_lua(
+    deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
         song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
     )

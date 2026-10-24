@@ -1,6 +1,15 @@
 # Fof Guys full replay result
 
-## Current production status (2026-10-19)
+## Update: 2026-10-24
+
+The October 19 status below is historical. A fresh 0.5.2364 application build
+produced an empty FoF scene after later compiled-only loading changes. The
+current fix restores loading/animation through a generic input-callback runtime
+fallback and adds detached native compilation of the original input handler.
+The full minigame still uses Lua. See the
+[current report](performance/2026-10-24-lua-fof.md) for measurements and limits.
+
+## Production status recorded on 2026-10-19
 
 Production now retains the shared Lua scene and executes the authored physics,
 input, timers, sounds and scene transitions. The source-specific Rust FOF

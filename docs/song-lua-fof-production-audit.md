@@ -1,6 +1,17 @@
 # Song Lua execution audit â€” 2026-10-19
 
-## Current execution policy
+## Update: 2026-10-24
+
+The dated policy below describes the October 19 implementation. Later changes
+made ordinary preparation compiled-only; a fresh 0.5.2364 application build
+dropped FoF's input-dependent scene. The new loading policy prefers compiled
+playback and retries the exact input-callback runtime requirement with a live
+scene. FoF startup/animation now passes in the normal application build. Generic
+native table support also compiles the original input handler independently;
+the complete FoF minigame still retains Lua. See the
+[current measurements and validation limits](performance/2026-10-24-lua-fof.md).
+
+## Execution policy recorded on 2026-10-19
 
 The source-verified FOF adapter described below has been removed. It was a
 handwritten implementation of that program, not a general Lua compiler.

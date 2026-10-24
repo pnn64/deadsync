@@ -66,6 +66,7 @@ mod player_options;
 mod rage_file;
 pub use rage_file::create_rage_file_util_table;
 mod runtime;
+mod runtime_fallback;
 mod runtime_mod;
 mod sl;
 mod song_tables;

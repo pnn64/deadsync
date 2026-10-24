@@ -14,6 +14,7 @@ fn fingerprint(code: &Code, strings: u64) -> u64 {
     code.ops.hash(&mut hash);
     code.parameters.hash(&mut hash);
     code.cells.hash(&mut hash);
+    code.tables.hash(&mut hash);
     code.registers.hash(&mut hash);
     code.clear_registers.hash(&mut hash);
     strings.hash(&mut hash);
@@ -26,6 +27,7 @@ fn same(a: &Code, b: &Code) -> bool {
         && a.ops == b.ops
         && a.parameters == b.parameters
         && a.cells == b.cells
+        && a.tables == b.tables
         && a.strings[..] == b.strings[..]
 }
 

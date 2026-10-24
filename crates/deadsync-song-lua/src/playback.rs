@@ -62,7 +62,7 @@ mod prepare;
 #[path = "playback/native.rs"]
 mod native;
 use deadlib_assets::present_dsl::cover_sprite;
-pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, reload_song_lua, song_lua_sound_paths};
+pub use prepare::{PreparedGameplaySongLua, prepare_song_lua, prepare_song_lua_with_runtime_fallback, reload_song_lua, song_lua_sound_paths};
 use prepare::{SongLuaOverlayEaseWindowRuntime, SongLuaSoundEvent};
 use smallvec::SmallVec;
 static NEXT_SONG_LUA_AFT_ID: AtomicU64 = AtomicU64::new(1);

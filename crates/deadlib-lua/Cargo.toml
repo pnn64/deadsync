@@ -135,6 +135,10 @@ name = "program_storage"
 required-features = ["lua51"]
 
 [[example]]
+name = "owned_tables"
+required-features = ["lua51"]
+
+[[example]]
 name = "serde"
 required-features = ["serde"]
 
