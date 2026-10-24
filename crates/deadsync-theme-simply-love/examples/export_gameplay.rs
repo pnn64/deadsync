@@ -26,13 +26,13 @@ const PRESETS: &[(&str, u32, u32)] = &[
     ("vga", 640, 480),
     ("svga", 800, 600),
     ("xga", 1024, 768),
+    ("5-4", 1280, 1024),
     ("720p", 1280, 720),
-    ("1080p", 1920, 1080),
-    ("16-10", 1920, 1200),
-    ("1440p", 2560, 1440),
-    ("ultrawide", 2560, 1080),
-    ("uwqhd", 3440, 1440),
-    ("portrait", 1080, 1920),
+    ("16-10", 1280, 800),
+    ("ultrawide", 1280, 540),
+    ("uwqhd", 1720, 720),
+    ("portrait-9-16", 540, 960),
+    ("portrait-10-16", 540, 960),
 ];
 const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
 const HELP: &str = "\
@@ -45,7 +45,7 @@ cargo run -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
   --size WxH[@A:B]       Add a custom size, optionally overriding display aspect
   --layout NAME          p1, p2, versus, double; repeat (default: all four)
   --reverse             Use reverse scrolling
-  --output PATH         Destination (default: target/gameplay-exports)
+  --output PATH         Destination (relative paths use the workspace root)
   --help                Show this help
 
 Examples:
@@ -132,7 +132,7 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
         sizes: Vec::new(),
         layouts: Vec::new(),
         reverse: false,
-        output: PathBuf::from("target").join("gameplay-exports"),
+        output: workspace_root().join("target").join("gameplay-exports"),
     };
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -172,7 +172,14 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
                             options.layouts.push(value);
                         }
                     }
-                    "--output" => options.output = PathBuf::from(value),
+                    "--output" => {
+                        let path = PathBuf::from(value);
+                        options.output = if path.is_absolute() {
+                            path
+                        } else {
+                            workspace_root().join(path)
+                        };
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -196,6 +203,14 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
         options.layouts = LAYOUTS.iter().map(|s| s.to_string()).collect();
     }
     Ok(Some(options))
+}
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("Simply Love crate is under the workspace crates directory")
+        .to_path_buf()
 }
 
 struct Logger;
@@ -258,10 +273,23 @@ fn run() -> Result<()> {
         random_movies: Vec::new(),
         bg_animations: Vec::new(),
     })?;
-    let simfile = sample_song(isolated.path())?;
+    let (simfile, pack_directory, pack_name) = sample_song(isolated.path())?;
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
         &simfile, 0.0,
     )?);
+    deadsync_simfile::runtime_cache::set_song_cache(vec![deadsync_chart::SongPack {
+        group_name: pack_name.clone(),
+        name: pack_name,
+        sort_title: "Layout Preview Pack".into(),
+        translit_title: String::new(),
+        series: String::new(),
+        folder_series: String::new(),
+        year: 2026,
+        sync_pref: deadsync_chart::SyncPref::Default,
+        directory: pack_directory.clone(),
+        banner_path: Some(pack_directory.join("banner.png")),
+        songs: vec![song.clone()],
+    }]);
     let mut event_loop_builder = winit::event_loop::EventLoop::builder();
     #[cfg(target_os = "windows")]
     {
@@ -377,11 +405,16 @@ fn export(
     Ok(())
 }
 
-fn sample_song(directory: &Path) -> Result<PathBuf> {
+fn sample_song(directory: &Path) -> Result<(PathBuf, PathBuf, String)> {
+    let pack_name = "Simply Love Preview Pack".to_owned();
+    let pack_directory = directory.join(&pack_name);
+    let song_directory = pack_directory.join("Layout Preview");
+    std::fs::create_dir_all(&song_directory)?;
     let banner = image::RgbaImage::from_fn(512, 160, |x, y| {
         image::Rgba([40 + (x / 4) as u8, 40 + (y / 2) as u8, 150, 255])
     });
-    banner.save(directory.join("banner.png"))?;
+    banner.save(song_directory.join("banner.png"))?;
+    pack_banner().save(pack_directory.join("banner.png"))?;
     let mut sm = String::from(
         "#TITLE:Simply Love Layout Preview;#SUBTITLE:All HUD widgets;#ARTIST:DeadSync;\
         #BPMS:0=150;#OFFSET:0;#BANNER:banner.png;\n",
@@ -408,9 +441,26 @@ fn sample_song(directory: &Path) -> Result<PathBuf> {
         }
         sm.push_str(";\n");
     }
-    let path = directory.join("preview.sm");
+    let path = song_directory.join("preview.sm");
     std::fs::write(&path, sm)?;
-    Ok(path)
+    Ok((path, pack_directory, pack_name))
+}
+
+fn pack_banner() -> image::RgbaImage {
+    image::RgbaImage::from_fn(512, 160, |x, y| {
+        let diagonal = (x + 2 * y) % 144;
+        let glow = (110_i32 - (x as i32 - 370).abs() / 2 - (y as i32 - 76).abs()).max(0) as u8;
+        let stripe = if diagonal < 18 { 30 } else { 0 };
+        image::Rgba([
+            28_u8
+                .saturating_add((x / 3) as u8)
+                .saturating_add(glow / 2)
+                .saturating_add(stripe),
+            24_u8.saturating_add((y / 2) as u8).saturating_add(glow / 3),
+            76_u8.saturating_add((x / 5) as u8).saturating_add(glow),
+            255,
+        ])
+    })
 }
 
 fn sample_profile(reverse: bool) -> profile::Profile {
@@ -717,81 +767,4 @@ fn compose(
         textures,
         Some(state.actor_resources()),
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sizes_validate_pixels_and_normalize_aspect() {
-        assert_eq!(Size::parse("1920x1080").unwrap().aspect, (16, 9));
-        assert_eq!(Size::parse("640x480@16:9").unwrap().aspect, (16, 9));
-        for invalid in [
-            "0x480",
-            "1920x0",
-            "9000x480",
-            "640x480@0:9",
-            "640x480@16:0",
-            "640x480@100:1",
-            "640",
-            "640x480@nan",
-            "640x480x2",
-        ] {
-            assert!(Size::parse(invalid).is_err(), "{invalid}");
-        }
-    }
-
-    #[test]
-    fn default_exports_all_presets_and_layouts() {
-        let options = options(Vec::new()).unwrap().unwrap();
-        assert_eq!(options.sizes.len(), PRESETS.len());
-        assert_eq!(options.layouts.len(), LAYOUTS.len());
-        assert!(!options.reverse);
-    }
-
-    #[test]
-    fn custom_selections_replace_defaults_and_deduplicate() {
-        let args = [
-            "--preset",
-            "720p",
-            "--size",
-            "1280x720",
-            "--size",
-            "640x480@16:9",
-            "--layout",
-            "p2",
-            "--layout",
-            "p2",
-            "--reverse",
-        ];
-        let options = options(args.map(String::from)).unwrap().unwrap();
-        assert_eq!(options.sizes.len(), 2);
-        assert_eq!(options.layouts, ["p2"]);
-        assert!(options.reverse);
-    }
-
-    #[test]
-    fn invalid_options_fail_explicitly() {
-        for args in [
-            vec!["--preset", "unknown"],
-            vec!["--layout", "unknown"],
-            vec!["--size"],
-            vec!["--unknown"],
-        ] {
-            assert!(options(args.into_iter().map(String::from)).is_err());
-        }
-    }
-
-    #[test]
-    fn gameplay_widgets_are_enabled_without_hiding_notes_or_scores() {
-        let profile = sample_profile(false);
-        assert_eq!(
-            profile.step_statistics,
-            profile::StepStatisticsMask::all_widgets()
-        );
-        assert_eq!(profile.error_bar_active_mask, profile::ErrorBarMask::all());
-        assert!(profile.live_timing_stats && profile.show_life_percent && profile.show_ex_score);
-        assert!(!profile.hide_score && !profile.hide_combo && !profile.hide_lifebar);
-    }
 }

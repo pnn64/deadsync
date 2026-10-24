@@ -64,8 +64,9 @@ layout list. Valid layouts are `p1`, `p2`, `versus`, and `double`.
 
 ### Output
 
-The default destination is `target\gameplay-exports`, relative to your current
-working directory:
+The default destination is `<workspace-root>\target\gameplay-exports`. Relative
+`--output` paths are also resolved from the workspace root, regardless of
+whether you start the exporter with `cargo run` or `cargo test`:
 
 ```text
 target\gameplay-exports\
@@ -89,6 +90,8 @@ peak NPS, banners, song information, duration, step counts, and judgment counts.
 It also enables FA+/EX presentation, timing/error displays, live timing stats,
 life percentage, scorebox, cues, countdowns, run timer, and a subtractive mini
 indicator. Sample judgment, combo, life, offset, and heart-rate data are supplied.
+The preview also creates a synthetic pack banner and registers it in an isolated
+song catalog, so the Pack Info image is included above the pack title.
 
 Normal gameplay visibility rules still apply. For example, step statistics are
 not forced onto unsupported aspect ratios, and widgets requiring external score
@@ -96,14 +99,33 @@ or hardware data do not acquire that data. Mutually exclusive display modes are
 represented by one selection, not superimposed. This is a layout inspection
 tool, not a pixel-golden assertion suite or a replay of a real score.
 
-## Automated tests
+## Export-only snapshot tests
 
-Run the exporter's argument validation and HUD configuration tests without
-starting graphics:
+Snapshot exports are opt-in: ordinary `cargo test` runs do not run the exporter.
+Run it explicitly with the command below (or with `cargo run --example` as shown
+above). Selecting all targets with `cargo test --all-targets` also explicitly
+includes examples and can run the exporter.
+
+The snapshot command only exports PNG files and the gallery for manual visual
+inspection. It does not compare actual images against expected images, golden
+files, or left/right values:
 
 ```powershell
 cargo test -p deadsync-theme-simply-love --example export_gameplay
 ```
+
+This runs the same exporter as `cargo run`, including graphics initialization.
+It fails only if exporting fails (for example, invalid arguments, unavailable
+graphics, or a file-write error). Pass exporter options after `--`:
+
+```powershell
+cargo test -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p --layout p1
+```
+
+## Separate automated layout checks
+
+These are ordinary assertion-based tests, separate from the export-only
+snapshots:
 
 Run the focused step-statistics layout tests:
 

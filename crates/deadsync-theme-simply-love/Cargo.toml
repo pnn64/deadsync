@@ -7,6 +7,11 @@ license = "GPL-3.0"
 [features]
 test-support = []
 
+[[example]]
+name = "export_gameplay"
+harness = false
+test = false
+
 [dependencies]
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }

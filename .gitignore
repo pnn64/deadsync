@@ -84,3 +84,5 @@ rust-performance.md
 /tests/fixtures/full_song_lua/ce1da310466ea79a289cb1ddf0cbf2e4994bde69967d6e128d30f8136b45b049.tar.zst
 /tests/fixtures/full_song_lua/7aa17e101f7ccd476d60cb9b1ed462ab68444d878fc1d8ed466d8fb4347316c0.tar.zst
 /tests/fixtures/full_song_lua/64727f8e25081f8a66aea85242c43958278e43bbca2e89b72a3c4577c1a4ad1d.tar.zst
+
+/crates/deadsync-theme-simply-love/target
