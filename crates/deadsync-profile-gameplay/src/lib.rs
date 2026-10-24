@@ -58,6 +58,14 @@ pub const fn gameplay_play_style_from_profile(
         deadsync_profile::PlayStyle::PumpDouble => {
             deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
         }
+        deadsync_profile::PlayStyle::Couple => deadsync_gameplay::GameplayInputPlayStyle::Couple,
+        deadsync_profile::PlayStyle::Routine => deadsync_gameplay::GameplayInputPlayStyle::Routine,
+        deadsync_profile::PlayStyle::PumpCouple => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpCouple
+        }
+        deadsync_profile::PlayStyle::PumpRoutine => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine
+        }
     }
 }
 
@@ -396,8 +404,14 @@ pub const fn song_lua_compile_play_style(
             deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
         deadsync_gameplay::GameplayInputPlayStyle::Double
-        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => {
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
+        | deadsync_gameplay::GameplayInputPlayStyle::Routine
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine => {
             deadsync_gameplay::SongLuaCompilePlayStyle::Double
+        }
+        deadsync_gameplay::GameplayInputPlayStyle::Couple
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpCouple => {
+            deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
     }
 }
@@ -508,6 +522,10 @@ pub fn song_lua_compile_context(
         deadsync_gameplay::GameplayInputPlayStyle::PumpSingle => "pump-single",
         deadsync_gameplay::GameplayInputPlayStyle::PumpVersus => "pump-versus",
         deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => "pump-double",
+        deadsync_gameplay::GameplayInputPlayStyle::Couple => "couple",
+        deadsync_gameplay::GameplayInputPlayStyle::Routine => "routine",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpCouple => "pump-couple",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine => "pump-routine",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;

@@ -868,6 +868,7 @@ mod tests {
     #[inline(always)]
     fn make_tap(row_index: usize, grade: JudgeGrade, time_error_ms: f32) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column: 0,
@@ -891,6 +892,7 @@ mod tests {
     #[inline(always)]
     fn make_hold_note(row_index: usize, note_type: NoteType, held: bool) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column: 0,
@@ -931,6 +933,7 @@ mod tests {
     #[inline(always)]
     fn make_mine(row_index: usize) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column: 0,

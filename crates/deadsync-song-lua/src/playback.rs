@@ -14677,8 +14677,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         f32,
         [(usize, f32); 2],
     ) = match play_style {
-        deadsync_gameplay::GameplayInputPlayStyle::Versus
-        | deadsync_gameplay::GameplayInputPlayStyle::PumpVersus => {
+        style if style.is_versus() => {
             let (
                 p1_x,
                 p1_player_source,

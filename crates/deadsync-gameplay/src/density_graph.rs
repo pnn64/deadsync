@@ -13,12 +13,12 @@ pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepSt
         GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
             StepStatsPlayStyle::Single
         }
-        GameplayInputPlayStyle::Double | GameplayInputPlayStyle::PumpDouble => {
-            StepStatsPlayStyle::Double
-        }
-        GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus => {
-            StepStatsPlayStyle::Versus
-        }
+        GameplayInputPlayStyle::Double | GameplayInputPlayStyle::PumpDouble
+        | GameplayInputPlayStyle::Routine
+        | GameplayInputPlayStyle::PumpRoutine => StepStatsPlayStyle::Double,
+        GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus
+        | GameplayInputPlayStyle::Couple
+        | GameplayInputPlayStyle::PumpCouple => StepStatsPlayStyle::Versus,
     }
 }
 

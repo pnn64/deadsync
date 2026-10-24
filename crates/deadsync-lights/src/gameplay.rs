@@ -229,6 +229,7 @@ mod tests {
 
     fn test_note(note_type: NoteType, can_be_judged: bool, is_fake: bool) -> Note {
         Note {
+            participant: None,
             beat: 0.0,
             quantization_idx: 0,
             column: 0,

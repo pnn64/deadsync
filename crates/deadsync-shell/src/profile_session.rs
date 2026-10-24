@@ -43,8 +43,8 @@ pub(crate) const fn profile_selection_session_plan(
         } else {
             PlayerSide::P2
         },
-        p1_joined,
-        p2_joined,
+        p1_joined: p1_joined || current_style.is_couple() || current_style.is_routine(),
+        p2_joined: p2_joined || current_style.is_couple() || current_style.is_routine(),
         play_style: play_style_for_joined(current_style, p1_joined, p2_joined),
     }
 }
@@ -56,7 +56,7 @@ pub const fn gameplay_combo_carry_updates(
         return [None; MAX_PLAYERS];
     }
     match context.play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => [
+        PlayStyle::Versus | PlayStyle::PumpVersus | PlayStyle::Couple | PlayStyle::PumpCouple => [
             match context.player_combos[0] {
                 Some(combo) => Some(ComboCarryUpdate {
                     side: PlayerSide::P1,
@@ -72,7 +72,9 @@ pub const fn gameplay_combo_carry_updates(
                 None => None,
             },
         ],
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => [
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => [
             match context.player_combos[0] {
                 Some(combo) => Some(ComboCarryUpdate {
                     side: context.active_side,
@@ -108,10 +110,12 @@ pub const fn course_last_played_sides(
     active_side: PlayerSide,
 ) -> [Option<PlayerSide>; MAX_PLAYERS] {
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => [Some(PlayerSide::P1), Some(PlayerSide::P2)],
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
-            [Some(active_side), None]
+        PlayStyle::Versus | PlayStyle::PumpVersus | PlayStyle::Couple | PlayStyle::PumpCouple => {
+            [Some(PlayerSide::P1), Some(PlayerSide::P2)]
         }
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => [Some(active_side), None],
     }
 }
 

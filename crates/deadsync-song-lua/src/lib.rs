@@ -483,6 +483,8 @@ fn song_lua_style_info_normalized(normalized: &str) -> SongLuaStyleInfo {
         "pumpversus" => ("versus", "StepsType_Pump_Single", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
         "pumpdouble" | "stepstypepumpdouble" =>
             ("double", "StepsType_Pump_Double", "StyleType_OnePlayerTwoSides", &SONG_LUA_PUMP_DOUBLE_X),
+        "pumpcouple" | "stepstypepumpcouple" =>
+            ("couple", "StepsType_Pump_Couple", "StyleType_TwoPlayersTwoSides", &SONG_LUA_PUMP_COLUMN_X),
         "pumproutine" | "stepstypepumproutine" =>
             ("routine", "StepsType_Pump_Routine", "StyleType_TwoPlayersSharedSides", &SONG_LUA_PUMP_DOUBLE_X),
         _ => ("single", "StepsType_Dance_Single", "StyleType_OnePlayerOneSide", &SONG_LUA_COLUMN_X),

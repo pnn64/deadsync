@@ -3,7 +3,7 @@ use deadsync_config::theme::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayStyle;
 
-pub const CHOICE_COUNT: usize = 3;
+pub const CHOICE_COUNT: usize = 5;
 pub const CHOICE_ZOOM_UNFOCUSED: f32 = 0.5;
 pub const CHOICE_ZOOM_FOCUSED: f32 = 1.0;
 pub const CHOICE_ZOOM_TWEEN_SECONDS: f32 = 0.125;
@@ -14,6 +14,8 @@ pub enum Choice {
     Single,
     Versus,
     Double,
+    Couple,
+    Routine,
 }
 
 impl Choice {
@@ -22,7 +24,9 @@ impl Choice {
         match index {
             0 => Self::Single,
             1 => Self::Versus,
-            _ => Self::Double,
+            2 => Self::Double,
+            3 => Self::Couple,
+            _ => Self::Routine,
         }
     }
 
@@ -32,9 +36,13 @@ impl Choice {
             (GameFlag::Dance, Self::Single) => PlayStyle::Single,
             (GameFlag::Dance, Self::Versus) => PlayStyle::Versus,
             (GameFlag::Dance, Self::Double) => PlayStyle::Double,
+            (GameFlag::Dance, Self::Couple) => PlayStyle::Couple,
+            (GameFlag::Dance, Self::Routine) => PlayStyle::Routine,
             (GameFlag::Pump, Self::Single) => PlayStyle::PumpSingle,
             (GameFlag::Pump, Self::Versus) => PlayStyle::PumpVersus,
             (GameFlag::Pump, Self::Double) => PlayStyle::PumpDouble,
+            (GameFlag::Pump, Self::Couple) => PlayStyle::PumpCouple,
+            (GameFlag::Pump, Self::Routine) => PlayStyle::PumpRoutine,
         }
     }
 
@@ -47,6 +55,8 @@ impl Choice {
             PlayStyle::PumpSingle => 0,
             PlayStyle::PumpVersus => 1,
             PlayStyle::PumpDouble => 2,
+            PlayStyle::Couple | PlayStyle::PumpCouple => 3,
+            PlayStyle::Routine | PlayStyle::PumpRoutine => 4,
         }
     }
 }
@@ -211,13 +221,17 @@ mod tests {
     }
 
     #[test]
-    fn dance_and_pump_styles_share_three_choice_positions() {
-        assert_eq!(CHOICE_COUNT, 3);
+    fn dance_and_pump_styles_share_five_choice_positions() {
+        assert_eq!(CHOICE_COUNT, 5);
         assert_eq!(Choice::index_for_style(PlayStyle::Single), 0);
         assert_eq!(Choice::index_for_style(PlayStyle::PumpSingle), 0);
         assert_eq!(Choice::index_for_style(PlayStyle::Versus), 1);
         assert_eq!(Choice::index_for_style(PlayStyle::PumpVersus), 1);
         assert_eq!(Choice::index_for_style(PlayStyle::Double), 2);
         assert_eq!(Choice::index_for_style(PlayStyle::PumpDouble), 2);
+        assert_eq!(Choice::index_for_style(PlayStyle::Couple), 3);
+        assert_eq!(Choice::index_for_style(PlayStyle::PumpCouple), 3);
+        assert_eq!(Choice::index_for_style(PlayStyle::Routine), 4);
+        assert_eq!(Choice::index_for_style(PlayStyle::PumpRoutine), 4);
     }
 }

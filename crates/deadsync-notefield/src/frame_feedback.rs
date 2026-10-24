@@ -1356,6 +1356,7 @@ mod tests {
 
     fn note(column: usize) -> Note {
         Note {
+            participant: None,
             beat: 0.0,
             quantization_idx: 0,
             column,

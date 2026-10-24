@@ -646,7 +646,13 @@ fn compose_field_contents<S, F>(
         let body_flipped = hold_plan.body_flipped;
         let y_head = hold_plan.y_head;
         let y_tail = hold_plan.y_tail;
-        let hold_diffuse = hold_plan.diffuse;
+        let mut hold_diffuse = hold_plan.diffuse;
+        if let Some(owner) = note.participant {
+            let tint = routine_note_tint(owner, 1.0);
+            for channel in 0..3 {
+                hold_diffuse[channel] *= tint[channel];
+            }
+        }
         let head_anchor_y = hold_plan.head_anchor_y;
         let head_anchor_travel = hold_plan.head_anchor_travel;
         let head_anchor_adjusted_travel = travel.adjusted_hold_anchor(
@@ -1344,7 +1350,10 @@ fn compose_visible_notes<S, F>(
                                 note_rotation_y,
                                 flat_tap_face_rotation_y,
                                 note_rotation_z,
-                                [1.0, 1.0, 1.0, note_alpha],
+                                note.participant
+                                    .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                        routine_note_tint(owner, note_alpha)
+                                    }),
                                 glow_alpha,
                                 crate::style::NOTE_Z,
                                 world_z,
@@ -1373,7 +1382,10 @@ fn compose_visible_notes<S, F>(
                             note_rotation_y,
                             flat_tap_face_rotation_y,
                             note_rotation_z,
-                            [1.0, 1.0, 1.0, note_alpha],
+                            note.participant
+                                .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                    routine_note_tint(owner, note_alpha)
+                                }),
                             glow_alpha,
                             crate::style::NOTE_Z,
                             world_z,
@@ -1415,7 +1427,10 @@ fn compose_visible_notes<S, F>(
                             note_rotation_y,
                             flat_tap_face_rotation_y,
                             note_rotation_z,
-                            [1.0, 1.0, 1.0, note_alpha],
+                            note.participant
+                                .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                    routine_note_tint(owner, note_alpha)
+                                }),
                             glow_alpha,
                             crate::style::NOTE_Z,
                             world_z,
@@ -1462,7 +1477,11 @@ fn compose_visible_notes<S, F>(
                             rotation_y_deg: flat_tap_face_rotation_y,
                             model_rotation_z_deg: rotation + note_rotation_z,
                             sprite_rotation_z_deg: rotation + note_rotation_z,
-                            tint: [1.0, 1.0, 1.0, note_alpha],
+                            tint: note
+                                .participant
+                                .map_or([1.0, 1.0, 1.0, note_alpha], |owner| {
+                                    routine_note_tint(owner, note_alpha)
+                                }),
                             glow_alpha,
                             blend: BlendMode::Alpha,
                             z: crate::style::NOTE_Z,
@@ -2693,3 +2712,12 @@ mod dynamic_sudden_tests {
 #[cfg(test)]
 #[path = "mesh_capture_performance.rs"]
 mod capture_performance;
+
+// Ownership is independent of pad position: Routine partners may cross sides.
+fn routine_note_tint(owner: u8, alpha: f32) -> [f32; 4] {
+    if owner == 0 {
+        [0.45, 0.75, 1.0, alpha]
+    } else {
+        [1.0, 0.5, 0.65, alpha]
+    }
+}

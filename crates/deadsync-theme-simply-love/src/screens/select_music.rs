@@ -2047,7 +2047,7 @@ fn sync_versus_music_selection(state: &mut State, song: &SongData, chart_type: &
 
     let p1_music = song.chart_music_path(chart_type, state.selected_steps_index);
     let p2_music = song.chart_music_path(chart_type, state.p2_selected_steps_index);
-    if p1_music == p2_music {
+    if p1_music == p2_music && !state.session.play_style.is_couple() {
         return;
     }
 
@@ -5119,7 +5119,11 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
             profile_data::PlayStyle::Double
             | profile_data::PlayStyle::Versus
             | profile_data::PlayStyle::PumpDouble
-            | profile_data::PlayStyle::PumpVersus => true,
+            | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => true,
             profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
                 state.session.side_joined(if is_p2 {
                     profile_data::PlayerSide::P2
@@ -5281,9 +5285,10 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         (profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle, true) => {
             Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
         }
-        (profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble, true) => {
-            Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE])
-        }
+        (profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine, true,
+        ) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
         _ => None,
     };
     let playlists = if state.playlist_library.is_empty() {
@@ -5382,7 +5387,11 @@ fn show_pad_config_overlay(state: &mut State) {
         profile_data::PlayStyle::Double
         | profile_data::PlayStyle::Versus
         | profile_data::PlayStyle::PumpDouble
-        | profile_data::PlayStyle::PumpVersus => (true, true),
+        | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => (true, true),
         profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => (
             state.session.side_joined(profile_data::PlayerSide::P1),
             state.session.side_joined(profile_data::PlayerSide::P2),
@@ -7283,7 +7292,9 @@ const fn steps_index_for_side(
 ) -> usize {
     match (play_style, side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple,
             profile_data::PlayerSide::P2,
         ) => p2_selected_steps_index,
         _ => selected_steps_index,
@@ -7299,7 +7310,9 @@ const fn set_steps_index_for_side(
     if matches!(
         (play_style, side),
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                | profile_data::PlayStyle::Couple
+                | profile_data::PlayStyle::PumpCouple,
             profile_data::PlayerSide::P2
         )
     ) {
@@ -7516,7 +7529,9 @@ fn hide_sync_overlay(state: &mut State) {
 const fn selected_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple,
             profile_data::PlayerSide::P2,
         ) => state.p2_selected_steps_index,
         _ => state.selected_steps_index,
@@ -7527,7 +7542,9 @@ const fn selected_steps_index_for_sync(state: &State) -> usize {
 const fn preferred_steps_index_for_sync(state: &State) -> usize {
     match (state.session.play_style, state.session.player_side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple,
             profile_data::PlayerSide::P2,
         ) => state.p2_preferred_difficulty_index,
         _ => state.preferred_difficulty_index,
@@ -7538,7 +7555,9 @@ const fn preferred_steps_index_for_sync(state: &State) -> usize {
 const fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
     match (state.session.play_style, state.session.player_side) {
         (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus,
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple,
             profile_data::PlayerSide::P2,
         ) => {
             state.p2_selected_steps_index = steps_index;
@@ -14298,13 +14317,15 @@ pub fn push_actors(
     if state.test_input_overlay_visible {
         let play_style = state.session.play_style;
         let (mut show_p1, mut show_p2, pad_spacing) = match play_style {
-            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
-                (true, true, 105.0)
-            }
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => (true, true, 105.0),
             profile_data::PlayStyle::Single
             | profile_data::PlayStyle::Versus
             | profile_data::PlayStyle::PumpSingle
-            | profile_data::PlayStyle::PumpVersus => (
+            | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple => (
                 state.session.side_joined(profile_data::PlayerSide::P1),
                 state.session.side_joined(profile_data::PlayerSide::P2),
                 125.0,

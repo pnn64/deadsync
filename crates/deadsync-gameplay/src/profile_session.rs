@@ -7,6 +7,10 @@ pub enum GameplayInputPlayStyle {
     PumpSingle,
     PumpVersus,
     PumpDouble,
+    Couple,
+    Routine,
+    PumpCouple,
+    PumpRoutine,
 }
 
 impl GameplayInputPlayStyle {
@@ -14,10 +18,10 @@ impl GameplayInputPlayStyle {
     #[must_use]
     pub const fn cols_per_player(self) -> usize {
         match self {
-            Self::Single | Self::Versus => 4,
-            Self::Double => 8,
-            Self::PumpSingle | Self::PumpVersus => 5,
-            Self::PumpDouble => 10,
+            Self::Single | Self::Versus | Self::Couple => 4,
+            Self::Double | Self::Routine => 8,
+            Self::PumpSingle | Self::PumpVersus | Self::PumpCouple => 5,
+            Self::PumpDouble | Self::PumpRoutine => 10,
         }
     }
 
@@ -25,33 +29,79 @@ impl GameplayInputPlayStyle {
     #[must_use]
     pub const fn player_count(self) -> usize {
         match self {
-            Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
-            Self::Versus | Self::PumpVersus => 2,
+            Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble
+            | Self::Routine
+            | Self::PumpRoutine => 1,
+            Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple => 2,
+        }
+    }
+
+    /// Number of human participants; Routine has one shared scoring field.
+    #[must_use]
+    pub const fn participant_count(self) -> usize {
+        if matches!(self, Self::Routine | Self::PumpRoutine) {
+            2
+        } else {
+            self.player_count()
         }
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn total_cols(self) -> usize {
-        self.cols_per_player() * self.player_count()
+        match self {
+            Self::Routine => 8,
+            Self::PumpRoutine => 10,
+            _ => self.cols_per_player() * self.player_count(),
+        }
+    }
+
+    /// Map an authored chart lane to a scoring field. Couple is one chart
+    /// split across pads; Versus gives each participant a separate chart.
+    #[must_use]
+    pub const fn runtime_column(self, chart_column: usize, player: usize) -> Option<usize> {
+        if player >= self.player_count() {
+            return None;
+        }
+        let width = self.cols_per_player();
+        if matches!(self, Self::Couple | Self::PumpCouple) {
+            if chart_column / width == player {
+                Some(chart_column)
+            } else {
+                None
+            }
+        } else if chart_column < width {
+            Some(chart_column + player * width)
+        } else {
+            None
+        }
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_pump(self) -> bool {
-        matches!(self, Self::PumpSingle | Self::PumpVersus | Self::PumpDouble)
+        matches!(self, Self::PumpSingle
+                | Self::PumpVersus
+                | Self::PumpDouble
+                | Self::PumpCouple
+                | Self::PumpRoutine
+        )
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_versus(self) -> bool {
-        matches!(self, Self::Versus | Self::PumpVersus)
+        matches!(self, Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple
+        )
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_double(self) -> bool {
-        matches!(self, Self::Double | Self::PumpDouble)
+        matches!(
+            self,
+            Self::Double | Self::PumpDouble | Self::Routine | Self::PumpRoutine
+        )
     }
 
     #[inline(always)]
@@ -234,7 +284,9 @@ pub const fn gameplay_runtime_player_is_p2(
             GameplayInputPlayStyle::Single
                 | GameplayInputPlayStyle::Double
                 | GameplayInputPlayStyle::PumpSingle
-                | GameplayInputPlayStyle::PumpDouble,
+                | GameplayInputPlayStyle::PumpDouble
+                | GameplayInputPlayStyle::Routine
+                | GameplayInputPlayStyle::PumpRoutine,
             GameplayInputPlayerSide::P2
         )
     )

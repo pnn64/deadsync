@@ -2126,14 +2126,18 @@ fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
     let is_p2_single = profile_data::is_single_p2_side(play_style, hud.player_side);
 
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => {
             append_player_markers(state, actors, 0, MarkerPlacement::P1, play_style, false);
             append_player_markers(state, actors, 1, MarkerPlacement::P2, play_style, false);
         }
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => {
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             let placement = if is_p2_single {
                 MarkerPlacement::P2
             } else {

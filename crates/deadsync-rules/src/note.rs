@@ -129,6 +129,8 @@ pub fn advance_hold_life_ns(
 
 #[derive(Clone, Debug)]
 pub struct Note {
+    /// Routine ownership; regular notes use the field's player.
+    pub participant: Option<u8>,
     pub beat: f32,
     pub quantization_idx: u8,
     pub column: usize,
@@ -246,6 +248,7 @@ mod tests {
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column,
