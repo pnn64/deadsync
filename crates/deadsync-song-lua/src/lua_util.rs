@@ -2027,7 +2027,7 @@ fn actor_def_children(
     let mut children = smallvec::SmallVec::<[(Value, Table); 16]>::new();
     // XmlFileUtil::XNodeFromTableRecursive visits raw array entries until the
     // first nil, then lua_next. Its duplicate range counts tables, not slots.
-    for index in 1_i64.. {
+    for index in 1.. {
         match source.raw_get::<Value>(index)? {
             Value::Nil => break,
             Value::Table(child) => children.push((Value::Integer(index), child)),
@@ -10417,7 +10417,7 @@ pub fn install_actor_tap_note_methods(lua: &Lua, actor: &Table) -> mlua::Result<
                     actor.get::<Option<Function>>("__songlua_did_tap_note_callback")?
                 {
                     let mut callback_args = MultiValue::new();
-                    callback_args.push_back(Value::Integer(i64::from(column)));
+                    callback_args.push_back(Value::Integer(column.into()));
                     callback_args.push_back(score);
                     callback_args.push_back(Value::Boolean(bright));
                     let _ = callback.call::<Value>(callback_args)?;
@@ -10653,7 +10653,7 @@ pub fn install_actor_wrapper_query_methods(lua: &Lua, actor: &Table) -> mlua::Re
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 let Some(index) = method_arg(&args, 0).cloned().and_then(|value| match value {
-                    Value::Integer(value) => Some(value),
+                    Value::Integer(value) => Some(i64::from(value)),
                     Value::Number(value) => Some(value as i64),
                     _ => None,
                 }) else {
@@ -11010,7 +11010,7 @@ fn adopt_actor_child(parent: &Table, child: &Table) -> mlua::Result<()> {
 
 fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let (_, children) = actor_def_children(lua, actor)?;
-    let mut indices = smallvec::SmallVec::<[i64; 16]>::new();
+    let mut indices = smallvec::SmallVec::<[mlua::Integer; 16]>::new();
     actor.for_each::<Value, Value>(|key, _value| {
         if let Value::Integer(index) = key
             && index > 0
@@ -18843,7 +18843,7 @@ fn read_function_upvalue(
     }
 }
 
-fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
+fn restore_function_action_tables(_lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
     for cell in snapshot.cells.sequence_values::<Table>() {
         let cell = cell?;
         let function = cell.raw_get::<Function>(1)?;
@@ -23850,7 +23850,7 @@ pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
                 return Ok((Value::Nil, Value::Nil));
             };
             let Some(index) = args.get(1).cloned().and_then(|value| match value {
-                Value::Integer(value) => Some(value),
+                Value::Integer(value) => Some(i64::from(value)),
                 Value::Number(value) => Some(value as i64),
                 _ => None,
             }) else {

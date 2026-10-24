@@ -6,6 +6,7 @@ pub fn json_to_lua_value(lua: &Lua, value: serde_json::Value) -> mlua::Result<Va
         serde_json::Value::Bool(value) => Value::Boolean(value),
         serde_json::Value::Number(value) => value
             .as_i64()
+            .and_then(|value| mlua::Integer::try_from(value).ok())
             .map(Value::Integer)
             .or_else(|| value.as_f64().map(Value::Number))
             .unwrap_or(Value::Nil),
