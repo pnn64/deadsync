@@ -53,8 +53,8 @@ Examples:
   cargo run -p deadsync-theme-simply-love --example export_gameplay -- --size 640x480@16:9
 
 Outputs: <destination>/<resolution-and-aspect>/<layout>/gameplay[-reverse].png
-and gameplay-hmr[-reverse].png, shown side by side in the gallery.
-and an index.html gallery. Settings and sample song data are isolated.";
+and gameplay-hmr[-reverse].png, shown side by side in the gallery. P1/P2
+also include <layout>-centered variants. An index.html gallery is generated.";
 
 #[derive(Clone, Debug, PartialEq)]
 struct Size {
@@ -347,66 +347,90 @@ fn export(
         backend.resize(size.width, size.height);
         backend.set_default_projection(metrics.projection());
         for layout in &options.layouts {
-            let folder = options.output.join(size.name()).join(layout);
-            std::fs::create_dir_all(&folder)?;
-            gallery.push_str("<div class=\"pair\">");
-            for (show_scorebox, stem, mode_caption) in
-                [(true, "gameplay", ""), (false, "gameplay-hmr", " HMR")]
-            {
-                let mut state = sample_state(
-                    song.clone(),
-                    logical_width,
-                    logical_height,
-                    layout,
-                    options.reverse,
-                    show_scorebox,
-                )?;
-                preload_noteskins(&state, &mut assets, &mut backend)?;
-                let context = CaptureTextures {
-                    assets: &assets,
-                    keys: RefCell::default(),
-                };
-                drop(compose(&mut state, &assets, &metrics, &context));
-                let missing: Vec<_> = context
-                    .keys
-                    .into_inner()
-                    .into_iter()
-                    .filter(|key| !assets.has_uploaded_texture_key(key))
-                    .collect();
-                for key in missing {
-                    load_texture(&mut assets, &mut backend, &key, false)?;
-                }
-                let frame = compose(&mut state, &assets, &metrics, assets.texture_context());
-                backend.request_screenshot();
-                backend.draw(&frame, assets.textures(), false)?;
-                let image = backend.capture_frame()?;
-                if image.dimensions() != (size.width, size.height) {
-                    return Err(format!(
-                        "capture returned {:?}, expected {}x{}",
-                        image.dimensions(),
-                        size.width,
-                        size.height
-                    )
-                    .into());
-                }
-                let filename = format!(
-                    "{stem}{}.png",
-                    if options.reverse { "-reverse" } else { "" }
-                );
-                let output = folder.join(&filename);
-                image.save(&output)?;
-                println!("{}", output.display());
-                let url = format!("{}/{layout}/{filename}", size.name());
-                gallery.push_str(&format!(
-                    "<figure><figcaption>{} - {}:{} - {layout}{mode_caption}{}\
-                    </figcaption><a href=\"{url}\"><img loading=\"lazy\" src=\"{url}\"></a></figure>",
-                    size.name(),
-                    size.aspect.0,
-                    size.aspect.1,
-                    if options.reverse { " (reverse)" } else { "" }
-                ));
+            let mut variants = vec![(layout.to_string(), false)];
+            if matches!(layout.as_str(), "p1" | "p2") {
+                variants.push((format!("{layout}-centered"), true));
             }
-            gallery.push_str("</div>");
+            for (export_layout, center_single_notefield) in variants {
+                let folder = options.output.join(size.name()).join(&export_layout);
+                std::fs::create_dir_all(&folder)?;
+                gallery.push_str("<div class=\"pair\">");
+                for (show_scorebox, stem, mode_caption) in
+                    [(true, "gameplay", ""), (false, "gameplay-hmr", " HMR")]
+                {
+                    let mut state = sample_state(
+                        song.clone(),
+                        logical_width,
+                        logical_height,
+                        layout,
+                        options.reverse,
+                        show_scorebox,
+                        center_single_notefield,
+                    )?;
+                    preload_noteskins(&state, &mut assets, &mut backend)?;
+                    let context = CaptureTextures {
+                        assets: &assets,
+                        keys: RefCell::default(),
+                    };
+                    drop(compose(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        &context,
+                        center_single_notefield,
+                    ));
+                    let missing: Vec<_> = context
+                        .keys
+                        .into_inner()
+                        .into_iter()
+                        .filter(|key| !assets.has_uploaded_texture_key(key))
+                        .collect();
+                    for key in missing {
+                        load_texture(&mut assets, &mut backend, &key, false)?;
+                    }
+                    let frame = compose(
+                        &mut state,
+                        &assets,
+                        &metrics,
+                        assets.texture_context(),
+                        center_single_notefield,
+                    );
+                    backend.request_screenshot();
+                    backend.draw(&frame, assets.textures(), false)?;
+                    let image = backend.capture_frame()?;
+                    if image.dimensions() != (size.width, size.height) {
+                        return Err(format!(
+                            "capture returned {:?}, expected {}x{}",
+                            image.dimensions(),
+                            size.width,
+                            size.height
+                        )
+                        .into());
+                    }
+                    let filename = format!(
+                        "{stem}{}.png",
+                        if options.reverse { "-reverse" } else { "" }
+                    );
+                    let output = folder.join(&filename);
+                    image.save(&output)?;
+                    println!("{}", output.display());
+                    let url = format!("{}/{export_layout}/{filename}", size.name());
+                    let centered_caption = if center_single_notefield {
+                        " (centered single-player playfield)"
+                    } else {
+                        ""
+                    };
+                    gallery.push_str(&format!(
+                        "<figure><figcaption>{} - {}:{} - {export_layout}{mode_caption}{centered_caption}{}\
+                        </figcaption><a href=\"{url}\"><img loading=\"lazy\" src=\"{url}\"></a></figure>",
+                        size.name(),
+                        size.aspect.0,
+                        size.aspect.1,
+                        if options.reverse { " (reverse)" } else { "" }
+                    ));
+                }
+                gallery.push_str("</div>");
+            }
         }
     }
     std::fs::write(options.output.join("index.html"), gallery)?;
@@ -414,7 +438,16 @@ fn export(
     backend.cleanup();
     println!(
         "Exported {} PNGs. Gallery: {}",
-        options.sizes.len() * options.layouts.len() * 2,
+        options.sizes.len()
+            * options
+                .layouts
+                .iter()
+                .map(|layout| if matches!(layout.as_str(), "p1" | "p2") {
+                    4
+                } else {
+                    2
+                })
+                .sum::<usize>(),
         options.output.join("index.html").display()
     );
     Ok(())
@@ -525,6 +558,7 @@ fn sample_state(
     layout: &str,
     reverse: bool,
     show_scorebox: bool,
+    center_single_notefield: bool,
 ) -> Result<gameplay::State> {
     let (play_style, side) = match layout {
         "p1" => (GameplayInputPlayStyle::Single, GameplayInputPlayerSide::P1),
@@ -568,6 +602,7 @@ fn sample_state(
     init.runtime.play_style = theme_style;
     init.runtime.player_side = theme_side;
     init.runtime.joined = joined;
+    init.runtime.policy.center_single_notefield = center_single_notefield;
     init.hud.play_style = theme_style;
     init.hud.player_side = theme_side;
     init.hud.p1.joined = joined[0];
@@ -802,11 +837,13 @@ fn compose(
     assets: &AssetManager,
     metrics: &Metrics,
     textures: &impl TextureContext,
+    center_single_notefield: bool,
 ) -> RenderFrame {
     let mut actors: Vec<Actor> = Vec::new();
     let mut song = state.song_scratch.take().expect("song scratch");
     let mut hud = state.frame_scratch.take().expect("HUD scratch");
-    let view = gameplay::ActorViewOverride::default();
+    let mut view = gameplay::ActorViewOverride::default();
+    view.notefield.force_center_1player = center_single_notefield;
     let visual = Default::default();
     let segments = deadsync_song_lua::playback::compose_frame(
         &mut actors,
