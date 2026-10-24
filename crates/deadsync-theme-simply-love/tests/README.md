@@ -7,7 +7,7 @@ renderer). Run commands from the repository root.
 ## Export gameplay screenshots
 
 ```powershell
-cargo run -p deadsync-theme-simply-love --example export_gameplay
+cargo test -p deadsync-theme-simply-love --example export_gameplay
 ```
 
 The exporter generates PNGs of the actual Simply Love gameplay presentation,
@@ -18,62 +18,33 @@ uses a hidden window.
 
 By default, every resolution preset is exported for P1, P2, versus, and doubles:
 
-| Preset | Pixels | Aspect |
-| --- | --- | --- |
-| `vga` | 640 x 480 | 4:3 |
-| `svga` | 800 x 600 | 4:3 |
-| `xga` | 1024 x 768 | 4:3 |
-| `720p` | 1280 x 720 | 16:9 |
-| `1080p` | 1920 x 1080 | 16:9 |
-| `16-10` | 1920 x 1200 | 16:10 |
-| `1440p` | 2560 x 1440 | 16:9 |
-| `ultrawide` | 2560 x 1080 | 64:27 |
-| `uwqhd` | 3440 x 1440 | 43:18 |
-| `portrait` | 1080 x 1920 | 9:16 |
-
-List presets without initializing graphics:
+P1 and P2 also get centered-playfield variants. The viewer has separate Single,
+Versus, P1, and P2 filters, plus Center 1P, HMR, Leaderboard, and resolution
+filters. Filter preferences persist across refreshes. Select presets to export,
+or use `--reverse` to export reverse-scrolling gameplay:
 
 ```powershell
-cargo run -p deadsync-theme-simply-love --example export_gameplay -- --list-presets
+cargo test -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p --preset ultrawide
+cargo test -p deadsync-theme-simply-love --example export_gameplay -- --reverse
 ```
 
-Choose a subset, or supply custom pixel dimensions:
-
-```powershell
-cargo run -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p --preset ultrawide
-cargo run -p deadsync-theme-simply-love --example export_gameplay -- --size 1366x768 --size 1600x900
-```
-
-Custom dimensions normally determine the display aspect. To inspect a different
-logical aspect at the same pixel resolution, append `@A:B`. For example,
-`640x480@16:9` renders a widescreen layout into a 640 x 480 PNG:
-
-```powershell
-cargo run -p deadsync-theme-simply-love --example export_gameplay -- --size 640x480@16:9
-```
-
-Select layouts, reverse scrolling, and an output directory:
-
-```powershell
-cargo run -p deadsync-theme-simply-love --example export_gameplay -- --preset 1080p --layout p1 --layout versus --reverse --output target\sl-preview
-```
-
-`--preset`, `--size`, and `--layout` may be repeated. Specifying resolutions
-replaces the default resolution list; specifying layouts replaces the default
-layout list. Valid layouts are `p1`, `p2`, `versus`, and `double`.
+`--preset` may be repeated. If no preset is specified, all built-in presets are
+used. Available presets: `vga`, `svga`, `xga`, `5-4`, `square`, `16-10`,
+`720p`, `ultrawide`, `uwqhd`, `portrait-9-16`, and `portrait-10-16`. The viewer
+includes every expected image link; a missing PNG appears as a broken image.
 
 ### Output
 
-The default destination is `<workspace-root>\target\gameplay-exports`. Relative
-`--output` paths are also resolved from the workspace root, regardless of
-whether you start the exporter with `cargo run` or `cargo test`:
+The destination is `<workspace-root>\target\gameplay-exports`:
 
 ```text
 target\gameplay-exports\
   index.html
   1280x720-16x9\
     p1\gameplay.png
+    p1-centered\gameplay.png
     p2\gameplay.png
+    p2-centered\gameplay.png
     versus\gameplay.png
     double\gameplay.png
 ```
@@ -119,7 +90,7 @@ It fails only if exporting fails (for example, invalid arguments, unavailable
 graphics, or a file-write error). Pass exporter options after `--`:
 
 ```powershell
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p --layout p1
+cargo test -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p
 ```
 
 ## Separate automated layout checks
@@ -140,5 +111,7 @@ The layout tests cover side-pane anchors and notefield separation at 4:3 and
 cargo test -p deadsync-theme-simply-love
 ```
 
-Exporter source: [export_gameplay.rs](../examples/export_gameplay.rs).
+Exporter source: [export_gameplay.rs](../examples/gameplay/export_gameplay.rs).
+Gallery viewer: [export_gameplay_viewer.rs](../examples/gameplay/export_gameplay_viewer.rs), using
+[export_gameplay_viewer.html](../examples/gameplay/export_gameplay_viewer.html).
 Layout tests: [step_stats_layout.rs](step_stats_layout.rs).

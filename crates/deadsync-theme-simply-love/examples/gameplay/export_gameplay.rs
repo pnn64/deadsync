@@ -1,4 +1,6 @@
 //! Export the real Simply Love gameplay presentation without changing player settings.
+mod export_gameplay_viewer;
+
 use deadlib_assets::AssetManager;
 use deadlib_present::{
     actors::Actor,
@@ -28,6 +30,7 @@ const PRESETS: &[(&str, u32, u32)] = &[
     ("xga", 1024, 768),
     ("5-4", 1280, 1024),
     ("720p", 1280, 720),
+    ("square", 640, 640),
     ("16-10", 1280, 800),
     ("ultrawide", 1280, 540),
     ("uwqhd", 1720, 720),
@@ -38,23 +41,14 @@ const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
 const HELP: &str = "\
 Export Simply Love gameplay PNGs (requires a desktop and Vulkan-capable GPU).
 
-cargo run -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
+cargo test -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
 
-  --list-presets         List built-in resolution presets and exit
-  --preset NAME          Select a preset; repeat to select several (default: all)
-  --size WxH[@A:B]       Add a custom size, optionally overriding display aspect
-  --layout NAME          p1, p2, versus, double; repeat (default: all four)
-  --reverse             Use reverse scrolling
-  --output PATH         Destination (relative paths use the workspace root)
-  --help                Show this help
+  --preset NAME   Select a preset; repeat to select several (default: all)
+  --reverse       Use reverse scrolling
+  --help          Show this help
 
-Examples:
-  cargo run -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p
-  cargo run -p deadsync-theme-simply-love --example export_gameplay -- --size 640x480@16:9
-
-Outputs: <destination>/<resolution-and-aspect>/<layout>/gameplay[-reverse].png
-and gameplay-hmr[-reverse].png, shown side by side in the gallery. P1/P2
-also include <layout>-centered variants. An index.html gallery is generated.";
+Available presets: vga, svga, xga, 5-4, square, 16-10, 720p, ultrawide,
+uwqhd, portrait-9-16, portrait-10-16.";
 
 #[derive(Clone, Debug, PartialEq)]
 struct Size {
@@ -64,38 +58,13 @@ struct Size {
 }
 
 impl Size {
-    fn new(width: u32, height: u32, aspect: (u32, u32)) -> Result<Self> {
-        if width == 0 || height == 0 || width > 8192 || height > 8192 {
-            return Err("image dimensions must be between 1 and 8192 pixels".into());
-        }
-        if aspect.0 == 0 || aspect.1 == 0 {
-            return Err("aspect ratio components must be positive".into());
-        }
-        let ratio = aspect.0 as f64 / aspect.1 as f64;
-        if !(0.25..=8.0).contains(&ratio) {
-            return Err("display aspect ratio must be between 1:4 and 8:1".into());
-        }
-        let divisor = gcd(aspect.0, aspect.1);
-        Ok(Self {
+    fn from_preset(width: u32, height: u32) -> Self {
+        let divisor = gcd(width, height);
+        Self {
             width,
             height,
-            aspect: (aspect.0 / divisor, aspect.1 / divisor),
-        })
-    }
-
-    fn parse(text: &str) -> Result<Self> {
-        let (pixels, aspect) = text
-            .split_once('@')
-            .map_or((text, None), |(p, a)| (p, Some(a)));
-        let (width, height) = pair(pixels, 'x')?;
-        Self::new(
-            width,
-            height,
-            aspect
-                .map(|a| pair(a, ':'))
-                .transpose()?
-                .unwrap_or((width, height)),
-        )
+            aspect: (width / divisor, height / divisor),
+        }
     }
 
     fn name(&self) -> String {
@@ -113,97 +82,45 @@ fn gcd(mut a: u32, mut b: u32) -> u32 {
     a
 }
 
-fn pair(text: &str, separator: char) -> Result<(u32, u32)> {
-    let (a, b) = text
-        .split_once(separator)
-        .ok_or_else(|| format!("invalid dimensions/aspect: {text}"))?;
-    Ok((a.parse()?, b.parse()?))
-}
-
 struct Options {
     sizes: Vec<Size>,
-    layouts: Vec<String>,
     reverse: bool,
-    output: PathBuf,
 }
 
 fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     let mut args = args.into_iter();
-    let mut options = Options {
-        sizes: Vec::new(),
-        layouts: Vec::new(),
-        reverse: false,
-        output: workspace_root().join("target").join("gameplay-exports"),
-    };
+    let mut sizes = Vec::new();
+    let mut reverse = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!("{HELP}");
                 return Ok(None);
             }
-            "--list-presets" => {
-                for &(name, w, h) in PRESETS {
-                    let d = gcd(w, h);
-                    println!("{name:12} {w:4}x{h:<4} {}:{}", w / d, h / d);
-                }
-                return Ok(None);
-            }
-            "--reverse" => options.reverse = true,
-            "--preset" | "--size" | "--layout" | "--output" => {
-                let value = args
-                    .next()
-                    .ok_or_else(|| format!("{arg} requires a value"))?;
-                match arg.as_str() {
-                    "--preset" => {
-                        let &(_, w, h) =
-                            PRESETS.iter().find(|p| p.0 == value).ok_or_else(|| {
-                                format!("unknown preset '{value}'; use --list-presets")
-                            })?;
-                        options.sizes.push(Size::new(w, h, (w, h))?);
-                    }
-                    "--size" => options.sizes.push(Size::parse(&value)?),
-                    "--layout" => {
-                        if !LAYOUTS.contains(&value.as_str()) {
-                            return Err(format!(
-                                "unknown layout '{value}'; use p1, p2, versus or double"
-                            )
-                            .into());
-                        }
-                        if !options.layouts.contains(&value) {
-                            options.layouts.push(value);
-                        }
-                    }
-                    "--output" => {
-                        let path = PathBuf::from(value);
-                        options.output = if path.is_absolute() {
-                            path
-                        } else {
-                            workspace_root().join(path)
-                        };
-                    }
-                    _ => unreachable!(),
+            "--reverse" => reverse = true,
+            "--preset" => {
+                let name = args.next().ok_or("--preset requires a name")?;
+                let &(_, width, height) = PRESETS
+                    .iter()
+                    .find(|preset| preset.0 == name)
+                    .ok_or_else(|| format!("unknown preset '{name}'; use --help"))?;
+                let size = Size::from_preset(width, height);
+                if !sizes.contains(&size) {
+                    sizes.push(size);
                 }
             }
             _ => return Err(format!("unknown option '{arg}'; use --help").into()),
         }
     }
-    if options.sizes.is_empty() {
-        options.sizes = PRESETS
-            .iter()
-            .map(|&(_, w, h)| Size::new(w, h, (w, h)))
-            .collect::<Result<_>>()?;
-    }
-    let mut unique = Vec::new();
-    for size in options.sizes {
-        if !unique.contains(&size) {
-            unique.push(size);
+    if sizes.is_empty() {
+        for &(_, width, height) in PRESETS {
+            let size = Size::from_preset(width, height);
+            if !sizes.contains(&size) {
+                sizes.push(size);
+            }
         }
     }
-    options.sizes = unique;
-    if options.layouts.is_empty() {
-        options.layouts = LAYOUTS.iter().map(|s| s.to_string()).collect();
-    }
-    Ok(Some(options))
+    Ok(Some(Options { sizes, reverse }))
 }
 
 fn workspace_root() -> PathBuf {
@@ -329,15 +246,9 @@ fn export(
     )?;
     let mut assets = AssetManager::new();
     deadsync_assets::load_initial_assets(&mut assets, &mut backend, theme::asset_manifest())?;
-    std::fs::create_dir_all(&options.output)?;
-    let mut gallery = String::from(
-        "<!doctype html><meta charset=\"utf-8\"><title>Simply Love gameplay layouts</title>\
-        <style>body{background:#181818;color:#eee;font:16px sans-serif}img{max-width:100%;height:auto}\
-        .pair{display:flex;gap:12px;align-items:flex-start}.pair figure{flex:1;min-width:0;margin:24px 0}\
-        a{color:#8cf}</style><h1>Simply Love gameplay layouts</h1>\
-        <p>Real gameplay rendering with synthetic sample data. Click an image for full resolution. \
-        Aspect-dependent visibility rules are preserved.</p>",
-    );
+    let output = workspace_root().join("target").join("gameplay-exports");
+    std::fs::create_dir_all(&output)?;
+    export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
     for size in &options.sizes {
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
         let logical_height = 480.0;
@@ -346,18 +257,15 @@ fn export(
         space::set_current_window_px(size.width, size.height);
         backend.resize(size.width, size.height);
         backend.set_default_projection(metrics.projection());
-        for layout in &options.layouts {
-            let mut variants = vec![(layout.to_string(), false)];
-            if matches!(layout.as_str(), "p1" | "p2") {
+        for &layout in LAYOUTS {
+            let mut variants = vec![(layout.to_owned(), false)];
+            if matches!(layout, "p1" | "p2") {
                 variants.push((format!("{layout}-centered"), true));
             }
             for (export_layout, center_single_notefield) in variants {
-                let folder = options.output.join(size.name()).join(&export_layout);
+                let folder = output.join(size.name()).join(&export_layout);
                 std::fs::create_dir_all(&folder)?;
-                gallery.push_str("<div class=\"pair\">");
-                for (show_scorebox, stem, mode_caption) in
-                    [(true, "gameplay", ""), (false, "gameplay-hmr", " HMR")]
-                {
+                for (show_scorebox, stem) in [(true, "gameplay"), (false, "gameplay-hmr")] {
                     let mut state = sample_state(
                         song.clone(),
                         logical_width,
@@ -414,41 +322,20 @@ fn export(
                     let output = folder.join(&filename);
                     image.save(&output)?;
                     println!("{}", output.display());
-                    let url = format!("{}/{export_layout}/{filename}", size.name());
-                    let centered_caption = if center_single_notefield {
-                        " (centered single-player playfield)"
-                    } else {
-                        ""
-                    };
-                    gallery.push_str(&format!(
-                        "<figure><figcaption>{} - {}:{} - {export_layout}{mode_caption}{centered_caption}{}\
-                        </figcaption><a href=\"{url}\"><img loading=\"lazy\" src=\"{url}\"></a></figure>",
-                        size.name(),
-                        size.aspect.0,
-                        size.aspect.1,
-                        if options.reverse { " (reverse)" } else { "" }
-                    ));
                 }
-                gallery.push_str("</div>");
             }
         }
     }
-    std::fs::write(options.output.join("index.html"), gallery)?;
     backend.dispose_textures(&mut assets.take_textures());
     backend.cleanup();
     println!(
         "Exported {} PNGs. Gallery: {}",
         options.sizes.len()
-            * options
-                .layouts
+            * LAYOUTS
                 .iter()
-                .map(|layout| if matches!(layout.as_str(), "p1" | "p2") {
-                    4
-                } else {
-                    2
-                })
+                .map(|layout| if matches!(*layout, "p1" | "p2") { 4 } else { 2 })
                 .sum::<usize>(),
-        options.output.join("index.html").display()
+        output.join("index.html").display()
     );
     Ok(())
 }
