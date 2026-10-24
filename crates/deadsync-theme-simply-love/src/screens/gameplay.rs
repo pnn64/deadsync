@@ -613,10 +613,12 @@ const fn gameplay_step_stats_mode(
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => p1_enabled,
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
-            p1_enabled || p2_enabled
-        }
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => p1_enabled,
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => p1_enabled || p2_enabled,
     };
     if !enabled {
         return GameplayStepStatsMode::Hidden;
@@ -625,12 +627,12 @@ const fn gameplay_step_stats_mode(
         GameplayStepStatsMode::Side
     } else {
         match play_style {
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
-                GameplayStepStatsMode::Versus
-            }
-            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
-                GameplayStepStatsMode::Double
-            }
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple => GameplayStepStatsMode::Versus,
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => GameplayStepStatsMode::Double,
             profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
                 GameplayStepStatsMode::Hidden
             }
@@ -4676,10 +4678,12 @@ pub fn frame_layers<'a>(
                     continue;
                 };
                 let (x, w, fl, fr) = match play_style {
-                    profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
-                        (0.0, sw, 0.0, 0.0)
-                    }
-                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                    profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
+                    | profile_data::PlayStyle::Routine
+                    | profile_data::PlayStyle::PumpRoutine => (0.0, sw, 0.0, 0.0),
+                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                    | profile_data::PlayStyle::Couple
+                    | profile_data::PlayStyle::PumpCouple => {
                         if player_idx == 0 {
                             (0.0, cx, 0.0, 0.1)
                         } else {
@@ -4752,7 +4756,9 @@ pub fn frame_layers<'a>(
 
             let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
             let player_count = match play_style {
-                profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                | profile_data::PlayStyle::Couple
+                | profile_data::PlayStyle::PumpCouple => {
                     players[0] = (
                         0,
                         profile_data::PlayerSide::P1,
@@ -5189,7 +5195,9 @@ pub fn frame_layers<'a>(
             {
                 let player_life_color = |player_idx: usize| -> [f32; 4] {
                     let color_index = match play_style {
-                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                        | profile_data::PlayStyle::Couple
+                        | profile_data::PlayStyle::PumpCouple => {
                             if player_idx == 0 {
                                 state.active_color_index()
                             } else {
@@ -5215,7 +5223,9 @@ pub fn frame_layers<'a>(
 
                 let mut life_players = [(0usize, profile_data::PlayerSide::P1); 2];
                 let life_player_count = match play_style {
-                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                    | profile_data::PlayStyle::Couple
+                    | profile_data::PlayStyle::PumpCouple => {
                         life_players[0] = (0, profile_data::PlayerSide::P1);
                         life_players[1] = (1, profile_data::PlayerSide::P2);
                         2
@@ -5269,7 +5279,9 @@ pub fn frame_layers<'a>(
                             let meter_cx = screen_center_x()
                                 + match play_style {
                                     profile_data::PlayStyle::Versus
-                                    | profile_data::PlayStyle::PumpVersus => match side {
+                                    | profile_data::PlayStyle::PumpVersus
+                                    | profile_data::PlayStyle::Couple
+                                    | profile_data::PlayStyle::PumpCouple => match side {
                                         profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
                                         profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
                                     },

@@ -492,6 +492,7 @@ mod tests {
 
     fn parsed_note(row_index: usize, column: usize, note_type: NoteType) -> ParsedNote {
         ParsedNote {
+            player: 0,
             row_index,
             column,
             note_type,

@@ -2,7 +2,7 @@ use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, course_display_timing_for_stages,
-    course_display_totals_for_chart,
+    course_display_totals_for_chart, course_display_totals_for_chart_side,
 };
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
@@ -122,7 +122,12 @@ fn add_course_stage_totals(
     totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
     stage: &CourseStageRuntime,
     chart_type: &str,
-) {
+) -> Option<()> {
+    let couple_style = match chart_type {
+        "dance-couple" => Some(deadsync_gameplay::GameplayInputPlayStyle::Couple),
+        "pump-couple" => Some(deadsync_gameplay::GameplayInputPlayStyle::PumpCouple),
+        _ => None,
+    };
     for (player_idx, total) in totals.iter_mut().enumerate() {
         let Some(chart) = stage
             .song
@@ -130,7 +135,20 @@ fn add_course_stage_totals(
         else {
             continue;
         };
-        let add = course_display_totals_for_chart(chart);
+        let add = if let Some(style) = couple_style {
+            let index = stage
+                .song
+                .charts
+                .iter()
+                .position(|entry| std::ptr::eq(entry, chart))?;
+            let mut payloads =
+                deadsync_simfile::app_runtime::load_gameplay_charts(&stage.song, &[index], 0.0)
+                    .map_err(|error| log::warn!("Cannot load Couple course chart: {error}"))
+                    .ok()?;
+            course_display_totals_for_chart_side(chart, &payloads.remove(0), style, player_idx)
+        } else {
+            course_display_totals_for_chart(chart)
+        };
         total.possible_grade_points = total
             .possible_grade_points
             .saturating_add(add.possible_grade_points);
@@ -139,6 +157,7 @@ fn add_course_stage_totals(
         total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
         total.mines_total = total.mines_total.saturating_add(add.mines_total);
     }
+    Some(())
 }
 
 pub fn append_endless_cycle(
@@ -155,7 +174,11 @@ pub fn append_endless_cycle(
         .into_iter()
         .filter_map(|stage| course_stage_runtime_from_plan(stage, chart_type))
     {
-        add_course_stage_totals(&mut course.course_display_totals, &stage, chart_type);
+        let mut totals = course.course_display_totals;
+        if add_course_stage_totals(&mut totals, &stage, chart_type).is_none() {
+            return false;
+        }
+        course.course_display_totals = totals;
         course.stages.push(stage);
     }
     course.stages.len() != previous_len
@@ -169,7 +192,7 @@ pub fn build_course_run_from_selection(
     let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in selection.stages {
         if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
-            add_course_stage_totals(&mut course_display_totals, &runtime, chart_type);
+            add_course_stage_totals(&mut course_display_totals, &runtime, chart_type)?;
             stages.push(runtime);
         }
     }
@@ -350,7 +373,7 @@ pub fn build_course_summary_score_info(
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => {
+        PlayStyle::Versus | PlayStyle::PumpVersus | PlayStyle::Couple | PlayStyle::PumpCouple => {
             for side in [PlayerSide::P1, PlayerSide::P2] {
                 let idx = profile_data::player_side_index(side);
                 score_info[idx] = score_info_from_stage(stage, side);
@@ -361,7 +384,9 @@ pub fn build_course_summary_score_info(
                 }
             }
         }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => {
             let idx = profile_data::player_side_index(active_side);
             score_info[0] = score_info_from_stage(stage, active_side);
             if let Some(score) = score_info[0].as_mut() {

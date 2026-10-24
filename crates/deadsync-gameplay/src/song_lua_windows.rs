@@ -22,8 +22,12 @@ impl SongLuaCompilePlayStyleLike for GameplayInputPlayStyle {
     fn as_song_lua_compile_play_style(self) -> SongLuaCompilePlayStyle {
         match self {
             Self::Single | Self::PumpSingle => SongLuaCompilePlayStyle::Single,
-            Self::Versus | Self::PumpVersus => SongLuaCompilePlayStyle::Versus,
-            Self::Double | Self::PumpDouble => SongLuaCompilePlayStyle::Double,
+            Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple => {
+                SongLuaCompilePlayStyle::Versus
+            }
+            Self::Double | Self::PumpDouble | Self::Routine | Self::PumpRoutine => {
+                SongLuaCompilePlayStyle::Double
+            }
         }
     }
 }

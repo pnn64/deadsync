@@ -471,6 +471,7 @@ pub fn set_added_tap_note(
 fn added_tap_note(timing_player: &TimingData, row: usize, column: usize) -> Option<Note> {
     let beat = timing_player.get_beat_for_row(row)?;
     Some(Note {
+        participant: None,
         beat,
         quantization_idx: quantization_index_from_beat(beat),
         column,
@@ -502,6 +503,7 @@ pub fn set_added_mine_note(
 fn added_mine_note(timing_player: &TimingData, row: usize, column: usize) -> Option<Note> {
     let beat = timing_player.get_beat_for_row(row)?;
     Some(Note {
+        participant: None,
         beat,
         quantization_idx: quantization_index_from_beat(beat),
         column,

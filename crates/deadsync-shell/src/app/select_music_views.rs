@@ -230,7 +230,11 @@ fn pad_in_play(session: SelectMusicSessionView, pad: usize) -> bool {
         profile_data::PlayStyle::Double
         | profile_data::PlayStyle::Versus
         | profile_data::PlayStyle::PumpDouble
-        | profile_data::PlayStyle::PumpVersus => true,
+        | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => true,
         profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
             session.joined.get(pad).copied().unwrap_or(false)
         }

@@ -586,6 +586,7 @@ mod runtime_regression_tests {
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32 / ROWS_PER_BEAT as f32,
             quantization_idx: 0,
             column,
@@ -894,12 +895,14 @@ mod runtime_regression_tests {
             notes: Vec::new(),
             parsed_notes: vec![
                 ParsedNote {
+                    player: 0,
                     row_index: 48,
                     column: 0,
                     note_type: NoteType::Tap,
                     tail_row_index: None,
                 },
                 ParsedNote {
+                    player: 0,
                     row_index: 96,
                     column: 1,
                     note_type: NoteType::Tap,
@@ -1144,6 +1147,7 @@ mod runtime_regression_tests {
         let mut gameplay_chart =
             regression_payload_with_segments(timing_segments, tail_row.max(96));
         gameplay_chart.parsed_notes = vec![ParsedNote {
+            player: 0,
             row_index: 48,
             column: 0,
             note_type: NoteType::Hold,

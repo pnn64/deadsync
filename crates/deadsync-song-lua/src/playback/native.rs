@@ -29,11 +29,7 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
     }
     draw_layer(ScreenLayer::ExitFade, actors, FieldLayout::default());
 
-    let versus = matches!(
-        view.play_style,
-        deadsync_gameplay::GameplayInputPlayStyle::Versus
-            | deadsync_gameplay::GameplayInputPlayStyle::PumpVersus
-    );
+    let versus = view.play_style.is_versus();
     let mut layout = FieldLayout {
         per_player_fields: [(usize::MAX, 0.0); MAX_PLAYERS],
         ..FieldLayout::default()

@@ -10094,6 +10094,7 @@ mod tests {
         mine_result: Option<MineResult>,
     ) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column: 0,

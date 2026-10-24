@@ -761,7 +761,9 @@ const fn active_players(
 ) -> [bool; PLAYER_SLOTS] {
     let joined_count = joined[P1] as usize + joined[P2] as usize;
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => {
             if joined_count > 0 {
                 joined
             } else {
@@ -771,7 +773,9 @@ const fn active_players(
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => {
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             if joined_count == 1 {
                 joined
             } else {
@@ -795,11 +799,15 @@ const fn persisted_player_idx(
     side: profile_data::PlayerSide,
 ) -> usize {
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => P1,
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => P1,
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => match side {
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => match side {
             profile_data::PlayerSide::P1 => P1,
             profile_data::PlayerSide::P2 => P2,
         },

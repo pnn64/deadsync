@@ -3081,7 +3081,9 @@ pub fn init(init_view: EvaluationInitView) -> State {
         }
 
         match play_style {
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple => {
                 active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
@@ -3098,7 +3100,9 @@ pub fn init(init_view: EvaluationInitView) -> State {
             profile_data::PlayStyle::Single
             | profile_data::PlayStyle::Double
             | profile_data::PlayStyle::PumpSingle
-            | profile_data::PlayStyle::PumpDouble => {
+            | profile_data::PlayStyle::PumpDouble
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => {
                 let joined = context.player_side;
                 let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
@@ -3274,7 +3278,9 @@ pub fn init_from_score_info(
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = context.play_style;
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => {
             active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
@@ -3291,7 +3297,9 @@ pub fn init_from_score_info(
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => {
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             let joined = context.player_side;
             let primary = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
@@ -5702,6 +5710,10 @@ pub fn push_actors(
     {
         let style_label = match play_style {
             profile_data::PlayStyle::Double => "Double",
+            profile_data::PlayStyle::Couple => "Couple",
+            profile_data::PlayStyle::Routine => "Routine",
+            profile_data::PlayStyle::PumpCouple => "Pump Couple",
+            profile_data::PlayStyle::PumpRoutine => "Pump Routine",
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => "Single",
             profile_data::PlayStyle::PumpDouble => "Pump Double",
             profile_data::PlayStyle::PumpSingle | profile_data::PlayStyle::PumpVersus => {

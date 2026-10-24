@@ -2,6 +2,8 @@ use deadsync_core::note::NoteType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParsedNote {
+    /// Authored Routine participant (0 = P1, 1 = P2).
+    pub player: u8,
     pub row_index: usize,
     pub column: usize,
     pub note_type: NoteType,
@@ -13,10 +15,18 @@ pub fn step_type_lanes(step_type: &str) -> usize {
     let step_type = step_type.trim();
     if step_type.eq_ignore_ascii_case("pump-double")
         || step_type.eq_ignore_ascii_case("pump_double")
+        || step_type.eq_ignore_ascii_case("pump-couple")
+        || step_type.eq_ignore_ascii_case("pump_couple")
+        || step_type.eq_ignore_ascii_case("pump-routine")
+        || step_type.eq_ignore_ascii_case("pump_routine")
     {
         10
     } else if step_type.eq_ignore_ascii_case("dance-double")
         || step_type.eq_ignore_ascii_case("dance_double")
+        || step_type.eq_ignore_ascii_case("dance-couple")
+        || step_type.eq_ignore_ascii_case("dance_couple")
+        || step_type.eq_ignore_ascii_case("dance-routine")
+        || step_type.eq_ignore_ascii_case("dance_routine")
     {
         8
     } else if step_type.eq_ignore_ascii_case("pump-single")
@@ -45,6 +55,7 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
         minimized_note_data,
         lanes,
         |row_index, column, note_type| ParsedNote {
+            player: 0,
             row_index,
             column,
             note_type,
@@ -232,6 +243,7 @@ mod tests {
         assert_eq!(
             notes,
             vec![ParsedNote {
+                player: 0,
                 row_index: 0,
                 column: 0,
                 note_type: NoteType::Hold,
@@ -252,6 +264,7 @@ mod tests {
         assert_eq!(
             notes,
             vec![ParsedNote {
+                player: 0,
                 row_index: 1,
                 column: 0,
                 note_type: NoteType::Tap,
@@ -266,6 +279,7 @@ mod tests {
         assert_eq!(
             notes,
             vec![ParsedNote {
+                player: 0,
                 row_index: 1,
                 column: 0,
                 note_type: NoteType::Hold,
@@ -289,6 +303,7 @@ mod tests {
                 lanes,
                 0,
                 |row_index, column, note_type| ParsedNote {
+                    player: 0,
                     row_index,
                     column,
                     note_type,

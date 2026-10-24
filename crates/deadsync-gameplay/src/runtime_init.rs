@@ -325,8 +325,10 @@ where
         let timing_player = &timing_players[player];
         let parsed_notes = &gameplay_charts[player].parsed_notes;
         let start = notes.len();
-        let col_offset = player.saturating_mul(cols_per_player);
         for parsed in parsed_notes {
+            let Some(column) = play_style.runtime_column(parsed.column, player) else {
+                continue;
+            };
             let row_index = parsed.row_index;
             let Some(beat) = timing_player.get_beat_for_row(row_index) else {
                 continue;
@@ -378,9 +380,14 @@ where
 
             let quantization_idx = quantization_index_from_beat(beat);
             notes.push(Note {
+                participant: matches!(
+                    play_style,
+                    GameplayInputPlayStyle::Routine | GameplayInputPlayStyle::PumpRoutine
+                )
+                .then_some(parsed.player),
                 beat,
                 quantization_idx,
-                column: parsed.column.saturating_add(col_offset),
+                column,
                 note_type,
                 row_index,
                 result: None,
@@ -395,6 +402,19 @@ where
         note_ranges[player] = (start, end);
     }
     let note_build_ms = note_build_started.elapsed().as_secs_f64() * 1000.0;
+
+    let couple = matches!(
+        play_style,
+        GameplayInputPlayStyle::Couple | GameplayInputPlayStyle::PumpCouple
+    );
+    let base_grade_points: [i32; MAX_PLAYERS] = std::array::from_fn(|player| {
+        if couple && player < num_players {
+            let totals = recompute_player_totals(&notes, note_ranges[player]);
+            judgment::max_grade_points(totals.steps, totals.holds, totals.rolls, 0)
+        } else {
+            charts[player].possible_grade_points
+        }
+    });
 
     let transform_started = Instant::now();
     let uncommon_effects = std::array::from_fn(|player| {
@@ -482,7 +502,7 @@ where
     let mut total_steps = [0u32; MAX_PLAYERS];
     let mut hands_total = [0u32; MAX_PLAYERS];
     let mut possible_grade_points = [0i32; MAX_PLAYERS];
-    if chart_layout_changed {
+    if chart_layout_changed || couple {
         holds_total = [0; MAX_PLAYERS];
         rolls_total = [0; MAX_PLAYERS];
         mines_total = [0; MAX_PLAYERS];
@@ -497,7 +517,7 @@ where
                 totals.steps,
                 holds_total[player],
                 rolls_total[player],
-                charts[player].possible_grade_points,
+                base_grade_points[player],
             );
         }
     } else {

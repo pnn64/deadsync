@@ -69,12 +69,14 @@ fn minimized_chart_notes_drop_invalid_holds() {
         notes,
         vec![
             ParsedNote {
+                player: 0,
                 row_index: 1,
                 column: 0,
                 note_type: NoteType::Tap,
                 tail_row_index: None,
             },
             ParsedNote {
+                player: 0,
                 row_index: 3,
                 column: 0,
                 note_type: NoteType::Lift,
