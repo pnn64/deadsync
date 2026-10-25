@@ -803,9 +803,7 @@ impl Vm {
         let choice = choices
             .iter()
             .position(|&name| name == option)
-            .ok_or_else(|| {
-                Error::new(ErrorKind::Runtime, 0, "invalid option to 'collectgarbage'")
-            })?;
+            .ok_or_else(|| self.argument_option_error(0, option))?;
         let extra = self.integer_argument(base, count, 1, Some(0))? as i32;
         let option = choices[choice];
         let value = match option {

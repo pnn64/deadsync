@@ -483,7 +483,7 @@ impl Vm {
             }
             level -= frame.tail_calls as usize;
         }
-        Err(Error::new(ErrorKind::Runtime, 0, "invalid level"))
+        Err(self.argument_error(0, b"invalid level"))
     }
     fn stack_kind(&self, level: usize) -> Result<FrameKind, Error> {
         self.stack_frame(level)
@@ -563,24 +563,17 @@ impl Vm {
                 Value::Nil
             }
         };
-        let bad = |index: usize, expected: &str| {
-            Error::new(
-                ErrorKind::Runtime,
-                0,
-                format!("bad argument #{} ({expected} expected)", index + 1),
-            )
-        };
         let value = match id {
             0 => {
                 if count == 0 {
-                    return Err(bad(0, "value"));
+                    return Err(self.argument_error(0, b"value expected"));
                 }
                 if !arg(self, 0).is_truthy() {
                     let text = match arg(self, 1) {
                         Value::Nil => self.intern(b"assertion failed!"),
                         v @ Value::String(_) => v,
                         v @ Value::Number(_) => self.default_string(v),
-                        _ => return Err(bad(1, "string")),
+                        _ => return Err(self.argument_type_error(base, count, 1, "string")),
                     };
                     let Value::String(id) = text else {
                         unreachable!("assertion message is a string");
@@ -606,40 +599,40 @@ impl Vm {
                 let level = if count < 2 || arg(self, 1) == Value::Nil {
                     1
                 } else {
-                    self.number(arg(self, 1)).ok_or_else(|| bad(1, "number"))? as isize
+                    self.number(arg(self, 1))
+                        .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?
+                        as isize
                 };
                 let object = self.located_error(arg(self, 0), level);
                 return Err(Error::raised(object, message));
             }
             2 => {
                 if count == 0 {
-                    return Err(bad(0, "value"));
+                    return Err(self.argument_error(0, b"value expected"));
                 }
                 self.intern(arg(self, 0).type_name().as_bytes())
             }
             3 => self.tonumber_native(base, count)?,
             4 => {
                 if count < 2 {
-                    return Err(bad(count, "value"));
+                    return Err(self.argument_error(count, b"value expected"));
                 }
                 Value::Boolean(arg(self, 0) == arg(self, 1))
             }
             5 => {
+                let table = self.table_argument(base, count)?;
                 if count < 2 {
-                    return Err(bad(count, "value"));
+                    return Err(self.argument_error(count, b"value expected"));
                 }
-                self.table(arg(self, 0))?.get(arg(self, 1))
+                self.tables[slot_index(table.0)].get(arg(self, 1))
             }
             6 => {
+                let table = self.table_argument(base, count)?;
                 if count < 3 {
-                    return Err(bad(count, "value"));
+                    return Err(self.argument_error(count, b"value expected"));
                 }
                 let (t, k, v) = (arg(self, 0), arg(self, 1), arg(self, 2));
-                self.table(t)?;
-                let Value::Table(id) = t else {
-                    unreachable!("validated table")
-                };
-                self.raw_set(id, k, v)?;
+                self.raw_set(table, k, v)?;
                 t
             }
             7 => {
@@ -651,11 +644,14 @@ impl Vm {
                     self.registers[base] = Value::Number(count.saturating_sub(1) as f64);
                     return Ok(1);
                 }
-                let n = self.number(arg(self, 0)).ok_or_else(|| bad(0, "number"))? as isize;
+                let n = self
+                    .number(arg(self, 0))
+                    .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?
+                    as isize;
                 let available = count.saturating_sub(1);
                 let start = if n < 0 { available as isize + n } else { n - 1 };
                 if start < 0 {
-                    return Err(Error::new(ErrorKind::Runtime, 0, "index out of range"));
+                    return Err(self.argument_error(0, b"index out of range"));
                 }
                 let start = (start as usize).min(available);
                 self.registers
@@ -664,19 +660,20 @@ impl Vm {
             }
             8 => {
                 let t = arg(self, 0);
-                let table = self.table(t)?;
+                let id = self.table_argument(base, count)?;
+                let table = &self.tables[slot_index(id.0)];
                 let start = if count < 2 || arg(self, 1) == Value::Nil {
                     1.0
                 } else {
                     self.number(arg(self, 1))
-                        .ok_or_else(|| bad(1, "number"))?
+                        .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?
                         .trunc()
                 };
                 let end = if count < 3 || arg(self, 2) == Value::Nil {
                     table.len() as f64
                 } else {
                     self.number(arg(self, 2))
-                        .ok_or_else(|| bad(2, "number"))?
+                        .ok_or_else(|| self.argument_type_error(base, count, 2, "number"))?
                         .trunc()
                 };
                 let results = (end - start + 1.0).max(0.0);
@@ -696,7 +693,8 @@ impl Vm {
                 return Ok(results);
             }
             NEXT | PAIRS_NEXT => {
-                let next = self.table(arg(self, 0))?.next(arg(self, 1))?;
+                let table = self.table_argument(base, count)?;
+                let next = self.tables[slot_index(table.0)].next(arg(self, 1))?;
                 if let Some((key, value)) = next {
                     self.resize_registers(self.registers.len().max(base + 2));
                     self.registers[base] = key;
@@ -707,7 +705,7 @@ impl Vm {
             }
             PAIRS | IPAIRS => {
                 let table = arg(self, 0);
-                self.table(table)?;
+                self.table_argument(base, count)?;
                 self.resize_registers(self.registers.len().max(base + 3));
                 self.registers[base] =
                     Value::Native(if id == PAIRS { PAIRS_NEXT } else { IPAIRS_STEP });
@@ -720,11 +718,12 @@ impl Vm {
                 return Ok(3);
             }
             IPAIRS_STEP => {
-                let n = self.number(arg(self, 1)).ok_or_else(|| bad(1, "number"))?;
+                let n = self
+                    .number(arg(self, 1))
+                    .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?;
                 let next = (n as i32).wrapping_add(1);
-                let value = self
-                    .table(arg(self, 0))?
-                    .get(Value::Number(f64::from(next)));
+                let table = self.table_argument(base, count)?;
+                let value = self.tables[slot_index(table.0)].get(Value::Number(f64::from(next)));
                 if value == Value::Nil {
                     return Ok(0);
                 }
@@ -735,7 +734,7 @@ impl Vm {
             }
             DEBUG_GET_ENV | DEBUG_SET_ENV => {
                 if count == 0 {
-                    return Err(bad(0, "value"));
+                    return Err(self.argument_error(0, b"value expected"));
                 }
                 let target = arg(self, 0);
                 if id == DEBUG_GET_ENV {
@@ -748,7 +747,7 @@ impl Vm {
                     }
                 } else {
                     let Value::Table(env) = arg(self, 1) else {
-                        return Err(bad(1, "table"));
+                        return Err(self.argument_type_error(base, count, 1, "table"));
                     };
                     match target {
                         Value::Function(id) => self.functions[slot_index(id.0)].env = env,
@@ -768,7 +767,7 @@ impl Vm {
             }
             GET_ENV | SET_ENV => {
                 if id == SET_ENV && !matches!(arg(self, 1), Value::Table(_)) {
-                    return Err(bad(1, "table"));
+                    return Err(self.argument_type_error(base, count, 1, "table"));
                 }
                 let target = arg(self, 0);
                 let function = match target {
@@ -776,13 +775,12 @@ impl Vm {
                     Value::Native(id) => FrameKind::Native(id),
                     Value::Nil if id == GET_ENV => self.stack_kind(1)?,
                     _ => {
-                        let level = self.number(target).ok_or_else(|| bad(0, "number"))? as isize;
+                        let level = self
+                            .number(target)
+                            .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?
+                            as isize;
                         if level < 0 {
-                            return Err(Error::new(
-                                ErrorKind::Runtime,
-                                0,
-                                "level must be non-negative",
-                            ));
+                            return Err(self.argument_error(0, b"level must be non-negative"));
                         }
                         if id == SET_ENV && level == 0 {
                             let Value::Table(env) = arg(self, 1) else {
@@ -818,12 +816,12 @@ impl Vm {
             LOAD_STRING => {
                 let source = match arg(self, 0) {
                     v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
-                    _ => return Err(bad(0, "string")),
+                    _ => return Err(self.argument_type_error(base, count, 0, "string")),
                 };
                 let name = match arg(self, 1) {
                     Value::Nil => source.clone(),
                     v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
-                    _ => return Err(bad(1, "string")),
+                    _ => return Err(self.argument_type_error(base, count, 1, "string")),
                 };
                 let compiled = crate::parser::Parser::with_native_depth(
                     self.native_depth(self.frames.len()) + 1,
@@ -846,7 +844,7 @@ impl Vm {
             }
             GET_META | DEBUG_GET_META => {
                 if count == 0 {
-                    return Err(bad(0, "value"));
+                    return Err(self.argument_error(0, b"value expected"));
                 }
                 let target = arg(self, 0);
                 let protected = self.metafield(target, Meta::Protected);
@@ -857,25 +855,25 @@ impl Vm {
                 }
             }
             SET_META | DEBUG_SET_META => {
-                if count < 2 {
-                    return Err(bad(count, "value"));
+                if id == SET_META {
+                    self.table_argument(base, count)?;
                 }
                 let target = arg(self, 0);
-                if id == SET_META {
-                    self.table(target)?;
-                    if self.metafield(target, Meta::Protected) != Value::Nil {
-                        return Err(Error::new(
-                            ErrorKind::Runtime,
-                            0,
-                            "cannot change a protected metatable",
-                        ));
-                    }
+                if count < 2 {
+                    return Err(self.argument_error(1, b"nil or table expected"));
                 }
                 let mt = match arg(self, 1) {
                     Value::Nil => None,
                     Value::Table(id) => Some(id),
-                    _ => return Err(bad(1, "nil or table")),
+                    _ => return Err(self.argument_error(1, b"nil or table expected")),
                 };
+                if id == SET_META && self.metafield(target, Meta::Protected) != Value::Nil {
+                    return Err(Error::new(
+                        ErrorKind::Runtime,
+                        0,
+                        "cannot change a protected metatable",
+                    ));
+                }
                 self.set_metatable(target, mt);
                 if id == DEBUG_SET_META {
                     Value::Boolean(true)

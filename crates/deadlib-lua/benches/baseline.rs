@@ -300,11 +300,18 @@ fn main() {
             100.0,
             10,
         ),
+        (
+            "native_arg_error",
+            r#"local function f()return math.sin(false)end;local sum=0;for i=1,100 do local ok,e=pcall(f);if not ok and e=="native-bench:1: bad argument #1 to 'sin' (number expected, got boolean)" then sum=sum+1 end end;return sum"#,
+            100.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = match name {
             "debug_traceback" => Some("=(traceback-bench)"),
             "runtime_error" => Some("=runtime-bench"),
+            "native_arg_error" => Some("=native-bench"),
             _ => None,
         };
         let program = match chunk_name {

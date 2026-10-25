@@ -322,9 +322,23 @@ impl Vm {
         }
     }
     fn checked_file(&self, value: Value, check_meta: bool) -> Result<u64, Error> {
-        let key = self
-            .file_key(value, check_meta)
-            .ok_or_else(|| runtime("bad argument #1 (FILE* expected)"))?;
+        let key = self.file_key(value, check_meta).ok_or_else(|| {
+            let missing = self
+                .active_native
+                .is_some_and(|i| self.frames[i].argc() == 0);
+            self.argument_error(
+                0,
+                format!(
+                    "FILE* expected, got {}",
+                    if missing {
+                        "no value"
+                    } else {
+                        value.type_name()
+                    }
+                )
+                .as_bytes(),
+            )
+        })?;
         if self.io.files[slot_index(key)].resource.is_none() {
             return Err(runtime("attempt to use a closed file"));
         }
@@ -360,6 +374,13 @@ impl Vm {
         self.registers[base + 1] = text;
         self.registers[base + 2] = Value::Number(f64::from(code));
         3
+    }
+    #[cold]
+    fn file_argument_error(&self, path: &[u8], code: i32) -> Error {
+        let mut detail = c_bytes(path).to_vec();
+        detail.extend_from_slice(b": ");
+        detail.extend_from_slice(message(code));
+        self.argument_error(0, &detail)
     }
     fn io_result(&mut self, base: usize, result: Result<(), i32>) -> usize {
         match result {
@@ -448,7 +469,7 @@ impl Vm {
         }
         if id == TYPE {
             if count == 0 {
-                return Err(runtime("bad argument #1 (value expected)"));
+                return Err(self.argument_error(0, b"value expected"));
             }
             self.registers[base] = match self.file_key(arg, true) {
                 Some(key) => self.intern(if self.io.files[slot_index(key)].resource.is_some() {
@@ -496,11 +517,7 @@ impl Vm {
                     let file =
                         open(&path, if id == INPUT { b"r" } else { b"w" }).map_err(|code| {
                             ERRNO.set(code);
-                            runtime(format!(
-                                "bad argument #1 ({}: {})",
-                                String::from_utf8_lossy(c_bytes(&path)),
-                                String::from_utf8_lossy(message(code))
-                            ))
+                            self.file_argument_error(&path, code)
                         })?;
                     self.file_value(file, env)
                 } else {
@@ -517,11 +534,7 @@ impl Vm {
             let path = self.strings.bytes[slot_index(s.0)].to_vec();
             let file = open(&path, b"r").map_err(|code| {
                 ERRNO.set(code);
-                runtime(format!(
-                    "bad argument #1 ({}: {})",
-                    String::from_utf8_lossy(c_bytes(&path)),
-                    String::from_utf8_lossy(message(code))
-                ))
+                self.file_argument_error(&path, code)
             })?;
             let Value::Userdata(file) = self.file_value(file, self.native_environment(id)) else {
                 unreachable!()
@@ -538,7 +551,7 @@ impl Vm {
         };
         let key = if id == GC || id == TO_STRING {
             self.file_key(value, true)
-                .ok_or_else(|| runtime("bad argument #1 (FILE* expected)"))?
+                .ok_or_else(|| self.argument_type_error(base, count, 0, "FILE*"))?
         } else {
             self.checked_file(value, !default || id == LINES)?
         };
@@ -582,7 +595,11 @@ impl Vm {
                         b"set" => 0,
                         b"cur" => 1,
                         b"end" => 2,
-                        _ => return Err(runtime("bad argument #2 (invalid option)")),
+                        _ => {
+                            return Err(
+                                self.argument_option_error(1, &self.strings.bytes[slot_index(s.0)])
+                            );
+                        }
                     }
                 };
                 let offset = match self.argument(base, count, 2) {
@@ -590,7 +607,7 @@ impl Vm {
                     value => {
                         let n = self
                             .number(value)
-                            .ok_or_else(|| runtime("bad argument #3 (number expected)"))?;
+                            .ok_or_else(|| self.argument_type_error(base, count, 2, "number"))?;
                         if cfg!(windows) {
                             i64::from(debug::integer(n))
                         } else {
@@ -617,13 +634,17 @@ impl Vm {
                     b"no" => 0,
                     b"full" => 1,
                     b"line" => 2,
-                    _ => return Err(runtime("bad argument #2 (invalid option)")),
+                    _ => {
+                        return Err(
+                            self.argument_option_error(1, &self.strings.bytes[slot_index(s.0)])
+                        );
+                    }
                 };
                 let size = match self.argument(base, count, 2) {
                     Value::Nil => stream::LINE_BUFFER,
                     value => integer(
                         self.number(value)
-                            .ok_or_else(|| runtime("bad argument #3 (number expected)"))?,
+                            .ok_or_else(|| self.argument_type_error(base, count, 2, "number"))?,
                     ) as usize,
                 };
                 if mode != 0 && !(2..=i32::MAX as usize).contains(&size) {
@@ -681,11 +702,11 @@ impl Vm {
                             self.strings.bytes[slot_index(s.0)].as_ref()
                         } else {
                             self.buffers.push(bytes);
-                            return Err(runtime("invalid option"));
+                            return Err(self.argument_error(first + index, b"invalid option"));
                         };
                         if text.first() != Some(&b'*') {
                             self.buffers.push(bytes);
-                            return Err(runtime("invalid option"));
+                            return Err(self.argument_error(first + index, b"invalid option"));
                         }
                         match text.get(1) {
                             Some(b'l') => self.io.files[slot]
@@ -698,7 +719,7 @@ impl Vm {
                                 .map(|n| (n.is_some(), n)),
                             _ => {
                                 self.buffers.push(bytes);
-                                return Err(runtime("invalid format"));
+                                return Err(self.argument_error(first + index, b"invalid format"));
                             }
                         }
                     };

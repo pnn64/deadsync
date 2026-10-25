@@ -38,13 +38,6 @@ pub(super) fn integer(value: f64) -> i32 {
     };
     value as i32
 }
-fn bad(index: usize, message: &str) -> Error {
-    Error::new(
-        ErrorKind::Runtime,
-        0,
-        format!("bad argument #{} ({message})", index + 1),
-    )
-}
 
 impl Vm {
     pub(super) fn debug_frames(&self, thread: ThreadId) -> &[Frame] {
@@ -168,10 +161,10 @@ impl Vm {
         } else if matches!(target, Value::Function(_) | Value::Native(_)) {
             (target, None, false)
         } else {
-            return Err(bad(arg, "function or level expected"));
+            return Err(self.argument_error(arg, b"function or level expected"));
         };
         if !tail && options.iter().any(|b| !b"flnSuL".contains(b)) {
-            return Err(bad(arg + 1, "invalid option"));
+            return Err(self.argument_error(arg + 1, b"invalid option"));
         }
         let code = if let Value::Function(id) = function {
             let closure = &self.functions[slot_index(id.0)];
@@ -257,18 +250,18 @@ impl Vm {
     }
     fn debug_upvalue(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
         if id == SET_UPVALUE && count < 3 {
-            return Err(bad(2, "value expected"));
+            return Err(self.argument_error(2, b"value expected"));
         }
         let n = integer(
             self.number(self.argument(base, count, 1))
-                .ok_or_else(|| bad(1, "number expected"))?,
+                .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?,
         );
         let function = self.argument(base, count, 0);
         let Value::Function(function) = function else {
             if matches!(function, Value::Native(_)) {
                 return Ok(0);
             }
-            return Err(bad(0, "function expected"));
+            return Err(self.argument_type_error(base, count, 0, "function"));
         };
         let closure = &self.functions[slot_index(function.0)];
         let Some(&cell) = n
@@ -490,17 +483,17 @@ impl Vm {
         };
         let level = integer(
             self.number(self.argument(base, count, arg))
-                .ok_or_else(|| bad(arg, "number expected"))?,
+                .ok_or_else(|| self.argument_type_error(base, count, arg, "number"))?,
         );
         let entry = self
             .debug_stack(thread, level)
-            .ok_or_else(|| bad(arg, "level out of range"))?;
+            .ok_or_else(|| self.argument_error(arg, b"level out of range"))?;
         if id == SET_LOCAL && count < arg + 3 {
-            return Err(bad(arg + 2, "value expected"));
+            return Err(self.argument_error(arg + 2, b"value expected"));
         }
         let n = integer(
             self.number(self.argument(base, count, arg + 1))
-                .ok_or_else(|| bad(arg + 1, "number expected"))?,
+                .ok_or_else(|| self.argument_type_error(base, count, arg + 1, "number"))?,
         );
         let slot = match entry {
             StackEntry::Frame(i) => {

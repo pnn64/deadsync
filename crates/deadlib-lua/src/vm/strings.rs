@@ -70,14 +70,6 @@ fn integer(number: f64) -> i64 {
         number as i64
     }
 }
-fn bad(index: usize, message: &str) -> Error {
-    Error::new(
-        ErrorKind::Runtime,
-        0,
-        format!("bad argument #{} ({message})", index + 1),
-    )
-}
-
 impl Vm {
     pub(super) fn open_strings(&mut self) {
         let table = self.new_table();
@@ -136,7 +128,7 @@ impl Vm {
         match self.argument(base, count, index) {
             Value::String(id) => Ok(id),
             Value::Number(n) => Ok(self.strings.intern(format_number(n).as_bytes())),
-            _ => Err(bad(index, "string expected")),
+            _ => Err(self.argument_type_error(base, count, index, "string")),
         }
     }
     pub(super) fn integer_argument(
@@ -154,7 +146,7 @@ impl Vm {
         }
         self.number(value)
             .map(integer)
-            .ok_or_else(|| bad(index, "number expected"))
+            .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
     fn prepare_pattern(&mut self, id: StringId, anchor: bool) {
         self.patterns
@@ -210,7 +202,7 @@ impl Vm {
             for index in 0..count {
                 let n = self.integer_argument(base, count, index, None)?;
                 if !(0..=255).contains(&n) {
-                    return Err(bad(index, "invalid value"));
+                    return Err(self.argument_error(index, b"invalid value"));
                 }
                 bytes.push(n as u8);
             }
@@ -459,7 +451,7 @@ impl Vm {
                 replacement,
                 Value::String(_) | Value::Table(_) | Value::Function(_) | Value::Native(_)
             ) {
-                return Err(bad(2, "string/function/table expected"));
+                return Err(self.argument_error(2, b"string/function/table expected"));
             }
             let len = self.strings.bytes[slot_index(source.0)].len();
             let maximum =
@@ -598,7 +590,7 @@ impl Vm {
             }
             arg += 1;
             if arg >= count {
-                return Err(bad(arg, "no value"));
+                return Err(self.argument_error(arg, b"no value"));
             }
             let spec = crate::format::Spec::parse(bytes, &mut pos)?;
             match spec.conversion {
@@ -615,7 +607,7 @@ impl Vm {
                 | b'G' => {
                     let n = self
                         .number(self.argument(base, count, arg))
-                        .ok_or_else(|| bad(arg, "number expected"))?;
+                        .ok_or_else(|| self.argument_type_error(base, count, arg, "number"))?;
                     let bytes = match spec.conversion {
                         b'c' => spec.character(n),
                         b'd' | b'i' | b'o' | b'u' | b'x' | b'X' => spec.integer(n),

@@ -94,10 +94,6 @@ impl Thread {
     }
 }
 
-fn runtime(message: impl Into<Box<str>>) -> Error {
-    Error::new(ErrorKind::Runtime, 0, message)
-}
-
 impl Vm {
     pub(super) fn open_threads(&mut self) {
         let table = self.new_table();
@@ -316,7 +312,7 @@ impl Vm {
         let result = match id {
             CO_CREATE | CO_WRAP => {
                 let Value::Function(entry) = self.argument(base, count, 0) else {
-                    return Err(runtime("bad argument #1 (Lua function expected)"));
+                    return Err(self.argument_error(0, b"Lua function expected"));
                 };
                 let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
                 self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
@@ -335,7 +331,7 @@ impl Vm {
             }
             CO_STATUS => {
                 let Value::Thread(thread) = self.argument(base, count, 0) else {
-                    return Err(runtime("bad argument #1 (coroutine expected)"));
+                    return Err(self.argument_error(0, b"coroutine expected"));
                 };
                 let status = if thread == self.thread {
                     Status::Running
@@ -423,7 +419,7 @@ impl Vm {
         } else {
             let Value::Thread(thread) = self.argument(frame.vararg_start - 1, frame.argc(), 0)
             else {
-                return Err(runtime("bad argument #1 (coroutine expected)"));
+                return Err(self.argument_error(0, b"coroutine expected"));
             };
             thread
         };

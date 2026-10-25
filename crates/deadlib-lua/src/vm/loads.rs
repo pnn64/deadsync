@@ -272,11 +272,7 @@ impl Vm {
             };
             let reader = self.argument(args, frame.argc(), 0);
             if !matches!(reader, Value::Function(_) | Value::Native(_)) {
-                return Err(Error::new(
-                    ErrorKind::Runtime,
-                    0,
-                    "bad argument #1 to 'load' (function expected)",
-                ));
+                return Err(self.argument_type_error(args, frame.argc(), 0, "function"));
             }
             let supplied_name = self.argument(args, frame.argc(), 1);
             let supplied_name = match supplied_name {

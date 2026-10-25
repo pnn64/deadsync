@@ -100,6 +100,62 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
 
 impl Vm {
     #[cold]
+    pub(super) fn argument_error(&self, index: usize, detail: &[u8]) -> Error {
+        let frame = self
+            .active_native
+            .or_else(|| self.frames.len().checked_sub(1));
+        let name = frame.and_then(|frame| self.debug_name(self.thread, frame));
+        let (name, method) = name
+            .as_ref()
+            .map_or((b"?".as_slice(), false), |(name, kind)| {
+                (name.as_ref(), *kind == b"method")
+            });
+        let mut bytes = if method && index == 0 {
+            b"calling '".to_vec()
+        } else {
+            format!("bad argument #{} to '", index + usize::from(!method)).into_bytes()
+        };
+        bytes.extend_from_slice(name);
+        bytes.extend_from_slice(if method && index == 0 {
+            b"' on bad self ("
+        } else {
+            b"' ("
+        });
+        bytes.extend_from_slice(detail);
+        bytes.push(b')');
+        Error::from_bytes(ErrorKind::Runtime, 0, bytes)
+    }
+
+    #[cold]
+    pub(super) fn argument_type_error(
+        &self,
+        base: usize,
+        count: usize,
+        index: usize,
+        expected: &str,
+    ) -> Error {
+        let actual = if index < count {
+            self.argument(base, count, index).type_name()
+        } else {
+            "no value"
+        };
+        self.argument_error(
+            index,
+            format!("{expected} expected, got {actual}").as_bytes(),
+        )
+    }
+
+    #[cold]
+    pub(super) fn argument_option_error(&self, index: usize, option: &[u8]) -> Error {
+        let mut detail = b"invalid option '".to_vec();
+        detail.extend_from_slice(
+            &option[..option.iter().position(|&b| b == 0).unwrap_or(option.len())],
+        );
+        detail.push(b'\'');
+        self.argument_error(index, &detail)
+    }
+
+    #[cold]
     pub(super) fn error_register(&self, right: bool) -> Option<usize> {
         let frame = self.frames.last()?;
         let FrameKind::Lua(id) = frame.function else {

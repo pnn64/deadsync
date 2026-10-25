@@ -192,13 +192,7 @@ impl Vm {
             Some(
                 self.metatable(arg)
                     .filter(|m| self.proxy_metatables.contains(m))
-                    .ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::Runtime,
-                            0,
-                            "bad argument #1 to 'newproxy' (boolean or proxy expected)",
-                        )
-                    })?,
+                    .ok_or_else(|| self.argument_error(0, b"boolean or proxy expected"))?,
             )
         };
         self.userdata[slot_index(id.0)].metatable = metatable;

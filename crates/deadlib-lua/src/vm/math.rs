@@ -117,7 +117,7 @@ impl Vm {
     }
     fn math_number(&self, base: usize, count: usize, index: usize) -> Result<f64, Error> {
         self.number(self.argument(base, count, index))
-            .ok_or_else(|| fail(format!("bad argument #{} (number expected)", index + 1)))
+            .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
     pub(super) fn math_native(
         &mut self,
@@ -137,7 +137,7 @@ impl Vm {
                 1 => {
                     let upper = self.integer_argument(base, count, 0, None)? as i32;
                     if upper < 1 {
-                        return Err(fail("bad argument #1 (interval is empty)"));
+                        return Err(self.argument_error(0, b"interval is empty"));
                     }
                     (r * f64::from(upper)).floor() + 1.0
                 }
@@ -145,7 +145,7 @@ impl Vm {
                     let lower = self.integer_argument(base, count, 0, None)? as i32;
                     let upper = self.integer_argument(base, count, 1, None)? as i32;
                     if lower > upper {
-                        return Err(fail("bad argument #2 (interval is empty)"));
+                        return Err(self.argument_error(1, b"interval is empty"));
                     }
                     (r * f64::from(upper.wrapping_sub(lower).wrapping_add(1))).floor()
                         + f64::from(lower)
@@ -223,7 +223,7 @@ impl Vm {
         let radix = self.integer_argument(base, count, 1, Some(10))? as i32;
         if radix == 10 {
             if count == 0 {
-                return Err(fail("bad argument #1 (value expected)"));
+                return Err(self.argument_error(0, b"value expected"));
             }
             return Ok(self
                 .number(self.argument(base, count, 0))
@@ -231,7 +231,7 @@ impl Vm {
         }
         let string = self.string_argument(base, count, 0)?;
         if !(2..=36).contains(&radix) {
-            return Err(fail("bad argument #2 (base out of range)"));
+            return Err(self.argument_error(1, b"base out of range"));
         }
         let text = &self.strings.bytes[slot_index(string.0)];
         let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];

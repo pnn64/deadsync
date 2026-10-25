@@ -96,25 +96,14 @@ impl Vm {
                 mask |= u8::from(text.contains(&b'r')) * RETURN;
                 mask |= u8::from(text.contains(&b'l')) * LINE;
                 if !matches!(value, Value::Function(_) | Value::Native(_)) {
-                    return Err(Error::new(
-                        ErrorKind::Runtime,
-                        0,
-                        format!(
-                            "bad argument #{} (function expected, got {})",
-                            arg + 1,
-                            value.type_name()
-                        ),
-                    ));
+                    return Err(self.argument_type_error(base, count, arg, "function"));
                 }
                 let index = self.argument(base, count, arg + 2);
                 if index != Value::Nil {
-                    ticks = debug::integer(self.number(index).ok_or_else(|| {
-                        Error::new(
-                            ErrorKind::Runtime,
-                            0,
-                            format!("bad argument #{} (number expected)", arg + 3),
-                        )
-                    })?);
+                    ticks =
+                        debug::integer(self.number(index).ok_or_else(|| {
+                            self.argument_type_error(base, count, arg + 2, "number")
+                        })?);
                 }
                 if ticks > 0 {
                     mask |= COUNT;

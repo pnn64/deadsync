@@ -81,11 +81,11 @@ impl Vm {
         self.set_global(b"table", Value::Table(table))
             .expect("table name is valid");
     }
-    fn table_argument(&self, base: usize, count: usize) -> Result<TableId, Error> {
+    pub(super) fn table_argument(&self, base: usize, count: usize) -> Result<TableId, Error> {
         if let Value::Table(table) = self.argument(base, count, 0) {
             Ok(table)
         } else {
-            Err(failure("bad argument #1 (table expected)"))
+            Err(self.argument_type_error(base, count, 0, "table"))
         }
     }
     fn raw_index(&self, table: TableId, index: i64) -> Value {
@@ -207,7 +207,7 @@ impl Vm {
         let callback = self.argument(args, frame.argc(), 1);
         if frame.pc() == 0 {
             if !matches!(callback, Value::Function(_) | Value::Native(_)) {
-                return Err(failure("bad argument #2 (function expected)"));
+                return Err(self.argument_type_error(args, frame.argc(), 1, "function"));
             }
             self.registers[base + 3] = if id == TAB_FOREACHI {
                 key(0)
@@ -325,7 +325,7 @@ impl Vm {
                 comparator,
                 Value::Nil | Value::Function(_) | Value::Native(_)
             ) {
-                return Err(failure("bad argument #2 (function expected)"));
+                return Err(self.argument_type_error(args, count, 1, "function"));
             }
             let len = self.tables[slot_index(table.0)].len() as i64;
             let index = self.sorts.len();
