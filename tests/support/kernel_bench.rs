@@ -22,7 +22,7 @@ fn cycles() -> u64 {
     0
 }
 
-pub fn compare(label: &str, iterations: usize, mut work: impl FnMut(bool)) {
+fn pin_thread() {
     #[cfg(windows)]
     {
         #[link(name = "kernel32")]
@@ -36,6 +36,32 @@ pub fn compare(label: &str, iterations: usize, mut work: impl FnMut(bool)) {
             0
         );
     }
+}
+
+#[allow(dead_code)]
+pub fn measure(label: &str, iterations: usize, mut work: impl FnMut()) {
+    pin_thread();
+    let mut samples = Vec::new();
+    for round in 0..12 {
+        let start_cycles = cycles();
+        let start = Instant::now();
+        for _ in 0..iterations {
+            work();
+        }
+        let ns = start.elapsed().as_nanos() as f64 / iterations as f64;
+        let cpu = (cycles() - start_cycles) as f64 / iterations as f64;
+        if round > 0 {
+            samples.push((cpu, ns));
+        }
+    }
+    samples.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    let (cpu, ns) = samples[5];
+    println!("{label}: cycles/op {cpu:.2}; ns/op {ns:.2}");
+}
+
+#[allow(dead_code)]
+pub fn compare(label: &str, iterations: usize, mut work: impl FnMut(bool)) {
+    pin_thread();
     let mut samples = [Vec::new(), Vec::new()];
     for round in 0..12 {
         for variant in [round % 2, 1 - round % 2] {

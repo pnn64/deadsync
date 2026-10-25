@@ -85,9 +85,22 @@ pub(super) fn texture_is_opaque(image: &RgbaImage) -> bool {
     }
     const ALPHA_MASK: u128 =
         u128::from_ne_bytes([0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]);
-    let (groups, tail) = image.as_raw().as_chunks::<16>();
-    groups
-        .iter()
-        .all(|group| u128::from_ne_bytes(*group) & ALPHA_MASK == ALPHA_MASK)
-        && tail.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255)
+    // Reduce four words before branching, retaining an immediate first-pixel exit.
+    let bytes = image.as_raw();
+    if bytes[3] != 255 {
+        return false;
+    }
+    let (blocks, tail) = bytes.as_chunks::<64>();
+    blocks.iter().all(|block| {
+        let alpha = block
+            .as_chunks::<16>()
+            .0
+            .iter()
+            .fold(u128::MAX, |alpha, word| alpha & u128::from_ne_bytes(*word));
+        alpha & ALPHA_MASK == ALPHA_MASK
+    }) && tail.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255)
 }
+
+#[cfg(test)]
+#[path = "opacity_kernel.rs"]
+mod opacity_kernel;

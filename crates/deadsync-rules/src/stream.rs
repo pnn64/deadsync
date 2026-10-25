@@ -636,7 +636,7 @@ fn for_each_measure_density<const LANES: usize>(
         // Minimized charts normally contain exactly one fixed-width row per line.
         if data.len() > LANES
             && (data[LANES] == b'\n' || data[LANES..].starts_with(b"\r\n"))
-            && !data[..LANES].contains(&b'\n')
+            && !row_contains_newline::<LANES>(&data[..LANES])
             && data[LANES - 1] != b'\r'
             && !matches!(data[0], b'/' | b',' | b';')
         {
@@ -672,6 +672,19 @@ fn for_each_measure_density<const LANES: usize>(
         }
     }
     visit(measure_steps);
+}
+
+#[inline]
+fn row_contains_newline<const LANES: usize>(row: &[u8]) -> bool {
+    if LANES <= 8 {
+        return row.contains(&b'\n');
+    }
+    // The ten-lane row spans a word and two bytes. Test the word together
+    // instead of making a separate byte-by-byte validation pass.
+    // XOR makes newline bytes zero; subtraction exposes a zero byte's high bit.
+    let word = u64::from_ne_bytes(row[..8].try_into().unwrap()) ^ 0x0a0a_0a0a_0a0a_0a0a;
+    word.wrapping_sub(0x0101_0101_0101_0101) & !word & 0x8080_8080_8080_8080 != 0
+        || row[8..].contains(&b'\n')
 }
 
 fn density_row_has_step<const LANES: usize>(line: &[u8]) -> bool {
@@ -871,3 +884,7 @@ mod tests {
 #[cfg(test)]
 #[path = "stream_perf.rs"]
 mod stream_perf;
+
+#[cfg(test)]
+#[path = "density_kernel.rs"]
+mod density_kernel;
