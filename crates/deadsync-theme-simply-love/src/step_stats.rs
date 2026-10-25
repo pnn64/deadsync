@@ -493,14 +493,15 @@ pub fn centered_single_split_layout(
     }
 
     let sidepane_width = double_sidepane_width(screen_w, notefield_width);
-    let panel_zoom = pane
-        .banner_data_zoom
-        .min(sidepane_width / PANEL_CONTENT_WIDTH);
+    let panel_zoom = (sidepane_width / PANEL_CONTENT_WIDTH).min(1.0);
     if panel_zoom < MIN_PANEL_ZOOM {
         return None;
     }
 
+    let banner_half_height = STEP_STATS_BANNER_H * STEP_STATS_SONG_BANNER_ZOOM * 0.5;
+    let banner_top_y = pane.pane_center_y - 200.0 - banner_half_height;
     let pane = DoubleStepStatsLayout {
+        pane_center_y: banner_top_y + (200.0 + banner_half_height) * panel_zoom,
         banner_data_zoom: panel_zoom,
         ..pane
     };
@@ -509,11 +510,14 @@ pub fn centered_single_split_layout(
     let right_field_edge = screen_center_x + notefield_width * 0.5;
     let graph = StepStatsGraphRect {
         x: right_field_edge,
-        y: pane.pane_center_y + 40.0,
+        y: screen_h - GRAPH_HEIGHT,
         w: density_graph_width(current_graph_w, sidepane_width, false),
     };
 
-    if graph.w > sidepane_width || graph.x + graph.w > screen_w || graph.y + GRAPH_HEIGHT > screen_h
+    if graph.w > sidepane_width
+        || graph.x + graph.w > screen_w
+        || graph.y < 0.0
+        || graph.y + GRAPH_HEIGHT > screen_h
     {
         return None;
     }
@@ -934,15 +938,25 @@ mod tests {
             .expect("centered split fits");
 
             assert!(layout.panel_width <= layout.sidepane_width);
+            assert_eq!(
+                layout.pane.banner_data_zoom,
+                (layout.sidepane_width / 200.0).min(1.0)
+            );
             assert!(layout.graph.x >= screen_w * 0.5 + 128.0);
             assert!(layout.graph.x + layout.graph.w <= screen_w);
-            assert!(layout.graph.y + 105.0 <= 480.0);
+            assert_eq!(layout.graph.y, 375.0);
+            assert_eq!(layout.graph.y + 105.0, 480.0);
 
             let song_banner = layout.song_banner();
             let banner_half_width = STEP_STATS_BANNER_W * song_banner.zoom * 0.5;
             let right_panel_left = screen_w * 0.5 + 128.0;
+            let banner_half_height =
+                STEP_STATS_BANNER_H * STEP_STATS_SONG_BANNER_ZOOM * layout.pane.banner_data_zoom * 0.5;
+            let expected_banner_top =
+                240.0 + 80.0 - 200.0 - STEP_STATS_BANNER_H * STEP_STATS_SONG_BANNER_ZOOM * 0.5;
             assert!(song_banner.x - banner_half_width >= right_panel_left);
             assert!(song_banner.x + banner_half_width <= right_panel_left + layout.panel_width);
+            assert!((song_banner.y - banner_half_height - expected_banner_top).abs() < 0.001);
             assert!(layout.holds_mines_rolls_frame().center_x < right_panel_left);
             assert!(layout.scorebox_frame().center_x > right_panel_left);
         }

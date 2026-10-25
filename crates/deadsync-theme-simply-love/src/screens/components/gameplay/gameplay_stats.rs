@@ -2268,7 +2268,11 @@ fn push_split_step_stats(
             || (-notefield_width + 75.0).mul_add(banner_data_zoom, pane_cx),
             |split| split.judgment_origin_x(),
         );
-        let origin_y = 40.0f32.mul_add(banner_data_zoom, pane_cy);
+        let origin_y = if centered_single_split {
+            pane_cy
+        } else {
+            40.0f32.mul_add(banner_data_zoom, pane_cy)
+        };
         let base_zoom = 0.8 * banner_data_zoom;
 
         let total_tapnotes = state.display_totals_for_player(0).total_steps as f32;
