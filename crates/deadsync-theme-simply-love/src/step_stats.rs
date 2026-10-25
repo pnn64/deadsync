@@ -40,6 +40,69 @@ pub struct DoubleStepStatsLayout {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CenteredSingleSplitLayout {
+    pub pane: DoubleStepStatsLayout,
+    pub sidepane_width: f32,
+    pub panel_width: f32,
+    pub left_panel_center_x: f32,
+    pub right_panel_center_x: f32,
+    pub graph: StepStatsGraphRect,
+}
+
+impl CenteredSingleSplitLayout {
+    #[must_use]
+    pub fn song_banner(self) -> StepStatsSpritePlacement {
+        StepStatsSpritePlacement {
+            x: 16.0f32.mul_add(self.pane.banner_data_zoom, self.right_panel_center_x),
+            y: 200.0f32.mul_add(-self.pane.banner_data_zoom, self.pane.pane_center_y),
+            zoom: STEP_STATS_SONG_BANNER_ZOOM * self.pane.banner_data_zoom,
+        }
+    }
+
+    #[must_use]
+    pub fn pack_banner(self) -> StepStatsSpritePlacement {
+        let song_banner = self.song_banner();
+        let song_w = STEP_STATS_BANNER_W * song_banner.zoom;
+        let pack_w = STEP_STATS_BANNER_W * 0.2 * self.pane.banner_data_zoom;
+        StepStatsSpritePlacement {
+            x: song_w.mul_add(-0.5, song_banner.x) + pack_w * 0.5,
+            y: 20.0f32.mul_add(self.pane.banner_data_zoom, self.pane.pane_center_y),
+            zoom: 0.2 * self.pane.banner_data_zoom,
+        }
+    }
+
+    #[must_use]
+    pub fn holds_mines_rolls_frame(self) -> StepStatsFramePlacement {
+        StepStatsFramePlacement {
+            center_x: 56.0f32.mul_add(self.pane.banner_data_zoom, self.left_panel_center_x),
+            center_y: 0.8f32
+                .mul_add(28.0, -10.0)
+                .mul_add(self.pane.banner_data_zoom, self.pane.pane_center_y),
+            zoom: 0.8 * self.pane.banner_data_zoom,
+        }
+    }
+
+    #[must_use]
+    pub fn scorebox_frame(self) -> StepStatsFramePlacement {
+        StepStatsFramePlacement {
+            center_x: 16.0f32.mul_add(self.pane.banner_data_zoom, self.right_panel_center_x),
+            center_y: 115.0f32.mul_add(-self.pane.banner_data_zoom, self.pane.pane_center_y),
+            zoom: self.pane.banner_data_zoom,
+        }
+    }
+
+    #[must_use]
+    pub fn judgment_origin_x(self) -> f32 {
+        (-81.0f32).mul_add(self.pane.banner_data_zoom, self.left_panel_center_x)
+    }
+
+    #[must_use]
+    pub fn time_base_x(self) -> f32 {
+        (-6.0f32).mul_add(self.pane.banner_data_zoom, self.left_panel_center_x)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StepStatsGraphRect {
     pub x: f32,
     pub y: f32,
@@ -398,6 +461,71 @@ pub fn double_pane_layout(
         note_field_is_centered,
         banner_data_zoom,
     }
+}
+
+#[must_use]
+pub fn centered_single_split_layout(
+    screen_center_x: f32,
+    screen_center_y: f32,
+    screen_w: f32,
+    screen_h: f32,
+    playfield_center_x: f32,
+    notefield_width: f32,
+    current_graph_w: f32,
+) -> Option<CenteredSingleSplitLayout> {
+    const PANEL_CONTENT_WIDTH: f32 = 200.0;
+    const MIN_PANEL_ZOOM: f32 = 0.8;
+    const GRAPH_HEIGHT: f32 = 105.0;
+
+    if screen_h <= 0.0 || screen_w < screen_h || screen_w / screen_h >= 1.6 {
+        return None;
+    }
+
+    let pane = double_pane_layout(
+        screen_center_x,
+        screen_center_y,
+        screen_w,
+        screen_h,
+        playfield_center_x,
+    );
+    if !pane.note_field_is_centered {
+        return None;
+    }
+
+    let sidepane_width = double_sidepane_width(screen_w, notefield_width);
+    let panel_zoom = pane
+        .banner_data_zoom
+        .min(sidepane_width / PANEL_CONTENT_WIDTH);
+    if panel_zoom < MIN_PANEL_ZOOM {
+        return None;
+    }
+
+    let pane = DoubleStepStatsLayout {
+        banner_data_zoom: panel_zoom,
+        ..pane
+    };
+    let panel_width = PANEL_CONTENT_WIDTH * panel_zoom;
+    let left_field_edge = screen_center_x - notefield_width * 0.5;
+    let right_field_edge = screen_center_x + notefield_width * 0.5;
+    let graph = StepStatsGraphRect {
+        x: right_field_edge,
+        y: pane.pane_center_y + 40.0,
+        w: density_graph_width(current_graph_w, sidepane_width, false),
+    };
+
+    if graph.w > sidepane_width || graph.x + graph.w > screen_w || graph.y + GRAPH_HEIGHT > screen_h
+    {
+        return None;
+    }
+
+    Some(CenteredSingleSplitLayout {
+        pane,
+        sidepane_width,
+        panel_width,
+        left_panel_center_x: left_field_edge - panel_width * 0.5,
+        right_panel_center_x: right_field_edge + panel_width * 0.5,
+        graph,
+    })
 }
 
 #[must_use]
@@ -774,5 +902,58 @@ mod tests {
                 w: 364.8
             }
         );
+    }
+
+    #[test]
+    fn centered_single_split_fits_vga_5_4_and_6_5() {
+        for screen_w in [640.0, 600.0, 576.0] {
+            let layout = centered_single_split_layout(
+                screen_w * 0.5,
+                240.0,
+                screen_w,
+                480.0,
+                screen_w * 0.5,
+                256.0,
+                0.0,
+            )
+            .expect("centered split fits");
+
+            assert!(layout.panel_width <= layout.sidepane_width);
+            assert!(layout.graph.x >= screen_w * 0.5 + 128.0);
+            assert!(layout.graph.x + layout.graph.w <= screen_w);
+            assert!(layout.graph.y + 105.0 <= 480.0);
+
+            let song_banner = layout.song_banner();
+            let banner_half_width = STEP_STATS_BANNER_W * song_banner.zoom * 0.5;
+            let right_panel_left = screen_w * 0.5 + 128.0;
+            assert!(song_banner.x - banner_half_width >= right_panel_left);
+            assert!(song_banner.x + banner_half_width <= right_panel_left + layout.panel_width);
+            assert!(layout.holds_mines_rolls_frame().center_x < right_panel_left);
+            assert!(layout.scorebox_frame().center_x > right_panel_left);
+        }
+
+        let six_five = centered_single_split_layout(
+            288.0, 240.0, 576.0, 480.0, 288.0, 256.0, 0.0,
+        )
+        .expect("6:5 is the minimum supported ratio");
+        assert!((six_five.pane.banner_data_zoom - 0.8).abs() < 0.001);
+    }
+
+    #[test]
+    fn centered_single_split_hides_when_it_does_not_fit_or_is_wide() {
+        for (screen_w, screen_h) in [(560.0, 480.0), (768.0, 480.0), (640.0, 400.0)] {
+            assert!(
+                centered_single_split_layout(
+                    screen_w * 0.5,
+                    screen_h * 0.5,
+                    screen_w,
+                    screen_h,
+                    screen_w * 0.5,
+                    256.0,
+                    0.0,
+                )
+                .is_none()
+            );
+        }
     }
 }
