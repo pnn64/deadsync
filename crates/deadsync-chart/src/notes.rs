@@ -60,7 +60,28 @@ pub(crate) fn parse_chart_notes_as<T>(
     new_note: impl FnMut(usize, usize, NoteType) -> T,
     set_tail: impl FnMut(&mut T, usize),
 ) -> Vec<T> {
-    let note_capacity = minimized_note_data
+    let (words, tail) = minimized_note_data.as_chunks::<8>();
+    let mut note_capacity = 0;
+    for &bytes in words {
+        let word = u64::from_ne_bytes(bytes);
+        // Case folding also maps control bytes 0x11/12/14 to digits. Keep
+        // their original bit 5 as a high-bit mask for the digit comparisons.
+        let digit_mask = (word & 0x2020_2020_2020_2020) << 2;
+        let word = word | 0x2020_2020_2020_2020;
+        let equal = |byte: u8| {
+            let xor = word ^ (u64::from(byte) * 0x0101_0101_0101_0101);
+            // Set each zero byte's high bit. Masking before the addition
+            // prevents carries between bytes, so every match is exact.
+            !(((xor & 0x7f7f_7f7f_7f7f_7f7f) + 0x7f7f_7f7f_7f7f_7f7f) | xor | 0x7f7f_7f7f_7f7f_7f7f)
+        };
+        let matches = ((equal(b'1') | equal(b'2') | equal(b'4')) & digit_mask)
+            | equal(b'f')
+            | equal(b'm')
+            | equal(b'l');
+        // Sum eight independent 0/1 lanes without requiring a POPCNT target.
+        note_capacity += ((matches >> 7).wrapping_mul(0x0101_0101_0101_0101) >> 56) as usize;
+    }
+    note_capacity += tail
         .iter()
         .filter(|&&ch| {
             matches!(
@@ -302,6 +323,46 @@ mod tests {
                 |note, tail_row_index| note.tail_row_index = Some(tail_row_index),
             );
             assert_eq!(actual, expected, "note parsing diverged for {lanes} lanes");
+        }
+    }
+
+    #[test]
+    fn note_reservation_matches_original_for_every_byte_and_lane_count() {
+        for lanes in [0, 1, 4, 5, 8, 10, 12] {
+            for (byte, length) in (0..=255)
+                .flat_map(|byte| (0..=17).chain([127, 128]).map(move |length| (byte, length)))
+            {
+                let mut data = vec![byte; length];
+                data.extend_from_slice(b"\r\n,\n200000000000\n100000000000\n300000000000\n");
+                let capacity = data
+                    .iter()
+                    .filter(|&&ch| {
+                        matches!(
+                            ch,
+                            b'1' | b'F' | b'f' | b'2' | b'4' | b'M' | b'm' | b'L' | b'l'
+                        )
+                    })
+                    .count();
+                let expected = parse_chart_notes_as_with_capacity(
+                    &data,
+                    lanes,
+                    capacity,
+                    |row_index, column, note_type| ParsedNote {
+                        row_index,
+                        column,
+                        note_type,
+                        tail_row_index: None,
+                    },
+                    |note, tail_row_index| note.tail_row_index = Some(tail_row_index),
+                );
+                let actual = parse_chart_notes(&data, lanes);
+                assert_eq!(actual, expected, "byte={byte}, lanes={lanes}");
+                assert_eq!(
+                    actual.capacity(),
+                    expected.capacity(),
+                    "byte={byte}, lanes={lanes}"
+                );
+            }
         }
     }
 }

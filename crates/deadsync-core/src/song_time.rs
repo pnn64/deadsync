@@ -32,7 +32,11 @@ pub fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
 #[inline(always)]
 #[must_use]
 pub fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    ((i128::from(lhs) - i128::from(rhs)) as f64 / SONG_TIME_NS_PER_SECOND) as f32
+    // The full difference fits u64, including MIN..MAX. Convert its magnitude
+    // once, then restore the sign without rounding the timestamps separately.
+    let magnitude = lhs.abs_diff(rhs) as f64;
+    let delta = if lhs < rhs { -magnitude } else { magnitude };
+    (delta / SONG_TIME_NS_PER_SECOND) as f32
 }
 
 #[inline(always)]
@@ -86,6 +90,42 @@ pub fn scaled_song_time_ns(seconds: f32, seconds_per_second: f32) -> SongTimeNs 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timestamp_differences_preserve_all_integer_bits_before_conversion() {
+        let check = |lhs: i64, rhs: i64| {
+            let expected =
+                ((i128::from(lhs) - i128::from(rhs)) as f64 / SONG_TIME_NS_PER_SECOND) as f32;
+            assert_eq!(
+                song_time_ns_delta_seconds(lhs, rhs).to_bits(),
+                expected.to_bits(),
+                "{lhs} - {rhs}"
+            );
+        };
+        let mut values = vec![i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX];
+        for bit in 0..63 {
+            for offset in -2..=2 {
+                if let Some(value) = (1_i64 << bit).checked_add(offset) {
+                    values.push(value);
+                    values.push(-value);
+                }
+            }
+        }
+        for &lhs in &values {
+            for &rhs in &values {
+                check(lhs, rhs);
+            }
+        }
+        let mut state = 0x1234_5678_9abc_def0_u64;
+        for _ in 0..100_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let lhs = state as i64;
+            state = state.wrapping_mul(0xd134_2543_de82_ef95);
+            check(lhs, state as i64);
+        }
+    }
 
     #[test]
     fn seconds_round_trip_through_integer_nanoseconds() {

@@ -154,49 +154,25 @@ pub fn classify_offset_ns_with_disabled_windows(
     profile: &TimingProfileNs,
     disabled_windows: &[bool; 5],
 ) -> Option<(JudgeGrade, TimingWindow)> {
-    let abs = i128::from(offset_ns).abs();
+    let abs = offset_ns.unsigned_abs();
     if !disabled_windows[0]
         && let Some(w0) = profile.fa_plus_window_ns
-        && abs <= i128::from(w0)
+        && w0 >= 0
+        && abs <= w0 as u64
     {
         return Some((JudgeGrade::Fantastic, TimingWindow::W0));
     }
 
-    let checks = [
-        (
-            disabled_windows[0],
-            profile.windows_ns[0],
-            JudgeGrade::Fantastic,
-            TimingWindow::W1,
-        ),
-        (
-            disabled_windows[1],
-            profile.windows_ns[1],
-            JudgeGrade::Excellent,
-            TimingWindow::W2,
-        ),
-        (
-            disabled_windows[2],
-            profile.windows_ns[2],
-            JudgeGrade::Great,
-            TimingWindow::W3,
-        ),
-        (
-            disabled_windows[3],
-            profile.windows_ns[3],
-            JudgeGrade::Decent,
-            TimingWindow::W4,
-        ),
-        (
-            disabled_windows[4],
-            profile.windows_ns[4],
-            JudgeGrade::WayOff,
-            TimingWindow::W5,
-        ),
+    const RESULTS: [(JudgeGrade, TimingWindow); 5] = [
+        (JudgeGrade::Fantastic, TimingWindow::W1),
+        (JudgeGrade::Excellent, TimingWindow::W2),
+        (JudgeGrade::Great, TimingWindow::W3),
+        (JudgeGrade::Decent, TimingWindow::W4),
+        (JudgeGrade::WayOff, TimingWindow::W5),
     ];
-    for (disabled, window_ns, grade, window) in checks {
-        if !disabled && abs <= i128::from(window_ns) {
-            return Some((grade, window));
+    for (index, &window_ns) in profile.windows_ns.iter().enumerate() {
+        if !disabled_windows[index] && window_ns >= 0 && abs <= window_ns as u64 {
+            return Some(RESULTS[index]);
         }
     }
     None
