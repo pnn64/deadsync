@@ -18,12 +18,12 @@ performance JSON keeps its recorded measurement provenance.
 | Requirement | Evidence and remaining work |
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Resumable byte scanner, flat AST arenas, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source compilation shares the scanner; reader loading still needs parser resumption and a protected callback boundary. Complete reference-suite coverage remains open. |
+| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source compilation and protected reader-based text loading share the frontend without replaying prefixes. Complete reference-suite coverage remains open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Full diagnostics, debug metadata and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug stacks/hooks, full diagnostics and broader resource tests remain open. |
-| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments and dynamic compilation. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Complete base, I/O, OS, package/require, debug, binary dumps and broader numeric/diagnostic compatibility remain open. |
+| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Complete base, I/O, OS, package/require, debug, binary dumps and broader numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
 | Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
 | Lua 5.2–5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 69 differential/adversarial integration tests, eight scanner/arena/verifier tests and
+crate, 82 differential/adversarial integration tests, eleven parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-userdata.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-reader.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38–13.51 times the reference duration. Subsequent
@@ -82,8 +82,13 @@ Host full collection now returns a result so Lua finalizer errors propagate.
 The [scanner validation](testing/2026-10-25-rust-lua-stream-lexer.md) covers all
 two-way splits of representative lexical input, one-byte input, 2,000 generated
 binary inputs and long partial tokens. The [frontend measurements](performance/2026-10-25-rust-lua-stream-lexer.md)
-add fixed-source compilation scaling from 10 KB to 1 MB. Lua reader APIs remain
-unfinished; lexer resumption alone does not establish their call/error ordering.
+add fixed-source compilation scaling from 10 KB to 1 MB. The subsequent
+[reader validation](testing/2026-10-25-rust-lua-reader.md) adds parser resumption,
+protected text `load`, reader/error ordering, environment changes, collection,
+nested calls and quota recovery. It also checks declaration-time local limits.
+The [reader measurements](performance/2026-10-25-rust-lua-reader.md) add single-chunk
+and one-byte loading workloads. Binary loading and broader compilation resource
+limits remain unfinished.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

@@ -51,6 +51,7 @@ fn empty(line: u32) -> Token {
 /// Input retains its prefix between calls. `None` requests more bytes; an EOF
 /// token is emitted only after `closed` is true. Partial tokens retain their
 /// cursor and decoded string bytes rather than rescanning earlier input.
+#[derive(Debug)]
 pub(crate) struct Scanner {
     pos: usize,
     start: usize,
@@ -74,6 +75,9 @@ impl Default for Scanner {
 }
 
 impl Scanner {
+    pub(crate) fn heap_bytes(&self) -> usize {
+        self.text.capacity() + self.token.text.len()
+    }
     fn error(&self, message: &str) -> Error {
         Error::new(ErrorKind::Syntax, self.line, message)
     }

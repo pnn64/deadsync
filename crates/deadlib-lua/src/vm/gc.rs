@@ -279,7 +279,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=29|32..=59|64..=77|80..=85|96..=104)
+                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
@@ -344,6 +344,7 @@ impl Vm {
             + self.substitutions.capacity() * std::mem::size_of::<strings::Substitution>()
             + jobs_bytes(&self.substitutions)
             + self.sorts.capacity() * std::mem::size_of::<tables::Sort>();
+        control += loads::storage_bytes(&self.loads);
         for (_, t) in self.threads.entries() {
             control += t.registers.capacity() * std::mem::size_of::<Value>()
                 + t.frames.capacity() * std::mem::size_of::<Frame>()
@@ -351,6 +352,7 @@ impl Vm {
                 + t.substitutions.capacity() * std::mem::size_of::<strings::Substitution>()
                 + jobs_bytes(&t.substitutions)
                 + t.sorts.capacity() * std::mem::size_of::<tables::Sort>();
+            control += loads::storage_bytes(&t.loads);
         }
         control += self.buffers.capacity() * std::mem::size_of::<Vec<u8>>()
             + self.buffers.iter().map(Vec::capacity).sum::<usize>()

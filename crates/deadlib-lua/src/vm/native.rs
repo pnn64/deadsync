@@ -51,6 +51,7 @@ impl Vm {
                 if matches!(
                     id,
                     PCALL
+                        | LOAD_READER
                         | COLLECT_GARBAGE
                         | XPCALL
                         | TOSTRING
@@ -154,7 +155,7 @@ impl Vm {
         }
         Ok(())
     }
-    fn protected_failure(&mut self, index: usize, value: Value) {
+    pub(super) fn protected_failure(&mut self, index: usize, value: Value) {
         let frame = self.frames[index];
         self.close_upvalues(frame.base);
         self.discard_finalizers(index + 1);
@@ -162,14 +163,20 @@ impl Vm {
         self.trim_substitutions();
         self.trim_sorts();
         self.registers.truncate(frame.base);
-        self.registers
-            .extend_from_slice(&[Value::Boolean(false), value]);
+        let first = if matches!(frame.function, FrameKind::Native(LOAD_READER)) {
+            Value::Nil
+        } else {
+            Value::Boolean(false)
+        };
+        self.registers.extend_from_slice(&[first, value]);
         self.frames[index].pc = 2;
+        self.trim_loads();
         self.top = frame.base + 2;
     }
     pub(super) fn catch_error(&mut self, error: &Error, _line: u32) -> Result<bool, Error> {
         let Some(index) = self.frames.iter().rposition(|f| {
-            matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3)
+            (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
+                || (matches!(f.function, FrameKind::Native(LOAD_READER)) && matches!(f.pc, 1 | 3))
         }) else {
             return Ok(false);
         };
@@ -180,9 +187,31 @@ impl Vm {
             let value = self.intern(error.message().as_bytes());
             self.located_error(value, 1)
         };
-        if matches!(frame.function, FrameKind::Native(XPCALL)) && frame.pc() == 1 {
+        // lua_load protects the parser while retaining the current error
+        // function. An enclosing xpcall transforms reader runtime errors even
+        // though the loader subsequently returns nil plus that transformed value.
+        let inherited = if matches!(frame.function, FrameKind::Native(LOAD_READER)) {
+            self.frames[..index].iter().rposition(|f| {
+                (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
+                    || (matches!(f.function, FrameKind::Native(LOAD_READER)) && f.pc == 3)
+            })
+        } else {
+            None
+        };
+        let handler_index = if matches!(frame.function, FrameKind::Native(XPCALL)) && frame.pc == 1
+        {
+            Some(index)
+        } else if frame.pc == 1 {
+            inherited.filter(|&i| {
+                matches!(self.frames[i].function, FrameKind::Native(XPCALL))
+                    && self.frames[i].pc == 1
+            })
+        } else {
+            None
+        };
+        if let Some(handler_index) = handler_index {
             self.frames[index].pc = 3;
-            let handler = self.registers[frame.vararg_start + 1];
+            let handler = self.registers[self.frames[handler_index].vararg_start + 1];
             if matches!(handler, Value::Function(_) | Value::Native(_)) {
                 // Preserve faulting frames until the error handler has returned.
                 let base = self.registers.len();
@@ -210,7 +239,11 @@ impl Vm {
                 return Ok(true);
             }
         }
-        let value = if frame.pc() == 3 || matches!(frame.function, FrameKind::Native(XPCALL)) {
+        let value = if frame.pc() == 3
+            || matches!(frame.function, FrameKind::Native(XPCALL))
+            || handler_index.is_some()
+            || inherited.is_some_and(|i| self.frames[i].pc == 3)
+        {
             self.intern(b"error in error handling")
         } else {
             value
@@ -222,6 +255,7 @@ impl Vm {
         let base = frame.base;
         let index = self.frames.len() - 1;
         match id {
+            LOAD_READER => self.load_step(frame),
             COLLECT_GARBAGE => self.collect_step(frame),
             CONT_GC => self.finalizer_step(frame),
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {

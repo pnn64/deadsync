@@ -8,6 +8,7 @@ use crate::{
 };
 use std::{collections::HashMap, sync::Arc};
 mod gc;
+mod loads;
 mod math;
 mod meta;
 mod native;
@@ -128,6 +129,7 @@ const DEBUG_SET_ENV: u64 = 26;
 const COLLECT_GARBAGE: u64 = 27;
 const GC_INFO: u64 = 28;
 const NEW_PROXY: u64 = 29;
+const LOAD_READER: u64 = 30;
 const CONT_RAW: u64 = 128;
 const CONT_BOOL: u64 = 129;
 const CONT_NOT: u64 = 130;
@@ -256,6 +258,7 @@ pub struct Vm {
     gc: gc::Collector,
     roots: Arena<Value>,
     identity: u64,
+    loads: Vec<loads::Loading>,
     userdata: Arena<userdata::Userdata>,
     proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
@@ -305,6 +308,7 @@ impl Vm {
             gc: gc::Collector::default(),
             roots: Arena::default(),
             identity: gc::new_vm_identity(),
+            loads: Vec::new(),
             userdata: Arena::default(),
             proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
@@ -343,6 +347,7 @@ impl Vm {
             (COLLECT_GARBAGE, b"collectgarbage"),
             (GC_INFO, b"gcinfo"),
             (NEW_PROXY, b"newproxy"),
+            (LOAD_READER, b"load"),
         ] {
             vm.set_global(name, Value::Native(id))
                 .expect("base library names are valid");
@@ -730,6 +735,7 @@ impl Vm {
         self.frames.clear();
         self.trim_substitutions();
         self.sorts.clear();
+        self.trim_loads();
         match result {
             Ok(count) => Ok(&self.registers[..count]),
             Err(error) => Err(error),

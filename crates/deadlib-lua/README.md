@@ -21,10 +21,11 @@ upvalue cells across executions. Registers and call frames are contiguous
 vectors. Calls use an explicit frame stack; tail calls reuse the frame. Values
 are copyable enum tags with numeric object handles.
 
-Fixed-source compilation uses a resumable byte scanner. It preserves token and
-string-decoding state across append-only input chunks, including split escapes,
-numbers, long delimiters and CR/LF pairs. Reader-based `load` still requires parser
-resumption and its protected callback boundary; it is not yet available.
+Fixed-source compilation and reader-based text `load` share a resumable scanner
+and parser. Flat grammar continuations preserve partial tokens, expressions and
+statements across input chunks without reparsing earlier input. Reader callbacks
+use protected VM frames, preserve arbitrary error values and obey Lua 5.1 yield
+restrictions. Loaded functions use the thread environment after input is read.
 
 Current Lua 5.1 coverage includes byte strings and lexical syntax, expressions,
 assignments, blocks, conditionals, numeric/generic loops, table constructors,
@@ -37,7 +38,8 @@ Native callbacks and metamethods use explicit continuation frames.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
-`pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, `loadstring` and `newproxy`.
+`pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`, `loadstring`
+and `newproxy`.
 The Lua 5.1 `math` function set and debug metatable/environment subsets are available. Binary
 decomposition/scaling preserve signed zero and round subnormals once. The random
 stream matches the MSVC reference, including per-OS-thread state shared by VMs;

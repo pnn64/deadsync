@@ -53,6 +53,7 @@ pub(super) struct Thread {
     pub(super) active_native: Option<usize>,
     pub(super) substitutions: Vec<strings::Substitution>,
     pub(super) sorts: Vec<tables::Sort>,
+    pub(super) loads: Vec<loads::Loading>,
     pub(super) entry: Option<FunctionId>,
     pub(super) status: Status,
     pub(super) resumer: Option<ThreadId>,
@@ -70,6 +71,7 @@ impl Thread {
             active_native: None,
             substitutions: Vec::new(),
             sorts: Vec::new(),
+            loads: Vec::new(),
             entry: None,
             status: Status::Running,
             resumer: None,
@@ -198,6 +200,7 @@ impl Vm {
         std::mem::swap(&mut self.active_native, &mut state.active_native);
         std::mem::swap(&mut self.substitutions, &mut state.substitutions);
         std::mem::swap(&mut self.sorts, &mut state.sorts);
+        std::mem::swap(&mut self.loads, &mut state.loads);
         std::mem::swap(line, &mut state.line);
     }
     fn switch_thread(&mut self, id: ThreadId, line: &mut u32) {
@@ -287,6 +290,7 @@ impl Vm {
             self.frames.clear();
             self.trim_substitutions();
             self.sorts.clear();
+            self.trim_loads();
             self.threads[slot_index(id.0)].status = Status::Dead;
             self.switch_thread(parent, line);
         }
@@ -332,6 +336,35 @@ impl Vm {
         };
         self.registers[base] = result;
         Ok(1)
+    }
+    pub(super) fn native_depth(&self, end: usize) -> usize {
+        let boundaries = self.frames[..end]
+            .iter()
+            .filter(|f| {
+                matches!(
+                    f.function,
+                    FrameKind::Native(
+                        PCALL
+                            | XPCALL
+                            | TOSTRING
+                            | PRINT
+                            | strings::STR_GSUB
+                            | tables::TAB_FOREACH
+                            | tables::TAB_FOREACHI
+                            | tables::TAB_SORT
+                            | CONT_RAW
+                            | CONT_BOOL
+                            | CONT_NOT
+                            | CONT_IGNORE
+                            | CONT_HANDLER
+                            | CONT_GC
+                    )
+                ) || (matches!(f.function, FrameKind::Native(LOAD_READER)) && matches!(f.pc, 1 | 3))
+            })
+            .count();
+        usize::from(self.threads[slot_index(self.thread.0)].depth)
+            + boundaries
+            + self.parser_nesting(end)
     }
     pub(super) fn coroutine_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
@@ -386,31 +419,7 @@ impl Vm {
         // A resumed thread inherits the caller's C-call count. Suspended native
         // callbacks and tag-method continuations each add one boundary; ordinary
         // Lua calls do not. The host's initial call accounts for the remaining one.
-        let boundaries = self.frames[..owner]
-            .iter()
-            .filter(|f| {
-                matches!(
-                    f.function,
-                    FrameKind::Native(
-                        PCALL
-                            | XPCALL
-                            | TOSTRING
-                            | PRINT
-                            | strings::STR_GSUB
-                            | tables::TAB_FOREACH
-                            | tables::TAB_FOREACHI
-                            | tables::TAB_SORT
-                            | CONT_RAW
-                            | CONT_BOOL
-                            | CONT_NOT
-                            | CONT_IGNORE
-                            | CONT_HANDLER
-                            | CONT_GC
-                    )
-                )
-            })
-            .count();
-        let depth = usize::from(self.threads[slot_index(self.thread.0)].depth) + boundaries;
+        let depth = self.native_depth(owner);
         if status != Status::Suspended || depth >= 199 {
             let message = if status != Status::Suspended {
                 format!(

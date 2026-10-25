@@ -1,7 +1,5 @@
 //! Lua 5.1 byte-oriented lexical analysis in the C locale.
 
-use crate::Error;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
     Eof,
@@ -67,24 +65,6 @@ pub(crate) struct Token {
 
 mod scanner;
 pub(crate) use scanner::Scanner;
-
-pub(crate) struct Lexer<'a> {
-    source: &'a [u8],
-    scanner: Scanner,
-}
-impl<'a> Lexer<'a> {
-    pub fn new(source: &'a [u8]) -> Self {
-        Self {
-            source,
-            scanner: Scanner::default(),
-        }
-    }
-    pub fn next(&mut self) -> Result<Token, Error> {
-        self.scanner
-            .next(self.source, true)
-            .map(|token| token.expect("closed input cannot request more bytes"))
-    }
-}
 
 pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
     let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];

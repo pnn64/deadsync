@@ -222,6 +222,18 @@ fn main() {
             3001.0,
             20,
         ),
+        (
+            "reader_load_single",
+            "local sum=0;for i=1,200 do local once=false;local f=load(function()if once then return nil end;once=true;return 'return 1+2'end);sum=sum+f()end;return sum",
+            600.0,
+            10,
+        ),
+        (
+            "reader_load_bytes",
+            "local source='local t={x=7};return t.x*3';local sum=0;for i=1,100 do local at=0;local f=load(function()at=at+1;if at>#source then return nil end;return string.sub(source,at,at)end);sum=sum+f()end;return sum",
+            2100.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let program = compile(source).unwrap();

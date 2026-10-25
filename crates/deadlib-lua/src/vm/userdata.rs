@@ -110,6 +110,7 @@ impl Vm {
         self.frames.clear();
         self.trim_substitutions();
         self.sorts.clear();
+        self.trim_loads();
         self.registers.truncate(len);
         self.top = top;
         result.map(|_| ())
