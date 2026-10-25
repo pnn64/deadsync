@@ -42,6 +42,23 @@ def main() -> None:
     def case(name: str, source: str, env: dict[str,str|None]|None=None) -> None:
         cases.append((name,source,env or {}))
     case('shell_query', "print(os.execute(),os.execute(nil),os.execute(nil,false),select('#',os.execute()))")
+    case('calendar_native_zone', "print(os.date('%Z|%z',0),os.date('!%Z|%z',0));print(type(os.time()),type(os.date()),select('#',os.time(nil,false)))")
+    for index, fmt in enumerate(('%Q','%E','%O','%#d','%','%n','%t','%F','%g','%V','%s','%10Y')):
+        case(f'calendar_format_{index}',f"print('before');print(os.date({lua(fmt)},0));print('after')")
+    case('calendar_invalid_time_before_format', "print(os.date('%Q',math.huge),os.date('%#d',0/0),os.date('!*t',-9223372036854775808))")
+    timezone_source="""
+        local dates={{year=2024,month=3,day=10,hour=2,min=30},
+          {year=2024,month=11,day=3,hour=1,min=30},
+          {year=2000,month=2,day=30,hour=25,sec=60},
+          {year=1969,month=12,day=31,hour=23,min=59,sec=59}}
+        for _,date in ipairs(dates)do for _,hint in ipairs({{},{value=false},{value=true}})do
+          date.isdst=hint.value;local n=os.time(date)
+          print(tostring(n),date.year,date.month,date.day,date.hour,tostring(date.isdst))
+          if n then print(os.date('%Y-%m-%d %H:%M:%S|%z|%Z',n),os.date('!%Y-%m-%d %H:%M:%S|%z|%Z',n))end
+        end end
+    """
+    for timezone in ('UTC0','EST5EDT','CET-1CEST'):
+        case('calendar_timezone_'+timezone,timezone_source,{'TZ':timezone})
     case('clock_contexts', """
         local clock=os.clock;local a=clock();local t={clock=clock}
         local c=coroutine.create(function()return t:clock(false,{},nil)end)
@@ -169,7 +186,7 @@ def main() -> None:
                     row[engine]={'timeout':True,'seconds':time.monotonic()-started}
             def observations(engine: str) -> dict:
                 return {k:v for k,v in row[engine].items() if k!='seconds'}
-            row['equal']=observations('reference')==observations('rust')==observations('cli')
+            row['equal']=all('returncode' in row[e] for e in ('reference','rust','cli')) and observations('reference')==observations('rust')==observations('cli')
             if args.extra_rust_binary:
                 row['extra_equal']=observations('reference')==observations('extra')
             results.append(row)

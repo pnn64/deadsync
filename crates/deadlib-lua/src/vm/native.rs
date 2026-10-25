@@ -81,6 +81,7 @@ impl Vm {
                         | XPCALL
                         | TOSTRING
                         | PRINT
+                        | os::TIME
                         | strings::STR_GSUB
                         | tables::TAB_FOREACH
                         | tables::TAB_FOREACHI
@@ -306,6 +307,7 @@ impl Vm {
                 }
             }),
             LOAD_READER => self.load_step(frame),
+            os::TIME => self.time_step(frame),
             LOAD_FILE | DO_FILE => self.file_load_step(id, frame),
             CONT_FILE => self.file_load_step(LOAD_FILE, frame),
             id if package::contains(id) => self.package_step(id, frame),

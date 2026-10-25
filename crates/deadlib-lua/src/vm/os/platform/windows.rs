@@ -59,6 +59,64 @@ unsafe extern "system" {
 unsafe extern "C" {
     #[link_name = "clock"]
     fn crt_clock() -> i32;
+    fn _time64(result: *mut i64) -> i64;
+    fn _mktime64(date: *mut super::Calendar) -> i64;
+    fn _gmtime64(time: *const i64) -> *mut super::Calendar;
+    fn _localtime64(time: *const i64) -> *mut super::Calendar;
+    fn strftime(
+        output: *mut std::ffi::c_char,
+        size: usize,
+        format: *const std::ffi::c_char,
+        date: *const super::Calendar,
+    ) -> usize;
+}
+
+const _: () = assert!(std::mem::size_of::<super::Calendar>() == 36);
+
+pub(super) fn now() -> Option<i64> {
+    // SAFETY: a null optional output requests a scalar CRT time result.
+    let time = unsafe { _time64(ptr::null_mut()) };
+    (time != -1).then_some(time)
+}
+pub(super) fn make_time(mut date: super::Calendar) -> Option<i64> {
+    // SAFETY: Calendar is the nine-int Windows tm layout, fully initialized and
+    // owned for the synchronous conversion. No Lua table memory is passed.
+    let time = unsafe { _mktime64(&mut date) };
+    (time != -1).then_some(time)
+}
+pub(super) fn date_parts(time: i64, utc: bool) -> Option<super::Calendar> {
+    // SAFETY: input points to a live i64. The CRT result is thread-local tm
+    // storage; copy it immediately before any other native or Lua callback.
+    let date = unsafe {
+        if utc {
+            _gmtime64(&time)
+        } else {
+            _localtime64(&time)
+        }
+    };
+    if date.is_null() {
+        None
+    } else {
+        Some(unsafe { *date })
+    }
+}
+pub(super) fn format_date(time: i64, utc: bool, format: &[u8], output: &mut Vec<u8>) -> bool {
+    let Some(date) = date_parts(time, utc) else {
+        return false;
+    };
+    super::super::calendar::format_with(format, output, |spec, bytes| {
+        // SAFETY: owned tm, a three-byte NUL-terminated conversion specifier and
+        // a writable 200-byte buffer stay alive for the native formatter call.
+        unsafe {
+            strftime(
+                bytes.as_mut_ptr().cast(),
+                bytes.len(),
+                spec.as_ptr().cast(),
+                &date,
+            )
+        }
+    });
+    true
 }
 
 pub(in crate::vm::os) fn clock() -> f64 {

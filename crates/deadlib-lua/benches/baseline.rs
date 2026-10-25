@@ -107,6 +107,10 @@ fn main() {
         "state",
         0,
     );
+    println!(
+        "calendar_tz_environment\t{}",
+        std::env::var("TZ").unwrap_or_else(|_| "<system>".into())
+    );
     let indexed_targets = (1..=16)
         .map(|i| format!("t[{i}]"))
         .collect::<Vec<_>>()
@@ -161,6 +165,24 @@ fn main() {
             10,
         ),
         ("os_execute", "return os.execute('exit 0')", 0.0, 5),
+        (
+            "os_time",
+            "local time=os.time;if not calendar_input then calendar_input={year=2000,month=1,day=1,isdst=false}end;local t=calendar_input;local reference=time(t);local n=0;for i=1,1000 do if time(t)==reference then n=n+1 end end;return n",
+            1000.0,
+            30,
+        ),
+        (
+            "os_date_format",
+            "local date=os.date;local n=0;for i=1,1000 do n=n+#date('!%Y-%m-%d %H:%M:%S',946684800+i)end;return n",
+            19000.0,
+            30,
+        ),
+        (
+            "os_date_table",
+            "local date=os.date;local n=0;for i=1,1000 do local d=date('!*t',946684800+i);n=n+d.year+d.month+d.day end;return n",
+            2002000.0,
+            20,
+        ),
         (
             "os_clock",
             "local clock=os.clock;local last=clock();local n=0;for i=1,10000 do local now=clock(false,nil,1);if now>=last then n=n+1 end;last=now end;return n",

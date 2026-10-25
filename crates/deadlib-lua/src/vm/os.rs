@@ -1,6 +1,7 @@
 //! Lua 5.1 environment, files, time differences and process operations.
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
+mod calendar;
 mod platform;
 mod process;
 
@@ -13,7 +14,9 @@ const EXECUTE: u64 = FIRST + 4;
 const EXIT: u64 = FIRST + 5;
 const CLOCK: u64 = FIRST + 6;
 const RENAME: u64 = FIRST + 7;
-pub(super) const LAST: u64 = RENAME;
+pub(super) const TIME: u64 = FIRST + 8;
+const DATE: u64 = FIRST + 9;
+pub(super) const LAST: u64 = DATE;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temporary_name() -> std::io::Result<std::path::PathBuf> {
@@ -68,6 +71,8 @@ impl Vm {
             (b"exit", EXIT),
             (b"clock", CLOCK),
             (b"rename", RENAME),
+            (b"time", TIME),
+            (b"date", DATE),
         ] {
             let name = self.intern(name);
             self.raw_set(table, name, Value::Native(id)).unwrap();
@@ -77,6 +82,7 @@ impl Vm {
 
     pub(super) fn os_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
         match id {
+            DATE => return self.date_native(base, count),
             CLOCK => {
                 #[cfg(any(
                     windows,

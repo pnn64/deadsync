@@ -184,7 +184,7 @@ open streams and shared stdout before terminating the process without Lua
 finalizers. Windows shell selection, raw command lines and exit-code widths match
 the pinned CRT probes. An explicitly empty Windows `COMSPEC` aborts as in that
 reference build. The interpreter and compiler use safe Rust. Native declarations
-are restricted to the Windows OS bridge and a narrow POSIX clock bridge. These
+are restricted to the Windows OS bridge and narrow POSIX clock/calendar bridges. These
 add no Cargo dependency or C Lua linkage.
 
 `clock` uses the native runtime's clock and preserves its epoch and units. The
@@ -194,8 +194,18 @@ currently report an unsupported clock. Windows `rename` refuses to replace an
 existing destination; same-volume moves are atomic and cross-volume behavior
 uses the CRT's copy flag. POSIX replacement follows its native rules. Errors
 retain the source filename and Lua 5.1 result tuple. Longer paths
-retain their complete names through native conversion. Calendar functions
-`date`/`time` and `setlocale` remain unfinished.
+retain their complete names through native conversion.
+
+`time` reads calendar fields in Lua 5.1 order through the existing callback
+scheduler, preserving metamethods, errors, yield restrictions and collection.
+Native conversion normalizes an owned calendar record without changing the Lua
+input table. `date` returns local or UTC fields and formats each conversion with
+the native formatter, retaining the reference's NUL and percent handling.
+Calendar validity, DST rules and format extensions follow the pinned runtime.
+Windows has differential runtime coverage; selected Linux/Apple targets have
+compile coverage only. Android declarations need target validation. Other
+targets report unsupported calendar operations.
+`setlocale` remains the missing OS function. Broader locale behavior is unfinished.
 
 Physical stdout is shared across VMs and buffers logical bytes before Windows
 newline translation. `print`, stdout writes and `setvbuf` share that buffer;
@@ -257,5 +267,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-clock-rename.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-calendar.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
