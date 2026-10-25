@@ -294,9 +294,19 @@ fn main() {
             100.0,
             10,
         ),
+        (
+            "runtime_error",
+            r#"local function f()local target=false;return target+1 end;local sum=0;for i=1,100 do local ok,e=pcall(f);if not ok and e=="runtime-bench:1: attempt to perform arithmetic on local 'target' (a boolean value)" then sum=sum+1 end end;return sum"#,
+            100.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
-        let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");
+        let chunk_name = match name {
+            "debug_traceback" => Some("=(traceback-bench)"),
+            "runtime_error" => Some("=runtime-bench"),
+            _ => None,
+        };
         let program = match chunk_name {
             Some(name) => deadlib_lua::compile_named(source, name.as_bytes()),
             None => compile(source),

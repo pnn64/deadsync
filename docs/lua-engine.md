@@ -30,7 +30,7 @@ performance JSON keeps its recorded measurement provenance.
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and ten Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Errors pass the initial syntax assertions and stop in the runtime-message checker at line 12. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and ten Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Errors pass the initial syntax and operand-name assertions and stop on native argument naming through the checker at line 12. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 212 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 222 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-syntax.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-runtime-errors.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -177,8 +177,18 @@ Cold token-span descriptors avoid copying diagnostic context on successful
 scans. Safe eight-byte checks scan long tokens, with byte lookup only in marked
 chunks or the tail. The [measurements](performance/2026-10-25-rust-lua-syntax.md)
 add a syntax-error workload, bringing the harness to 31 execution workloads and
-eight frontend cases. Runtime operand provenance, remaining compiler bounds,
+eight frontend cases. Broader runtime operand provenance, remaining compiler bounds,
 binary chunks and the broader standalone-engine gates remain unfinished.
+
+The [runtime-error validation](testing/2026-10-25-rust-lua-runtime-errors.md)
+adds ten groups covering operand names, anonymous/redirected values, logical
+trees, scoped locals, callbacks, coroutines, raw names and comparison wording.
+Names are reconstructed from verified producers and existing debug metadata on
+the cold error path, without new per-instruction provenance storage or changes
+to successful dispatch. The [measurements](performance/2026-10-25-rust-lua-runtime-errors.md)
+add a protected runtime-error workload, bringing the harness to 32 execution
+workloads and eight frontend cases. Native argument diagnostics and wider
+compiler/runtime/debug compatibility remain open.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

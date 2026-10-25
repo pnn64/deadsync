@@ -70,7 +70,7 @@ impl Vm {
         key: Value,
         result: usize,
     ) -> Result<(), Error> {
-        for _ in 0..100 {
+        for step in 0..100 {
             let handler = if let Value::Table(id) = target {
                 let value = self.tables[slot_index(id.0)].get(key);
                 if value != Value::Nil {
@@ -86,10 +86,14 @@ impl Vm {
             } else {
                 let handler = self.metafield(target, Meta::Index);
                 if handler == Value::Nil {
-                    return Err(Error::new(
-                        ErrorKind::Runtime,
-                        0,
-                        format!("attempt to index a {} value", target.type_name()),
+                    return Err(self.type_error(
+                        target,
+                        "index",
+                        if step == 0 {
+                            self.error_register(false)
+                        } else {
+                            None
+                        },
                     ));
                 }
                 handler
@@ -107,7 +111,7 @@ impl Vm {
         key: Value,
         value: Value,
     ) -> Result<(), Error> {
-        for _ in 0..100 {
+        for step in 0..100 {
             let handler = if let Value::Table(id) = target {
                 // Lua checks invalid keys before consulting __newindex on tables.
                 if key == Value::Nil || matches!(key,Value::Number(n) if n.is_nan()) {
@@ -122,10 +126,14 @@ impl Vm {
             } else {
                 let handler = self.metafield(target, Meta::NewIndex);
                 if handler == Value::Nil {
-                    return Err(Error::new(
-                        ErrorKind::Runtime,
-                        0,
-                        format!("attempt to index a {} value", target.type_name()),
+                    return Err(self.type_error(
+                        target,
+                        "index",
+                        if step == 0 {
+                            self.error_register(false)
+                        } else {
+                            None
+                        },
                     ));
                 }
                 handler
@@ -162,12 +170,12 @@ impl Vm {
         if handler != Value::Nil {
             return self.meta_call(handler, &[left, right], result, CONT_RAW);
         }
-        self.numeric(if self.number(left).is_none() {
-            left
-        } else {
-            right
-        })
-        .map(|_| ())
+        let right_is_bad = self.number(left).is_some();
+        Err(self.type_error(
+            if right_is_bad { right } else { left },
+            "perform arithmetic on",
+            self.error_register(right_is_bad),
+        ))
     }
     pub(super) fn concatenate(
         &mut self,
@@ -187,12 +195,12 @@ impl Vm {
         if handler != Value::Nil {
             return self.meta_call(handler, &[left, right], result, CONT_RAW);
         }
-        self.concat_bytes(if matches!(left, Value::String(_) | Value::Number(_)) {
-            right
-        } else {
-            left
-        })
-        .map(|_| ())
+        let right_is_bad = matches!(left, Value::String(_) | Value::Number(_));
+        Err(self.type_error(
+            if right_is_bad { right } else { left },
+            "concatenate",
+            self.error_register(right_is_bad),
+        ))
     }
     pub(super) fn length(&mut self, value: Value, result: usize) -> Result<(), Error> {
         let n = match value {
@@ -203,11 +211,7 @@ impl Vm {
                 if handler != Value::Nil {
                     return self.meta_call(handler, &[value, Value::Nil], result, CONT_RAW);
                 }
-                return Err(Error::new(
-                    ErrorKind::Runtime,
-                    0,
-                    format!("attempt to get length of a {} value", value.type_name()),
-                ));
+                return Err(self.type_error(value, "get length of", self.error_register(false)));
             }
         };
         self.registers[result] = Value::Number(n as f64);
@@ -277,11 +281,15 @@ impl Vm {
         Err(Error::new(
             ErrorKind::Runtime,
             0,
-            format!(
-                "attempt to compare {} with {}",
-                left.type_name(),
-                right.type_name()
-            ),
+            if left.type_name().as_bytes()[2] == right.type_name().as_bytes()[2] {
+                format!("attempt to compare two {} values", left.type_name())
+            } else {
+                format!(
+                    "attempt to compare {} with {}",
+                    left.type_name(),
+                    right.type_name()
+                )
+            },
         ))
     }
 }

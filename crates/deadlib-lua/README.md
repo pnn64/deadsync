@@ -48,6 +48,11 @@ error values; `xpcall` handlers run before faulting frames are unwound. Function
 environments and dynamically compiled chunks preserve shared state and identity.
 Native callbacks and metamethods use explicit continuation frames.
 
+Runtime type errors recover scoped local, global, upvalue, field and method names
+from verified code and existing debug metadata. Name reconstruction runs only
+when formatting an error and retains raw byte names. Metatable redirection and
+anonymous intermediate values keep their reference diagnostic behavior.
+
 `debug.getinfo` reports function sources, definitions, active/current lines,
 upvalue counts, caller-derived names and function identity. Stack queries include
 lost tail calls and active, suspended or failed coroutine frames. `getupvalue`
@@ -175,7 +180,7 @@ currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Ru
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua` and `math.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
-probes reach missing libraries/functions or runtime operand-name diagnostics. It verifies the official
+probes reach missing libraries/functions or remaining runtime/native diagnostics. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-syntax.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-runtime-errors.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

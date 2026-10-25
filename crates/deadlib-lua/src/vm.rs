@@ -8,6 +8,7 @@ use crate::{
 };
 use std::{collections::HashMap, sync::Arc};
 mod debug;
+mod errors;
 mod gc;
 mod hooks;
 mod io;
@@ -518,18 +519,6 @@ impl Vm {
             _ => None,
         }
     }
-    fn numeric(&self, value: Value) -> Result<f64, Error> {
-        self.number(value).ok_or_else(|| {
-            Error::new(
-                ErrorKind::Runtime,
-                0,
-                format!(
-                    "attempt to perform arithmetic on a {} value",
-                    value.type_name()
-                ),
-            )
-        })
-    }
     fn table(&self, value: Value) -> Result<&Table, Error> {
         if let Value::Table(id) = value
             && let Some(t) = self.tables.get(id.0)
@@ -877,7 +866,7 @@ impl Vm {
                     let previous = self.active_native.replace(frame_index);
                     let result = self.step_native(id, frame).map_err(|error| {
                         if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                            let value = self.intern(error.message().as_bytes());
+                            let value = self.intern(error.message_bytes());
                             let value = self.located_error(value, 1);
                             error.with_value(value)
                         } else {

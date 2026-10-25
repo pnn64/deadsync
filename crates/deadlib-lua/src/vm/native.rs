@@ -26,11 +26,7 @@ impl Vm {
             let target = self.registers[call];
             let handler = self.metafield(target, Meta::Call);
             if !matches!(handler, Value::Function(_) | Value::Native(_)) {
-                return Err(Error::new(
-                    ErrorKind::Runtime,
-                    0,
-                    format!("attempt to call a {} value", target.type_name()),
-                ));
+                return Err(self.type_error(target, "call", Some(call)));
             }
             self.resize_registers(self.registers.len().max(call + count + 2));
             self.registers.copy_within(call..call + count + 1, call + 1);
@@ -117,7 +113,7 @@ impl Vm {
                 let previous = self.active_native.replace(index);
                 let result = self.native(id, call, count).map(Some).map_err(|error| {
                     if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                        let value = self.intern(error.message().as_bytes());
+                        let value = self.intern(error.message_bytes());
                         let value = self.located_error(value, 1);
                         error.with_value(value)
                     } else {
@@ -209,7 +205,7 @@ impl Vm {
         let value = if let Some(value) = error.value() {
             value
         } else {
-            let value = self.intern(error.message().as_bytes());
+            let value = self.intern(error.message_bytes());
             self.located_error(value, 1)
         };
         // lua_load protects the parser while retaining the current error
@@ -285,7 +281,7 @@ impl Vm {
                 // lua_concat raises in the C traceback frame; it does not add
                 // the caller location used by Lua-level arithmetic failures.
                 if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                    let value = self.intern(error.message().as_bytes());
+                    let value = self.intern(error.message_bytes());
                     error.with_value(value)
                 } else {
                     error
