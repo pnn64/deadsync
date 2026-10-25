@@ -2,6 +2,7 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
+    Byte(u8),
     Eof,
     Name,
     Number,
@@ -53,6 +54,72 @@ pub(crate) enum Kind {
     Dot,
     Concat,
     Dots,
+}
+
+impl Kind {
+    pub(crate) fn label(self) -> Vec<u8> {
+        let text = match self {
+            Self::Byte(byte) => {
+                return if byte.is_ascii_control() {
+                    format!("char({byte})").into_bytes()
+                } else {
+                    vec![byte]
+                };
+            }
+            Self::Eof => "<eof>",
+            Self::Name => "<name>",
+            Self::Number => "<number>",
+            Self::String => "<string>",
+            Self::And => "and",
+            Self::Break => "break",
+            Self::Do => "do",
+            Self::Else => "else",
+            Self::ElseIf => "elseif",
+            Self::End => "end",
+            Self::False => "false",
+            Self::For => "for",
+            Self::Function => "function",
+            Self::If => "if",
+            Self::In => "in",
+            Self::Local => "local",
+            Self::Nil => "nil",
+            Self::Not => "not",
+            Self::Or => "or",
+            Self::Repeat => "repeat",
+            Self::Return => "return",
+            Self::Then => "then",
+            Self::True => "true",
+            Self::Until => "until",
+            Self::While => "while",
+            Self::Plus => "+",
+            Self::Minus => "-",
+            Self::Star => "*",
+            Self::Slash => "/",
+            Self::Percent => "%",
+            Self::Caret => "^",
+            Self::Hash => "#",
+            Self::Eq => "==",
+            Self::Ne => "~=",
+            Self::Le => "<=",
+            Self::Ge => ">=",
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Assign => "=",
+            Self::LParen => "(",
+            Self::RParen => ")",
+            Self::LBrace => "{",
+            Self::RBrace => "}",
+            Self::LBracket => "[",
+            Self::RBracket => "]",
+            Self::Semi => ";",
+            Self::Colon => ":",
+            Self::Comma => ",",
+            Self::Dot => ".",
+            Self::Concat => "..",
+            Self::Dots => "...",
+        };
+        text.as_bytes().to_vec()
+    }
 }
 
 #[derive(Debug)]

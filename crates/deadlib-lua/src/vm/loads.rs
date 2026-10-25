@@ -222,9 +222,8 @@ impl Vm {
                 Ok(program) => Ok(self.load(&program)),
                 Err(error) => {
                     let mut message = crate::bytecode::chunk_id_limit(&self.loads[index].name, 80);
-                    message.extend_from_slice(
-                        format!(":{}: {}", error.line(), error.message()).as_bytes(),
-                    );
+                    message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
+                    message.extend_from_slice(error.message_bytes());
                     Err(self.intern(&message))
                 }
             };
@@ -365,9 +364,8 @@ impl Vm {
                 }
                 Err(error) => {
                     let mut message = crate::bytecode::chunk_id_limit(&self.loads[index].name, 80);
-                    message.extend_from_slice(
-                        format!(":{}: {}", error.line(), error.message()).as_bytes(),
-                    );
+                    message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
+                    message.extend_from_slice(error.message_bytes());
                     let value = self.intern(&message);
                     self.protected_failure(owner, value);
                     return Ok(None);

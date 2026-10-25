@@ -55,7 +55,7 @@ enum Task {
     Params(u32, Vec<Box<[u8]>>, bool),
     ParamAfter(u32, Vec<Box<[u8]>>),
     ParamsEnd(u32, Vec<Box<[u8]>>, bool),
-    FunctionEnd(u32, Vec<Box<[u8]>>, bool, u16, bool, u16),
+    FunctionEnd(u32, Vec<Box<[u8]>>, bool, u16, bool, u16, u32),
     Expr(u8),
     ExprLoop(u8, u32),
     Unary(Kind, u32),
@@ -70,8 +70,8 @@ enum Task {
     MethodEnd(u32, ExprId, Box<[u8]>, u32),
     CallEnd(u32, ExprId, u32),
     Args,
-    ArgsParen,
-    ArgsEnd,
+    ArgsParen(u32),
+    ArgsEnd(u32),
     ArgsTable,
     Table,
     TableNext([u32; 2], Vec<(Option<ExprId>, ExprId)>),
@@ -94,6 +94,7 @@ pub(crate) struct Parser {
     loops: u16,
     vararg: bool,
     locals: u16,
+    function_line: u32,
     tasks: Vec<Task>,
     ast: Ast,
     expr: ExprId,
@@ -115,6 +116,7 @@ impl Default for Parser {
             loops: 0,
             vararg: true,
             locals: 0,
+            function_line: 0,
             tasks: vec![Task::RootEnd, Task::Block],
             ast: Ast::default(),
             expr: 0,
@@ -261,28 +263,41 @@ impl Parser {
         self.current().line
     }
     fn error(&self, text: &str) -> Error {
-        Error::new(ErrorKind::Syntax, self.line(), text)
+        let mut error = Error::new(ErrorKind::Syntax, self.scanner.line(), text);
+        error.near = true;
+        error
     }
     fn enter(&mut self) -> Result<(), Error> {
         if self.depth >= self.limit {
             return Err(Error::new(
                 ErrorKind::Limit,
-                self.line(),
+                self.scanner.line(),
                 "chunk has too many syntax levels",
             ));
         }
         self.depth += 1;
         Ok(())
     }
-    fn check_local_count(&self, total: usize) -> Result<(), Error> {
+    fn limit_error(&self, limit: usize, what: &str, line: u32) -> Error {
+        let owner = if line == 0 {
+            "main function".to_owned()
+        } else {
+            format!("function at line {line}")
+        };
+        Error::new(
+            ErrorKind::Limit,
+            self.scanner.line(),
+            format!("{owner} has more than {limit} {what}"),
+        )
+    }
+    fn check_local_count_at(&self, total: usize, line: u32) -> Result<(), Error> {
         if total > 200 {
-            return Err(Error::new(
-                ErrorKind::Limit,
-                self.line(),
-                "too many local variables",
-            ));
+            return Err(self.limit_error(200, "local variables", line));
         }
         Ok(())
+    }
+    fn check_local_count(&self, total: usize) -> Result<(), Error> {
+        self.check_local_count_at(total, self.function_line)
     }
     fn take(&mut self) -> Token {
         let token = self
@@ -295,9 +310,20 @@ impl Parser {
     }
     fn expect(&mut self, kind: Kind) -> Result<Token, Error> {
         if self.kind() != kind {
-            return Err(self.error(&format!("expected {kind:?}, found {:?}", self.kind())));
+            let name = String::from_utf8(kind.label()).expect("expected token is ASCII");
+            return Err(self.error(&format!("'{name}' expected")));
         }
         Ok(self.take())
+    }
+    fn close(&mut self, kind: Kind, opener: Kind, line: u32) -> Result<Token, Error> {
+        if self.kind() != kind && self.scanner.line() != line {
+            let kind = String::from_utf8(kind.label()).expect("closing token");
+            let opener = String::from_utf8(opener.label()).expect("opening token");
+            return Err(self.error(&format!(
+                "'{kind}' expected (to close '{opener}' at line {line})"
+            )));
+        }
+        self.expect(kind)
     }
     fn end_block(&self) -> bool {
         matches!(
@@ -329,7 +355,7 @@ impl Parser {
         vararg: bool,
     ) -> Result<(), Error> {
         let count = params.len() + usize::from(vararg);
-        self.check_local_count(count)?;
+        self.check_local_count_at(count, line)?;
         self.expect(Kind::RParen)?;
         self.tasks.push(Task::FunctionEnd(
             line,
@@ -338,7 +364,9 @@ impl Parser {
             self.loops,
             self.vararg,
             self.locals,
+            self.function_line,
         ));
+        self.function_line = line;
         self.loops = 0;
         self.vararg = vararg;
         self.locals = count as u16;
@@ -365,6 +393,30 @@ impl Parser {
     /// Supply the entire retained prefix and whether the reader has reached EOF.
     /// `None` requests more source; `Some` contains the finished flat AST.
     pub(crate) fn resume(&mut self, input: &[u8], closed: bool) -> Result<Option<Ast>, Error> {
+        self.resume_inner(input, closed).map_err(|mut error| {
+            if !error.near {
+                return error;
+            }
+            error.near = false;
+            if self.kind() == Kind::Byte(0) {
+                return error;
+            }
+            let kind = self.kind();
+            let near = if matches!(kind, Kind::Name | Kind::String | Kind::Number) {
+                self.scanner.near_buffer(input)
+            } else {
+                kind.label()
+            };
+            let mut bytes = error.message_bytes().to_vec();
+            bytes.extend_from_slice(b" near '");
+            bytes.extend_from_slice(
+                &near[..near.iter().position(|&b| b == 0).unwrap_or(near.len())],
+            );
+            bytes.push(b'\'');
+            Error::from_bytes(error.kind(), error.line(), bytes)
+        })
+    }
+    fn resume_inner(&mut self, input: &[u8], closed: bool) -> Result<Option<Ast>, Error> {
         assert!(!self.finished, "a completed parser cannot be resumed");
         loop {
             if self.tasks.is_empty() {
@@ -575,7 +627,7 @@ impl Parser {
                     self.statement(Stmt::Break, line);
                 }
                 Task::DoEnd(line) => {
-                    self.expect(Kind::End)?;
+                    self.close(Kind::End, Kind::Do, line)?;
                     let body = std::mem::take(&mut self.body);
                     self.statement(Stmt::Do(body), line);
                 }
@@ -587,13 +639,13 @@ impl Parser {
                     self.tasks.push(Task::Block);
                 }
                 Task::WhileEnd(line, cond) => {
-                    self.expect(Kind::End)?;
+                    self.close(Kind::End, Kind::While, line)?;
                     self.loops -= 1;
                     let body = std::mem::take(&mut self.body);
                     self.statement(Stmt::While(cond, body), line);
                 }
                 Task::RepeatBody(line) => {
-                    self.expect(Kind::Until)?;
+                    self.close(Kind::Until, Kind::Repeat, line)?;
                     let body = std::mem::take(&mut self.body);
                     self.tasks.push(Task::RepeatEnd(line, body));
                     self.tasks.push(Task::Expr(0));
@@ -618,12 +670,12 @@ impl Parser {
                         self.tasks.push(Task::IfElse(line, arms));
                         self.tasks.push(Task::Block);
                     } else {
-                        self.expect(Kind::End)?;
+                        self.close(Kind::End, Kind::If, line)?;
                         self.statement(Stmt::If(arms.into_boxed_slice(), Box::default()), line);
                     }
                 }
                 Task::IfElse(line, arms) => {
-                    self.expect(Kind::End)?;
+                    self.close(Kind::End, Kind::If, line)?;
                     let body = std::mem::take(&mut self.body);
                     self.statement(Stmt::If(arms.into_boxed_slice(), body), line);
                 }
@@ -662,7 +714,7 @@ impl Parser {
                     self.for_body(line, name, start, limit, Some(self.expr))?
                 }
                 Task::ForEnd(line, name, start, limit, step, do_line) => {
-                    self.expect(Kind::End)?;
+                    self.close(Kind::End, Kind::For, line)?;
                     self.loops -= 1;
                     self.locals -= 4;
                     let body = std::mem::take(&mut self.body);
@@ -707,7 +759,7 @@ impl Parser {
                     self.tasks.push(Task::Block);
                 }
                 Task::ForInEnd(line, names, values, lines) => {
-                    self.expect(Kind::End)?;
+                    self.close(Kind::End, Kind::For, line)?;
                     self.loops -= 1;
                     self.locals -= names.len() as u16 + 3;
                     let body = std::mem::take(&mut self.body);
@@ -723,15 +775,19 @@ impl Parser {
                 }
                 Task::ExpressionStatement(line) => {
                     let first = self.expr;
-                    if matches!(self.kind(), Kind::Assign | Kind::Comma) {
-                        self.tasks.push(Task::AssignTargets(line, vec![first]));
-                    } else if matches!(self.ast.exprs[first].0, Expr::Call(..) | Expr::Method(..)) {
+                    if matches!(self.ast.exprs[first].0, Expr::Call(..) | Expr::Method(..)) {
                         self.statement(Stmt::Call(first), line);
                     } else {
-                        return Err(self.error("expected assignment or function call"));
+                        self.tasks.push(Task::AssignTargets(line, vec![first]));
                     }
                 }
                 Task::AssignTargets(line, targets) => {
+                    if !matches!(
+                        self.ast.exprs[*targets.last().expect("assignment target")].0,
+                        Expr::Name(_) | Expr::Index(..)
+                    ) {
+                        return Err(self.error("syntax error"));
+                    }
                     if self.kind() == Kind::Comma {
                         self.take();
                         self.tasks.push(Task::AssignTarget(line, targets));
@@ -740,7 +796,7 @@ impl Parser {
                         if targets.iter().any(|&i| {
                             !matches!(self.ast.exprs[i].0, Expr::Name(_) | Expr::Index(..))
                         }) {
-                            return Err(self.error("assignment target must be a variable"));
+                            return Err(self.error("syntax error"));
                         }
                         self.expect(Kind::Assign)?;
                         self.tasks.push(Task::AssignEnd(line, targets));
@@ -748,6 +804,14 @@ impl Parser {
                     }
                 }
                 Task::AssignTarget(line, mut targets) => {
+                    let limit = usize::from(self.limit.saturating_sub(self.depth));
+                    if targets.len() > limit {
+                        return Err(self.limit_error(
+                            limit,
+                            "variables in assignment",
+                            self.function_line,
+                        ));
+                    }
                     targets.push(self.expr);
                     self.tasks.push(Task::AssignTargets(line, targets));
                 }
@@ -786,12 +850,15 @@ impl Parser {
                     } else if self.kind() == Kind::RParen && allow_end {
                         self.start_function_body(line, params, false)?;
                     } else {
-                        params.push(self.expect(Kind::Name)?.text);
+                        if self.kind() != Kind::Name {
+                            return Err(self.error("<name> or '...' expected"));
+                        }
+                        params.push(self.take().text);
                         self.tasks.push(Task::ParamAfter(line, params));
                     }
                 }
                 Task::ParamAfter(line, params) => {
-                    self.check_local_count(params.len())?;
+                    self.check_local_count_at(params.len(), line)?;
                     if self.kind() == Kind::Comma {
                         self.take();
                         self.tasks.push(Task::Params(line, params, false));
@@ -802,11 +869,20 @@ impl Parser {
                 Task::ParamsEnd(line, params, vararg) => {
                     self.start_function_body(line, params, vararg)?
                 }
-                Task::FunctionEnd(line, params, vararg, loops, parent_vararg, locals) => {
-                    let end_line = self.expect(Kind::End)?.end_line;
+                Task::FunctionEnd(
+                    line,
+                    params,
+                    vararg,
+                    loops,
+                    parent_vararg,
+                    locals,
+                    parent_line,
+                ) => {
+                    let end_line = self.close(Kind::End, Kind::Function, line)?.end_line;
                     self.loops = loops;
                     self.vararg = parent_vararg;
                     self.locals = locals;
+                    self.function_line = parent_line;
                     let body = std::mem::take(&mut self.body);
                     self.expression(
                         Expr::Function {
@@ -896,11 +972,11 @@ impl Parser {
                         self.tasks.push(Task::Paren(line));
                         self.tasks.push(Task::Expr(0));
                     } else {
-                        return Err(self.error("expected expression"));
+                        return Err(self.error("unexpected symbol"));
                     }
                 }
                 Task::Paren(line) => {
-                    self.expect(Kind::RParen)?;
+                    self.close(Kind::RParen, Kind::LParen, line)?;
                     let id = self.expression(Expr::Paren(self.expr), line);
                     self.tasks.push(Task::Suffix(line, id));
                 }
@@ -959,33 +1035,34 @@ impl Parser {
                     Kind::LParen => {
                         if self.line() != self.previous_line {
                             return Err(
-                                self.error("ambiguous syntax (function call on a new line)")
+                                self.error("ambiguous syntax (function call x new statement)")
                             );
                         }
-                        self.take();
-                        self.tasks.push(Task::ArgsParen);
+                        let line = self.take().end_line;
+                        self.tasks.push(Task::ArgsParen(line));
                     }
                     Kind::LBrace => {
                         self.tasks.push(Task::ArgsTable);
                         self.tasks.push(Task::Table);
                     }
-                    _ => {
-                        let token = self.expect(Kind::String)?;
+                    Kind::String => {
+                        let token = self.take();
                         let id = self.expression(Expr::String(token.text), token.line);
                         self.list = vec![id];
                     }
+                    _ => return Err(self.error("function arguments expected")),
                 },
-                Task::ArgsParen => {
+                Task::ArgsParen(line) => {
                     if self.kind() == Kind::RParen {
                         self.take();
                         self.list = Vec::new();
                     } else {
-                        self.tasks.push(Task::ArgsEnd);
+                        self.tasks.push(Task::ArgsEnd(line));
                         self.tasks.push(Task::List);
                     }
                 }
-                Task::ArgsEnd => {
-                    self.expect(Kind::RParen)?;
+                Task::ArgsEnd(line) => {
+                    self.close(Kind::RParen, Kind::LParen, line)?;
                 }
                 Task::ArgsTable => self.list = vec![self.expr],
                 Task::Table => {
@@ -1044,7 +1121,7 @@ impl Parser {
                         if let Some((None, value)) = fields.last() {
                             self.ast.exprs[*value].1.discharge = self.current().end_line;
                         }
-                        self.expect(Kind::RBrace)?;
+                        self.close(Kind::RBrace, Kind::LBrace, line[0])?;
                         self.expression(Expr::Table(fields.into_boxed_slice(), line[1]), line[0]);
                     }
                 }

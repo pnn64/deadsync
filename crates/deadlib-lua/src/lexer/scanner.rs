@@ -4,6 +4,7 @@ use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
 enum State {
+    Deprecated,
     Skip,
     Comment,
     LineComment,
@@ -36,7 +37,6 @@ enum State {
         count: u8,
     },
     Emit,
-    Fault(&'static str),
 }
 
 fn empty(line: u32) -> Token {
@@ -47,6 +47,48 @@ fn empty(line: u32) -> Token {
         text: Box::default(),
         number: 0.0,
     }
+}
+
+fn long_boundary(bytes: &[u8], equals: usize) -> usize {
+    const ONE: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = 0x8080_8080_8080_8080;
+    let opening = u64::from_ne_bytes([if equals == 0 { b'[' } else { b']' }; 8]);
+    let (chunks, tail) = bytes.as_chunks::<8>();
+    for (index, chunk) in chunks.iter().enumerate() {
+        let word = u64::from_ne_bytes(*chunk);
+        let a = word ^ opening;
+        let b = word ^ u64::from_ne_bytes([b']'; 8]);
+        let c = word ^ u64::from_ne_bytes([b'\n'; 8]);
+        let d = word ^ u64::from_ne_bytes([b'\r'; 8]);
+        // A zero byte in any XOR marks a possible delimiter. Subtraction can
+        // also flag a neighboring lane, so locate the first byte in that chunk.
+        if ((a.wrapping_sub(ONE) & !a)
+            | (b.wrapping_sub(ONE) & !b)
+            | (c.wrapping_sub(ONE) & !c)
+            | (d.wrapping_sub(ONE) & !d))
+            & HIGH
+            != 0
+        {
+            return index * 8
+                + chunk
+                    .iter()
+                    .position(|&b| matches!(b, b']' | b'\n' | b'\r') || (equals == 0 && b == b'['))
+                    .expect("delimiter in marked chunk");
+        }
+    }
+    bytes.len() - tail.len()
+        + tail
+            .iter()
+            .position(|&b| matches!(b, b']' | b'\n' | b'\r') || (equals == 0 && b == b'['))
+            .unwrap_or(tail.len())
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+enum Buffer {
+    #[default]
+    Empty,
+    Raw(usize, usize),
+    String(usize, usize),
 }
 
 /// Input retains its prefix between calls. `None` requests more bytes; an EOF
@@ -60,6 +102,7 @@ pub(crate) struct Scanner {
     state: State,
     token: Token,
     text: Vec<u8>,
+    buffer: Buffer,
 }
 
 impl Default for Scanner {
@@ -71,18 +114,63 @@ impl Default for Scanner {
             state: State::Skip,
             token: empty(1),
             text: Vec::new(),
+            buffer: Buffer::Empty,
         }
     }
 }
 
 impl Scanner {
+    pub(crate) fn line(&self) -> u32 {
+        self.line
+    }
+    pub(crate) fn near_buffer(&self, input: &[u8]) -> Vec<u8> {
+        match self.buffer {
+            Buffer::Empty => Vec::new(),
+            Buffer::Raw(start, end) => input[start..end].to_vec(),
+            Buffer::String(start, end) => {
+                // Decode only a failed diagnostic's completed string token.
+                // Successful scans keep no duplicate lexical byte buffer.
+                let raw = &input[start..end];
+                let token = Self::default()
+                    .next(raw, true)
+                    .expect("completed string token")
+                    .expect("closed string input");
+                let prefix = if matches!(raw[0], b'\'' | b'"') {
+                    1
+                } else {
+                    raw[1..]
+                        .iter()
+                        .position(|&b| b == b'[')
+                        .expect("long string delimiter")
+                        + 2
+                };
+                let mut out = Vec::with_capacity(prefix * 2 + token.text.len());
+                out.extend_from_slice(&raw[..prefix]);
+                out.extend_from_slice(&token.text);
+                out.extend(
+                    raw[..prefix]
+                        .iter()
+                        .map(|&b| if b == b'[' { b']' } else { b }),
+                );
+                out
+            }
+        }
+    }
+    fn diagnostic(&self, message: &str, near: &[u8]) -> Error {
+        let mut bytes = message.as_bytes().to_vec();
+        bytes.extend_from_slice(b" near '");
+        bytes.extend_from_slice(&near[..near.iter().position(|&b| b == 0).unwrap_or(near.len())]);
+        bytes.push(b'\'');
+        Error::from_bytes(ErrorKind::Syntax, self.line, bytes)
+    }
+    fn string_error(&self, message: &str, input: &[u8]) -> Error {
+        let mut near = vec![input[self.start]];
+        near.extend_from_slice(&self.text);
+        self.diagnostic(message, &near)
+    }
     pub(crate) fn heap_bytes(&self) -> usize {
         self.text.capacity() + self.token.text.len()
     }
-    fn error(&self, message: &str) -> Error {
-        Error::new(ErrorKind::Syntax, self.line, message)
-    }
-
     fn newline(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         if self.pos + 1 == input.len() && !closed {
             return Ok(false);
@@ -103,6 +191,36 @@ impl Scanner {
     }
 
     fn emit(&mut self, kind: Kind) {
+        self.buffer = match kind {
+            Kind::Name
+            | Kind::Number
+            | Kind::And
+            | Kind::Break
+            | Kind::Do
+            | Kind::Else
+            | Kind::ElseIf
+            | Kind::End
+            | Kind::False
+            | Kind::For
+            | Kind::Function
+            | Kind::If
+            | Kind::In
+            | Kind::Local
+            | Kind::Nil
+            | Kind::Not
+            | Kind::Or
+            | Kind::Repeat
+            | Kind::Return
+            | Kind::Then
+            | Kind::True
+            | Kind::Until
+            | Kind::While => Buffer::Raw(self.start, self.pos),
+            Kind::String => Buffer::String(self.start, self.pos),
+            Kind::Dot | Kind::Concat | Kind::Dots | Kind::LBracket => {
+                Buffer::Raw(self.start, self.start + 1)
+            }
+            _ => Buffer::Empty,
+        };
         self.token.end_line = self.line;
         self.token.kind = kind;
         self.state = State::Emit;
@@ -122,12 +240,16 @@ impl Scanner {
                 return Ok(None);
             }
             match self.state {
-                State::Fault(message) => return Err(self.error(message)),
+                State::Deprecated => {
+                    return Err(self.diagnostic("nesting of [[...]] is deprecated", b"["));
+                }
                 State::Emit => {
                     self.state = State::Skip;
                     return Ok(Some(std::mem::replace(&mut self.token, empty(self.line))));
                 }
                 State::Skip => {
+                    self.start = self.pos;
+                    self.buffer = Buffer::Empty;
                     self.token.line = self.line;
                     let Some(c) = current else {
                         self.emit(Kind::Eof);
@@ -181,11 +303,11 @@ impl Scanner {
                                 self.start = self.pos;
                                 self.pos += 1;
                                 self.state = State::Number;
-                            } else if input.get(self.pos + 1) == Some(&b'.') {
+                            } else if matches!(input.get(self.pos + 1), Some(b'.' | 0)) {
                                 if self.pos + 2 == input.len() && !closed {
                                     return Ok(None);
                                 }
-                                if input.get(self.pos + 2) == Some(&b'.') {
+                                if matches!(input.get(self.pos + 2), Some(b'.' | 0)) {
                                     self.pos += 3;
                                     self.emit(Kind::Dots);
                                 } else {
@@ -214,10 +336,7 @@ impl Scanner {
                                 (b'>', true) => Kind::Ge,
                                 (b'>', false) => Kind::Gt,
                                 (b'~', true) => Kind::Ne,
-                                _ => {
-                                    self.state = State::Fault("unexpected character");
-                                    continue;
-                                }
+                                _ => Kind::Byte(c),
                             });
                         }
                         _ => {
@@ -237,10 +356,7 @@ impl Scanner {
                                 b';' => Kind::Semi,
                                 b':' => Kind::Colon,
                                 b',' => Kind::Comma,
-                                _ => {
-                                    self.state = State::Fault("unexpected character");
-                                    continue;
-                                }
+                                _ => Kind::Byte(c),
                             });
                         }
                     }
@@ -317,7 +433,7 @@ impl Scanner {
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
-                    if matches!(input.get(self.pos), Some(b'e' | b'E')) {
+                    if matches!(input.get(self.pos), Some(b'e' | b'E' | 0)) {
                         self.pos += 1;
                         self.state = State::Exponent;
                     } else {
@@ -325,7 +441,7 @@ impl Scanner {
                     }
                 }
                 State::Exponent => {
-                    if matches!(current, Some(b'+' | b'-')) {
+                    if matches!(current, Some(b'+' | b'-' | 0)) {
                         self.pos += 1;
                     }
                     self.state = State::NumberTail;
@@ -340,8 +456,10 @@ impl Scanner {
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
-                    self.token.number = parse_number(&input[self.start..self.pos])
-                        .ok_or_else(|| self.error("malformed number"))?;
+                    self.token.number =
+                        parse_number(&input[self.start..self.pos]).ok_or_else(|| {
+                            self.diagnostic("malformed number", &input[self.start..self.pos])
+                        })?;
                     self.emit(Kind::Number);
                 }
                 State::Bracket {
@@ -364,7 +482,10 @@ impl Scanner {
                     } else if equals == 0 {
                         self.emit(Kind::LBracket);
                     } else {
-                        return Err(self.error("invalid long string delimiter"));
+                        return Err(self.diagnostic(
+                            "invalid long string delimiter",
+                            &input[self.start..self.pos],
+                        ));
                     }
                 }
                 State::LongStart { comment, equals } => {
@@ -375,11 +496,28 @@ impl Scanner {
                 }
                 State::Long { comment, equals } => match current {
                     None => {
-                        return Err(self.error(if comment {
-                            "unfinished long comment"
-                        } else {
-                            "unfinished long string"
-                        }));
+                        return Err(self.diagnostic(
+                            if comment {
+                                "unfinished long comment"
+                            } else {
+                                "unfinished long string"
+                            },
+                            b"<eof>",
+                        ));
+                    }
+                    Some(b'[') if equals == 0 => {
+                        if self.pos + 1 == input.len() && !closed {
+                            return Ok(None);
+                        }
+                        self.pos += 1;
+                        if input.get(self.pos) == Some(&b'[') {
+                            self.pos += 1;
+                            self.state = State::Deprecated;
+                            continue;
+                        }
+                        if !comment {
+                            self.text.push(b'[');
+                        }
                     }
                     Some(b']') => {
                         self.pos += 1;
@@ -399,10 +537,7 @@ impl Scanner {
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
-                        let count = rest
-                            .iter()
-                            .position(|&b| matches!(b, b']' | b'\n' | b'\r'))
-                            .unwrap_or(rest.len());
+                        let count = long_boundary(rest, equals);
                         if !comment {
                             self.text.extend_from_slice(&rest[..count]);
                         }
@@ -442,7 +577,10 @@ impl Scanner {
                     }
                 }
                 State::Quoted(quote) => match current {
-                    None | Some(b'\n' | b'\r') => return Err(self.error("unfinished string")),
+                    None => return Err(self.diagnostic("unfinished string", b"<eof>")),
+                    Some(b'\n' | b'\r') => {
+                        return Err(self.string_error("unfinished string", input));
+                    }
                     Some(c) if c == quote => {
                         self.pos += 1;
                         self.string();
@@ -462,7 +600,7 @@ impl Scanner {
                     }
                 },
                 State::Escape(quote) => match current {
-                    None => return Err(self.error("unfinished string")),
+                    None => return Err(self.diagnostic("unfinished string", b"<eof>")),
                     Some(b'\n' | b'\r') => {
                         if !self.newline(input, closed)? {
                             return Ok(None);
@@ -511,7 +649,8 @@ impl Scanner {
                         return Ok(None);
                     }
                     self.text.push(
-                        u8::try_from(value).map_err(|_| self.error("escape sequence too large"))?,
+                        u8::try_from(value)
+                            .map_err(|_| self.string_error("escape sequence too large", input))?,
                     );
                     self.state = State::Quoted(quote);
                 }
@@ -594,7 +733,10 @@ mod tests {
         }
         let mut scan = Scanner::default();
         assert!(scan.next(b"@", false).unwrap().is_none());
-        assert!(scan.next(b"@x", false).is_err());
+        assert_eq!(
+            scan.next(b"@x", false).unwrap().unwrap().kind,
+            Kind::Byte(b'@')
+        );
     }
 
     #[test]

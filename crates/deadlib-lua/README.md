@@ -33,6 +33,12 @@ results, errors and C-call restrictions. Source readers close on success, errors
 and instruction aborts. Standard input keeps its lookahead across I/O and loading;
 changing `io.input` does not redirect the loader.
 
+Source diagnostics retain Lua 5.1 token labels, decoded string context, opening
+delimiter lines and local/assignment limit descriptions. `Error::message_bytes`
+preserves non-UTF-8 diagnostic bytes; `message` and display provide readable UTF-8.
+Reader and file loaders return the original diagnostic bytes to Lua. Long-token
+scanning uses safe eight-byte delimiter checks without reading beyond input.
+
 Current Lua 5.1 coverage includes byte strings and lexical syntax, expressions,
 assignments, blocks, conditionals, numeric/generic loops, table constructors,
 functions, upvalues, recursion, varargs, methods, tail calls and multiple results.
@@ -169,7 +175,7 @@ currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Ru
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua` and `math.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
-probes reach missing libraries/functions or a syntax-diagnostic mismatch. It verifies the official
+probes reach missing libraries/functions or runtime operand-name diagnostics. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-package.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-syntax.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

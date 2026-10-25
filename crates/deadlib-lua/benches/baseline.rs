@@ -288,6 +288,12 @@ fn main() {
             100.0,
             10,
         ),
+        (
+            "syntax_error",
+            r#"local sum=0;for i=1,100 do local f,e=loadstring("local x={1\n\n","=syntax-bench");if f==nil and e=="syntax-bench:3: '}' expected (to close '{' at line 1) near '<eof>'" then sum=sum+1 end end;return sum"#,
+            100.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");

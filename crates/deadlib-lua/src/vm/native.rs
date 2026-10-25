@@ -838,9 +838,8 @@ impl Vm {
                     Ok(program) => Value::Function(self.load(&program)),
                     Err(error) => {
                         let mut message = crate::bytecode::chunk_id_limit(&name, 80);
-                        message.extend_from_slice(
-                            format!(":{}: {}", error.line(), error.message()).as_bytes(),
-                        );
+                        message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
+                        message.extend_from_slice(error.message_bytes());
                         let value = self.intern(&message);
                         self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Nil;
