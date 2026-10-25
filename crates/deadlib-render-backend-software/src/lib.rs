@@ -734,7 +734,7 @@ fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) 
             .iter_mut()
             .zip(&target.texture.half_pixels)
         {
-            *rgba = unpack_half(pixel).map(|v| (clamp01(v) * 255.0).round() as u8);
+            *rgba = std::array::from_fn(|i| half_to_byte((pixel >> (i * 16)) as u16));
         }
         return;
     }
@@ -3088,40 +3088,55 @@ fn encode_half(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 16) & 0x8000) as u16;
     let magnitude = bits & 0x7fff_ffff;
-    if magnitude >= 0x7f80_0000 {
-        return sign | 0x7c00 | if magnitude == 0x7f80_0000 { 0 } else { 0x0200 };
-    }
-    let exponent = ((magnitude >> 23) & 0xff) as i32 - 127;
-    if exponent > 15 {
-        return sign | 0x7c00;
-    }
-    if exponent >= -14 {
+    // One unsigned check covers normal binary16 exponents: [2^-14, 2^16).
+    if magnitude.wrapping_sub(0x3880_0000) < 0x0f00_0000 {
         let rounded = magnitude + 0x0fff + ((magnitude >> 13) & 1);
         return sign | ((rounded >> 13) - 0x1c000) as u16;
     }
-    if exponent < -25 {
+    if magnitude >= 0x4780_0000 {
+        return sign | 0x7c00 | if magnitude > 0x7f80_0000 { 0x0200 } else { 0 };
+    }
+    // Below 2^-25, even rounding cannot reach a subnormal.
+    if magnitude < 0x3300_0000 {
         return sign;
     }
     let mantissa = (magnitude & 0x007f_ffff) | 0x0080_0000;
-    let shift = (-exponent - 1) as u32;
+    let shift = 126 - (magnitude >> 23);
     let rounded = mantissa + ((1 << (shift - 1)) - 1) + ((mantissa >> shift) & 1);
     sign | (rounded >> shift) as u16
 }
 
 fn decode_half(bits: u16) -> f32 {
     let sign = u32::from(bits & 0x8000) << 16;
-    let exponent = u32::from((bits >> 10) & 0x1f);
-    let mantissa = u32::from(bits & 0x03ff);
-    let magnitude = match exponent {
-        0 if mantissa == 0 => 0,
-        0 => {
-            let shift = mantissa.leading_zeros() - 21;
-            ((113 - shift) << 23) | (((mantissa << shift) & 0x03ff) << 13)
-        }
-        31 => 0x7f80_0000 | (mantissa << 13),
-        _ => ((exponent + 112) << 23) | (mantissa << 13),
+    let exponent = bits & 0x7c00;
+    let magnitude = if exponent == 0 {
+        // All binary16 subnormals are normal f32 values: scale the integer
+        // significand exactly, including zero, instead of renormalizing bits.
+        (f32::from(bits & 0x03ff) * (1.0 / 16_777_216.0)).to_bits()
+    } else {
+        let normal = (u32::from(bits & 0x7fff) << 13) + 0x3800_0000;
+        normal | if exponent == 0x7c00 { 0x7f80_0000 } else { 0 }
     };
     f32::from_bits(sign | magnitude)
+}
+
+fn half_to_byte(bits: u16) -> u8 {
+    // Negative values and NaNs cast to zero after clamping; +infinity saturates.
+    if bits > 0x7c00 {
+        return 0;
+    }
+    if bits >= 0x3c00 {
+        return 255;
+    }
+    // Values below 2^-9 cannot round up to one byte, including all subnormals.
+    if bits < 0x1800 {
+        return 0;
+    }
+    // The 11-bit significand times 255 is exact in f32. Round that integer
+    // product directly, removing the float decode, clamp, scale and round.
+    let scaled = (u32::from(bits & 0x03ff) | 0x0400) * 255;
+    let shift = 25 - (bits >> 10);
+    ((scaled + (1 << (shift - 1))) >> shift) as u8
 }
 
 fn pack_half(color: [f32; 4]) -> u64 {
