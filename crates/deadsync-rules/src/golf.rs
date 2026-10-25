@@ -15,23 +15,20 @@ pub fn tap_strokes_seconds(offset: Option<f64>) -> u32 {
     strokes_from_ms(offset.map(|offset| offset.abs() * 1000.0))
 }
 
+// The curve floors absolute milliseconds before scoring, so its finite domain
+// has only 104 results. Keep the 103.5 ms cutoff before truncating to an index.
+const STROKES: [u8; 104] = [
+    0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 12, 12, 13,
+    14, 14, 15, 16, 17, 17, 18, 19, 19, 20, 21, 21, 22, 23, 24, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+    32, 33, 34, 35, 36, 37, 37, 38, 39, 40, 41, 41, 42, 43, 44, 44, 45, 46, 47, 47, 48, 49, 49, 50,
+    51, 51, 52, 52, 53, 54, 54, 55, 56, 56, 57, 57, 58, 58, 59, 60, 60, 61, 61, 62, 62, 63, 63, 64,
+    64, 65, 65,
+];
+
 fn strokes_from_ms(ms: Option<f64>) -> u32 {
-    let Some(ms) = ms.filter(|v| v.is_finite()) else {
-        return MISS_STROKES;
-    };
-    if ms > 103.5 {
-        MISS_STROKES
-    } else if ms < 5.0 {
-        0
-    } else {
-        let f = ms.floor();
-        let points = if f <= 45.0 {
-            1.25 * (f - 4.0) + 0.5 * (f - 23.0).max(0.0)
-        } else {
-            62.25 + 150.0 * (1.0 + (f - 45.0) / 60.0).ln()
-        };
-        // Lua math.floor(points * 0.4 + 0.5), rounded per judged row.
-        (points * 0.4 + 0.5).floor() as u32
+    match ms {
+        Some(ms) if (0.0..=103.5).contains(&ms) => u32::from(STROKES[ms as usize]),
+        _ => MISS_STROKES,
     }
 }
 

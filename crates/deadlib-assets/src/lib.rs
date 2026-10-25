@@ -668,8 +668,11 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .0
         .iter()
         .find(|pixel| pixel[3] != 0)
-        .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-        .unwrap_or([0; 3]);
+        .map(|pixel| [pixel[0], pixel[1], pixel[2]]);
+    let Some(first) = first else {
+        image.as_mut().as_chunks_mut::<4>().0.fill([0; 4]);
+        return;
+    };
     let last = image
         .as_raw()
         .as_chunks::<4>()
