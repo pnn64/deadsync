@@ -58,6 +58,27 @@ def main() -> None:
         source_path.write_text(native_source,encoding='utf-8')
         native = subprocess.run([str(binary),'dump',str(source_path)],capture_output=True,check=True).stdout
     literal=lua_bytes(native)
+    case('concat_ranges', """
+        local trace={};local mt={};local weak=setmetatable({},{__mode='v'})
+        mt.__concat=function(a,b)
+          collectgarbage('collect');assert(weak[1]~=nil)
+          trace[#trace+1]=a.s..':'..b.s;return setmetatable({s=a.s..b.s},mt)
+        end
+        local function f(i)local t=setmetatable({s=tostring(i)},mt);weak[i]=t;return t end
+        local r=f(1)..f(2)..f(3)..f(4);print(r.s,table.concat(trace,'|'))
+        local source="return 'a'..1 ..2 ..3,'a'..(false and 'b'..'c' or 'd')..'e'"
+        local g=assert(loadstring(string.dump(assert(loadstring(source)))))
+        print(g())
+    """)
+    case('concat_hooks', """
+        local f=assert(loadstring('return function(a,b,c)\\nreturn a\\n ..b\\n ..c\\nend'))()
+        local trace={}
+        debug.sethook(function(event,line)
+          local d=debug.getinfo(2,'fl')
+          if d.func==f then trace[#trace+1]=event..':'..tostring(line)..':'..d.currentline end
+        end,'l',1)
+        local result=f('a',1,2);debug.sethook();print(result,table.concat(trace,'|'))
+    """)
     case('dump_long_branches', """
         local body=string.rep('x=x+1;',120000)
         for _,source in ipairs({'local x=0;if x==1 then '..body..'end;return x',

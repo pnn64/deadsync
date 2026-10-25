@@ -107,7 +107,20 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 impl<'a> Compiler<'a> {
     fn finish(&mut self) -> u32 {
         let mut f = std::mem::take(&mut self.function);
-        for (pc, i) in f.code.iter().enumerate() {
+        for pc in 0..f.code.len() {
+            let i = f.code[pc];
+            if matches!(i.op, Op::JumpFalse | Op::JumpTrue)
+                && i.c as usize > pc
+                && f.code.get(i.c as usize).is_some_and(|next| {
+                    matches!(next.op, Op::JumpFalse | Op::JumpTrue)
+                        && next.op != i.op
+                        && next.a == i.a
+                })
+            {
+                // On this edge the opposite test cannot jump. Logical chains
+                // go straight to its right operand, as in native codegen.
+                f.code[pc].c += 1;
+            }
             let consumed_branch = matches!(i.op, Op::JumpFalse | Op::JumpTrue)
                 && f.code[..pc]
                     .iter()

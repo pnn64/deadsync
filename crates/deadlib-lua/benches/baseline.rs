@@ -121,7 +121,17 @@ fn main() {
         .join(",");
     let indexed_kernel =
         format!("local t={{}};for n=1,1000 do {indexed_targets}={indexed_values} end;return t[16]");
+    let concat_kernel = |count| {
+        format!(
+            "local x='abcdefghijklmnop';local n=0;for i=1,200 do local s={};n=n+#s end;return n",
+            vec!["x"; count].join("..")
+        )
+    };
+    let concat16 = concat_kernel(16);
+    let concat128 = concat_kernel(128);
     for (name, source, expected, repeats) in [
+        ("concat_chain_16", concat16.as_str(), 51_200.0, 10),
+        ("concat_chain_128", concat128.as_str(), 409_600.0, 10),
         (
             "numeric_for",
             "local s=0; for i=1,100000 do s=s+i end; return s",

@@ -261,11 +261,41 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
     pub(super) fn binary_right(&mut self, id: ExprId, dst: u8, left: u8) -> Result<(), Error> {
-        let Expr::Binary(op, ..) = self.ast.exprs[id].0 else {
+        let Expr::Binary(op, _, right_id, _) = self.ast.exprs[id].0 else {
             unreachable!()
         };
         let right = self.result;
         self.line = self.ast.exprs[id].1.end;
+        // Only a direct right-hand concatenation can be extended: a logical
+        // expression may jump past its last CONCAT on another path.
+        if op == Kind::Concat
+            && matches!(
+                self.ast.exprs[self.unparen(right_id)].0,
+                Expr::Binary(Kind::Concat, ..)
+            )
+            && let Some(tail) = self.function.code.last().copied()
+            && (tail.op == Op::ConcatRange
+                || (tail.op == Op::Concat && tail.c == u32::from(tail.b) + 1))
+            && tail.a == right
+            && tail.b == u16::from(left) + 1
+        {
+            let pc = self.function.code.len() - 1;
+            self.function.code[pc] = Instruction {
+                op: Op::ConcatRange,
+                a: dst,
+                b: u16::from(left),
+                c: tail.c,
+            };
+            // Keep the original before-map: all unevaluated range operands
+            // remain roots through callbacks. The result has the outer scope.
+            self.live_register(u16::from(dst));
+            let after = self.live_map()?;
+            self.function.gc_live[pc] =
+                (self.function.gc_live[pc] & 0xffff) | (u32::from(after) << 16);
+            self.function.lines[pc] = self.line;
+            self.debug_line(self.line);
+            return Ok(());
+        }
         let op = match op {
             Kind::Plus => Op::Add,
             Kind::Minus => Op::Sub,

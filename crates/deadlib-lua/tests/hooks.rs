@@ -436,6 +436,30 @@ fn finalizer_callbacks_suppress_hooks_without_losing_pending_function_entries() 
     "#,
     );
 }
+#[test]
+fn source_concatenation_ranges_keep_reference_line_and_count_hook_events() {
+    for body in [
+        "return a\n ..b\n ..c",
+        "return a..(b\n ..c)",
+        "return (a\n ..b)..c",
+        "return a..(false and b..c or b)..c",
+    ] {
+        let function = format!("return function(a,b,c)\n{body}\nend");
+        let source = format!(
+            r#"
+          local f=assert(loadstring({function:?}))();local trace={{}}
+          debug.sethook(function(event,line)
+            local d=debug.getinfo(2,'fl')
+            if d.func==f then trace[#trace+1]=event..':'..tostring(line)..':'..d.currentline end
+          end,'l',1)
+          local result=f('a',1,2);debug.sethook()
+          return result,table.concat(trace,'|')
+        "#
+        );
+        compare(source.as_bytes());
+    }
+}
+
 fn compare(source: &[u8]) {
     let mut vm = Vm::new();
     vm.set_instruction_limit(Some(10_000_000));

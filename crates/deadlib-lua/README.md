@@ -102,6 +102,11 @@ error values; `xpcall` handlers run before faulting frames are unwound. Function
 environments and dynamically compiled chunks preserve shared state and identity.
 Native callbacks and metamethods use explicit continuation frames.
 
+Eligible right-associated concatenation chains use one range operation and the
+same buffered runtime path as imported native chunks. Operand evaluation order,
+left-associated groups, logical paths and named assignment destinations remain
+observable at their original points. Range operands stay rooted through callbacks.
+
 Runtime type errors recover scoped local, global, upvalue, field and method names
 from verified code and existing debug metadata. Name reconstruction runs only
 when formatting an error and retains raw byte names. Metatable redirection and
@@ -317,5 +322,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua` and `calls.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-jumps.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-concat.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

@@ -658,3 +658,19 @@ fn long_dump_relays_do_not_reserve_additional_registers() {
     compare_execution_against(&bytes, source.as_bytes());
     compare_execution(&bytes);
 }
+
+#[test]
+fn source_concatenation_ranges_export_with_original_grouping_and_errors() {
+    let sources = [
+        format!("local x='ab';return {}", vec!["x"; 190].join("..")),
+        "local x='a';local function f()x='b';return 'c' end;return x..f()..x,x".into(),
+        "local t=setmetatable({},{__concat=function(a,b)return '('..tostring(a)..':'..tostring(b)..')'end,__tostring=function()return 't'end});return t..1 ..2 ..3,(t..1)..2 ..3,t..(false and t..1 or 'x')".into(),
+        "return pcall(function()return 'a'..1 ..2 ..false..4 ..5 end)".into(),
+    ];
+    for source in sources {
+        let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+        let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+        compare_execution_against(&bytes, source.as_bytes());
+        compare_execution(&bytes);
+    }
+}

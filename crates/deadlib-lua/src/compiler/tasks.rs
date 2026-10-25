@@ -423,6 +423,13 @@ impl<'a> Compiler<'a> {
                             LineUse::Operand
                         },
                     );
+                    if op == Kind::Concat
+                        && let Some(&line) = self.function.hook_lines.last().filter(|&&l| l != 0)
+                    {
+                        // A copied concat operand is discharged at the operator;
+                        // callbacks and hook inspection must see that location.
+                        *self.function.lines.last_mut().expect("concat operand") = line;
+                    }
                     let right_reg =
                         self.right_register(right, left_reg, work, op == Kind::Concat)?;
                     self.tasks.push(Task::BinaryRight(id, dst, left_reg));

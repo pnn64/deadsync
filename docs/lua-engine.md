@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 350 differential/adversarial integration tests, forty-two unit tests and
+crate, 354 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-chunk-jumps.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-concat.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -521,6 +521,20 @@ retain fifteen passes in each engine and the shared Windows rename failure.
 Two [measurement runs](performance/2026-10-25-rust-lua-chunk-jumps.md) cover
 sixty-two runtime and twenty-two frontend workloads. Register/operand limits,
 broader debug/collector cases and the full standalone-engine gates remain open.
+
+The [source concatenation validation](testing/2026-10-26-rust-lua-concat.md)
+extends eligible right-associated chains into the shared native-style range
+operation. Buffered string groups avoid repeated pairwise intermediate copies;
+metamethods preserve operand order and callback roots. Parenthesized left groups
+and logical paths retain their evaluation boundaries. Copied operands report
+their operator's source line, and known conditional edges bypass an opposite
+test of the same register. All 398 tests and 140 process probes pass, including
+256 generated concatenation/logical contexts and exact line/count hook probes.
+The official file results remain fifteen of sixteen in both engines. The
+[measurements](performance/2026-10-26-rust-lua-concat.md) retain a compiler
+baseline and two final runs over sixty-four runtime and twenty-two frontend
+workloads. Full standalone compatibility, broader resource/collector/debug
+coverage and later dialects remain unfinished.
 
 ## Reference contract
 

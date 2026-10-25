@@ -282,6 +282,61 @@ mod tests {
         );
     }
     #[test]
+    fn concatenation_ranges_preserve_grouping_calls_and_named_destinations() {
+        let setup = "local trace={};local mt={};mt.__concat=function(a,b)local x=type(a)=='table' and a.s or a;local y=type(b)=='table' and b.s or b;trace[#trace+1]=x..':'..y;return setmetatable({s=x..y},mt)end;local function f(x)trace[#trace+1]=x;return setmetatable({s=x},mt)end;";
+        let mut sources = Vec::new();
+        for expression in [
+            "f('a')..f('b')..f('c')..f('d')",
+            "(f('a')..f('b'))..f('c')..f('d')",
+            "f('a')..(f('b')..f('c'))..f('d')",
+            "f('a')..(true and f('b')..f('c') or f('d'))",
+            "f('a')..(false and f('b')..f('c') or f('d'))",
+            "f('a')..(f('b') or f('c')..f('d'))",
+            "f('a')..(false or f('c')..f('d'))",
+        ] {
+            sources.push(format!(
+                "{setup}local x={expression};return x.s,table.concat(trace,'|')"
+            ));
+        }
+        sources.push("local x='old';local mt={__concat=function(a,b)assert(x=='old');return 'new' end};local a=setmetatable({},mt);x=a..1 ..2 ..3;return x".into());
+        sources
+            .push("local x='a';local function f()x='b';return 'c' end;return x..f()..x,x".into());
+        check(sources);
+    }
+    #[test]
+    fn concatenation_range_operands_survive_collection_and_callback_errors() {
+        check(vec![
+            "local weak=setmetatable({},{__mode='v'});local mt={};mt.__concat=function(a,b)collectgarbage('collect');assert(weak[1]~=nil);return setmetatable({s=a.s..b.s},mt)end;local function f(i)local t=setmetatable({s=tostring(i)},mt);weak[i]=t;return t end;local x=f(1)..f(2)..f(3)..f(4);return x.s".into(),
+            "local err={};local t=setmetatable({},{__concat=function()collectgarbage('collect');error(err)end});local ok,e=pcall(function()return 'x'..t..1 ..2 ..3 end);return ok,e==err".into(),
+            "local obj=setmetatable({},{__concat=function()return coroutine.yield('bad')end});local c=coroutine.create(function()return 'a'..obj..1 ..2 end);local ok,e=coroutine.resume(c);return ok,type(e),coroutine.status(c)".into(),
+        ]);
+    }
+    #[test]
+    fn generated_concatenation_and_logical_contexts_keep_callback_order() {
+        fn expression(seed: &mut u32, depth: u8) -> String {
+            *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let choice = *seed;
+            if depth == 0 {
+                return format!("f('{}')", (b'a' + (choice % 5) as u8) as char);
+            }
+            let left = expression(seed, depth - 1);
+            let right = expression(seed, depth - 1);
+            match choice % 6 {
+                0 => format!("{left}..{right}"),
+                1 => format!("({left})..({right})"),
+                2 => format!("(true and {left} or {right})"),
+                3 => format!("(false and {left} or {right})"),
+                4 => format!("({left} or {right})"),
+                _ => format!("({left} and {right})"),
+            }
+        }
+        let mut seed = 0x051c_0ca7;
+        check((0..256).map(|_| {
+            let expr = expression(&mut seed, 4);
+            format!("local trace={{}};local mt={{}};mt.__concat=function(a,b)trace[#trace+1]=a.s..':'..b.s;return setmetatable({{s=a.s..b.s}},mt)end;local function f(s)trace[#trace+1]=s;return setmetatable({{s=s}},mt)end;local r={expr};return r.s,table.concat(trace,'|')")
+        }).collect());
+    }
+    #[test]
     fn named_destinations_remain_unchanged_until_callbacks_and_metamethods_finish() {
         check([
             "local x=10;local function f()local old=x;x=20;return old end;x=(x+1)+f();return x",
