@@ -3,7 +3,7 @@
 use crate::{
     Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, UserdataId, Value,
     bytecode::{Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
-    lexer::parse_number,
+    locale::parse_number,
     table::Table,
 };
 use std::{collections::HashMap, sync::Arc};
@@ -270,6 +270,7 @@ pub struct Vm {
     active_native: Option<usize>,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
     pattern_work: crate::pattern::Work,
+    pattern_locale: u64,
     native_closures: Arena<threads::NativeClosure>,
     native_envs: HashMap<u64, TableId>,
     substitutions: Vec<strings::Substitution>,
@@ -327,6 +328,7 @@ impl Vm {
             active_native: None,
             patterns: HashMap::new(),
             pattern_work: crate::pattern::Work::default(),
+            pattern_locale: crate::locale::revision(),
             native_closures: Arena::default(),
             native_envs: HashMap::new(),
             substitutions: Vec::new(),
@@ -1205,7 +1207,7 @@ impl Vm {
     fn concat_bytes(&self, value: Value) -> Result<Vec<u8>, Error> {
         match value {
             Value::String(id) => Ok(self.string_bytes(id).unwrap_or_default().to_vec()),
-            Value::Number(n) => Ok(format_number(n).into_bytes()),
+            Value::Number(n) => Ok(format_number(n)),
             _ => Err(Error::new(
                 ErrorKind::Runtime,
                 0,

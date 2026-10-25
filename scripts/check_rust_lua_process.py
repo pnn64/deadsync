@@ -43,6 +43,117 @@ def main() -> None:
     def case(name: str, source: str, env: dict[str,str|None]|None=None) -> None:
         cases.append((name,source,env or {}))
     case('shell_query', "print(os.execute(),os.execute(nil),os.execute(nil,false),select('#',os.execute()))")
+    if os.name == 'nt':
+        case('locale_queries', """
+            assert(os.setlocale('C'));print(os.setlocale(),os.setlocale(nil,'numeric'))
+            for _,category in ipairs({'all','collate','ctype','monetary','numeric','time'})do
+              print(category,os.setlocale('C',category),os.setlocale(nil,category))
+            end
+            for _,args in ipairs({{false},{true,'bad'},{'C','bad'},{'C',false},{'C','NUMERIC'},
+              {'a locale which does not exist'},{'C\\0ignored','numeric\\0ignored'}})do
+              print(pcall(os.setlocale,unpack(args)))
+            end
+        """)
+        for name in ('ptb','fr-FR','.UTF-8','trk'):
+            setup = f"assert(os.setlocale('C'));local name={lua(name)};print(assert(os.setlocale(name)));"
+            case('locale_numeric_'+name, setup+"""
+                for _,text in ipairs({'3.4','3,4','  3,4  ','0x1.8p1','0x1,8p1','0x1p1',
+                  '1e3','1,25e-3','-0,0','nan','inf','-inf','1.2,3','3\\0tail'})do
+                  local n=tonumber(text);print(text,n,n and 1/n)
+                end
+                print(tostring(3.4),string.format('%08.2f|%+.3e|%#.0f|%.4g',3.4,12.5,4,0.00125))
+                print('concat',3.4 .. '|' .. table.concat({3.4,2.5},';'))
+                print(assert(loadstring('return 3.4,.4,4.,4.+.5'))())
+                local f,e=loadstring('return 4.5.');print(f==nil,e)
+                print(tonumber(string.char(160)..'42'..string.char(160)),tonumber(string.char(160)..'ff'..string.char(160),16))
+                os.setlocale('C')
+            """)
+            case('locale_bytes_'+name, setup+"""
+                local bytes={};for i=0,255 do bytes[#bytes+1]=string.char(i)end;bytes=table.concat(bytes)
+                local function encode(s)
+                  local out={};for i=1,#s do out[i]=string.format('%02x',string.byte(s,i))end
+                  return table.concat(out)
+                end
+                print('lower',encode(string.lower(bytes)));print('upper',encode(string.upper(bytes)))
+                for class in string.gmatch('aAcCdDlLpPsSuUwWxXzZ','.')do
+                  local value,n=string.gsub(bytes,'%'..class,'*');print(class,encode(value),n)
+                  value,n=string.gsub(bytes,'[%'..class..']','*');print(class,encode(value),n)
+                  value,n=string.gsub(bytes,'[^%'..class..']','*');print(class,encode(value),n)
+                end
+                for _,c in ipairs({128,160,178,192,201,233,253,255})do
+                  local byte=string.char(c);local f,e=loadstring('local '..byte..'=7;return '..byte)
+                  print(c,f and f()or e)
+                end
+                os.setlocale('C')
+            """)
+        case('locale_pattern_invalidation', """
+            assert(os.setlocale('C'));local c=string.char(233);local p='%a'
+            print(string.match(c,p));local it=string.gmatch('a'..c..'b',p)
+            print(it());assert(os.setlocale('ptb','ctype'));print(it());print(string.match(c,p))
+            assert(os.setlocale('C','ctype'));print(it())
+            print(string.gsub('a'..c..'b',p,function(x)
+              if x=='a'then assert(os.setlocale('ptb','ctype'));string.match(c,p)end;return 'x'
+            end))
+            print(string.gsub('a'..c..'b','^%a',function(x)
+              assert(os.setlocale('C','ctype'));string.match(c,p);return 'X'
+            end))
+            assert(os.setlocale('C'))
+        """)
+        case('locale_lexer_bytes', """
+            for _,name in ipairs({'C','ptb','.UTF-8'})do
+              assert(os.setlocale(name));print(name)
+              for i=128,255 do
+                local c=string.char(i)
+                for _,source in ipairs({'local '..c..'=7;return '..c,'local a'..c..'=8;return a'..c,
+                  'return "\\\\'..c..'"','return "\\\\1'..c..'"'})do
+                  local f,e=loadstring(source)
+                  if f then local v=f();print(i,type(v),type(v)=='string'and string.byte(v)or v)
+                  else print(i,e)end
+                end
+              end
+            end
+            assert(os.setlocale('C'))
+        """)
+        case('locale_category_independence', """
+            assert(os.setlocale('C'));assert(os.setlocale('ptb','numeric'))
+            print(os.setlocale(nil,'all'));print(os.setlocale(nil,'ctype'),os.setlocale(nil,'numeric'))
+            print(string.upper(string.char(233)),tonumber('3,4'),tonumber('3.4'))
+            assert(os.setlocale('fr-FR','time'));print(os.date('!%A|%B|%x|%X',0))
+            assert(os.setlocale('ptb','ctype'));print(os.setlocale(nil,'all'))
+            assert(os.setlocale('C'));print(os.setlocale())
+        """)
+        case('locale_collation', """
+            local strings={'','a','z',string.char(225)..'lo','alo','amo','A','a\\0b','A\\0c','a\\0','a\\0\\0'}
+            for _,name in ipairs({'C','ptb','fr-FR','.UTF-8'})do
+              assert(os.setlocale(name,'collate'));print(name)
+              for i,a in ipairs(strings)do for j,b in ipairs(strings)do print(i,j,a<b,a<=b,a==b)end end
+            end
+            os.setlocale('C')
+        """)
+        case('locale_stream_numbers', """
+            assert(os.setlocale('C'));assert(os.setlocale('ptb'))
+            local f=assert(io.tmpfile());f:write(' 3,4|0x1,8p1|5.6|'..string.char(160)..'42|')
+            f:seek('set')
+            for i=1,4 do print(f:read('*n'),f:read(1))end;print(f:read('*a'));f:close()
+            f=assert(io.tmpfile());f:write(3.4,'|',string.format('%.2f',2.5));f:seek('set');print(f:read('*a'));f:close()
+            assert(os.setlocale('C'))
+        """)
+        case('locale_digit_grammar', """
+            for _,name in ipairs({'C','ptb','.UTF-8','trk'})do
+              assert(os.setlocale(name));print(name)
+              for _,code in ipairs({178,179,185})do
+                local c=string.char(code)
+                print(pcall(string.match,'x','%'..c))
+                for _,middle in ipairs({c,'2'..c,c..'2','.'..c,c..'.2',c..c..c})do
+                  for _,conversion in ipairs({'d','f','s','c','q'})do
+                    local format='%'..middle..conversion
+                    print(code,format,pcall(string.format,format,65))
+                  end
+                end
+              end
+            end
+            assert(os.setlocale('C'))
+        """)
     gc_setup = """
         collectgarbage('restart');collectgarbage('setpause',200);collectgarbage();collectgarbage('stop')
         local weak=setmetatable({},{__mode='v'});local keep={}

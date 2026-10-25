@@ -305,7 +305,10 @@ impl Scanner {
                             if self.pos + 1 == input.len() && !closed {
                                 return Ok(None);
                             }
-                            if input.get(self.pos + 1).is_some_and(u8::is_ascii_digit) {
+                            if input
+                                .get(self.pos + 1)
+                                .is_some_and(|b| crate::locale::is_digit(*b))
+                            {
                                 self.start = self.pos;
                                 self.pos += 1;
                                 self.state = State::Number;
@@ -344,6 +347,15 @@ impl Scanner {
                                 (b'~', true) => Kind::Ne,
                                 _ => Kind::Byte(c),
                             });
+                        }
+                        _ if crate::locale::is_space(c) => self.pos += 1,
+                        _ if crate::locale::is_digit(c) => {
+                            self.pos += 1;
+                            self.state = State::Number;
+                        }
+                        _ if crate::locale::is_alpha(c) => {
+                            self.pos += 1;
+                            self.state = State::Word;
                         }
                         _ => {
                             self.pos += 1;
@@ -392,7 +404,7 @@ impl Scanner {
                 State::Word => {
                     while input
                         .get(self.pos)
-                        .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
+                        .is_some_and(|c| crate::locale::is_alnum(*c) || *c == b'_')
                     {
                         self.pos += 1;
                     }
@@ -432,7 +444,7 @@ impl Scanner {
                 State::Number => {
                     while input
                         .get(self.pos)
-                        .is_some_and(|c| c.is_ascii_digit() || *c == b'.')
+                        .is_some_and(|c| crate::locale::is_digit(*c) || *c == b'.')
                     {
                         self.pos += 1;
                     }
@@ -455,7 +467,7 @@ impl Scanner {
                 State::NumberTail => {
                     while input
                         .get(self.pos)
-                        .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
+                        .is_some_and(|c| crate::locale::is_alnum(*c) || *c == b'_')
                     {
                         self.pos += 1;
                     }
@@ -614,7 +626,7 @@ impl Scanner {
                         self.text.push(b'\n');
                         self.state = State::Quoted(quote);
                     }
-                    Some(b'0'..=b'9') => {
+                    Some(c) if crate::locale::is_digit(c) => {
                         self.state = State::Decimal {
                             quote,
                             value: 0,
@@ -641,7 +653,11 @@ impl Scanner {
                     mut value,
                     mut count,
                 } => {
-                    while count < 3 && input.get(self.pos).is_some_and(u8::is_ascii_digit) {
+                    while count < 3
+                        && input
+                            .get(self.pos)
+                            .is_some_and(|b| crate::locale::is_digit(*b))
+                    {
                         value = value * 10 + u16::from(input[self.pos] - b'0');
                         count += 1;
                         self.pos += 1;

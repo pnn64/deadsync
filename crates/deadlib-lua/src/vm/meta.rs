@@ -251,9 +251,10 @@ impl Vm {
         let equal = matches!(op, Op::Le | Op::Ge);
         let order = match (left, right) {
             (Value::Number(x), Value::Number(y)) => Some(x.partial_cmp(&y)),
-            (Value::String(x), Value::String(y)) => {
-                Some(self.string_bytes(x).partial_cmp(&self.string_bytes(y)))
-            }
+            (Value::String(x), Value::String(y)) => Some(Some(crate::locale::compare(
+                self.string_bytes(x).unwrap(),
+                self.string_bytes(y).unwrap(),
+            ))),
             _ => None,
         };
         if let Some(order) = order {

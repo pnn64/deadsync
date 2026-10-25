@@ -1,4 +1,4 @@
-//! Lua 5.1 byte-oriented lexical analysis in the C locale.
+//! Lua 5.1 byte-oriented lexical analysis with locale character classes.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Kind {
@@ -60,7 +60,7 @@ impl Kind {
     pub(crate) fn label(self) -> Vec<u8> {
         let text = match self {
             Self::Byte(byte) => {
-                return if byte.is_ascii_control() {
+                return if crate::locale::class(byte, b'c') {
                     format!("char({byte})").into_bytes()
                 } else {
                     vec![byte]

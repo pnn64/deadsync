@@ -666,7 +666,7 @@ impl Vm {
                 for index in first..count {
                     let value = self.argument(base, count, index);
                     let s = match value {
-                        Value::Number(n) => self.intern(native::format_number(n).as_bytes()),
+                        Value::Number(n) => self.intern(native::format_number(n).as_slice()),
                         _ => Value::String(self.string_argument(base, count, index)?),
                     };
                     let Value::String(s) = s else { unreachable!() };

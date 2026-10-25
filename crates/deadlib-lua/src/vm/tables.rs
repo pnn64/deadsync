@@ -183,7 +183,7 @@ impl Vm {
                         Value::String(id) => {
                             output.extend_from_slice(&self.strings.bytes[slot_index(id.0)])
                         }
-                        Value::Number(n) => output.extend_from_slice(format_number(n).as_bytes()),
+                        Value::Number(n) => output.extend_from_slice(format_number(n).as_slice()),
                         _ => {
                             return Err(failure(format!(
                                 "invalid value ({}) at index {index} in table for 'concat'",

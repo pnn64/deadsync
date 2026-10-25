@@ -1,5 +1,5 @@
 //! Lua 5.1 byte patterns with compact instructions and explicit backtracking.
-use crate::{Error, ErrorKind};
+use crate::{Error, ErrorKind, locale::class};
 
 const UNFINISHED: usize = usize::MAX;
 const POSITION: usize = usize::MAX - 1;
@@ -142,22 +142,6 @@ fn error(message: &str) -> Error {
     Error::new(ErrorKind::Runtime, 0, message)
 }
 
-fn class(byte: u8, class: u8) -> bool {
-    let hit = match class.to_ascii_lowercase() {
-        b'a' => byte.is_ascii_alphabetic(),
-        b'c' => byte.is_ascii_control(),
-        b'd' => byte.is_ascii_digit(),
-        b'l' => byte.is_ascii_lowercase(),
-        b'p' => byte.is_ascii_punctuation(),
-        b's' => matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 11 | 12),
-        b'u' => byte.is_ascii_uppercase(),
-        b'w' => byte.is_ascii_alphanumeric(),
-        b'x' => byte.is_ascii_hexdigit(),
-        b'z' => byte == 0,
-        _ => return byte == class,
-    };
-    hit != class.is_ascii_uppercase()
-}
 fn set_has(set: &[u64; 4], byte: u8) -> bool {
     set[usize::from(byte) / 64] & (1u64 << (byte % 64)) != 0
 }
@@ -298,7 +282,7 @@ impl Pattern {
                                 arg = 2;
                             }
                         }
-                        Some(c @ b'0'..=b'9') => {
+                        Some(c) if crate::locale::is_digit(c) => {
                             kind = Kind::Reference;
                             arg = u32::from(c - b'0');
                         }

@@ -19,6 +19,8 @@ mod compiler;
 mod error;
 mod format;
 mod lexer;
+mod locale;
+mod numeric;
 mod optimizer;
 mod parser;
 mod pattern;

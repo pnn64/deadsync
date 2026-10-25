@@ -157,7 +157,7 @@ impl Vm {
                     for pos in first..=last {
                         let value = self.registers[pos];
                         let value = if let Value::Number(n) = value {
-                            self.intern(format_number(n).as_bytes())
+                            self.intern(format_number(n).as_slice())
                         } else {
                             value
                         };

@@ -384,7 +384,7 @@ impl Vm {
     fn default_string(&mut self, value: Value) -> Value {
         match value {
             Value::String(_) => value,
-            Value::Number(n) => self.intern(format_number(n).as_bytes()),
+            Value::Number(n) => self.intern(format_number(n).as_slice()),
             Value::Nil => self.intern(b"nil"),
             Value::Boolean(b) => self.intern(if b { b"true" } else { b"false" }),
             Value::Table(id) => self.intern(format!("table: 0x{:x}", id.0).as_bytes()),
@@ -919,8 +919,13 @@ impl Vm {
     }
 }
 
-// Lua 5.1's default formatting uses C's %.14g in the C locale.
-pub(super) fn format_number(n: f64) -> String {
+// Locale punctuation is applied after the pure Rust %.14g conversion.
+pub(super) fn format_number(n: f64) -> Vec<u8> {
+    let mut bytes = format_number_c(n).into_bytes();
+    crate::locale::localize(&mut bytes);
+    bytes
+}
+fn format_number_c(n: f64) -> String {
     if !n.is_finite() {
         return if n.is_nan() {
             format!(

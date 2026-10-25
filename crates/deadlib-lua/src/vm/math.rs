@@ -235,7 +235,7 @@ impl Vm {
         }
         let text = &self.strings.bytes[slot_index(string.0)];
         let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
-        let whitespace = |c: &u8| matches!(c, 9..=13 | 32);
+        let whitespace = |c: &u8| crate::locale::is_space(*c);
         let first = text
             .iter()
             .position(|c| !whitespace(c))

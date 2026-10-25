@@ -16,6 +16,42 @@ fn number(n: f64) -> Scalar {
         Scalar::Number(n.to_bits())
     }
 }
+
+#[test]
+fn locale_queries_and_validation_keep_the_c_locale() {
+    compare(br#"
+      assert(os.setlocale('C'))
+      local out={os.setlocale(),os.setlocale(nil,'numeric'),os.setlocale('C','ctype')}
+      for _,args in ipairs({{false},{true,'bad'},{'C','bad'},{'C',false},{'C','NUMERIC'},
+        {'a locale which does not exist'},{'C\0ignored','numeric\0ignored'}})do
+        local ok,value=pcall(os.setlocale,unpack(args));out[#out+1]=tostring(ok);out[#out+1]=tostring(value)
+      end
+      out[#out+1]=os.setlocale(nil,'all');return unpack(out)
+    "#);
+}
+
+#[test]
+fn runtime_hexadecimal_fractions_round_like_native_conversions() {
+    for text in [
+        "0x1.8p1",
+        "-0x.8p+2",
+        "+0Xab.cdP-3",
+        "0x0.0p-99999",
+        "0x1p99999",
+        "0x1p-99999",
+        "0x1.fffffffffffffp-1023",
+        "0x.0000000000001p-1022",
+        "0x1.00000000000008p0",
+        "0x1.0000000000000800000001p0",
+        "0x.",
+        "0x..1",
+        "0x1p",
+        "0x1p+",
+        "0x1.2.3",
+    ] {
+        compare(format!("local n=tonumber('{text}');return n,n and 1/n").as_bytes());
+    }
+}
 fn compare(source: &[u8]) {
     let mut vm = Vm::new();
     vm.set_output_capture(true);

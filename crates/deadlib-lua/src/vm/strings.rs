@@ -127,7 +127,7 @@ impl Vm {
     ) -> Result<StringId, Error> {
         match self.argument(base, count, index) {
             Value::String(id) => Ok(id),
-            Value::Number(n) => Ok(self.strings.intern(format_number(n).as_bytes())),
+            Value::Number(n) => Ok(self.strings.intern(format_number(n).as_slice())),
             _ => Err(self.argument_type_error(base, count, index, "string")),
         }
     }
@@ -149,6 +149,11 @@ impl Vm {
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
     fn prepare_pattern(&mut self, id: StringId, anchor: bool) {
+        let revision = crate::locale::revision();
+        if revision != self.pattern_locale {
+            self.patterns.clear();
+            self.pattern_locale = revision;
+        }
         self.patterns
             .entry((id, anchor))
             .or_insert_with(|| Pattern::compile(&self.strings.bytes[slot_index(id.0)], anchor));
@@ -277,13 +282,7 @@ impl Vm {
                 if id == STR_REVERSE {
                     bytes.extend(text.iter().rev().copied());
                 } else {
-                    bytes.extend(text.iter().map(|b| {
-                        if id == STR_LOWER {
-                            b.to_ascii_lowercase()
-                        } else {
-                            b.to_ascii_uppercase()
-                        }
-                    }));
+                    crate::locale::map_case(text, id == STR_UPPER, &mut bytes);
                 }
                 self.finish_buffer(bytes)
             }
@@ -359,6 +358,7 @@ impl Vm {
             return Err(Error::new(ErrorKind::Runtime, 0, "unknown native closure"));
         };
         let (source, pattern, position) = (iter.source, iter.pattern, iter.position);
+        self.prepare_pattern(pattern, false);
         let found = self.patterns[&(pattern, false)].find(
             &self.strings.bytes[slot_index(source.0)],
             position,
@@ -396,7 +396,7 @@ impl Vm {
         } else {
             state.done = true;
         }
-        if self.patterns[&(state.pattern, true)].anchored {
+        if self.strings.bytes[slot_index(state.pattern.0)].first() == Some(&b'^') {
             state.done = true;
         }
     }
@@ -420,10 +420,10 @@ impl Vm {
                 bytes.extend_from_slice(
                     &self.strings.bytes[slot_index(source.0)][found.start..found.end],
                 );
-            } else if c.is_ascii_digit() {
+            } else if crate::locale::is_digit(c) {
                 let capture = found.capture(usize::from(c - b'1'))?;
                 if capture.position() {
-                    bytes.extend_from_slice(format_number((capture.start + 1) as f64).as_bytes());
+                    bytes.extend_from_slice(format_number((capture.start + 1) as f64).as_slice());
                 } else {
                     bytes.extend_from_slice(
                         &self.strings.bytes[slot_index(source.0)][capture.range()?],
@@ -445,7 +445,7 @@ impl Vm {
             let pattern = self.string_argument(args, argc, 1)?;
             let mut replacement = self.argument(args, argc, 2);
             if let Value::Number(n) = replacement {
-                replacement = self.intern(format_number(n).as_bytes());
+                replacement = self.intern(format_number(n).as_slice());
             }
             if !matches!(
                 replacement,
@@ -488,7 +488,7 @@ impl Vm {
             } else {
                 let string = match value {
                     Value::String(id) => id,
-                    Value::Number(n) => self.strings.intern(format_number(n).as_bytes()),
+                    Value::Number(n) => self.strings.intern(format_number(n).as_slice()),
                     _ => {
                         return Err(Error::new(
                             ErrorKind::Runtime,
@@ -526,6 +526,7 @@ impl Vm {
         let state = &self.substitutions[index];
         let (source, pattern, cursor, replacement) =
             (state.source, state.pattern, state.cursor, state.replacement);
+        self.prepare_pattern(pattern, true);
         Pattern::reset(&mut self.pattern_work);
         let found = self.patterns[&(pattern, true)].match_at(
             &self.strings.bytes[slot_index(source.0)],
@@ -616,11 +617,10 @@ impl Vm {
                     output.extend_from_slice(&bytes);
                 }
                 c => {
-                    return Err(Error::new(
-                        ErrorKind::Runtime,
-                        0,
-                        format!("invalid option '%{}' to 'format'", c as char),
-                    ));
+                    let mut message = b"invalid option '%".to_vec();
+                    message.push(c);
+                    message.extend_from_slice(b"' to 'format'");
+                    return Err(Error::from_bytes(ErrorKind::Runtime, 0, message));
                 }
             }
         }

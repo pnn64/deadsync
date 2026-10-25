@@ -16,7 +16,8 @@ const CLOCK: u64 = FIRST + 6;
 const RENAME: u64 = FIRST + 7;
 pub(super) const TIME: u64 = FIRST + 8;
 const DATE: u64 = FIRST + 9;
-pub(super) const LAST: u64 = DATE;
+const SETLOCALE: u64 = FIRST + 10;
+pub(super) const LAST: u64 = SETLOCALE;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temporary_name() -> std::io::Result<std::path::PathBuf> {
@@ -73,6 +74,7 @@ impl Vm {
             (b"rename", RENAME),
             (b"time", TIME),
             (b"date", DATE),
+            (b"setlocale", SETLOCALE),
         ] {
             let name = self.intern(name);
             self.raw_set(table, name, Value::Native(id)).unwrap();
@@ -82,6 +84,37 @@ impl Vm {
 
     pub(super) fn os_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
         match id {
+            SETLOCALE => {
+                let name = if self.argument(base, count, 0) == Value::Nil {
+                    None
+                } else {
+                    Some(self.string_argument(base, count, 0)?)
+                };
+                let category = if self.argument(base, count, 1) == Value::Nil {
+                    0
+                } else {
+                    let id = self.string_argument(base, count, 1)?;
+                    let bytes = &self.strings.bytes[slot_index(id.0)];
+                    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+                    [
+                        b"all".as_slice(),
+                        b"collate",
+                        b"ctype",
+                        b"monetary",
+                        b"numeric",
+                        b"time",
+                    ]
+                    .iter()
+                    .position(|&s| s == bytes)
+                    .ok_or_else(|| self.argument_option_error(1, bytes))?
+                };
+                let value = crate::locale::set(
+                    name.map(|id| self.strings.bytes[slot_index(id.0)].as_ref()),
+                    category,
+                )?;
+                self.registers[base] = value.map_or(Value::Nil, |s| self.intern(&s));
+                return Ok(1);
+            }
             DATE => return self.date_native(base, count),
             CLOCK => {
                 #[cfg(any(

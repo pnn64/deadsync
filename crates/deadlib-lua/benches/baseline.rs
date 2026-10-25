@@ -329,6 +329,18 @@ fn main() {
             10,
         ),
         (
+            "locale_numeric",
+            "local old=os.setlocale(nil,'numeric');assert(os.setlocale('ptb','numeric'));local n=0;for i=1,1000 do local v=tonumber('12,5');if string.format('%.2f',v)=='12,50'then n=n+1 end end;assert(os.setlocale(old,'numeric'));return n",
+            1000.0,
+            10,
+        ),
+        (
+            "locale_ctype",
+            "local old=os.setlocale(nil,'ctype');assert(os.setlocale('ptb','ctype'));local s=string.char(233,225,65,97);local n=0;for i=1,1000 do n=n+#string.upper(s);n=n+select(2,string.gsub(s,'%a','x'))end;assert(os.setlocale(old,'ctype'));return n",
+            8000.0,
+            10,
+        ),
+        (
             "reader_load_single",
             "local sum=0;for i=1,200 do local once=false;local f=load(function()if once then return nil end;once=true;return 'return 1+2'end);sum=sum+f()end;return sum",
             600.0,

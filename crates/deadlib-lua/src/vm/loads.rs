@@ -273,7 +273,7 @@ impl Vm {
             }
             let supplied_name = self.argument(args, frame.argc(), 1);
             let supplied_name = match supplied_name {
-                Value::Number(n) => self.intern(format_number(n).as_bytes()),
+                Value::Number(n) => self.intern(format_number(n).as_slice()),
                 v => v,
             };
             // lua_settop(3) retains an already supplied third argument until
@@ -309,7 +309,7 @@ impl Vm {
             self.loads[index].probed = true;
             let result = self.registers[base + 3];
             let result = if let Value::Number(n) = result {
-                self.intern(format_number(n).as_bytes())
+                self.intern(format_number(n).as_slice())
             } else {
                 result
             };

@@ -197,7 +197,7 @@ open streams and shared stdout before terminating the process without Lua
 finalizers. Windows shell selection, raw command lines and exit-code widths match
 the pinned CRT probes. An explicitly empty Windows `COMSPEC` aborts as in that
 reference build. The interpreter and compiler use safe Rust. Native declarations
-are restricted to the Windows OS bridge and narrow POSIX clock/calendar bridges. These
+are restricted to the Windows OS/locale bridges and narrow POSIX clock/calendar bridges. These
 add no Cargo dependency or C Lua linkage.
 
 `clock` uses the native runtime's clock and preserves its epoch and units. The
@@ -220,7 +220,19 @@ Calendar validity, DST rules and format extensions follow the pinned runtime.
 Windows has differential runtime coverage; selected Linux/Apple targets have
 compile coverage only. Android declarations need target validation. Other
 targets report unsupported calendar operations.
-`setlocale` remains the missing OS function. Broader locale behavior is unfinished.
+`setlocale` supports all six Lua 5.1 categories on Windows/MSVC, including native
+names, aliases, default selection, queries and unavailable locales. Numeric
+conversion, formatting and stream scanning follow the numeric decimal point;
+source literals retain Lua's period syntax. Byte character classes, casing,
+identifier scanning and cached patterns follow the ctype category. Pattern
+iterators and replacement callbacks observe subsequent locale changes. String
+ordering uses native collation, including Lua 5.1's embedded-NUL segmentation;
+equality remains byte identity. Calendar formatting follows the time category.
+Locale state is shared between Rust VMs. The native bridge holds the CRT locale
+lock while copying its returned storage. Cached Rust views are updated through
+this Lua API; external CRT locale changes and host per-thread locale modes are
+outside the current contract. Other targets report unsupported native locales.
+Broader locale/encoding coverage remains unfinished.
 
 Physical stdout is shared across VMs and buffers logical bytes before Windows
 newline translation. `print`, stdout writes and `setvbuf` share that buffer;
@@ -278,9 +290,10 @@ booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
 currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
-`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua` and `sort.lua`. The retained
+`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`,
+`sort.lua`, `literals.lua` and `strings.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-gc-mark.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-locale.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
