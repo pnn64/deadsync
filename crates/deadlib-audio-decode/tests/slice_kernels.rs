@@ -106,27 +106,6 @@ fn benchmark_slice_kernels() {
             println!("{label}: allocation {counts:?}");
             bench::measure(&label, (1_000_000 / frames).max(100), &mut work);
         }
-        for channels in [1, 2, 6] {
-            let input: Vec<i16> = (0..frames * channels)
-                .map(|i| i.wrapping_mul(71) as i16)
-                .collect();
-            let mut output = input.clone();
-            let label = format!("fade/channels={channels}/frames={frames}");
-            let mut work = || {
-                output.copy_from_slice(&input);
-                let fade = black_box(apply_fade_envelope as fn(&mut [i16], usize, u64, (i64, i64)));
-                fade(
-                    black_box(&mut output),
-                    black_box(channels),
-                    black_box(50),
-                    black_box((0, 5000)),
-                );
-                black_box(&output);
-            };
-            let (_, counts) = perf::measure(&mut work);
-            println!("{label}: allocation {counts:?}");
-            bench::measure(&label, (1_000_000 / frames).max(100), &mut work);
-        }
         for channels in [1usize, 2, 6] {
             let input: Vec<Vec<f32>> = (0..channels)
                 .map(|ch| {
@@ -150,6 +129,34 @@ fn benchmark_slice_kernels() {
                 black_box(&output);
             };
             work();
+            let (_, counts) = perf::measure(&mut work);
+            println!("{label}: allocation {counts:?}");
+            bench::measure(&label, (1_000_000 / frames).max(100), &mut work);
+        }
+    }
+}
+
+#[test]
+#[ignore = "release CPU and allocation benchmark"]
+fn benchmark_fade_envelope() {
+    for frames in [64usize, 256, 4096] {
+        for channels in [1, 2, 6] {
+            let input: Vec<i16> = (0..frames * channels)
+                .map(|i| i.wrapping_mul(71) as i16)
+                .collect();
+            let mut output = input.clone();
+            let label = format!("fade/channels={channels}/frames={frames}");
+            let mut work = || {
+                output.copy_from_slice(&input);
+                let fade = black_box(apply_fade_envelope as fn(&mut [i16], usize, u64, (i64, i64)));
+                fade(
+                    black_box(&mut output),
+                    black_box(channels),
+                    black_box(50),
+                    black_box((0, 5000)),
+                );
+                black_box(&output);
+            };
             let (_, counts) = perf::measure(&mut work);
             println!("{label}: allocation {counts:?}");
             bench::measure(&label, (1_000_000 / frames).max(100), &mut work);

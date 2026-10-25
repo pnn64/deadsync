@@ -369,7 +369,12 @@ pub fn apply_fade_envelope(
         }
         for sample in samples {
             let scaled = f32::from(*sample) * volume;
-            *sample = scaled.round() as i16;
+            // Volume is in [0, 1], so the rounded result fits in i16.
+            // Correct the exact fractional part instead of calling round.
+            let whole = scaled as i16;
+            let fraction = scaled - f32::from(whole);
+            *sample = (i32::from(whole) + i32::from(fraction >= 0.5)
+                - i32::from(fraction <= -0.5)) as i16;
         }
     }
 }

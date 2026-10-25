@@ -318,5 +318,86 @@ mod backend {
                 });
             }
         }
+
+        #[test]
+        fn repeat_indices_match_signed_remainder_at_boundaries() {
+            for max in [
+                0usize,
+                1,
+                2,
+                3,
+                7,
+                63,
+                127,
+                128,
+                255,
+                640,
+                1920,
+                i32::MAX as usize,
+            ] {
+                for i in (-4000..=4000).chain([i32::MIN, i32::MAX]) {
+                    let expected = if max == 0 {
+                        0
+                    } else {
+                        i.rem_euclid(max as i32) as usize
+                    };
+                    assert_eq!(
+                        wrap_index(i, max, SamplerWrap::Repeat),
+                        expected,
+                        "{i}/{max}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        #[ignore = "release CPU and allocation benchmark"]
+        fn benchmark_repeat_sampling() {
+            for (width, height) in [(127, 127), (128, 127), (128, 128), (640, 360)] {
+                let image = RgbaImage::from_fn(width, height, |x, y| {
+                    image::Rgba([x as u8, 71, y as u8, (x * 47 + y * 23) as u8])
+                });
+                let coords: Vec<_> = (0..1024)
+                    .map(|i| ((i as f32 * 0.371).fract(), (i as f32 * 0.613).fract()))
+                    .collect();
+                for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                    for filter in [SamplerFilter::Nearest, SamplerFilter::Linear] {
+                        let sampler = SamplerDesc {
+                            wrap,
+                            filter,
+                            mipmaps: false,
+                        };
+                        let label = format!("sampling/{width}x{height}/{wrap:?}/{filter:?}/1024");
+                        let mut work = || {
+                            for &(u, v) in &coords {
+                                let texels = black_box(Texels::from(&image));
+                                let color = match filter {
+                                    SamplerFilter::Nearest => sample_tex_nearest::<false, 4>(
+                                        texels,
+                                        black_box(width as usize),
+                                        black_box(height as usize),
+                                        black_box(u),
+                                        black_box(v),
+                                        black_box(sampler),
+                                    ),
+                                    SamplerFilter::Linear => sample_tex_linear::<false, 4>(
+                                        texels,
+                                        black_box(width as usize),
+                                        black_box(height as usize),
+                                        black_box(u),
+                                        black_box(v),
+                                        black_box(sampler),
+                                    ),
+                                };
+                                black_box(color);
+                            }
+                        };
+                        let (_, counts) = crate::alloc::measure(work);
+                        println!("{label}: allocation {counts:?}");
+                        crate::bench::measure(&label, 256, &mut work);
+                    }
+                }
+            }
+        }
     }
 }

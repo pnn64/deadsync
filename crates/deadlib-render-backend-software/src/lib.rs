@@ -2933,6 +2933,9 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
             let m = max as i32;
             if m == 0 {
                 0
+            } else if i >= 0 && i < m {
+                // UVs are already wrapped; only edge texels need a remainder.
+                i as usize
             } else {
                 let mut v = i % m;
                 if v < 0 {

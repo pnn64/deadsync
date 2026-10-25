@@ -7,14 +7,28 @@ impl<T> Sealed for &mut T where T: Sealed {}
 /// Locate the first byte that cannot represent a wire-format Boolean.
 #[inline]
 pub(crate) fn invalid_bool(bytes: &[u8]) -> Option<usize> {
-    let mut words = bytes.chunks_exact(8);
+    let mut offset = 0;
+    if bytes.len() >= 32 {
+        for block in bytes.chunks_exact(32) {
+            // Validate four words before branching. An invalid block falls
+            // through to the ordered word scan below to locate its first error.
+            let bits = block.chunks_exact(8).fold(0, |bits, word| {
+                bits | u64::from_le_bytes(word.try_into().expect("eight-byte chunk"))
+            });
+            if bits & 0xfefe_fefe_fefe_fefe != 0 {
+                break;
+            }
+            offset += 32;
+        }
+    }
+    let mut words = bytes[offset..].chunks_exact(8);
     for (index, word) in words.by_ref().enumerate() {
         // Only bit zero may be set in each byte. Little endian makes the
         // least significant invalid bit identify the earliest source byte.
         let invalid =
             u64::from_le_bytes(word.try_into().expect("eight-byte chunk")) & 0xfefe_fefe_fefe_fefe;
         if invalid != 0 {
-            return Some(index * 8 + invalid.trailing_zeros() as usize / 8);
+            return Some(offset + index * 8 + invalid.trailing_zeros() as usize / 8);
         }
     }
     let tail = words.remainder();

@@ -58,19 +58,26 @@ fn benchmark_signed_codec() {
 #[ignore = "release CPU and allocation benchmark"]
 fn benchmark_bool_codec() {
     let config = bincode::config::standard();
-    for len in [0, 1, 7, 8, 9, 16, 256, 4096, 65536] {
+    for len in [0usize, 1, 7, 8, 9, 16, 256, 4096, 65536] {
         let values: Vec<bool> = (0..len).map(|i| i % 3 == 0).collect();
         let encoded = bincode::encode_to_vec(&values, config).unwrap();
-        for invalid in [false, true] {
-            if invalid && len == 0 {
+        for error in ["none", "first", "middle", "last"] {
+            if error != "none" && len == 0 {
                 continue;
             }
             let mut input = encoded.clone();
-            if invalid {
-                *input.last_mut().unwrap() = 2;
+            let valid_len = match error {
+                "first" => 0,
+                "middle" => len / 2,
+                "last" => len.saturating_sub(1),
+                _ => len,
+            };
+            if valid_len < len {
+                let prefix = encoded.len() - len;
+                input[prefix + valid_len] = 2;
             }
             let mut decoded = Vec::<bool>::with_capacity(len);
-            let label = format!("bool/len={len}/invalid={invalid}");
+            let label = format!("bool/len={len}/error={error}");
             let mut work = || {
                 black_box(bincode::decode_from_slice_into_vec(
                     black_box(&input),
@@ -83,7 +90,7 @@ fn benchmark_bool_codec() {
             let (_, counts) = perf::measure(&mut work);
             println!("{label}: allocation {counts:?}");
             bench::measure(&label, (2_000_000 / len.max(1)).max(100), &mut work);
-            assert_eq!(decoded, values[..len - usize::from(invalid)]);
+            assert_eq!(decoded, values[..valid_len]);
         }
     }
 }
