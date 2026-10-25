@@ -73,12 +73,14 @@ impl PlanarAccum {
             right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
             return;
         }
-        for channel in &mut self.channels {
+        let complete = &interleaved[..frames * channels];
+        for (index, channel) in self.channels.iter_mut().enumerate() {
             channel.reserve(frames);
-        }
-        for frame in interleaved.chunks_exact(channels) {
-            for (channel, sample) in self.channels.iter_mut().zip(frame.iter()) {
-                channel.push(f32::from(*sample) / 32768.0);
+            if index < channels {
+                channel.extend(
+                    complete.iter().skip(index).step_by(channels)
+                        .map(|&sample| f32::from(sample) / 32768.0),
+                );
             }
         }
     }
@@ -282,10 +284,13 @@ pub fn append_channel_mapped_i16(
         );
         return frames;
     }
+    let repeats = out_ch / in_ch;
+    let tail = out_ch % in_ch;
     for frame in input.chunks_exact(in_ch) {
-        for channel in 0..out_ch {
-            out.push(frame[channel % in_ch]);
+        for _ in 0..repeats {
+            out.extend_from_slice(frame);
         }
+        out.extend_from_slice(&frame[..tail]);
     }
     frames
 }

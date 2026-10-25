@@ -633,6 +633,35 @@ fn zoom_axis(source: u32, destination: u32) -> impl Iterator<Item = (u32, u32, u
     })
 }
 
+// At exactly 2:1 both fixed-point weights are 1/2. Average all four
+// byte lanes together: horizontal blends floor, then the vertical blend rounds.
+#[inline(never)]
+fn zoom_half(image: &RgbaImage, size: [u32; 2]) -> RgbaImage {
+    let mut output = RgbaImage::new(size[0], size[1]);
+    let source = image.as_raw().as_chunks::<4>().0;
+    for (rows, row) in source.chunks_exact(image.width() as usize * 2).zip(
+        output
+            .as_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .chunks_exact_mut(size[0] as usize),
+    ) {
+        let (top, bottom) = rows.split_at(image.width() as usize);
+        for ((pixel, top), bottom) in row
+            .iter_mut()
+            .zip(top.as_chunks::<2>().0)
+            .zip(bottom.as_chunks::<2>().0)
+        {
+            let [a, b] = top.map(u32::from_le_bytes);
+            let [c, d] = bottom.map(u32::from_le_bytes);
+            let upper = (a & b) + (((a ^ b) & 0xfefe_fefe) >> 1);
+            let lower = (c & d) + (((c ^ d) & 0xfefe_fefe) >> 1);
+            *pixel = ((upper | lower) - (((upper ^ lower) & 0xfefe_fefe) >> 1)).to_le_bytes();
+        }
+    }
+    output
+}
+
 fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
     while [image.width(), image.height()] != size {
         let next = std::array::from_fn::<_, 2, _>(|axis| {
@@ -640,6 +669,13 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             let ratio = (size[axis] as f32 / current as f32).clamp(0.5, 2.0);
             (current as f32 * ratio).round_ties_even() as u32
         });
+        // Beyond 2^23, f32 coordinates no longer preserve half-pixel steps.
+        if image.width().max(image.height()) <= 1 << 23
+            && [next[0] * 2, next[1] * 2] == [image.width(), image.height()]
+        {
+            image = zoom_half(&image, next);
+            continue;
+        }
         let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
         let ys = zoom_axis(image.height(), next[1]);
         let mut output = RgbaImage::new(next[0], next[1]);
@@ -958,3 +994,6 @@ mod indexed_pixels_perf;
 
 #[cfg(test)]
 mod preparation_perf;
+
+#[cfg(test)]
+mod direct_media_perf;
