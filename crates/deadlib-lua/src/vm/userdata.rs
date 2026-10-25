@@ -65,6 +65,12 @@ impl Vm {
 
     pub(super) fn finalizer_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
+        let owner = self.frames.len() - 1;
+        if frame.pc != 0 {
+            // Native Lua restores controls only after a successful tag method.
+            // Error unwinding skips this continuation and retains its changes.
+            self.leave_gc_finalizer(owner, frame);
+        }
         while let Some(id) = self.gc.finalizers.pop_front() {
             let value = Value::Userdata(id);
             let finalizer = self.metafield(value, Meta::Gc);
@@ -73,11 +79,13 @@ impl Vm {
             }
             self.registers[base] = finalizer;
             self.registers[base + 1] = value;
+            self.enter_gc_finalizer(owner);
             if let Some(actual) = self.start_call(base, 1, 0, false)? {
                 self.finish_call(base, actual, 0);
             }
             return Ok(None);
         }
+        self.finish_gc_cycle();
         self.frames.pop();
         self.registers.truncate(frame.stack_start);
         self.top = frame.result;
@@ -132,6 +140,7 @@ impl Vm {
     /// finalizers stay pending for a later collection or VM destruction.
     pub fn collect_garbage(&mut self) -> Result<HeapStats, Error> {
         self.collect_cycle();
+        self.finish_gc_cycle();
         if !self.gc.finalizers.is_empty() {
             self.run_host_finalizers()?;
         }

@@ -311,6 +311,12 @@ fn main() {
             20,
         ),
         (
+            "gc_restart",
+            "collectgarbage('stop');local weak=setmetatable({},{__mode='v'});local keep={};for i=1,1000 do local t={};weak[i]=t;keep[i]=t end;collectgarbage();keep=nil;for i=1,10000 do local t={}end;return next(weak)==nil and 1 or 0",
+            1.0,
+            10,
+        ),
+        (
             "reader_load_single",
             "local sum=0;for i=1,200 do local once=false;local f=load(function()if once then return nil end;once=true;return 'return 1+2'end);sum=sum+f()end;return sum",
             600.0,

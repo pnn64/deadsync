@@ -446,12 +446,38 @@ impl Vm {
         self.gc.control_allocated = 0;
         self.gc.pending = false;
         self.gc.last_live = self.heap_stats().live_bytes;
+        self.set_gc_threshold();
+    }
+    fn set_gc_threshold(&mut self) {
         self.gc.threshold = self
             .gc
             .last_live
             .saturating_mul(self.gc.pause.max(1) as usize)
             .saturating_div(100)
             .max(64 * 1024);
+    }
+    pub(super) fn finish_gc_cycle(&mut self) {
+        self.gc.stopped = false;
+        self.set_gc_threshold();
+    }
+    pub(super) fn enter_gc_finalizer(&mut self, owner: usize) {
+        // CONT_GC has no arguments. Its unused argument start saves the native
+        // threshold; pc records the callback phase and previous stop state.
+        debug_assert_eq!(self.frames[owner].argc(), 0);
+        self.frames[owner].vararg_start = self.gc.threshold;
+        self.frames[owner].pc = 1 | (u32::from(self.gc.stopped) << 1);
+        self.gc.threshold = self
+            .gc
+            .last_live
+            .saturating_add(self.gc_debt())
+            .saturating_mul(2);
+        self.gc.stopped = false;
+    }
+    pub(super) fn leave_gc_finalizer(&mut self, owner: usize, frame: Frame) {
+        self.gc.threshold = frame.vararg_start;
+        self.gc.stopped = frame.pc & 2 != 0;
+        self.frames[owner].pc = 0;
+        self.frames[owner].vararg_start = 0;
     }
     fn gc_debt(&self) -> usize {
         self.strings
@@ -823,17 +849,23 @@ impl Vm {
             }
             b"restart" => {
                 self.gc.stopped = false;
+                // Frame-boundary checks must wait for the next allocation.
+                self.gc.threshold = self
+                    .gc
+                    .last_live
+                    .saturating_add(self.gc_debt())
+                    .saturating_add(1);
                 Value::Number(0.0)
             }
             b"collect" => {
                 self.collect_cycle();
+                self.finish_gc_cycle();
                 Value::Number(0.0)
             }
             b"count" => Value::Number(self.heap_stats().live_bytes as f64 / 1024.0),
             b"setpause" => {
                 let old = self.gc.pause;
                 self.gc.pause = extra;
-                self.gc.threshold = self.gc.last_live.saturating_mul(extra.max(1) as usize) / 100;
                 Value::Number(f64::from(old))
             }
             b"setstepmul" => {
@@ -842,6 +874,7 @@ impl Vm {
                 Value::Number(f64::from(old))
             }
             b"step" => {
+                self.gc.stopped = false;
                 let bytes = (extra.max(1) as usize)
                     .saturating_mul(1024)
                     .saturating_mul(self.gc.stepmul.max(1) as usize)
@@ -850,6 +883,12 @@ impl Vm {
                 let complete = self.gc.credit >= self.heap_stats().live_bytes;
                 if complete {
                     self.collect_cycle();
+                } else {
+                    self.gc.threshold = self
+                        .gc
+                        .last_live
+                        .saturating_add(self.gc_debt())
+                        .saturating_add(1);
                 }
                 Value::Boolean(complete)
             }

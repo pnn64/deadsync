@@ -42,6 +42,29 @@ def main() -> None:
     def case(name: str, source: str, env: dict[str,str|None]|None=None) -> None:
         cases.append((name,source,env or {}))
     case('shell_query', "print(os.execute(),os.execute(nil),os.execute(nil,false),select('#',os.execute()))")
+    gc_setup = """
+        collectgarbage('restart');collectgarbage('setpause',200);collectgarbage();collectgarbage('stop')
+        local weak=setmetatable({},{__mode='v'});local keep={}
+        for i=1,1000 do local t={};weak[i]=t;keep[i]=t end
+        local function pressure()
+          keep=nil;for i=1,10000 do local t={}end;return next(weak)==nil
+        end
+    """
+    for name, operation in (
+        ('gc_full_restart', "collectgarbage();print(pressure())"),
+        ('gc_explicit_stop', "collectgarbage();collectgarbage('stop');print(pressure())"),
+        ('gc_step0_restart', "collectgarbage('step',0);print(pressure())"),
+        ('gc_step_big_restart', "collectgarbage('step',1000000);print(pressure())"),
+        ('gc_restart_large_pause', "collectgarbage('setpause',2000000000);collectgarbage();collectgarbage('stop');collectgarbage('restart');print(pressure())"),
+        ('gc_setpause_deferred', "collectgarbage();collectgarbage('setpause',2000000000);print(pressure())"),
+        ('gc_finalizer_stop_restore', "local hit=false;local p=newproxy(true);getmetatable(p).__gc=function()hit=true;collectgarbage('stop')end;p=nil;collectgarbage();print(hit,pressure())"),
+        ('gc_finalizer_error_restart', "local tag={};local p=newproxy(true);getmetatable(p).__gc=function()error(tag,0)end;p=nil;local ok,e=pcall(collectgarbage);print(ok,e==tag,pressure())"),
+        ('gc_finalizer_error_stop', "local tag={};local p=newproxy(true);getmetatable(p).__gc=function()collectgarbage('stop');error(tag,0)end;p=nil;local ok,e=pcall(collectgarbage);print(ok,e==tag,pressure())"),
+        ('gc_hook_return_stop', "local hit=0;debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==collectgarbage then hit=hit+1;collectgarbage('stop')end end,'r');collectgarbage();debug.sethook();print(hit,pressure())"),
+        ('gc_invalid_stays_stopped', "local ok,e=pcall(collectgarbage,'restart',{});print(ok,type(e),pressure())"),
+        ('gc_finalizer_coroutine', "local co;local p=newproxy(true);getmetatable(p).__gc=function()co=coroutine.create(function()collectgarbage('stop');coroutine.yield(7);collectgarbage('restart');return 11 end);local ok,n=coroutine.resume(co);assert(ok and n==7)end;p=nil;collectgarbage();local automatic=pressure();local ok,n=coroutine.resume(co);print(automatic,ok,n,coroutine.status(co))"),
+    ):
+        case(name, gc_setup+operation)
     case('calendar_native_zone', "print(os.date('%Z|%z',0),os.date('!%Z|%z',0));print(type(os.time()),type(os.date()),select('#',os.time(nil,false)))")
     for index, fmt in enumerate(('%Q','%E','%O','%#d','%','%n','%t','%F','%g','%V','%s','%10Y')):
         case(f'calendar_format_{index}',f"print('before');print(os.date({lua(fmt)},0));print('after')")
