@@ -92,16 +92,19 @@ pub(super) fn message(code: i32) -> &'static [u8] {
     match code {
         0 => b"No error",
         2 => b"No such file or directory",
+        8 => b"Exec format error",
         9 => b"Bad file descriptor",
         12 => b"Not enough space",
         13 => b"Permission denied",
         17 => b"File exists",
+        18 => b"Improper link",
         22 => b"Invalid argument",
         24 => b"Too many open files",
         28 => b"No space left on device",
         29 => b"Illegal seek",
         32 => b"Broken pipe",
         34 => b"Result too large",
+        41 => b"Directory not empty",
         _ => b"Input/output error",
     }
 }

@@ -162,6 +162,18 @@ fn main() {
         ),
         ("os_execute", "return os.execute('exit 0')", 0.0, 5),
         (
+            "os_clock",
+            "local clock=os.clock;local last=clock();local n=0;for i=1,10000 do local now=clock(false,nil,1);if now>=last then n=n+1 end;last=now end;return n",
+            10000.0,
+            30,
+        ),
+        (
+            "os_rename",
+            "local rename=os.rename;for i=1,32 do assert(rename(rename_from,rename_to));assert(rename(rename_to,rename_from))end;return 32",
+            32.0,
+            5,
+        ),
+        (
             "call_table",
             "local function f(t)return t end;local sum=0;for i=1,1000 do sum=sum+f({key=i}).key end;return sum",
             500500.0,
@@ -386,6 +398,27 @@ fn main() {
             program.register_count()
         );
         let mut vm = Vm::new();
+        let rename_files = (name == "os_rename").then(|| {
+            let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/lua-bench-fixtures");
+            std::fs::create_dir_all(&directory).unwrap();
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let from =
+                SourceFile(directory.join(format!("rename-{}-{stamp}.from", std::process::id())));
+            let to =
+                SourceFile(directory.join(format!("rename-{}-{stamp}.to", std::process::id())));
+            std::fs::write(&from.0, b"rename fixture").unwrap();
+            println!("rename_from_path_bytes\t{}", from.0.as_os_str().len());
+            println!("rename_to_path_bytes\t{}", to.0.as_os_str().len());
+            for (key, path) in [(b"rename_from".as_slice(), &from.0), (b"rename_to", &to.0)] {
+                let value = vm.intern(path.to_str().unwrap().as_bytes());
+                vm.set_global(key, value).unwrap();
+            }
+            [from, to]
+        });
         let source_file = (name == "loadfile_text").then(|| {
             let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../target/lua-bench-fixtures");
@@ -416,6 +449,16 @@ fn main() {
             reference
                 .globals()
                 .set("loadfile_path", file.0.to_str().unwrap())
+                .unwrap();
+        }
+        if let Some([from, to]) = &rename_files {
+            reference
+                .globals()
+                .set("rename_from", from.0.to_str().unwrap())
+                .unwrap();
+            reference
+                .globals()
+                .set("rename_to", to.0.to_str().unwrap())
                 .unwrap();
         }
         let chunk = reference.load(source);

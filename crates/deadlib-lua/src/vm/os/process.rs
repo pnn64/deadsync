@@ -3,10 +3,6 @@
 use std::process::Command;
 
 #[cfg(windows)]
-#[allow(unsafe_code)]
-mod windows;
-
-#[cfg(windows)]
 fn shell_path(path: &std::path::Path) -> Result<std::path::PathBuf, i32> {
     if path.as_os_str().is_empty() {
         return Err(22);
@@ -45,7 +41,7 @@ pub(super) fn execute(command: Option<&[u8]>) -> Result<i32, i32> {
     };
     if let Some(path) = comspec {
         match shell_path(std::path::Path::new(&path))
-            .and_then(|executable| windows::spawn(&executable, &path, command))
+            .and_then(|executable| super::platform::spawn(&executable, &path, command))
         {
             Ok(status) => return Ok(status),
             Err(2 | 13) => {}
@@ -56,7 +52,7 @@ pub(super) fn execute(command: Option<&[u8]>) -> Result<i32, i32> {
     // search also includes OS system directories that the CRT does not search.
     let name = std::ffi::OsStr::new("cmd.exe");
     match shell_path(std::path::Path::new(name))
-        .and_then(|path| windows::spawn(&path, name, command))
+        .and_then(|path| super::platform::spawn(&path, name, command))
     {
         Ok(status) => return Ok(status),
         Err(2) => {}
@@ -70,7 +66,7 @@ pub(super) fn execute(command: Option<&[u8]>) -> Result<i32, i32> {
             continue;
         }
         let path = directory.join("cmd.exe");
-        match shell_path(&path).and_then(|path| windows::spawn(&path, name, command)) {
+        match shell_path(&path).and_then(|path| super::platform::spawn(&path, name, command)) {
             Ok(status) => return Ok(status),
             Err(2) => {}
             Err(code) => return Err(code),

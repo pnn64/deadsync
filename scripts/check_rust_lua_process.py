@@ -42,6 +42,21 @@ def main() -> None:
     def case(name: str, source: str, env: dict[str,str|None]|None=None) -> None:
         cases.append((name,source,env or {}))
     case('shell_query', "print(os.execute(),os.execute(nil),os.execute(nil,false),select('#',os.execute()))")
+    case('clock_contexts', """
+        local clock=os.clock;local a=clock();local t={clock=clock}
+        local c=coroutine.create(function()return t:clock(false,{},nil)end)
+        local ok,b=coroutine.resume(c)
+        print(type(a),ok,type(b),b>=a,select('#',clock(false)),debug.getinfo(clock).what)
+    """)
+    case('rename_numeric_names', """
+        for _,pair in ipairs({{42,43},{1.5,2.25}}) do
+          local a,b=pair[1],pair[2];local f=assert(io.open(tostring(a),'wb'))
+          f:write('contents');f:close()
+          print(select('#',os.rename(a,b,false,{})))
+          f=assert(io.open(tostring(b),'rb'));print(f:read('*a'));f:close()
+          print(os.rename(b,a));assert(os.remove(tostring(a)))
+        end
+    """)
     for status in (0,1,7,127,255,256,-1,2147483647,-2147483648):
         shell = f'exit /b {status}' if os.name == 'nt' else f'exit {status}'
         case(f'execute_status_{status}',f"print(os.execute({lua(shell)}),select('#',os.execute({lua(shell)})))")

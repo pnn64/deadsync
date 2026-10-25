@@ -32,10 +32,13 @@ pub(in crate::vm) fn errno(error: std::io::Error) -> i32 {
     #[cfg(windows)]
     {
         match error.raw_os_error() {
-            Some(2 | 3) => 2,
+            Some(2 | 3 | 15 | 53 | 67 | 161 | 206) => 2,
             Some(5 | 19 | 32 | 33) => 13,
             Some(6) => 9,
             Some(80 | 183) => 17,
+            Some(17) => 18,
+            Some(145) => 41,
+            Some(188..=202) => 8,
             Some(109 | 232) => 32,
             Some(112) => 28,
             Some(4) => 24,

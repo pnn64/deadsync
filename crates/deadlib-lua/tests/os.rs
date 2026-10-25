@@ -133,15 +133,21 @@ impl Fixture {
     fn new() -> Self {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/lua-os-fixtures")
-            .join(format!(
+        let base =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/lua-os-fixtures");
+        std::fs::create_dir_all(&base).unwrap();
+        loop {
+            let path = base.join(format!(
                 "{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-        std::fs::create_dir_all(&path).unwrap();
-        Self(path)
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => panic!("create owned fixture: {error}"),
+            }
+        }
     }
     fn source(&self, source: &str) -> Vec<u8> {
         source
@@ -155,9 +161,221 @@ impl Fixture {
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(self.0.join("file.dat"));
-        std::fs::remove_dir(&self.0).unwrap();
+        let result = std::fs::remove_dir_all(&self.0);
+        if !std::thread::panicking() {
+            result.unwrap();
+        }
     }
+}
+
+#[test]
+fn clock_returns_one_number_and_ignores_arguments_environments_and_method_self() {
+    compare(
+        br#"
+        local clock=os.clock;local t={clock=clock};local env={};debug.setfenv(clock,env)
+        local a=clock();local b=t:clock(false,{},function()end)
+        return type(a),type(b),b>=a,select('#',clock()),getfenv(clock)==env,
+          package.loaded.os==os,debug.getinfo(clock).what
+    "#,
+    );
+}
+
+#[test]
+fn clock_readings_are_bracketed_by_the_official_clock_in_the_same_process() {
+    let lua = Lua::new();
+    let reference = lua.load("return os.clock()").into_function().unwrap();
+    let program = compile(b"return os.clock(false,nil,42)").unwrap();
+    let mut vm = Vm::new();
+    let mut same_tick = 0;
+    for _ in 0..512 {
+        let before: f64 = reference.call(()).unwrap();
+        let Value::Number(actual) = vm.execute(&program).unwrap()[0] else {
+            panic!("clock result")
+        };
+        let after: f64 = reference.call(()).unwrap();
+        assert!(
+            before <= actual && actual <= after,
+            "reference bracket {before}..={after}, Rust {actual}"
+        );
+        if before.to_bits() == after.to_bits() {
+            assert_eq!(actual.to_bits(), before.to_bits());
+            same_tick += 1;
+        }
+    }
+    if cfg!(windows) {
+        assert!(
+            same_tick > 0,
+            "at least one exact stable millisecond tick comparison"
+        );
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn clock_epoch_precedes_vm_creation_and_is_shared_with_other_os_threads() {
+    let lua = Lua::new();
+    let clock = lua.load("return os.clock()").into_function().unwrap();
+    let start: f64 = clock.call(()).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    let before: f64 = clock.call(()).unwrap();
+    assert!(
+        before - start >= 0.020,
+        "the MSVC clock includes idle wall time"
+    );
+    let actual = std::thread::spawn(|| {
+        let mut vm = Vm::new();
+        let p = compile(b"return os.clock()").unwrap();
+        let Value::Number(n) = vm.execute(&p).unwrap()[0] else {
+            panic!("clock result")
+        };
+        n
+    })
+    .join()
+    .unwrap();
+    let after: f64 = clock.call(()).unwrap();
+    assert!(
+        before <= actual && actual <= after,
+        "clock epoch must not restart with a VM or thread"
+    );
+}
+
+#[test]
+fn rename_argument_errors_validate_from_before_to_and_keep_method_names() {
+    compare(
+        br#"
+        local out={}
+        local function save(...)local ok,e=pcall(os.rename,...);out[#out+1]=ok;out[#out+1]=e end
+        save();save(nil);save(false,{});save({},false);save('from');save('from',nil)
+        save('from',false);save(42,false);save(function()end,'to')
+        local t={rename=os.rename};local ok,e=pcall(function()return t:rename('to')end)
+        out[#out+1]=ok;out[#out+1]=e;return unpack(out)
+    "#,
+    );
+}
+
+#[test]
+fn rename_preserves_data_result_counts_nul_boundaries_and_full_failure_tuples() {
+    let fixture = Fixture::new();
+    compare(&fixture.source(r#"
+        local path=@PATH@;local other=path..'.other';local out={}
+        local function save(...)out[#out+1]=select('#',...);for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end
+        local f=assert(io.open(path,'wb'));f:write('before\0after');f:close()
+        save(os.rename(path..'\0ignored',other..'\0ignored'));save(os.rename(path,other))
+        f=assert(io.open(other,'rb'));out[#out+1]=f:read('*a');f:close()
+        save(os.rename(other,other));save(os.rename(other,path));save(os.rename('',other))
+        save(os.rename(path,other..'/missing'));save(os.rename(path..'.missing',other))
+        save(os.rename(path,path..'*'));save(os.rename(path,path..'?'))
+        save(os.rename(path,path..string.rep('x',300)))
+        save(os.rename(path..string.rep('x',300),other))
+        assert(os.remove(path));return unpack(out)
+    "#));
+}
+
+#[test]
+fn rename_preserves_existing_destinations_and_open_handle_behavior() {
+    let fixture = Fixture::new();
+    compare(&fixture.source(r#"
+        local path=@PATH@;local other=path..'.other';local out={}
+        local function save(...)out[#out+1]=select('#',...);for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end
+        local a=assert(io.open(path,'wb'));a:write('source');a:close()
+        local b=assert(io.open(other,'wb'));b:write('target');b:close()
+        save(os.rename(path,other));b=assert(io.open(other,'rb'));out[#out+1]=b:read('*a');b:close()
+        a=io.open(path,'rb');if a then
+          save(os.rename(path,path..'.held'));a:close()
+          os.rename(path..'.held',path)
+        end
+        os.remove(path);assert(os.remove(other));return unpack(out)
+    "#));
+}
+
+#[test]
+fn rename_directories_and_case_changes_match_the_reference() {
+    let fixture = Fixture::new();
+    std::fs::create_dir(fixture.0.join("folder")).unwrap();
+    compare(&fixture.source(r#"
+        local folder=@DIR@..'/folder';local renamed=folder..'-other';local path=@PATH@;local out={}
+        local function save(...)out[#out+1]=select('#',...);for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end
+        save(os.rename(folder,renamed));save(os.rename(folder,renamed));save(os.rename(renamed,folder))
+        local f=assert(io.open(path,'wb'));f:write('case');f:close()
+        local upper=string.sub(path,1,-9)..'FILE.dat'
+        save(os.rename(path,upper));f=assert(io.open(upper,'rb'));out[#out+1]=f:read('*a');f:close()
+        save(os.rename(upper,path));assert(os.remove(path));return unpack(out)
+    "#));
+    assert!(fixture.0.join("folder").is_dir());
+}
+
+#[test]
+#[cfg(windows)]
+fn rename_and_exclusive_creation_cannot_overwrite_each_others_winner() {
+    use std::io::Write;
+    use std::sync::{Arc, Barrier};
+    let fixture = Fixture::new();
+    let from = fixture.0.join("source");
+    let to = fixture.0.join("destination");
+    let program = compile(b"return os.rename(from_path,to_path)").unwrap();
+    let mut vm = Vm::new();
+    let name = vm.intern(from.to_str().unwrap().as_bytes());
+    vm.set_global(b"from_path", name).unwrap();
+    let name = vm.intern(to.to_str().unwrap().as_bytes());
+    vm.set_global(b"to_path", name).unwrap();
+    let lua = Lua::new();
+    lua.globals()
+        .set("from_path", from.to_str().unwrap())
+        .unwrap();
+    lua.globals().set("to_path", to.to_str().unwrap()).unwrap();
+    let reference = lua
+        .load("return os.rename(from_path,to_path)")
+        .into_function()
+        .unwrap();
+    for oracle in [false, true] {
+        for _ in 0..64 {
+            std::fs::write(&from, b"source").unwrap();
+            let gate = Arc::new(Barrier::new(2));
+            let worker_gate = gate.clone();
+            let target = to.clone();
+            let worker = std::thread::spawn(move || {
+                worker_gate.wait();
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(target)
+                    .and_then(|mut f| f.write_all(b"target"))
+            });
+            gate.wait();
+            let renamed = if oracle {
+                let values: MultiValue = reference.call(()).unwrap();
+                matches!(values.front(), Some(Ref::Boolean(true)))
+            } else {
+                vm.execute(&program).unwrap()[0] == Value::Boolean(true)
+            };
+            let created = worker.join().unwrap();
+            match (renamed, created) {
+                (true, Err(error)) => {
+                    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+                    assert_eq!(std::fs::read(&to).unwrap(), b"source");
+                }
+                (false, Ok(())) => assert_eq!(std::fs::read(&to).unwrap(), b"target"),
+                result => panic!("rename/create race: {result:?}"),
+            }
+            let _ = std::fs::remove_file(&from);
+            std::fs::remove_file(&to).unwrap();
+        }
+    }
+}
+
+#[test]
+fn rename_keeps_complete_names_when_native_paths_need_more_than_stack_storage() {
+    let fixture = Fixture::new();
+    std::fs::create_dir(fixture.0.join("p".repeat(80))).unwrap();
+    compare(&fixture.source(
+        r#"
+        local path=@DIR@..'/'..string.rep('p',80)..'/file.dat';local other=path..'.other'
+        assert(#path>=128);local f=assert(io.open(path,'wb'));f:write('long path');f:close()
+        local count=select('#',os.rename(path,other));f=assert(io.open(other,'rb'))
+        local bytes=f:read('*a');f:close();assert(os.rename(other,path));assert(os.remove(path))
+        return count,bytes
+    "#,
+    ));
 }
 
 #[test]

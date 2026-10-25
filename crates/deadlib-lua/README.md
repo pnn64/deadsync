@@ -183,10 +183,19 @@ Windows CRT environment changes made outside this engine are not synchronized.
 open streams and shared stdout before terminating the process without Lua
 finalizers. Windows shell selection, raw command lines and exit-code widths match
 the pinned CRT probes. An explicitly empty Windows `COMSPEC` aborts as in that
-reference build. The interpreter and compiler use safe Rust; a small audited
-Windows process-creation bridge is the sole production unsafe module. It calls
-system APIs directly and adds no Cargo dependency or C Lua linkage.
-`clock`, `date`, `time`, `setlocale` and `rename` remain unfinished.
+reference build. The interpreter and compiler use safe Rust. Native declarations
+are restricted to the Windows OS bridge and a narrow POSIX clock bridge. These
+add no Cargo dependency or C Lua linkage.
+
+`clock` uses the native runtime's clock and preserves its epoch and units. The
+pinned MSVC build measures wall time since CRT initialization in milliseconds;
+the declared Linux/Android/Apple targets use their native CPU clock. Other targets
+currently report an unsupported clock. Windows `rename` refuses to replace an
+existing destination; same-volume moves are atomic and cross-volume behavior
+uses the CRT's copy flag. POSIX replacement follows its native rules. Errors
+retain the source filename and Lua 5.1 result tuple. Longer paths
+retain their complete names through native conversion. Calendar functions
+`date`/`time` and `setlocale` remain unfinished.
 
 Physical stdout is shared across VMs and buffers logical bytes before Windows
 newline translation. `print`, stdout writes and `setvbuf` share that buffer;
@@ -244,9 +253,9 @@ booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
 currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
-`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua` and `errors.lua`. The retained
+`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua` and `sort.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-process.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-clock-rename.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

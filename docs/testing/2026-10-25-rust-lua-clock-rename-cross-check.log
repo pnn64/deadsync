@@ -1,0 +1,13 @@
+﻿Compile-only checks; no cross-target runtime or reference parity claim.
+cargo check -p deadlib-lua --lib --target x86_64-unknown-linux-gnu
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.14s
+cargo check -p deadlib-lua --lib --target aarch64-apple-darwin
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.19s
+cargo check -p deadlib-lua --lib --target i686-pc-windows-msvc
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.04s
+cargo check -p deadlib-lua --lib --target aarch64-pc-windows-msvc
+    Checking deadlib-lua v0.1.0 (C:\GitHub\deadsync\crates\deadlib-lua)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.01s

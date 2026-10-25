@@ -1,6 +1,7 @@
 //! Lua 5.1 environment, files, time differences and process operations.
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
+mod platform;
 mod process;
 
 pub(super) const FIRST: u64 = 159;
@@ -10,7 +11,9 @@ const REMOVE: u64 = FIRST + 2;
 const TMPNAME: u64 = FIRST + 3;
 const EXECUTE: u64 = FIRST + 4;
 const EXIT: u64 = FIRST + 5;
-pub(super) const LAST: u64 = EXIT;
+const CLOCK: u64 = FIRST + 6;
+const RENAME: u64 = FIRST + 7;
+pub(super) const LAST: u64 = RENAME;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temporary_name() -> std::io::Result<std::path::PathBuf> {
@@ -63,6 +66,8 @@ impl Vm {
             (b"tmpname", TMPNAME),
             (b"execute", EXECUTE),
             (b"exit", EXIT),
+            (b"clock", CLOCK),
+            (b"rename", RENAME),
         ] {
             let name = self.intern(name);
             self.raw_set(table, name, Value::Native(id)).unwrap();
@@ -72,6 +77,41 @@ impl Vm {
 
     pub(super) fn os_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
         match id {
+            CLOCK => {
+                #[cfg(any(
+                    windows,
+                    target_os = "linux",
+                    target_os = "android",
+                    target_vendor = "apple"
+                ))]
+                {
+                    self.registers[base] = Value::Number(platform::clock());
+                }
+                #[cfg(not(any(
+                    windows,
+                    target_os = "linux",
+                    target_os = "android",
+                    target_vendor = "apple"
+                )))]
+                {
+                    return Err(Error::new(
+                        ErrorKind::Unsupported,
+                        0,
+                        "os.clock is unsupported on this platform",
+                    ));
+                }
+            }
+            RENAME => {
+                let from = self.string_argument(base, count, 0)?;
+                let to = self.string_argument(base, count, 1)?;
+                let old = &self.strings.bytes[slot_index(from.0)];
+                let new = &self.strings.bytes[slot_index(to.0)];
+                if let Err(code) = platform::rename(&io::path(old), &io::path(new)) {
+                    let name = io::c_bytes(old).to_vec();
+                    return Ok(self.io_failure(base, code, Some(&name)));
+                }
+                self.registers[base] = Value::Boolean(true);
+            }
             EXECUTE => {
                 let name = if self.argument(base, count, 0) == Value::Nil {
                     None

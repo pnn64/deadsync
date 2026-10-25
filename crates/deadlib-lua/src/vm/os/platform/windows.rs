@@ -1,4 +1,4 @@
-//! Minimal Windows process ABI. No Lua values or VM storage cross this boundary.
+//! Windows OS ABI. No Lua values or VM storage cross this boundary.
 use std::{
     ffi::{OsStr, c_void},
     os::windows::ffi::OsStrExt,
@@ -53,6 +53,54 @@ unsafe extern "system" {
     fn CloseHandle(handle: Handle) -> i32;
     fn WaitForSingleObject(handle: Handle, milliseconds: u32) -> u32;
     fn GetExitCodeProcess(handle: Handle, code: *mut u32) -> i32;
+    fn MoveFileExW(from: *const u16, to: *const u16, flags: u32) -> i32;
+}
+
+unsafe extern "C" {
+    #[link_name = "clock"]
+    fn crt_clock() -> i32;
+}
+
+pub(in crate::vm::os) fn clock() -> f64 {
+    // SAFETY: clock takes no arguments or pointers and uses CRT state
+    // initialized before Rust entry. MSVC clock_t is signed 32-bit milliseconds.
+    f64::from(unsafe { crt_clock() }) / 1000.0
+}
+
+pub(in crate::vm::os) fn rename(from: &Path, to: &Path) -> Result<(), i32> {
+    let mut old_storage = [0; 128];
+    let mut new_storage = [0; 128];
+    let mut old_spill = Vec::new();
+    let mut new_spill = Vec::new();
+    let old = wide_path(from, &mut old_storage, &mut old_spill);
+    let new = wide_path(to, &mut new_storage, &mut new_spill);
+    // SAFETY: the two owned NUL-terminated UTF-16 buffers live through the
+    // synchronous call. COPY_ALLOWED matches the CRT; REPLACE_EXISTING is
+    // deliberately absent, so destination creation cannot race a precheck.
+    if unsafe { MoveFileExW(old.as_ptr(), new.as_ptr(), 2) } == 0 {
+        Err(super::super::io::errno(std::io::Error::last_os_error()))
+    } else {
+        Ok(())
+    }
+}
+
+fn wide_path<'a>(path: &Path, storage: &'a mut [u16; 128], spill: &'a mut Vec<u16>) -> &'a [u16] {
+    // WTF-8 byte length bounds the number of UTF-16 units. Common paths use
+    // initialized stack storage; longer paths keep the full name in one spill.
+    if path.as_os_str().len() < storage.len() {
+        let mut len = 0;
+        for unit in path.as_os_str().encode_wide() {
+            storage[len] = unit;
+            len += 1;
+        }
+        storage[len] = 0;
+        &storage[..=len]
+    } else {
+        spill.reserve(path.as_os_str().len() + 1);
+        spill.extend(path.as_os_str().encode_wide());
+        spill.push(0);
+        spill
+    }
 }
 
 struct OwnedHandle(Handle);
@@ -66,7 +114,7 @@ impl Drop for OwnedHandle {
     }
 }
 
-pub(super) fn spawn(path: &Path, name: &OsStr, command: &[u8]) -> Result<i32, i32> {
+pub(in crate::vm::os) fn spawn(path: &Path, name: &OsStr, command: &[u8]) -> Result<i32, i32> {
     let mut application = Vec::with_capacity(path.as_os_str().len() + 1);
     application.extend(path.as_os_str().encode_wide());
     application.push(0);
