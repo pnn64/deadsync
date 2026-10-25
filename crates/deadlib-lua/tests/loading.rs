@@ -69,6 +69,48 @@ fn compare(source: &[u8]) {
 }
 
 #[test]
+fn binary_headers_and_names_report_native_load_errors() {
+    compare(
+        br#"
+      local header='\27Lua'..string.char(81,0,1,4,8,4,8,0)
+      local values={'\27',header:sub(1,11),header:sub(1,4)..'Z'..header:sub(6),
+        header..string.rep('\0',8)..string.rep('\255',4)}
+      local out={}
+      for _,bytes in ipairs(values)do
+        for _,name in ipairs({'=probe','@a.lua','plain','a\0ignored',''})do
+          local f,e=loadstring(bytes,name);out[#out+1]=f==nil;out[#out+1]=e
+        end
+        local f,e=loadstring(bytes);out[#out+1]=f==nil;out[#out+1]=e
+      end
+      return unpack(out)
+    "#,
+    );
+}
+
+#[test]
+fn binary_readers_stop_at_errors_and_preserve_the_initial_probe() {
+    compare(br#"
+      local header='\27Lua'..string.char(81,0,1,4,8,4,8,0)
+      local bad=header..string.rep('\0',8)..string.rep('\255',4)..'unused'
+      local out={}
+      for _,empty in ipairs({false,true})do for size=1,4 do
+        local at,calls=0,0
+        local f,e=load(function()
+          calls=calls+1;collectgarbage()
+          if empty and calls==1 then return ''end
+          local s=bad:sub(at+1,at+size);at=at+#s;return s
+        end,'=reader')
+        out[#out+1]=f==nil;out[#out+1]=e;out[#out+1]=calls;out[#out+1]=at
+      end end
+      local marker={};local calls=0
+      local ok,f,e=pcall(load,function()calls=calls+1;if calls==1 then return '\27Lua'else error(marker,0)end end)
+      assert(ok)
+      out[#out+1]=f==nil;out[#out+1]=e==marker;out[#out+1]=calls
+      return unpack(out)
+    "#);
+}
+
+#[test]
 fn reader_load_preserves_chunks_eof_coercions_and_result_counts() {
     for source in [
         "local n=0;local f,e=load(function(...)assert(select('#',...)==0);n=n+1;if n==1 then return 'return ' elseif n==2 then return 17 end end);return type(f),e,f(),n",

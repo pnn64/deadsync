@@ -43,6 +43,30 @@ def main() -> None:
     def case(name: str, source: str, env: dict[str,str|None]|None=None) -> None:
         cases.append((name,source,env or {}))
     case('shell_query', "print(os.execute(),os.execute(nil),os.execute(nil,false),select('#',os.execute()))")
+    binary_header = "local h='\\27Lua'..string.char(81,0,1,4,8,4,8,0);"
+    case('binary_header_errors', binary_header+"""
+        for _,s in ipairs({'\\27',h:sub(1,11),h:sub(1,4)..'Z'..h:sub(6),
+          h..string.rep('\\0',8)..string.rep('\\255',4)})do
+          print(loadstring(s,'=probe'));print(loadstring(s))
+        end
+    """)
+    case('binary_reader_errors',binary_header+"""
+        local s=h..string.rep('\\0',8)..string.rep('\\255',4)..'unused'
+        for size=1,4 do local at,calls=0,0
+          local f,e=load(function()calls=calls+1;local b=s:sub(at+1,at+size);at=at+#b;return b end,'=probe')
+          print(f,e,calls,at)
+        end
+        local marker={};local calls=0
+        local ok,f,e=pcall(load,function()calls=calls+1;if calls==1 then return '\\27Lua'else error(marker,0)end end)
+        print(ok,f,e==marker,calls)
+    """)
+    case('binary_file_errors', """
+        local bytes='\\27LuaQ\\26'..string.char(1,4,8,4,8,0)
+        for _,prefix in ipairs({'','#!/usr/bin/lua\\r\\n','# early \\27junk\\n'})do
+          local f=assert(io.open('output.dat','wb'));f:write(prefix,bytes);f:close()
+          print(loadfile('output.dat'));print(pcall(dofile,'output.dat'))
+        end
+    """)
     if os.name == 'nt':
         case('locale_queries', """
             assert(os.setlocale('C'));print(os.setlocale(),os.setlocale(nil,'numeric'))

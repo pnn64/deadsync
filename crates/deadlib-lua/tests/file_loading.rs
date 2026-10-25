@@ -41,6 +41,42 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn binary_files_reopen_before_validation_and_preserve_native_errors() {
+    let mut body = vec![27, b'L', b'u', b'a', 81, 0, 1, 4, 8, 4, 8, 0];
+    let source = b"@embedded\x1a\r\nsource";
+    body.extend_from_slice(&(source.len() + 1).to_ne_bytes());
+    body.extend_from_slice(source);
+    body.push(0);
+    body.extend_from_slice(&[0; 8]);
+    body.extend_from_slice(&[0, 0, 2, 2]);
+    body.extend_from_slice(&1u32.to_ne_bytes());
+    body.extend_from_slice(&63u32.to_ne_bytes());
+    body.extend_from_slice(&[0; 20]);
+    let cases: &[&[u8]] = &[
+        b"\x1bLuaQ\x1a\x01\x04\x08\x04\x08\0",
+        b"\x1bLua\r\n\x01\x04\x08\x04\x08\0",
+        &body,
+    ];
+    for prefix in [
+        b"".as_slice(),
+        b"#!/usr/bin/lua\r\n",
+        b"# embedded \x1bjunk\n",
+    ] {
+        for bytes in cases {
+            let mut all = prefix.to_vec();
+            all.extend_from_slice(bytes);
+            Fixture::new(&all).compare(
+                r#"
+              local f,e=loadfile(@FILE@)
+              local ok,raised=pcall(dofile,@FILE@)
+              return f==nil,e,ok,raised==e,select('#',loadfile(@FILE@))
+            "#,
+            );
+        }
+    }
+}
+
+#[test]
 fn named_loads_preserve_results_varargs_and_debug_source() {
     let file = Fixture::new(b"return select('#',...),nil,17,false,'a\\000z'");
     file.compare(

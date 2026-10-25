@@ -848,17 +848,20 @@ impl Vm {
                     v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
                     _ => return Err(self.argument_type_error(base, count, 1, "string")),
                 };
-                let compiled = crate::parser::Parser::with_native_depth(
-                    self.native_depth(self.frames.len()) + 1,
-                )
-                .resume(&source, true)
-                .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), &name));
+                let depth = self.native_depth(self.frames.len()) + 1;
+                let compiled = if source.first() == Some(&27) {
+                    crate::chunk51::compile(&source, &name, depth)
+                } else {
+                    crate::parser::Parser::with_native_depth(depth)
+                        .resume(&source, true)
+                        .and_then(|ast| {
+                            crate::compiler::compile(ast.expect("closed source"), &name)
+                        })
+                };
                 match compiled {
                     Ok(program) => Value::Function(self.load(&program)),
                     Err(error) => {
-                        let mut message = crate::bytecode::chunk_id_limit(&name, 80);
-                        message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
-                        message.extend_from_slice(error.message_bytes());
+                        let message = loads::message(&name, &error, source.first() == Some(&27));
                         let value = self.intern(&message);
                         self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Nil;

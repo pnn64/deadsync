@@ -46,6 +46,16 @@ results, errors and C-call restrictions. Source readers close on success, errors
 and instruction aborts. Standard input keeps its lookahead across I/O and loading;
 changing `io.input` does not redirect the loader.
 
+Precompiled Lua 5.1 input has a separate resumable decoder and structural
+verifier. Fixed buffers, readers and files recognize the leading escape byte,
+check the native ABI header and decode flat prototype trees without replaying
+input prefixes or reserving storage from untrusted declared counts. Instruction
+checks cover all 38 native opcodes, constants, captures, jumps, open results and
+SETLIST payloads. Named binary files reopen in binary mode before validation.
+Malformed chunks report native-style diagnostics and reader stopping points.
+Valid native chunks currently return an unsupported-execution error; native
+instruction translation and `string.dump` remain unimplemented.
+
 Source diagnostics retain Lua 5.1 token labels, decoded string context, opening
 delimiter lines and local/assignment limit descriptions. Lexical capture checks
 enforce the 60-upvalue limit while parsing, including unfinished source, and
@@ -295,5 +305,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-locale.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-codec.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

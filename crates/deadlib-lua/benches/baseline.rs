@@ -341,6 +341,12 @@ fn main() {
             10,
         ),
         (
+            "binary_header_reject",
+            "local bad='\\27Lua'..string.char(0,0,1,4,8,4,8,0);local n=0;for i=1,1000 do local f,e=loadstring(bad,'=binary');if f==nil and e=='binary: bad header in precompiled chunk'then n=n+1 end end;return n",
+            1000.0,
+            10,
+        ),
+        (
             "reader_load_single",
             "local sum=0;for i=1,200 do local once=false;local f=load(function()if once then return nil end;once=true;return 'return 1+2'end);sum=sum+f()end;return sum",
             600.0,

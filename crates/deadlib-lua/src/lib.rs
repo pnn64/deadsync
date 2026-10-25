@@ -15,6 +15,7 @@
 
 mod arena;
 mod bytecode;
+mod chunk51;
 mod compiler;
 mod error;
 mod format;
@@ -53,5 +54,8 @@ pub fn compile(source: &[u8]) -> Result<Program, Error> {
 /// # Errors
 /// Returns syntax or limit errors for invalid source.
 pub fn compile_named(source: &[u8], name: &[u8]) -> Result<Program, Error> {
+    if source.first() == Some(&27) {
+        return chunk51::compile(source, name, 0);
+    }
     compiler::compile(parser::parse(source)?, name)
 }

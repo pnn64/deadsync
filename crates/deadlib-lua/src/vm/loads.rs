@@ -1,4 +1,4 @@
-//! Reader-backed text loading through resumable parsing and protected frames.
+//! Resumable source/binary validation through protected loading frames.
 use super::*;
 
 pub(super) fn protected(function: FrameKind) -> bool {
@@ -19,6 +19,9 @@ pub(super) struct FileReader {
 pub(super) struct Loading {
     pub owner: usize,
     parser: crate::parser::Parser,
+    decoder: Option<Box<crate::chunk51::Decoder>>,
+    native_depth: usize,
+    binary_mode: bool,
     source: Vec<u8>,
     name: Box<[u8]>,
     awaiting: bool,
@@ -30,8 +33,106 @@ pub(super) fn storage_bytes(jobs: &Vec<Loading>) -> usize {
     jobs.capacity() * std::mem::size_of::<Loading>()
         + jobs
             .iter()
-            .map(|j| j.source.capacity() + j.name.len() + j.parser.heap_bytes())
+            .map(|j| {
+                j.source.capacity()
+                    + j.name.len()
+                    + j.parser.heap_bytes()
+                    + j.decoder
+                        .as_ref()
+                        .map_or(0, |d| std::mem::size_of_val(d.as_ref()) + d.heap_bytes())
+            })
             .sum::<usize>()
+}
+
+pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Vec<u8> {
+    if binary {
+        return error.message_bytes().to_vec();
+    }
+    let mut message = crate::bytecode::chunk_id_limit(name, 80);
+    message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
+    message.extend_from_slice(error.message_bytes());
+    message
+}
+impl Loading {
+    fn arena_bytes(&self) -> usize {
+        self.parser.arena_bytes()
+            + self
+                .decoder
+                .as_ref()
+                .map_or(0, |d| std::mem::size_of_val(d.as_ref()) + d.heap_bytes())
+    }
+    fn resume(&mut self) -> Result<Option<Program>, Error> {
+        if self.binary_mode {
+            let decoder = self
+                .decoder
+                .get_or_insert_with(|| Box::new(crate::chunk51::Decoder::new(self.native_depth)));
+            return match decoder.resume(&self.source, self.closed) {
+                Ok(false) => Ok(None),
+                Ok(true) => Err(crate::chunk51::unsupported()),
+                Err(why) => Err(crate::chunk51::diagnostic(&self.name, why)),
+            };
+        }
+        self.parser
+            .resume(&self.source, self.closed)?
+            .map(|ast| crate::compiler::compile(ast, &self.name))
+            .transpose()
+    }
+    fn read_file(&mut self, stream: &mut io::Stream) -> Result<(), (i32, bool)> {
+        let file = self.file.as_mut().expect("active file reader");
+        if file.phase == 0 {
+            file.phase = if stream.peek().map_err(|e| (e, false))? == Some(b'#') {
+                1
+            } else {
+                2
+            };
+        }
+        if file.phase == 1 {
+            for _ in 0..io::LINE_BUFFER {
+                if matches!(stream.get().map_err(|e| (e, false))?, None | Some(b'\n')) {
+                    file.phase = 2;
+                    self.source.push(b'\n');
+                    break;
+                }
+            }
+            return Ok(());
+        }
+        if file.phase == 2 {
+            self.binary_mode = stream.peek().map_err(|e| (e, false))? == Some(27);
+            if file.owned && self.binary_mode {
+                // Text-mode buffering may already have translated CRLF or ^Z.
+                // Reopen from byte zero, then locate the first signature just
+                // as luaL_loadfile does after an executable header.
+                let _ = stream.close();
+                *stream = io::open(&self.name[1..], b"rb").map_err(|e| (e, true))?;
+                self.source.clear();
+                file.phase = 3;
+            } else {
+                file.phase = 4;
+            }
+        }
+        if file.phase == 3 {
+            for _ in 0..io::LINE_BUFFER {
+                match stream.peek().map_err(|e| (e, false))? {
+                    Some(27) | None => {
+                        file.phase = 4;
+                        break;
+                    }
+                    _ => {
+                        stream.get().map_err(|e| (e, false))?;
+                    }
+                }
+            }
+            if file.phase == 3 {
+                return Ok(());
+            }
+        }
+        let before = self.source.len();
+        stream
+            .read_chars(&mut self.source, io::LINE_BUFFER)
+            .map_err(|e| (e, false))?;
+        self.closed = self.source.len() - before < io::LINE_BUFFER;
+        Ok(())
+    }
 }
 
 impl Vm {
@@ -155,6 +256,9 @@ impl Vm {
             self.loads.push(Loading {
                 owner,
                 parser: crate::parser::Parser::with_native_depth(self.native_depth(owner + 1)),
+                decoder: None,
+                native_depth: self.native_depth(owner + 1),
+                binary_mode: false,
                 source,
                 name: name.into_boxed_slice(),
                 awaiting: false,
@@ -170,47 +274,26 @@ impl Vm {
         let stream = &mut self.io.files[slot_index(file.key)];
         let before = stream.heap_bytes();
         let source_before = self.loads[index].source.capacity();
-        let read = (|| {
-            let job = &mut self.loads[index];
-            let file = job.file.as_mut().expect("file reader");
-            if file.phase == 0 {
-                file.phase = if stream.peek()? == Some(b'#') { 1 } else { 2 };
-            }
-            if file.phase == 1 {
-                // Bound work even for an arbitrarily long executable header.
-                for _ in 0..io::LINE_BUFFER {
-                    if matches!(stream.get()?, None | Some(b'\n')) {
-                        file.phase = 2;
-                        job.source.push(b'\n');
-                        break;
-                    }
-                }
-            } else {
-                let start = job.source.len();
-                stream.read_chars(&mut job.source, io::LINE_BUFFER)?;
-                job.closed = job.source.len() - start < io::LINE_BUFFER;
-            }
-            Ok::<_, i32>(())
-        })();
+        let read = self.loads[index].read_file(stream);
         let growth = stream.heap_bytes().saturating_sub(before);
         self.io.files.note_alloc(growth);
         self.gc_note_control(self.loads[index].source.capacity() - source_before);
-        if let Err(code) = read {
+        if let Err((code, reopen)) = read {
             let name = self.loads[index].name.clone();
-            let value = self.file_load_error(&name, b"read", code);
+            let value = self.file_load_error(&name, if reopen { b"reopen" } else { b"read" }, code);
             self.finish_file_load();
             return self.file_load_result(id, frame, Err(value));
         }
-        if self.loads[index].file.expect("file reader").phase == 1 {
+        if matches!(self.loads[index].file.expect("file reader").phase, 1 | 3) {
             return Ok(None);
         }
         let job = &mut self.loads[index];
-        let before = job.parser.arena_bytes();
-        let parsed = job.parser.resume(&job.source, job.closed);
-        let growth = job.parser.arena_bytes().saturating_sub(before);
+        let before = job.arena_bytes();
+        let parsed = job.resume();
+        let growth = job.arena_bytes().saturating_sub(before);
         self.gc_note_control(growth);
         let compiled = match parsed {
-            Ok(Some(ast)) => Some(crate::compiler::compile(ast, &self.loads[index].name)),
+            Ok(Some(program)) => Some(Ok(program)),
             Err(error) => Some(Err(error)),
             Ok(None) => None,
         };
@@ -218,9 +301,11 @@ impl Vm {
             let result = match compiled {
                 Ok(program) => Ok(self.load(&program)),
                 Err(error) => {
-                    let mut message = crate::bytecode::chunk_id_limit(&self.loads[index].name, 80);
-                    message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
-                    message.extend_from_slice(error.message_bytes());
+                    let message = message(
+                        &self.loads[index].name,
+                        &error,
+                        self.loads[index].binary_mode,
+                    );
                     Err(self.intern(&message))
                 }
             };
@@ -249,7 +334,11 @@ impl Vm {
         self.loads
             .iter()
             .filter(|j| j.owner < end)
-            .map(|j| j.parser.nesting())
+            .map(|j| {
+                j.decoder
+                    .as_ref()
+                    .map_or_else(|| j.parser.nesting(), |d| d.nesting())
+            })
             .sum()
     }
     pub(super) fn load_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
@@ -290,6 +379,9 @@ impl Vm {
             self.loads.push(Loading {
                 owner,
                 parser: crate::parser::Parser::with_native_depth(self.native_depth(owner + 1)),
+                decoder: None,
+                native_depth: self.native_depth(owner + 1),
+                binary_mode: false,
                 source,
                 name: name.into_boxed_slice(),
                 awaiting: false,
@@ -319,6 +411,9 @@ impl Vm {
                     self.registers[base + 2] = result;
                     let bytes = &self.strings.bytes[slot_index(id.0)];
                     let job = &mut self.loads[index];
+                    if first {
+                        job.binary_mode = bytes.first() == Some(&27);
+                    }
                     let capacity = job.source.capacity();
                     job.source.extend_from_slice(bytes);
                     if bytes.is_empty() && !first {
@@ -337,12 +432,12 @@ impl Vm {
             }
         }
         let job = &mut self.loads[index];
-        let before = job.parser.arena_bytes();
-        let parsed = job.parser.resume(&job.source, job.closed);
-        let growth = job.parser.arena_bytes().saturating_sub(before);
+        let before = job.arena_bytes();
+        let parsed = job.resume();
+        let growth = job.arena_bytes().saturating_sub(before);
         self.gc_note_control(growth);
         let compiled = match parsed {
-            Ok(Some(ast)) => Some(crate::compiler::compile(ast, &self.loads[index].name)),
+            Ok(Some(program)) => Some(Ok(program)),
             Err(error) => Some(Err(error)),
             Ok(None) => None,
         };
@@ -356,9 +451,11 @@ impl Vm {
                     return Ok(self.return_frame(frame, base, 1));
                 }
                 Err(error) => {
-                    let mut message = crate::bytecode::chunk_id_limit(&self.loads[index].name, 80);
-                    message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
-                    message.extend_from_slice(error.message_bytes());
+                    let message = message(
+                        &self.loads[index].name,
+                        &error,
+                        self.loads[index].binary_mode,
+                    );
                     let value = self.intern(&message);
                     self.protected_failure(owner, value);
                     return Ok(None);
