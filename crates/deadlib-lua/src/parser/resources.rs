@@ -4,7 +4,7 @@
 //! lists. Checks run at parser continuations, before the next reader request
 //! whenever the reference would already reject the source. No code is emitted.
 use super::{
-    Ast, Expr, ExprId, KeyConstant,
+    Ast, ConstantOperand, Expr, ExprId,
     bindings::{Bindings, Reference},
 };
 use crate::lexer::Kind;
@@ -171,14 +171,14 @@ pub(super) struct Resources {
     parents: Vec<Function>,
     values: Vec<Value>,
     tables: Vec<Table>,
-    keys: Vec<(ExprId, KeyConstant)>,
+    constants: Vec<(ExprId, ConstantOperand)>,
 }
 impl Resources {
     pub(super) fn heap_bytes(&self) -> usize {
         self.parents.capacity() * size_of::<Function>()
             + self.values.capacity() * size_of::<Value>()
             + self.tables.capacity() * size_of::<Table>()
-            + self.keys.capacity() * size_of::<(ExprId, KeyConstant)>()
+            + self.constants.capacity() * size_of::<(ExprId, ConstantOperand)>()
             + self.function.pool.heap_bytes()
             + self
                 .parents
@@ -223,8 +223,8 @@ impl Resources {
         child.zero_sign
     }
     pub(super) fn finish(&mut self, ast: &mut Ast) {
-        self.keys.sort_unstable_by_key(|&(id, _)| id);
-        ast.key_constants = std::mem::take(&mut self.keys);
+        self.constants.sort_unstable_by_key(|&(id, _)| id);
+        ast.constant_operands = std::mem::take(&mut self.constants);
         ast.root_zero_sign = self.function.zero_sign;
     }
     fn number(&mut self, number: f64, cx: &Context<'_>) -> u32 {
@@ -233,7 +233,7 @@ impl Resources {
         }
         self.function.pool.insert(Key::number(number), cx)
     }
-    fn save_key(&mut self, id: ExprId, operand: u16) {
+    fn save_operand(&mut self, id: ExprId, operand: u16) {
         if operand < RK {
             return;
         }
@@ -241,18 +241,18 @@ impl Resources {
         let constant = match key.kind {
             0 => {
                 let number = f64::from_bits(key.data);
-                KeyConstant::Number(if number == 0.0 && self.function.zero_sign == Some(true) {
+                ConstantOperand::Number(if number == 0.0 && self.function.zero_sign == Some(true) {
                     -0.0
                 } else {
                     number
                 })
             }
-            1 => KeyConstant::Nil,
-            2 | 3 => KeyConstant::Boolean(key.kind == 3),
-            4 => KeyConstant::String(key.data as ExprId),
-            _ => unreachable!("a constant string key has an AST literal"),
+            1 => ConstantOperand::Nil,
+            2 | 3 => ConstantOperand::Boolean(key.kind == 3),
+            4 => ConstantOperand::String(key.data as ExprId),
+            _ => unreachable!("a constant string operand has an AST literal"),
         };
-        self.keys.push((id, constant));
+        self.constants.push((id, constant));
     }
     fn free(&mut self, reg: u16) {
         if reg < RK && reg >= self.function.locals {
@@ -451,7 +451,14 @@ impl Resources {
             ..v
         })
     }
-    fn binary(&mut self, op: Kind, mut a: Value, mut b: Value, cx: &Context<'_>) -> Check<Value> {
+    fn binary(
+        &mut self,
+        op: Kind,
+        left: ExprId,
+        mut a: Value,
+        mut b: Value,
+        cx: &Context<'_>,
+    ) -> Check<Value> {
         if matches!(op, Kind::And | Kind::Or) {
             self.discharge(&mut b);
             b.jumps |= a.jumps;
@@ -491,6 +498,14 @@ impl Resources {
             {
                 return Ok(Value::number(n));
             }
+        }
+        if a.form == Form::Constant && a.info <= 255 {
+            self.save_operand(left, RK + a.info as u16);
+        } else if a.numeral() && !matches!(cx.ast.exprs[left].0, Expr::Number(_)) {
+            // Plain numbers use the backend's literal fast path. A reference
+            // numeral can also come from a folded logical expression.
+            self.constants
+                .push((left, ConstantOperand::Number(a.number)));
         }
         let (ar, br) = if comparison {
             (self.rk(&mut a, cx)?, self.rk(&mut b, cx)?)
@@ -616,7 +631,7 @@ impl Resources {
     ) -> Check {
         for &target in targets {
             if let Expr::Index(_, key) = cx.ast.exprs[target].0 {
-                self.save_key(key, self.values[target].key);
+                self.save_operand(key, self.values[target].key);
             }
         }
         if targets.len() == values.len() {
@@ -669,7 +684,7 @@ impl Resources {
     pub(super) fn record_key(&mut self, id: ExprId, cx: &Context<'_>) -> Check {
         let mut v = self.values[id];
         let operand = self.rk(&mut v, cx)?;
-        self.save_key(id, operand);
+        self.save_operand(id, operand);
         self.values[id] = v;
         Ok(())
     }
@@ -716,7 +731,9 @@ impl Resources {
                 v
             }
             Expr::Unary(op, inner) => self.unary(*op, self.values[*inner], cx)?,
-            Expr::Binary(op, a, b, _) => self.binary(*op, self.values[*a], self.values[*b], cx)?,
+            Expr::Binary(op, a, b, _) => {
+                self.binary(*op, *a, self.values[*a], self.values[*b], cx)?
+            }
             Expr::Index(table, key) => {
                 let mut k = self.values[*key];
                 let operand = self.rk(&mut k, cx)?;

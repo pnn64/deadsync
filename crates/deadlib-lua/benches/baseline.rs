@@ -137,6 +137,12 @@ fn main() {
             50,
         ),
         (
+            "constant_left",
+            "local x=1.25;local y=0;for i=1,10000 do y=1+(2*(3+(4*(5+x))))end;return y",
+            57.0,
+            50,
+        ),
+        (
             "call_table",
             "local function f(t)return t end;local sum=0;for i=1,1000 do sum=sum+f({key=i}).key end;return sum",
             500500.0,
@@ -511,7 +517,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(20);
+    let mut frontends = Vec::with_capacity(22);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -609,6 +615,19 @@ fn main() {
         "do local pad={{true,false,nil}}end;do local pad={{{pad}}}end;local t={{}};{targets}={values};return t[150]"
     );
     frontends.push(("frontend_compact_pool_150".into(), source, 150.0, 30));
+    let names = (1..=100)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!("local {names};local x=1;return {}x", "2^".repeat(190));
+    frontends.push(("frontend_right_power_190".into(), source, f64::INFINITY, 30));
+    let source = format!("local {names};local x=1;return {}x", "'2'^".repeat(190));
+    frontends.push((
+        "frontend_right_string_power_190".into(),
+        source,
+        f64::INFINITY,
+        30,
+    ));
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
         println!(

@@ -174,7 +174,7 @@ impl Parser {
             + self.bindings.heap_bytes()
             + self.resources.heap_bytes()
             + self.ast.zero_signs.capacity() * size_of::<(ExprId, bool)>()
-            + self.ast.key_constants.capacity() * size_of::<(ExprId, KeyConstant)>()
+            + self.ast.constant_operands.capacity() * size_of::<(ExprId, ConstantOperand)>()
     }
     pub(crate) fn heap_bytes(&self) -> usize {
         fn names(v: &[Box<[u8]>]) -> usize {
@@ -373,12 +373,36 @@ impl Parser {
     }
     fn expression(&mut self, input: &[u8], expr: Expr, line: u32) -> Result<ExprId, Error> {
         let id = self.ast.exprs.len();
+        let scalar_cost = match &expr {
+            Expr::Number(_) | Expr::Name(_) => 1,
+            Expr::Paren(inner) | Expr::Unary(_, inner) => {
+                let cost = self.ast.exprs[*inner].1.scalar_cost;
+                if cost != 0 && cost < 32 { cost + 1 } else { 0 }
+            }
+            Expr::Binary(
+                Kind::Plus | Kind::Minus | Kind::Star | Kind::Slash | Kind::Percent | Kind::Caret,
+                left,
+                right,
+                _,
+            ) => {
+                let a = self.ast.exprs[*left].1.scalar_cost;
+                let b = self.ast.exprs[*right].1.scalar_cost;
+                let cost = a + b + 1;
+                if a != 0 && b != 0 && cost <= 32 {
+                    cost
+                } else {
+                    0
+                }
+            }
+            _ => 0,
+        };
         self.ast.exprs.push((
             expr,
             SourceSpan {
                 start: line,
                 end: self.previous_line,
                 discharge: self.previous_line,
+                scalar_cost,
             },
         ));
         self.account(input, |r, cx| r.expression(id, cx))?;

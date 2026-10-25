@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 289 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 295 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-reference-constants.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-deferred-operands.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -309,6 +309,23 @@ locals and 190 right-associated literal powers remains reference-valid and
 exhausts backend storage. The
 [measurements](performance/2026-10-25-rust-lua-reference-constants.md) cover
 38 execution and twenty frontend workloads, including metadata overhead.
+
+The [deferred-operand validation](testing/2026-10-25-rust-lua-deferred-operands.md)
+adds six groups with 421 executed programs and 512 loader observations. Numeric
+arithmetic left operands and reference compact constants for arithmetic and
+comparisons materialize after the right result. Constant-pool insertion remains
+before right-hand code generation, preserving backend pool ordering and the
+existing reference zero-sign metadata. Named destinations retain their old
+values through callbacks; dynamic/noncompact operands retain ordinary evaluation.
+Small numeric/variable trees retain grouped loads when a cached 32-node bound
+fits the remaining register file, avoiding interleaved-load overhead. The hint
+uses existing AST span padding on 64-bit targets.
+The 190-power numeric and string probes now execute, and numeric chains fit with
+200 active locals. Generated pressure cases compare acceptance and diagnostics
+with large pools and mixed expression forms. The
+[measurements](performance/2026-10-25-rust-lua-deferred-operands.md) cover
+39 execution and twenty-two frontend workloads. Complete resource/debug/scratch
+parity and broader standalone compatibility remain open.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

@@ -351,3 +351,46 @@ fn local_stores_contribute_to_reference_constant_pool_boundaries() {
         }
     }
 }
+
+#[test]
+fn mixed_expression_pressure_matches_reference_acceptance_and_diagnostics() {
+    let mut oracle = Oracle::new();
+    let mut random = 0x51c0ffe_u32;
+    for case in 0..512 {
+        let count = [0, 50, 180, 199, 200][case % 5];
+        let pool = [0, 254, 255, 300][(case / 5) % 4];
+        let depth = [1, 5, 10, 30, 60, 90][(case / 20) % 6];
+        let mut source = if pool == 0 {
+            String::new()
+        } else {
+            format!(
+                "do local pad={{{}}}end;",
+                (1..=pool)
+                    .map(|n| n.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        };
+        if count != 0 {
+            source.push_str(&format!("local {};", names(count)));
+        }
+        let mut expr = ["a1", "g", "f()", "...", "1.25", "{}"][(case / 120) % 6].to_owned();
+        for _ in 0..depth {
+            random = random.wrapping_mul(1664525).wrapping_add(1013904223);
+            expr = match (random >> 8) % 10 {
+                0 => format!("2^{expr}"),
+                1 => format!("'2'^({expr})"),
+                2 => format!("false+({expr})"),
+                3 => format!("a1+({expr})"),
+                4 => format!("g+({expr})"),
+                5 => format!("f({expr})"),
+                6 => format!("a1[{expr}]"),
+                7 => format!("{{key={expr}}}"),
+                8 => format!("not ({expr})"),
+                _ => format!("({expr})<a1"),
+            };
+        }
+        source.push_str(&format!("return {expr}"));
+        oracle.check(&source, 0, 0);
+    }
+}

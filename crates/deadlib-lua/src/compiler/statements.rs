@@ -182,7 +182,7 @@ impl<'a> Compiler<'a> {
         let Expr::Index(_, key) = self.ast.exprs[targets[index]].0 else {
             unreachable!("indexed assignment key")
         };
-        let key = if let Some(constant) = self.field_constant(key)? {
+        let key = if let Some(constant) = self.constant_operand(key)? {
             TargetKey::Constant(constant)
         } else if let Some(reg) = self.local_operand(key) {
             TargetKey::Register(reg)

@@ -87,6 +87,23 @@ pub fn indexed_assignment(count: usize) -> String {
         .join(",");
     format!("local t={{}};{targets}={values};return t[1],t[{count}]")
 }
+pub fn right_numeric_chain(locals: usize, depth: usize, op: &str) -> String {
+    let names = (1..=locals)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let prefix = if locals == 0 {
+        String::new()
+    } else {
+        format!("local {names};")
+    };
+    let expression = if op == "^" {
+        format!("{}x", "2^".repeat(depth))
+    } else {
+        format!("{}x{}", format!("2{op}(").repeat(depth), ")".repeat(depth))
+    };
+    format!("{prefix}local x=1.25;x={expression};if x~=x then return 'nan' else return x end")
+}
 pub fn generated() -> Vec<String> {
     fn expr(seed: &mut u32, depth: u8) -> String {
         *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
@@ -165,7 +182,11 @@ mod tests {
                 for (source, expected) in sources.iter().zip(expected) {
                     let program = compile_named(source.as_bytes(), b"=codegen").unwrap();
                     if let Some(max) = max_registers {
-                        assert!(program.register_count() <= max);
+                        assert!(
+                            program.register_count() <= max,
+                            "entry slots {} > {max}: {source}",
+                            program.register_count()
+                        );
                     }
                     let values = vm.execute(&program).unwrap().to_vec();
                     let actual: Vec<_> = values
@@ -580,6 +601,132 @@ mod tests {
                         ));
                     }
                 }
+            }
+        }
+        check(sources);
+    }
+    #[test]
+    fn right_associated_numeric_chains_fit_with_many_active_locals() {
+        let mut sources = Vec::new();
+        for locals in [0, 50, 100, 199] {
+            for depth in [60, 125, 190] {
+                sources.push(right_numeric_chain(locals, depth, "^"));
+            }
+        }
+        for op in ["+", "-", "*", "/", "%"] {
+            for locals in [0, 100, 199] {
+                for depth in [30, 60, 90] {
+                    sources.push(right_numeric_chain(locals, depth, op));
+                }
+            }
+        }
+        check_bound(sources, Some(216));
+    }
+    #[test]
+    fn deferred_numeric_operands_keep_named_values_and_error_provenance() {
+        check([
+            "local x=10;local seen;local function f()seen=x;x=20;return 1 end;x=2+f();return x,seen",
+            "local x=10;local rhs=setmetatable({},{__add=function(a,b)assert(a==2);return x end});x=2+rhs;return x",
+            "local x=10;local function f()return setmetatable({},{__add=function(a,b)return x end})end;x=2+f();return x",
+            "local x=3;local function f()x=9;return 0 end;return 2+(x+f())",
+            "x=3;local function f()x=9;return 0 end;return 2+(x+f())",
+            "local x=3;local function g()local function f()x=9;return 0 end;return 2+(x+f())end;return g()",
+            "local function f(n)return n end;local x=0+f(-0.0);return 1/x",
+            "if false then unused=-0.0 end;local x=0;return 1/x",
+            "local x={};return pcall(function()return 2-x end)",
+            "local function f()return {}end;return pcall(function()return 2/f().missing end)",
+            "return pcall(function()return 2+(\nmath.abs(false)\n)end)",
+            "local function f()return 7 end;local x=(0/0)+f();return x~=x",
+        ].into_iter().map(str::to_owned).collect());
+    }
+    #[test]
+    fn deferred_numeric_operands_preserve_metamethods_and_pending_roots() {
+        let mut sources = Vec::new();
+        for (op, method) in [
+            ("+", "__add"),
+            ("-", "__sub"),
+            ("*", "__mul"),
+            ("/", "__div"),
+            ("%", "__mod"),
+            ("^", "__pow"),
+        ] {
+            for left in ["2", "'2'", "false", "nil", "(false or 2)"] {
+                sources.push(format!("local log={{}};local obj;obj=setmetatable({{}},{{{method}=function(a,b)collectgarbage('collect');assert(b==obj);log[#log+1]=type(a)..':'..tostring(a)..':'..type(b);return b end}});local function f()log[#log+1]='rhs';collectgarbage('collect');return obj end;local r={left}{op}({left}{op}f());return r==obj,table.concat(log,',')"));
+            }
+        }
+        sources.extend([
+            "local weak=setmetatable({},{__mode='v'});local function make()local o=newproxy(true);getmetatable(o).__add=function(a,b)collectgarbage('collect');assert(weak[1]==b);return 7 end;weak[1]=o;return o end;return 2+make()",
+            "local weak=setmetatable({},{__mode='v'});local function make()local o=setmetatable({},{__pow=function(a,b)collectgarbage('collect');assert(weak[1]==b);return 7 end});weak[1]=o;return o end;return 2^make()",
+            "local co=coroutine.create(function()local x=10;x=2+coroutine.yield(x);return x end);local ok,x=coroutine.resume(co);collectgarbage('collect');local ok2,y=coroutine.resume(co,7);return ok,x,ok2,y",
+        ].into_iter().map(str::to_owned));
+        check(sources);
+    }
+    #[test]
+    fn generated_numeric_left_trees_preserve_bits_and_effect_order() {
+        fn expression(seed: &mut u32, depth: u8) -> String {
+            *seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let choice = *seed;
+            if depth == 0 {
+                return if choice & 1 == 0 {
+                    "x".into()
+                } else {
+                    "mark(1)".into()
+                };
+            }
+            let right = expression(seed, depth - 1);
+            if choice % 8 == 6 {
+                return format!("x+({right})");
+            }
+            if choice % 8 == 7 {
+                return format!("mark(1)+({right})");
+            }
+            let left = ["0", "-0.0", "(1+2)", "2", "1.25", "3.5"][(choice >> 8) as usize % 6];
+            let op = ["+", "-", "*", "/", "%", "^"][choice as usize % 6];
+            format!("{left}{op}({right})")
+        }
+        let mut seed = 0x51c0de;
+        let sources=(0..256).map(|_|{
+            let expr=expression(&mut seed,4);
+            format!("local x=1.25;local log={{}};local function mark(n)log[#log+1]=x;x=x+n;return x end;local v={expr};return v~=v and 'nan' or v,x,table.concat(log,',')")
+        }).collect();
+        check(sources);
+    }
+    #[test]
+    fn reference_constant_left_operands_cover_coercions_comparisons_and_large_pools() {
+        let mut sources = Vec::new();
+        for left in ["'2'", "true", "nil", "(false or 2)"] {
+            for locals in [100, 199] {
+                let names = (1..=locals)
+                    .map(|i| format!("a{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                for depth in [60, 125, 190] {
+                    let expr = format!("{}x", format!("{left}^").repeat(depth));
+                    sources.push(format!(
+                        "return pcall(function()local {names};local x=1.25;x={expr};return x end)"
+                    ));
+                }
+            }
+        }
+        for left in ["2", "'2'", "false", "nil", "(true and 2)"] {
+            for op in ["==", "~=", "<", "<=", ">", ">="] {
+                sources.push(format!(
+                    "local x={{}};return pcall(function()return {left}{op}x end)"
+                ));
+            }
+        }
+        let pad = (1..=300)
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        for left in ["'2'", "false", "nil"] {
+            for depth in [10, 30, 40] {
+                let expr = format!("{}x", format!("{left}^").repeat(depth));
+                let names = (1..=199)
+                    .map(|i| format!("a{i}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                sources.push(format!("return pcall(function()do local pad={{{pad}}}end;local {names};local x=1.25;x={expr};return x end)"));
             }
         }
         check(sources);

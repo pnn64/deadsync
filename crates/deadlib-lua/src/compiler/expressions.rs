@@ -43,8 +43,32 @@ impl<'a> Compiler<'a> {
                 self.tasks.push(Task::LogicalLeft(id, dst));
                 self.tasks.push(Task::Expr(*left, dst));
             }
-            Expr::Binary(op, left, _, _) => {
+            Expr::Binary(op, left, right, _) => {
                 let work = self.work_register(dst)?;
+                let constant = if matches!(
+                    op,
+                    Kind::Plus
+                        | Kind::Minus
+                        | Kind::Star
+                        | Kind::Slash
+                        | Kind::Percent
+                        | Kind::Caret
+                ) && let Some(number) = self.folded[*left]
+                {
+                    Some(self.constant(Constant::Number(number))?)
+                } else if *op != Kind::Concat {
+                    self.constant_operand(*left)?
+                } else {
+                    None
+                };
+                if let Some(constant) = constant
+                    && !self.eager_numeric_tree(id)
+                {
+                    self.tasks
+                        .push(Task::BinaryConstant(id, dst, work, constant));
+                    self.tasks.push(Task::Operand(*right, work));
+                    return Ok(());
+                }
                 self.tasks.push(Task::BinaryLeft(id, dst, work));
                 self.tasks.push(if *op == Kind::Concat {
                     Task::Expr(*left, work)
@@ -177,6 +201,10 @@ impl<'a> Compiler<'a> {
         u16::from(dst) + 1 == self.function.next
             && self.function.debug_named[usize::from(dst) / 64] & (1u64 << (dst % 64)) == 0
     }
+    fn eager_numeric_tree(&self, id: ExprId) -> bool {
+        let cost = u16::from(self.ast.exprs[id].1.scalar_cost);
+        cost != 0 && cost <= 256 - self.function.next
+    }
     pub(super) fn right_register(
         &mut self,
         right: ExprId,
@@ -265,13 +293,31 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
+    pub(super) fn binary_constant(
+        &mut self,
+        id: ExprId,
+        dst: u8,
+        work: u8,
+        constant: u32,
+    ) -> Result<(), Error> {
+        let Expr::Binary(_, left, _, _) = self.ast.exprs[id].0 else {
+            unreachable!("constant left operand")
+        };
+        let right = self.result;
+        let reg = if right == work { self.alloc(1)? } else { work };
+        self.line = self.ast.exprs[left].1.discharge;
+        self.emit(Op::Load, reg, 0, constant)?;
+        self.function.debug_hidden[usize::from(reg) / 64] |= 1u64 << (reg % 64);
+        self.debug_line(0);
+        self.binary_right(id, dst, reg)
+    }
     pub(super) fn table_next(&mut self, state: TableState) -> Result<(), Error> {
         let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
             unreachable!()
         };
         if let Some(&(key, value)) = fields.get(state.index) {
             if let Some(key) = key {
-                if let Some(constant) = self.field_constant(key)? {
+                if let Some(constant) = self.constant_operand(key)? {
                     let reg = self.alloc(1)?;
                     self.tasks.push(Task::TableConstant(state, reg, constant));
                     self.tasks.push(Task::Operand(value, reg));
@@ -298,19 +344,19 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
-    pub(super) fn field_constant(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
+    pub(super) fn constant_operand(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
         let Ok(index) = self
             .ast
-            .key_constants
+            .constant_operands
             .binary_search_by_key(&id, |&(id, _)| id)
         else {
             return Ok(None);
         };
-        let constant = match self.ast.key_constants[index].1 {
-            crate::parser::KeyConstant::Nil => Constant::Nil,
-            crate::parser::KeyConstant::Boolean(value) => Constant::Boolean(value),
-            crate::parser::KeyConstant::Number(value) => Constant::Number(value),
-            crate::parser::KeyConstant::String(source) => {
+        let constant = match self.ast.constant_operands[index].1 {
+            crate::parser::ConstantOperand::Nil => Constant::Nil,
+            crate::parser::ConstantOperand::Boolean(value) => Constant::Boolean(value),
+            crate::parser::ConstantOperand::Number(value) => Constant::Number(value),
+            crate::parser::ConstantOperand::String(source) => {
                 let Expr::String(bytes) = &self.ast.exprs[source].0 else {
                     unreachable!("constant key literal")
                 };

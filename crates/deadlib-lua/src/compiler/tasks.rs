@@ -62,6 +62,7 @@ pub(super) enum Task<'a> {
     LogicalEnd(ExprId, u32, usize),
     BinaryLeft(ExprId, u8, u8),
     BinaryRight(ExprId, u8, u8),
+    BinaryConstant(ExprId, u8, u8, u32),
     IndexTable(ExprId, u8, u8),
     IndexKey(ExprId, u8, u8),
     TableNext(TableState),
@@ -432,6 +433,9 @@ impl<'a> Compiler<'a> {
                     });
                 }
                 Task::BinaryRight(id, dst, left) => self.binary_right(id, dst, left)?,
+                Task::BinaryConstant(id, dst, work, constant) => {
+                    self.binary_constant(id, dst, work, constant)?
+                }
                 Task::IndexTable(id, dst, work) => {
                     let Expr::Index(_, key) = self.ast.exprs[id].0 else {
                         unreachable!()
