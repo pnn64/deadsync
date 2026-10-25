@@ -1,13 +1,16 @@
-//! Lua 5.1 environment, file removal, temporary names and time differences.
+//! Lua 5.1 environment, files, time differences and process operations.
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
+mod process;
 
 pub(super) const FIRST: u64 = 159;
 const DIFFTIME: u64 = FIRST;
 const GETENV: u64 = FIRST + 1;
 const REMOVE: u64 = FIRST + 2;
 const TMPNAME: u64 = FIRST + 3;
-pub(super) const LAST: u64 = TMPNAME;
+const EXECUTE: u64 = FIRST + 4;
+const EXIT: u64 = FIRST + 5;
+pub(super) const LAST: u64 = EXIT;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temporary_name() -> std::io::Result<std::path::PathBuf> {
@@ -58,6 +61,8 @@ impl Vm {
             (b"getenv", GETENV),
             (b"remove", REMOVE),
             (b"tmpname", TMPNAME),
+            (b"execute", EXECUTE),
+            (b"exit", EXIT),
         ] {
             let name = self.intern(name);
             self.raw_set(table, name, Value::Native(id)).unwrap();
@@ -67,6 +72,37 @@ impl Vm {
 
     pub(super) fn os_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
         match id {
+            EXECUTE => {
+                let name = if self.argument(base, count, 0) == Value::Nil {
+                    None
+                } else {
+                    Some(self.string_argument(base, count, 0)?)
+                };
+                let command = name.map(|name| io::c_bytes(&self.strings.bytes[slot_index(name.0)]));
+                let status = process::execute(command).unwrap_or_else(|code| {
+                    io::set_errno(code);
+                    -1
+                });
+                self.registers[base] = Value::Number(f64::from(status));
+            }
+            EXIT => {
+                let code = match self.argument(base, count, 0) {
+                    Value::Nil => 0,
+                    value => io::integer(
+                        self.number(value)
+                            .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?,
+                    ) as i32,
+                };
+                // Process termination does not close the Lua state or run its
+                // finalizers. Flush owned streams before the OS closes handles.
+                for stream in self.io.files.iter_mut() {
+                    let _ = stream.flush();
+                }
+                use std::io::Write;
+                let _ = io::stdout_flush();
+                let _ = std::io::stderr().flush();
+                std::process::exit(code);
+            }
             DIFFTIME => {
                 // The pinned MSVC Lua build evaluates the second difftime
                 // argument first, including its optional-number validation.

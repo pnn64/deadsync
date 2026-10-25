@@ -7,25 +7,13 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 mod number;
+mod output;
 mod stream;
 use number::read_number;
 pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut stdout = std::io::stdout().lock();
-    if cfg!(windows) {
-        let mut start = 0;
-        for (at, &byte) in bytes.iter().enumerate() {
-            if byte == b'\n' {
-                stdout.write_all(&bytes[start..at])?;
-                stdout.write_all(b"\r\n")?;
-                start = at + 1;
-            }
-        }
-        stdout.write_all(&bytes[start..])
-    } else {
-        stdout.write_all(bytes)
-    }
+    output::write(bytes)
 }
+pub(super) use output::flush as stdout_flush;
 pub(super) use stream::LINE_BUFFER;
 use stream::Resource;
 pub(super) use stream::Stream;
@@ -664,11 +652,7 @@ impl Vm {
                 if mode != 0 && !(2..=i32::MAX as usize).contains(&size) {
                     return Ok(self.io_failure(base, 22, None));
                 }
-                let result = self.io.files[slot].flush();
-                if result.is_ok() {
-                    self.io.files[slot].buffering = mode;
-                    self.io.files[slot].size = size;
-                }
+                let result = self.io.files[slot].set_buffering(mode, size);
                 Ok(self.io_result(base, result))
             }
             WRITE | FWRITE => {

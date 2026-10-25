@@ -97,6 +97,24 @@ fn os_argument_errors_preserve_names_validation_order_and_missing_values() {
 }
 
 #[test]
+fn process_argument_errors_and_aliases_use_lua51_types_and_native_environments() {
+    compare(
+        br#"
+        local out={}
+        local function save(f,...)
+          local ok,why=pcall(f,...);out[#out+1]=ok;out[#out+1]=why
+        end
+        save(os.execute,false);save(os.execute,{});save(os.exit,false);save(os.exit,{})
+        local t={execute=os.execute,exit=os.exit}
+        save(function()return t:execute()end);save(function()return t:exit()end)
+        local env={};debug.setfenv(os.execute,env)
+        collectgarbage();out[#out+1]=getfenv(os.execute)==env
+        return unpack(out)
+    "#,
+    );
+}
+
+#[test]
 fn environment_names_use_c_string_boundaries_numeric_coercion_and_missing_nil() {
     compare(
         br#"

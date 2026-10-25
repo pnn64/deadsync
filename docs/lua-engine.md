@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 303 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 304 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-os-basics.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-process.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -362,7 +362,8 @@ The host must pin retained values. A live host `Program` keeps its per-VM mutabl
 entry binding; a separate weak lifetime token lets dynamically loaded chunks and
 unused entries die while escaped Lua closures retain their immutable code.
 Generation exhaustion retires an arena slot rather than reusing an old identity.
-All engine code remains safe Rust with no normal/build dependencies. Commit each
+Compiler/VM storage uses safe Rust; Windows process creation has one scoped
+unsafe system-API bridge. There are no normal/build dependencies. Commit each
 verified milestone while keeping unrelated edits separate.
 
 The [OS validation](testing/2026-10-25-rust-lua-os-basics.md) covers
@@ -371,9 +372,17 @@ builtin-module registry and existing native error/environment machinery.
 Windows time differences retain integer conversion, second-argument-first
 validation and negative-time rejection. I/O and OS paths share borrowed path
 conversion. Windows environment/path checks currently cover ASCII; clock,
-calendar/time-zone, locale, rename and process functions remain open. The
+calendar/time-zone, locale, rename and further process behavior remain open. The
 [measurements](performance/2026-10-25-rust-lua-os-basics.md) add two workloads
 and retain 41 runtime and twenty-two frontend measurements.
+
+The [process validation](testing/2026-10-25-rust-lua-process.md) adds Lua 5.1
+shell execution and process exit. Seventy-four isolated cases compare process
+statuses, output bytes and generated files across the reference, Rust runner and
+CLI. Shared stdout buffering preserves ordering around child execution.
+The [measurements](performance/2026-10-25-rust-lua-process.md) retain the safe
+standard-library process baseline, the Windows bridge and 43 runtime workloads.
+Remaining OS, encoding, terminal and host-process resource behavior stays open.
 
 ## Reference contract
 

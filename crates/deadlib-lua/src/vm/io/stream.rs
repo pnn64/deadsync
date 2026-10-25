@@ -275,6 +275,9 @@ impl Stream {
             return Err(9);
         }
         self.reconcile()?;
+        if matches!(self.resource, Some(Resource::Output)) {
+            return super::stdout_write(bytes).map_err(errno);
+        }
         if cfg!(windows) && self.text {
             for &byte in bytes {
                 if byte == b'\n' {
@@ -307,6 +310,9 @@ impl Stream {
         Ok(())
     }
     pub fn flush(&mut self) -> Result<(), i32> {
+        if matches!(self.resource, Some(Resource::Output)) {
+            return super::stdout_flush().map_err(errno);
+        }
         if !self.write.is_empty() {
             match self.resource.as_mut() {
                 Some(Resource::File(f)) => f.write_all(&self.write),
@@ -326,6 +332,15 @@ impl Stream {
             _ => Ok(()),
         }
         .map_err(errno)
+    }
+    pub fn set_buffering(&mut self, mode: u8, size: usize) -> Result<(), i32> {
+        self.flush()?;
+        if matches!(self.resource, Some(Resource::Output)) {
+            super::output::configure(mode, size).map_err(errno)?;
+        }
+        self.buffering = mode;
+        self.size = size;
+        Ok(())
     }
     pub fn seek(&mut self, mode: usize, offset: i64) -> Result<u64, i32> {
         self.flush()?;
@@ -361,7 +376,8 @@ impl Stream {
 }
 impl Drop for Stream {
     fn drop(&mut self) {
-        if self.resource.is_some() {
+        // Standard stdout remains a process resource when its Lua userdata dies.
+        if self.resource.is_some() && !matches!(self.resource, Some(Resource::Output)) {
             let _ = self.close();
         }
     }

@@ -1,4 +1,4 @@
-//! A standalone Lua compiler and register interpreter written in safe Rust.
+//! A standalone Lua compiler and register interpreter written in Rust.
 //!
 //! This crate is under construction. See the README for its current language coverage.
 //! Compilation does not depend on a VM, and a compiled program can run in multiple VMs.
@@ -11,7 +11,7 @@
 //! # Ok::<(), deadlib_lua::Error>(())
 //! ```
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod arena;
 mod bytecode;

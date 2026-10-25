@@ -155,6 +155,13 @@ fn main() {
             30,
         ),
         (
+            "os_shell_query",
+            "local execute=os.execute;local n=execute();local sum=0;for i=1,100 do if execute()==n then sum=sum+1 end end;return sum",
+            100.0,
+            10,
+        ),
+        ("os_execute", "return os.execute('exit 0')", 0.0, 5),
+        (
             "call_table",
             "local function f(t)return t end;local sum=0;for i=1,1000 do sum=sum+f({key=i}).key end;return sum",
             500500.0,

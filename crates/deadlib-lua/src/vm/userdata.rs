@@ -205,5 +205,6 @@ impl Vm {
 impl Drop for Vm {
     fn drop(&mut self) {
         self.finalize_on_close();
+        let _ = io::stdout_flush();
     }
 }

@@ -1,6 +1,6 @@
 # deadlib-lua
 
-Independent Lua compiler and register interpreter in safe Rust, with no runtime
+Independent Lua compiler and register interpreter in Rust, with no runtime
 dependencies. This incremental implementation does **not** yet run arbitrary Lua
 programs. Production consumers use [deadlib-lua-legacy](../deadlib-lua-legacy/README.md).
 
@@ -179,7 +179,20 @@ Names and numeric components of temporary names are implementation-dependent.
 Environment access reads the host process environment. Windows paths, environment
 names and values currently use UTF-8 conversion; reference checks cover ASCII.
 Windows CRT environment changes made outside this engine are not synchronized.
-`clock`, `date`, `time`, `setlocale`, `rename`, `execute` and `exit` remain unfinished.
+`execute` returns the Lua 5.1 numeric shell status, and `exit` flushes this VM's
+open streams and shared stdout before terminating the process without Lua
+finalizers. Windows shell selection, raw command lines and exit-code widths match
+the pinned CRT probes. An explicitly empty Windows `COMSPEC` aborts as in that
+reference build. The interpreter and compiler use safe Rust; a small audited
+Windows process-creation bridge is the sole production unsafe module. It calls
+system APIs directly and adds no Cargo dependency or C Lua linkage.
+`clock`, `date`, `time`, `setlocale` and `rename` remain unfinished.
+
+Physical stdout is shared across VMs and buffers logical bytes before Windows
+newline translation. `print`, stdout writes and `setvbuf` share that buffer;
+`os.execute` leaves pending output buffered. Explicit flush, process exit and VM
+shutdown flush it. Terminal behavior, unusual buffer sizes, host-owned streams
+and exit-time flushing of named files belonging to other VMs need broader checks.
 
 `debug.getregistry` returns the shared, rooted registry. Its `FILE*` entry controls
 file type checks, and `_LOADED` contains the registered builtin modules. The package
@@ -235,5 +248,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-os-basics.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-process.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

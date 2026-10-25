@@ -113,6 +113,9 @@ impl<T> Arena<T> {
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.values.iter().filter_map(Option::as_ref)
     }
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.values.iter_mut().filter_map(Option::as_mut)
+    }
     pub fn entries(&self) -> impl Iterator<Item = (usize, &T)> {
         self.values
             .iter()
