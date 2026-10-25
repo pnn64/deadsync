@@ -103,14 +103,16 @@ impl<'a> Compiler<'a> {
                 }
                 Task::Reset(next) => self.reset(next),
                 Task::Values(values, wanted) => {
-                    let count = u16::try_from(wanted.max(values.len()))
-                        .map_err(|_| self.error(ErrorKind::Limit, "too many expression values"))?;
-                    let start = self.alloc(count.max(1))?;
+                    let start = self.alloc(1)?;
                     self.tasks
                         .push(Task::ValuesNext(values, wanted as u16, start, 0));
                 }
                 Task::ValuesNext(values, wanted, start, index) => {
                     if let Some(&value) = values.get(usize::from(index)) {
+                        let end = u16::from(start) + index + 1;
+                        if end > self.function.next {
+                            self.alloc(end - self.function.next)?;
+                        }
                         let returns = if usize::from(index) + 1 == values.len() {
                             u32::from(wanted.saturating_sub(index))
                         } else {
@@ -121,6 +123,10 @@ impl<'a> Compiler<'a> {
                         self.tasks
                             .push(Task::Results(value, start + index as u8, returns));
                     } else {
+                        let end = u16::from(start) + wanted.max(values.len() as u16).max(1);
+                        if end > self.function.next {
+                            self.alloc(end - self.function.next)?;
+                        }
                         if !values.last().is_some_and(|id| self.multiple(*id)) {
                             for index in values.len()..usize::from(wanted) {
                                 self.load((usize::from(start) + index) as u8, Constant::Nil)?;
@@ -191,6 +197,10 @@ impl<'a> Compiler<'a> {
                         unreachable!()
                     };
                     if let Some(&value) = values.get(index) {
+                        let end = u16::from(base) + index as u16 + 1;
+                        if end > self.function.next {
+                            self.alloc(end - self.function.next)?;
+                        }
                         let all = index + 1 == values.len() && self.multiple(value);
                         self.tasks.push(Task::ReturnNext(
                             id,
@@ -347,6 +357,10 @@ impl<'a> Compiler<'a> {
                 Task::Results(id, dst, wanted) => self.expr_results(id, dst, wanted)?,
                 Task::FillNil(dst, wanted) => {
                     if wanted != OPEN {
+                        let end = u16::from(dst) + wanted as u16;
+                        if end > self.function.next {
+                            self.alloc(end - self.function.next)?;
+                        }
                         for i in 1..wanted {
                             self.load((u32::from(dst) + i) as u8, Constant::Nil)?;
                         }

@@ -1,5 +1,6 @@
 //! Flat grammar continuations for fixed and reader-supplied source.
 use super::bindings::Bindings;
+use super::resources::{Context, Resources};
 use super::*;
 use crate::lexer::Scanner;
 
@@ -65,9 +66,15 @@ enum Task {
     Prefix,
     ResolveName(ExprId),
     Paren(u32),
+    ParenEnd(u32),
     Suffix(u32, ExprId),
     Field(u32, ExprId),
     Index(u32, ExprId),
+    IndexEnd(u32, ExprId, ExprId),
+    FunctionFieldEnd(u32, ExprId, ExprId, bool),
+    ResourceNext(ExprId),
+    ResourceInfix(ExprId, Kind),
+    ResourceKey(ExprId),
     MethodName(u32, ExprId),
     MethodArgs(u32, ExprId, Box<[u8]>),
     MethodEnd(u32, ExprId, Box<[u8]>, u32),
@@ -82,6 +89,7 @@ enum Task {
     TableKey([u32; 2], Vec<(Option<ExprId>, ExprId)>),
     TableValue([u32; 2], Vec<(Option<ExprId>, ExprId)>, Option<ExprId>),
     TableSeparator([u32; 2], Vec<(Option<ExprId>, ExprId)>),
+    TableEnd([u32; 2], Vec<(Option<ExprId>, ExprId)>),
 }
 
 /// A parser that suspends at a lexical input request. AST edges and grammar
@@ -99,6 +107,7 @@ pub(crate) struct Parser {
     locals: u16,
     function_line: u32,
     bindings: Bindings,
+    resources: Resources,
     tasks: Vec<Task>,
     ast: Ast,
     expr: ExprId,
@@ -122,6 +131,7 @@ impl Default for Parser {
             locals: 0,
             function_line: 0,
             bindings: Bindings::default(),
+            resources: Resources::default(),
             tasks: vec![Task::RootEnd, Task::Block],
             ast: Ast::default(),
             expr: 0,
@@ -162,6 +172,7 @@ impl Parser {
             + self.ast.stmts.capacity() * std::mem::size_of::<(Stmt, u32)>()
             + self.scanner.heap_bytes()
             + self.bindings.heap_bytes()
+            + self.resources.heap_bytes()
     }
     pub(crate) fn heap_bytes(&self) -> usize {
         fn names(v: &[Box<[u8]>]) -> usize {
@@ -249,7 +260,8 @@ impl Parser {
                 | Task::TableAssign(_, v, _)
                 | Task::TableKey(_, v)
                 | Task::TableValue(_, v, _)
-                | Task::TableSeparator(_, v) => {
+                | Task::TableSeparator(_, v)
+                | Task::TableEnd(_, v) => {
                     v.capacity() * std::mem::size_of::<(Option<ExprId>, ExprId)>()
                 }
                 _ => 0,
@@ -272,6 +284,26 @@ impl Parser {
         let mut error = Error::new(ErrorKind::Syntax, self.scanner.line(), text);
         error.near = true;
         error
+    }
+    fn account<T>(
+        &mut self,
+        input: &[u8],
+        action: impl FnOnce(&mut Resources, &Context<'_>) -> Result<T, ()>,
+    ) -> Result<T, Error> {
+        let cx = Context {
+            ast: &self.ast,
+            input,
+            bindings: &self.bindings,
+        };
+        action(&mut self.resources, &cx).map_err(|()| {
+            let mut error = Error::new(
+                ErrorKind::Limit,
+                self.scanner.line(),
+                "function or expression too complex",
+            );
+            error.near = true;
+            error
+        })
     }
     fn enter(&mut self) -> Result<(), Error> {
         if self.depth >= self.limit {
@@ -337,7 +369,7 @@ impl Parser {
             Kind::Eof | Kind::End | Kind::Else | Kind::ElseIf | Kind::Until
         )
     }
-    fn expression(&mut self, expr: Expr, line: u32) -> ExprId {
+    fn expression(&mut self, input: &[u8], expr: Expr, line: u32) -> Result<ExprId, Error> {
         let id = self.ast.exprs.len();
         self.ast.exprs.push((
             expr,
@@ -347,8 +379,9 @@ impl Parser {
                 discharge: self.previous_line,
             },
         ));
+        self.account(input, |r, cx| r.expression(id, cx))?;
         self.expr = id;
-        id
+        Ok(id)
     }
     fn statement(&mut self, stmt: Stmt, line: u32) {
         self.stmt = self.ast.stmts.len();
@@ -378,6 +411,7 @@ impl Parser {
         self.loops = 0;
         self.vararg = vararg;
         self.locals = count as u16;
+        self.resources.enter(self.locals);
         self.tasks.push(Task::Block);
         Ok(())
     }
@@ -393,6 +427,7 @@ impl Parser {
         let do_line = self.expect(Kind::Do)?.end_line;
         self.loops += 1;
         self.locals += 4;
+        self.resources.locals(self.locals);
         self.bindings.hidden(3);
         self.bindings.declare(input, &name);
         self.tasks
@@ -440,6 +475,7 @@ impl Parser {
         loop {
             if self.tasks.is_empty() {
                 self.finished = true;
+                self.resources = Resources::default();
                 return Ok(Some(std::mem::take(&mut self.ast)));
             }
             // Advance fetches the next token before continuing grammar work.
@@ -449,6 +485,10 @@ impl Parser {
                 if self.token.is_none() {
                     return Ok(None);
                 }
+            }
+            if matches!(self.tasks.last(), Some(Task::TableNext(..))) && self.kind() != Kind::RBrace
+            {
+                self.account(input, |r, cx| r.prepare_field(cx))?;
             }
             if matches!(self.tasks.last(), Some(Task::TableNext(..)))
                 && self.kind() == Kind::Name
@@ -488,6 +528,7 @@ impl Parser {
                     }
                 }
                 Task::BlockAfter(mut stmts, terminal) => {
+                    self.resources.reset();
                     stmts.push(self.stmt);
                     if self.kind() == Kind::Semi {
                         self.take();
@@ -504,6 +545,7 @@ impl Parser {
                 }
                 Task::RestoreLocals(count) => {
                     self.locals = count;
+                    self.resources.locals(count);
                     self.bindings.truncate(count);
                 }
                 Task::Statement => {
@@ -580,7 +622,9 @@ impl Parser {
                         self.tasks.push(Task::LocalEnd(line, names));
                         self.tasks.push(Task::List);
                     } else {
+                        self.account(input, |r, cx| r.adjust(names.len(), &[], cx))?;
                         self.locals += names.len() as u16;
+                        self.resources.locals(self.locals);
                         for name in &names {
                             self.bindings.declare(input, name);
                         }
@@ -588,11 +632,13 @@ impl Parser {
                     }
                 }
                 Task::LocalEnd(line, names) => {
+                    let values = std::mem::take(&mut self.list).into_boxed_slice();
+                    self.account(input, |r, cx| r.adjust(names.len(), &values, cx))?;
                     self.locals += names.len() as u16;
+                    self.resources.locals(self.locals);
                     for name in &names {
                         self.bindings.declare(input, name);
                     }
-                    let values = std::mem::take(&mut self.list).into_boxed_slice();
                     self.statement(Stmt::Local(names.into_boxed_slice(), values), line);
                 }
                 Task::LocalFunctionName(line) => {
@@ -601,7 +647,9 @@ impl Parser {
                 }
                 Task::LocalFunctionBody(line, name) => {
                     self.check_local_count(usize::from(self.locals) + 1)?;
+                    self.account(input, |r, _| r.reserve(1))?;
                     self.locals += 1;
+                    self.resources.locals(self.locals);
                     self.bindings.declare(input, &name);
                     self.tasks.push(Task::LocalFunctionEnd(line, name));
                     self.tasks
@@ -612,12 +660,13 @@ impl Parser {
                 }
                 Task::FunctionName(line) => {
                     let name = self.expect(Kind::Name)?.text;
-                    let id = self.expression(Expr::Name(name), line);
+                    let id = self.expression(input, Expr::Name(name), line)?;
                     self.tasks.push(Task::FunctionTarget(line, id));
                     self.tasks.push(Task::ResolveName(id));
                 }
                 Task::FunctionTarget(line, id) => {
                     if matches!(self.kind(), Kind::Dot | Kind::Colon) {
+                        self.account(input, |r, cx| r.any(id, cx))?;
                         let method = self.take().kind == Kind::Colon;
                         self.tasks.push(Task::FunctionField(line, id, method));
                     } else {
@@ -627,8 +676,12 @@ impl Parser {
                 }
                 Task::FunctionField(line, id, method) => {
                     let name = self.expect(Kind::Name)?.text;
-                    let key = self.expression(Expr::String(name), line);
-                    let target = self.expression(Expr::Index(id, key), line);
+                    let key = self.expression(input, Expr::String(name), line)?;
+                    self.tasks
+                        .push(Task::FunctionFieldEnd(line, id, key, method));
+                }
+                Task::FunctionFieldEnd(line, id, key, method) => {
+                    let target = self.expression(input, Expr::Index(id, key), line)?;
                     if method {
                         self.tasks.push(Task::FunctionAssign(line, target));
                         self.tasks.push(Task::Function(line, true));
@@ -636,13 +689,17 @@ impl Parser {
                         self.tasks.push(Task::FunctionTarget(line, target));
                     }
                 }
-                Task::FunctionAssign(line, target) => self.statement(
-                    Stmt::FunctionDefinition(
-                        vec![target].into_boxed_slice(),
-                        vec![self.expr].into_boxed_slice(),
-                    ),
-                    line,
-                ),
+                Task::FunctionAssign(line, target) => {
+                    let value = self.expr;
+                    self.account(input, |r, cx| r.assignment(&[target], &[value], cx))?;
+                    self.statement(
+                        Stmt::FunctionDefinition(
+                            vec![target].into_boxed_slice(),
+                            vec![self.expr].into_boxed_slice(),
+                        ),
+                        line,
+                    );
+                }
                 Task::Return(line) => {
                     if self.end_block() || self.kind() == Kind::Semi {
                         self.statement(Stmt::Return(Box::default(), self.previous_line), line);
@@ -653,6 +710,7 @@ impl Parser {
                 }
                 Task::ReturnEnd(line) => {
                     let values = std::mem::take(&mut self.list).into_boxed_slice();
+                    self.account(input, |r, cx| r.return_values(&values, cx))?;
                     self.statement(Stmt::Return(values, self.previous_line), line);
                 }
                 Task::Break(line) => {
@@ -668,6 +726,7 @@ impl Parser {
                 }
                 Task::WhileCond(line) => {
                     let cond = self.expr;
+                    self.account(input, |r, cx| r.condition(cond, cx))?;
                     self.expect(Kind::Do)?;
                     self.loops += 1;
                     self.tasks.push(Task::WhileEnd(line, cond));
@@ -686,10 +745,14 @@ impl Parser {
                     self.tasks.push(Task::Expr(0));
                 }
                 Task::RepeatEnd(line, body) => {
+                    let cond = self.expr;
+                    self.account(input, |r, cx| r.condition(cond, cx))?;
                     self.loops -= 1;
                     self.statement(Stmt::Repeat(body, self.expr), line);
                 }
                 Task::IfCond(line, arms) => {
+                    let cond = self.expr;
+                    self.account(input, |r, cx| r.condition(cond, cx))?;
                     self.expect(Kind::Then)?;
                     self.tasks.push(Task::IfArm(line, arms, self.expr));
                     self.tasks.push(Task::Block);
@@ -731,27 +794,34 @@ impl Parser {
                     }
                 }
                 Task::ForStart(line, name) => {
+                    let start = self.expr;
+                    self.account(input, |r, cx| r.next(start, cx))?;
                     self.expect(Kind::Comma)?;
                     self.tasks.push(Task::ForLimit(line, name, self.expr));
                     self.tasks.push(Task::Expr(0));
                 }
                 Task::ForLimit(line, name, start) => {
                     let limit = self.expr;
+                    self.account(input, |r, cx| r.next(limit, cx))?;
                     if self.kind() == Kind::Comma {
                         self.take();
                         self.tasks.push(Task::ForStep(line, name, start, limit));
                         self.tasks.push(Task::Expr(0));
                     } else {
+                        self.account(input, |r, cx| r.default_step(cx))?;
                         self.for_body(input, line, name, start, limit, None)?;
                     }
                 }
                 Task::ForStep(line, name, start, limit) => {
-                    self.for_body(input, line, name, start, limit, Some(self.expr))?
+                    let step = self.expr;
+                    self.account(input, |r, cx| r.next(step, cx))?;
+                    self.for_body(input, line, name, start, limit, Some(step))?
                 }
                 Task::ForEnd(line, name, start, limit, step, do_line) => {
                     self.close(Kind::End, Kind::For, line)?;
                     self.loops -= 1;
                     self.locals -= 4;
+                    self.resources.locals(self.locals);
                     self.bindings.truncate(self.locals);
                     let body = std::mem::take(&mut self.body);
                     self.statement(
@@ -786,10 +856,15 @@ impl Parser {
                     self.tasks.push(Task::List);
                 }
                 Task::ForValues(line, names, iter_line) => {
-                    let do_line = self.expect(Kind::Do)?.end_line;
                     let values = std::mem::take(&mut self.list);
+                    self.account(input, |r, cx| {
+                        r.adjust(3, &values, cx)?;
+                        r.check(3)
+                    })?;
+                    let do_line = self.expect(Kind::Do)?.end_line;
                     self.loops += 1;
                     self.locals += names.len() as u16 + 3;
+                    self.resources.locals(self.locals);
                     self.bindings.hidden(3);
                     for name in &names {
                         self.bindings.declare(input, name);
@@ -802,6 +877,7 @@ impl Parser {
                     self.close(Kind::End, Kind::For, line)?;
                     self.loops -= 1;
                     self.locals -= names.len() as u16 + 3;
+                    self.resources.locals(self.locals);
                     self.bindings.truncate(self.locals);
                     let body = std::mem::take(&mut self.body);
                     self.statement(
@@ -845,6 +921,8 @@ impl Parser {
                     }
                 }
                 Task::AssignTarget(line, mut targets) => {
+                    let target = self.expr;
+                    self.account(input, |r, _| r.conflict(&targets, target))?;
                     let limit = usize::from(self.limit.saturating_sub(self.depth));
                     if targets.len() > limit {
                         return Err(self.limit_error(
@@ -858,6 +936,7 @@ impl Parser {
                 }
                 Task::AssignEnd(line, targets) => {
                     let values = std::mem::take(&mut self.list).into_boxed_slice();
+                    self.account(input, |r, cx| r.assignment(&targets, &values, cx))?;
                     self.statement(Stmt::Assign(targets.into_boxed_slice(), values), line);
                 }
                 Task::List => {
@@ -871,6 +950,7 @@ impl Parser {
                         self.ast.exprs[self.expr].1.discharge = separator.end_line;
                         self.tasks.push(Task::ListAfter(values));
                         self.tasks.push(Task::Expr(0));
+                        self.tasks.push(Task::ResourceNext(self.expr));
                     } else {
                         self.list = values;
                     }
@@ -925,8 +1005,10 @@ impl Parser {
                     self.locals = locals;
                     self.function_line = parent_line;
                     self.bindings.leave();
+                    self.resources.leave();
                     let body = std::mem::take(&mut self.body);
                     self.expression(
+                        input,
                         Expr::Function {
                             params: params.into_boxed_slice(),
                             vararg,
@@ -934,7 +1016,7 @@ impl Parser {
                             end_line,
                         },
                         line,
-                    );
+                    )?;
                 }
                 Task::Expr(min) => {
                     self.enter()?;
@@ -948,19 +1030,19 @@ impl Parser {
                         }
                         Kind::Nil => {
                             self.take();
-                            self.expression(Expr::Nil, line);
+                            self.expression(input, Expr::Nil, line)?;
                         }
                         Kind::True | Kind::False => {
                             let b = self.take().kind == Kind::True;
-                            self.expression(Expr::Boolean(b), line);
+                            self.expression(input, Expr::Boolean(b), line)?;
                         }
                         Kind::Number => {
                             let n = self.take().number;
-                            self.expression(Expr::Number(n), line);
+                            self.expression(input, Expr::Number(n), line)?;
                         }
                         Kind::String => {
                             let s = self.take().text;
-                            self.expression(Expr::String(s), line);
+                            self.expression(input, Expr::String(s), line)?;
                         }
                         Kind::Dots => {
                             if !self.vararg {
@@ -969,7 +1051,7 @@ impl Parser {
                                 );
                             }
                             self.take();
-                            self.expression(Expr::Vararg, line);
+                            self.expression(input, Expr::Vararg, line)?;
                         }
                         Kind::Function => {
                             self.take();
@@ -992,22 +1074,23 @@ impl Parser {
                             token.end_line,
                         ));
                         self.tasks.push(Task::Expr(right));
+                        self.tasks.push(Task::ResourceInfix(self.expr, token.kind));
                     } else {
                         self.depth -= 1;
                     }
                 }
                 Task::Unary(op, line) => {
-                    self.expression(Expr::Unary(op, self.expr), line);
+                    self.expression(input, Expr::Unary(op, self.expr), line)?;
                 }
                 Task::Binary(min, line, left, op, op_line) => {
-                    self.expression(Expr::Binary(op, left, self.expr, op_line), line);
+                    self.expression(input, Expr::Binary(op, left, self.expr, op_line), line)?;
                     self.tasks.push(Task::ExprLoop(min, line));
                 }
                 Task::Prefix => {
                     let line = self.line();
                     if self.kind() == Kind::Name {
                         let name = self.take().text;
-                        let id = self.expression(Expr::Name(name), line);
+                        let id = self.expression(input, Expr::Name(name), line)?;
                         self.tasks.push(Task::Suffix(line, id));
                         self.tasks.push(Task::ResolveName(id));
                     } else if self.kind() == Kind::LParen {
@@ -1022,21 +1105,31 @@ impl Parser {
                     let Expr::Name(name) = &self.ast.exprs[id].0 else {
                         unreachable!()
                     };
-                    if let Err(line) = self.bindings.reference(input, name) {
-                        return Err(self.limit_error(60, "upvalues", line));
-                    }
+                    let reference = self
+                        .bindings
+                        .reference(input, name)
+                        .map_err(|line| self.limit_error(60, "upvalues", line))?;
+                    self.account(input, |r, cx| {
+                        r.resolve(id, reference, cx);
+                        Ok(())
+                    })?;
                 }
                 Task::Paren(line) => {
                     self.close(Kind::RParen, Kind::LParen, line)?;
-                    let id = self.expression(Expr::Paren(self.expr), line);
+                    self.tasks.push(Task::ParenEnd(line));
+                }
+                Task::ParenEnd(line) => {
+                    let id = self.expression(input, Expr::Paren(self.expr), line)?;
                     self.tasks.push(Task::Suffix(line, id));
                 }
                 Task::Suffix(line, id) => match self.kind() {
                     Kind::Dot => {
+                        self.account(input, |r, cx| r.any(id, cx))?;
                         self.take();
                         self.tasks.push(Task::Field(line, id));
                     }
                     Kind::LBracket => {
+                        self.account(input, |r, cx| r.any(id, cx))?;
                         self.take();
                         self.tasks.push(Task::Index(line, id));
                         self.tasks.push(Task::Expr(0));
@@ -1046,6 +1139,7 @@ impl Parser {
                         self.tasks.push(Task::MethodName(line, id));
                     }
                     Kind::LParen | Kind::LBrace | Kind::String => {
+                        self.account(input, |r, cx| r.next(id, cx))?;
                         self.tasks
                             .push(Task::CallEnd(line, id, self.current().end_line));
                         self.tasks.push(Task::Args);
@@ -1054,13 +1148,17 @@ impl Parser {
                 },
                 Task::Field(line, id) => {
                     let name = self.expect(Kind::Name)?.text;
-                    let key = self.expression(Expr::String(name), line);
-                    let field = self.expression(Expr::Index(id, key), line);
-                    self.tasks.push(Task::Suffix(line, field));
+                    let key = self.expression(input, Expr::String(name), line)?;
+                    self.tasks.push(Task::IndexEnd(line, id, key));
                 }
                 Task::Index(line, id) => {
+                    let key = self.expr;
+                    self.account(input, |r, cx| r.val(key, cx))?;
                     self.expect(Kind::RBracket)?;
-                    let field = self.expression(Expr::Index(id, self.expr), line);
+                    self.tasks.push(Task::IndexEnd(line, id, key));
+                }
+                Task::IndexEnd(line, id, key) => {
+                    let field = self.expression(input, Expr::Index(id, key), line)?;
                     self.tasks.push(Task::Suffix(line, field));
                 }
                 Task::MethodName(line, id) => {
@@ -1068,18 +1166,20 @@ impl Parser {
                     self.tasks.push(Task::MethodArgs(line, id, name));
                 }
                 Task::MethodArgs(line, id, name) => {
+                    self.account(input, |r, cx| r.method(id, &name, cx))?;
                     self.tasks
                         .push(Task::MethodEnd(line, id, name, self.current().end_line));
                     self.tasks.push(Task::Args);
                 }
                 Task::MethodEnd(line, id, name, call_line) => {
                     let args = std::mem::take(&mut self.list).into_boxed_slice();
-                    let call = self.expression(Expr::Method(id, name, args, call_line), line);
+                    let call =
+                        self.expression(input, Expr::Method(id, name, args, call_line), line)?;
                     self.tasks.push(Task::Suffix(line, call));
                 }
                 Task::CallEnd(line, id, call_line) => {
                     let args = std::mem::take(&mut self.list).into_boxed_slice();
-                    let call = self.expression(Expr::Call(id, args, call_line), line);
+                    let call = self.expression(input, Expr::Call(id, args, call_line), line)?;
                     self.tasks.push(Task::Suffix(line, call));
                 }
                 Task::Args => match self.kind() {
@@ -1098,7 +1198,7 @@ impl Parser {
                     }
                     Kind::String => {
                         let token = self.take();
-                        let id = self.expression(Expr::String(token.text), token.line);
+                        let id = self.expression(input, Expr::String(token.text), token.line)?;
                         self.list = vec![id];
                     }
                     _ => return Err(self.error("function arguments expected")),
@@ -1113,10 +1213,14 @@ impl Parser {
                     }
                 }
                 Task::ArgsEnd(line) => {
+                    let values = std::mem::take(&mut self.list);
+                    self.account(input, |r, _| r.arguments(&values))?;
+                    self.list = values;
                     self.close(Kind::RParen, Kind::LParen, line)?;
                 }
                 Task::ArgsTable => self.list = vec![self.expr],
                 Task::Table => {
+                    self.account(input, |r, _| r.begin_table())?;
                     let previous = self.previous_line;
                     let line = self.expect(Kind::LBrace)?.line;
                     self.tasks
@@ -1128,7 +1232,7 @@ impl Parser {
                             self.ast.exprs[*value].1.discharge = self.current().end_line;
                         }
                         self.take();
-                        self.expression(Expr::Table(fields.into_boxed_slice(), line[1]), line[0]);
+                        self.tasks.push(Task::TableEnd(line, fields));
                     } else if self.kind() == Kind::Name
                         && self
                             .lookahead
@@ -1136,7 +1240,7 @@ impl Parser {
                             .is_some_and(|t| t.kind == Kind::Assign)
                     {
                         let token = self.take();
-                        let key = self.expression(Expr::String(token.text), token.line);
+                        let key = self.expression(input, Expr::String(token.text), token.line)?;
                         self.tasks.push(Task::TableAssign(line, fields, key));
                     } else if self.kind() == Kind::LBracket {
                         self.take();
@@ -1149,6 +1253,7 @@ impl Parser {
                 }
                 Task::TableKey(line, fields) => {
                     let key = self.expr;
+                    self.account(input, |r, cx| r.val(key, cx))?;
                     self.tasks.push(Task::TableAssign(line, fields, key));
                     self.tasks.push(Task::Expect(Kind::RBracket));
                 }
@@ -1156,8 +1261,11 @@ impl Parser {
                     self.expect(Kind::Assign)?;
                     self.tasks.push(Task::TableValue(line, fields, Some(key)));
                     self.tasks.push(Task::Expr(0));
+                    self.tasks.push(Task::ResourceKey(key));
                 }
                 Task::TableValue(line, mut fields, key) => {
+                    let value = self.expr;
+                    self.account(input, |r, cx| r.field(key, value, cx))?;
                     fields.push((key, self.expr));
                     self.tasks.push(Task::TableSeparator(line, fields));
                 }
@@ -1173,9 +1281,19 @@ impl Parser {
                             self.ast.exprs[*value].1.discharge = self.current().end_line;
                         }
                         self.close(Kind::RBrace, Kind::LBrace, line[0])?;
-                        self.expression(Expr::Table(fields.into_boxed_slice(), line[1]), line[0]);
+                        self.tasks.push(Task::TableEnd(line, fields));
                     }
                 }
+                Task::TableEnd(line, fields) => {
+                    self.expression(
+                        input,
+                        Expr::Table(fields.into_boxed_slice(), line[1]),
+                        line[0],
+                    )?;
+                }
+                Task::ResourceNext(id) => self.account(input, |r, cx| r.next(id, cx))?,
+                Task::ResourceInfix(id, op) => self.account(input, |r, cx| r.infix(id, op, cx))?,
+                Task::ResourceKey(id) => self.account(input, |r, cx| r.record_key(id, cx))?,
             }
         }
     }

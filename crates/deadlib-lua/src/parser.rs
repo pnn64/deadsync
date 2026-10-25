@@ -72,6 +72,7 @@ pub(crate) struct Ast {
 }
 
 mod bindings;
+mod resources;
 mod resume;
 pub(crate) use resume::Parser;
 

@@ -55,6 +55,14 @@ preserves non-UTF-8 diagnostic bytes; `message` and display provide readable UTF
 Reader and file loaders return the original diagnostic bytes to Lua. Long-token
 scanning uses safe eight-byte delimiter checks without reading beyond input.
 
+The parser separately tracks Lua 5.1 logical register use, including constant
+operands, pending constructor fields, call arguments and multiple results. A
+request reaching 250 logical slots fails at the reference token/reader boundary.
+Physical result slots grow as expressions finish, so large result lists can
+reuse scratch storage. Physical allocation still rejects some reference-valid
+programs with many indexed assignment targets; full resource-limit parity is
+unfinished.
+
 Current Lua 5.1 coverage includes byte strings and lexical syntax, expressions,
 assignments, blocks, conditionals, numeric/generic loops, table constructors,
 functions, upvalues, recursion, varargs, methods, tail calls and multiple results.
@@ -210,5 +218,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-call-table-slots.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-register-budget.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

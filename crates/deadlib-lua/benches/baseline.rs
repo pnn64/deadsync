@@ -500,7 +500,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(17);
+    let mut frontends = Vec::with_capacity(18);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -570,6 +570,16 @@ fn main() {
         ":again(1)".repeat(10_000)
     );
     frontends.push(("frontend_method_chain_10000".into(), source, 10_000.0, 3));
+    let names = (1..=199)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let args = (1..=247)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!("local function f(...)return ... end;local {names}=f({args});return a199");
+    frontends.push(("frontend_results_199".into(), source, 199.0, 30));
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
         println!(

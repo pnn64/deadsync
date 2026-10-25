@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 274 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 282 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-call-table-slots.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-register-budget.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -268,8 +268,22 @@ list flushing. The earlier 190-constructor and 300-call failure probes now load.
 The [measurements](performance/2026-10-25-rust-lua-call-table-slots.md) expand to
 37 execution and seventeen frontend workloads. Exact reference register budgets,
 remaining resource diagnostics and broader scratch/debug parity remain open. A
-249-argument `print` loader probe is still accepted here and rejected by C;
-both accept 248, so exact budgeting remains a concrete compatibility gap.
+249-argument `print` loader probe was still accepted here and rejected by C;
+both accepted 248. The following milestone closes that logical-budget gap.
+
+The [register-budget validation](testing/2026-10-25-rust-lua-register-budget.md)
+adds eight groups with 3,624 protected loader observations and five executed
+programs. Flat 16-byte descriptors track Lua 5.1 logical register use while
+parsing, independently of physical bytecode storage. Constant identities, list
+flushes, open arguments, conditionals and assignment conflicts preserve the
+reference's error token and reader consumption. A request reaching 250 logical
+slots fails during parsing. Physical result slots grow as expressions finish,
+allowing 199-result assignments with 247 call arguments and deep first results.
+The [measurements](performance/2026-10-25-rust-lua-register-budget.md) cover
+37 runtime and eighteen frontend workloads, with parent comparison and explicit
+accounting costs. Full physical allocation parity remains open: 150 literal-key
+indexed assignment targets still exhaust Rust storage in a reference-valid
+program. Broader resource/debug/scratch behavior remains unfinished.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

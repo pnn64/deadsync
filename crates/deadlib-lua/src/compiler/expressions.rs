@@ -126,6 +126,10 @@ impl<'a> Compiler<'a> {
             ));
         }
         self.function.compat_arg = false;
+        let end = u16::from(dst) + if wanted == OPEN { 1 } else { wanted as u16 };
+        if end > self.function.next {
+            self.alloc(end - self.function.next)?;
+        }
         self.emit(Op::Vararg, dst, 0, wanted)?;
         self.result = dst;
         Ok(())
@@ -374,7 +378,11 @@ impl<'a> Compiler<'a> {
                 )?;
             }
         }
-        self.reset(saved);
+        self.reset(if wanted < TAIL {
+            saved.max(u16::from(dst) + wanted as u16)
+        } else {
+            saved
+        });
         self.result = dst;
         Ok(())
     }

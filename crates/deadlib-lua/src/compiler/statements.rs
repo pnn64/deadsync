@@ -45,10 +45,7 @@ impl<'a> Compiler<'a> {
                         return Ok(());
                     }
                 }
-                let base = self.alloc(
-                    u16::try_from(values.len().max(1))
-                        .map_err(|_| self.error(ErrorKind::Limit, "too many return values"))?,
-                )?;
+                let base = self.alloc(1)?;
                 self.tasks
                     .push(Task::ReturnNext(id, base, 0, values.len() as u32));
             }

@@ -2,6 +2,12 @@
 const NONE: u32 = u32::MAX;
 const MAX_UPVALUES: u8 = 60;
 
+pub(super) enum Reference {
+    Local(u16),
+    Upvalue,
+    Global(u32),
+}
+
 #[derive(Debug)]
 struct Name {
     start: usize,
@@ -112,9 +118,19 @@ impl Bindings {
             hash,
         });
     }
-    fn name(&self, input: &[u8], bytes: &[u8]) -> u32 {
+    pub(super) fn name(&self, input: &[u8], bytes: &[u8]) -> u32 {
         self.lookup(input, bytes, hash(bytes))
             .expect("lexer interned identifier")
+    }
+    pub(super) fn bytes<'a>(&self, input: &'a [u8], name: u32) -> &'a [u8] {
+        match name {
+            0 => b"arg",
+            1 => b"self",
+            _ => {
+                let n = &self.names[name as usize - 2];
+                &input[n.start..n.start + n.len]
+            }
+        }
     }
     pub(super) fn declare(&mut self, input: &[u8], bytes: &[u8]) {
         self.locals.push(self.name(input, bytes));
@@ -165,20 +181,26 @@ impl Bindings {
     }
     /// Return the first overflowing function's definition line. Captures must
     /// propagate from the owning scope outwards, as for nested closures in 5.1.
-    pub(super) fn reference(&mut self, input: &[u8], bytes: &[u8]) -> Result<(), u32> {
+    pub(super) fn reference(&mut self, input: &[u8], bytes: &[u8]) -> Result<Reference, u32> {
         let name = self.name(input, bytes);
         let mut end = self.locals.len();
         let mut owner = None;
         for index in (0..self.scopes.len()).rev() {
             let start = self.scopes[index].base;
-            if self.locals[start..end].contains(&name) || self.captured(index, name) {
+            let local = self.locals[start..end].iter().rposition(|&n| n == name);
+            if index + 1 == self.scopes.len()
+                && let Some(reg) = local
+            {
+                return Ok(Reference::Local(reg as u16));
+            }
+            if local.is_some() || self.captured(index, name) {
                 owner = Some(index);
                 break;
             }
             end = start;
         }
         let Some(owner) = owner else {
-            return Ok(());
+            return Ok(Reference::Global(name));
         }; // Global.
         for scope in owner + 1..self.scopes.len() {
             if self.scopes[scope].count == MAX_UPVALUES {
@@ -201,6 +223,6 @@ impl Bindings {
             self.scopes[scope].head = index;
             self.scopes[scope].count += 1;
         }
-        Ok(())
+        Ok(Reference::Upvalue)
     }
 }

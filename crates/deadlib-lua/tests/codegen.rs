@@ -377,4 +377,38 @@ mod tests {
         }
         check(sources);
     }
+    #[test]
+    fn large_result_lists_reserve_slots_as_each_expression_finishes() {
+        let names = (1..=199)
+            .map(|i| format!("a{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let args = (1..=247)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let nested = format!("{}7{}", "{".repeat(190), "}".repeat(190));
+        let rest = std::iter::repeat_n("1", 198).collect::<Vec<_>>().join(",");
+        check(vec![
+            format!(
+                "local function f(...)return ... end;local {names}=f({args});collectgarbage('collect');return a1,a100,a199"
+            ),
+            format!(
+                "local function f(...)return ... end;{names}=f({});return a1,a100,a199",
+                (1..=48)
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+            format!(
+                "local {names}={nested},{rest};local n=0;while type(a1)=='table' do n=n+1;a1=a1[1] end;return n,a1,a199"
+            ),
+            format!(
+                "local function f()return {nested},{rest} end;local {names}=f();collectgarbage('collect');return type(a1),a199"
+            ),
+            format!(
+                "local function f(...)local {names}=...;collectgarbage('collect');return a1,a199 end;return f({args})"
+            ),
+        ]);
+    }
 }
