@@ -60,7 +60,7 @@ pub(super) enum Trace {
 }
 fn edge(value: Value) -> Option<Trace> {
     match value {
-        Value::Nil | Value::Boolean(_) | Value::Number(_) => None,
+        Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_) => None,
         _ => Some(Trace::Value(value)),
     }
 }
@@ -299,7 +299,8 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|io::FIRST..=io::LAST)
+                (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|io::FIRST..=io::LAST)
+                    || package::contains(id))
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,

@@ -1,6 +1,6 @@
 # Independent Lua engine
 
-The full objective is a standalone Rust Lua 5.1–5.5 implementation, followed by
+The full objective is a standalone Rust Lua 5.1â€“5.5 implementation, followed by
 song and noteskin integrations sharing the compiler, VM, heap and semantics.
 The first completion target remains arbitrary standalone Lua 5.1 programs with
 correct libraries, GC, closures, metatables, coroutines and errors. The current
@@ -23,14 +23,14 @@ performance JSON keeps its recorded measurement provenance.
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
-| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Complete base, OS, package/require, debug, binary dumps, broader I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
+| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. Remaining base/OS functions, native C-library loading, debug, binary dumps, broader I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
 | Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
-| Lua 5.2–5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
+| Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and nine Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales, math reaches `require`, sort reaches `os.clock`, and errors expose incomplete syntax diagnostics. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and ten Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales, sort reaches `os.clock`, and errors expose incomplete syntax diagnostics. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 171 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 196 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,12 +58,12 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-file-load.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-package.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
-execution ratios of 2.38–13.51 times the reference duration. Subsequent
+execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
 [compatibility and dispatch measurements](performance/2026-10-24-rust-lua-dispatch.md)
-recorded ratios of 2.57–6.63 with expanded semantics. The latest
+recorded ratios of 2.57â€“6.63 with expanded semantics. The latest
 [string/table measurements](performance/2026-10-24-rust-lua-stdlib.md) add six
 workloads and confirm zero warmed allocation events for pattern search and
 replacement workloads. The [coroutine measurements](performance/2026-10-24-rust-lua-coroutines.md)
@@ -154,6 +154,20 @@ buffer separately from debug/runtime descriptions. The
 workload. Host errors also expose the actual raised file-error string. Binary
 chunks, complete syntax diagnostics and compiler depth/resource
 parity remain open, along with the broader standalone and integration gates.
+
+The [package validation](testing/2026-10-25-rust-lua-package.md) adds import
+caching, preloaded/Lua-file/custom searchers, path defaults and 5.1 module
+initialization/options. Retained native slots preserve callback mutations without
+aliasing captured names or duplicated module tables. Light userdata adds opaque
+unmanaged identities, weak-table behavior and independent per-VM metatables.
+Twenty-five groups cover these semantics, nested native-call limits, environment
+expansion in child processes, instruction aborts and 2,000 transient imports.
+The unchanged `math.lua` probe now passes. The
+[measurements](performance/2026-10-25-rust-lua-package.md) add cached and preloaded
+imports, bringing the harness to thirty execution workloads and eight frontend
+cases. Cached imports allocate nothing after warmup but remain slower than C;
+removing dispatch work remains a profiling target. Native C modules, exact native
+scratch footprints and broader package/resource diagnostics remain open.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

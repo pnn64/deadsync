@@ -421,6 +421,18 @@ impl Vm {
                         }
                         frame.base + n
                     }
+                    package::REQUIRE if matches!(frame.pc, 5 | 7) => {
+                        if n >= 5 {
+                            return None;
+                        }
+                        frame.base + n
+                    }
+                    package::MODULE if frame.pc == 12 => {
+                        if n >= frame.argc() + 3 {
+                            return None;
+                        }
+                        frame.base + n
+                    }
                     TRACEBACK if frame.pc != 0 => {
                         let jobs = if thread == self.thread {
                             &self.tracebacks

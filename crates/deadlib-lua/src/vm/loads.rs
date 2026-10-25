@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn protected(function: FrameKind) -> bool {
     matches!(
         function,
-        FrameKind::Native(LOAD_READER | LOAD_FILE | DO_FILE)
+        FrameKind::Native(LOAD_READER | LOAD_FILE | DO_FILE | CONT_FILE)
     )
 }
 

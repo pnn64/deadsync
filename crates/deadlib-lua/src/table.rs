@@ -12,6 +12,7 @@ enum Key {
     Native(u64),
     Thread(ThreadId),
     Userdata(UserdataId),
+    LightUserdata(u64),
 }
 
 impl Key {
@@ -27,6 +28,7 @@ impl Key {
             Value::Native(v) => Self::Native(v),
             Value::Thread(v) => Self::Thread(v),
             Value::Userdata(v) => Self::Userdata(v),
+            Value::LightUserdata(v) => Self::LightUserdata(v),
         })
     }
     fn value(self) -> Value {
@@ -39,6 +41,7 @@ impl Key {
             Self::Native(v) => Value::Native(v),
             Self::Thread(v) => Value::Thread(v),
             Self::Userdata(v) => Value::Userdata(v),
+            Self::LightUserdata(v) => Value::LightUserdata(v),
         }
     }
     fn hash(self) -> usize {
@@ -51,6 +54,7 @@ impl Key {
             Self::Native(v) => (v, 6),
             Self::Thread(v) => (v.0, 7),
             Self::Userdata(v) => (v.0, 8),
+            Self::LightUserdata(v) => (v, 9),
         };
         let mut h = bits
             ^ (tag as u64)

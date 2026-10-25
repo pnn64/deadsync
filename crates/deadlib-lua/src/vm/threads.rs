@@ -361,6 +361,8 @@ impl Vm {
                             | TOSTRING
                             | PRINT
                             | DO_FILE
+                            | package::REQUIRE
+                            | package::MODULE
                             | strings::STR_GSUB
                             | tables::TAB_FOREACH
                             | tables::TAB_FOREACHI

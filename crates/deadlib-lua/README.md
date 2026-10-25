@@ -62,6 +62,8 @@ Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,
 `loadstring`, `loadfile`, `dofile` and `newproxy`.
+`require`, `module` and the package namespace provide preloaded, Lua-file and
+custom loaders, shared import caching and Lua 5.1 module environments.
 The Lua 5.1 `math` function set and debug metatable/environment operations are available. Binary
 decomposition/scaling preserve signed zero and round subnormals once. The random
 stream matches the MSVC reference, including per-OS-thread state shared by VMs;
@@ -117,7 +119,12 @@ reference's buffered seek cookies. Captured stdout keeps logical byte order acro
 
 `debug.getregistry` returns the shared, rooted registry. Its `FILE*` entry controls
 file type checks, and `_LOADED` contains the registered builtin modules. The package
-loader is still unfinished. Windows path conversion currently uses UTF-8; ASCII
+library shares that table through `package.loaded`. `require` preserves loader
+order, truthy cache results, retryable false results and the loading/error
+sentinel. Path templates, environment defaults and `module`/`seeall` use Lua 5.1
+rules. Callbacks use explicit continuations and retain their native argument
+slots. Native C-library loading remains unsupported; `package.loadlib` returns
+nil, an explanation and `"absent"`. Windows path conversion currently uses UTF-8; ASCII
 paths are covered by the reference checks. Exact standard-stream buffering, more
 device/error cases, native scratch stacks and I/O cancellation remain open.
 
@@ -129,7 +136,13 @@ while escaped Lua closures retain their code independently. `Vm::heap_stats`
 reports object counts and capacity-based memory estimates, including reusable
 storage. These are not process RSS or exact allocator peaks.
 
-Other standard libraries, light userdata, complete diagnostic text and
+`Value::LightUserdata` carries an unmanaged opaque identity. It owns no storage,
+is never dereferenced, survives weak tables and has a metatable shared by light
+userdata within its VM. Its numeric identity may be shared across VMs; arena
+object handles retain their ownership restrictions. Package loading uses this
+value type for its observable sentinel.
+
+Other standard libraries, native C-library loading, complete diagnostic text and
 debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
@@ -154,9 +167,9 @@ booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
 currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
-`pm.lua`, `events.lua`, `gc.lua`, `closure.lua` and `db.lua`. The newly included
+`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua` and `math.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions or a syntax-diagnostic mismatch. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-file-load.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-package.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

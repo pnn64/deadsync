@@ -43,6 +43,9 @@ pub enum Value {
     Thread(ThreadId),
     /// A full userdata identity with VM-owned byte storage.
     Userdata(UserdataId),
+    /// An unmanaged opaque identity. It owns no storage and is never dereferenced.
+    /// Unlike arena handles, the same identity may be shared across VMs.
+    LightUserdata(u64),
     /// A native function's numeric dispatch ID.
     Native(u64),
 }
@@ -63,7 +66,7 @@ impl Value {
             Self::Table(_) => "table",
             Self::Function(_) | Self::Native(_) => "function",
             Self::Thread(_) => "thread",
-            Self::Userdata(_) => "userdata",
+            Self::Userdata(_) | Self::LightUserdata(_) => "userdata",
         }
     }
 }

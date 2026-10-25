@@ -26,6 +26,7 @@ impl Vm {
             Value::Table(_) => 5,
             Value::Thread(_) => 6,
             Value::Userdata(_) => 7,
+            Value::LightUserdata(_) => 8,
         }
     }
     pub(super) fn metatable(&self, value: Value) -> Option<TableId> {
@@ -256,7 +257,12 @@ impl Vm {
             );
             return Ok(());
         }
-        if left.type_name() == right.type_name() {
+        if std::mem::discriminant(&left) == std::mem::discriminant(&right)
+            || matches!(
+                (left, right),
+                (Value::Function(_), Value::Native(_)) | (Value::Native(_), Value::Function(_))
+            )
+        {
             let handler = self.shared_handler(left, right, if equal { Meta::Le } else { Meta::Lt });
             if handler != Value::Nil {
                 return self.meta_call(handler, &[left, right], result, CONT_BOOL);

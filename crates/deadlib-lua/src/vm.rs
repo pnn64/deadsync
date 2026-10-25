@@ -15,6 +15,7 @@ mod loads;
 mod math;
 mod meta;
 mod native;
+mod package;
 mod strings;
 mod tables;
 mod threads;
@@ -145,6 +146,7 @@ const CONT_GC: u64 = 261;
 const CONT_HOOK: u64 = 262;
 const CONT_TRACE: u64 = 263;
 const CONT_RETURN: u64 = 264;
+const CONT_FILE: u64 = 265;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -249,7 +251,7 @@ pub struct Vm {
     registry: TableId,
     top: usize,
     budget: Option<u64>,
-    type_metatables: [Option<TableId>; 8],
+    type_metatables: [Option<TableId>; 9],
     meta_names: [StringId; 19],
     output: Option<Vec<u8>>,
     active_native: Option<usize>,
@@ -305,7 +307,7 @@ impl Vm {
             registry,
             top: 0,
             budget: None,
-            type_metatables: [None; 8],
+            type_metatables: [None; 9],
             meta_names: [StringId(0); 19],
             output: None,
             active_native: None,
@@ -423,6 +425,7 @@ impl Vm {
             let name = vm.intern(name);
             vm.raw_set(loaded, name, value).unwrap();
         }
+        vm.open_package(loaded);
         vm.reset_gc_debt();
         vm
     }

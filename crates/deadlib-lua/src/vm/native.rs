@@ -57,6 +57,7 @@ impl Vm {
                         | LOAD_READER
                         | LOAD_FILE
                         | DO_FILE
+                        | CONT_FILE
                         | debug::TRACEBACK
                         | COLLECT_GARBAGE
                         | XPCALL
@@ -68,7 +69,8 @@ impl Vm {
                         | tables::TAB_SORT
                         | threads::CO_RESUME
                         | threads::CO_YIELD
-                ) || self.is_wrapper(id)
+                ) || package::contains(id)
+                    || self.is_wrapper(id)
                     || (self.hooks.mask != 0 && self.hooks.allowed()) =>
             {
                 if self.frames.len() >= 10000 {
@@ -145,6 +147,13 @@ impl Vm {
         result: usize,
         continuation: u64,
     ) -> Result<(), Error> {
+        let barriers = self.frames.last().map_or(0, |f| usize::from(f.barriers));
+        let inherited = usize::from(self.threads[slot_index(self.thread.0)].depth);
+        if (barriers + inherited >= 198 || !self.loads.is_empty())
+            && self.native_depth(self.frames.len()) >= 198
+        {
+            return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
+        }
         if self.frames.len() >= 10000 {
             return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
         }
@@ -284,6 +293,8 @@ impl Vm {
             }),
             LOAD_READER => self.load_step(frame),
             LOAD_FILE | DO_FILE => self.file_load_step(id, frame),
+            CONT_FILE => self.file_load_step(LOAD_FILE, frame),
+            id if package::contains(id) => self.package_step(id, frame),
             COLLECT_GARBAGE => self.collect_step(frame),
             CONT_GC => self.finalizer_step(frame),
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {
@@ -369,6 +380,20 @@ impl Vm {
             }
             Value::Thread(id) => self.intern(format!("thread: 0x{:x}", id.0).as_bytes()),
             Value::Userdata(id) => self.intern(format!("userdata: 0x{:x}", id.0).as_bytes()),
+            Value::LightUserdata(id) => {
+                #[cfg(all(windows, target_env = "msvc"))]
+                let text = format!(
+                    "userdata: {id:0width$X}",
+                    width = std::mem::size_of::<usize>() * 2
+                );
+                #[cfg(not(all(windows, target_env = "msvc")))]
+                let text = if cfg!(target_os = "linux") && id == 0 {
+                    "userdata: (nil)".to_owned()
+                } else {
+                    format!("userdata: 0x{id:x}")
+                };
+                self.intern(text.as_bytes())
+            }
         }
     }
     fn print_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {

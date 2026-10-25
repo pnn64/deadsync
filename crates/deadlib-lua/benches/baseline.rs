@@ -276,6 +276,18 @@ fn main() {
             2080.0,
             10,
         ),
+        (
+            "require_cached",
+            "local m=require('math');local sum=0;for i=1,1000 do if require('math')==m then sum=sum+1 end end;return sum",
+            1000.0,
+            10,
+        ),
+        (
+            "require_preload",
+            "package.preload.module_bench=function(n)return {name=n}end;local sum=0;for i=1,100 do package.loaded.module_bench=nil;local m=require('module_bench');if m.name=='module_bench' then sum=sum+1 end end;return sum",
+            100.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");
