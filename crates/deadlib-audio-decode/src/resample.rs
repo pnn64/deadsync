@@ -236,6 +236,8 @@ pub fn write_channel_mapped_i16(
         {
             *output = [input[0], input[1]];
         }
+    } else if out_ch == 1 {
+        copy_mono_channel(input, in_ch, out_tmp);
     } else {
         // Output channel `c` copies input channel `c % in_ch`.
         for (output, input) in out_tmp
@@ -248,6 +250,14 @@ pub fn write_channel_mapped_i16(
         }
     }
     frames
+}
+
+// Keep mono's strided loop out of the stereo and repeated-channel kernels.
+#[inline(never)]
+fn copy_mono_channel(input: &[i16], channels: usize, output: &mut [i16]) {
+    for (frame, dst) in input.chunks_exact(channels).zip(output) {
+        *dst = frame[0];
+    }
 }
 
 /// Append channel-mapped frames directly to an existing output allocation.

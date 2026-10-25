@@ -158,10 +158,7 @@ fn decode_bool_vec_into<T, D: Decoder>(
         return None;
     }
     let source = &source[..len];
-    let invalid = source
-        .iter()
-        .position(|byte| *byte > 1)
-        .map(|index| (index, source[index]));
+    let invalid = crate::utils::invalid_bool(source).map(|index| (index, source[index]));
     let valid_len = invalid.map_or(len, |(index, _)| index);
 
     values.reserve(valid_len);

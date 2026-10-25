@@ -4,6 +4,25 @@ pub trait Sealed {}
 
 impl<T> Sealed for &mut T where T: Sealed {}
 
+/// Locate the first byte that cannot represent a wire-format Boolean.
+#[inline]
+pub(crate) fn invalid_bool(bytes: &[u8]) -> Option<usize> {
+    let mut words = bytes.chunks_exact(8);
+    for (index, word) in words.by_ref().enumerate() {
+        // Only bit zero may be set in each byte. Little endian makes the
+        // least significant invalid bit identify the earliest source byte.
+        let invalid =
+            u64::from_le_bytes(word.try_into().expect("eight-byte chunk")) & 0xfefe_fefe_fefe_fefe;
+        if invalid != 0 {
+            return Some(index * 8 + invalid.trailing_zeros() as usize / 8);
+        }
+    }
+    let tail = words.remainder();
+    tail.iter()
+        .position(|&byte| byte > 1)
+        .map(|index| bytes.len() - tail.len() + index)
+}
+
 pub fn can_memcpy<T, C>() -> bool
 where
     C: InternalEndianConfig + InternalIntEncodingConfig,
