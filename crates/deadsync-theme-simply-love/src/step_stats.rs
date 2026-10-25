@@ -787,6 +787,21 @@ mod tests {
     }
 
     #[test]
+    fn song_info_without_pack_banner_uses_the_full_lane() {
+        let slide = StepStatsSongInfoSlide {
+            left: 448.0,
+            center_y: 300.0,
+            width: 192.0,
+            height: 100.0,
+            banner_width: 0.0,
+        };
+        let text = song_info_text_placement(slide, false, 0.74);
+
+        assert_eq!(text.values_x, slide.left + STEP_STATS_SONG_INFO_PADDING);
+        assert_eq!(text.values_max_width, slide.width - 2.0 * STEP_STATS_SONG_INFO_PADDING);
+    }
+
+    #[test]
     fn step_count_frames_follow_player_side_and_ultrawide() {
         let layout = StepStatsPaneLayout {
             sidepane_center_x: 500.0,

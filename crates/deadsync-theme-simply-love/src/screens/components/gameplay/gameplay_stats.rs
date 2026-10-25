@@ -2202,7 +2202,8 @@ fn push_split_step_stats(
     }
 
     // Banner2.lua (zmod pack banner): static (no animation) at the final position.
-    if mask.pack_info_enabled()
+    if !centered_single_split
+        && mask.pack_info_enabled()
         && let Some(pack_key) = state.pack_banner_key.as_ref()
     {
         let pack_banner = split_layout.map_or_else(
@@ -2224,16 +2225,16 @@ fn push_split_step_stats(
             sidepane_center_x: split.right_panel_center_x,
             sidepane_center_y: pane_cy,
             sidepane_width: split.sidepane_width,
-            note_field_is_centered: false,
+            note_field_is_centered: true,
             is_ultrawide: false,
             banner_data_zoom,
         };
         let slide = StepStatsSongInfoSlide {
             left: split.graph.x,
-            center_y: split.graph.y - 60.0 * banner_data_zoom,
+            center_y: split.graph.y - 34.0 * banner_data_zoom,
             width: split.graph.w,
             height: 120.0 * banner_data_zoom,
-            banner_width: STEP_STATS_BANNER_W * 0.2 * banner_data_zoom,
+            banner_width: 0.0,
         };
         build_steps_info(
             actors,
