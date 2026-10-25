@@ -242,9 +242,58 @@ mod backend {
         }
 
         #[test]
+        fn yuv_tables_preserve_rounding_and_the_small_image_path() {
+            for (width, height) in [
+                (2, 2),
+                (2, 510),
+                (2, 512),
+                (2, 514),
+                (30, 34),
+                (32, 32),
+                (64, 64),
+            ] {
+                let count = width as usize * height as usize;
+                let y: Vec<_> = (0..count).map(|i| (i * 71) as u8).collect();
+                let u: Vec<_> = (0..count / 4).map(|i| (i * 47) as u8).collect();
+                let v: Vec<_> = (0..count / 4).map(|i| (i * 23) as u8).collect();
+                let mut image = RgbaImage::new(width, height);
+                for levels in [
+                    [1.0, 0.0, 1.0, -0.5],
+                    [1.164_383_5, -0.073_059_365, 1.138_392_9, -0.571_428_6],
+                    [f32::INFINITY, f32::NAN, -f32::INFINITY, -0.0],
+                ] {
+                    let upload = Yuv420Upload {
+                        width,
+                        height,
+                        y: &y,
+                        u: &u,
+                        v: &v,
+                        levels,
+                        coeffs: [1.402, -0.344136, -0.714136, 1.772],
+                    };
+                    let expected = reference_yuv(upload);
+                    let pointer = image.as_raw().as_ptr();
+                    crate::alloc::assert_no_churn(|| {
+                        update_yuv420_image(&mut image, upload).unwrap()
+                    });
+                    assert_eq!(image.as_raw(), expected.as_raw());
+                    assert_eq!(image.as_raw().as_ptr(), pointer);
+                }
+            }
+        }
+
+        #[test]
         #[ignore = "release CPU benchmark"]
         fn benchmark_yuv_conversion() {
-            for (width, height) in [(2, 2), (64, 64), (640, 360), (1920, 1080)] {
+            for (width, height) in [
+                (2, 2),
+                (16, 16),
+                (30, 34),
+                (32, 32),
+                (64, 64),
+                (640, 360),
+                (1920, 1080),
+            ] {
                 let count = width as usize * height as usize;
                 let y: Vec<_> = (0..count).map(|i| (i * 71) as u8).collect();
                 let u: Vec<_> = (0..count / 4).map(|i| (i * 47) as u8).collect();

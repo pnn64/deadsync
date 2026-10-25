@@ -187,7 +187,9 @@ pub fn write_resampler_output(
     for (frame, output) in out_tmp.chunks_exact_mut(out_ch).enumerate() {
         let (converted, repeated) = output.split_at_mut(out.len().min(out_ch));
         for (dst, source) in converted.iter_mut().zip(out) {
-            *dst = sample_to_i16(source[frame]);
+            // The scalar fallback has no vector lanes to amortize the
+            // fraction correction used by the mono/stereo loops.
+            *dst = (source[frame] * 32767.0).round() as i16;
         }
         // Extra channels reuse this frame's PCM instead of converting it again.
         for (dst, &sample) in repeated.iter_mut().zip(converted.iter().cycle()) {
@@ -292,6 +294,10 @@ pub fn append_channel_mapped_i16(
                 .chunks_exact(in_ch)
                 .flat_map(|frame| [frame[0], frame[1]]),
         );
+        return frames;
+    }
+    if out_ch == 1 {
+        out.extend(input.chunks_exact(in_ch).map(|frame| frame[0]));
         return frames;
     }
     let repeats = out_ch / in_ch;
@@ -401,8 +407,15 @@ fn resize_output(out_tmp: &mut Vec<i16>, produced_samples: usize) {
 
 #[inline(always)]
 fn sample_to_i16(sample: f32) -> i16 {
-    // Rust float-to-integer casts already saturate and map NaN to zero.
-    (sample * 32767.0).round() as i16
+    let scaled = sample * 32767.0;
+    // Truncation leaves an exact fraction in (-1, 1) for in-range values.
+    // Correct half ties away from zero without calling round per sample.
+    // Saturated values can only move outward; NaN casts to zero and neither
+    // comparison succeeds. The final clamp therefore preserves both cases.
+    let whole = scaled as i16;
+    let fraction = scaled - f32::from(whole);
+    (i32::from(whole) + i32::from(fraction >= 0.5) - i32::from(fraction <= -0.5))
+        .clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16
 }
 
 #[cfg(test)]
