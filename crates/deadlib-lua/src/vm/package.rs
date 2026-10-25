@@ -192,6 +192,7 @@ impl Vm {
                     unreachable!("module table")
                 };
                 self.functions[slot_index(function.0)].env = module;
+                self.gc_barrier(Value::Function(function), Value::Table(module));
                 self.registers[scratch + 2] = Value::Table(module);
                 self.registers[scratch + 5] = Value::Number(1.);
                 self.frames[owner].pc = 11;

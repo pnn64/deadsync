@@ -73,7 +73,7 @@ impl Vm {
         }
         // A tag method can start another cycle with an explicit step. Finish
         // its sweep before dispatching the newly separated tag methods.
-        self.finish_pending_sweep();
+        self.prepare_gc_finalizers();
         while let Some(id) = self.gc.finalizers.pop_front() {
             let value = Value::Userdata(id);
             let finalizer = self.metafield(value, Meta::Gc);
@@ -165,14 +165,16 @@ impl Vm {
             .checked_add(1)
             .expect("userdata creation order exhausted");
         self.userdata.note_alloc(size);
-        UserdataId(self.userdata.insert(Userdata {
+        let id = UserdataId(self.userdata.insert(Userdata {
             file: None,
             env,
             metatable: None,
             bytes: vec![0; size].into_boxed_slice(),
             finalized: false,
             order: self.userdata_order,
-        }))
+        }));
+        self.gc_new_value(Value::Userdata(id));
+        id
     }
 
     /// Allocate zero-initialized userdata in this thread's environment.
@@ -208,7 +210,7 @@ impl Vm {
                     .ok_or_else(|| self.argument_error(0, b"boolean or proxy expected"))?,
             )
         };
-        self.userdata[slot_index(id.0)].metatable = metatable;
+        self.set_metatable(Value::Userdata(id), metatable);
         self.registers[base] = Value::Userdata(id);
         Ok(1)
     }

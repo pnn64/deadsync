@@ -69,6 +69,41 @@ def main() -> None:
     ):
         case(name, gc_setup+operation)
     case('gc_finalizer_phase', (root/'docs/testing/lua51-gc-finalizer-phase.lua').read_text(encoding='utf-8'))
+    case('gc_mark_mutation', """
+        collectgarbage('stop');local roots={};local weak=setmetatable({},{__mode='v'})
+        for i=1,512 do roots[i]={i};weak[i]={i}end
+        collectgarbage('step',0)
+        for i=1,512 do local v=weak[i] or{i};roots[i].child=v
+          if i%8==0 then collectgarbage('step',0)end
+        end
+        collectgarbage();local n=0
+        for i=1,512 do n=n+roots[i].child[1]end;print(n)
+    """)
+    case('gc_mark_graph_mutation', """
+        collectgarbage('stop');local step=collectgarbage;local final=0
+        local tree={};local weak=setmetatable({},{__mode='v'})
+        for i=1,512 do weak[i]={value=i}end
+        for i=1,64 do
+          step('step',0)
+          local state=weak[i] or {value=i};local obj={state=state}
+          obj.call=function()return state end;obj.env=function()return number end
+          setfenv(obj.env,{number=i})
+          obj.co=coroutine.create(function()coroutine.yield(state);return state end)
+          local ok,v=coroutine.resume(obj.co);assert(ok and v==state)
+          obj.guard=newproxy(true);getmetatable(obj.guard).__gc=function()final=final+1 end
+          debug.setfenv(obj.guard,{number=i})
+          setmetatable(obj,{__index={number=i}});tree[i]=obj
+          step('step',0)
+        end
+        step('collect');local sum=0
+        for i,obj in ipairs(tree)do
+          local ok,v=coroutine.resume(obj.co)
+          assert(ok and v==obj.state and obj.call()==v)
+          assert(obj.env()==i and obj.number==i and debug.getfenv(obj.guard).number==i)
+          sum=sum+v.value
+        end
+        local before=final;tree=nil;step('collect');print(sum,before,final)
+    """)
     case('gc_sweep_churn', """
         collectgarbage('stop');local held={}
         for i=1,3000 do local t={'garbage'..i}end

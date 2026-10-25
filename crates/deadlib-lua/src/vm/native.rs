@@ -785,6 +785,7 @@ impl Vm {
                             ));
                         }
                     }
+                    self.gc_barrier(target, Value::Table(env));
                     target
                 }
             }
@@ -809,7 +810,7 @@ impl Vm {
                             let Value::Table(env) = arg(self, 1) else {
                                 unreachable!("environment type checked");
                             };
-                            self.globals = env;
+                            self.set_thread_environment(self.thread, env);
                             return Ok(0);
                         }
                         self.stack_kind(level as usize)?
@@ -825,6 +826,7 @@ impl Vm {
                             unreachable!("environment type checked");
                         };
                         self.functions[slot_index(id.0)].env = env;
+                        self.gc_barrier(Value::Function(id), Value::Table(env));
                         Value::Function(id)
                     }
                     _ => {

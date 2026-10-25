@@ -21,7 +21,7 @@ performance JSON keeps its recorded measurement provenance.
 | Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Complete reference-suite coverage remains open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Source diagnostics retain raw bytes, token context, opening lines and tested local/assignment bounds. Full runtime/compiler diagnostics, debug behavior and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
-| Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking and weak processing remain atomic; sweeping advances in bounded arena-slot batches. Incremental marking, bounded callback batches and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
+| Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking advances a persistent frontier; mutator barriers and final stack/open-cell/metatable refreshes preserve new references. Sweeping advances in bounded arena-slot batches. Individual object scans, final root/weak processing, cache rebuilding and callback batches still contain atomic work; fully bounded pauses and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
 | Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Locale support, remaining base functions, native C-library loading, debug, binary dumps, broader I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 338 differential/adversarial integration tests, seventeen parser/scanner/arena/verifier/GC tests and
+crate, 339 differential/adversarial integration tests, twenty-four parser/scanner/arena/verifier/GC tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-gc-sweep.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-gc-mark.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -437,6 +437,19 @@ process cases. The [measurements](performance/2026-10-25-rust-lua-gc-sweep.md)
 retain 50 runtime and twenty-two frontend workloads. Marking, weak processing,
 cache compaction and callback batches still need incremental work. The complete
 standalone engine and integration gates remain open.
+
+The [incremental marking validation](testing/2026-10-25-rust-lua-gc-mark.md)
+adds a persistent marking frontier and barriers for table edges, environments,
+metatables, closures and shared cells. Final root, stack, open-cell and metatable
+refreshes preserve mutations before weak processing. Full collection restarts
+partial marking so floating garbage can be reclaimed. Seven new unit groups
+exercise the same active cycle; a differential group combines mutation with
+coroutines and finalizers. All 364 tests and 111 process probes pass. The
+[measurements](performance/2026-10-25-rust-lua-gc-mark.md) retain 51 runtime and
+twenty-two frontend workloads. Individual object scans, final root/weak work,
+cache rebuilding and callback batches still contain atomic work. Exact PUC work
+units and fully bounded pauses remain open, as do the complete standalone
+engine and integration gates.
 
 ## Reference contract
 

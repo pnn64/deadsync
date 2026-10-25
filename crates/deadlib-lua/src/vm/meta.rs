@@ -42,6 +42,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata[slot_index(id.0)].metatable = table,
             _ => self.type_metatables[Self::type_slot(value)] = table,
         }
+        self.gc_metatable_write(value, table);
     }
     pub(super) fn metafield(&self, value: Value, event: Meta) -> Value {
         self.metatable(value).map_or(Value::Nil, |mt| {

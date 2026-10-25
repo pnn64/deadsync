@@ -127,6 +127,7 @@ impl Vm {
                 FrameKind::Native(id) => self.native_environment(id),
             });
         let id = self.native_closures.insert(NativeClosure { env, kind });
+        self.gc_new_value(Value::Native(id));
         Ok(Value::Native(id))
     }
     pub(super) fn is_wrapper(&self, id: u64) -> bool {
@@ -152,6 +153,7 @@ impl Vm {
         } else {
             self.native_envs.insert(id, env);
         }
+        self.gc_barrier(Value::Native(id), Value::Table(env));
     }
     pub(super) fn thread_environment(&self, id: ThreadId) -> TableId {
         if id == self.thread {
@@ -166,6 +168,7 @@ impl Vm {
         } else {
             self.threads[slot_index(id.0)].globals = env;
         }
+        self.gc_barrier(Value::Thread(id), Value::Table(env));
     }
     pub(super) fn cell_value(&self, id: usize) -> Value {
         match self.upvalues[id] {
@@ -190,6 +193,7 @@ impl Vm {
                 }
             }
         }
+        self.gc_cell_barrier(id, value);
     }
     // Active vectors stay directly in Vm for ordinary dispatch. Switching swaps
     // ownership with the inactive thread slots; it never copies stack contents.
@@ -320,6 +324,7 @@ impl Vm {
                 };
                 let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
                 self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
+                self.gc_new_value(Value::Thread(thread));
                 if id == CO_WRAP {
                     self.new_native(NativeKind::Wrap(thread))?
                 } else {

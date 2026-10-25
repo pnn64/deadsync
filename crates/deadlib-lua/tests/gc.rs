@@ -297,6 +297,38 @@ fn generated_collector_control_sequences_match_reference_reachability() {
 }
 
 #[test]
+fn incremental_mutation_preserves_closures_environments_threads_and_finalizers() {
+    compare(
+        br#"
+      collectgarbage('stop');local step=collectgarbage;local final=0
+      local tree={};local weak=setmetatable({},{__mode='v'})
+      for i=1,512 do weak[i]={value=i}end
+      for i=1,64 do
+        step('step',0)
+        local state=weak[i] or {value=i};local obj={state=state}
+        obj.call=function()return state end;obj.env=function()return number end
+        setfenv(obj.env,{number=i})
+        obj.co=coroutine.create(function()coroutine.yield(state);return state end)
+        local ok,v=coroutine.resume(obj.co);assert(ok and v==state)
+        obj.guard=newproxy(true);getmetatable(obj.guard).__gc=function()final=final+1 end
+        debug.setfenv(obj.guard,{number=i})
+        setmetatable(obj,{__index={number=i}});tree[i]=obj
+        step('step',0)
+      end
+      step('collect');local sum=0
+      for i,obj in ipairs(tree)do
+        local ok,v=coroutine.resume(obj.co)
+        assert(ok and v==obj.state and obj.call()==v)
+        assert(obj.env()==i and obj.number==i and debug.getfenv(obj.guard).number==i)
+        sum=sum+v.value
+      end
+      local before=final;tree=nil;step('collect')
+      return sum,before,final
+    "#,
+    );
+}
+
+#[test]
 fn invalid_collector_arguments_do_not_resume_a_stopped_collector() {
     for operation in [
         "false",

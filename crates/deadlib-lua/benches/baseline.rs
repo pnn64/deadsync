@@ -323,6 +323,12 @@ fn main() {
             20,
         ),
         (
+            "gc_mark_mutation",
+            "collectgarbage('stop');local roots={};local weak=setmetatable({},{__mode='v'});for i=1,512 do roots[i]={i};weak[i]={i}end;collectgarbage('step',0);for i=1,512 do local v=weak[i] or{i};roots[i].child=v;if i%8==0 then collectgarbage('step',0)end end;collectgarbage();local n=0;for i=1,512 do n=n+roots[i].child[1]end;return n",
+            131328.0,
+            10,
+        ),
+        (
             "reader_load_single",
             "local sum=0;for i=1,200 do local once=false;local f=load(function()if once then return nil end;once=true;return 'return 1+2'end);sum=sum+f()end;return sum",
             600.0,
@@ -788,6 +794,6 @@ fn main() {
         "allocation_scope\tRust GlobalAlloc only; native C malloc excluded; totals cover all iterations in each row"
     );
     println!(
-        "limitations\tAtomic tracing GC; heap numbers are capacity-based estimates, not RSS or exact allocator peaks; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary"
+        "limitations\tIncremental mark frontier and slot sweeping; individual object scans, final root/weak work, cache rebuilding and callback batches remain atomic; heap numbers are capacity-based estimates, not RSS or exact allocator peaks; startup opens different libraries; execution includes host entry/return; compile includes drop; instrumented timings are preliminary"
     );
 }

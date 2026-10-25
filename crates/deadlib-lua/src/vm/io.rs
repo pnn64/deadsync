@@ -305,6 +305,9 @@ impl Vm {
         let user = &mut self.userdata[slot_index(id.0)];
         user.file = NonZeroU64::new(file);
         user.metatable = metatable;
+        if let Some(table) = metatable {
+            self.gc_barrier(Value::Userdata(id), Value::Table(table));
+        }
         Value::Userdata(id)
     }
     fn file_key(&self, value: Value, check_meta: bool) -> Option<u64> {

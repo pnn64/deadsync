@@ -508,6 +508,7 @@ impl Vm {
             self.tables.note_alloc(growth);
             self.gc.pending = true;
         }
+        self.gc_table_write(id, key, value);
         Ok(())
     }
     fn resize_registers(&mut self, len: usize) {
@@ -525,13 +526,17 @@ impl Vm {
     }
 
     fn new_table(&mut self) -> TableId {
-        TableId(self.tables.insert(Table::default()))
+        let id = TableId(self.tables.insert(Table::default()));
+        self.gc_new_value(Value::Table(id));
+        id
     }
     fn new_record_table(&mut self, capacity: usize) -> TableId {
         let table = Table::with_record_capacity(capacity);
         self.tables.note_alloc(table.heap_bytes());
         self.gc.pending = true;
-        TableId(self.tables.insert(table))
+        let id = TableId(self.tables.insert(table));
+        self.gc_new_value(Value::Table(id));
+        id
     }
     fn number(&self, value: Value) -> Option<f64> {
         match value {
@@ -561,6 +566,7 @@ impl Vm {
             .map(|(index, p)| (index, p.entry));
         if let Some((index, old_entry)) = cached {
             if self.functions.contains(old_entry.0) {
+                self.gc_new_value(Value::Function(old_entry));
                 return old_entry;
             }
             let entry = FunctionId(self.functions.insert(Closure {
@@ -570,6 +576,7 @@ impl Vm {
                 env: self.globals,
             }));
             self.programs[index].entry = entry;
+            self.gc_new_value(Value::Function(entry));
             return entry;
         }
         let mut constants = Vec::with_capacity(program.data.prototypes.len());
@@ -600,6 +607,7 @@ impl Vm {
             env: self.globals,
         }));
         self.programs[index].entry = entry;
+        self.gc_new_value(Value::Function(entry));
         entry
     }
 
@@ -613,6 +621,7 @@ impl Vm {
         }
         let id = slot_index(self.upvalues.insert(Cell::Open(self.thread, register))) as u32;
         self.open_upvalues.push(id);
+        self.gc_new_cell(id as usize);
         id
     }
 
@@ -624,6 +633,7 @@ impl Vm {
                 && r >= base
             {
                 self.upvalues[id] = Cell::Closed(self.registers[r]);
+                self.gc_cell_barrier(id, self.registers[r]);
                 self.open_upvalues.swap_remove(i);
                 continue;
             }
@@ -996,6 +1006,7 @@ impl Vm {
                             env,
                         }));
                         self.registers[a] = Value::Function(id);
+                        self.gc_new_value(Value::Function(id));
                         self.maybe_gc();
                     }
                     Op::GetUpvalue => {

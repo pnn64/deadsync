@@ -141,11 +141,14 @@ strong and do not use later dialects' ephemeron rules. Collection traces native
 continuations and compiler register maps, and closes surviving cells before
 freeing their thread. Object slots carry generations so stale handles cannot
 alias reused slots. `collectgarbage`, `gcinfo`, automatic pressure checks and
-`Vm::collect_garbage` are available. Marking and weak processing currently finish
-atomically; automatic checks and `step` sweep bounded batches of arena slots.
-New allocations and re-interned strings survive the remaining sweep. Full
-collection remains synchronous. Incremental marking and fully bounded pauses
-remain unfinished.
+`Vm::collect_garbage` are available. Automatic checks and `step` advance a marking
+frontier and sweep bounded batches of arena slots. Mutator barriers preserve new
+references in reached tables, closures, environments and cells. Thread stacks,
+open cells and tables with metatables are refreshed before weak processing.
+New allocations and re-interned strings survive the active cycle. Full collection
+restarts marking and remains synchronous. Individual object scans, final root
+and weak processing, cache rebuilding and callback batches still contain atomic
+work; fully bounded pauses remain unfinished.
 
 Full collection, explicit steps and the host collection API re-enable automatic
 collection. Restart waits for the next allocation; pause settings take effect
@@ -153,7 +156,7 @@ when a cycle completes. A successful finalizer restores the collector controls
 saved on entry; a failing finalizer retains its last changes. A pending
 finalization phase resumes before another mark/sweep begins, including the
 [finalizer phase regression](../../docs/testing/lua51-gc-finalizer-phase.lua).
-Exact PUC step work units and incremental marking remain unfinished.
+Exact PUC step work units and fully incremental behavior remain unfinished.
 
 Full userdata has byte storage, independent identity, a metatable and an
 environment. `newproxy` follows Lua 5.1's weak registry of valid metatables.
@@ -279,5 +282,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-gc-sweep.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-gc-mark.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
