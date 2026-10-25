@@ -66,6 +66,7 @@ struct Function<'a> {
     debug_lines: Vec<u32>,
     hook_lines: Vec<u32>,
     hook_visible: usize,
+    zero_sign: Option<bool>,
 }
 
 struct Compiler<'a> {
@@ -84,6 +85,7 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
         ast: &ast,
         function: Function {
             vararg: true,
+            zero_sign: ast.root_zero_sign,
             ..Function::default()
         },
         parents: Vec::new(),
@@ -333,7 +335,13 @@ impl<'a> Compiler<'a> {
             .last_mut()
             .expect("emitted hook line") = line;
     }
-    fn constant(&mut self, k: Constant) -> Result<u32, Error> {
+    fn constant(&mut self, mut k: Constant) -> Result<u32, Error> {
+        if let Constant::Number(number) = &mut k
+            && *number == 0.0
+            && let Some(negative) = self.function.zero_sign
+        {
+            *number = if negative { -0.0 } else { 0.0 };
+        }
         // PUC 5.1 pools numbers by numeric equality, including +0 and -0.
         if let Some(i) = self.function.constants.iter().position(|v| match (v, &k) {
             (Constant::Nil, Constant::Nil) => true,

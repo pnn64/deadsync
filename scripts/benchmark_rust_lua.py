@@ -94,8 +94,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired compilation measurements for {name}")
         compile_ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(compile_ratios) != 19:
-        raise SystemExit(f"expected 19 frontend scaling measurements, received {len(compile_ratios)}")
+    if len(compile_ratios) != 20:
+        raise SystemExit(f"expected 20 frontend scaling measurements, received {len(compile_ratios)}")
     if rust_program_layout.keys() != ratios.keys() | compile_ratios.keys():
         raise SystemExit("missing program layout measurements")
     result = dict(

@@ -59,9 +59,9 @@ capacities. They are not retained or exact peak bytes.
 | `frontend_quoted_100000` | 35/22 | 35/22 | 206,170 | 206,170 | 5 | 2 |
 | `frontend_scopes_1000` | 13,052/4,157 | 13,052/4,157 | 3,630,738 | 3,630,738 | 9,006 | 7 |
 | `frontend_captures_1000` | 25,032/19,125 | 25,032/19,125 | 4,675,015 | 4,675,015 | 9,003 | 3 |
-| `frontend_logical_20000` | 40,066/160 | 40,066/160 | 25,917,770 | 25,917,770 | 60,010 | 3 |
+| `frontend_logical_20000` | 40,066/160 | 40,066/160 | 25,917,766 | 25,917,770 | 60,010 | 3 |
 | `frontend_results_199` | 466/127 | 466/127 | 246,106 | 246,106 | 255 | 249 |
-| `frontend_indexed_targets_150` | 198/100 | 198/100 | 297,168 | 297,168 | 455 | 152 |
+| `frontend_indexed_targets_150` | not accepted | 198/100 | — | 297,168 | 455 | 152 |
 
 Parser heap estimates include accounting storage, which is released before
 backend compilation. Exact compiler allocator live/peak bytes and RSS remain

@@ -489,4 +489,99 @@ mod tests {
             "local obj={};local co=coroutine.create(function()obj.a,obj.b=coroutine.yield(1)end);local ok,n=coroutine.resume(co);collectgarbage();local ok2=coroutine.resume(co,7,9);return ok,n,ok2,obj.a,obj.b",
         ].into_iter().map(str::to_owned).collect());
     }
+    #[test]
+    fn reference_compact_keys_survive_larger_backend_pools() {
+        let mut sources = Vec::new();
+        for count in [100, 150, 190, 200] {
+            let pad = (1..=253)
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            sources.push(format!(
+                "do local pad={{true,false,nil}}end;do local pad={{{pad}}}end;{}",
+                indexed_assignment(count)
+            ));
+            sources.push(format!(
+                "{}{}",
+                (1000..1300)
+                    .map(|n| format!("if {n} then end;"))
+                    .collect::<String>(),
+                indexed_assignment(count)
+            ));
+        }
+        sources.push("a={};a['a']=7;return a.a".into());
+        sources.push("local t=setmetatable({},{__index=function()return function(self)return self end end});local x=t:m();x['m']=7;return x.m".into());
+        check_bound(sources, Some(203));
+    }
+    #[test]
+    fn folded_keys_follow_reference_operands_and_preserve_effects() {
+        let mut sources = Vec::new();
+        for key in [
+            "not nil",
+            "not true",
+            "false or 1",
+            "nil or 'field'",
+            "true and 1",
+            "not false and 1",
+            "(1+2)",
+            "-0.0",
+        ] {
+            let targets = std::iter::repeat_n(format!("t[{key}]"), 150)
+                .collect::<Vec<_>>()
+                .join(",");
+            let values = (1..=150)
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            sources.push(format!("local t={{}};{targets}={values};return t[{key}]"));
+        }
+        sources.extend([
+            "local log={};local function f(v)log[#log+1]=tostring(v);return v end;local t={};t[f(false) or 'field'],t[f(true) and 1]=f(7),f(9);return t.field,t[1],table.concat(log,',')",
+            "local n=0;local function f()n=n+1;return 7 end;local t={};t[true or f()],t[false and f()]=1,2;return n,t[true],t[false]",
+            "local t={[not nil]=7,[nil or 'field']=9,[true and 1]=11};return t[true],t.field,t[1]",
+        ].into_iter().map(str::to_owned));
+        check(sources);
+    }
+    #[test]
+    fn zero_pool_signs_ignore_unused_conditions_and_stay_function_local() {
+        let mut sources=[
+            "if 0 then end;return 1/-0.0",
+            "if -0.0 then end;return 1/0",
+            "if 0 then end;local x=-0.0;return 1/x,1/0",
+            "local x;x=-0.0;return 1/x,1/0",
+            "local x;x=0;return 1/x,1/-0.0",
+            "do local x=-0.0 end;return 1/0",
+            "if 0 then end;local t={[-0.0]=0};return 1/t[0]",
+            "if -0.0 then end;local t={[0]=-0.0};return 1/t[0]",
+            "local function f()if 0 then end;return -0.0 end;local function g()if -0.0 then end;return 0 end;return 1/f(),1/g(),1/-0.0",
+            "local f=assert(loadstring('if 0 then end;return -0.0'));return 1/f()",
+        ].into_iter().map(str::to_owned).collect::<Vec<_>>();
+        for prefix in [
+            "if 0 then end;",
+            "if -0.0 then end;",
+            "",
+            "do local t={true,false,nil}end;",
+        ] {
+            for first in ["0", "-0.0", "1-1", "-(1-1)"] {
+                for second in ["0", "-0.0", "1-1", "-(1-1)"] {
+                    for declaration in [true, false] {
+                        sources.push(format!(
+                            "{prefix}local x{};{}return 1/x,1/({second})",
+                            if declaration {
+                                format!("={first}")
+                            } else {
+                                String::new()
+                            },
+                            if declaration {
+                                String::new()
+                            } else {
+                                format!("x={first};")
+                            }
+                        ));
+                    }
+                }
+            }
+        }
+        check(sources);
+    }
 }

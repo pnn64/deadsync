@@ -69,6 +69,19 @@ pub(crate) struct Ast {
     pub stmts: Vec<(Stmt, u32)>,
     pub body: Block,
     pub end_line: u32,
+    pub key_constants: Vec<(ExprId, KeyConstant)>,
+    pub zero_signs: Vec<(ExprId, bool)>,
+    pub root_zero_sign: Option<bool>,
+}
+
+/// Deferred store-key operands selected by the reference compiler's pool.
+/// String indices borrow existing AST literals, including folded logical keys.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum KeyConstant {
+    Nil,
+    Boolean(bool),
+    Number(f64),
+    String(ExprId),
 }
 
 mod bindings;

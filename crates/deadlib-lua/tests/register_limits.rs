@@ -331,3 +331,23 @@ fn conditions_conflicts_and_nested_expressions_share_the_logical_stack() {
         }
     }
 }
+
+#[test]
+fn local_stores_contribute_to_reference_constant_pool_boundaries() {
+    let mut oracle = Oracle::new();
+    for pool in [250, 254, 255, 256, 300] {
+        let prefix = format!(
+            "local x;{}local {};",
+            (1..=pool).map(|n| format!("x={n};")).collect::<String>(),
+            names(199)
+        );
+        for expr in ["a1[1]", "a1[true]", "{[1]=1}", "a1:m()"] {
+            for count in 44..=49 {
+                let source = format!("{prefix}return f({},{expr})", repeated("1", count));
+                for width in [0, 7, 128] {
+                    oracle.check(&source, width, 0);
+                }
+            }
+        }
+    }
+}

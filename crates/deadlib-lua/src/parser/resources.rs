@@ -4,7 +4,7 @@
 //! lists. Checks run at parser continuations, before the next reader request
 //! whenever the reference would already reject the source. No code is emitted.
 use super::{
-    Ast, Expr, ExprId,
+    Ast, Expr, ExprId, KeyConstant,
     bindings::{Bindings, Reference},
 };
 use crate::lexer::Kind;
@@ -155,6 +155,7 @@ struct Function {
     next: u16,
     locals: u16,
     pool: Pool,
+    zero_sign: Option<bool>,
 }
 #[derive(Debug)]
 struct Table {
@@ -170,12 +171,14 @@ pub(super) struct Resources {
     parents: Vec<Function>,
     values: Vec<Value>,
     tables: Vec<Table>,
+    keys: Vec<(ExprId, KeyConstant)>,
 }
 impl Resources {
     pub(super) fn heap_bytes(&self) -> usize {
         self.parents.capacity() * size_of::<Function>()
             + self.values.capacity() * size_of::<Value>()
             + self.tables.capacity() * size_of::<Table>()
+            + self.keys.capacity() * size_of::<(ExprId, KeyConstant)>()
             + self.function.pool.heap_bytes()
             + self
                 .parents
@@ -212,8 +215,44 @@ impl Resources {
         self.parents.push(std::mem::take(&mut self.function));
         self.locals(count);
     }
-    pub(super) fn leave(&mut self) {
-        self.function = self.parents.pop().expect("resource parent");
+    pub(super) fn leave(&mut self) -> Option<bool> {
+        let child = std::mem::replace(
+            &mut self.function,
+            self.parents.pop().expect("resource parent"),
+        );
+        child.zero_sign
+    }
+    pub(super) fn finish(&mut self, ast: &mut Ast) {
+        self.keys.sort_unstable_by_key(|&(id, _)| id);
+        ast.key_constants = std::mem::take(&mut self.keys);
+        ast.root_zero_sign = self.function.zero_sign;
+    }
+    fn number(&mut self, number: f64, cx: &Context<'_>) -> u32 {
+        if number == 0.0 && self.function.zero_sign.is_none() {
+            self.function.zero_sign = Some(number.is_sign_negative());
+        }
+        self.function.pool.insert(Key::number(number), cx)
+    }
+    fn save_key(&mut self, id: ExprId, operand: u16) {
+        if operand < RK {
+            return;
+        }
+        let key = self.function.pool.entries[usize::from(operand - RK)];
+        let constant = match key.kind {
+            0 => {
+                let number = f64::from_bits(key.data);
+                KeyConstant::Number(if number == 0.0 && self.function.zero_sign == Some(true) {
+                    -0.0
+                } else {
+                    number
+                })
+            }
+            1 => KeyConstant::Nil,
+            2 | 3 => KeyConstant::Boolean(key.kind == 3),
+            4 => KeyConstant::String(key.data as ExprId),
+            _ => unreachable!("a constant string key has an AST literal"),
+        };
+        self.keys.push((id, constant));
     }
     fn free(&mut self, reg: u16) {
         if reg < RK && reg >= self.function.locals {
@@ -240,7 +279,7 @@ impl Resources {
     }
     fn load(&mut self, value: &mut Value, reg: u16, cx: &Context<'_>) {
         if value.form == Form::Number {
-            self.function.pool.insert(Key::number(value.number), cx);
+            self.number(value.number, cx);
         }
         value.form = Form::Temp;
         value.info = u32::from(reg);
@@ -292,7 +331,11 @@ impl Resources {
         if let Some(key) = key
             && self.function.pool.entries.len() <= 255
         {
-            value.info = self.function.pool.insert(key, cx);
+            value.info = if value.form == Form::Number {
+                self.number(value.number, cx)
+            } else {
+                self.function.pool.insert(key, cx)
+            };
             value.form = Form::Constant;
         }
         if value.form == Form::Constant && value.info <= 255 {
@@ -571,11 +614,18 @@ impl Resources {
         values: &[ExprId],
         cx: &Context<'_>,
     ) -> Check {
+        for &target in targets {
+            if let Expr::Index(_, key) = cx.ast.exprs[target].0 {
+                self.save_key(key, self.values[target].key);
+            }
+        }
         if targets.len() == values.len() {
             let mut value = self.values[*values.last().unwrap()];
             let target = self.values[*targets.last().unwrap()];
             self.discharge(&mut value);
-            if target.form != Form::Local {
+            if target.form == Form::Local {
+                self.load(&mut value, target.info as u16, cx);
+            } else {
                 if target.form == Form::Index {
                     self.rk(&mut value, cx)?;
                 } else {
@@ -618,7 +668,8 @@ impl Resources {
     }
     pub(super) fn record_key(&mut self, id: ExprId, cx: &Context<'_>) -> Check {
         let mut v = self.values[id];
-        self.rk(&mut v, cx)?;
+        let operand = self.rk(&mut v, cx)?;
+        self.save_key(id, operand);
         self.values[id] = v;
         Ok(())
     }
@@ -651,6 +702,10 @@ impl Resources {
                     },
                     cx,
                 );
+                // An identifier or method may have interned these bytes first.
+                // Retain this literal as an allocation-free compiler source.
+                self.function.pool.entries[k as usize].kind = 4;
+                self.function.pool.entries[k as usize].data = id as u64;
                 Value::new(Form::Constant, k)
             }
             Expr::Vararg => Value::new(Form::Vararg, 0),
@@ -664,10 +719,10 @@ impl Resources {
             Expr::Binary(op, a, b, _) => self.binary(*op, self.values[*a], self.values[*b], cx)?,
             Expr::Index(table, key) => {
                 let mut k = self.values[*key];
-                let key = self.rk(&mut k, cx)?;
+                let operand = self.rk(&mut k, cx)?;
                 let mut v = self.values[*table];
                 v.form = Form::Index;
-                v.key = key;
+                v.key = operand;
                 v
             }
             Expr::Table(..) => {

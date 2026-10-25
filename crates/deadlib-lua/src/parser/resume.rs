@@ -173,6 +173,8 @@ impl Parser {
             + self.scanner.heap_bytes()
             + self.bindings.heap_bytes()
             + self.resources.heap_bytes()
+            + self.ast.zero_signs.capacity() * size_of::<(ExprId, bool)>()
+            + self.ast.key_constants.capacity() * size_of::<(ExprId, KeyConstant)>()
     }
     pub(crate) fn heap_bytes(&self) -> usize {
         fn names(v: &[Box<[u8]>]) -> usize {
@@ -475,6 +477,7 @@ impl Parser {
         loop {
             if self.tasks.is_empty() {
                 self.finished = true;
+                self.resources.finish(&mut self.ast);
                 self.resources = Resources::default();
                 return Ok(Some(std::mem::take(&mut self.ast)));
             }
@@ -1005,7 +1008,9 @@ impl Parser {
                     self.locals = locals;
                     self.function_line = parent_line;
                     self.bindings.leave();
-                    self.resources.leave();
+                    if let Some(sign) = self.resources.leave() {
+                        self.ast.zero_signs.push((self.ast.exprs.len(), sign));
+                    }
                     let body = std::mem::take(&mut self.body);
                     self.expression(
                         input,

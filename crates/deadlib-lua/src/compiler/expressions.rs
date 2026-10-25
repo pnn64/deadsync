@@ -87,6 +87,12 @@ impl<'a> Compiler<'a> {
                         vararg: *vararg,
                         compat_arg: *vararg,
                         defined: [span.start, *end_line],
+                        zero_sign: self
+                            .ast
+                            .zero_signs
+                            .binary_search_by_key(&id, |&(id, _)| id)
+                            .ok()
+                            .map(|at| self.ast.zero_signs[at].1),
                         ..Function::default()
                     },
                 );
@@ -293,22 +299,25 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
     pub(super) fn field_constant(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
-        // Preserve constant-pool insertion order without keeping a literal key
-        // in a register while the field value is evaluated.
-        let constant = if let Some(number) = self.folded[id] {
-            Constant::Number(number)
-        } else {
-            match &self.ast.exprs[self.unparen(id)].0 {
-                Expr::Nil => Constant::Nil,
-                Expr::Boolean(value) => Constant::Boolean(*value),
-                Expr::String(value) => Constant::String(value.clone()),
-                _ => return Ok(None),
+        let Ok(index) = self
+            .ast
+            .key_constants
+            .binary_search_by_key(&id, |&(id, _)| id)
+        else {
+            return Ok(None);
+        };
+        let constant = match self.ast.key_constants[index].1 {
+            crate::parser::KeyConstant::Nil => Constant::Nil,
+            crate::parser::KeyConstant::Boolean(value) => Constant::Boolean(value),
+            crate::parser::KeyConstant::Number(value) => Constant::Number(value),
+            crate::parser::KeyConstant::String(source) => {
+                let Expr::String(bytes) = &self.ast.exprs[source].0 else {
+                    unreachable!("constant key literal")
+                };
+                Constant::String(bytes.clone())
             }
         };
-        let compact =
-            matches!(constant, Constant::String(_)) || self.function.constants.len() <= 255;
-        let index = self.constant(constant)?;
-        Ok((compact && index <= 255).then_some(index))
+        self.constant(constant).map(Some)
     }
     pub(super) fn call_parts(&self, id: ExprId) -> (ExprId, Option<&'a [u8]>, &'a [ExprId], u32) {
         match &self.ast.exprs[id].0 {
