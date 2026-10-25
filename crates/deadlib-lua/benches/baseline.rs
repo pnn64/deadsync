@@ -258,6 +258,12 @@ fn main() {
             5558.0,
             10,
         ),
+        (
+            "io_tmpfile",
+            r#"local f=assert(io.tmpfile());for i=1,64 do assert(f:write(i,'\n'))end;assert(f:seek('set',0)==0);local sum=0;for line in f:lines()do sum=sum+tonumber(line)end;assert(f:close());return sum"#,
+            2080.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");

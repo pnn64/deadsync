@@ -30,6 +30,7 @@ impl Status {
 pub(super) enum NativeKind {
     Match(strings::MatchIterator),
     Wrap(ThreadId),
+    Lines { file: UserdataId, close: bool },
 }
 #[derive(Debug)]
 pub(super) struct NativeClosure {

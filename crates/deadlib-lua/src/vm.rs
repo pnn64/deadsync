@@ -10,6 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 mod debug;
 mod gc;
 mod hooks;
+mod io;
 mod loads;
 mod math;
 mod meta;
@@ -133,15 +134,15 @@ const COLLECT_GARBAGE: u64 = 27;
 const GC_INFO: u64 = 28;
 const NEW_PROXY: u64 = 29;
 const LOAD_READER: u64 = 30;
-const CONT_RAW: u64 = 128;
-const CONT_BOOL: u64 = 129;
-const CONT_NOT: u64 = 130;
-const CONT_IGNORE: u64 = 131;
-const CONT_HANDLER: u64 = 132;
-const CONT_GC: u64 = 133;
-const CONT_HOOK: u64 = 134;
-const CONT_TRACE: u64 = 135;
-const CONT_RETURN: u64 = 136;
+const CONT_RAW: u64 = 256;
+const CONT_BOOL: u64 = 257;
+const CONT_NOT: u64 = 258;
+const CONT_IGNORE: u64 = 259;
+const CONT_HANDLER: u64 = 260;
+const CONT_GC: u64 = 261;
+const CONT_HOOK: u64 = 262;
+const CONT_TRACE: u64 = 263;
+const CONT_RETURN: u64 = 264;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -243,6 +244,7 @@ pub struct Vm {
     strings: Strings,
     tables: Arena<Table>,
     globals: TableId,
+    registry: TableId,
     top: usize,
     budget: Option<u64>,
     type_metatables: [Option<TableId>; 8],
@@ -269,6 +271,7 @@ pub struct Vm {
     hooks: hooks::Hooks,
     hook_functions: HashMap<ThreadId, Value>,
     userdata: Arena<userdata::Userdata>,
+    io: io::Io,
     proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
 }
@@ -284,6 +287,7 @@ impl Vm {
     pub fn new() -> Self {
         let mut tables = Arena::default();
         let globals = TableId(tables.insert(Table::default()));
+        let registry = TableId(tables.insert(Table::default()));
         let mut threads = Arena::default();
         let main = ThreadId(threads.insert(threads::Thread::main(globals)));
         let mut vm = Self {
@@ -296,6 +300,7 @@ impl Vm {
             strings: Strings::default(),
             tables,
             globals,
+            registry,
             top: 0,
             budget: None,
             type_metatables: [None; 8],
@@ -322,6 +327,7 @@ impl Vm {
             hooks: hooks::Hooks::default(),
             hook_functions: HashMap::new(),
             userdata: Arena::default(),
+            io: io::Io::default(),
             proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
         };
@@ -378,6 +384,7 @@ impl Vm {
             (debug::TRACEBACK, b"traceback"),
             (hooks::GET_HOOK, b"gethook"),
             (hooks::SET_HOOK, b"sethook"),
+            (debug::GET_REGISTRY, b"getregistry"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]
@@ -395,6 +402,23 @@ impl Vm {
         vm.open_strings();
         vm.open_tables();
         vm.open_threads();
+        vm.open_io();
+        let loaded = vm.new_table();
+        let key = vm.intern(b"_LOADED");
+        vm.raw_set(registry, key, Value::Table(loaded)).unwrap();
+        for name in [
+            b"_G".as_slice(),
+            b"math",
+            b"string",
+            b"table",
+            b"debug",
+            b"coroutine",
+            b"io",
+        ] {
+            let value = vm.global(name);
+            let name = vm.intern(name);
+            vm.raw_set(loaded, name, value).unwrap();
+        }
         vm.reset_gc_debt();
         vm
     }
@@ -404,7 +428,7 @@ impl Vm {
         self.budget = limit;
     }
 
-    /// Capture subsequent `print` output in a buffer instead of writing to stdout.
+    /// Capture logical bytes from `print` and I/O writes to stdout.
     pub fn set_output_capture(&mut self, enabled: bool) {
         self.output = enabled.then(Vec::new);
     }

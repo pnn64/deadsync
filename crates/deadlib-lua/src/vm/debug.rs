@@ -7,6 +7,7 @@ pub(super) const SET_UPVALUE: u64 = 114;
 pub(super) const GET_LOCAL: u64 = 115;
 pub(super) const SET_LOCAL: u64 = 116;
 pub(super) const TRACEBACK: u64 = 117;
+pub(super) const GET_REGISTRY: u64 = 120;
 
 #[derive(Clone, Copy)]
 pub(super) enum StackEntry {
@@ -109,6 +110,7 @@ impl Vm {
                 match self.native_closures.get(id).map(|c| &c.kind) {
                     Some(threads::NativeKind::Match(_)) => 3,
                     Some(threads::NativeKind::Wrap(_)) => 1,
+                    Some(threads::NativeKind::Lines { .. }) => 2,
                     None => 0,
                 }
             }

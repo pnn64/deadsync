@@ -3,6 +3,7 @@ use super::*;
 
 #[derive(Debug)]
 pub(super) struct Userdata {
+    pub file: Option<std::num::NonZeroU64>,
     pub env: TableId,
     pub metatable: Option<TableId>,
     pub bytes: Box<[u8]>,
@@ -145,13 +146,14 @@ impl Vm {
         }
     }
 
-    fn allocate_userdata(&mut self, size: usize, env: TableId) -> UserdataId {
+    pub(super) fn allocate_userdata(&mut self, size: usize, env: TableId) -> UserdataId {
         self.userdata_order = self
             .userdata_order
             .checked_add(1)
             .expect("userdata creation order exhausted");
         self.userdata.note_alloc(size);
         UserdataId(self.userdata.insert(Userdata {
+            file: None,
             env,
             metatable: None,
             bytes: vec![0; size].into_boxed_slice(),

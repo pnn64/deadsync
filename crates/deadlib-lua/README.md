@@ -101,6 +101,20 @@ Hosts can allocate userdata with `Vm::new_userdata` and borrow its byte storage.
 `Vm::collect_garbage` returns `Result<HeapStats, Error>` so finalizer failures
 can propagate; pending finalizers remain available to later collection.
 
+The I/O library provides named/temporary files, default streams, process pipes,
+reads, writes, seeking, buffering, close/type queries and line iterators. File
+userdata owns a generation-checked stream record and uses the shared collector
+and finalizer machinery. Lua 5.1 writes return booleans; iterator closures retain
+their file. Windows text files translate newlines and Ctrl+Z, including the
+reference's buffered seek cookies. Captured stdout keeps logical byte order across
+`print` and I/O writes; the Windows CLI emits translated newlines.
+
+`debug.getregistry` returns the shared, rooted registry. Its `FILE*` entry controls
+file type checks, and `_LOADED` contains the registered builtin modules. The package
+loader is still unfinished. Windows path conversion currently uses UTF-8; ASCII
+paths are covered by the reference checks. Exact standard-stream buffering, more
+device/error cases, native scratch stacks and I/O cancellation remain open.
+
 Host copies of `Value` do not keep objects alive. Use `Vm::pin`, `rooted` and
 `unpin` for values retained across executions or collections. Root handles check
 VM ownership and generations; ordinary object handles must stay in their
@@ -132,10 +146,11 @@ as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: all fifteen reference probes pass; the Rust engine
+currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
-`pm.lua`, `events.lua`, `gc.lua` and `closure.lua`. Remaining probes reach missing
-functions or a syntax-diagnostic mismatch. It verifies the official
+`pm.lua`, `events.lua`, `gc.lua`, `closure.lua` and `db.lua`. The newly included
+`files.lua` also fails in the C reference at a Windows open-file rename. Other
+probes reach missing libraries/functions or a syntax-diagnostic mismatch. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-hooks.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-io.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

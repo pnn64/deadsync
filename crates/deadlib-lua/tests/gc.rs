@@ -204,7 +204,7 @@ fn automatic_collection_handles_opcode_only_churn_and_large_live_arrays() {
 fn native_handles_cannot_restore_collected_environments() {
     let mut vm = Vm::new();
     let native = vm.global(b"assert");
-    vm.execute(&compile(b"debug.setmetatable('',nil);setfenv(0,{});return nil").unwrap())
+    vm.execute(&compile(b"local f=assert;debug.setfenv(f,{});assert=nil;return nil").unwrap())
         .unwrap();
     vm.collect_garbage().unwrap();
     assert!(vm.pin(native).is_err());

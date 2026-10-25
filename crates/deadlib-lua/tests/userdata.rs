@@ -206,6 +206,7 @@ fn automatic_finalization_restores_interrupted_lua_registers() {
 #[test]
 fn host_userdata_storage_and_collection_validate_live_handles() {
     let mut vm = Vm::new();
+    let baseline = vm.heap_stats().userdata;
     let value = vm.new_userdata(32);
     let Value::Userdata(id) = value else {
         unreachable!()
@@ -216,7 +217,7 @@ fn host_userdata_storage_and_collection_validate_live_handles() {
     vm.collect_garbage().unwrap();
     assert_eq!(vm.userdata_bytes(id).unwrap()[3], 17);
     vm.unpin(root).unwrap();
-    assert_eq!(vm.collect_garbage().unwrap().userdata, 0);
+    assert_eq!(vm.collect_garbage().unwrap().userdata, baseline);
     assert!(vm.userdata_bytes(id).is_none());
     assert!(vm.userdata_bytes_mut(id).is_none());
     assert!(vm.pin(value).is_err());
@@ -251,7 +252,14 @@ fn vm_drop_finalizes_reachable_userdata_and_continues_after_errors() {
         "{}",
         String::from_utf8_lossy(&run.stderr)
     );
-    assert_eq!(run.stdout, b"done\n3\n2\n1\n");
+    assert_eq!(
+        run.stdout,
+        if cfg!(windows) {
+            b"done\r\n3\r\n2\r\n1\r\n".as_slice()
+        } else {
+            b"done\n3\n2\n1\n".as_slice()
+        }
+    );
 }
 
 #[test]

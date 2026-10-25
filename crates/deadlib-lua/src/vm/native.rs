@@ -1,6 +1,5 @@
 //! Native library functions and explicit callback continuations.
 use super::*;
-use std::io::Write;
 
 impl Vm {
     pub(super) fn finish_call(&mut self, call: usize, actual: usize, wanted: u32) {
@@ -403,11 +402,10 @@ impl Vm {
                 }
                 output.extend_from_slice(bytes);
             } else {
-                let mut stdout = std::io::stdout().lock();
                 if completed != 0 {
-                    stdout.write_all(b"\t").map_err(io_error)?;
+                    io::stdout_write(b"\t").map_err(io_error)?;
                 }
-                stdout.write_all(bytes).map_err(io_error)?;
+                io::stdout_write(bytes).map_err(io_error)?;
             }
         }
         let next = if frame.pc() == 1 { 0 } else { completed + 1 };
@@ -415,7 +413,7 @@ impl Vm {
             if let Some(output) = &mut self.output {
                 output.push(b'\n');
             } else {
-                std::io::stdout().write_all(b"\n").map_err(io_error)?;
+                io::stdout_write(b"\n").map_err(io_error)?;
             }
             return Ok(self.return_frame(frame, base, 0));
         }
@@ -494,6 +492,13 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        if id == debug::GET_REGISTRY {
+            self.registers[base] = Value::Table(self.registry);
+            return Ok(1);
+        }
+        if (io::FIRST..=io::LAST).contains(&id) {
+            return self.io_native(id, base, count);
+        }
         if matches!(id, hooks::GET_HOOK | hooks::SET_HOOK) {
             return self.hook_native(id, base, count);
         }
@@ -519,6 +524,12 @@ impl Vm {
             return self.table_native(id, base, count);
         }
         if id >= strings::ITERATOR_FIRST {
+            if matches!(
+                self.native_closures.get(id).map(|c| &c.kind),
+                Some(threads::NativeKind::Lines { .. })
+            ) {
+                return self.io_iterator(id, base);
+            }
             return self.match_iterator(id, base);
         }
         let arg = |vm: &Self, index: usize| {

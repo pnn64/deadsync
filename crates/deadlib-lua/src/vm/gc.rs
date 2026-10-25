@@ -43,6 +43,8 @@ pub struct HeapStats {
     pub upvalues: usize,
     /// Live full userdata objects.
     pub userdata: usize,
+    /// Live file records, including closed file userdata.
+    pub files: usize,
     /// Completed tracing cycles.
     pub collections: u64,
     /// Total arena objects reclaimed by completed cycles.
@@ -296,7 +298,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=hooks::SET_HOOK)
+                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|io::FIRST..=io::LAST)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
@@ -355,6 +357,7 @@ impl Vm {
             .sum::<usize>();
         payload += self.programs.iter().map(program_bytes).sum::<usize>();
         payload += self.userdata.iter().map(|u| u.bytes.len()).sum::<usize>();
+        payload += self.io.heap_bytes();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()
             + self.frames.capacity() * std::mem::size_of::<Frame>()
             + self.open_upvalues.capacity() * 4
@@ -396,8 +399,9 @@ impl Vm {
             + self.native_closures.live_len() * std::mem::size_of::<threads::NativeClosure>()
             + self.programs.live_len() * std::mem::size_of::<LoadedProgram>()
             + self.roots.live_len() * std::mem::size_of::<Value>();
-        let objects =
-            objects + self.userdata.live_len() * std::mem::size_of::<userdata::Userdata>();
+        let objects = objects
+            + self.userdata.live_len() * std::mem::size_of::<userdata::Userdata>()
+            + self.io.files.live_len() * std::mem::size_of::<io::Stream>();
         let storage = self.strings.bytes.storage_bytes()
             + self.tables.storage_bytes()
             + self.functions.storage_bytes()
@@ -406,7 +410,7 @@ impl Vm {
             + self.native_closures.storage_bytes()
             + self.programs.storage_bytes()
             + self.roots.storage_bytes();
-        let storage = storage + self.userdata.storage_bytes();
+        let storage = storage + self.userdata.storage_bytes() + self.io.files.storage_bytes();
         let reserved = payload + control + storage;
         self.gc.peak = self.gc.peak.max(reserved);
         HeapStats {
@@ -421,6 +425,7 @@ impl Vm {
             programs: self.programs.live_len(),
             upvalues: self.upvalues.live_len(),
             userdata: self.userdata.live_len(),
+            files: self.io.files.live_len(),
             collections: self.gc.collections,
             reclaimed_objects: self.gc.reclaimed,
         }
@@ -435,6 +440,7 @@ impl Vm {
         self.programs.allocated = 0;
         self.roots.allocated = 0;
         self.userdata.allocated = 0;
+        self.io.files.allocated = 0;
         self.gc.control_allocated = 0;
         self.gc.pending = false;
         self.gc.last_live = self.heap_stats().live_bytes;
@@ -456,6 +462,7 @@ impl Vm {
             .saturating_add(self.native_closures.allocated)
             .saturating_add(self.programs.allocated)
             .saturating_add(self.userdata.allocated)
+            .saturating_add(self.io.files.allocated)
             .saturating_add(self.gc.control_allocated)
     }
     pub(super) fn maybe_gc(&mut self) {
@@ -584,6 +591,9 @@ impl Vm {
                 Trace::Value(Value::Userdata(id)) => {
                     if self.userdata.mark(id.0) {
                         let u = &self.userdata[slot_index(id.0)];
+                        if let Some(file) = u.file {
+                            self.io.files.mark(file.get());
+                        }
                         work.push(Trace::Value(Value::Table(u.env)));
                         if let Some(mt) = u.metatable {
                             work.push(Trace::Value(Value::Table(mt)));
@@ -606,6 +616,9 @@ impl Vm {
                                 }
                                 threads::NativeKind::Wrap(t) => {
                                     work.push(Trace::Value(Value::Thread(*t)))
+                                }
+                                threads::NativeKind::Lines { file, .. } => {
+                                    work.push(Trace::Value(Value::Userdata(*file)))
                                 }
                             }
                         }
@@ -648,10 +661,15 @@ impl Vm {
         self.native_closures.clear_marks();
         self.programs.clear_marks();
         self.userdata.clear_marks();
+        self.io.files.clear_marks();
         self.gc.natives.fill(0);
         let mut work = std::mem::take(&mut self.gc.work);
         work.clear();
         work.push(Trace::Value(Value::Thread(self.main)));
+        work.push(Trace::Value(Value::Table(self.registry)));
+        if let Some(tag) = self.io.file_tag {
+            work.push(Trace::Value(Value::String(tag)));
+        }
         work.push(Trace::Value(Value::Thread(self.thread)));
         work.extend(
             self.meta_names
@@ -725,6 +743,7 @@ impl Vm {
             + sweep(&mut self.programs)
             + sweep(&mut self.strings.bytes);
         let reclaimed = reclaimed + sweep(&mut self.userdata);
+        let reclaimed = reclaimed + sweep(&mut self.io.files);
         self.proxy_metatables
             .retain(|id| self.tables.contains(id.0));
         self.strings.rebuild();
