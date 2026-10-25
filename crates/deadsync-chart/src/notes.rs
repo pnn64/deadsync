@@ -115,7 +115,12 @@ fn parse_chart_notes_with_heads<T>(
     let lanes = hold_heads.len();
     let mut invalid_heads = Vec::new();
 
-    for line in minimized_note_data.split(|&b| b == b'\n') {
+    let mut line_start = 0;
+    for line_end in memchr::memchr_iter(b'\n', minimized_note_data)
+        .chain(std::iter::once(minimized_note_data.len()))
+    {
+        let line = &minimized_note_data[line_start..line_end];
+        line_start = line_end + 1;
         let trimmed_line = line.strip_suffix(b"\r").unwrap_or(line);
         if trimmed_line.is_empty() || trimmed_line == b"," {
             continue;

@@ -5,6 +5,8 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+crc32fast = "1.5.3"
+memchr = "2.8.3"
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
 rustc-hash = "2.1.3"

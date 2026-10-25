@@ -13,3 +13,7 @@ pub use song::{
     SongForegroundLuaChange, SongPack, SyncPref,
 };
 pub mod golf;
+
+#[cfg(test)]
+#[path = "../../../tests/perf/core_alloc.rs"]
+mod perf_alloc;

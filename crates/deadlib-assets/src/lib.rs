@@ -683,12 +683,13 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
         .unwrap_or([0; 3]);
     let [r, g, b] = if first == last { first } else { [0, 0, 0] };
+    let hidden = u32::from_le_bytes([r, g, b, 0]);
     for pixel in image.as_mut().as_chunks_mut::<4>().0 {
-        if pixel[3] == 0 {
-            pixel[0] = r;
-            pixel[1] = g;
-            pixel[2] = b;
-        }
+        let word = u32::from_le_bytes(*pixel);
+        // Compare packed lanes so LLVM can vectorize the selection. Byte
+        // extraction followed by a boolean-to-word mask inhibits that here.
+        let visible = 0u32.wrapping_sub(u32::from(word & 0xff00_0000 != 0));
+        *pixel = ((word & visible) | (hidden & !visible)).to_le_bytes();
     }
 }
 

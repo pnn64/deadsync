@@ -1,7 +1,6 @@
 use super::*;
 use std::hint::black_box;
-#[path = "../../../tests/perf/core_alloc.rs"]
-mod alloc;
+use crate::perf_alloc as alloc;
 #[path = "metadata_original.rs"]
 mod original;
 #[path = "../../../tests/perf/core_support.rs"]
