@@ -26,6 +26,10 @@ and parser. Flat grammar continuations preserve partial tokens, expressions and
 statements across input chunks without reparsing earlier input. Reader callbacks
 use protected VM frames, preserve arbitrary error values and obey Lua 5.1 yield
 restrictions. Loaded functions use the thread environment after input is read.
+Code generation also uses flat continuations for blocks, expressions, argument
+lists and nested functions. Ancestor capture propagation is iterative. Compilation
+does not consume host stack in proportion to source nesting or expression-tree
+depth; the frontend's Lua syntax limits still apply.
 Text `loadfile` and `dofile` share this frontend and the buffered stream backend.
 They accept named files or underlying stdin, skip an initial `#` line, and retain
 file source names. `dofile` runs through the flat scheduler, preserving multiple
@@ -171,9 +175,7 @@ value type for its observable sentinel.
 Other standard libraries, native C-library loading, complete diagnostic text and
 debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
-limits also need broader compatibility work. Code generation still recurses on
-the host stack; deeply nested valid functions can overflow a small debug-thread
-stack. In particular, `string.dump` is
+limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
 work limits. Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
@@ -199,5 +201,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-captures.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-flat-codegen.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

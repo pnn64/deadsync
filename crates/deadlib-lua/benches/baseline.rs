@@ -483,7 +483,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(10);
+    let mut frontends = Vec::with_capacity(12);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -512,6 +512,24 @@ fn main() {
         );
         frontends.push((format!("frontend_captures_{scopes}"), source, 7.0, repeats));
     }
+    let mut source = String::from("local root=7\n");
+    for index in 1..=190 {
+        source.push_str(&format!("local function f{index}()\n"));
+    }
+    source.push_str("root=root+1;return root\n");
+    for index in (1..=190).rev() {
+        source.push_str("end\n");
+        if index > 1 {
+            source.push_str(&format!("return f{index}()\n"));
+        }
+    }
+    source.push_str("return f1()");
+    frontends.push(("frontend_functions_190".into(), source, 8.0, 20));
+    let source = format!(
+        "local n=0;local function f()n=n+1;return n end;local value={};return value",
+        vec!["f()"; 20_000].join(" and ")
+    );
+    frontends.push(("frontend_logical_20000".into(), source, 20_000.0, 3));
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
         let mut vm = Vm::new();

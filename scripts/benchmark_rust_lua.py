@@ -91,8 +91,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired compilation measurements for {name}")
         compile_ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(compile_ratios) != 10:
-        raise SystemExit(f"expected 10 frontend scaling measurements, received {len(compile_ratios)}")
+    if len(compile_ratios) != 12:
+        raise SystemExit(f"expected 12 frontend scaling measurements, received {len(compile_ratios)}")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         build_and_run_seconds=time.time() - started,

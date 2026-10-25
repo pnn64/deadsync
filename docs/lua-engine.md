@@ -18,7 +18,7 @@ performance JSON keeps its recorded measurement provenance.
 | Requirement | Evidence and remaining work |
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Complete reference-suite coverage remains open. |
+| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Complete reference-suite coverage remains open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Source diagnostics retain raw bytes, token context, opening lines and tested local/assignment bounds. Full runtime/compiler diagnostics, debug behavior and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
@@ -34,13 +34,13 @@ performance JSON keeps its recorded measurement provenance.
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
-Next work should finish the standalone engine: incremental collection,
+Next work should finish the standalone engine: register allocation/resource limits, incremental collection,
 remaining standard libraries, complete diagnostics/debug behavior, binary loading and
 caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 255 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 260 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-captures.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-flat-codegen.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -226,10 +226,21 @@ waiting for the reference's next-token lookahead. Repeat-body locals remain in
 scope through the condition. The unchanged official `errors.lua` now passes.
 The [measurements](performance/2026-10-25-rust-lua-captures.md) add a capture-limit
 workload and closure-heavy compilation scaling: 35 execution workloads and ten
-frontend cases. Successful code generation still uses host recursion; a valid
-59-level nested-function fixture overflows a small Windows debug test-thread
-stack. Replacing that recursion and completing register/expression/resource
-limits remain required compiler work.
+frontend cases. This milestone exposed host-stack overflow on deeply nested valid
+code generation, addressed by the continuation-based compiler below.
+
+The [flat compiler validation](testing/2026-10-25-rust-lua-flat-codegen.md) adds five
+groups with 273 paired execution programs on 512 KB Rust thread stacks. Blocks,
+expressions, argument/return lists, table fields and nested function compilation
+use one flat continuation stack; ancestor capture propagation is iterative.
+Tested sources reach 190 nested functions/scopes and 20,000-term logical chains.
+The artificial recursive-compiler depth guard is removed; source syntax limits
+remain enforced by the parser. The earlier capture corpus now also compiles its
+complete 59- and 60-capture nested fixtures. The
+[measurements](performance/2026-10-25-rust-lua-flat-codegen.md) include nested-function
+and long-expression frontend cases, bringing the harness to 35 execution and
+twelve frontend workloads. Exact register allocation/resource limits and broader
+diagnostics remain required compiler work.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

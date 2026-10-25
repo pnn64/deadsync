@@ -111,12 +111,8 @@ fn descendant_captures_report_the_first_overflowing_ancestor() {
             source.push_str(&format!("function foo{i}()\na{i}=3\n"));
         }
         oracle.check(&source, 0, 0);
-        // Deep successful code generation still uses the compiler's host stack.
-        // Keep these debug-thread probes below that separate implementation limit.
-        if count <= 12 || count > 60 {
-            source.push_str(&"end\n".repeat(count + 1));
-            oracle.check(&source, 0, 0);
-        }
+        source.push_str(&"end\n".repeat(count + 1));
+        oracle.check(&source, 0, 0);
     }
 }
 
