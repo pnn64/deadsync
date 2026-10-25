@@ -55,6 +55,8 @@ impl Vm {
                     id,
                     PCALL
                         | LOAD_READER
+                        | LOAD_FILE
+                        | DO_FILE
                         | debug::TRACEBACK
                         | COLLECT_GARBAGE
                         | XPCALL
@@ -175,7 +177,7 @@ impl Vm {
         self.trim_substitutions();
         self.trim_sorts();
         self.registers.truncate(frame.base);
-        let first = if matches!(frame.function, FrameKind::Native(LOAD_READER)) {
+        let first = if loads::protected(frame.function) {
             Value::Nil
         } else {
             Value::Boolean(false)
@@ -190,7 +192,7 @@ impl Vm {
     pub(super) fn catch_error(&mut self, error: &Error, _line: u32) -> Result<bool, Error> {
         let Some(index) = self.frames.iter().rposition(|f| {
             (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
-                || (matches!(f.function, FrameKind::Native(LOAD_READER)) && matches!(f.pc, 1 | 3))
+                || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
         }) else {
             return Ok(false);
         };
@@ -204,10 +206,10 @@ impl Vm {
         // lua_load protects the parser while retaining the current error
         // function. An enclosing xpcall transforms reader runtime errors even
         // though the loader subsequently returns nil plus that transformed value.
-        let inherited = if matches!(frame.function, FrameKind::Native(LOAD_READER)) {
+        let inherited = if loads::protected(frame.function) {
             self.frames[..index].iter().rposition(|f| {
                 (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
-                    || (matches!(f.function, FrameKind::Native(LOAD_READER)) && f.pc == 3)
+                    || (loads::protected(f.function) && f.pc == 3)
             })
         } else {
             None
@@ -281,6 +283,7 @@ impl Vm {
                 }
             }),
             LOAD_READER => self.load_step(frame),
+            LOAD_FILE | DO_FILE => self.file_load_step(id, frame),
             COLLECT_GARBAGE => self.collect_step(frame),
             CONT_GC => self.finalizer_step(frame),
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {
@@ -801,10 +804,15 @@ impl Vm {
                     v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
                     _ => return Err(bad(1, "string")),
                 };
-                match crate::compile_named(&source, &name) {
+                let compiled = crate::parser::Parser::with_native_depth(
+                    self.native_depth(self.frames.len()) + 1,
+                )
+                .resume(&source, true)
+                .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), &name));
+                match compiled {
                     Ok(program) => Value::Function(self.load(&program)),
                     Err(error) => {
-                        let mut message = crate::bytecode::chunk_id(&name);
+                        let mut message = crate::bytecode::chunk_id_limit(&name, 80);
                         message.extend_from_slice(
                             format!(":{}: {}", error.line(), error.message()).as_bytes(),
                         );

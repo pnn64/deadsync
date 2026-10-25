@@ -43,7 +43,7 @@ pub struct HeapStats {
     pub upvalues: usize,
     /// Live full userdata objects.
     pub userdata: usize,
-    /// Live file records, including closed file userdata.
+    /// Live file records, including closed userdata and active source readers.
     pub files: usize,
     /// Completed tracing cycles.
     pub collections: u64,
@@ -56,6 +56,7 @@ pub(super) enum Trace {
     Value(Value),
     Program(usize),
     Cell(usize),
+    File(u64),
 }
 fn edge(value: Value) -> Option<Trace> {
     match value {
@@ -298,7 +299,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|io::FIRST..=io::LAST)
+                matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|io::FIRST..=io::LAST)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
@@ -551,6 +552,16 @@ impl Vm {
         for job in sorts {
             work.extend(job.roots().into_iter().filter_map(edge));
         }
+        let loads = if id == self.thread {
+            &self.loads
+        } else {
+            &t.loads
+        };
+        work.extend(
+            loads
+                .iter()
+                .filter_map(|j| j.file.map(|f| Trace::File(f.key))),
+        );
     }
     fn marked_weak_value(&self, value: Value, key: bool) -> bool {
         self.marked_value(value)
@@ -647,6 +658,9 @@ impl Vm {
                         work.extend(edge(self.cell_value(i)));
                     }
                 }
+                Trace::File(key) => {
+                    self.io.files.mark(key);
+                }
                 _ => {}
             }
         }
@@ -662,6 +676,9 @@ impl Vm {
         self.programs.clear_marks();
         self.userdata.clear_marks();
         self.io.files.clear_marks();
+        if let Some(key) = self.io.stdin {
+            self.io.files.mark(key.get());
+        }
         self.gc.natives.fill(0);
         let mut work = std::mem::take(&mut self.gc.work);
         work.clear();

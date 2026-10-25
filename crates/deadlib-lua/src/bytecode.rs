@@ -7,12 +7,16 @@ pub(crate) const OPEN: u32 = u32::MAX;
 pub(crate) const OPEN_ARGS: u16 = u16::MAX;
 
 pub(crate) fn chunk_id(name: &[u8]) -> Vec<u8> {
+    chunk_id_limit(name, 60)
+}
+
+pub(crate) fn chunk_id_limit(name: &[u8], size: usize) -> Vec<u8> {
     let name = &name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())];
     if let Some(name) = name.strip_prefix(b"=") {
-        return name[..name.len().min(59)].to_vec();
+        return name[..name.len().min(size - 1)].to_vec();
     }
     if let Some(name) = name.strip_prefix(b"@") {
-        let limit = 60 - b" '...' \0".len();
+        let limit = size - b" '...' \0".len();
         if name.len() > limit {
             let mut out = b"...".to_vec();
             out.extend_from_slice(&name[name.len() - limit..]);
@@ -20,7 +24,7 @@ pub(crate) fn chunk_id(name: &[u8]) -> Vec<u8> {
         }
         return name.to_vec();
     }
-    let limit = 60 - b" [string \"...\"] \0".len();
+    let limit = size - b" [string \"...\"] \0".len();
     let len = name
         .iter()
         .position(|&b| matches!(b, b'\n' | b'\r'))

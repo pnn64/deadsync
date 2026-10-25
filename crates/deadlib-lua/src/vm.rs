@@ -134,6 +134,8 @@ const COLLECT_GARBAGE: u64 = 27;
 const GC_INFO: u64 = 28;
 const NEW_PROXY: u64 = 29;
 const LOAD_READER: u64 = 30;
+const LOAD_FILE: u64 = 31;
+const DO_FILE: u64 = 121;
 const CONT_RAW: u64 = 256;
 const CONT_BOOL: u64 = 257;
 const CONT_NOT: u64 = 258;
@@ -366,6 +368,8 @@ impl Vm {
             (GC_INFO, b"gcinfo"),
             (NEW_PROXY, b"newproxy"),
             (LOAD_READER, b"load"),
+            (LOAD_FILE, b"loadfile"),
+            (DO_FILE, b"dofile"),
         ] {
             vm.set_global(name, Value::Native(id))
                 .expect("base library names are valid");

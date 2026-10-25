@@ -8,6 +8,12 @@ use std::{
 };
 
 struct Counted;
+struct SourceFile(std::path::PathBuf);
+impl Drop for SourceFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
 #[global_allocator]
 static ALLOCATOR: Counted = Counted;
 static ENABLED: AtomicBool = AtomicBool::new(false);
@@ -264,6 +270,12 @@ fn main() {
             2080.0,
             10,
         ),
+        (
+            "loadfile_text",
+            "local f=assert(loadfile(loadfile_path));return f()",
+            2080.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");
@@ -273,6 +285,20 @@ fn main() {
         }
         .unwrap();
         let mut vm = Vm::new();
+        let source_file = (name == "loadfile_text").then(|| {
+            let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/lua-bench-fixtures");
+            std::fs::create_dir_all(&directory).unwrap();
+            let file = SourceFile(directory.join(format!("loadfile-{}.lua", std::process::id())));
+            let source = format!(
+                "#!lua\n--[=[{}]=]\nlocal sum=0;for i=1,64 do sum=sum+i end;return sum",
+                "x".repeat(4096)
+            );
+            std::fs::write(&file.0, source).unwrap();
+            let path = vm.intern(file.0.to_str().unwrap().as_bytes());
+            vm.set_global(b"loadfile_path", path).unwrap();
+            file
+        });
         assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
         let reference = if name.starts_with("debug_") {
             // SAFETY: only these fixed developer workloads need the debug library.
@@ -285,6 +311,12 @@ fn main() {
         } else {
             lua_reference::Lua::new()
         };
+        if let Some(file) = &source_file {
+            reference
+                .globals()
+                .set("loadfile_path", file.0.to_str().unwrap())
+                .unwrap();
+        }
         let chunk = reference.load(source);
         let function = if let Some(name) = chunk_name {
             chunk.set_name(name)

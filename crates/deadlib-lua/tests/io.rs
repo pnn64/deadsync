@@ -395,6 +395,10 @@ fn buffering_modes_and_partial_read_validation_preserve_file_position() {
     );
 }
 fn compare(source: &[u8]) {
+    // The Windows CRT's _popen can inherit another oracle state's fopen handles.
+    // Keep reference I/O calls in one process serial, including Lua-state drop.
+    static ORACLE_IO: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _oracle_io = ORACLE_IO.lock().unwrap();
     let mut vm = Vm::new();
     vm.set_instruction_limit(Some(10_000_000));
     vm.set_output_capture(true);

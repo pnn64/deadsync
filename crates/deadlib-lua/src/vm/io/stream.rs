@@ -5,7 +5,7 @@ use std::{
     process::Child,
 };
 
-pub(super) const LINE_BUFFER: usize = if cfg!(windows) { 512 } else { 8192 };
+pub(in crate::vm) const LINE_BUFFER: usize = if cfg!(windows) { 512 } else { 8192 };
 pub(super) const BUFFER: usize = 4096;
 
 #[derive(Debug)]

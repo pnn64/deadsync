@@ -26,6 +26,12 @@ and parser. Flat grammar continuations preserve partial tokens, expressions and
 statements across input chunks without reparsing earlier input. Reader callbacks
 use protected VM frames, preserve arbitrary error values and obey Lua 5.1 yield
 restrictions. Loaded functions use the thread environment after input is read.
+Text `loadfile` and `dofile` share this frontend and the buffered stream backend.
+They accept named files or underlying stdin, skip an initial `#` line, and retain
+file source names. `dofile` runs through the flat scheduler, preserving multiple
+results, errors and C-call restrictions. Source readers close on success, errors
+and instruction aborts. Standard input keeps its lookahead across I/O and loading;
+changing `io.input` does not redirect the loader.
 
 Current Lua 5.1 coverage includes byte strings and lexical syntax, expressions,
 assignments, blocks, conditionals, numeric/generic loops, table constructors,
@@ -54,8 +60,8 @@ bounds remain unfinished.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
-`pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`, `loadstring`
-and `newproxy`.
+`pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,
+`loadstring`, `loadfile`, `dofile` and `newproxy`.
 The Lua 5.1 `math` function set and debug metatable/environment operations are available. Binary
 decomposition/scaling preserve signed zero and round subnormals once. The random
 stream matches the MSVC reference, including per-OS-thread state shared by VMs;
@@ -152,5 +158,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions or a syntax-diagnostic mismatch. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-io.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-file-load.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

@@ -26,6 +26,7 @@ pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
         stdout.write_all(bytes)
     }
 }
+pub(super) use stream::LINE_BUFFER;
 use stream::Resource;
 pub(super) use stream::Stream;
 
@@ -61,13 +62,14 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 pub(super) struct Io {
     pub files: Arena<Stream>,
     pub file_tag: Option<StringId>,
+    pub stdin: Option<NonZeroU64>,
 }
 impl Io {
     pub fn heap_bytes(&self) -> usize {
         self.files.iter().map(Stream::heap_bytes).sum()
     }
 }
-fn c_bytes(bytes: &[u8]) -> &[u8] {
+pub(super) fn c_bytes(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 fn integer(n: f64) -> i64 {
@@ -77,7 +79,7 @@ fn integer(n: f64) -> i64 {
         n as i64
     }
 }
-fn message(code: i32) -> &'static [u8] {
+pub(super) fn message(code: i32) -> &'static [u8] {
     match code {
         0 => b"No error",
         2 => b"No such file or directory",
@@ -97,7 +99,7 @@ fn message(code: i32) -> &'static [u8] {
 fn runtime(text: impl Into<Box<str>>) -> Error {
     Error::new(ErrorKind::Runtime, 0, text)
 }
-fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
+pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
     let mode = c_bytes(mode);
     let first = *mode.first().ok_or(22)?;
     if !matches!(first, b'r' | b'w' | b'a')
@@ -279,6 +281,9 @@ impl Vm {
             (0, b"stderr", Resource::Error, false, true),
         ] {
             let value = self.file_value(Stream::new(resource, read, write, true), standard);
+            if index == 1 {
+                self.io.stdin = self.file_key(value, false).and_then(NonZeroU64::new);
+            }
             let name = self.intern(name);
             self.raw_set(library, name, value).unwrap();
             if index != 0 {

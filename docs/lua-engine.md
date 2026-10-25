@@ -18,7 +18,7 @@ performance JSON keeps its recorded measurement provenance.
 | Requirement | Evidence and remaining work |
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source compilation and protected reader-based text loading share the frontend without replaying prefixes. Complete reference-suite coverage remains open. |
+| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Complete reference-suite coverage remains open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Full diagnostics/debug behavior and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 156 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 171 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-io.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-file-load.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38–13.51 times the reference duration. Subsequent
@@ -142,6 +142,18 @@ coverage and blocking-I/O cancellation remain open. Closed stream records follow
 userdata lifetime; reclaiming their storage earlier and bounding large write
 buffers remain performance work. The registry's C-private entries and broader
 numeric-string conversion parity also need further coverage.
+
+The [file-loading validation](testing/2026-10-25-rust-lua-file-load.md) adds text
+`loadfile`/`dofile`, named-reader roots and cleanup, shared underlying stdin and
+initial executable headers. Fifteen groups cover extra arguments, environments,
+hooks, errors, nested C-call limits, six isolated stdin cases, thirty-one quota
+aborts and 1,000 successful reloads. The parser deducts active native-call depth
+from its 200-level syntax budget; lexer diagnostics use their 80-byte source-ID
+buffer separately from debug/runtime descriptions. The
+[measurements](performance/2026-10-25-rust-lua-file-load.md) add a 28th runtime
+workload. Host errors also expose the actual raised file-error string. Binary
+chunks, complete syntax diagnostics and compiler depth/resource
+parity remain open, along with the broader standalone and integration gates.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

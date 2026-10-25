@@ -360,6 +360,7 @@ impl Vm {
                             | XPCALL
                             | TOSTRING
                             | PRINT
+                            | DO_FILE
                             | strings::STR_GSUB
                             | tables::TAB_FOREACH
                             | tables::TAB_FOREACHI
@@ -372,7 +373,7 @@ impl Vm {
                             | CONT_GC
                             | CONT_HOOK
                     )
-                ) || (matches!(f.function, FrameKind::Native(LOAD_READER)) && matches!(f.pc, 1 | 3))
+                ) || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             })
             .count();
         usize::from(self.threads[slot_index(self.thread.0)].depth)

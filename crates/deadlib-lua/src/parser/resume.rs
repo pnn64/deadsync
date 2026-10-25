@@ -90,6 +90,7 @@ pub(crate) struct Parser {
     lookahead: Option<Token>,
     previous_line: u32,
     depth: u16,
+    limit: u16,
     loops: u16,
     vararg: bool,
     locals: u16,
@@ -110,6 +111,7 @@ impl Default for Parser {
             lookahead: None,
             previous_line: 1,
             depth: 0,
+            limit: 200,
             loops: 0,
             vararg: true,
             locals: 0,
@@ -138,6 +140,12 @@ fn precedence(kind: Kind) -> Option<(u8, u8)> {
 }
 
 impl Parser {
+    pub(crate) fn with_native_depth(depth: usize) -> Self {
+        Self {
+            limit: 200usize.saturating_sub(depth) as u16,
+            ..Self::default()
+        }
+    }
     pub(crate) fn nesting(&self) -> usize {
         usize::from(self.depth)
     }
@@ -256,11 +264,11 @@ impl Parser {
         Error::new(ErrorKind::Syntax, self.line(), text)
     }
     fn enter(&mut self) -> Result<(), Error> {
-        if self.depth >= 120 {
+        if self.depth >= self.limit {
             return Err(Error::new(
                 ErrorKind::Limit,
                 self.line(),
-                "syntax nesting limit exceeded",
+                "chunk has too many syntax levels",
             ));
         }
         self.depth += 1;
