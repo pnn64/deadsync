@@ -187,9 +187,10 @@ pub fn write_resampler_output(
     for (frame, output) in out_tmp.chunks_exact_mut(out_ch).enumerate() {
         let (converted, repeated) = output.split_at_mut(out.len().min(out_ch));
         for (dst, source) in converted.iter_mut().zip(out) {
-            // The scalar fallback has no vector lanes to amortize the
-            // fraction correction used by the mono/stereo loops.
-            *dst = (source[frame] * 32767.0).round() as i16;
+            // Preserve the f32 product; widening prevents a half bias from
+            // rounding across an integer boundary prematurely.
+            let scaled = f64::from(source[frame] * 32767.0);
+            *dst = (scaled + 0.5f64.copysign(scaled)) as i16;
         }
         // Extra channels reuse this frame's PCM instead of converting it again.
         for (dst, &sample) in repeated.iter_mut().zip(converted.iter().cycle()) {

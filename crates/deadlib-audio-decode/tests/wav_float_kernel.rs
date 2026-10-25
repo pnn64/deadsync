@@ -14,6 +14,54 @@ mod wav {
         use std::hint::black_box;
 
         #[test]
+        fn float64_packets_preserve_half_boundaries_and_nonfinite_silence() {
+            let mut values = Vec::new();
+            for integer in -32770..=32770 {
+                let v = (f64::from(integer) + 0.5) / 32767.0;
+                values.extend([
+                    v.next_down().next_down(),
+                    v.next_down(),
+                    v,
+                    v.next_up(),
+                    v.next_up().next_up(),
+                ]);
+            }
+            for exponent in 0..=2047u64 {
+                for sign in [0, 1 << 63] {
+                    for mantissa in [
+                        0,
+                        1,
+                        0x7_ffff_ffff_ffff,
+                        0x8_0000_0000_0000,
+                        0xf_ffff_ffff_ffff,
+                    ] {
+                        values.push(f64::from_bits(sign | (exponent << 52) | mantissa));
+                    }
+                }
+            }
+            let mut state = 0x1234_5678_9abc_def0u64;
+            for _ in 0..2_000_000 {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                values.push(f64::from_bits(state));
+            }
+            let bytes: Vec<_> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+            let mut output = Vec::with_capacity(values.len());
+            perf::assert_no_churn(|| {
+                decode_packet_into(&bytes, Encoding::Float64, &mut output).unwrap()
+            });
+            for (value, actual) in values.into_iter().zip(output) {
+                let expected = if value.is_finite() {
+                    (value * 32767.0).round() as i16
+                } else {
+                    0
+                };
+                assert_eq!(actual, expected, "{:016x}", value.to_bits());
+            }
+        }
+
+        #[test]
         fn float32_packets_preserve_rounding_boundaries_and_nonfinite_silence() {
             let mut values = Vec::new();
             for integer in -32770..=32770 {
@@ -63,7 +111,7 @@ mod wav {
             for encoding in [Encoding::Float32, Encoding::Float64, Encoding::Pcm16] {
                 for pattern in ["audio", "clipped", "exceptional"] {
                     for samples in [64usize, 8192] {
-                        let bytes: Vec<_> = (0..samples)
+                        let mut bytes: Vec<_> = (0..samples)
                             .flat_map(|i| {
                                 let value = match pattern {
                                     "audio" => f64::from(i.wrapping_mul(71) as i16) / 32768.0,
@@ -87,13 +135,23 @@ mod wav {
                             })
                             .collect();
                         let mut output = Vec::with_capacity(samples);
+                        let length = bytes.len();
+                        bytes.resize(length + 4096, 0);
+                        // Fix the relative page offset so the PCM memcpy control
+                        // does not vary with allocator address aliasing.
+                        let offset = (output.as_ptr() as usize)
+                            .wrapping_sub(bytes.as_ptr() as usize)
+                            .wrapping_add(128)
+                            & 4095;
+                        bytes.copy_within(..length, offset);
+                        let bytes = &bytes[offset..offset + length];
                         let label = format!(
                             "wav/bytes={}/{pattern}/samples={samples}",
                             encoding.sample_bytes()
                         );
                         let mut work = || {
                             decode_packet_into(
-                                black_box(&bytes),
+                                black_box(bytes),
                                 black_box(encoding),
                                 black_box(&mut output),
                             )

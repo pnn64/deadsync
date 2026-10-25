@@ -382,12 +382,13 @@ const fn pcm24_to_i16(sample: &[u8; 3]) -> i16 {
 
 #[inline(always)]
 fn float_to_i16(value: f64) -> i16 {
-    if !value.is_finite() {
+    let scaled = value * 32767.0;
+    if !value.is_finite() || scaled.abs() < 0.5 {
         return 0;
     }
-    // The cast saturates overflow after scaling, including finite input whose
-    // product overflows to infinity. Nonfinite source samples stay silent.
-    (value * 32767.0).round() as i16
+    // Below one half, adding a half could round up to one. Above that guard,
+    // the bias cannot round across an integer boundary in the i16 range.
+    (scaled + 0.5f64.copysign(value)) as i16
 }
 
 #[inline(always)]

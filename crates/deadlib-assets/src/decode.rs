@@ -566,20 +566,10 @@ fn key_rgba(image: &mut RgbaImage) {
     };
     let key = u32::from_ne_bytes(key);
     let length = image.width() as usize * image.height() as usize * 4;
-    // Scan 16 RGBA pixels per block, avoiding writes to blocks without the key.
-    for block in image.as_mut()[..length].chunks_mut(64) {
-        let pixels = block.as_chunks_mut::<4>().0;
-        let mut has_key = false;
-        for pixel in &*pixels {
-            has_key |= u32::from_ne_bytes(*pixel) == key;
-        }
-        if has_key {
-            for pixel in pixels {
-                let value = u32::from_ne_bytes(*pixel);
-                let keep = u32::from(value != key).wrapping_neg();
-                *pixel = (value & keep).to_ne_bytes();
-            }
-        }
+    for pixel in image.as_mut()[..length].as_chunks_mut::<4>().0 {
+        let value = u32::from_ne_bytes(*pixel);
+        let keep = u32::from(value != key).wrapping_neg();
+        *pixel = (value & keep).to_ne_bytes();
     }
 }
 
@@ -1009,3 +999,6 @@ mod direct_media_perf;
 
 #[cfg(test)]
 mod resize_kernel;
+
+#[cfg(test)]
+mod key_kernel;
