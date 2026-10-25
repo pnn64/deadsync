@@ -541,6 +541,9 @@ impl Vm {
         if (io::FIRST..=io::LAST).contains(&id) {
             return self.io_native(id, base, count);
         }
+        if (os::FIRST..=os::LAST).contains(&id) {
+            return self.os_native(id, base, count);
+        }
         if matches!(id, hooks::GET_HOOK | hooks::SET_HOOK) {
             return self.hook_native(id, base, count);
         }

@@ -17,6 +17,7 @@ mod loads;
 mod math;
 mod meta;
 mod native;
+mod os;
 mod package;
 mod strings;
 mod tables;
@@ -416,6 +417,7 @@ impl Vm {
         vm.open_tables();
         vm.open_threads();
         vm.open_io();
+        vm.open_os();
         let loaded = vm.new_table();
         let key = vm.intern(b"_LOADED");
         vm.raw_set(registry, key, Value::Table(loaded)).unwrap();
@@ -427,6 +429,7 @@ impl Vm {
             b"debug",
             b"coroutine",
             b"io",
+            b"os",
         ] {
             let value = vm.global(name);
             let name = vm.intern(name);

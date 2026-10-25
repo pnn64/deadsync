@@ -143,6 +143,18 @@ fn main() {
             50,
         ),
         (
+            "os_difftime",
+            "local diff=os.difftime;local sum=0;for i=1,10000 do sum=sum+diff(i+.75,i-1)end;return sum",
+            10000.0,
+            50,
+        ),
+        (
+            "os_getenv",
+            "local getenv=os.getenv;local sum=0;for i=1,1000 do if getenv('DEADSYNC_LUA_UNSET_7F189225')==nil then sum=sum+1 end end;return sum",
+            1000.0,
+            30,
+        ),
+        (
             "call_table",
             "local function f(t)return t end;local sum=0;for i=1,1000 do sum=sum+f({key=i}).key end;return sum",
             500500.0,

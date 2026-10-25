@@ -28,7 +28,7 @@ impl Resource {
     }
 }
 
-pub(super) fn errno(error: std::io::Error) -> i32 {
+pub(in crate::vm) fn errno(error: std::io::Error) -> i32 {
     #[cfg(windows)]
     {
         match error.raw_os_error() {

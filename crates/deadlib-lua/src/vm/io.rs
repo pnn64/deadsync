@@ -29,6 +29,7 @@ pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
 pub(super) use stream::LINE_BUFFER;
 use stream::Resource;
 pub(super) use stream::Stream;
+pub(super) use stream::errno;
 
 pub(super) const FIRST: u64 = 128;
 const CLOSE: u64 = 128;
@@ -72,11 +73,31 @@ impl Io {
 pub(super) fn c_bytes(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
-fn integer(n: f64) -> i64 {
+pub(super) fn integer(n: f64) -> i64 {
     if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&n) {
         i64::MIN
     } else {
         n as i64
+    }
+}
+pub(super) fn set_errno(code: i32) {
+    ERRNO.set(code);
+}
+pub(super) fn path(bytes: &[u8]) -> std::borrow::Cow<'_, std::path::Path> {
+    let bytes = c_bytes(bytes);
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        std::borrow::Cow::Borrowed(std::path::Path::new(std::ffi::OsStr::from_bytes(bytes)))
+    }
+    #[cfg(not(unix))]
+    {
+        match String::from_utf8_lossy(bytes) {
+            std::borrow::Cow::Borrowed(text) => {
+                std::borrow::Cow::Borrowed(std::path::Path::new(text))
+            }
+            std::borrow::Cow::Owned(text) => std::borrow::Cow::Owned(text.into()),
+        }
     }
 }
 pub(super) fn message(code: i32) -> &'static [u8] {
@@ -122,14 +143,7 @@ pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
         use std::os::windows::fs::OpenOptionsExt;
         options.share_mode(3);
     }
-    #[cfg(unix)]
-    let path = {
-        use std::os::unix::ffi::OsStrExt;
-        std::path::PathBuf::from(std::ffi::OsStr::from_bytes(c_bytes(path)))
-    };
-    #[cfg(not(unix))]
-    let path = std::path::PathBuf::from(String::from_utf8_lossy(c_bytes(path)).as_ref());
-    let file = options.open(path).map_err(stream::errno)?;
+    let file = options.open(self::path(path)).map_err(stream::errno)?;
     #[cfg(windows)]
     let file = {
         use std::io::{Read, Seek, SeekFrom};
@@ -360,8 +374,8 @@ impl Vm {
         }
         Ok(value)
     }
-    fn io_failure(&mut self, base: usize, code: i32, path: Option<&[u8]>) -> usize {
-        ERRNO.set(code);
+    pub(super) fn io_failure(&mut self, base: usize, code: i32, path: Option<&[u8]>) -> usize {
+        set_errno(code);
         let mut bytes = self.take_buffer(64);
         if let Some(path) = path {
             bytes.extend_from_slice(c_bytes(path));

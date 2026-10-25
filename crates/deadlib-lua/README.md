@@ -171,6 +171,16 @@ their file. Windows text files translate newlines and Ctrl+Z, including the
 reference's buffered seek cookies. Captured stdout keeps logical byte order across
 `print` and I/O writes; the Windows CLI emits translated newlines.
 
+The partial `os` library supplies `difftime`, `getenv`, `remove` and `tmpname`.
+Time differences use the pinned MSVC 64-bit integer conversion and validation
+order. Temporary names use the system temporary directory; Windows calls return
+unused names without creating files. POSIX calls create private empty files.
+Names and numeric components of temporary names are implementation-dependent.
+Environment access reads the host process environment. Windows paths, environment
+names and values currently use UTF-8 conversion; reference checks cover ASCII.
+Windows CRT environment changes made outside this engine are not synchronized.
+`clock`, `date`, `time`, `setlocale`, `rename`, `execute` and `exit` remain unfinished.
+
 `debug.getregistry` returns the shared, rooted registry. Its `FILE*` entry controls
 file type checks, and `_LOADED` contains the registered builtin modules. The package
 library shares that table through `package.loaded`. `require` preserves loader
@@ -225,5 +235,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-deferred-operands.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-os-basics.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
