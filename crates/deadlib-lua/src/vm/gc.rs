@@ -188,6 +188,20 @@ fn frames_roots(
                 work.push(Trace::Value(Value::Function(function)));
                 let closure = &vm.functions[slot_index(function.0)];
                 let proto = &vm.programs[closure.program].data.prototypes[closure.prototype];
+                if frames
+                    .get(i + 1)
+                    .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
+                {
+                    let end = (frame.base + usize::from(proto.registers))
+                        .min(registers.len())
+                        .min(cutoff);
+                    work.extend(
+                        registers[frame.base.min(end)..end]
+                            .iter()
+                            .copied()
+                            .filter_map(edge),
+                    );
+                }
                 let pc = frame.pc().saturating_sub(1).min(proto.code.len() - 1);
                 let maps = proto.gc_live[pc];
                 // Finalization interrupts an already completed opcode. Its
@@ -254,7 +268,9 @@ fn frames_roots(
                 );
             }
         }
-        if !matches!(frame.function, FrameKind::Native(threads::CO_YIELD)) || frame.pc() == 0 {
+        if !matches!(frame.function, FrameKind::Native(CONT_HOOK | CONT_TRACE))
+            && (!matches!(frame.function, FrameKind::Native(threads::CO_YIELD)) || frame.pc() == 0)
+        {
             let start = frame.vararg_start;
             let end = (start + frame.argc()).min(registers.len()).min(cutoff);
             work.extend(
@@ -280,7 +296,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::TRACEBACK)
+                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=hooks::SET_HOOK)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
@@ -369,6 +385,7 @@ impl Vm {
             + self.patterns.capacity() * (std::mem::size_of::<((StringId, bool), crate::pattern::Pattern)>() + 1)
             + self.native_envs.capacity() * (std::mem::size_of::<(u64, TableId)>() + 1);
         control += self.proxy_metatables.capacity() * (std::mem::size_of::<TableId>() + 1);
+        control += self.hook_functions.capacity() * (std::mem::size_of::<(ThreadId, Value)>() + 1);
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
             + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<Box<[u8]>>()
@@ -650,6 +667,7 @@ impl Vm {
                 .map(|t| Trace::Value(Value::Table(t))),
         );
         work.extend(self.roots.iter().copied().filter_map(edge));
+        work.extend(self.hook_functions.values().copied().filter_map(edge));
         // A live host Program retains its mutable per-VM entry binding. Internal
         // code ownership by escaped Lua closures does not pin unused entries.
         work.extend(

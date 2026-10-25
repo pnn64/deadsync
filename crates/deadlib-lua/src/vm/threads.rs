@@ -55,6 +55,7 @@ pub(super) struct Thread {
     pub(super) sorts: Vec<tables::Sort>,
     pub(super) loads: Vec<loads::Loading>,
     pub(super) tracebacks: Vec<traces::Traceback>,
+    pub(super) hooks: hooks::Hooks,
     pub(super) entry: Option<FunctionId>,
     pub(super) status: Status,
     pub(super) resumer: Option<ThreadId>,
@@ -74,6 +75,7 @@ impl Thread {
             sorts: Vec::new(),
             loads: Vec::new(),
             tracebacks: Vec::new(),
+            hooks: hooks::Hooks::default(),
             entry: None,
             status: Status::Running,
             resumer: None,
@@ -204,6 +206,7 @@ impl Vm {
         std::mem::swap(&mut self.sorts, &mut state.sorts);
         std::mem::swap(&mut self.loads, &mut state.loads);
         std::mem::swap(&mut self.tracebacks, &mut state.tracebacks);
+        std::mem::swap(&mut self.hooks, &mut state.hooks);
         std::mem::swap(line, &mut state.line);
     }
     fn switch_thread(&mut self, id: ThreadId, line: &mut u32) {
@@ -295,6 +298,7 @@ impl Vm {
             self.sorts.clear();
             self.trim_loads();
             self.trim_tracebacks();
+            self.trim_hooks();
             self.registers.clear();
             self.top = 0;
             self.threads[slot_index(id.0)].status = Status::Dead;
@@ -314,6 +318,7 @@ impl Vm {
                     return Err(runtime("bad argument #1 (Lua function expected)"));
                 };
                 let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
+                self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
                 if id == CO_WRAP {
                     self.new_native(NativeKind::Wrap(thread))?
                 } else {
@@ -364,6 +369,7 @@ impl Vm {
                             | CONT_IGNORE
                             | CONT_HANDLER
                             | CONT_GC
+                            | CONT_HOOK
                     )
                 ) || (matches!(f.function, FrameKind::Native(LOAD_READER)) && matches!(f.pc, 1 | 3))
             })

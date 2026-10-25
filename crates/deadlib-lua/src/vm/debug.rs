@@ -342,6 +342,26 @@ impl Vm {
                         f.result.saturating_sub(frame.base)
                     })
                     .min(usize::from(proto.registers));
+                // A call hook runs above the newly allocated full register
+                // window, before the first instruction has produced live values.
+                if frames
+                    .get(index + 1)
+                    .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
+                {
+                    let mut wanted = n.checked_sub(named)?;
+                    for r in 0..usize::from(proto.registers) {
+                        if active[r / 64] & (1u64 << (r % 64)) == 0 {
+                            if wanted == 0 {
+                                return Some((
+                                    LocalName::Temporary,
+                                    LocalSlot::Register(frame.base + r),
+                                ));
+                            }
+                            wanted -= 1;
+                        }
+                    }
+                    return None;
+                }
                 let pc = (pc as usize).min(proto.gc_live.len() - 1);
                 if let Ok(i) = proto
                     .debug

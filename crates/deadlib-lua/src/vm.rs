@@ -9,6 +9,7 @@ use crate::{
 use std::{collections::HashMap, sync::Arc};
 mod debug;
 mod gc;
+mod hooks;
 mod loads;
 mod math;
 mod meta;
@@ -138,6 +139,9 @@ const CONT_NOT: u64 = 130;
 const CONT_IGNORE: u64 = 131;
 const CONT_HANDLER: u64 = 132;
 const CONT_GC: u64 = 133;
+const CONT_HOOK: u64 = 134;
+const CONT_TRACE: u64 = 135;
+const CONT_RETURN: u64 = 136;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -262,6 +266,8 @@ pub struct Vm {
     identity: u64,
     loads: Vec<loads::Loading>,
     tracebacks: Vec<traces::Traceback>,
+    hooks: hooks::Hooks,
+    hook_functions: HashMap<ThreadId, Value>,
     userdata: Arena<userdata::Userdata>,
     proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
@@ -313,6 +319,8 @@ impl Vm {
             identity: gc::new_vm_identity(),
             loads: Vec::new(),
             tracebacks: Vec::new(),
+            hooks: hooks::Hooks::default(),
+            hook_functions: HashMap::new(),
             userdata: Arena::default(),
             proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
@@ -368,6 +376,8 @@ impl Vm {
             (debug::GET_LOCAL, b"getlocal"),
             (debug::SET_LOCAL, b"setlocal"),
             (debug::TRACEBACK, b"traceback"),
+            (hooks::GET_HOOK, b"gethook"),
+            (hooks::SET_HOOK, b"sethook"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]
@@ -461,6 +471,9 @@ impl Vm {
     fn push_record(&mut self, frame: Frame) {
         let before = self.frames.capacity();
         self.frames.push(frame);
+        if self.hooks.mask & hooks::CALL != 0 && self.hooks.allowed() {
+            self.hook_call_record(frame);
+        }
         self.gc_note_control((self.frames.capacity() - before) * std::mem::size_of::<Frame>());
     }
 
@@ -689,6 +702,15 @@ impl Vm {
     }
 
     fn return_frame(&mut self, frame: Frame, source: usize, count: usize) -> Option<usize> {
+        if self.hooks.mask & hooks::RETURN != 0
+            && self.hooks.allowed()
+            && self.defer_hook_return(frame, source, count)
+        {
+            return None;
+        }
+        self.finish_frame(frame, source, count)
+    }
+    fn finish_frame(&mut self, frame: Frame, source: usize, count: usize) -> Option<usize> {
         self.close_upvalues(frame.base);
         if self.frames.len() == 1 {
             self.registers.copy_within(source..source + count, 0);
@@ -747,6 +769,7 @@ impl Vm {
         self.sorts.clear();
         self.trim_loads();
         self.trim_tracebacks();
+        self.trim_hooks();
         match result {
             Ok(count) => Ok(&self.registers[..count]),
             Err(error) => {
@@ -809,6 +832,13 @@ impl Vm {
         'frames: loop {
             self.maybe_gc();
             let frame_index = self.frames.len() - 1;
+            if self.hooks.enter.is_some() && self.hook_entry(frame_index)? {
+                continue;
+            }
+            if self.hooks.tail.is_some() {
+                self.merge_hook_tail(frame_index)?;
+            }
+            let frame_index = self.frames.len() - 1;
             let frame = self.frames[frame_index];
             let function = match frame.function {
                 FrameKind::Native(id) => {
@@ -842,6 +872,11 @@ impl Vm {
             let mut pc = frame.pc();
             let base = frame.base;
             loop {
+                if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0
+                    && self.hook_instruction(frame_index, pc, prototype.debug.hook_lines[pc])?
+                {
+                    continue 'frames;
+                }
                 Self::charge(budget)?;
                 let i = prototype.code[pc];
                 *error_line = prototype.lines[pc];
@@ -852,7 +887,12 @@ impl Vm {
                 self.frames[frame_index].pc = pc as u32;
                 match i.op {
                     Op::Load => {
-                        self.registers[a] = self.programs[program_index].constants[proto_index][c]
+                        // Initial nil slots were cleared on frame entry. A call
+                        // hook can already have replaced them before execution.
+                        if i.b == 0 {
+                            self.registers[a] =
+                                self.programs[program_index].constants[proto_index][c];
+                        }
                     }
                     Op::Move if i.c == OPEN => {
                         let count = self.top.checked_sub(b).ok_or_else(|| {
@@ -862,7 +902,7 @@ impl Vm {
                         self.registers.copy_within(b..b + count, a);
                         self.top = a + count;
                     }
-                    Op::Move => self.registers[a] = self.registers[b],
+                    Op::Move | Op::Bool => self.registers[a] = self.registers[b],
                     Op::GetGlobal => self.get_table(
                         Value::Table(env),
                         self.programs[program_index].constants[proto_index][c],
@@ -988,6 +1028,14 @@ impl Vm {
                             });
                         } else {
                             self.compare(i.op, left, right, a)?;
+                        }
+                        if self.frames.len() == frame_index + 1
+                            && self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0
+                            && let Some(next) = prototype.code.get(pc)
+                            && next.op == Op::Bool
+                        {
+                            self.registers[base + usize::from(next.a)] = self.registers[a];
+                            pc += 1;
                         }
                     }
                     Op::Concat => {

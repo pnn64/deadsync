@@ -252,6 +252,12 @@ fn main() {
             200.0,
             10,
         ),
+        (
+            "debug_hook",
+            r#"local lines=0;local f=assert(loadstring("local sum=0\nfor i=1,100 do\nsum=sum+i\nend\nreturn sum\n"));debug.sethook(function(e,l)lines=lines+l end,"l");local sum=f();debug.sethook();return sum+lines"#,
+            5558.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");

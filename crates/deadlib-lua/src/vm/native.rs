@@ -41,7 +41,11 @@ impl Vm {
         match self.registers[call] {
             Value::Function(id) => {
                 if tail {
-                    self.tail_frame(id, call, count)?;
+                    if self.hooks.mask & hooks::CALL != 0 && self.hooks.allowed() {
+                        self.hooked_tail(id, call, count)?;
+                    } else {
+                        self.tail_frame(id, call, count)?;
+                    }
                 } else {
                     self.push_frame(id, call, count, wanted)?;
                 }
@@ -63,7 +67,8 @@ impl Vm {
                         | tables::TAB_SORT
                         | threads::CO_RESUME
                         | threads::CO_YIELD
-                ) || self.is_wrapper(id) =>
+                ) || self.is_wrapper(id)
+                    || (self.hooks.mask != 0 && self.hooks.allowed()) =>
             {
                 if self.frames.len() >= 10000 {
                     return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
@@ -117,6 +122,13 @@ impl Vm {
                     }
                 });
                 self.active_native = previous;
+                if let Ok(Some(actual)) = result
+                    && self.hooks.mask & hooks::RETURN != 0
+                    && self.hooks.allowed()
+                {
+                    self.return_frame(self.frames[index], call, actual);
+                    return Ok(None);
+                }
                 if result.is_ok() {
                     self.frames.pop();
                 }
@@ -173,6 +185,7 @@ impl Vm {
         self.frames[index].pc = 2;
         self.trim_loads();
         self.trim_tracebacks();
+        self.trim_hooks();
         self.top = frame.base + 2;
     }
     pub(super) fn catch_error(&mut self, error: &Error, _line: u32) -> Result<bool, Error> {
@@ -257,6 +270,7 @@ impl Vm {
         let base = frame.base;
         let index = self.frames.len() - 1;
         match id {
+            CONT_HOOK | CONT_TRACE | CONT_RETURN => self.hook_step(id, frame),
             debug::TRACEBACK => self.traceback_step(frame).map_err(|error| {
                 // lua_concat raises in the C traceback frame; it does not add
                 // the caller location used by Lua-level arithmetic failures.
@@ -332,7 +346,10 @@ impl Vm {
             tables::TAB_SORT => self.sort_step(frame),
             threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
             id if self.is_wrapper(id) => self.coroutine_step(id, frame),
-            _ => unreachable!("native continuation ID"),
+            _ => {
+                let actual = self.native(id, frame.result, frame.argc())?;
+                Ok(self.return_frame(frame, frame.result, actual))
+            }
         }
     }
     fn default_string(&mut self, value: Value) -> Value {
@@ -477,6 +494,9 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        if matches!(id, hooks::GET_HOOK | hooks::SET_HOOK) {
+            return self.hook_native(id, base, count);
+        }
         if (debug::GET_INFO..=debug::SET_LOCAL).contains(&id) {
             return self.debug_native(id, base, count);
         }

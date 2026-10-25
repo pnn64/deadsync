@@ -55,6 +55,8 @@ struct Function<'a> {
     debug_calls: Vec<DebugCall>,
     debug_temporaries: Vec<u8>,
     debug_lines: Vec<u32>,
+    hook_lines: Vec<u32>,
+    hook_visible: usize,
 }
 
 struct Compiler<'a> {
@@ -92,6 +94,29 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 impl<'a> Compiler<'a> {
     fn finish(&mut self) -> u32 {
         let mut f = std::mem::take(&mut self.function);
+        for (pc, i) in f.code.iter().enumerate() {
+            let consumed_branch = matches!(i.op, Op::JumpFalse | Op::JumpTrue)
+                && f.code[..pc]
+                    .iter()
+                    .rev()
+                    .find(|p| p.op != Op::Close)
+                    .is_some_and(|previous| {
+                        matches!(
+                            previous.op,
+                            Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Bool
+                        ) && previous.a == i.a
+                    });
+            let branch_value = i.op == Op::Bool
+                && f.code[pc + 1..]
+                    .iter()
+                    .find(|next| next.op != Op::Close)
+                    .is_some_and(|next| {
+                        matches!(next.op, Op::JumpFalse | Op::JumpTrue) && next.a == i.a
+                    });
+            if consumed_branch || branch_value {
+                f.hook_lines[pc] = 0;
+            }
+        }
         f.debug_lines.retain(|&l| l != 0);
         f.debug_lines.sort_unstable();
         f.debug_lines.dedup();
@@ -109,7 +134,7 @@ impl<'a> Compiler<'a> {
             gc_live: f.gc_live.into_boxed_slice(),
             gc_maps: f.gc_maps.into_boxed_slice(),
             constants: f.constants.into_boxed_slice(),
-            registers: f.max.max(1),
+            registers: f.max.max(2),
             params: f.params,
             vararg: f.vararg,
             compat_arg: f.compat_arg,
@@ -120,6 +145,7 @@ impl<'a> Compiler<'a> {
                 locals: f.debug_locals.into_boxed_slice(),
                 calls: f.debug_calls.into_boxed_slice(),
                 active_lines: f.debug_lines.into_boxed_slice(),
+                hook_lines: f.hook_lines.into_boxed_slice(),
                 temporaries: f.debug_temporaries.into_boxed_slice(),
             },
         });
@@ -255,6 +281,7 @@ impl<'a> Compiler<'a> {
         match op {
             Op::Load
             | Op::Move
+            | Op::Bool
             | Op::GetGlobal
             | Op::NewTable
             | Op::Closure
@@ -294,17 +321,44 @@ impl<'a> Compiler<'a> {
         }
         let after = self.live_map()?;
         self.function.code.push(Instruction { op, a, b, c });
+        self.function.hook_visible += usize::from(op != Op::Close && self.line != 0);
         self.function.lines.push(self.line);
+        self.function
+            .hook_lines
+            .push(if op == Op::Close { 0 } else { self.line });
         self.function
             .debug_lines
             .push(if op == Op::Close { 0 } else { self.line });
         self.function
             .gc_live
             .push(u32::from(before) | (u32::from(after) << 16));
+        if op == Op::Move
+            && (c == OPEN
+                || u16::from(a) == b
+                || (self.function.debug_named[usize::from(a) / 64] & (1u64 << (a % 64)) == 0
+                    && self.function.debug_named[usize::from(b) / 64] & (1u64 << (b % 64)) == 0))
+        {
+            self.debug_line(0);
+        }
         Ok(pc)
     }
     fn patch(&mut self, pc: usize) {
         self.function.code[pc].c = self.function.code.len() as u32;
+    }
+    fn debug_line(&mut self, line: u32) {
+        let previous = *self.function.hook_lines.last().expect("emitted hook line");
+        self.function.hook_visible =
+            self.function.hook_visible + usize::from(line != 0) - usize::from(previous != 0);
+        *self
+            .function
+            .debug_lines
+            .last_mut()
+            .expect("emitted debug line") = line;
+        *self
+            .function
+            .hook_lines
+            .last_mut()
+            .expect("emitted hook line") = line;
     }
     fn constant(&mut self, k: Constant) -> Result<u32, Error> {
         // PUC 5.1 pools numbers by numeric equality, including +0 and -0.
@@ -323,8 +377,15 @@ impl<'a> Compiler<'a> {
         Ok(i)
     }
     fn load(&mut self, dst: u8, k: Constant) -> Result<(), Error> {
+        let initial_nil = matches!(k, Constant::Nil)
+            && self.function.hook_visible == 0
+            && self.function.loops.is_empty()
+            && self.function.debug_named[usize::from(dst) / 64] & (1u64 << (dst % 64)) == 0;
         let id = self.constant(k)?;
-        self.emit(Op::Load, dst, 0, id)?;
+        self.emit(Op::Load, dst, u16::from(initial_nil), id)?;
+        if initial_nil {
+            self.debug_line(0);
+        }
         Ok(())
     }
     fn local(&self, name: &[u8]) -> Option<u8> {
@@ -464,6 +525,20 @@ impl<'a> Compiler<'a> {
                     }
                     locations.push(target);
                 }
+                if let ([Target::Local(dst)], [value]) = (locations.as_slice(), values.as_ref()) {
+                    let mut expression = *value;
+                    while let Expr::Paren(inner) = self.ast.exprs[expression].0 {
+                        expression = inner;
+                    }
+                    if !matches!(
+                        self.ast.exprs[expression].0,
+                        Expr::Table(..) | Expr::Binary(Kind::And | Kind::Or, ..) | Expr::Vararg
+                    ) {
+                        self.expr_results(*value, *dst, 1)?;
+                        self.reset(saved);
+                        return Ok(());
+                    }
+                }
                 let base = self.values(values, targets.len())?;
                 if matches!(stmt, Stmt::FunctionDefinition(..)) {
                     self.line = statement_line;
@@ -492,6 +567,18 @@ impl<'a> Compiler<'a> {
             }
             Stmt::Return(values, end_line) => {
                 if values.len() == 1 {
+                    let mut value = values[0];
+                    while let Expr::Paren(inner) = self.ast.exprs[value].0 {
+                        value = inner;
+                    }
+                    if let Expr::Name(name) = &self.ast.exprs[value].0
+                        && let Some(register) = self.local(name)
+                    {
+                        self.line = *end_line;
+                        self.emit(Op::Return, register, 0, 1)?;
+                        self.reset(saved);
+                        return Ok(());
+                    }
                     let call = match &self.ast.exprs[values[0]].0 {
                         Expr::Call(function, args, line) => {
                             Some((*function, None, args.as_ref(), *line))
@@ -937,11 +1024,7 @@ impl<'a> Compiler<'a> {
                 };
                 let omitted = truth == Some(and);
                 if omitted {
-                    *self
-                        .function
-                        .debug_lines
-                        .last_mut()
-                        .expect("constant condition emits a value") = 0;
+                    self.debug_line(0);
                 }
                 let op = if matches!(expr, Expr::Binary(Kind::And, ..)) {
                     Op::JumpFalse
@@ -958,11 +1041,7 @@ impl<'a> Compiler<'a> {
                         )
                     )
                 {
-                    *self
-                        .function
-                        .debug_lines
-                        .last_mut()
-                        .expect("condition emits a branch") = 0;
+                    self.debug_line(0);
                 }
                 self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
                 self.expr(*right, dst)?;
@@ -999,11 +1078,16 @@ impl<'a> Compiler<'a> {
                     Kind::Ge => Op::Ge,
                     _ => unreachable!("parser produced invalid binary operator"),
                 };
-                self.emit(op, dst, u16::from(left_reg), u32::from(right_reg))?;
                 if matches!(op, Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge) {
-                    self.function
-                        .debug_lines
-                        .push(self.ast.exprs[id].1.discharge);
+                    let boolean = self.alloc(1)?;
+                    self.emit(op, boolean, u16::from(left_reg), u32::from(right_reg))?;
+                    // Between comparison and materialization this private result
+                    // is a boolean, so it needs no object root or temporary slot.
+                    self.function.live[usize::from(boolean) / 64] &= !(1u64 << (boolean % 64));
+                    self.line = self.ast.exprs[id].1.discharge;
+                    self.emit(Op::Bool, dst, u16::from(boolean), 0)?;
+                } else {
+                    self.emit(op, dst, u16::from(left_reg), u32::from(right_reg))?;
                 }
             }
             Expr::Index(table, key) => {
@@ -1095,11 +1179,7 @@ impl<'a> Compiler<'a> {
             )
         {
             self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
-            *self
-                .function
-                .debug_lines
-                .last_mut()
-                .expect("operand emits a value") = 0;
+            self.debug_line(0);
         }
         Ok(dst)
     }
@@ -1110,36 +1190,20 @@ impl<'a> Compiler<'a> {
                 Expr::Paren(inner) | Expr::Binary(Kind::And | Kind::Or, _, inner, _) => id = *inner,
                 Expr::Name(name) => {
                     if matches!(usage, LineUse::Condition) && self.local(name).is_some() {
-                        *self
-                            .function
-                            .debug_lines
-                            .last_mut()
-                            .expect("local emits a copy") = 0;
+                        self.debug_line(0);
                     } else if matches!(usage, LineUse::Copy) || self.local(name).is_none() {
-                        *self
-                            .function
-                            .debug_lines
-                            .last_mut()
-                            .expect("name emits a value") = line;
+                        self.debug_line(line);
                     }
                     return;
                 }
                 Expr::Nil | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) => {
                     if !matches!(usage, LineUse::Operand) {
-                        *self
-                            .function
-                            .debug_lines
-                            .last_mut()
-                            .expect("literal emits a value") = line;
+                        self.debug_line(line);
                     }
                     return;
                 }
                 Expr::Index(..) => {
-                    *self
-                        .function
-                        .debug_lines
-                        .last_mut()
-                        .expect("index emits a value") = line;
+                    self.debug_line(line);
                     return;
                 }
                 _ => return,

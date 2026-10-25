@@ -46,8 +46,11 @@ Prototype metadata, call sites and temporary ranges are verified; names resolve
 through prototype indices during inspection. `debug.traceback` formats current or
 other-thread stacks, including lost tail calls, reference truncation and native
 concatenation callbacks. Formatting resumes through flat VM continuations, with
-retained target roots across callbacks and coroutine switches. Hooks and broader
-native scratch-stack compatibility remain unfinished.
+retained target roots across callbacks and coroutine switches. `debug.sethook`
+and `gethook` provide per-thread call, return, tail-return, line and count hooks.
+Callbacks can inspect/mutate stacks, collect and resume children; recursive hook
+delivery is suppressed. Broader instruction-event parity and exact scratch-stack
+bounds remain unfinished.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
@@ -111,8 +114,8 @@ debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
-work limits. Broader source/register diagnostics, native scratch-stack behavior
-and hooks remain open. The API and bytecode
+work limits. Broader source/register diagnostics, hook coverage and native
+scratch-stack behavior remain open. The API and bytecode
 are provisional. The CLI accepts a file, stdin or `-e source`.
 
 ```sh
@@ -134,5 +137,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua` and `closure.lua`. Remaining probes reach missing
 functions or a syntax-diagnostic mismatch. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-traceback.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

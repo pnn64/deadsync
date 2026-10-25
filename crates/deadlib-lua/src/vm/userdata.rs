@@ -50,13 +50,16 @@ impl Vm {
             tail_calls: 0,
         });
         self.gc.running += 1;
+        self.hooks.finalizers += 1;
     }
 
     pub(super) fn discard_finalizers(&mut self, first: usize) {
-        self.gc.running -= self.frames[first..]
+        let count = self.frames[first..]
             .iter()
             .filter(|f| matches!(f.function, FrameKind::Native(CONT_GC)))
             .count();
+        self.gc.running -= count;
+        self.hooks.finalizers -= count as u16;
     }
 
     pub(super) fn finalizer_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
@@ -78,6 +81,7 @@ impl Vm {
         self.registers.truncate(frame.stack_start);
         self.top = frame.result;
         self.gc.running -= 1;
+        self.hooks.finalizers -= 1;
         Ok((frame.wanted == FRAME_OPEN).then_some(0))
     }
 
@@ -112,6 +116,7 @@ impl Vm {
         self.sorts.clear();
         self.trim_loads();
         self.trim_tracebacks();
+        self.trim_hooks();
         self.registers.truncate(len);
         self.top = top;
         result.map(|_| ())

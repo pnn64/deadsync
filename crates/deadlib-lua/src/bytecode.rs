@@ -40,6 +40,7 @@ pub(crate) fn chunk_id(name: &[u8]) -> Vec<u8> {
 pub(crate) enum Op {
     Load,
     Move,
+    Bool,
     GetGlobal,
     SetGlobal,
     NewTable,
@@ -146,12 +147,14 @@ pub(crate) struct DebugInfo {
     pub locals: Box<[DebugLocal]>,
     pub calls: Box<[DebugCall]>,
     pub active_lines: Box<[u32]>,
+    pub hook_lines: Box<[u32]>,
     pub temporaries: Box<[u8]>,
 }
 impl DebugInfo {
     pub fn heap_bytes(&self) -> usize {
         std::mem::size_of_val(self.upvalues.as_ref())
             + std::mem::size_of_val(self.active_lines.as_ref())
+            + std::mem::size_of_val(self.hook_lines.as_ref())
             + self.upvalues.iter().map(|n| n.len()).sum::<usize>()
             + std::mem::size_of_val(self.locals.as_ref())
             + self.locals.iter().map(|l| l.name.len()).sum::<usize>()
@@ -255,6 +258,7 @@ impl Prototype {
             || self.params > self.registers
             || self.upvalues.len() > 60
             || self.lines.len() != self.code.len()
+            || self.debug.hook_lines.len() != self.code.len()
             || self.gc_live.len() != self.code.len()
             || self.gc_live.iter().any(|&m| {
                 (m as u16 as usize) >= self.gc_maps.len()
@@ -326,6 +330,9 @@ impl Prototype {
                     if i.op != Op::Load && !matches!(k, Constant::String(_)) {
                         return Err(fail(pc, "global name must be a string"));
                     }
+                    if i.op == Op::Load && (i.b > 1 || (i.b == 1 && !matches!(k, Constant::Nil))) {
+                        return Err(fail(pc, "invalid initial nil marker"));
+                    }
                 }
                 Op::NewTable => reg(u32::from(i.a))?,
                 Op::SetList => {
@@ -367,9 +374,20 @@ impl Prototype {
                         range(u32::from(i.a), i.c)?;
                     }
                 }
-                Op::Move | Op::Neg | Op::Not | Op::Len => {
+                Op::Move | Op::Bool | Op::Neg | Op::Not | Op::Len => {
                     reg(u32::from(i.a))?;
                     reg(u32::from(i.b))?;
+                    if i.op == Op::Bool
+                        && (i.c != 0
+                            || pc == 0
+                            || !matches!(
+                                self.code[pc - 1].op,
+                                Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge
+                            )
+                            || u16::from(self.code[pc - 1].a) != i.b)
+                    {
+                        return Err(fail(pc, "invalid comparison materialization"));
+                    }
                 }
                 Op::Add
                 | Op::Sub
@@ -419,6 +437,13 @@ impl Prototype {
             {
                 return Err(fail(pc, "jump target out of bounds"));
             }
+            if matches!(
+                i.op,
+                Op::Jump | Op::JumpFalse | Op::JumpTrue | Op::ForPrep | Op::ForLoop
+            ) && self.code[i.c as usize].op == Op::Bool
+            {
+                return Err(fail(pc, "jump into comparison materialization"));
+            }
             if pc + 1 == self.code.len() && !matches!(i.op, Op::Return | Op::Jump | Op::TailCall) {
                 return Err(fail(pc, "instruction can fall off end of program"));
             }
@@ -430,6 +455,31 @@ impl Prototype {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verifier_rejects_invalid_comparison_materialization_and_hook_maps() {
+        let good = crate::compile(b"local x=1; if x<3 then x=x+1 end;return x==2").unwrap();
+        for corrupt in 0..4 {
+            let mut p = good.clone();
+            let data = Arc::make_mut(&mut p.data);
+            let proto = &mut data.prototypes[data.entry as usize];
+            let boolean = proto.code.iter().position(|i| i.op == Op::Bool).unwrap();
+            match corrupt {
+                0 => proto.code[boolean].b = proto.registers,
+                1 => proto.code[boolean].c = 1,
+                2 => {
+                    let jump = proto
+                        .code
+                        .iter_mut()
+                        .find(|i| matches!(i.op, Op::Jump | Op::JumpFalse | Op::JumpTrue))
+                        .unwrap();
+                    jump.c = boolean as u32;
+                }
+                _ => proto.debug.hook_lines = Box::new([]),
+            }
+            assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+        }
+    }
 
     #[test]
     fn verifier_rejects_corrupt_operands_and_edges() {
