@@ -234,12 +234,28 @@ fn main() {
             2100.0,
             10,
         ),
+        (
+            "debug_info",
+            "local function f(n)return n+1 end;local sum=0;for i=1,1000 do local d=debug.getinfo(f,'SufL');sum=sum+d.linedefined+d.func(1)end;return sum",
+            3000.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let program = compile(source).unwrap();
         let mut vm = Vm::new();
         assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
-        let reference = lua_reference::Lua::new();
+        let reference = if name == "debug_info" {
+            // SAFETY: only this fixed developer workload needs the debug library.
+            unsafe {
+                lua_reference::Lua::unsafe_new_with(
+                    lua_reference::StdLib::ALL_SAFE | lua_reference::StdLib::DEBUG,
+                    lua_reference::LuaOptions::default(),
+                )
+            }
+        } else {
+            lua_reference::Lua::new()
+        };
         let function = reference.load(source).into_function().unwrap();
         assert_eq!(function.call::<f64>(()).unwrap(), expected);
         measure(
@@ -332,6 +348,7 @@ fn main() {
         );
     }
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
+    println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_info only");
     // Source bytes and initial correctness checks remain outside compile timing.
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {

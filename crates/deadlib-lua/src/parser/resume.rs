@@ -39,11 +39,12 @@ enum Task {
     ForStart(u32, Box<[u8]>),
     ForLimit(u32, Box<[u8]>, ExprId),
     ForStep(u32, Box<[u8]>, ExprId, ExprId),
-    ForEnd(u32, Box<[u8]>, ExprId, ExprId, Option<ExprId>),
+    ForEnd(u32, Box<[u8]>, ExprId, ExprId, Option<ExprId>, u32),
     ForNames(u32, Vec<Box<[u8]>>),
     ForMoreName(u32, Vec<Box<[u8]>>),
-    ForValues(u32, Vec<Box<[u8]>>),
-    ForInEnd(u32, Vec<Box<[u8]>>, Vec<ExprId>),
+    ForBegin(u32, Vec<Box<[u8]>>),
+    ForValues(u32, Vec<Box<[u8]>>, u32),
+    ForInEnd(u32, Vec<Box<[u8]>>, Vec<ExprId>, [u32; 2]),
     ExpressionStatement(u32),
     AssignTargets(u32, Vec<ExprId>),
     AssignTarget(u32, Vec<ExprId>),
@@ -58,25 +59,26 @@ enum Task {
     Expr(u8),
     ExprLoop(u8, u32),
     Unary(Kind, u32),
-    Binary(u8, u32, ExprId, Kind),
+    Binary(u8, u32, ExprId, Kind, u32),
     Prefix,
     Paren(u32),
     Suffix(u32, ExprId),
     Field(u32, ExprId),
     Index(u32, ExprId),
     MethodName(u32, ExprId),
-    MethodEnd(u32, ExprId, Box<[u8]>),
-    CallEnd(u32, ExprId),
+    MethodArgs(u32, ExprId, Box<[u8]>),
+    MethodEnd(u32, ExprId, Box<[u8]>, u32),
+    CallEnd(u32, ExprId, u32),
     Args,
     ArgsParen,
     ArgsEnd,
     ArgsTable,
     Table,
-    TableNext(u32, Vec<(Option<ExprId>, ExprId)>),
-    TableAssign(u32, Vec<(Option<ExprId>, ExprId)>, ExprId),
-    TableKey(u32, Vec<(Option<ExprId>, ExprId)>),
-    TableValue(u32, Vec<(Option<ExprId>, ExprId)>, Option<ExprId>),
-    TableSeparator(u32, Vec<(Option<ExprId>, ExprId)>),
+    TableNext([u32; 2], Vec<(Option<ExprId>, ExprId)>),
+    TableAssign([u32; 2], Vec<(Option<ExprId>, ExprId)>, ExprId),
+    TableKey([u32; 2], Vec<(Option<ExprId>, ExprId)>),
+    TableValue([u32; 2], Vec<(Option<ExprId>, ExprId)>, Option<ExprId>),
+    TableSeparator([u32; 2], Vec<(Option<ExprId>, ExprId)>),
 }
 
 /// A parser that suspends at a lexical input request. AST edges and grammar
@@ -141,7 +143,7 @@ impl Parser {
     }
     pub(crate) fn arena_bytes(&self) -> usize {
         self.tasks.capacity() * std::mem::size_of::<Task>()
-            + self.ast.exprs.capacity() * std::mem::size_of::<(Expr, u32)>()
+            + self.ast.exprs.capacity() * std::mem::size_of::<(Expr, SourceSpan)>()
             + self.ast.stmts.capacity() * std::mem::size_of::<(Stmt, u32)>()
             + self.scanner.heap_bytes()
     }
@@ -160,9 +162,9 @@ impl Parser {
         for (expr, _) in &self.ast.exprs {
             bytes += match expr {
                 Expr::String(s) | Expr::Name(s) => s.len(),
-                Expr::Table(v) => std::mem::size_of_val(v.as_ref()),
-                Expr::Call(_, v) => std::mem::size_of_val(v.as_ref()),
-                Expr::Method(_, n, v) => n.len() + std::mem::size_of_val(v.as_ref()),
+                Expr::Table(v, _) => std::mem::size_of_val(v.as_ref()),
+                Expr::Call(_, v, _) => std::mem::size_of_val(v.as_ref()),
+                Expr::Method(_, n, v, _) => n.len() + std::mem::size_of_val(v.as_ref()),
                 Expr::Function { params, body, .. } => names(params) + block(body),
                 _ => 0,
             };
@@ -171,10 +173,10 @@ impl Parser {
             bytes += match stmt {
                 Stmt::Local(n, v) => names(n) + std::mem::size_of_val(v.as_ref()),
                 Stmt::LocalFunction(n, _) => n.len(),
-                Stmt::Assign(a, b) => {
+                Stmt::Assign(a, b) | Stmt::FunctionDefinition(a, b) => {
                     std::mem::size_of_val(a.as_ref()) + std::mem::size_of_val(b.as_ref())
                 }
-                Stmt::Return(v) => std::mem::size_of_val(v.as_ref()),
+                Stmt::Return(v, _) => std::mem::size_of_val(v.as_ref()),
                 Stmt::Do(b) | Stmt::While(_, b) | Stmt::Repeat(b, _) => block(b),
                 Stmt::If(a, b) => {
                     std::mem::size_of_val(a.as_ref())
@@ -182,7 +184,7 @@ impl Parser {
                         + block(b)
                 }
                 Stmt::For { name, body, .. } => name.len() + block(body),
-                Stmt::ForIn(n, v, b) => names(n) + std::mem::size_of_val(v.as_ref()) + block(b),
+                Stmt::ForIn(n, v, b, _) => names(n) + std::mem::size_of_val(v.as_ref()) + block(b),
                 _ => 0,
             };
         }
@@ -200,7 +202,8 @@ impl Parser {
                 | Task::LocalEnd(_, v)
                 | Task::ForNames(_, v)
                 | Task::ForMoreName(_, v)
-                | Task::ForValues(_, v)
+                | Task::ForBegin(_, v)
+                | Task::ForValues(_, v, _)
                 | Task::Params(_, v, _)
                 | Task::ParamAfter(_, v)
                 | Task::ParamsEnd(_, v, _)
@@ -214,13 +217,14 @@ impl Parser {
                 | Task::ForLimit(_, n, _)
                 | Task::ForStep(_, n, ..)
                 | Task::ForEnd(_, n, ..)
-                | Task::MethodEnd(_, _, n) => n.len(),
+                | Task::MethodEnd(_, _, n, _) => n.len(),
+                Task::MethodArgs(_, _, n) => n.len(),
                 Task::RepeatEnd(_, b) => block(b),
                 Task::IfCond(_, v) | Task::IfArm(_, v, _) | Task::IfElse(_, v) => {
                     v.capacity() * std::mem::size_of::<(ExprId, Block)>()
                         + v.iter().map(|(_, b)| block(b)).sum::<usize>()
                 }
-                Task::ForInEnd(_, n, v) => {
+                Task::ForInEnd(_, n, v, _) => {
                     names(n)
                         + (n.capacity() - n.len()) * std::mem::size_of::<Box<[u8]>>()
                         + v.capacity() * std::mem::size_of::<ExprId>()
@@ -277,7 +281,7 @@ impl Parser {
             .token
             .take()
             .expect("grammar consumes its current token");
-        self.previous_line = token.line;
+        self.previous_line = token.end_line;
         self.token = self.lookahead.take();
         token
     }
@@ -295,7 +299,14 @@ impl Parser {
     }
     fn expression(&mut self, expr: Expr, line: u32) -> ExprId {
         let id = self.ast.exprs.len();
-        self.ast.exprs.push((expr, line));
+        self.ast.exprs.push((
+            expr,
+            SourceSpan {
+                start: line,
+                end: self.previous_line,
+                discharge: self.previous_line,
+            },
+        ));
         self.expr = id;
         id
     }
@@ -334,11 +345,11 @@ impl Parser {
         limit: ExprId,
         step: Option<ExprId>,
     ) -> Result<(), Error> {
-        self.expect(Kind::Do)?;
+        let do_line = self.expect(Kind::Do)?.end_line;
         self.loops += 1;
         self.locals += 4;
         self.tasks
-            .push(Task::ForEnd(line, name, start, limit, step));
+            .push(Task::ForEnd(line, name, start, limit, step, do_line));
         self.tasks.push(Task::Block);
         Ok(())
     }
@@ -372,6 +383,7 @@ impl Parser {
             let task = self.tasks.pop().expect("grammar continuation exists");
             match task {
                 Task::RootEnd => {
+                    self.ast.end_line = self.previous_line;
                     self.expect(Kind::Eof)?;
                     self.ast.body = std::mem::take(&mut self.body);
                 }
@@ -498,7 +510,8 @@ impl Parser {
                     self.check_local_count(usize::from(self.locals) + 1)?;
                     self.locals += 1;
                     self.tasks.push(Task::LocalFunctionEnd(line, name));
-                    self.tasks.push(Task::Function(line, false));
+                    self.tasks
+                        .push(Task::Function(self.current().end_line, false));
                 }
                 Task::LocalFunctionEnd(line, name) => {
                     self.statement(Stmt::LocalFunction(name, self.expr), line)
@@ -529,7 +542,7 @@ impl Parser {
                     }
                 }
                 Task::FunctionAssign(line, target) => self.statement(
-                    Stmt::Assign(
+                    Stmt::FunctionDefinition(
                         vec![target].into_boxed_slice(),
                         vec![self.expr].into_boxed_slice(),
                     ),
@@ -537,7 +550,7 @@ impl Parser {
                 ),
                 Task::Return(line) => {
                     if self.end_block() || self.kind() == Kind::Semi {
-                        self.statement(Stmt::Return(Box::default()), line);
+                        self.statement(Stmt::Return(Box::default(), self.previous_line), line);
                     } else {
                         self.tasks.push(Task::ReturnEnd(line));
                         self.tasks.push(Task::List);
@@ -545,7 +558,7 @@ impl Parser {
                 }
                 Task::ReturnEnd(line) => {
                     let values = std::mem::take(&mut self.list).into_boxed_slice();
-                    self.statement(Stmt::Return(values), line);
+                    self.statement(Stmt::Return(values, self.previous_line), line);
                 }
                 Task::Break(line) => {
                     if self.loops == 0 {
@@ -640,7 +653,7 @@ impl Parser {
                 Task::ForStep(line, name, start, limit) => {
                     self.for_body(line, name, start, limit, Some(self.expr))?
                 }
-                Task::ForEnd(line, name, start, limit, step) => {
+                Task::ForEnd(line, name, start, limit, step, do_line) => {
                     self.expect(Kind::End)?;
                     self.loops -= 1;
                     self.locals -= 4;
@@ -651,6 +664,7 @@ impl Parser {
                             start,
                             limit,
                             step,
+                            do_line,
                             body,
                         },
                         line,
@@ -663,29 +677,39 @@ impl Parser {
                         self.tasks.push(Task::ForMoreName(line, names));
                     } else {
                         self.expect(Kind::In)?;
-                        self.tasks.push(Task::ForValues(line, names));
-                        self.tasks.push(Task::List);
+                        self.tasks.push(Task::ForBegin(line, names));
                     }
                 }
                 Task::ForMoreName(line, mut names) => {
                     names.push(self.expect(Kind::Name)?.text);
                     self.tasks.push(Task::ForNames(line, names));
                 }
-                Task::ForValues(line, names) => {
-                    self.expect(Kind::Do)?;
+                Task::ForBegin(line, names) => {
+                    self.tasks
+                        .push(Task::ForValues(line, names, self.current().end_line));
+                    self.tasks.push(Task::List);
+                }
+                Task::ForValues(line, names, iter_line) => {
+                    let do_line = self.expect(Kind::Do)?.end_line;
                     let values = std::mem::take(&mut self.list);
                     self.loops += 1;
                     self.locals += names.len() as u16 + 3;
-                    self.tasks.push(Task::ForInEnd(line, names, values));
+                    self.tasks
+                        .push(Task::ForInEnd(line, names, values, [do_line, iter_line]));
                     self.tasks.push(Task::Block);
                 }
-                Task::ForInEnd(line, names, values) => {
+                Task::ForInEnd(line, names, values, lines) => {
                     self.expect(Kind::End)?;
                     self.loops -= 1;
                     self.locals -= names.len() as u16 + 3;
                     let body = std::mem::take(&mut self.body);
                     self.statement(
-                        Stmt::ForIn(names.into_boxed_slice(), values.into_boxed_slice(), body),
+                        Stmt::ForIn(
+                            names.into_boxed_slice(),
+                            values.into_boxed_slice(),
+                            body,
+                            lines,
+                        ),
                         line,
                     );
                 }
@@ -730,7 +754,8 @@ impl Parser {
                 Task::ListAfter(mut values) => {
                     values.push(self.expr);
                     if self.kind() == Kind::Comma {
-                        self.take();
+                        let separator = self.take();
+                        self.ast.exprs[self.expr].1.discharge = separator.end_line;
                         self.tasks.push(Task::ListAfter(values));
                         self.tasks.push(Task::Expr(0));
                     } else {
@@ -770,7 +795,7 @@ impl Parser {
                     self.start_function_body(line, params, vararg)?
                 }
                 Task::FunctionEnd(line, params, vararg, loops, parent_vararg, locals) => {
-                    self.expect(Kind::End)?;
+                    let end_line = self.expect(Kind::End)?.end_line;
                     self.loops = loops;
                     self.vararg = parent_vararg;
                     self.locals = locals;
@@ -780,6 +805,7 @@ impl Parser {
                             params: params.into_boxed_slice(),
                             vararg,
                             body,
+                            end_line,
                         },
                         line,
                     );
@@ -831,8 +857,14 @@ impl Parser {
                     if let Some((left, right)) = precedence(self.kind())
                         && left > min
                     {
-                        let op = self.take().kind;
-                        self.tasks.push(Task::Binary(min, line, self.expr, op));
+                        let token = self.take();
+                        self.tasks.push(Task::Binary(
+                            min,
+                            line,
+                            self.expr,
+                            token.kind,
+                            token.end_line,
+                        ));
                         self.tasks.push(Task::Expr(right));
                     } else {
                         self.depth -= 1;
@@ -841,8 +873,8 @@ impl Parser {
                 Task::Unary(op, line) => {
                     self.expression(Expr::Unary(op, self.expr), line);
                 }
-                Task::Binary(min, line, left, op) => {
-                    self.expression(Expr::Binary(op, left, self.expr), line);
+                Task::Binary(min, line, left, op, op_line) => {
+                    self.expression(Expr::Binary(op, left, self.expr, op_line), line);
                     self.tasks.push(Task::ExprLoop(min, line));
                 }
                 Task::Prefix => {
@@ -879,7 +911,8 @@ impl Parser {
                         self.tasks.push(Task::MethodName(line, id));
                     }
                     Kind::LParen | Kind::LBrace | Kind::String => {
-                        self.tasks.push(Task::CallEnd(line, id));
+                        self.tasks
+                            .push(Task::CallEnd(line, id, self.current().end_line));
                         self.tasks.push(Task::Args);
                     }
                     _ => self.expr = id,
@@ -897,17 +930,21 @@ impl Parser {
                 }
                 Task::MethodName(line, id) => {
                     let name = self.expect(Kind::Name)?.text;
-                    self.tasks.push(Task::MethodEnd(line, id, name));
+                    self.tasks.push(Task::MethodArgs(line, id, name));
+                }
+                Task::MethodArgs(line, id, name) => {
+                    self.tasks
+                        .push(Task::MethodEnd(line, id, name, self.current().end_line));
                     self.tasks.push(Task::Args);
                 }
-                Task::MethodEnd(line, id, name) => {
+                Task::MethodEnd(line, id, name, call_line) => {
                     let args = std::mem::take(&mut self.list).into_boxed_slice();
-                    let call = self.expression(Expr::Method(id, name, args), line);
+                    let call = self.expression(Expr::Method(id, name, args, call_line), line);
                     self.tasks.push(Task::Suffix(line, call));
                 }
-                Task::CallEnd(line, id) => {
+                Task::CallEnd(line, id, call_line) => {
                     let args = std::mem::take(&mut self.list).into_boxed_slice();
-                    let call = self.expression(Expr::Call(id, args), line);
+                    let call = self.expression(Expr::Call(id, args, call_line), line);
                     self.tasks.push(Task::Suffix(line, call));
                 }
                 Task::Args => match self.kind() {
@@ -944,13 +981,18 @@ impl Parser {
                 }
                 Task::ArgsTable => self.list = vec![self.expr],
                 Task::Table => {
+                    let previous = self.previous_line;
                     let line = self.expect(Kind::LBrace)?.line;
-                    self.tasks.push(Task::TableNext(line, Vec::new()));
+                    self.tasks
+                        .push(Task::TableNext([line, previous], Vec::new()));
                 }
                 Task::TableNext(line, fields) => {
                     if self.kind() == Kind::RBrace {
+                        if let Some((None, value)) = fields.last() {
+                            self.ast.exprs[*value].1.discharge = self.current().end_line;
+                        }
                         self.take();
-                        self.expression(Expr::Table(fields.into_boxed_slice()), line);
+                        self.expression(Expr::Table(fields.into_boxed_slice(), line[1]), line[0]);
                     } else if self.kind() == Kind::Name
                         && self
                             .lookahead
@@ -985,11 +1027,17 @@ impl Parser {
                 }
                 Task::TableSeparator(line, fields) => {
                     if matches!(self.kind(), Kind::Comma | Kind::Semi) {
-                        self.take();
+                        let separator = self.take();
+                        if let Some((None, value)) = fields.last() {
+                            self.ast.exprs[*value].1.discharge = separator.end_line;
+                        }
                         self.tasks.push(Task::TableNext(line, fields));
                     } else {
+                        if let Some((None, value)) = fields.last() {
+                            self.ast.exprs[*value].1.discharge = self.current().end_line;
+                        }
                         self.expect(Kind::RBrace)?;
-                        self.expression(Expr::Table(fields.into_boxed_slice()), line);
+                        self.expression(Expr::Table(fields.into_boxed_slice(), line[1]), line[0]);
                     }
                 }
             }

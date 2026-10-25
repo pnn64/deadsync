@@ -13,7 +13,7 @@ pub(crate) fn literals(ast: &Ast) -> Vec<Option<f64>> {
             Expr::Number(n) => Some(*n),
             Expr::Paren(id) => folded[*id],
             Expr::Unary(Kind::Minus, id) => folded[*id].map(|n: f64| -n),
-            Expr::Binary(op, left, right) => {
+            Expr::Binary(op, left, right, _) => {
                 folded[*left].zip(folded[*right]).and_then(|(x, y)| {
                     Some(match op {
                         Kind::Plus => x + y,

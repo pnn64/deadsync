@@ -102,6 +102,61 @@ pub(crate) enum Upvalue {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct DebugLocal {
+    pub name: Box<[u8]>,
+    pub start: u32,
+    pub end: u32,
+    pub register: u16,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum NameKind {
+    Local,
+    Global,
+    Upvalue,
+    Field,
+    Method,
+}
+impl NameKind {
+    pub fn bytes(self) -> &'static [u8] {
+        match self {
+            Self::Local => b"local",
+            Self::Global => b"global",
+            Self::Upvalue => b"upvalue",
+            Self::Field => b"field",
+            Self::Method => b"method",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct DebugCall {
+    pub pc: u32,
+    pub name: Box<[u8]>,
+    pub kind: NameKind,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct DebugInfo {
+    pub defined: [u32; 2],
+    pub upvalues: Box<[Box<[u8]>]>,
+    pub locals: Box<[DebugLocal]>,
+    pub calls: Box<[DebugCall]>,
+    pub active_lines: Box<[u32]>,
+}
+impl DebugInfo {
+    pub fn heap_bytes(&self) -> usize {
+        std::mem::size_of_val(self.upvalues.as_ref())
+            + std::mem::size_of_val(self.active_lines.as_ref())
+            + self.upvalues.iter().map(|n| n.len()).sum::<usize>()
+            + std::mem::size_of_val(self.locals.as_ref())
+            + self.locals.iter().map(|l| l.name.len()).sum::<usize>()
+            + std::mem::size_of_val(self.calls.as_ref())
+            + self.calls.iter().map(|c| c.name.len()).sum::<usize>()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct Prototype {
     pub code: Box<[Instruction]>,
     pub lines: Box<[u32]>,
@@ -113,6 +168,7 @@ pub(crate) struct Prototype {
     pub vararg: bool,
     pub compat_arg: bool,
     pub upvalues: Box<[Upvalue]>,
+    pub debug: DebugInfo,
 }
 
 #[derive(Clone, Debug)]
@@ -203,6 +259,19 @@ impl Prototype {
                 (usize::from(self.registers)..256).any(|r| mask[r / 64] & (1u64 << (r % 64)) != 0)
             })
             || self.code.is_empty()
+            || self.debug.upvalues.len() != self.upvalues.len()
+            || self.debug.defined[0] > self.debug.defined[1]
+            || self.debug.active_lines.first() == Some(&0)
+            || self.debug.active_lines.windows(2).any(|l| l[0] >= l[1])
+            || self.debug.locals.iter().any(|l| {
+                l.start > l.end || l.end as usize > self.code.len() || l.register >= self.registers
+            })
+            || self.debug.calls.windows(2).any(|c| c[0].pc >= c[1].pc)
+            || self.debug.calls.iter().any(|c| {
+                self.code
+                    .get(c.pc as usize)
+                    .is_none_or(|i| !matches!(i.op, Op::Call | Op::TailCall))
+            })
         {
             return Err(fail(0, "invalid program layout"));
         }
@@ -383,6 +452,35 @@ mod tests {
                 0 => prototype.gc_live = Box::new([]),
                 1 => prototype.gc_live[0] = u32::MAX,
                 _ => prototype.gc_maps[0][3] = 1u64 << 63,
+            }
+            assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+        }
+    }
+
+    #[test]
+    fn verifier_rejects_corrupt_debug_ranges_names_and_call_sites() {
+        let good =
+            crate::compile(b"local x=1;local function f()return x end;f();return f()").unwrap();
+        for corrupt in 0..8 {
+            let mut p = good.clone();
+            let data = Arc::make_mut(&mut p.data);
+            let proto = &mut data.prototypes[data.entry as usize];
+            match corrupt {
+                0 => proto.debug.locals[0].start = u32::MAX,
+                1 => proto.debug.locals[0].end = u32::MAX,
+                2 => proto.debug.locals[0].register = proto.registers,
+                3 => proto.debug.calls[0].pc = u32::MAX,
+                4 => proto.debug.calls[0].pc = 0,
+                5 => proto.debug.calls[1].pc = proto.debug.calls[0].pc,
+                6 => proto.debug.active_lines = Box::new([3, 2]),
+                _ => {
+                    data.prototypes
+                        .iter_mut()
+                        .find(|p| !p.upvalues.is_empty())
+                        .unwrap()
+                        .debug
+                        .upvalues = Box::new([])
+                }
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }

@@ -36,11 +36,18 @@ error values; `xpcall` handlers run before faulting frames are unwound. Function
 environments and dynamically compiled chunks preserve shared state and identity.
 Native callbacks and metamethods use explicit continuation frames.
 
+`debug.getinfo` reports function sources, definitions, active/current lines,
+upvalue counts, caller-derived names and function identity. Stack queries include
+lost tail calls and active, suspended or failed coroutine frames. `getupvalue`
+and `setupvalue` inspect and mutate shared Lua cells, including cells owned by
+other threads. Prototype metadata and call sites are verified; name lookup runs
+only during inspection. Local inspection, tracebacks and hooks remain unfinished.
+
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`, `loadstring`
 and `newproxy`.
-The Lua 5.1 `math` function set and debug metatable/environment subsets are available. Binary
+The Lua 5.1 `math` function set and debug metatable/environment operations are available. Binary
 decomposition/scaling preserve signed zero and round subnormals once. The random
 stream matches the MSVC reference, including per-OS-thread state shared by VMs;
 other CRT random sequences are not emulated. `compile_named` assigns
@@ -94,11 +101,12 @@ reports object counts and capacity-based memory estimates, including reusable
 storage. These are not process RSS or exact allocator peaks.
 
 Other standard libraries, light userdata, complete diagnostic text and
-debug metadata, binary chunks, persistent caches, host callback registration and
+debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
-work limits. Debug stack inspection and hooks remain open. The API and bytecode
+work limits. Broader source/register diagnostics, local inspection, tracebacks
+and hooks remain open. The API and bytecode
 are provisional. The CLI accepts a file, stdin or `-e source`.
 
 ```sh

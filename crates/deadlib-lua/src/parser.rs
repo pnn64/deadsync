@@ -17,16 +17,17 @@ pub(crate) enum Expr {
     String(Box<[u8]>),
     Name(Box<[u8]>),
     Unary(Kind, ExprId),
-    Binary(Kind, ExprId, ExprId),
+    Binary(Kind, ExprId, ExprId, u32),
     Paren(ExprId),
     Index(ExprId, ExprId),
-    Table(Box<[(Option<ExprId>, ExprId)]>),
-    Call(ExprId, Box<[ExprId]>),
-    Method(ExprId, Box<[u8]>, Box<[ExprId]>),
+    Table(Box<[(Option<ExprId>, ExprId)]>, u32),
+    Call(ExprId, Box<[ExprId]>, u32),
+    Method(ExprId, Box<[u8]>, Box<[ExprId]>, u32),
     Function {
         params: Box<[Box<[u8]>]>,
         vararg: bool,
         body: Block,
+        end_line: u32,
     },
     Vararg,
 }
@@ -36,8 +37,9 @@ pub(crate) enum Stmt {
     Local(Box<[Box<[u8]>]>, Box<[ExprId]>),
     LocalFunction(Box<[u8]>, ExprId),
     Assign(Box<[ExprId]>, Box<[ExprId]>),
+    FunctionDefinition(Box<[ExprId]>, Box<[ExprId]>),
     Call(ExprId),
-    Return(Box<[ExprId]>),
+    Return(Box<[ExprId]>, u32),
     Break,
     Do(Block),
     While(ExprId, Block),
@@ -48,16 +50,25 @@ pub(crate) enum Stmt {
         start: ExprId,
         limit: ExprId,
         step: Option<ExprId>,
+        do_line: u32,
         body: Block,
     },
-    ForIn(Box<[Box<[u8]>]>, Box<[ExprId]>, Block),
+    ForIn(Box<[Box<[u8]>]>, Box<[ExprId]>, Block, [u32; 2]),
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct SourceSpan {
+    pub start: u32,
+    pub end: u32,
+    pub discharge: u32,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Ast {
-    pub exprs: Vec<(Expr, u32)>,
+    pub exprs: Vec<(Expr, SourceSpan)>,
     pub stmts: Vec<(Stmt, u32)>,
     pub body: Block,
+    pub end_line: u32,
 }
 
 mod resume;

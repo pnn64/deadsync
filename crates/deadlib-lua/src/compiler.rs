@@ -2,7 +2,10 @@
 
 use crate::{
     Error, ErrorKind,
-    bytecode::{Constant, Instruction, OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue},
+    bytecode::{
+        Constant, DebugCall, DebugInfo, DebugLocal, Instruction, NameKind, OPEN, OPEN_ARGS, Op,
+        Program, Prototype, Upvalue,
+    },
     lexer::Kind,
     parser::{Ast, Block, Expr, ExprId, Stmt},
 };
@@ -11,6 +14,7 @@ use std::collections::HashMap;
 struct Local<'a> {
     name: &'a [u8],
     reg: u8,
+    debug: usize,
 }
 const TAIL: u32 = OPEN - 1;
 enum Target {
@@ -18,6 +22,13 @@ enum Target {
     Upvalue(u16),
     Global(u32),
     Index(u8, u8),
+}
+
+#[derive(Clone, Copy)]
+enum LineUse {
+    Operand,
+    Condition,
+    Copy,
 }
 
 #[derive(Default)]
@@ -37,6 +48,10 @@ struct Function<'a> {
     params: u16,
     vararg: bool,
     compat_arg: bool,
+    defined: [u32; 2],
+    debug_locals: Vec<DebugLocal>,
+    debug_calls: Vec<DebugCall>,
+    debug_lines: Vec<u32>,
 }
 
 struct Compiler<'a> {
@@ -63,6 +78,7 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
         line: 1,
     };
     c.block(&ast.body)?;
+    c.line = ast.end_line;
     c.emit(Op::Return, 0, 0, 0)?;
     let entry = c.finish();
     let p = Program::new(c.prototypes, entry, name);
@@ -72,7 +88,17 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 
 impl<'a> Compiler<'a> {
     fn finish(&mut self) -> u32 {
-        let f = std::mem::take(&mut self.function);
+        let mut f = std::mem::take(&mut self.function);
+        f.debug_lines.retain(|&l| l != 0);
+        f.debug_lines.sort_unstable();
+        f.debug_lines.dedup();
+        for local in &mut f.debug_locals {
+            if local.end == u32::MAX {
+                local.end = f.code.len() as u32;
+            }
+        }
+        let (names, upvalues): (Vec<_>, Vec<_>) =
+            f.upvalues.into_iter().map(|(n, u)| (n.into(), u)).unzip();
         let id = self.prototypes.len() as u32;
         self.prototypes.push(Prototype {
             code: f.code.into_boxed_slice(),
@@ -84,7 +110,14 @@ impl<'a> Compiler<'a> {
             params: f.params,
             vararg: f.vararg,
             compat_arg: f.compat_arg,
-            upvalues: f.upvalues.into_iter().map(|(_, u)| u).collect(),
+            upvalues: upvalues.into_boxed_slice(),
+            debug: DebugInfo {
+                defined: f.defined,
+                upvalues: names.into_boxed_slice(),
+                locals: f.debug_locals.into_boxed_slice(),
+                calls: f.debug_calls.into_boxed_slice(),
+                active_lines: f.debug_lines.into_boxed_slice(),
+            },
         });
         id
     }
@@ -127,12 +160,19 @@ impl<'a> Compiler<'a> {
         }
         Ok(None)
     }
-    fn child(&mut self, params: &'a [Box<[u8]>], vararg: bool, body: &Block) -> Result<u32, Error> {
+    fn child(
+        &mut self,
+        params: &'a [Box<[u8]>],
+        vararg: bool,
+        body: &Block,
+        defined: [u32; 2],
+    ) -> Result<u32, Error> {
         let parent = std::mem::replace(
             &mut self.function,
             Function {
                 vararg,
                 compat_arg: vararg,
+                defined,
                 ..Function::default()
             },
         );
@@ -147,6 +187,7 @@ impl<'a> Compiler<'a> {
             self.bind(b"arg", r)?;
         }
         self.block(body)?;
+        self.line = defined[1];
         self.emit(Op::Return, 0, 0, 0)?;
         let id = self.finish();
         self.function = self.parents.pop().expect("nested compiler has a parent");
@@ -248,6 +289,9 @@ impl<'a> Compiler<'a> {
         self.function.code.push(Instruction { op, a, b, c });
         self.function.lines.push(self.line);
         self.function
+            .debug_lines
+            .push(if op == Op::Close { 0 } else { self.line });
+        self.function
             .gc_live
             .push(u32::from(before) | (u32::from(after) << 16));
         Ok(pc)
@@ -288,9 +332,27 @@ impl<'a> Compiler<'a> {
         if self.function.locals.len() >= 200 {
             return Err(self.error(ErrorKind::Limit, "too many local variables"));
         }
-        self.function.locals.push(Local { name, reg });
+        let debug = self.debug_local(name, reg);
+        self.function.locals.push(Local { name, reg, debug });
         self.live_register(u16::from(reg));
         Ok(())
+    }
+    fn debug_local(&mut self, name: &[u8], reg: u8) -> usize {
+        let index = self.function.debug_locals.len();
+        self.function.debug_locals.push(DebugLocal {
+            name: name.into(),
+            start: self.function.code.len() as u32,
+            end: u32::MAX,
+            register: u16::from(reg),
+        });
+        index
+    }
+    fn end_locals(&mut self, retained: usize) {
+        let end = self.function.code.len() as u32;
+        for local in &self.function.locals[retained..] {
+            self.function.debug_locals[local.debug].end = end;
+        }
+        self.function.locals.truncate(retained);
     }
     fn block(&mut self, block: &Block) -> Result<(), Error> {
         for &id in block.iter() {
@@ -304,7 +366,7 @@ impl<'a> Compiler<'a> {
         let saved = (self.function.locals.len(), self.function.next);
         self.block(body)?;
         self.close(saved.1)?;
-        self.function.locals.truncate(saved.0);
+        self.end_locals(saved.0);
         self.reset(saved.1);
         Ok(())
     }
@@ -349,6 +411,7 @@ impl<'a> Compiler<'a> {
 
     fn statement(&mut self, stmt: &'a Stmt) -> Result<(), Error> {
         let saved = self.function.next;
+        let statement_line = self.line;
         match stmt {
             Stmt::Local(names, values) => {
                 let base = self.values(values, names.len())?;
@@ -358,7 +421,7 @@ impl<'a> Compiler<'a> {
                 }
                 return Ok(());
             }
-            Stmt::Assign(targets, values) => {
+            Stmt::Assign(targets, values) | Stmt::FunctionDefinition(targets, values) => {
                 let mut locations = Vec::with_capacity(targets.len());
                 for &id in targets.iter() {
                     locations.push(match &self.ast.exprs[id].0 {
@@ -373,14 +436,17 @@ impl<'a> Compiler<'a> {
                         }
                         Expr::Index(table, key) => {
                             let t = self.alloc(2)?;
-                            self.expr(*table, t)?;
-                            self.expr(*key, t + 1)?;
+                            self.operand(*table, t)?;
+                            self.operand(*key, t + 1)?;
                             Target::Index(t, t + 1)
                         }
                         _ => return Err(self.error(ErrorKind::Syntax, "invalid assignment target")),
                     });
                 }
                 let base = self.values(values, targets.len())?;
+                if matches!(stmt, Stmt::FunctionDefinition(..)) {
+                    self.line = statement_line;
+                }
                 for (i, target) in locations.iter().enumerate().rev() {
                     let src = (usize::from(base) + i) as u8;
                     match target {
@@ -403,18 +469,26 @@ impl<'a> Compiler<'a> {
                 let dst = self.alloc(1)?;
                 self.expr_results(*id, dst, 0)?;
             }
-            Stmt::Return(values) => {
+            Stmt::Return(values, end_line) => {
                 if values.len() == 1 {
                     let call = match &self.ast.exprs[values[0]].0 {
-                        Expr::Call(function, args) => Some((*function, None, args.as_ref())),
-                        Expr::Method(receiver, name, args) => {
-                            Some((*receiver, Some(name.as_ref()), args.as_ref()))
+                        Expr::Call(function, args, line) => {
+                            Some((*function, None, args.as_ref(), *line))
+                        }
+                        Expr::Method(receiver, name, args, line) => {
+                            Some((*receiver, Some(name.as_ref()), args.as_ref(), *line))
                         }
                         _ => None,
                     };
-                    if let Some((function, method, args)) = call {
+                    if let Some((function, method, args, line)) = call {
                         let dst = self.alloc(1)?;
+                        self.line = line;
                         self.call(function, method, args, dst, TAIL)?;
+                        *self
+                            .function
+                            .lines
+                            .last_mut()
+                            .expect("tail call emits return") = *end_line;
                         self.reset(saved);
                         return Ok(());
                     }
@@ -435,6 +509,7 @@ impl<'a> Compiler<'a> {
                         count = OPEN;
                     }
                 }
+                self.line = *end_line;
                 self.emit(Op::Return, base, 0, count)?;
             }
             Stmt::Do(body) => self.scope(body)?,
@@ -459,7 +534,7 @@ impl<'a> Compiler<'a> {
                 self.expr(*cond, r)?;
                 self.close(saved)?;
                 self.emit(Op::JumpFalse, r, 0, start)?;
-                self.function.locals.truncate(locals);
+                self.end_locals(locals);
                 self.finish_loop();
             }
             Stmt::If(arms, other) => {
@@ -483,6 +558,7 @@ impl<'a> Compiler<'a> {
                 start,
                 limit,
                 step,
+                do_line,
                 body,
             } => {
                 let base = self.alloc(4)?;
@@ -493,16 +569,29 @@ impl<'a> Compiler<'a> {
                 } else {
                     self.load(base + 2, Constant::Number(1.0))?;
                 }
+                let controls = self.function.debug_locals.len();
+                for (i, name) in [b"(for index)".as_slice(), b"(for limit)", b"(for step)"]
+                    .into_iter()
+                    .enumerate()
+                {
+                    self.debug_local(name, base + i as u8);
+                }
+                self.line = *do_line;
                 let prep = self.emit(Op::ForPrep, base, 0, 0)?;
                 let head = self.function.code.len() as u32;
                 let locals = self.function.locals.len();
                 self.bind(name, base + 3)?;
                 self.function.loops.push((saved, Vec::new()));
                 self.scope(body)?;
-                self.function.locals.truncate(locals);
+                self.end_locals(locals);
                 self.close(u16::from(base) + 3)?;
                 self.patch(prep);
+                self.line = statement_line;
                 self.emit(Op::ForLoop, base, 0, head)?;
+                let end = self.function.code.len() as u32;
+                for local in &mut self.function.debug_locals[controls..controls + 3] {
+                    local.end = end;
+                }
                 self.finish_loop();
             }
             Stmt::Break => {
@@ -528,17 +617,42 @@ impl<'a> Compiler<'a> {
                 let reg = self.alloc(1)?;
                 self.bind(name, reg)?;
                 self.expr(*value, reg)?;
+                let index = self
+                    .function
+                    .locals
+                    .last()
+                    .expect("local function is bound")
+                    .debug;
+                self.function.debug_locals[index].start = self.function.code.len() as u32;
                 return Ok(());
             }
-            Stmt::ForIn(names, values, body) => {
+            Stmt::ForIn(names, values, body, lines) => {
                 let base = self.values(values, 3)?;
                 self.reset(u16::from(base) + 3);
+                let controls = self.function.debug_locals.len();
+                for (i, name) in [
+                    b"(for generator)".as_slice(),
+                    b"(for state)",
+                    b"(for control)",
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    self.debug_local(name, base + i as u8);
+                }
                 let results = self.alloc(names.len().max(3) as u16)?;
                 let test = self.alloc(1)?;
+                self.function.debug_lines.push(lines[0]);
+                self.line = lines[1];
                 let head = self.function.code.len() as u32;
                 for i in 0..3 {
                     self.emit(Op::Move, results + i, u16::from(base + i), 0)?;
                 }
+                self.function.debug_calls.push(DebugCall {
+                    pc: self.function.code.len() as u32,
+                    name: b"(for generator)".as_slice().into(),
+                    kind: NameKind::Local,
+                });
                 self.emit(Op::Call, results, 2, names.len() as u32)?;
                 self.load(test, Constant::Nil)?;
                 self.emit(Op::Eq, test, u16::from(results), u32::from(test))?;
@@ -551,9 +665,13 @@ impl<'a> Compiler<'a> {
                 self.function.loops.push((saved, Vec::new()));
                 self.scope(body)?;
                 self.close(u16::from(results))?;
-                self.function.locals.truncate(locals);
+                self.end_locals(locals);
                 self.emit(Op::Jump, 0, 0, head)?;
                 self.patch(done);
+                let end = self.function.code.len() as u32;
+                for local in &mut self.function.debug_locals[controls..controls + 3] {
+                    local.end = end;
+                }
                 self.finish_loop();
             }
         }
@@ -563,8 +681,12 @@ impl<'a> Compiler<'a> {
 
     fn expr_results(&mut self, id: ExprId, dst: u8, wanted: u32) -> Result<(), Error> {
         match &self.ast.exprs[id].0 {
-            Expr::Call(function, args) => self.call(*function, None, args, dst, wanted),
-            Expr::Method(receiver, method, args) => {
+            Expr::Call(function, args, line) => {
+                self.line = *line;
+                self.call(*function, None, args, dst, wanted)
+            }
+            Expr::Method(receiver, method, args, line) => {
+                self.line = *line;
                 self.call(*receiver, Some(method), args, dst, wanted)
             }
             Expr::Vararg => {
@@ -598,6 +720,7 @@ impl<'a> Compiler<'a> {
         dst: u8,
         wanted: u32,
     ) -> Result<(), Error> {
+        let call_line = self.line;
         // Build arguments above all live temporaries, then copy the requested results down.
         let saved = self.function.next;
         let count = args.len() + usize::from(method.is_some());
@@ -625,11 +748,14 @@ impl<'a> Compiler<'a> {
                 argc = OPEN_ARGS;
             }
         }
+        self.line = call_line;
         if wanted == TAIL {
+            self.record_call(function, method);
             self.emit(Op::TailCall, base, argc, 0)?;
             // Lua tail calls replace the frame. A resumable native call returns here.
             self.emit(Op::Return, base, 0, OPEN)?;
         } else if wanted == OPEN {
+            self.record_call(function, method);
             // Open result ranges are relocated by Call using b/c-independent metadata in Move.
             self.emit(Op::Call, base, argc, OPEN)?;
             self.emit(Op::Move, dst, u16::from(base), OPEN)?;
@@ -638,6 +764,7 @@ impl<'a> Compiler<'a> {
             if needed > self.function.next {
                 self.alloc(needed - self.function.next)?;
             }
+            self.record_call(function, method);
             self.emit(Op::Call, base, argc, wanted)?;
             for i in 0..wanted {
                 self.emit(
@@ -652,14 +779,63 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
+    fn record_call(&mut self, mut function: ExprId, method: Option<&[u8]>) {
+        let (name, kind) = if let Some(name) = method {
+            (name, NameKind::Method)
+        } else {
+            loop {
+                match self.ast.exprs[function].0 {
+                    Expr::Paren(inner) => function = inner,
+                    Expr::Binary(Kind::Or, left, right, _)
+                        if matches!(self.ast.exprs[left].0, Expr::Binary(Kind::And, ..)) =>
+                    {
+                        function = right
+                    }
+                    _ => break,
+                }
+            }
+            match &self.ast.exprs[function].0 {
+                Expr::Name(name) => {
+                    let kind = if self.local(name).is_some() {
+                        NameKind::Local
+                    } else if self
+                        .function
+                        .upvalues
+                        .iter()
+                        .any(|(n, _)| *n == name.as_ref())
+                    {
+                        NameKind::Upvalue
+                    } else {
+                        NameKind::Global
+                    };
+                    (name.as_ref(), kind)
+                }
+                Expr::Index(_, key) => {
+                    let name = if let Expr::String(name) = &self.ast.exprs[*key].0 {
+                        name.as_ref()
+                    } else {
+                        b"?"
+                    };
+                    (name, NameKind::Field)
+                }
+                _ => return,
+            }
+        };
+        self.function.debug_calls.push(DebugCall {
+            pc: self.function.code.len() as u32,
+            name: name.into(),
+            kind,
+        });
+    }
+
     fn expr(&mut self, id: ExprId, dst: u8) -> Result<(), Error> {
         if self.depth >= 120 {
             return Err(self.error(ErrorKind::Limit, "expression nesting limit exceeded"));
         }
         self.depth += 1;
         let saved = self.function.next;
-        let (expr, line) = &self.ast.exprs[id];
-        self.line = *line;
+        let (expr, span) = &self.ast.exprs[id];
+        self.line = self.ast.exprs[id].1.discharge;
         if let Some(n) = self.folded[id] {
             self.load(dst, Constant::Number(n))?;
             self.depth -= 1;
@@ -680,9 +856,13 @@ impl<'a> Compiler<'a> {
                     self.emit(Op::GetGlobal, dst, 0, k)?;
                 }
             }
-            Expr::Paren(inner) => self.expr(*inner, dst)?,
+            Expr::Paren(inner) => {
+                self.expr(*inner, dst)?;
+                self.discharge_line(*inner, self.ast.exprs[id].1.discharge, LineUse::Copy);
+            }
             Expr::Unary(op, inner) => {
                 self.expr(*inner, dst)?;
+                self.line = self.ast.exprs[id].1.end;
                 let op = match op {
                     Kind::Minus => Op::Neg,
                     Kind::Not => Op::Not,
@@ -691,21 +871,66 @@ impl<'a> Compiler<'a> {
                 };
                 self.emit(op, dst, u16::from(dst), 0)?;
             }
-            Expr::Binary(Kind::And | Kind::Or, left, right) => {
+            Expr::Binary(Kind::And | Kind::Or, left, right, op_line) => {
                 self.expr(*left, dst)?;
+                self.discharge_line(*left, *op_line, LineUse::Condition);
+                self.line = *op_line;
+                let and = matches!(expr, Expr::Binary(Kind::And, ..));
+                let mut first = *left;
+                while let Expr::Paren(inner) = self.ast.exprs[first].0 {
+                    first = inner;
+                }
+                let truth = match &self.ast.exprs[first].0 {
+                    Expr::Nil | Expr::Boolean(false) => Some(false),
+                    Expr::Boolean(true) | Expr::String(_) => Some(true),
+                    _ if self.folded[first].is_some() => Some(true),
+                    _ => None,
+                };
+                let omitted = truth == Some(and);
+                if omitted {
+                    *self
+                        .function
+                        .debug_lines
+                        .last_mut()
+                        .expect("constant condition emits a value") = 0;
+                }
                 let op = if matches!(expr, Expr::Binary(Kind::And, ..)) {
                     Op::JumpFalse
                 } else {
                     Op::JumpTrue
                 };
                 let done = self.emit(op, dst, 0, 0)?;
+                if omitted
+                    || matches!(
+                        self.ast.exprs[first].0,
+                        Expr::Binary(
+                            Kind::Eq | Kind::Ne | Kind::Lt | Kind::Le | Kind::Gt | Kind::Ge,
+                            ..
+                        )
+                    )
+                {
+                    *self
+                        .function
+                        .debug_lines
+                        .last_mut()
+                        .expect("condition emits a branch") = 0;
+                }
                 self.expr(*right, dst)?;
+                self.discharge_line(*right, self.ast.exprs[id].1.discharge, LineUse::Copy);
                 self.patch(done);
             }
-            Expr::Binary(op, left, right) => {
+            Expr::Binary(op, left, right, op_line) => {
                 let regs = self.alloc(2)?;
-                self.expr(*left, regs)?;
-                self.expr(*right, regs + 1)?;
+                if *op == Kind::Concat {
+                    self.expr(*left, regs)?;
+                    self.discharge_line(*left, *op_line, LineUse::Copy);
+                    self.expr(*right, regs + 1)?;
+                } else {
+                    self.operand(*left, regs)?;
+                    self.discharge_line(*left, *op_line, LineUse::Operand);
+                    self.operand(*right, regs + 1)?;
+                }
+                self.line = self.ast.exprs[id].1.end;
                 let op = match op {
                     Kind::Plus => Op::Add,
                     Kind::Minus => Op::Sub,
@@ -723,23 +948,30 @@ impl<'a> Compiler<'a> {
                     _ => unreachable!("parser produced invalid binary operator"),
                 };
                 self.emit(op, dst, u16::from(regs), u32::from(regs + 1))?;
+                if matches!(op, Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge) {
+                    self.function
+                        .debug_lines
+                        .push(self.ast.exprs[id].1.discharge);
+                }
             }
             Expr::Index(table, key) => {
                 let regs = self.alloc(2)?;
-                self.expr(*table, regs)?;
-                self.expr(*key, regs + 1)?;
+                self.operand(*table, regs)?;
+                self.operand(*key, regs + 1)?;
+                self.line = self.ast.exprs[id].1.discharge;
                 self.emit(Op::GetTable, dst, u16::from(regs), u32::from(regs + 1))?;
             }
-            Expr::Table(fields) => {
+            Expr::Table(fields, load_line) => {
                 let table = self.alloc(1)?;
+                self.line = *load_line;
                 self.emit(Op::NewTable, table, 0, 0)?;
                 let mut flushed = 0u32;
                 let mut pending = 0u16;
                 for (i, (key, value)) in fields.iter().enumerate() {
                     if let Some(key) = key {
                         let regs = self.alloc(2)?;
-                        self.expr(*key, regs)?;
-                        self.expr(*value, regs + 1)?;
+                        self.operand(*key, regs)?;
+                        self.operand(*value, regs + 1)?;
                         self.emit(Op::SetTable, table, u16::from(regs), u32::from(regs + 1))?;
                         self.reset(u16::from(regs));
                     } else {
@@ -761,20 +993,26 @@ impl<'a> Compiler<'a> {
                     }
                 }
                 if pending != 0 {
+                    self.line = self.ast.exprs[id].1.end;
                     self.emit(Op::SetList, table, pending, flushed + 1)?;
                 }
                 self.emit(Op::Move, dst, u16::from(table), 0)?;
             }
-            Expr::Call(function, args) => self.call(*function, None, args, dst, 1)?,
-            Expr::Method(receiver, method, args) => {
+            Expr::Call(function, args, line) => {
+                self.line = *line;
+                self.call(*function, None, args, dst, 1)?;
+            }
+            Expr::Method(receiver, method, args, line) => {
+                self.line = *line;
                 self.call(*receiver, Some(method), args, dst, 1)?
             }
             Expr::Function {
                 params,
                 vararg,
                 body,
+                end_line,
             } => {
-                let child = self.child(params, *vararg, body)?;
+                let child = self.child(params, *vararg, body, [span.start, *end_line])?;
                 self.emit(Op::Closure, dst, 0, child)?;
             }
             Expr::Vararg => self.expr_results(id, dst, 1)?,
@@ -782,5 +1020,71 @@ impl<'a> Compiler<'a> {
         self.reset(saved);
         self.depth -= 1;
         Ok(())
+    }
+
+    fn operand(&mut self, mut id: ExprId, dst: u8) -> Result<(), Error> {
+        self.expr(id, dst)?;
+        // Lua 5.1 can use a local register or an RK constant directly. Our
+        // explicit operand copies are not distinct source-level instructions.
+        while let Expr::Paren(inner) = self.ast.exprs[id].0 {
+            id = inner;
+        }
+        if self.folded[id].is_some()
+            || matches!(
+                &self.ast.exprs[id].0,
+                Expr::Nil | Expr::Boolean(_) | Expr::String(_)
+            )
+            || matches!(&self.ast.exprs[id].0, Expr::Name(n) if self.local(n).is_some())
+        {
+            *self
+                .function
+                .debug_lines
+                .last_mut()
+                .expect("operand emits a value") = 0;
+        }
+        Ok(())
+    }
+
+    fn discharge_line(&mut self, mut id: ExprId, line: u32, usage: LineUse) {
+        loop {
+            match &self.ast.exprs[id].0 {
+                Expr::Paren(inner) | Expr::Binary(Kind::And | Kind::Or, _, inner, _) => id = *inner,
+                Expr::Name(name) => {
+                    if matches!(usage, LineUse::Condition) && self.local(name).is_some() {
+                        *self
+                            .function
+                            .debug_lines
+                            .last_mut()
+                            .expect("local emits a copy") = 0;
+                    } else if matches!(usage, LineUse::Copy) || self.local(name).is_none() {
+                        *self
+                            .function
+                            .debug_lines
+                            .last_mut()
+                            .expect("name emits a value") = line;
+                    }
+                    return;
+                }
+                Expr::Nil | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) => {
+                    if !matches!(usage, LineUse::Operand) {
+                        *self
+                            .function
+                            .debug_lines
+                            .last_mut()
+                            .expect("literal emits a value") = line;
+                    }
+                    return;
+                }
+                Expr::Index(..) => {
+                    *self
+                        .function
+                        .debug_lines
+                        .last_mut()
+                        .expect("index emits a value") = line;
+                    return;
+                }
+                _ => return,
+            }
+        }
     }
 }

@@ -7,6 +7,7 @@ use crate::{
     table::Table,
 };
 use std::{collections::HashMap, sync::Arc};
+mod debug;
 mod gc;
 mod loads;
 mod math;
@@ -358,6 +359,9 @@ impl Vm {
             (DEBUG_SET_META, b"setmetatable"),
             (DEBUG_GET_ENV, b"getfenv"),
             (DEBUG_SET_ENV, b"setfenv"),
+            (debug::GET_INFO, b"getinfo"),
+            (debug::GET_UPVALUE, b"getupvalue"),
+            (debug::SET_UPVALUE, b"setupvalue"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]

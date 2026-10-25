@@ -59,6 +59,7 @@ pub(crate) enum Kind {
 pub(crate) struct Token {
     pub kind: Kind,
     pub line: u32,
+    pub end_line: u32,
     pub text: Box<[u8]>,
     pub number: f64,
 }

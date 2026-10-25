@@ -465,6 +465,9 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        if (debug::GET_INFO..=debug::SET_UPVALUE).contains(&id) {
+            return self.debug_native(id, base, count);
+        }
         if id == NEW_PROXY {
             return self.proxy_native(base, count);
         }

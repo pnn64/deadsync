@@ -43,6 +43,7 @@ fn empty(line: u32) -> Token {
     Token {
         kind: Kind::Eof,
         line,
+        end_line: line,
         text: Box::default(),
         number: 0.0,
     }
@@ -102,6 +103,7 @@ impl Scanner {
     }
 
     fn emit(&mut self, kind: Kind) {
+        self.token.end_line = self.line;
         self.token.kind = kind;
         self.state = State::Emit;
     }
@@ -521,7 +523,7 @@ impl Scanner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    type Observed = (Kind, u32, Vec<u8>, u64);
+    type Observed = (Kind, u32, u32, Vec<u8>, u64);
     type Outcome = Result<Vec<Observed>, (ErrorKind, u32, String)>;
 
     fn tokens(source: &[u8], ends: &[usize]) -> Outcome {
@@ -539,6 +541,7 @@ mod tests {
                 result.push((
                     token.kind,
                     token.line,
+                    token.end_line,
                     token.text.into_vec(),
                     token.number.to_bits(),
                 ));

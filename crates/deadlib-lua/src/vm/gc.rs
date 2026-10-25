@@ -151,6 +151,7 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
         + p.data.prototypes.len() * std::mem::size_of::<crate::bytecode::Prototype>();
     for f in &p.data.prototypes {
         bytes += f.code.len() * 8
+            + f.debug.heap_bytes()
             + f.lines.len() * 4
             + f.gc_live.len() * 4
             + f.gc_maps.len() * 32
@@ -279,7 +280,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104)
+                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::SET_UPVALUE)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
