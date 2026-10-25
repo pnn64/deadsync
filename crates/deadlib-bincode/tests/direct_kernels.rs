@@ -58,7 +58,9 @@ fn benchmark_signed_codec() {
 #[ignore = "release CPU and allocation benchmark"]
 fn benchmark_bool_codec() {
     let config = bincode::config::standard();
-    for len in [0usize, 1, 7, 8, 9, 16, 256, 4096, 65536] {
+    for len in [
+        0usize, 1, 7, 8, 9, 16, 31, 32, 33, 63, 64, 65, 127, 128, 129, 256, 4096, 65536,
+    ] {
         let values: Vec<bool> = (0..len).map(|i| i % 3 == 0).collect();
         let encoded = bincode::encode_to_vec(&values, config).unwrap();
         for error in ["none", "first", "middle", "last"] {

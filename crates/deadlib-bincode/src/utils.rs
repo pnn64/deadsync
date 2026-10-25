@@ -8,18 +8,16 @@ impl<T> Sealed for &mut T where T: Sealed {}
 #[inline]
 pub(crate) fn invalid_bool(bytes: &[u8]) -> Option<usize> {
     let mut offset = 0;
-    if bytes.len() >= 32 {
-        for block in bytes.chunks_exact(32) {
-            // Validate four words before branching. An invalid block falls
-            // through to the ordered word scan below to locate its first error.
-            let bits = block.chunks_exact(8).fold(0, |bits, word| {
-                bits | u64::from_le_bytes(word.try_into().expect("eight-byte chunk"))
-            });
-            if bits & 0xfefe_fefe_fefe_fefe != 0 {
-                break;
-            }
-            offset += 32;
+    for block in bytes.chunks_exact(64) {
+        // Validate four packed words before branching; the ordered scan below
+        // still locates the first invalid byte inside a failing block.
+        let bits = block.chunks_exact(16).fold(0, |bits, word| {
+            bits | u128::from_ne_bytes(word.try_into().expect("sixteen-byte chunk"))
+        });
+        if bits & u128::from_ne_bytes([0xfe; 16]) != 0 {
+            break;
         }
+        offset += 64;
     }
     let mut words = bytes[offset..].chunks_exact(8);
     for (index, word) in words.by_ref().enumerate() {

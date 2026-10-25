@@ -6,13 +6,13 @@ use bincode::{
 #[test]
 fn boolean_validation_preserves_first_error_and_reader_position() {
     let config = bincode::config::standard();
-    for index in 0..65 {
+    for index in 0..193 {
         for invalid in 2..=255u8 {
-            let mut bytes: Vec<u8> = (0..65).map(|i| (i % 2) as u8).collect();
+            let mut bytes: Vec<u8> = (0..193).map(|i| (i % 2) as u8).collect();
             bytes[index] = invalid;
             // A later error must not supersede the first error's value or prefix.
-            bytes[64] = if index == 64 { invalid } else { 255 };
-            let mut encoded = vec![65];
+            bytes[192] = if index == 192 { invalid } else { 255 };
+            let mut encoded = vec![193];
             encoded.extend_from_slice(&bytes);
             let mut output = vec![true; 100];
             let error =
@@ -30,12 +30,12 @@ fn boolean_validation_preserves_first_error_and_reader_position() {
                 config,
                 (),
             );
-            let error = <[bool; 65]>::decode(&mut decoder).unwrap_err();
+            let error = <[bool; 193]>::decode(&mut decoder).unwrap_err();
             assert!(
                 matches!(error, bincode::error::DecodeError::InvalidBooleanValue(v) if v == invalid)
             );
             let mut next = [0];
-            if index < 64 {
+            if index < 192 {
                 decoder.reader().read(&mut next).unwrap();
                 assert_eq!(next[0], bytes[index + 1]);
             } else {
@@ -75,7 +75,16 @@ fn boolean_validation_covers_word_tails_and_borrowed_decoding() {
     check_array!(15);
     check_array!(16);
     check_array!(17);
+    check_array!(31);
+    check_array!(32);
+    check_array!(33);
+    check_array!(63);
+    check_array!(64);
     check_array!(65);
+    check_array!(127);
+    check_array!(128);
+    check_array!(129);
+    check_array!(193);
 
     for len in 0..=129 {
         let values: Vec<_> = (0..len).map(|i| i % 3 == 0).collect();

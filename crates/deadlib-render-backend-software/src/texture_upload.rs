@@ -44,10 +44,13 @@ pub(super) fn update_yuv420_image(
 
 #[inline]
 fn rgba_pixel(y: f32, u: f32, v: f32, coeffs: [f32; 4]) -> [u8; 4] {
+    // Widen the rounded f32 product before adding the half: f32 addition can
+    // otherwise round a value just below a half-integer across the boundary.
+    // The u8 cast already saturates negative values, infinities and NaNs.
     [
-        (coeffs[0].mul_add(v, y) * 255.0).round() as u8,
-        (coeffs[2].mul_add(v, coeffs[1].mul_add(u, y)) * 255.0).round() as u8,
-        (coeffs[3].mul_add(u, y) * 255.0).round() as u8,
+        (f64::from(coeffs[0].mul_add(v, y) * 255.0) + 0.5) as u8,
+        (f64::from(coeffs[2].mul_add(v, coeffs[1].mul_add(u, y)) * 255.0) + 0.5) as u8,
+        (f64::from(coeffs[3].mul_add(u, y) * 255.0) + 0.5) as u8,
         255,
     ]
 }
@@ -128,3 +131,7 @@ pub(super) fn texture_is_opaque(image: &RgbaImage) -> bool {
 #[cfg(test)]
 #[path = "opacity_kernel.rs"]
 mod opacity_kernel;
+
+#[cfg(test)]
+#[path = "yuv_quantization.rs"]
+mod yuv_quantization;
