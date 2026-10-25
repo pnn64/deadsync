@@ -58,9 +58,6 @@ impl Vm {
                     return Ok(self.return_frame(frame, base, 1));
                 }
                 self.frames.last_mut().expect("active dofile").pc = 4;
-                if self.native_depth(self.frames.len()) >= 200 {
-                    return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-                }
                 if let Some(actual) = self.start_call(base, 0, OPEN, false)? {
                     self.finish_call(base, actual, OPEN);
                 }

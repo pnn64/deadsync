@@ -113,6 +113,7 @@ impl Vm {
         self.close_upvalues(len);
         self.discard_finalizers(0);
         self.frames.clear();
+        self.restore_calls();
         self.trim_substitutions();
         self.sorts.clear();
         self.trim_loads();

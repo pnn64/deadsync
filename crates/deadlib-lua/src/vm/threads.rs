@@ -48,6 +48,7 @@ pub(super) enum Transition {
 pub(super) struct Thread {
     pub(super) registers: Vec<Value>,
     pub(super) frames: Vec<Frame>,
+    pub(super) call_slots: u16,
     pub(super) open_upvalues: Vec<u32>,
     pub(super) globals: TableId,
     pub(super) top: usize,
@@ -68,6 +69,7 @@ impl Thread {
         Self {
             registers: Vec::new(),
             frames: Vec::new(),
+            call_slots: 8,
             open_upvalues: Vec::new(),
             globals,
             top: 0,
@@ -195,6 +197,7 @@ impl Vm {
         let state = &mut self.threads[slot_index(id.0)];
         std::mem::swap(&mut self.registers, &mut state.registers);
         std::mem::swap(&mut self.frames, &mut state.frames);
+        std::mem::swap(&mut self.call_slots, &mut state.call_slots);
         std::mem::swap(&mut self.open_upvalues, &mut state.open_upvalues);
         std::mem::swap(&mut self.globals, &mut state.globals);
         std::mem::swap(&mut self.top, &mut state.top);
@@ -291,6 +294,7 @@ impl Vm {
             self.close_upvalues(0);
             self.discard_finalizers(0);
             self.frames.clear();
+            self.restore_calls();
             self.trim_substitutions();
             self.sorts.clear();
             self.trim_loads();

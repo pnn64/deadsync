@@ -26,6 +26,7 @@ pub struct Error {
     message: Box<str>,
     bytes: Option<Box<[u8]>>,
     pub(crate) near: bool,
+    pub(crate) bypass_handler: bool,
     value: Option<Value>,
 }
 
@@ -37,6 +38,7 @@ impl Error {
             message: message.into(),
             bytes: None,
             near: false,
+            bypass_handler: false,
             value: None,
         }
     }
@@ -48,6 +50,7 @@ impl Error {
             message: message.into(),
             bytes: None,
             near: false,
+            bypass_handler: false,
             value: Some(value),
         }
     }
@@ -72,6 +75,7 @@ impl Error {
                         .into_boxed_str(),
                     bytes: Some(bytes.into_boxed_slice()),
                     near: false,
+                    bypass_handler: false,
                     value: None,
                 }
             }
@@ -87,6 +91,12 @@ impl Error {
     pub(crate) fn with_value(mut self, value: Value) -> Self {
         self.value = Some(value);
         self
+    }
+
+    pub(crate) fn handling(value: Value) -> Self {
+        let mut error = Self::raised(value, "error in error handling");
+        error.bypass_handler = true;
+        error
     }
 
     /// Return an explicitly raised Lua error value, owned by its originating VM.

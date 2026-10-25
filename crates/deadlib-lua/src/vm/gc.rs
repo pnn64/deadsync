@@ -507,7 +507,7 @@ impl Vm {
             _ => true,
         }
     }
-    fn trace_thread(&self, id: ThreadId, work: &mut Vec<Trace>) {
+    fn trace_thread(&mut self, id: ThreadId, work: &mut Vec<Trace>) {
         let t = &self.threads[slot_index(id.0)];
         if let Some(entry) = t.entry {
             work.push(Trace::Value(Value::Function(entry)));
@@ -563,6 +563,7 @@ impl Vm {
                 .iter()
                 .filter_map(|j| j.file.map(|f| Trace::File(f.key))),
         );
+        self.shrink_thread_calls(id);
     }
     fn marked_weak_value(&self, value: Value, key: bool) -> bool {
         self.marked_value(value)
@@ -713,6 +714,15 @@ impl Vm {
                 .map(|p| Trace::Value(Value::Function(p.entry))),
         );
         self.trace_graph(&mut work);
+        // Lua 5.1 revisits initially reachable threads in its gray-again pass.
+        // Threads reached only through finalizer preservation are visited once.
+        for index in 0..self.threads.len() {
+            if let Some(key) = self.threads.key(index)
+                && self.threads.marked(key)
+            {
+                self.shrink_thread_calls(ThreadId(key));
+            }
+        }
         // Pending callbacks preserve their graphs only after discovering newly
         // finalizable userdata, including graphs attached after a callback error.
         self.separate_userdata(false);

@@ -306,12 +306,19 @@ fn main() {
             100.0,
             10,
         ),
+        (
+            "stack_overflow",
+            r#"collectgarbage('stop');local n=0;local function f()n=n+1;f()end;local ok,e=pcall(f);return not ok and n>10000 and e=="stack-bench:1: stack overflow" and 1 or 0"#,
+            1.0,
+            3,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = match name {
             "debug_traceback" => Some("=(traceback-bench)"),
             "runtime_error" => Some("=runtime-bench"),
             "native_arg_error" => Some("=native-bench"),
+            "stack_overflow" => Some("=stack-bench"),
             _ => None,
         };
         let program = match chunk_name {

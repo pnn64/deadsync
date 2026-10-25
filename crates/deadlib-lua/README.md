@@ -125,6 +125,13 @@ Hosts can allocate userdata with `Vm::new_userdata` and borrow its byte storage.
 `Vm::collect_garbage` returns `Result<HeapStats, Error>` so finalizer failures
 can propagate; pending finalizers remain available to later collection.
 
+Lua recursion overflow is catchable. Each thread tracks Lua 5.1's logical
+call-info growth and error-handler reserve independently of its frame vector.
+Protected recovery and GC update that capacity; internal continuations consume
+no Lua call slots. Error handlers can re-enter after runtime errors, use the
+native-call emergency range and terminate with the reference error object when
+that range is exhausted. Instruction aborts remain uncatchable.
+
 The I/O library provides named/temporary files, default streams, process pipes,
 reads, writes, seeking, buffering, close/type queries and line iterators. File
 userdata owns a generation-checked stream record and uses the shared collector
@@ -185,7 +192,7 @@ currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Ru
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua` and `math.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
-probes reach missing libraries/functions or runtime resource limits. It verifies the official
+probes reach missing libraries/functions or compiler-limit diagnostics. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-native-errors.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-call-limits.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

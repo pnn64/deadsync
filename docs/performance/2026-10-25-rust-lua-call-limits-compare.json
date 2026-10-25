@@ -1,0 +1,473 @@
+{
+  "parent_revision": "1b1042fb04aaa771ed7e8e6fc97045fa3b22367e",
+  "current_source_digest": "0d017bfcfb5489d0ff7af1e309376d1fe5d721882a7978366efb4cb7e88ba8ec",
+  "source_artifact": "2026-10-25-rust-lua-call-limits-compare.rs",
+  "driver_sha256": "2fe7fb10ed314ab3aa5132937c94943feed437a9269651e19e2a35ebf25dfe4d",
+  "protocol": "Two standalone zero-dependency libraries linked into one executable with distinct crate names; five warmups, nine alternating pairs; 20 repeats for numeric loops and 10 for Fibonacci. Exact returned numbers checked before warmup. Direct rustc opt-level=3, static CRT, final fat LTO; differs from Cargo benchmark protocol.",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "sizes": "sizes\tparent_error=56\tcurrent_error=56\tparent_vm=4352\tcurrent_vm=4360",
+  "parent_source_hashes": {
+    "arena.rs": "49e430940197bd075f8f1c3cbf55941ab84b073c2d175a4021c2845e9c4b3d06",
+    "bin/deadlua.rs": "414f6c16aa256837f0ba452e172d1dfd02e985d9ef6b7e9f2d380700a7f31743",
+    "bytecode.rs": "7399b9551d7fb3efb5c50d6a44d337cf86619af5733b606957c1c5fa40742afa",
+    "compiler.rs": "a3ab63878346ab2987fef3ee428713fff7d74b88e0ba63bcb34b55bbbf6d750e",
+    "error.rs": "53dde24a0eefcace32860e113c468e844e4d62d276f72c5de8ec37874448d74c",
+    "format.rs": "e2c14f109f7909ae417f55ef152e7334522d1cce94786271d3b7a855c06d25fe",
+    "lexer/scanner.rs": "2e1a3fc1efc23ad6f01c20392a72acc7d6313a79e54a42e7dfd1010e958d1c4c",
+    "lexer.rs": "16035cc5490301c60055fb502bd730f1f1694b04d98d306178907353f9825d1d",
+    "lib.rs": "4dc2a2f35ba57f0ef620aefe03e6d856b6994fe58a10894658e66e0f7b898fb8",
+    "optimizer.rs": "60bfa583b75bec6919019b17d7bd746549a303a151bc084d18a5b482134c038c",
+    "parser/resume.rs": "e4631be79897f90f7006b32ee200fdb593f774ed73b284bab95793d1a8a0fb7e",
+    "parser.rs": "f5f6e3c0def31cb5a3926384ffae73ca30d4797c41cce25b60aeedee2c84308b",
+    "pattern.rs": "67c8060f21fcbe7b9774d4f8b22e357650371d7db542621db04992a0c8ab30fc",
+    "table.rs": "fce2e9407bb849d209a384a8c22b907cf711d4a4303245812f19af46280f7548",
+    "value.rs": "dc0d9c5e50a137c1fb2ff6cc41426d8694ddee08f8b92dc19d0696da30af1a35",
+    "vm/debug.rs": "fac98d70c108e4fb999ebf05497b636c290b7d7e413e697fc47a15179fb4737d",
+    "vm/errors.rs": "52a90897713c751fcafe7dde54a085ffa5290fe4e2c0885069a3a5bd39c2808b",
+    "vm/gc.rs": "749444a5b4082e0679d86cbdae1576fcf7119ee41c1c9e7a10b2b69f17823596",
+    "vm/hooks.rs": "f2c9dabdee92304ea749325582c95f6099aeceb19f27a6d5c2fc8b414d1772ff",
+    "vm/io/number.rs": "8da9d0cdd87f9dad661419ca0afc61b92486b309b7fae848d0818437075083f9",
+    "vm/io/stream.rs": "84253e53aca7904c49a028181e2610e88bf2b4eac4495d92844c4bfe27db5d3c",
+    "vm/io.rs": "582e2f23169807de5cce90a34f7b2d9369aa096b643852edcad774e321e2f971",
+    "vm/loads.rs": "f71b1fe118c7d7da88275901eb00f95f3100f37002e076ab85a372dcdb0016af",
+    "vm/math.rs": "c8457f3fd7efc8ee1c00c9b0e81debe9cdc49833eb37a3ae9685803c9db5f5c8",
+    "vm/meta.rs": "a5d484e6b5b8c00ad410bc2b8a215c537205ad182f4de421bf6e5668c44d71d7",
+    "vm/native.rs": "371dbbd6fe95a9d8b4397bc868091e9aee929d4eb399e7b620836d707068ddcf",
+    "vm/package.rs": "3edb3549c43aa1c1bbd4e308f14a685d729327f11a322ae48dcb94aa6b2e58e9",
+    "vm/strings.rs": "2789ff563365d54e51d0d3d1b61bf2ca1efe2dfe6855d929547cfda76b0868b5",
+    "vm/tables.rs": "1cf0f8c0474b2b5c2ac03f91226ed669a1ad8f7c8df114c33367dda78d762ee7",
+    "vm/threads.rs": "872474d33c732848d4d78e097ff970aece5c8a7809bb5e8ce7838dc29a4ad72a",
+    "vm/traces.rs": "62673e9d98110f30ba49bffef03c8180a4cebc0f5df97bc64c11f8d8415d0945",
+    "vm/userdata.rs": "05965ebdf359e96ae7e2a087f4fe95ccfc191c2cd5643b4820dc5836efcc9db1",
+    "vm.rs": "8bc69a8670aab547406398b502e7525c0b4a2370cb17648fd605218bec52ed7b"
+  },
+  "current_source_hashes": {
+    "crates/deadlib-lua/src/arena.rs": "a022f5e910680d3634eb415937b001441decc00e508c3293ff52ab04a09f8419",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "0990ea2628d37ade72447caaad2d9f27050a39aff95c35185e8a0897052f0824",
+    "crates/deadlib-lua/src/bytecode.rs": "f8437ecd78f5360d1663ea6fd4db68d71245435538b3f9c2f1dccf66a1c356a0",
+    "crates/deadlib-lua/src/compiler.rs": "c826d1ef96e6e9dae891ccfc2062fa2a1346874b6cf0fe7be11bb646a8f2e7bb",
+    "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "crates/deadlib-lua/src/format.rs": "d30690c55ddcb9beba4e1fe0979aa168e14fc67f1eed05c8195efe57a8d2aa3c",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "78a1a67813bdf038a4cc4e81682fe652f142c689aa00556942a684d15a3391e7",
+    "crates/deadlib-lua/src/lexer.rs": "bcbfc34ea608868f1013a227388f6454e3b7d6870c9a7f1f27ecbe19c6e105a2",
+    "crates/deadlib-lua/src/lib.rs": "13006e1dec794c8a2ffaafab04455e941e5599c2ae1e5dbe3b461ffca50f6bb1",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/resume.rs": "066f10c4045e5f04ff192b5f6c26e35e6c37caa9435d21c694987c71a7355783",
+    "crates/deadlib-lua/src/parser.rs": "6766df6d22e53458bdef3e55d81ee7cd4641a906c630d63f6e7e426f2f89c1df",
+    "crates/deadlib-lua/src/pattern.rs": "70ca21eae197709630ad94e279031ebb8a5647ee6042dc3b6f4874e9f02de01f",
+    "crates/deadlib-lua/src/table.rs": "792846122e35696d45213f20d7b822ab4b647c49dc3755ff9285500754e6d5d3",
+    "crates/deadlib-lua/src/value.rs": "f24a28b8ab79ceb6e6fb9dce25d719d6378f2f63788784729acf79130959f7fc",
+    "crates/deadlib-lua/src/vm/debug.rs": "fac98d70c108e4fb999ebf05497b636c290b7d7e413e697fc47a15179fb4737d",
+    "crates/deadlib-lua/src/vm/errors.rs": "9d027a742dc5073996f803eb4c7a15613c73066170310c91fab6d7b0d50ebcce",
+    "crates/deadlib-lua/src/vm/gc.rs": "4322f1a6df3901753e774879301e021b994ef2429d33c88f0eaf75d988a5a7db",
+    "crates/deadlib-lua/src/vm/hooks.rs": "32999dd0d952a10dc076245955225842cdeff2210f96f8daaee1ef887138171f",
+    "crates/deadlib-lua/src/vm/io/number.rs": "7c4d6cb43e3792ee7b6237440361776aa6f1be623fab0f782d02a2c91baad9f1",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "1fd635c2e2e6bd399296247a737545e868eca1b5a9d8a312619656eff8f8cfab",
+    "crates/deadlib-lua/src/vm/io.rs": "582e2f23169807de5cce90a34f7b2d9369aa096b643852edcad774e321e2f971",
+    "crates/deadlib-lua/src/vm/limits.rs": "82c8ca8b0c23d90297b7b00afb4448dfd3e1383132740fac97d10e2a0027c47a",
+    "crates/deadlib-lua/src/vm/loads.rs": "3822431796acf5abbbdcc248d1111d5eae87302ed3ff7a4039f82cb07c7f0264",
+    "crates/deadlib-lua/src/vm/math.rs": "c8457f3fd7efc8ee1c00c9b0e81debe9cdc49833eb37a3ae9685803c9db5f5c8",
+    "crates/deadlib-lua/src/vm/meta.rs": "23124912deaf29fe6be1e768a00703c650c67df56c2bebbedcb39206d9ed3a07",
+    "crates/deadlib-lua/src/vm/native.rs": "9771d7a4286befd43b0db522f1ce1c9226770abb369e2e4073a864c90af0a807",
+    "crates/deadlib-lua/src/vm/package.rs": "7850e2b22b1d46dad66676a650c653e8025c7037c4353fa603ad3b5fbdec4907",
+    "crates/deadlib-lua/src/vm/strings.rs": "2789ff563365d54e51d0d3d1b61bf2ca1efe2dfe6855d929547cfda76b0868b5",
+    "crates/deadlib-lua/src/vm/tables.rs": "1cf0f8c0474b2b5c2ac03f91226ed669a1ad8f7c8df114c33367dda78d762ee7",
+    "crates/deadlib-lua/src/vm/threads.rs": "23ffe72f87cdb4263255c99c3c689293cf65a16c064d31c936dfe23831ebb860",
+    "crates/deadlib-lua/src/vm/traces.rs": "55b16bd9001878ac03a42c9447ebbf8b9ee4dadd7d5c2dcb16c43c60c451e3df",
+    "crates/deadlib-lua/src/vm/userdata.rs": "10b2328d57dc18abc1da09e3af6daa8ef4a650ceb1bf46c43ff597e80461f058",
+    "crates/deadlib-lua/src/vm.rs": "f83c9a6386a0394d52decf394465d0df5fedc366ca8779fbd12f07e5bbd8b6ab"
+  },
+  "median_paired_current_over_parent": {
+    "for": 0.973453137061062,
+    "while": 0.9754477530659812,
+    "fib": 1.0031358356859996
+  },
+  "samples": [
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 0,
+      "ns_per_iteration": 3347420
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 0,
+      "ns_per_iteration": 3130605
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 1,
+      "ns_per_iteration": 3612340
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 1,
+      "ns_per_iteration": 3653230
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 2,
+      "ns_per_iteration": 3692150
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 2,
+      "ns_per_iteration": 3594135
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 3,
+      "ns_per_iteration": 3765295
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 3,
+      "ns_per_iteration": 3320830
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 4,
+      "ns_per_iteration": 3840715
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 4,
+      "ns_per_iteration": 3485645
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 5,
+      "ns_per_iteration": 4336625
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 5,
+      "ns_per_iteration": 3661225
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 6,
+      "ns_per_iteration": 4057520
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 6,
+      "ns_per_iteration": 3698035
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 7,
+      "ns_per_iteration": 3446310
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 7,
+      "ns_per_iteration": 3709815
+    },
+    {
+      "workload": "for",
+      "engine": "parent",
+      "sample": 8,
+      "ns_per_iteration": 4127900
+    },
+    {
+      "workload": "for",
+      "engine": "current",
+      "sample": 8,
+      "ns_per_iteration": 4444725
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 0,
+      "ns_per_iteration": 6921615
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 0,
+      "ns_per_iteration": 6621300
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 1,
+      "ns_per_iteration": 6769390
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 1,
+      "ns_per_iteration": 5717915
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 2,
+      "ns_per_iteration": 6063100
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 2,
+      "ns_per_iteration": 5650120
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 3,
+      "ns_per_iteration": 5578025
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 3,
+      "ns_per_iteration": 5625630
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 4,
+      "ns_per_iteration": 5696975
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 4,
+      "ns_per_iteration": 5554130
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 5,
+      "ns_per_iteration": 6541210
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 5,
+      "ns_per_iteration": 5832580
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 6,
+      "ns_per_iteration": 5595565
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 6,
+      "ns_per_iteration": 5358875
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 7,
+      "ns_per_iteration": 5759070
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 7,
+      "ns_per_iteration": 5877335
+    },
+    {
+      "workload": "while",
+      "engine": "parent",
+      "sample": 8,
+      "ns_per_iteration": 5738375
+    },
+    {
+      "workload": "while",
+      "engine": "current",
+      "sample": 8,
+      "ns_per_iteration": 5597485
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 0,
+      "ns_per_iteration": 3015510
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 0,
+      "ns_per_iteration": 3142580
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 1,
+      "ns_per_iteration": 3116210
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 1,
+      "ns_per_iteration": 3134060
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 2,
+      "ns_per_iteration": 3166620
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 2,
+      "ns_per_iteration": 3176550
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 3,
+      "ns_per_iteration": 3265890
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 3,
+      "ns_per_iteration": 3213240
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 4,
+      "ns_per_iteration": 3107700
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 4,
+      "ns_per_iteration": 3155350
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 5,
+      "ns_per_iteration": 3287710
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 5,
+      "ns_per_iteration": 3155850
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 6,
+      "ns_per_iteration": 3131600
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 6,
+      "ns_per_iteration": 3133420
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 7,
+      "ns_per_iteration": 3206490
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 7,
+      "ns_per_iteration": 3289910
+    },
+    {
+      "workload": "fib",
+      "engine": "parent",
+      "sample": 8,
+      "ns_per_iteration": 3538180
+    },
+    {
+      "workload": "fib",
+      "engine": "current",
+      "sample": 8,
+      "ns_per_iteration": 3248850
+    }
+  ],
+  "limitations": "One auxiliary run on a non-isolated machine; different build protocol from Cargo reports. Ratios do not establish a general speedup or exclude build-specific timing differences.",
+  "commands": [
+    [
+      "git",
+      "archive",
+      "--format=zip",
+      "1b1042fb04aaa771ed7e8e6fc97045fa3b22367e",
+      "crates/deadlib-lua/src"
+    ],
+    [
+      "rustc",
+      "--edition",
+      "2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "--crate-type",
+      "rlib",
+      "--crate-name",
+      "lua_parent",
+      "target\\lua-call-limit-comparison\\crates\\deadlib-lua\\src\\lib.rs",
+      "-o",
+      "target\\lua-call-limit-comparison\\liblua_parent.rlib"
+    ],
+    [
+      "rustc",
+      "--edition",
+      "2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "--crate-type",
+      "rlib",
+      "--crate-name",
+      "lua_current",
+      "crates\\deadlib-lua\\src\\lib.rs",
+      "-o",
+      "target\\lua-call-limit-comparison\\liblua_current.rlib"
+    ],
+    [
+      "rustc",
+      "--edition",
+      "2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "-C",
+      "lto=fat",
+      "--extern",
+      "lua_parent=target\\lua-call-limit-comparison\\liblua_parent.rlib",
+      "--extern",
+      "lua_current=target\\lua-call-limit-comparison\\liblua_current.rlib",
+      "target\\lua-call-limit-comparison\\compare.rs",
+      "-o",
+      "target\\lua-call-limit-comparison\\compare.exe"
+    ]
+  ]
+}

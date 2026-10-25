@@ -12,6 +12,7 @@ mod errors;
 mod gc;
 mod hooks;
 mod io;
+mod limits;
 mod loads;
 mod math;
 mod meta;
@@ -215,6 +216,9 @@ struct Frame {
     tail_calls: u32,
 }
 impl Frame {
+    fn is_call(self) -> bool {
+        !matches!(self.function, FrameKind::Native(id) if (CONT_RAW..strings::ITERATOR_FIRST).contains(&id))
+    }
     fn pc(self) -> usize {
         self.pc as usize
     }
@@ -246,6 +250,7 @@ pub struct Vm {
     upvalues: Arena<Cell>,
     open_upvalues: Vec<u32>,
     frames: Vec<Frame>,
+    call_slots: u16,
     strings: Strings,
     tables: Arena<Table>,
     globals: TableId,
@@ -302,6 +307,7 @@ impl Vm {
             upvalues: Arena::default(),
             open_upvalues: Vec::new(),
             frames: Vec::new(),
+            call_slots: 8,
             strings: Strings::default(),
             tables,
             globals,
@@ -617,13 +623,7 @@ impl Vm {
         count: usize,
         wanted: u32,
     ) -> Result<(), Error> {
-        if self.frames.len() >= 10000 {
-            return Err(Error::new(
-                ErrorKind::Limit,
-                0,
-                "Lua call stack limit exceeded",
-            ));
-        }
+        self.check_calls()?;
         let closure = &self.functions[slot_index(function.0)];
         let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
         let (registers, params, compat_arg) = (
@@ -785,6 +785,7 @@ impl Vm {
         self.close_upvalues(0);
         self.discard_finalizers(0);
         self.frames.clear();
+        self.restore_calls();
         self.trim_substitutions();
         self.sorts.clear();
         self.trim_loads();
@@ -811,7 +812,7 @@ impl Vm {
             let result = self.run(&mut budget, &mut error_line);
             match result {
                 Err(error) if error.kind() == ErrorKind::Runtime => {
-                    match self.catch_error(&error, error_line) {
+                    match self.catch_error(&error, &mut budget) {
                         Ok(true) => continue,
                         Ok(false) if self.thread != self.main => {
                             self.fail_thread(&error, &mut error_line);
@@ -1135,7 +1136,7 @@ impl Vm {
                             usize::from(i.b)
                         };
                         self.frames[frame_index].pc = pc as u32;
-                        let Some(actual) = self.start_call(
+                        let Some(actual) = self.start_lua_call(
                             a,
                             count,
                             if i.op == Op::TailCall { OPEN } else { i.c },

@@ -30,7 +30,7 @@ performance JSON keeps its recorded measurement provenance.
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and ten Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Errors pass the initial syntax, operand/native argument and line-error assertions, then stop at the uncatchable Lua call-stack limit at line 142. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and ten Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Errors now pass overflow/recovery and syntax-depth assertions, then stop at the upvalue-limit diagnostic at line 238. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 229 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 245 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-native-errors.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-call-limits.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -201,6 +201,21 @@ native argument-error workload, bringing the harness to 33 execution workloads
 and eight frontend cases. The official error probe reaches the Lua call-stack
 limit; catchable overflow behavior, depth/reserve parity and broader resource
 limits remain open with the other standalone-engine requirements.
+
+The [call-limit validation](testing/2026-10-25-rust-lua-call-limits.md) adds sixteen
+groups and 47 paired programs covering exact stopped-GC recursion counts,
+repeated recovery, error-handler reserve/re-entry, C-call emergency callbacks,
+near-capacity calls, explicit GC shrinking, coroutine state, surviving cells,
+deep tracebacks, call hooks, tail calls and instruction-abort recovery. A per-thread
+`u16` records logical call-info capacity; physical vector length bounds the common
+check and visible frames are counted only near a limit. Native callbacks perform
+their C-boundary check separately from ordinary Lua calls. Fatal handling errors
+bypass handler re-entry; the scheduler retains faulting frames until recovery.
+The [measurements](performance/2026-10-25-rust-lua-call-limits.md) add a protected
+overflow workload, bringing the harness to 34 execution workloads and eight
+frontend cases. Backing vectors retain reusable capacity independently of the
+logical model. Wider compiler/resource, debug, allocation-failure and incremental
+GC parity remain open.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

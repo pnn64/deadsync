@@ -44,7 +44,7 @@ impl Hooks {
 }
 
 fn visible(frame: Frame) -> bool {
-    !matches!(frame.function, FrameKind::Native(id) if (CONT_RAW..strings::ITERATOR_FIRST).contains(&id))
+    frame.is_call()
 }
 
 impl Vm {

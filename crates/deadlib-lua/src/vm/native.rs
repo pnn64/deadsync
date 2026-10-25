@@ -18,6 +18,27 @@ impl Vm {
     pub(super) fn start_call(
         &mut self,
         call: usize,
+        count: usize,
+        wanted: u32,
+        tail: bool,
+    ) -> Result<Option<usize>, Error> {
+        debug_assert!(matches!(
+            self.frames.last().map(|f| f.function),
+            Some(FrameKind::Native(_))
+        ));
+        if let Some(frame) = self.frames.last()
+            && (usize::from(frame.barriers)
+                + usize::from(self.threads[slot_index(self.thread.0)].depth)
+                >= 198
+                || !self.loads.is_empty())
+        {
+            self.check_c_call()?;
+        }
+        self.start_lua_call(call, count, wanted, tail)
+    }
+    pub(super) fn start_lua_call(
+        &mut self,
+        call: usize,
         mut count: usize,
         wanted: u32,
         tail: bool,
@@ -39,6 +60,7 @@ impl Vm {
                     if self.hooks.mask & hooks::CALL != 0 && self.hooks.allowed() {
                         self.hooked_tail(id, call, count)?;
                     } else {
+                        self.check_calls()?;
                         self.tail_frame(id, call, count)?;
                     }
                 } else {
@@ -69,9 +91,7 @@ impl Vm {
                     || self.is_wrapper(id)
                     || (self.hooks.mask != 0 && self.hooks.allowed()) =>
             {
-                if self.frames.len() >= 10000 {
-                    return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-                }
+                self.check_calls()?;
                 let base = self.registers.len();
                 self.resize_registers(base + count.max(2) + 4);
                 self.push_record(Frame {
@@ -93,9 +113,7 @@ impl Vm {
                 Ok(None)
             }
             Value::Native(id) => {
-                if self.frames.len() >= 10000 {
-                    return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-                }
+                self.check_calls()?;
                 let index = self.frames.len();
                 let base = self.registers.len();
                 self.push_record(Frame {
@@ -143,16 +161,6 @@ impl Vm {
         result: usize,
         continuation: u64,
     ) -> Result<(), Error> {
-        let barriers = self.frames.last().map_or(0, |f| usize::from(f.barriers));
-        let inherited = usize::from(self.threads[slot_index(self.thread.0)].depth);
-        if (barriers + inherited >= 198 || !self.loads.is_empty())
-            && self.native_depth(self.frames.len()) >= 198
-        {
-            return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-        }
-        if self.frames.len() >= 10000 {
-            return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-        }
         let base = self.registers.len();
         self.registers.push(function);
         self.registers.extend_from_slice(args);
@@ -179,6 +187,7 @@ impl Vm {
         self.close_upvalues(frame.base);
         self.discard_finalizers(index + 1);
         self.frames.truncate(index + 1);
+        self.restore_calls();
         self.trim_substitutions();
         self.trim_sorts();
         self.registers.truncate(frame.base);
@@ -194,83 +203,92 @@ impl Vm {
         self.trim_hooks();
         self.top = frame.base + 2;
     }
-    pub(super) fn catch_error(&mut self, error: &Error, _line: u32) -> Result<bool, Error> {
-        let Some(index) = self.frames.iter().rposition(|f| {
-            (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
-                || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
-        }) else {
-            return Ok(false);
-        };
-        let frame = self.frames[index];
-        let value = if let Some(value) = error.value() {
-            value
-        } else {
-            let value = self.intern(error.message_bytes());
-            self.located_error(value, 1)
-        };
-        // lua_load protects the parser while retaining the current error
-        // function. An enclosing xpcall transforms reader runtime errors even
-        // though the loader subsequently returns nil plus that transformed value.
-        let inherited = if loads::protected(frame.function) {
-            self.frames[..index].iter().rposition(|f| {
+    pub(super) fn catch_error(
+        &mut self,
+        original: &Error,
+        budget: &mut Option<u64>,
+    ) -> Result<bool, Error> {
+        let mut pending = None;
+        loop {
+            let error = pending.as_ref().unwrap_or(original);
+            let Some(index) = self.frames.iter().rposition(|f| {
                 (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
-                    || (loads::protected(f.function) && f.pc == 3)
-            })
-        } else {
-            None
-        };
-        let handler_index = if matches!(frame.function, FrameKind::Native(XPCALL)) && frame.pc == 1
-        {
-            Some(index)
-        } else if frame.pc == 1 {
-            inherited.filter(|&i| {
-                matches!(self.frames[i].function, FrameKind::Native(XPCALL))
-                    && self.frames[i].pc == 1
-            })
-        } else {
-            None
-        };
-        if let Some(handler_index) = handler_index {
-            self.frames[index].pc = 3;
-            let handler = self.registers[self.frames[handler_index].vararg_start + 1];
-            if matches!(handler, Value::Function(_) | Value::Native(_)) {
-                // Preserve faulting frames until the error handler has returned.
-                let base = self.registers.len();
-                self.registers.extend_from_slice(&[handler, value]);
-                self.push_record(Frame {
-                    function: FrameKind::Native(CONT_HANDLER),
-                    pc: 1,
-                    base,
-                    stack_start: base,
-                    result: 0,
-                    wanted: 1,
-                    barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
-                    vararg_start: index,
-                    vararg_count: 0,
-                    tail_calls: 0,
-                });
-                match self.start_call(base, 1, 1, false) {
-                    Ok(Some(actual)) => self.finish_call(base, actual, 1),
-                    Ok(None) => {}
-                    Err(_) => {
-                        let value = self.intern(b"error in error handling");
-                        self.protected_failure(index, value);
-                    }
-                }
+                    || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
+            }) else {
+                return Ok(false);
+            };
+            let frame = self.frames[index];
+            let value = if let Some(value) = error.value() {
+                value
+            } else {
+                let value = self.intern(error.message_bytes());
+                self.located_error(value, 1)
+            };
+            if error.bypass_handler {
+                self.protected_failure(index, value);
                 return Ok(true);
             }
+            // lua_load protects the parser while retaining the current error
+            // function. An enclosing xpcall transforms reader runtime errors even
+            // though the loader subsequently returns nil plus that transformed value.
+            let inherited = if loads::protected(frame.function) {
+                self.frames[..index].iter().rposition(|f| {
+                    (matches!(f.function, FrameKind::Native(PCALL | XPCALL))
+                        && matches!(f.pc, 1 | 3))
+                        || (loads::protected(f.function) && f.pc == 3)
+                })
+            } else {
+                None
+            };
+            let handler_index = if matches!(frame.function, FrameKind::Native(XPCALL)) {
+                Some(index)
+            } else {
+                inherited.filter(|&i| matches!(self.frames[i].function, FrameKind::Native(XPCALL)))
+            };
+            if let Some(handler_index) = handler_index {
+                self.frames[index].pc = 3;
+                let handler = self.registers[self.frames[handler_index].vararg_start + 1];
+                if matches!(handler, Value::Function(_) | Value::Native(_)) {
+                    Self::charge(budget)?;
+                    // Preserve faulting frames until the error handler has returned.
+                    let base = self.registers.len();
+                    self.registers.extend_from_slice(&[handler, value]);
+                    self.push_record(Frame {
+                        function: FrameKind::Native(CONT_HANDLER),
+                        pc: 1,
+                        base,
+                        stack_start: base,
+                        result: 0,
+                        wanted: 1,
+                        barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
+                        vararg_start: index,
+                        vararg_count: 0,
+                        tail_calls: 0,
+                    });
+                    match self.start_call(base, 1, 1, false) {
+                        Ok(Some(actual)) => self.finish_call(base, actual, 1),
+                        Ok(None) => {}
+                        Err(next) if next.kind() == ErrorKind::Runtime => {
+                            pending = Some(next);
+                            continue;
+                        }
+                        Err(next) => return Err(next),
+                    }
+                    return Ok(true);
+                }
+            }
+            let value = if frame.pc() == 3
+                || matches!(frame.function, FrameKind::Native(XPCALL))
+                || handler_index.is_some()
+                || inherited.is_some_and(|i| self.frames[i].pc == 3)
+            {
+                self.intern(b"error in error handling")
+            } else {
+                value
+            };
+            self.protected_failure(index, value);
+            return Ok(true);
         }
-        let value = if frame.pc() == 3
-            || matches!(frame.function, FrameKind::Native(XPCALL))
-            || handler_index.is_some()
-            || inherited.is_some_and(|i| self.frames[i].pc == 3)
-        {
-            self.intern(b"error in error handling")
-        } else {
-            value
-        };
-        self.protected_failure(index, value);
-        Ok(true)
     }
     pub(super) fn step_native(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;

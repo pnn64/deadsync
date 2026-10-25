@@ -623,9 +623,6 @@ impl Vm {
         self.get_table(Value::Table(self.native_environment(id)), key, result)
     }
     fn package_call(&mut self, call: usize, count: usize, wanted: u32) -> Result<(), Error> {
-        if self.native_depth(self.frames.len()) >= 199 {
-            return Err(runtime("C stack overflow"));
-        }
         if let Some(actual) = self.start_call(call, count, wanted, false)? {
             self.finish_call(call, actual, wanted)
         }

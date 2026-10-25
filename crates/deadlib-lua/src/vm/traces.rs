@@ -170,11 +170,6 @@ impl Vm {
                     self.registers[first] = self.finish_buffer(bytes);
                     self.tracebacks[index].count = first - start + 1;
                 } else {
-                    // The concatenation continuation accounts for the C call;
-                    // the surrounding traceback formatter adds no second one.
-                    if self.native_depth(self.frames.len()) >= 198 {
-                        return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-                    }
                     self.tracebacks[index].pending = true;
                     self.concatenate(self.registers[last - 1], self.registers[last], last - 1)?;
                 }
