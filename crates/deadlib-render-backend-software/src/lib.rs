@@ -103,7 +103,10 @@ impl DepthRows<'_> {
             return true;
         }
         let z = if self.unorm16 {
-            (z * 65535.0).round() / 65535.0
+            // Valid depths are nonnegative; widen before the half bias to
+            // retain values just below a tie. Restore negative zero's sign.
+            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
+            (rounded as f32 / 65535.0).copysign(z)
         } else {
             z
         };
