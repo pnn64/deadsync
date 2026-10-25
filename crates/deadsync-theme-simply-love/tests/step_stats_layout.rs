@@ -3,7 +3,8 @@ use deadsync_theme_simply_love::scorebox::SCOREBOX_W;
 use deadsync_theme_simply_love::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsPaneParams, density_graph_rect,
     judgment_count_center_x, pack_banner_placement, pane_layout, pane_rect, scorebox_frame,
-    song_banner_placement, song_info_slide, song_info_text_placement, step_stats_aspect_enabled,
+    song_banner_placement, song_info_slide, song_info_text_placement, song_info_text_zoom,
+    step_stats_aspect_enabled,
 };
 
 #[derive(Clone, Copy)]
@@ -44,7 +45,7 @@ fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
             let banner = song_banner_placement(layout, wide, player_side, 1);
             let slide = song_info_slide(layout, player_side, wide, 1, true, 3, graph.y);
             let pack_banner = pack_banner_placement(slide);
-            let text = song_info_text_placement(slide, true);
+            let text = song_info_text_placement(slide, true, song_info_text_zoom(layout));
             let note_field = Rect {
                 left: playfield_center_x - 128.0,
                 right: playfield_center_x + 128.0,

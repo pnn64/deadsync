@@ -317,21 +317,20 @@ pub fn pack_banner_placement(slide: StepStatsSongInfoSlide) -> StepStatsSpritePl
 pub fn song_info_text_placement(
     slide: StepStatsSongInfoSlide,
     show_labels: bool,
+    text_zoom: f32,
 ) -> StepStatsSongInfoTextPlacement {
     let text_left = slide.left + slide.banner_width + STEP_STATS_SONG_INFO_PADDING;
     let text_right = slide.left + slide.width;
-    let text_width = (text_right - text_left).max(1.0);
     let labels_x = text_left;
-    let label_width = text_width * 0.25;
     let values_x = if show_labels {
-        labels_x + label_width
+        labels_x + 45.0 * text_zoom
     } else {
         labels_x
     };
 
     StepStatsSongInfoTextPlacement {
         labels_x,
-        labels_max_width: (label_width - STEP_STATS_SONG_INFO_PADDING).max(1.0),
+        labels_max_width: (values_x - labels_x - STEP_STATS_SONG_INFO_PADDING).max(1.0),
         values_x,
         values_max_width: (text_right - values_x - STEP_STATS_SONG_INFO_PADDING).max(1.0),
     }
@@ -646,7 +645,7 @@ mod tests {
         };
         let slide = song_info_slide(layout, PlayerSide::P1, false, 1, true, 3, 355.0);
         let banner = pack_banner_placement(slide);
-        let text = song_info_text_placement(slide, true);
+        let text = song_info_text_placement(slide, true, 0.75);
 
         assert_eq!(slide.left, 348.0);
         assert_eq!(slide.width, 289.0);

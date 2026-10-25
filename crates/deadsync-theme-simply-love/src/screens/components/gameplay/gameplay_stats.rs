@@ -2587,7 +2587,7 @@ fn build_steps_info(
 
     let group_zoom = song_info_text_zoom(layout);
     let show_labels = !note_field_is_centered;
-    let text_placement = step_stats_theme::song_info_text_placement(slide, show_labels);
+    let text_placement = step_stats_theme::song_info_text_placement(slide, show_labels, group_zoom);
     let row_h = 16.0;
     let first_row_y = slide.center_y - row_h * 1.5 * group_zoom;
     let z = 72i16;
@@ -2597,7 +2597,6 @@ fn build_steps_info(
             actors.push(act!(text:
                 font("miso"): settext(step_info_label_text(state, i)):
                 align(0.0, 0.5): xy(text_placement.labels_x, y):
-                maxwidth(text_placement.labels_max_width):
                 zoom(group_zoom): z(z):
                 horizalign(left)
             ));
@@ -2605,12 +2604,10 @@ fn build_steps_info(
     }
 
     let values_x = text_placement.values_x;
-    let maxwidth = text_placement.values_max_width;
     let y_song = first_row_y;
     actors.push(act!(text:
         font("miso"): settext(state.song_full_title.clone()):
         align(0.0, 0.5): xy(values_x, y_song):
-        maxwidth(maxwidth):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
@@ -2618,7 +2615,6 @@ fn build_steps_info(
     actors.push(act!(text:
         font("miso"): settext(Arc::clone(&state.gameplay_stats_text.song_artist)):
         align(0.0, 0.5): xy(values_x, y_artist):
-        maxwidth(maxwidth):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
@@ -2626,7 +2622,6 @@ fn build_steps_info(
     actors.push(act!(text:
         font("miso"): settext(state.pack_group.clone()):
         align(0.0, 0.5): xy(values_x, y_pack):
-        maxwidth(maxwidth):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
@@ -2634,7 +2629,6 @@ fn build_steps_info(
     actors.push(act!(text:
         font("miso"): settext(desc_text):
         align(0.0, 0.5): xy(values_x, y_desc):
-        maxwidth(maxwidth):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
