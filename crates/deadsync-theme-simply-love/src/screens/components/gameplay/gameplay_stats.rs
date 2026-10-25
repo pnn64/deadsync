@@ -1572,6 +1572,7 @@ pub fn push_step_stats(
     build_steps_info(
         &mut pane_actors,
         state,
+        asset_manager,
         layout,
         player_side,
         show_pack_info,
@@ -2566,6 +2567,7 @@ fn build_pack_banner(
 fn build_steps_info(
     actors: &mut Vec<Actor>,
     state: &State,
+    asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
     show_song_info: bool,
@@ -2588,6 +2590,17 @@ fn build_steps_info(
     let group_zoom = song_info_text_zoom(layout);
     let show_labels = !note_field_is_centered;
     let text_placement = step_stats_theme::song_info_text_placement(slide, show_labels, group_zoom);
+    let fitted_values = fit_song_info_values(
+        asset_manager,
+        [
+            state.song_full_title.as_ref(),
+            state.gameplay_stats_text.song_artist.as_ref(),
+            state.pack_group.as_ref(),
+            desc_text.as_ref(),
+        ],
+        group_zoom,
+        text_placement.values_max_width,
+    );
     let row_h = 16.0;
     let first_row_y = slide.center_y - row_h * 1.5 * group_zoom;
     let z = 72i16;
@@ -2606,32 +2619,96 @@ fn build_steps_info(
     let values_x = text_placement.values_x;
     let y_song = first_row_y;
     actors.push(act!(text:
-        font("miso"): settext(state.song_full_title.clone()):
+        font("miso"): settext(Arc::clone(&fitted_values[0])):
         align(0.0, 0.5): xy(values_x, y_song):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
     let y_artist = (row_h * 1.0).mul_add(group_zoom, first_row_y);
     actors.push(act!(text:
-        font("miso"): settext(Arc::clone(&state.gameplay_stats_text.song_artist)):
+        font("miso"): settext(Arc::clone(&fitted_values[1])):
         align(0.0, 0.5): xy(values_x, y_artist):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
     let y_pack = (row_h * 2.0).mul_add(group_zoom, first_row_y);
     actors.push(act!(text:
-        font("miso"): settext(state.pack_group.clone()):
+        font("miso"): settext(Arc::clone(&fitted_values[2])):
         align(0.0, 0.5): xy(values_x, y_pack):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
     let y_desc = (row_h * 3.0).mul_add(group_zoom, first_row_y);
     actors.push(act!(text:
-        font("miso"): settext(desc_text):
+        font("miso"): settext(Arc::clone(&fitted_values[3])):
         align(0.0, 0.5): xy(values_x, y_desc):
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
+}
+
+fn fit_song_info_values(
+    asset_manager: &AssetManager,
+    values: [&str; 4],
+    zoom: f32,
+    max_width: f32,
+) -> [Arc<str>; 4] {
+    let mut fitted = values.map(Arc::from);
+    asset_manager.with_fonts(|all_fonts| {
+        asset_manager.with_font("miso", |miso_font| {
+            let measure = |text: &str| {
+                font::measure_line_width_logical(miso_font, text, all_fonts) as f32 * zoom
+            };
+            for (result, value) in fitted.iter_mut().zip(values) {
+                *result = Arc::from(truncate_text_to_width(value, max_width, &measure));
+            }
+        });
+    });
+    fitted
+}
+
+fn truncate_text_to_width(text: &str, max_width: f32, measure: &impl Fn(&str) -> f32) -> String {
+    if measure(text) <= max_width {
+        return text.to_owned();
+    }
+
+    const ELLIPSIS: &str = "...";
+    if measure(ELLIPSIS) > max_width {
+        return String::new();
+    }
+
+    let boundaries = text
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain(std::iter::once(text.len()))
+        .collect::<Vec<_>>();
+    let (mut low, mut high) = (0, boundaries.len() - 1);
+    while low < high {
+        let middle = (low + high + 1) / 2;
+        let candidate = format!("{}{}", &text[..boundaries[middle]], ELLIPSIS);
+        if measure(&candidate) <= max_width {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    format!("{}{}", &text[..boundaries[low]], ELLIPSIS)
+}
+
+#[cfg(test)]
+mod song_info_text_fit_tests {
+    use super::truncate_text_to_width;
+
+    #[test]
+    fn truncates_to_available_width_without_scaling() {
+        let measure = |text: &str| text.chars().count() as f32;
+
+        assert_eq!(truncate_text_to_width("Song", 8.0, &measure), "Song");
+        let truncated = truncate_text_to_width("Simply Love Preview", 7.0, &measure);
+        assert_eq!(truncated, "Simp...");
+        assert!(measure(&truncated) <= 7.0);
+        assert_eq!(truncate_text_to_width("Song", 2.0, &measure), "");
+    }
 }
 
 fn push_holds_mines_rolls_pane_at(

@@ -78,7 +78,6 @@ pub struct StepStatsSongInfoSlide {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StepStatsSongInfoTextPlacement {
     pub labels_x: f32,
-    pub labels_max_width: f32,
     pub values_x: f32,
     pub values_max_width: f32,
 }
@@ -330,7 +329,6 @@ pub fn song_info_text_placement(
 
     StepStatsSongInfoTextPlacement {
         labels_x,
-        labels_max_width: (values_x - labels_x - STEP_STATS_SONG_INFO_PADDING).max(1.0),
         values_x,
         values_max_width: (text_right - values_x - STEP_STATS_SONG_INFO_PADDING).max(1.0),
     }
