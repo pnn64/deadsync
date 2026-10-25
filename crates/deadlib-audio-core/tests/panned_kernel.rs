@@ -26,8 +26,11 @@ fn panning_matches_fused_reference_bits_and_voice_progress() {
         .chain([321, -654])
         .collect();
     let controls = MixControls::new();
-    for pan in [SfxPan::Left, SfxPan::Right] {
-        for gain in [0.0, -0.0, 1.0, 0.375, f32::MIN_POSITIVE, f32::MAX] {
+    for pan in [SfxPan::Left, SfxPan::Right, SfxPan::Center] {
+        let gains = [0.0, -0.0, 1.0, 0.375, f32::MIN_POSITIVE, f32::MAX]
+            .into_iter()
+            .chain((1..255).map(|exponent| f32::from_bits(exponent << 23)));
+        for gain in gains {
             controls.set_bus_gain(MixBus::new(0), gain);
             for initial in [
                 0.0f32,
@@ -41,22 +44,31 @@ fn panning_matches_fused_reference_bits_and_voice_progress() {
                 f32::from_bits(0xffc0_4321),
             ] {
                 let mut active = vec![voice(source.clone(), pan)];
-                // Keep an odd trailing sample: panning must ignore the incomplete frame.
+                // Panning ignores incomplete frames; centered mixing includes their samples.
                 let mut actual = vec![initial; source.len() - 1];
                 let mut expected = actual.clone();
-                let channel = usize::from(pan == SfxPan::Right);
-                for (input, output) in source
-                    .as_chunks::<2>()
-                    .0
-                    .iter()
-                    .zip(expected.as_chunks_mut::<2>().0)
-                {
-                    let sample = f32::from(input[1]) / 32768.0;
-                    output[channel] = if gain == 1.0 {
-                        output[channel] + sample
+                let mix = |sample: i16, output: &mut f32| {
+                    let sample = f32::from(sample) / 32768.0;
+                    *output = if gain == 1.0 {
+                        *output + sample
                     } else {
-                        sample.mul_add(gain, output[channel])
+                        sample.mul_add(gain, *output)
                     };
+                };
+                if pan == SfxPan::Center {
+                    for (&input, output) in source.iter().zip(&mut expected) {
+                        mix(input, output);
+                    }
+                } else {
+                    let channel = usize::from(pan == SfxPan::Right);
+                    for (input, output) in source
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .zip(expected.as_chunks_mut::<2>().0)
+                    {
+                        mix(input[1], &mut output[channel]);
+                    }
                 }
                 assert!(mix_active_sfx(&mut active, &mut actual, 0, 2, &controls));
                 assert_eq!(active.len(), 1);
@@ -76,7 +88,7 @@ fn panning_matches_fused_reference_bits_and_voice_progress() {
 fn benchmark_panned_mix() {
     let controls = MixControls::new();
     for pan in [SfxPan::Left, SfxPan::Right, SfxPan::Center] {
-        for gain in [0.0, 1.0, 0.375] {
+        for gain in [0.0, 1.0, 0.5, 0.125, 2.0, 0.375] {
             controls.set_bus_gain(MixBus::new(0), gain);
             for frames in [256usize, 4096] {
                 let data: Arc<[i16]> = (0..frames * 2 + 2)

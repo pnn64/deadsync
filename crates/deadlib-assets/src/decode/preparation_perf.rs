@@ -71,6 +71,17 @@ fn streamed_zoom_matches_original_rounding_and_multistep_resizes() {
             }
         }
     }
+    // Exercise every byte value in independent packed lanes at uneven weights.
+    let input = RgbaImage::from_fn(257, 129, |x, y| {
+        image::Rgba([x as u8, (x ^ y) as u8, (255 - x.min(255)) as u8, (y * 71) as u8])
+    });
+    for size in [[129, 65], [513, 257], [259, 127], [64, 32]] {
+        assert_eq!(
+            zoom_image(input.clone(), size),
+            original::zoom_image(input.clone(), size),
+            "257x129 -> {size:?}"
+        );
+    }
 }
 
 fn png_file(path: &Path, size: u32, indexed: bool, transparent: bool) {

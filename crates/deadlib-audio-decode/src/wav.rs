@@ -356,7 +356,7 @@ fn decode_packet_into(
                 .as_chunks::<4>()
                 .0
                 .iter()
-                .map(|sample| float_to_i16(f64::from(f32::from_le_bytes(*sample)))),
+                .map(|sample| float32_to_i16(f32::from_le_bytes(*sample))),
         ),
         Encoding::Float64 => out.extend(
             bytes
@@ -388,6 +388,17 @@ fn float_to_i16(value: f64) -> i16 {
     // The cast saturates overflow after scaling, including finite input whose
     // product overflows to infinity. Nonfinite source samples stay silent.
     (value * 32767.0).round() as i16
+}
+
+#[inline(always)]
+fn float32_to_i16(value: f32) -> i16 {
+    if !value.is_finite() {
+        return 0;
+    }
+    let value = f64::from(value);
+    // The 24-bit input times a 15-bit integer is exact in f64. Near the
+    // i16 range, adding a signed half cannot cross a rounding boundary.
+    (value * 32767.0 + 0.5f64.copysign(value)) as i16
 }
 
 fn le_u16(data: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {

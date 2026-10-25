@@ -691,16 +691,25 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             let upper_row = &source[top as usize * width..(top as usize + 1) * width];
             let lower_row = &source[bottom as usize * width..(bottom as usize + 1) * width];
             for (pixel, &(left, right, wx)) in row.iter_mut().zip(&xs) {
-                let c00 = upper_row[left as usize];
-                let c01 = upper_row[right as usize];
-                let c10 = lower_row[left as usize];
-                let c11 = lower_row[right as usize];
-                for c in 0..4 {
-                    let upper =
-                        (u32::from(c00[c]) * wx + u32::from(c01[c]) * (16777216 - wx)) >> 24;
-                    let lower =
-                        (u32::from(c10[c]) * wx + u32::from(c11[c]) * (16777216 - wx)) >> 24;
-                    pixel[c] = ((upper * wy + lower * (16777216 - wy) + 8388608) >> 24) as u8;
+                // Two 32-bit lanes hold independent 8-bit channels and their
+                // 24-bit products. Complementary weights cannot carry between lanes.
+                let spread = |p: [u8; 4]| [
+                    u64::from(p[0]) | (u64::from(p[2]) << 32),
+                    u64::from(p[1]) | (u64::from(p[3]) << 32),
+                ];
+                let c00 = spread(upper_row[left as usize]);
+                let c01 = spread(upper_row[right as usize]);
+                let c10 = spread(lower_row[left as usize]);
+                let c11 = spread(lower_row[right as usize]);
+                for c in 0..2 {
+                    let upper = ((c00[c] * u64::from(wx) + c01[c] * u64::from(16777216 - wx)) >> 24)
+                        & 0x0000_00ff_0000_00ff;
+                    let lower = ((c10[c] * u64::from(wx) + c11[c] * u64::from(16777216 - wx)) >> 24)
+                        & 0x0000_00ff_0000_00ff;
+                    let pair = (upper * u64::from(wy) + lower * u64::from(16777216 - wy)
+                        + 0x0080_0000_0080_0000) >> 24;
+                    pixel[c] = pair as u8;
+                    pixel[c + 2] = (pair >> 32) as u8;
                 }
             }
         }
@@ -997,3 +1006,6 @@ mod preparation_perf;
 
 #[cfg(test)]
 mod direct_media_perf;
+
+#[cfg(test)]
+mod resize_kernel;
