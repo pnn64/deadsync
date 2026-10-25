@@ -120,6 +120,7 @@ pub(crate) struct NativeDebug {
     pub source: u32,
     pub stack: u16,
     pub has_lines: bool,
+    pub wire: crate::chunk51::Wire,
 }
 
 #[derive(Clone, Debug)]
@@ -173,10 +174,9 @@ pub(crate) struct DebugInfo {
 }
 impl DebugInfo {
     pub fn heap_bytes(&self) -> usize {
-        self.native
-            .as_ref()
-            .map_or(0, |n| std::mem::size_of_val(n.as_ref()))
-            + std::mem::size_of_val(self.upvalues.as_ref())
+        self.native.as_ref().map_or(0, |n| {
+            std::mem::size_of_val(n.as_ref()) + n.wire.heap_bytes()
+        }) + std::mem::size_of_val(self.upvalues.as_ref())
             + std::mem::size_of_val(self.active_lines.as_ref())
             + std::mem::size_of_val(self.hook_lines.as_ref())
             + self.upvalues.iter().map(|n| n.len()).sum::<usize>()

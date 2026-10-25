@@ -443,6 +443,24 @@ fn main() {
             100,
         ),
         (
+            "function_dump",
+            "local function f(a,b)return a*3+b end;local n=0;for i=1,200 do local s=string.dump(f);if string.byte(s)==27 then n=n+1 end end;assert(loadstring(string.dump(f))(7,4)==25);return n",
+            200.0,
+            10,
+        ),
+        (
+            "dump_load",
+            "local function f(n)local s=0;for k,v in ipairs({2,3,4})do local x=n+k*v;local function g()return x end;s=s+g()end;return s end;local bytes=string.dump(f);local n=0;for i=1,100 do n=n+assert(loadstring(bytes))(5)end;return n",
+            3500.0,
+            10,
+        ),
+        (
+            "native_redump",
+            "local function f(a,b)return a*3+b end;local s=string.dump(f);local g=assert(loadstring(s));local n=0;for i=1,200 do local x=string.dump(g);if x==s then n=n+1 end end;return n",
+            200.0,
+            10,
+        ),
+        (
             "native_chunk_captures",
             "local x=0;local function f(n)x=x+n end;for i=1,2000 do f(i)end;return x",
             2001000.0,
@@ -469,6 +487,7 @@ fn main() {
             source.as_bytes()
         };
         let chunk_name = match name {
+            "function_dump" | "dump_load" | "native_redump" => Some("=(dump-bench)"),
             "debug_traceback" => Some("=(traceback-bench)"),
             "runtime_error" => Some("=runtime-bench"),
             "native_arg_error" => Some("=native-bench"),

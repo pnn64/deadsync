@@ -193,11 +193,27 @@ impl Vm {
         count: usize,
     ) -> Result<usize, Error> {
         if id == STR_DUMP {
-            return Err(Error::new(
-                ErrorKind::Unsupported,
-                0,
-                "binary function dumps are not implemented yet",
-            ));
+            let value = self.argument(base, count, 0);
+            if !matches!(value, Value::Function(_) | Value::Native(_)) {
+                return Err(self.argument_type_error(base, count, 0, "function"));
+            }
+            // Lua 5.1 discards extra arguments before producing the dump.
+            self.registers[base + 2..base + 1 + count].fill(Value::Nil);
+            if let Some(index) = self.active_native {
+                self.frames[index].vararg_count = 1;
+            }
+            let Value::Function(function) = value else {
+                return Err(Error::new(
+                    ErrorKind::Runtime,
+                    0,
+                    "unable to dump given function",
+                ));
+            };
+            let closure = &self.functions[slot_index(function.0)];
+            let bytes =
+                crate::chunk51::dump(&self.programs[closure.program].data, closure.prototype)?;
+            self.registers[base] = self.intern(&bytes);
+            return Ok(1);
         }
         if id == STR_FORMAT {
             return self.string_format(base, count);
@@ -626,5 +642,20 @@ impl Vm {
         }
         self.registers[base] = self.finish_buffer(output);
         Ok(1)
+    }
+
+    pub(super) fn dump_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
+        let args = frame.vararg_start - 1;
+        let function = self.argument(args, frame.argc(), 0);
+        self.string_native(STR_DUMP, args, frame.argc())?;
+        let value = self.registers[args];
+        self.registers[frame.base] = function;
+        self.registers[frame.base + 1] = value;
+        frame.vararg_start = frame.base;
+        frame.vararg_count = 2;
+        frame.pc = 1;
+        let index = self.frames.len() - 1;
+        self.frames[index] = frame;
+        Ok(self.return_frame(frame, frame.base + 1, 1))
     }
 }

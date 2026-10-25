@@ -307,6 +307,7 @@ impl Vm {
                 }
             }),
             LOAD_READER => self.load_step(frame),
+            strings::STR_DUMP => self.dump_step(frame),
             os::TIME => self.time_step(frame),
             LOAD_FILE | DO_FILE => self.file_load_step(id, frame),
             CONT_FILE => self.file_load_step(LOAD_FILE, frame),

@@ -10,6 +10,25 @@ enum Scalar {
 }
 
 #[test]
+fn native_dump_hooks_expose_the_live_registry_hook_table() {
+    compare(br#"
+      local seen,key;local hits=0;local function f()return 1 end
+      local function first(e)
+        if e=='return' and debug.getinfo(2,'f').func==string.dump then
+          local n,t=debug.getlocal(2,3);seen=t
+          for k,v in pairs(t)do if v==first then key=k end end
+        end
+      end
+      debug.sethook(first,'r');string.dump(f)
+      local function second(e)if e=='return' and debug.getinfo(2,'f').func==math.abs then hits=hits+1;collectgarbage()end end
+      seen[key]=second;local same=debug.gethook()==second;math.abs(-3)
+      debug.sethook();local count=0;for k in pairs(seen)do count=count+1 end
+      local registered=false;for k,v in pairs(debug.getregistry())do if v==seen and type(k)=='userdata' then registered=true end end
+      return hits,same,registered,type(key),count
+    "#);
+}
+
+#[test]
 fn controls_keep_function_identity_masks_counts_and_thread_independence() {
     compare(
         br#"

@@ -400,6 +400,13 @@ impl Vm {
             }
             FrameKind::Native(id) => {
                 let current = thread == self.thread && index + 1 == frames.len();
+                if id == strings::STR_DUMP && n == frame.argc() {
+                    let hook = frames[index + 1..].iter().find(|f| {
+                        matches!(f.function, FrameKind::Native(CONT_HOOK))
+                            && f.vararg_start == index
+                    })?;
+                    return Some((LocalName::Temporary, LocalSlot::Register(hook.base)));
+                }
                 let position = match id {
                     SET_LOCAL if current => {
                         let arg = usize::from(matches!(

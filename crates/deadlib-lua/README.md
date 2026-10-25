@@ -58,7 +58,12 @@ per-site captures, varargs, loops, native source/debug metadata and hook events.
 Translation scratch slots have collector liveness maps and remain hidden from
 debug locals. Native concatenation preserves range coercions and callbacks;
 generic-for iterator calls preserve native yield/depth boundaries. `string.dump`
-remains unimplemented. Binary execution coverage is incremental, not a claim of
+lowers source-compiled functions to native Lua 5.1 chunks and re-exports imported
+functions using retained native words/debug offsets. Dumps omit captured values
+and function environments; loaded roots receive nil cells and the loading thread's
+environment. Additional arguments, including a strip flag, are ignored as in 5.1.
+Export checks native register/operand/jump limits. Source-compiled dump bytes need
+not match the C compiler's instruction stream. Binary coverage is incremental, not a claim of
 complete compatibility with every C-accepted chunk.
 
 Source diagnostics retain Lua 5.1 token labels, decoded string context, opening
@@ -281,10 +286,10 @@ object handles retain their ownership restrictions. Package loading uses this
 value type for its observable sentinel.
 
 Other standard libraries, native C-library loading, complete diagnostic text and
-debug behavior, binary dump emission, persistent caches, host callback registration and
+debug behavior, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
-limits also need broader compatibility work. In particular, `string.dump` is
-unsupported, native locales require Windows/MSVC, and patterns/table operations have
+limits also need broader compatibility work. Native locales require Windows/MSVC,
+and patterns/table operations have
 work limits. Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
 are provisional. The CLI accepts a file, stdin or `-e source`.
@@ -303,12 +308,11 @@ as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Rust engine
+currently exits unsuccessfully: fifteen of sixteen reference and Rust probes pass. The Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`,
-`sort.lua`, `literals.lua` and `strings.lua`. The retained
-`files.lua` also fails in the C reference at a Windows open-file rename. Other
-probes reach missing libraries/functions. It verifies the official
+`sort.lua`, `literals.lua`, `strings.lua` and `calls.lua`. The retained
+`files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-exec.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-dump.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

@@ -58,6 +58,40 @@ def main() -> None:
         source_path.write_text(native_source,encoding='utf-8')
         native = subprocess.run([str(binary),'dump',str(source_path)],capture_output=True,check=True).stdout
     literal=lua_bytes(native)
+    case('dump_roundtrip', """
+        local make=assert(loadstring('local x=7;return function(a)return x+a end','=dump fixture'))
+        local f=make();local s=string.dump(f,true);print(string.byte(s,1,12))
+        local g=assert(loadstring(s,'=ignored'));print(debug.getupvalue(g,1));debug.setupvalue(g,1,11)
+        print(g(3),f(3),string.dump(g)==string.dump(g,false),debug.getinfo(g,'S').source)
+        local source='return function(a,...)return a,arg.n,arg[1]end'
+        local h=assert(loadstring(source))();print(assert(loadstring(string.dump(h)))(1,2,3))
+    """)
+    case('dump_native_files', f"local original={literal};"+"""
+        local f=assert(loadstring(original));local s=string.dump(f)
+        local file=assert(io.open('output.dat','wb'));file:write('#!lua\\r\\n',s);file:close()
+        local g=assert(loadfile('output.dat'));print(g(3,5));print(s==string.dump(g))
+        local at=0;local h=assert(load(function()at=at+1;return s:sub(at,at)end));print(at,#s,h(7,8))
+    """)
+    case('dump_errors_hooks', """
+        for _,args in ipairs({{},{false},{true},{3},{'abc'},{{}},{print},{string.dump}})do print(pcall(string.dump,unpack(args)))end
+        local function f()return 4 end
+        debug.sethook(function(e)
+          if e=='return' and debug.getinfo(2,'f').func==string.dump then
+            for i=1,4 do local n,v=debug.getlocal(2,i);print(n,type(v))end
+            collectgarbage()
+          end
+        end,'r')
+        local s=string.dump(f,newproxy(),newproxy());debug.sethook();print(assert(loadstring(s))())
+    """)
+    case('dump_generated', """
+        local hash=0
+        for n=1,32 do
+          local source='return function(a,...)local out={...};local sum=0;for k,v in ipairs(out)do local x=v+a;sum=sum+(function()return x end)() end;return sum,'..n..' end'
+          local f=assert(loadstring(source))();local g=assert(loadstring(string.dump(f)))
+          local x,y=g(n,2,3,4);hash=(hash*31+x+y)%10000019
+        end
+        print(hash)
+    """)
     case('binary_execute', f"local s={literal};local f=assert(loadstring(s,'=ignored'));print(f(3,5));collectgarbage();print(f(7,11));print(debug.getinfo(f,'S').source)")
     case('binary_execute_readers', f"local s={literal};"+"""
         for width=1,7 do local at,calls=0,0

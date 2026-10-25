@@ -449,7 +449,6 @@ impl Vm {
             + self.patterns.capacity() * (std::mem::size_of::<((StringId, bool), crate::pattern::Pattern)>() + 1)
             + self.native_envs.capacity() * (std::mem::size_of::<(u64, TableId)>() + 1);
         control += self.proxy_metatables.capacity() * (std::mem::size_of::<TableId>() + 1);
-        control += self.hook_functions.capacity() * (std::mem::size_of::<(ThreadId, Value)>() + 1);
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
             + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<Box<[u8]>>()
@@ -909,7 +908,6 @@ impl Vm {
                 .map(|t| Trace::Value(Value::Table(t))),
         );
         work.extend(self.roots.iter().copied().filter_map(edge));
-        work.extend(self.hook_functions.values().copied().filter_map(edge));
         // A live host Program retains its mutable per-VM entry binding. Internal
         // code ownership by escaped Lua closures does not pin unused entries.
         work.extend(

@@ -88,6 +88,9 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
     let n = p.code.len();
     let scratch = p.stack;
     let registers = u16::from(p.stack) + 2;
+    let constant_count = p.constants.len();
+    let name_count = p.names.len();
+    let local_bounds = p.locals.iter().map(|l| [l.start, l.end]).collect();
     let mut local_registers = Vec::with_capacity(p.locals.len());
     let mut slots: Vec<Vec<usize>> = Vec::new();
     let mut ends = Vec::new();
@@ -433,6 +436,15 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                 source,
                 stack: u16::from(p.stack),
                 has_lines: !p.lines.is_empty(),
+                wire: super::Wire {
+                    code: p.code.into_boxed_slice(),
+                    lines: p.lines.into_boxed_slice(),
+                    locals: local_bounds,
+                    children: p.children.into_boxed_slice(),
+                    constants: constant_count,
+                    names: name_count,
+                    vararg: p.vararg,
+                },
             })),
             defined: p.defined,
             upvalues: names.into_boxed_slice(),

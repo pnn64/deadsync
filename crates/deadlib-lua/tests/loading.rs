@@ -88,6 +88,63 @@ fn binary_headers_and_names_report_native_load_errors() {
 }
 
 #[test]
+fn dumps_round_trip_closures_varargs_scopes_and_thread_environments() {
+    compare(br#"
+      local a,b=20,30
+      local original=function(x,...)
+        if x=='set' then a=10+b;b=b+1 else return a,... end
+      end
+      local bytes=string.dump(original,true,newproxy())
+      assert(bytes==string.dump(original,false))
+      local f=assert(loadstring(bytes,'=ignored'));local out={f()==nil}
+      out[#out+1]=debug.setupvalue(f,1,'hi');out[#out+1]=f()
+      out[#out+1]=debug.setupvalue(f,2,13);f('set');out[#out+1]=f();f('set');out[#out+1]=f()
+      local once=false;local g=assert(load(function()if not once then once=true;return bytes end end))
+      out[#out+1]=g()==nil;out[#out+1]=a;out[#out+1]=b
+      local global=_G;local env=setmetatable({x=17},{__index=global})
+      local h=loadstring('return x');setfenv(h,{x=3});local encoded=string.dump(h)
+      setfenv(0,env);local k=assert(loadstring(encoded));out[#out+1]=k();out[#out+1]=getfenv(k)==env
+      return unpack(out)
+    "#);
+    compare(
+        br#"
+      local function f(a,...)return a,arg.n,arg[1],arg[2]end
+      local g=assert(loadstring(string.dump(f)));return g(1,2,3)
+    "#,
+    );
+}
+
+#[test]
+fn dump_argument_errors_keep_native_messages_and_return_arity() {
+    compare(br#"
+      local out={}
+      for _,args in ipairs({{},{false},{true},{3},{'abc'},{{}},{print},{string.dump}})do
+        local ok,e=pcall(string.dump,unpack(args));out[#out+1]=ok;out[#out+1]=e
+      end
+      local function f()return 7 end
+      out[#out+1]=select('#',string.dump(f));out[#out+1]=type(string.dump(f));out[#out+1]=assert(loadstring(string.dump(f)))()
+      return unpack(out)
+    "#);
+}
+
+#[test]
+fn dump_return_hooks_see_the_retained_function_and_result_slots() {
+    compare(
+        br#"
+      local out={};local function f()return 9 end
+      debug.sethook(function(e)
+        if e=='return' and debug.getinfo(2,'f').func==string.dump then
+          for i=1,4 do local n,v=debug.getlocal(2,i);out[#out+1]=tostring(n)..':'..type(v)end
+          collectgarbage()
+        end
+      end,'r')
+      local bytes=string.dump(f,newproxy(),newproxy());debug.sethook()
+      return assert(loadstring(bytes))(),table.concat(out,'|')
+    "#,
+    );
+}
+
+#[test]
 fn binary_readers_stop_at_errors_and_preserve_the_initial_probe() {
     compare(br#"
       local header='\27Lua'..string.char(81,0,1,4,8,4,8,0)

@@ -47,6 +47,26 @@ struct Chunk {
     prototypes: Vec<Prototype>,
 }
 
+/// Native words/debug offsets retained for re-export of imported code.
+#[derive(Clone, Debug)]
+pub(crate) struct Wire {
+    code: Box<[u32]>,
+    lines: Box<[u32]>,
+    locals: Box<[[u32; 2]]>,
+    children: Box<[usize]>,
+    constants: usize,
+    names: usize,
+    vararg: u8,
+}
+impl Wire {
+    pub fn heap_bytes(&self) -> usize {
+        std::mem::size_of_val(self.code.as_ref())
+            + std::mem::size_of_val(self.lines.as_ref())
+            + std::mem::size_of_val(self.locals.as_ref())
+            + std::mem::size_of_val(self.children.as_ref())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum StringTarget {
     Source(usize),
@@ -363,7 +383,9 @@ pub(crate) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<crate:
     decoder.program(name)
 }
 
+mod dump;
 mod translate;
+pub(crate) use dump::dump;
 mod verify;
 use verify::verify;
 

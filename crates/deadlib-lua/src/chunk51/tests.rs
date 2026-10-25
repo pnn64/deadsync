@@ -283,8 +283,12 @@ enum Scalar {
     Number(u64),
     Bytes(Vec<u8>),
 }
-#[allow(unsafe_code)] // The development C oracle requires its debug library.
 fn compare_execution(bytes: &[u8]) {
+    compare_execution_against(bytes, bytes);
+}
+
+#[allow(unsafe_code)] // Only fixed/generated developer programs reach the oracle.
+fn compare_execution_against(bytes: &[u8], expected_source: &[u8]) {
     let program = crate::compile_named(bytes, b"=ignored loader name").unwrap();
     program.verify().unwrap();
     let mut vm = crate::Vm::new();
@@ -303,8 +307,8 @@ fn compare_execution(bytes: &[u8]) {
     // SAFETY: only the fixed valid official dumps in these tests are executed.
     let lua = unsafe { Lua::unsafe_new() };
     let expected: Vec<_> = lua
-        .load(bytes)
-        .set_name("=ignored loader name")
+        .load(expected_source)
+        .set_name("=(binary codec)")
         .eval::<lua_reference::MultiValue>()
         .unwrap()
         .into_iter()
@@ -458,4 +462,107 @@ fn native_entry_cells_binding_sites_and_source_inheritance_are_independent() {
     ));
     decoder.chunk.prototypes[1].source = Some(Box::from(b"@distinct-child.lua".as_slice()));
     compare_execution(&encode(&decoder.chunk));
+}
+
+#[test]
+fn source_dumps_execute_in_the_native_reference_and_shared_vm() {
+    let cases: &[&[u8]] = &[
+        b"local a,b=7,3;return a+b,a-b,a*b,a/b,a%b,a^b,-a,a<b,a<=b,a>b,a>=b,a~=b,not a,true,false,nil",
+        b"local t={x='ab',1,2,3};function t:add(x)return self[1]+x end;return t:add(8),t.x..4 ..'end',#t",
+        b"local sum=0;for i=1,10 do sum=sum+i end;return sum",
+        b"local sum=0;for k,v in ipairs({2,3,4})do local x=k*v;sum=sum+x end;return sum",
+        b"local f;do local x=2;f=function(n)x=x+n;return x end end;return f(3),f(4)",
+        b"local function f(...)return ... end;return f(1,2,3)",
+        b"local function f(a,...)return a,arg.n,arg[1]end;return f(1,2,3)",
+        b"local function f(...)return ... end;local a,b,c=f(1,2,3);return a,b,c,f(f(7,8,9))",
+        b"local x=0;repeat x=x+1 until x>=3;while x<6 do x=x+1 end;return x",
+        b"local function f()local a,b,c,d,e end;f();return 4",
+        br#"local out={};for k,v in ipairs({3,4})do local x=k+v;for i=1,16 do local n,y=debug.getlocal(1,i);if not n or n=='(*temporary)' then break end;out[#out+1]=n..':'..type(y)end end;return table.concat(out,'|')"#,
+        b"return pcall(function()return ('abc'):find({})end)",
+        b"local out={};for k,v in ipairs({2,3})do for j,w in ipairs({4,5})do local x=v*w;out[#out+1]=function()return k,j,x end end end;return out[1](),out[4]()",
+    ];
+    for source in cases {
+        let program = crate::compile_named(source, b"=(binary codec)").unwrap();
+        let bytes = super::dump(&program.data, program.data.entry as usize)
+            .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(source)));
+        compare_execution(&bytes);
+        compare_execution_against(&bytes, source);
+        // Exporting the imported form keeps the native instruction/debug form.
+        let imported = crate::compile(&bytes).unwrap();
+        assert_eq!(
+            super::dump(&imported.data, imported.data.entry as usize).unwrap(),
+            bytes
+        );
+    }
+}
+
+#[test]
+fn source_dump_register_pressure_reaches_native_limits() {
+    let lua = Lua::new();
+    for width in [10, 100, 200, 240, 245, 246, 247, 248, 249] {
+        let ones = vec!["1"; width].join(",");
+        let vars = (0..width.min(195))
+            .map(|i| format!("a{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let sources = [
+            format!("local function f(...)return select('#',...)end;return f({ones})"),
+            format!("local {vars};return {}", vec!["1+2"; width].join(",")),
+            format!("local x=3;return {}", vec!["x"; width].join("+")),
+            format!("local t={{{ones}}};return #t"),
+        ];
+        for source in sources {
+            if lua.load(source.as_bytes()).into_function().is_err() {
+                continue;
+            }
+            let program = crate::compile(source.as_bytes()).unwrap();
+            let bytes =
+                super::dump(&program.data, program.data.entry as usize).unwrap_or_else(|e| {
+                    panic!(
+                        "width={width}, registers={}: {e}: {source}",
+                        program.register_count()
+                    )
+                });
+            compare_execution_against(&bytes, source.as_bytes());
+        }
+    }
+}
+
+#[test]
+fn official_native_dumps_reexport_like_the_c_writer() {
+    let lua = Lua::new();
+    let cases: &[&[u8]]=&[
+        b"global=3;local a,b=...;local t={x=a};t.x=b;t:method(a);return a+b,a-b,a*b,a/b,a%b,a^b,-a,#b,not a,a..b,a==b,a~=b,a<b,a<=b,a>b,a>=b,a and b or a,true,false,nil",
+        b"local f;do local x=1;f=function()x=x+1;return function()return x end end end;return f(...)",
+        b"local t={};for i=1,10 do t[i]=i end;for k,v in pairs(t)do if k==4 then break end end;repeat t.x=1 until t.x;while t.x do t.x=false end;return t",
+    ];
+    let large = format!("return {{{}}}", vec!["0"; 25_551].join(","));
+    for source in cases
+        .iter()
+        .copied()
+        .chain(std::iter::once(large.as_bytes()))
+    {
+        for stripped in [false, true] {
+            let bytes = dump(source, stripped);
+            let program = crate::compile(&bytes).unwrap();
+            let actual = super::dump(&program.data, program.data.entry as usize).unwrap();
+            let expected = lua.load(&bytes).into_function().unwrap().dump(false);
+            assert_eq!(actual, expected);
+        }
+    }
+}
+
+#[test]
+fn generated_source_dump_round_trips_keep_control_flow_and_captures() {
+    for n in 0..128 {
+        let source = format!(
+            "local a,b={},{};local out={{}};for k,v in ipairs({{2,3,4}})do local x=a+k*v;out[k]=function(y)return x+y end end;local function f(...)return ... end;return a<b,a==b,a>=b,a and b or false,out[1](b),f(out[2](a),out[3](b))",
+            n % 17,
+            n % 7
+        );
+        let program = crate::compile(source.as_bytes()).unwrap();
+        let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+        compare_execution_against(&bytes, source.as_bytes());
+        compare_execution(&bytes);
+    }
 }
