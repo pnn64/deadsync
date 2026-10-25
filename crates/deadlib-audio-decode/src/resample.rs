@@ -241,6 +241,8 @@ pub fn write_channel_mapped_i16(
         }
     } else if out_ch == 1 {
         copy_mono_channel(input, in_ch, out_tmp);
+    } else if in_ch <= 2 {
+        repeat_mono_stereo(input, in_ch, out_ch, out_tmp);
     } else {
         // Output channel `c` copies input channel `c % in_ch`.
         for (output, input) in out_tmp
@@ -260,6 +262,27 @@ pub fn write_channel_mapped_i16(
 fn copy_mono_channel(input: &[i16], channels: usize, output: &mut [i16]) {
     for (frame, dst) in input.chunks_exact(channels).zip(output) {
         *dst = frame[0];
+    }
+}
+
+// Keep the fixed-frame fill loops out of the generic channel mapper.
+#[inline(never)]
+fn repeat_mono_stereo(input: &[i16], in_ch: usize, out_ch: usize, output: &mut [i16]) {
+    if in_ch == 1 {
+        for (output, &sample) in output.chunks_exact_mut(out_ch).zip(input) {
+            output.fill(sample);
+        }
+    } else {
+        for (output, input) in output
+            .chunks_exact_mut(out_ch)
+            .zip(input.as_chunks::<2>().0)
+        {
+            let (pairs, tail) = output.as_chunks_mut::<2>();
+            pairs.fill(*input);
+            if let [last] = tail {
+                *last = input[0];
+            }
+        }
     }
 }
 
@@ -298,7 +321,11 @@ pub fn append_channel_mapped_i16(
         return frames;
     }
     if out_ch == 1 {
-        out.extend(input.chunks_exact(in_ch).map(|frame| frame[0]));
+        if in_ch == 2 {
+            out.extend(input.as_chunks::<2>().0.iter().map(|frame| frame[0]));
+        } else {
+            out.extend(input.chunks_exact(in_ch).map(|frame| frame[0]));
+        }
         return frames;
     }
     let repeats = out_ch / in_ch;
@@ -369,13 +396,10 @@ pub fn apply_fade_envelope(
             continue;
         }
         for sample in samples {
-            let scaled = f32::from(*sample) * volume;
-            // Volume is in [0, 1], so the rounded result fits in i16.
-            // Correct the exact fractional part instead of calling round.
-            let whole = scaled as i16;
-            let fraction = scaled - f32::from(whole);
-            *sample = (i32::from(whole) + i32::from(fraction >= 0.5)
-                - i32::from(fraction <= -0.5)) as i16;
+            // Widen the original f32 product before adding the half bias so
+            // values just below a rounding boundary cannot cross it early.
+            let scaled = f64::from(f32::from(*sample) * volume);
+            *sample = (scaled + 0.5f64.copysign(scaled)) as i16;
         }
     }
 }

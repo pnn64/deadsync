@@ -27,10 +27,12 @@ fn mapped_output_keeps_complete_frames_and_reuses_storage() {
                         (0..out_ch).map(move |channel| input[frame * in_ch + channel % in_ch])
                     })
                     .collect();
-                assert_eq!(
-                    write_channel_mapped_i16(&input[..len], in_ch, out_ch, &mut output),
-                    frames
-                );
+                perf::assert_no_churn(|| {
+                    assert_eq!(
+                        write_channel_mapped_i16(&input[..len], in_ch, out_ch, &mut output),
+                        frames
+                    );
+                });
                 assert_eq!(output, expected, "{in_ch} -> {out_ch}, len={len}");
                 assert_eq!(output.as_ptr(), pointer);
             }
@@ -42,13 +44,21 @@ fn mapped_output_keeps_complete_frames_and_reuses_storage() {
 #[ignore = "release CPU and allocation benchmark"]
 fn benchmark_mapped_output() {
     for (in_ch, out_ch) in [
-        (2usize, 1),
+        (1usize, 3),
+        (1, 6),
+        (1, 8),
+        (2, 1),
         (3, 1),
         (4, 1),
         (6, 1),
         (8, 1),
+        (2, 3),
+        (2, 5),
         (2, 6),
         (2, 8),
+        (3, 5),
+        (6, 3),
+        (6, 6),
         (6, 8),
         (8, 3),
         (2, 2),
