@@ -549,7 +549,10 @@ fn sample_state(
         [payload.clone(), payload],
         GameplayViewport::new(width, height),
         session,
-        Default::default(),
+        deadsync_gameplay::GameplayConfig {
+            center_1player_notefield: center_single_notefield,
+            ..Default::default()
+        },
         5,
         1.0,
         scroll,
