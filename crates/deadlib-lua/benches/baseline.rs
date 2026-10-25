@@ -312,6 +312,12 @@ fn main() {
             1.0,
             3,
         ),
+        (
+            "capture_limit",
+            r#"local vars={};for i=1,61 do vars[i]='a'..i end;local s='local '..table.concat(vars,',')..'\nlocal function f()\n';for i=1,61 do s=s..'a'..i..'=1\n' end;local sum=0;for i=1,100 do local f,e=loadstring(s,'=capture-bench');if f==nil and e=='capture-bench:63: function at line 2 has more than 60 upvalues' then sum=sum+1 end end;return sum"#,
+            100.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let chunk_name = match name {
@@ -477,7 +483,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(8);
+    let mut frontends = Vec::with_capacity(10);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -500,6 +506,11 @@ fn main() {
             "do local x=1;consume(x,consume(x,0))end;\n".repeat(scopes)
         );
         frontends.push((format!("frontend_scopes_{scopes}"), source, 7.0, repeats));
+        let source = format!(
+            "{}return 7",
+            "do local a,b=1,2;local function f()return a+b end end;\n".repeat(scopes)
+        );
+        frontends.push((format!("frontend_captures_{scopes}"), source, 7.0, repeats));
     }
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();

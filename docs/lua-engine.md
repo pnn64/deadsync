@@ -30,7 +30,7 @@ performance JSON keeps its recorded measurement provenance.
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and ten Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Errors now pass overflow/recovery and syntax-depth assertions, then stop at the upvalue-limit diagnostic at line 238. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and eleven Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Lexical capture checks preserve upvalue-limit timing, owning functions and reader consumption, including unfinished source. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 245 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 255 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-call-limits.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-captures.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -216,6 +216,20 @@ overflow workload, bringing the harness to 34 execution workloads and eight
 frontend cases. Backing vectors retain reusable capacity independently of the
 logical model. Wider compiler/resource, debug, allocation-failure and incremental
 GC parity remain open.
+
+The [capture-limit validation](testing/2026-10-25-rust-lua-captures.md) adds ten
+groups with 398 paired loader observations, including 256 generated lexical
+layouts. Identifier spans are interned in flat storage; scopes share a local
+stack and capture nodes are reused after function exit. Checks propagate captures
+from the owner through descendants, before a complete AST is required, while
+waiting for the reference's next-token lookahead. Repeat-body locals remain in
+scope through the condition. The unchanged official `errors.lua` now passes.
+The [measurements](performance/2026-10-25-rust-lua-captures.md) add a capture-limit
+workload and closure-heavy compilation scaling: 35 execution workloads and ten
+frontend cases. Successful code generation still uses host recursion; a valid
+59-level nested-function fixture overflows a small Windows debug test-thread
+stack. Replacing that recursion and completing register/expression/resource
+limits remain required compiler work.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

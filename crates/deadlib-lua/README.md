@@ -34,7 +34,10 @@ and instruction aborts. Standard input keeps its lookahead across I/O and loadin
 changing `io.input` does not redirect the loader.
 
 Source diagnostics retain Lua 5.1 token labels, decoded string context, opening
-delimiter lines and local/assignment limit descriptions. `Error::message_bytes`
+delimiter lines and local/assignment limit descriptions. Lexical capture checks
+enforce the 60-upvalue limit while parsing, including unfinished source, and
+identify the first overflowing ancestor function. Reader lookahead precedes the
+check, preserving reader-error and lexical-error ordering. `Error::message_bytes`
 preserves non-UTF-8 diagnostic bytes; `message` and display provide readable UTF-8.
 Reader and file loaders return the original diagnostic bytes to Lua. Long-token
 scanning uses safe eight-byte delimiter checks without reading beyond input.
@@ -168,7 +171,9 @@ value type for its observable sentinel.
 Other standard libraries, native C-library loading, complete diagnostic text and
 debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
-limits also need broader compatibility work. In particular, `string.dump` is
+limits also need broader compatibility work. Code generation still recurses on
+the host stack; deeply nested valid functions can overflow a small debug-thread
+stack. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
 work limits. Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
@@ -190,9 +195,9 @@ booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
 currently exits unsuccessfully: fifteen of sixteen reference probes pass; the Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
-`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua` and `math.lua`. The retained
+`pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua` and `errors.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
-probes reach missing libraries/functions or compiler-limit diagnostics. It verifies the official
+probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-call-limits.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-captures.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

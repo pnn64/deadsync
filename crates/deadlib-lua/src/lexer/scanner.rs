@@ -120,6 +120,12 @@ impl Default for Scanner {
 }
 
 impl Scanner {
+    pub(crate) fn name_span(&self) -> (usize, usize) {
+        match self.buffer {
+            Buffer::Raw(start, end) => (start, end),
+            _ => unreachable!("completed name token has a source span"),
+        }
+    }
     pub(crate) fn line(&self) -> u32 {
         self.line
     }
