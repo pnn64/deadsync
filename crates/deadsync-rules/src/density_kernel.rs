@@ -1,8 +1,7 @@
 use super::*;
 use std::hint::black_box;
 include!("density_kernel_original.rs");
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
+use crate::perf_bench as bench;
 
 fn original(data: &[u8], lanes: usize) -> Vec<usize> {
     fn scan<const L: usize>(data: &[u8]) -> Vec<usize> {

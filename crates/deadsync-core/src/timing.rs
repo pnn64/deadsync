@@ -10,7 +10,16 @@ pub fn note_row_to_beat(row: i32) -> f32 {
 #[must_use]
 pub fn beat_to_note_row(beat: f32) -> i32 {
     // ITGmania's NoteTypes.h uses std::lrint with nearest-even rounding.
-    (beat * ROWS_PER_BEAT as f32).round_ties_even() as i32
+    let row = beat * ROWS_PER_BEAT as f32;
+    let magnitude = row.abs();
+    // In [2^23, 2^24), f32 spacing is one: adding/subtracting 2^23
+    // rounds smaller magnitudes to even. Larger f32 values are integral.
+    let rounded = if magnitude < 8_388_608.0 {
+        (magnitude + 8_388_608.0) - 8_388_608.0
+    } else {
+        magnitude
+    };
+    rounded.copysign(row) as i32
 }
 
 #[cfg(test)]

@@ -28,16 +28,6 @@ pub fn step_type_lanes(step_type: &str) -> usize {
     }
 }
 
-fn invalidate_hold(
-    invalid_heads: &mut Vec<usize>,
-    hold_heads: &mut [Option<usize>],
-    col_index: usize,
-) {
-    if let Some(note_index) = hold_heads[col_index].take() {
-        invalid_heads.push(note_index);
-    }
-}
-
 /// Parses minimized chart note data into note events, tracking hold/roll tails.
 #[must_use]
 pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<ParsedNote> {
@@ -107,12 +97,13 @@ pub(crate) fn parse_chart_notes_as_with_capacity<T>(
     set_tail: impl FnMut(&mut T, usize),
 ) -> Vec<T> {
     let lanes = lanes.max(1);
-    let mut stack_heads = [None; 10];
+    // No Vec element can have index usize::MAX; keep each head in one word.
+    let mut stack_heads = [usize::MAX; 10];
     let mut heap_heads = Vec::new();
     let hold_heads = if lanes <= stack_heads.len() {
         &mut stack_heads[..lanes]
     } else {
-        heap_heads.resize(lanes, None);
+        heap_heads.resize(lanes, usize::MAX);
         heap_heads.as_mut_slice()
     };
     parse_chart_notes_with_heads(
@@ -126,7 +117,7 @@ pub(crate) fn parse_chart_notes_as_with_capacity<T>(
 
 fn parse_chart_notes_with_heads<T>(
     minimized_note_data: &[u8],
-    hold_heads: &mut [Option<usize>],
+    hold_heads: &mut [usize],
     note_capacity: usize,
     mut new_note: impl FnMut(usize, usize, NoteType) -> T,
     mut set_tail: impl FnMut(&mut T, usize),
@@ -148,52 +139,49 @@ fn parse_chart_notes_with_heads<T>(
         }
 
         if trimmed_line.len() >= lanes {
-            for (col_index, &ch) in trimmed_line.iter().take(lanes).enumerate() {
-                match ch {
-                    b'1' => {
-                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
-                        notes.push(new_note(row_index, col_index, NoteType::Tap));
-                    }
-                    b'F' | b'f' => {
-                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
-                        notes.push(new_note(row_index, col_index, NoteType::Fake));
-                    }
-                    b'2' | b'4' => {
-                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
-                        let note_type = if ch == b'2' {
-                            NoteType::Hold
-                        } else {
-                            NoteType::Roll
-                        };
-                        let note_index = notes.len();
-                        notes.push(new_note(row_index, col_index, note_type));
-                        hold_heads[col_index] = Some(note_index);
-                    }
-                    b'M' | b'm' => {
-                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
-                        notes.push(new_note(row_index, col_index, NoteType::Mine));
-                    }
-                    b'L' | b'l' => {
-                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
-                        notes.push(new_note(row_index, col_index, NoteType::Lift));
-                    }
+            for (col_index, (&ch, head)) in trimmed_line[..lanes]
+                .iter()
+                .zip(hold_heads.iter_mut())
+                .enumerate()
+            {
+                let note_type = match ch {
+                    b'1' => NoteType::Tap,
+                    b'F' | b'f' => NoteType::Fake,
+                    b'2' => NoteType::Hold,
+                    b'4' => NoteType::Roll,
+                    b'M' | b'm' => NoteType::Mine,
+                    b'L' | b'l' => NoteType::Lift,
                     b'3' => {
-                        if let Some(head_idx) = hold_heads[col_index].take()
+                        let head_idx = std::mem::replace(head, usize::MAX);
+                        if head_idx != usize::MAX
                             && let Some(note) = notes.get_mut(head_idx)
                         {
                             set_tail(note, row_index);
                         }
+                        continue;
                     }
-                    _ => {}
+                    _ => continue,
+                };
+                let note_index = std::mem::replace(head, usize::MAX);
+                if note_index != usize::MAX {
+                    invalid_heads.push(note_index);
+                }
+                let note_index = notes.len();
+                notes.push(new_note(row_index, col_index, note_type));
+                if matches!(note_type, NoteType::Hold | NoteType::Roll) {
+                    *head = note_index;
                 }
             }
         }
         row_index += 1;
     }
 
-    for col_index in 0..lanes {
-        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
-    }
+    invalid_heads.extend(
+        hold_heads
+            .iter()
+            .copied()
+            .filter(|&index| index != usize::MAX),
+    );
     if invalid_heads.is_empty() {
         return notes;
     }

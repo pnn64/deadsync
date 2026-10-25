@@ -10,7 +10,7 @@ mod bench;
 #[ignore = "release CPU benchmark"]
 fn benchmark_note_scan_kernel() {
     for lanes in [4, 5, 8, 10] {
-        for kind in ["sparse", "dense", "holds"] {
+        for kind in ["sparse", "dense", "holds", "invalid"] {
             let mut data = Vec::new();
             for row in 0..8192 {
                 for col in 0..lanes {
@@ -18,6 +18,7 @@ fn benchmark_note_scan_kernel() {
                         "sparse" if row % 4 == 0 && col == row % lanes => b'1',
                         "dense" => b"1FfmMLl1"[(row + col) % 8],
                         "holds" if col == 0 => b"2030"[row % 4],
+                        "invalid" => b"24F0M1L3"[(row + col) % 8],
                         _ => b'0',
                     });
                 }

@@ -38,6 +38,33 @@ fn fixture(rows: usize, lanes: usize, kind: usize) -> Vec<u8> {
     bytes
 }
 
+fn assert_original(bytes: &[u8], lanes: usize) {
+    let old = original::parse_chart_notes(bytes, lanes);
+    let new = parse_chart_notes(bytes, lanes);
+    assert_eq!(old.capacity(), new.capacity());
+    assert!(
+        old.iter()
+            .map(|n| (n.row_index, n.column, n.note_type, n.tail_row_index))
+            .eq(new
+                .iter()
+                .map(|n| (n.row_index, n.column, n.note_type, n.tail_row_index)))
+    );
+}
+
+#[test]
+fn parser_matches_original_for_every_byte_between_hold_heads_and_tails() {
+    for lanes in [0, 1, 4, 5, 8, 10, 11, 12, 32] {
+        for byte in 0..=255 {
+            let mut bytes = Vec::new();
+            for row in [b'2', byte, b'3', b'4', byte, b'1', b'3'] {
+                bytes.extend(std::iter::repeat_n(row, lanes.max(1)));
+                bytes.extend_from_slice(b"\r\n,\n\n");
+            }
+            assert_original(&bytes, lanes);
+        }
+    }
+}
+
 #[test]
 fn parser_matches_original_for_arbitrary_bytes_and_lane_counts() {
     let mut state = 0x12345678u32;
@@ -52,16 +79,7 @@ fn parser_matches_original_for_arbitrary_bytes_and_lane_counts() {
                     alphabet[state as usize % alphabet.len()]
                 })
                 .collect();
-            let old = original::parse_chart_notes(&bytes, lanes);
-            let new = parse_chart_notes(&bytes, lanes);
-            assert_eq!(old.capacity(), new.capacity());
-            assert_eq!(old.len(), new.len());
-            for (old, new) in old.iter().zip(&new) {
-                assert_eq!(
-                    (old.row_index, old.column, old.note_type, old.tail_row_index),
-                    (new.row_index, new.column, new.note_type, new.tail_row_index)
-                );
-            }
+            assert_original(&bytes, lanes);
         }
     }
 }
