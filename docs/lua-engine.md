@@ -18,7 +18,7 @@ performance JSON keeps its recorded measurement provenance.
 | Requirement | Evidence and remaining work |
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. A resumable native Lua 5.1 decoder checks binary headers, prototype trees and opcode structure; valid native chunks still report unsupported execution. Native instruction translation, dump emission and complete reference-suite coverage remain open. |
+| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Native Lua 5.1 chunks are decoded, checked and translated into the shared VM with per-site captures and native debug/hook metadata. Binary dump emission and complete reference-suite coverage remain open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Source diagnostics retain raw bytes, token context, opening lines and tested local/assignment bounds. Full runtime/compiler diagnostics, debug behavior and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking advances a persistent frontier; mutator barriers and final stack/open-cell/metatable refreshes preserve new references. Sweeping advances in bounded arena-slot batches. Individual object scans, final root/weak processing, cache rebuilding and callback batches still contain atomic work; fully bounded pauses and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-chunk-codec.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-chunk-exec.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -479,6 +479,21 @@ execution: instruction translation and dump emission remain required. Official
 suite results stay fourteen Rust passes and fifteen reference passes among
 sixteen files. This is a decoding/verification stage, not binary execution,
 native-module loading or the persistent compiled cache.
+
+The [native execution validation](testing/2026-10-25-rust-lua-chunk-exec.md)
+adds translation of all 38 native opcodes to the existing VM. Closures use
+per-site bindings; imported functions retain native source names, local ranges,
+upvalues, lines and dispatch hook counts. Range concatenation preserves numeric
+coercions and callback order. Generic-for calls retain native yield and C-depth
+boundaries for imported chunks and ordinary source loops. Collector maps exclude dead translation scratch slots and stale
+caller argument copies. Fixed buffers, Lua loaders, binary files and the CLI
+share execution. Four additional unit groups include 256 generated programs,
+stripped chunks, native metadata and a 25,551-element constructor. A source
+regression checks iterator yield/depth boundaries in both thread contexts. The
+[measurements](performance/2026-10-25-rust-lua-chunk-exec.md) add three imported
+chunk workloads. This remains incremental coverage; dump emission, broader
+binary diagnostics/collector edges and the full standalone-engine gates remain
+open. Production consumers still use the legacy crate.
 
 ## Reference contract
 

@@ -178,6 +178,97 @@ impl Vm {
             self.error_register(right_is_bad),
         ))
     }
+    fn concat_string(&mut self, register: usize) -> Option<StringId> {
+        match self.registers[register] {
+            Value::String(id) => Some(id),
+            Value::Number(n) => {
+                let value = self.intern(&format_number(n));
+                self.registers[register] = value;
+                let Value::String(id) = value else {
+                    unreachable!()
+                };
+                Some(id)
+            }
+            _ => None,
+        }
+    }
+    pub(super) fn concat_range(
+        &mut self,
+        result: usize,
+        first: usize,
+        mut last: usize,
+    ) -> Result<(), Error> {
+        while last > first {
+            // Coercions modify their original slots, in the native VM's order.
+            let left_ok = matches!(
+                self.registers[last - 1],
+                Value::String(_) | Value::Number(_)
+            );
+            let right = if left_ok {
+                self.concat_string(last)
+            } else {
+                None
+            };
+            if let Some(right) = right {
+                let right_len = self.strings.bytes[slot_index(right.0)].len();
+                if right_len == 0 {
+                    self.concat_string(last - 1);
+                    last -= 1;
+                    continue;
+                }
+                let mut start = last;
+                let mut size = right_len;
+                while start > first {
+                    let Some(id) = self.concat_string(start - 1) else {
+                        break;
+                    };
+                    size = size
+                        .checked_add(self.strings.bytes[slot_index(id.0)].len())
+                        .ok_or_else(|| {
+                            Error::new(ErrorKind::Runtime, 0, "string length overflow")
+                        })?;
+                    start -= 1;
+                }
+                let mut bytes = self.take_buffer(size);
+                for r in start..=last {
+                    let Value::String(id) = self.registers[r] else {
+                        unreachable!()
+                    };
+                    bytes.extend_from_slice(&self.strings.bytes[slot_index(id.0)]);
+                }
+                self.registers[start] = self.finish_buffer(bytes);
+                last = start;
+            } else {
+                let left = self.registers[last - 1];
+                let right = self.registers[last];
+                let handler = self.binary_handler(left, right, Meta::Concat);
+                if handler == Value::Nil {
+                    let r = if matches!(left, Value::String(_) | Value::Number(_)) {
+                        last
+                    } else {
+                        last - 1
+                    };
+                    return Err(self.type_error(self.registers[r], "concatenate", Some(r)));
+                }
+                let base = self.registers.len();
+                self.push_record(Frame {
+                    function: FrameKind::Native(CONT_CONCAT),
+                    pc: self.top as u32,
+                    base,
+                    stack_start: base,
+                    result,
+                    wanted: 0,
+                    barriers: self.frames.last().map_or(0, |f| f.barriers),
+                    vararg_start: first,
+                    vararg_count: (last - first) as u32,
+                    tail_calls: 0,
+                });
+                return self.meta_call(handler, &[left, right], last - 1, CONT_RAW);
+            }
+        }
+        self.registers[result] = self.registers[first];
+        Ok(())
+    }
     pub(super) fn concatenate(
         &mut self,
         left: Value,

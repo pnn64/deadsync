@@ -357,11 +357,12 @@ impl Vm {
                             unreachable!();
                         };
                         let c = &self.functions[slot_index(id.0)];
-                        Some(
-                            self.programs[c.program].data.prototypes[c.prototype]
-                                .debug
-                                .hook_lines[frame.argc()],
-                        )
+                        let proto = &self.programs[c.program].data.prototypes[c.prototype];
+                        Some(if proto.debug.native.is_some() {
+                            proto.lines[frame.argc()]
+                        } else {
+                            proto.debug.hook_lines[frame.argc()]
+                        })
                     };
                     self.hook_callback(
                         if count { b"count" } else { b"line" },

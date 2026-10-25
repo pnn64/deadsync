@@ -193,6 +193,8 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             .map(|k| k.len() * std::mem::size_of::<Value>())
             .sum::<usize>();
     bytes += p.data.name.len()
+        + std::mem::size_of_val(p.data.sources.as_ref())
+        + p.data.sources.iter().map(|s| s.len()).sum::<usize>()
         + p.data.prototypes.len() * std::mem::size_of::<crate::bytecode::Prototype>();
     for f in &p.data.prototypes {
         bytes += f.code.len() * 8
@@ -201,6 +203,11 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             + f.gc_live.len() * 4
             + f.gc_maps.len() * 32
             + f.upvalues.len() * std::mem::size_of::<Upvalue>()
+            + std::mem::size_of_val(f.bindings.as_ref())
+            + f.bindings
+                .iter()
+                .map(|b| std::mem::size_of_val(b.upvalues.as_ref()))
+                .sum::<usize>()
             + f.constants.len() * std::mem::size_of::<Constant>()
             + f.constants
                 .iter()
@@ -237,7 +244,7 @@ fn frames_roots(
                     .get(i + 1)
                     .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
                 {
-                    let end = (frame.base + usize::from(proto.registers))
+                    let end = (frame.base + proto.debug_registers())
                         .min(registers.len())
                         .min(cutoff);
                     work.extend(

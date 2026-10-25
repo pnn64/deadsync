@@ -180,7 +180,7 @@ impl Vm {
             let (source, what, defined) = if let Some((data, p)) = &code {
                 let proto = &data.prototypes[*p];
                 (
-                    c_bytes(&data.name),
+                    c_bytes(data.source(proto)),
                     if proto.debug.defined[0] == 0 {
                         b"main".as_slice()
                     } else {
@@ -207,7 +207,7 @@ impl Vm {
                         .pc()
                         .saturating_sub(1)
                         .min(proto.lines.len() - 1);
-                    i64::from(proto.lines[pc])
+                    proto.debug_line(pc)
                 }
                 _ => -1,
             };
@@ -331,12 +331,23 @@ impl Vm {
                         active[usize::from(local.register) / 64] |= 1u64 << (local.register % 64);
                     }
                 }
-                let limit = frames
-                    .get(index + 1)
-                    .map_or(usize::from(proto.registers), |f| {
-                        f.result.saturating_sub(frame.base)
-                    })
-                    .min(usize::from(proto.registers));
+                let limit = if proto.debug.native.is_some() {
+                    let instruction = proto.code[(pc as usize).min(proto.code.len() - 1)];
+                    if frames.get(index + 1).is_some()
+                        && matches!(instruction.op, Op::Call | Op::CallIter | Op::TailCall)
+                    {
+                        usize::from(instruction.a)
+                    } else {
+                        proto.debug_registers()
+                    }
+                } else {
+                    frames
+                        .get(index + 1)
+                        .map_or(proto.debug_registers(), |f| {
+                            f.result.saturating_sub(frame.base)
+                        })
+                        .min(proto.debug_registers())
+                };
                 // A call hook runs above the newly allocated full register
                 // window, before the first instruction has produced live values.
                 if frames
@@ -344,7 +355,7 @@ impl Vm {
                     .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
                 {
                     let mut wanted = n.checked_sub(named)?;
-                    for r in 0..usize::from(proto.registers) {
+                    for r in 0..proto.debug_registers() {
                         if active[r / 64] & (1u64 << (r % 64)) == 0 {
                             if wanted == 0 {
                                 return Some((

@@ -229,7 +229,7 @@ impl<'a> Compiler<'a> {
             kind: NameKind::Local,
             temporaries: 0..0,
         });
-        self.emit(Op::Call, results, 2, names.len() as u32)?;
+        self.emit(Op::CallIter, results, 2, names.len() as u32)?;
         self.load(test, Constant::Nil)?;
         self.emit(Op::Eq, test, u16::from(results), u32::from(test))?;
         self.function.debug_hidden[usize::from(test) / 64] |= 1u64 << (test % 64);

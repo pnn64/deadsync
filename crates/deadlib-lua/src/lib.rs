@@ -38,18 +38,21 @@ pub use value::{FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{HeapStats, Root, Vm};
 
-/// Compile Lua 5.1 source into verified, VM-independent bytecode.
+/// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.
 ///
 /// # Errors
-/// Returns a syntax or limit error for invalid source or unsupported constructs.
+/// Returns a syntax or limit error for invalid input. Native chunks must match
+/// this target's Lua 5.1 ABI header.
 pub fn compile(source: &[u8]) -> Result<Program, Error> {
     compile_named(source, b"=(deadlib-lua)")
 }
 
-/// Compile Lua 5.1 source with a chunk name for errors and stack locations.
+/// Compile Lua 5.1 source or a native chunk with a diagnostic chunk name.
 ///
 /// A leading `=` supplies a literal display name; `@` introduces a filename.
 /// Other names are displayed as Lua source excerpts.
+/// Native chunks retain their embedded source names for execution/debugging;
+/// the supplied name identifies loading errors.
 ///
 /// # Errors
 /// Returns syntax or limit errors for invalid source.

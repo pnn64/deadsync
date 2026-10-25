@@ -41,9 +41,9 @@ impl Vm {
                 let proto = &program.prototypes[closure.prototype];
                 let pc = frame.pc().saturating_sub(1).min(proto.lines.len() - 1);
                 (
-                    crate::bytecode::chunk_id(&program.name),
+                    crate::bytecode::chunk_id(program.source(proto)),
                     Some(proto.debug.defined[0]),
-                    Some(proto.lines[pc]),
+                    Some(proto.debug_line(pc)),
                 )
             } else {
                 (b"[C]".to_vec(), None, None)

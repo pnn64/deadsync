@@ -355,6 +355,24 @@ impl Vm {
         Ok(1)
     }
     pub(super) fn native_depth(&self, end: usize) -> usize {
+        let iterators = self.frames[..end]
+            .windows(2)
+            .filter(|pair| {
+                if pair[1].barriers <= pair[0].barriers {
+                    return false;
+                }
+                let FrameKind::Lua(id) = pair[0].function else {
+                    return false;
+                };
+                let closure = &self.functions[slot_index(id.0)];
+                let prototype = &self.programs[closure.program].data.prototypes[closure.prototype];
+                pair[0]
+                    .pc
+                    .checked_sub(1)
+                    .and_then(|pc| prototype.code.get(pc as usize))
+                    .is_some_and(|i| i.op == Op::CallIter)
+            })
+            .count();
         let boundaries = self.frames[..end]
             .iter()
             .filter(|f| {
@@ -385,6 +403,7 @@ impl Vm {
             .count();
         usize::from(self.threads[slot_index(self.thread.0)].depth)
             + boundaries
+            + iterators
             + self.parser_nesting(end)
     }
     pub(super) fn coroutine_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {

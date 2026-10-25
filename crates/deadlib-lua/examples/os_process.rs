@@ -8,6 +8,18 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     let source = fs::read(path).expect("read fixed process probe");
+    if engine == "dump" {
+        let lua = lua_reference::Lua::new();
+        let function = lua
+            .load(source)
+            .set_name("=(native process)")
+            .into_function()
+            .expect("compile fixed binary fixture");
+        std::io::stdout()
+            .write_all(&function.dump(false))
+            .expect("write native fixture");
+        return ExitCode::SUCCESS;
+    }
     let name = b"=(deadlib-lua)";
     let result = if engine == "rust" {
         let mut vm = deadlib_lua::Vm::new();

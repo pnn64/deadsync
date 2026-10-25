@@ -436,8 +436,38 @@ fn main() {
             100.0,
             10,
         ),
+        (
+            "native_chunk_numeric",
+            "local n=0;for i=1,20000 do n=n+i end;return n",
+            200010000.0,
+            100,
+        ),
+        (
+            "native_chunk_captures",
+            "local x=0;local function f(n)x=x+n end;for i=1,2000 do f(i)end;return x",
+            2001000.0,
+            100,
+        ),
+        (
+            "native_chunk_tables",
+            "local t={1,2,3,4,5};for i=6,500 do t[i]=i end;local n=0;for k,v in ipairs(t)do n=n+v end;return n",
+            125250.0,
+            100,
+        ),
     ] {
-        let source = source.as_bytes();
+        let native;
+        let source = if name.starts_with("native_chunk_") {
+            let lua = lua_reference::Lua::new();
+            native = lua
+                .load(source)
+                .set_name("=(native bench)")
+                .into_function()
+                .unwrap()
+                .dump(false);
+            native.as_slice()
+        } else {
+            source.as_bytes()
+        };
         let chunk_name = match name {
             "debug_traceback" => Some("=(traceback-bench)"),
             "runtime_error" => Some("=runtime-bench"),

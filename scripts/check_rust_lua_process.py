@@ -13,9 +13,13 @@ import time
 
 
 def lua(text: str) -> str:
+    return lua_bytes(text.encode('utf-8'))
+
+
+def lua_bytes(data: bytes) -> str:
     return '"' + ''.join(chr(b) if 32 <= b < 127 and b not in (34, 92)
                          else '\\"' if b == 34 else '\\\\' if b == 92
-                         else f'\\{b:03d}' for b in text.encode('utf-8')) + '"'
+                         else f'\\{b:03d}' for b in data) + '"'
 
 
 def main() -> None:
@@ -42,6 +46,33 @@ def main() -> None:
     cases: list[tuple[str,str,dict[str,str|None]]] = []
     def case(name: str, source: str, env: dict[str,str|None]|None=None) -> None:
         cases.append((name,source,env or {}))
+    native_source = """
+        local a,b=...;local x=4
+        local function f(n)x=x+n;return x end
+        local t={a,b,'\\r\\n\\026'};local sum=0
+        for k,v in ipairs(t)do if type(v)=='number' then sum=sum+k*v end end
+        return f(sum),f(-1),#t[3],debug.getinfo(1,'S').source
+    """
+    with tempfile.TemporaryDirectory(prefix='lua-native-') as temporary:
+        source_path=Path(temporary)/'source.lua'
+        source_path.write_text(native_source,encoding='utf-8')
+        native = subprocess.run([str(binary),'dump',str(source_path)],capture_output=True,check=True).stdout
+    literal=lua_bytes(native)
+    case('binary_execute', f"local s={literal};local f=assert(loadstring(s,'=ignored'));print(f(3,5));collectgarbage();print(f(7,11));print(debug.getinfo(f,'S').source)")
+    case('binary_execute_readers', f"local s={literal};"+"""
+        for width=1,7 do local at,calls=0,0
+          local f=assert(load(function()calls=calls+1;collectgarbage();local b=s:sub(at+1,at+width);at=at+#b;return b end,'=ignored'))
+          print(width,calls,at,#s,f(3,5))
+        end
+        local s=s..'unused';local at=0
+        local f=assert(load(function()at=at+1;return s:sub(at,at)end));print(at,#s-6,f(2,4))
+    """)
+    case('binary_execute_files',f"local s={literal};"+"""
+        for _,prefix in ipairs({'','#!/usr/bin/lua\\r\\n'})do
+          local file=assert(io.open('output.dat','wb'));file:write(prefix,s);file:close()
+          local f=assert(loadfile('output.dat'));print(f(3,5));print(dofile('output.dat'))
+        end
+    """)
     case('shell_query', "print(os.execute(),os.execute(nil),os.execute(nil,false),select('#',os.execute()))")
     binary_header = "local h='\\27Lua'..string.char(81,0,1,4,8,4,8,0);"
     case('binary_header_errors', binary_header+"""

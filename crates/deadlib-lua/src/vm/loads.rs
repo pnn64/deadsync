@@ -68,7 +68,7 @@ impl Loading {
                 .get_or_insert_with(|| Box::new(crate::chunk51::Decoder::new(self.native_depth)));
             return match decoder.resume(&self.source, self.closed) {
                 Ok(false) => Ok(None),
-                Ok(true) => Err(crate::chunk51::unsupported()),
+                Ok(true) => decoder.program(&self.name).map(Some),
                 Err(why) => Err(crate::chunk51::diagnostic(&self.name, why)),
             };
         }

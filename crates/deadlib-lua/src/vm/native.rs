@@ -313,6 +313,18 @@ impl Vm {
             id if package::contains(id) => self.package_step(id, frame),
             COLLECT_GARBAGE => self.collect_step(frame),
             CONT_GC => self.finalizer_step(frame),
+            CONT_CONCAT => {
+                self.frames.pop();
+                self.registers.truncate(frame.base);
+                self.top = frame.pc();
+                self.concat_range(
+                    frame.result,
+                    frame.vararg_start,
+                    frame.vararg_start + frame.argc() - 1,
+                )?;
+                self.maybe_gc();
+                Ok(None)
+            }
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {
                 if matches!(id, CONT_BOOL | CONT_NOT) {
                     self.registers[base] =
@@ -523,8 +535,9 @@ impl Vm {
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program].data;
         let prototype = &program.prototypes[closure.prototype];
-        let line = prototype.lines[frame.pc().saturating_sub(1).min(prototype.lines.len() - 1)];
-        let mut bytes = crate::bytecode::chunk_id(&program.name);
+        let line =
+            prototype.debug_line(frame.pc().saturating_sub(1).min(prototype.lines.len() - 1));
+        let mut bytes = crate::bytecode::chunk_id(program.source(prototype));
         bytes.extend_from_slice(format!(":{line}: ").as_bytes());
         bytes.extend_from_slice(
             &self

@@ -156,6 +156,7 @@ const CONT_HOOK: u64 = 262;
 const CONT_TRACE: u64 = 263;
 const CONT_RETURN: u64 = 264;
 const CONT_FILE: u64 = 265;
+const CONT_CONCAT: u64 = 266;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -571,10 +572,11 @@ impl Vm {
                 self.gc_new_value(Value::Function(old_entry));
                 return old_entry;
             }
+            let upvalues = self.entry_upvalues(program);
             let entry = FunctionId(self.functions.insert(Closure {
                 program: index,
                 prototype: program.data.entry as usize,
-                upvalues: Box::default(),
+                upvalues,
                 env: self.globals,
             }));
             self.programs[index].entry = entry;
@@ -602,15 +604,30 @@ impl Vm {
         }));
         let bytes = gc::program_bytes(&self.programs[index]);
         self.programs.note_alloc(bytes);
+        let upvalues = self.entry_upvalues(program);
         let entry = FunctionId(self.functions.insert(Closure {
             program: index,
             prototype: program.data.entry as usize,
-            upvalues: Box::default(),
+            upvalues,
             env: self.globals,
         }));
         self.programs[index].entry = entry;
         self.gc_new_value(Value::Function(entry));
         entry
+    }
+
+    fn entry_upvalues(&mut self, program: &Program) -> Box<[u32]> {
+        let count = program.data.prototypes[program.data.entry as usize]
+            .upvalues
+            .len();
+        let mut upvalues = Vec::with_capacity(count);
+        for _ in 0..count {
+            let id = slot_index(self.upvalues.insert(Cell::Closed(Value::Nil))) as u32;
+            self.gc_new_cell(id as usize);
+            upvalues.push(id);
+        }
+        self.functions.note_alloc(count * 4);
+        upvalues.into_boxed_slice()
     }
 
     fn capture_register(&mut self, register: usize) -> u32 {
@@ -792,8 +809,17 @@ impl Vm {
         let function = self.load(program);
         let closure = &self.functions[slot_index(function.0)];
         let entry = &self.programs[closure.program].data.prototypes[closure.prototype];
+        let compat_arg = entry.compat_arg;
+        let params = usize::from(entry.params);
+        let registers = usize::from(entry.registers);
         self.registers.clear();
-        self.resize_registers(usize::from(entry.registers));
+        self.resize_registers(registers);
+        if compat_arg {
+            let arg = self.new_table();
+            let n = self.intern(b"n");
+            self.raw_set(arg, n, Value::Number(0.0))?;
+            self.registers[params] = Value::Table(arg);
+        }
         self.frames.clear();
         self.push_record(Frame {
             function: FrameKind::Lua(function),
@@ -986,13 +1012,24 @@ impl Vm {
                         }
                     }
                     Op::Closure => {
-                        let len = self.programs[program_index].data.prototypes[c]
+                        let target = if i.b == 0 {
+                            c
+                        } else {
+                            self.programs[program_index].data.prototypes[proto_index].bindings[c]
+                                .prototype as usize
+                        };
+                        let len = self.programs[program_index].data.prototypes[target]
                             .upvalues
                             .len();
                         let mut upvalues = Vec::with_capacity(len);
                         for index in 0..len {
-                            let capture =
-                                self.programs[program_index].data.prototypes[c].upvalues[index];
+                            let capture = if i.b == 0 {
+                                self.programs[program_index].data.prototypes[target].upvalues[index]
+                            } else {
+                                self.programs[program_index].data.prototypes[proto_index].bindings
+                                    [c]
+                                    .upvalues[index]
+                            };
                             upvalues.push(match capture {
                                 Upvalue::Local(r) => self.capture_register(base + usize::from(r)),
                                 Upvalue::Outer(u) => {
@@ -1003,7 +1040,7 @@ impl Vm {
                         self.functions.note_alloc(upvalues.len() * 4);
                         let id = FunctionId(self.functions.insert(Closure {
                             program: program_index,
-                            prototype: c,
+                            prototype: target,
                             upvalues: upvalues.into_boxed_slice(),
                             env,
                         }));
@@ -1093,6 +1130,12 @@ impl Vm {
                             self.maybe_gc();
                         }
                     }
+                    Op::ConcatRange => {
+                        self.concat_range(a, b, base + c)?;
+                        if self.frames.len() == frame_index + 1 {
+                            self.maybe_gc();
+                        }
+                    }
                     Op::Neg => {
                         if let Value::Number(x) = self.registers[b] {
                             self.registers[a] = Value::Number(-x);
@@ -1155,7 +1198,7 @@ impl Vm {
                             pc = c;
                         }
                     }
-                    Op::Call | Op::TailCall => {
+                    Op::Call | Op::TailCall | Op::CallIter => {
                         let count = if i.b == OPEN_ARGS {
                             self.top.checked_sub(a + 1).ok_or_else(|| {
                                 Error::new(ErrorKind::Runtime, 0, "invalid open argument range")
@@ -1164,13 +1207,24 @@ impl Vm {
                             usize::from(i.b)
                         };
                         self.frames[frame_index].pc = pc as u32;
-                        let Some(actual) = self.start_lua_call(
+                        if i.op == Op::CallIter
+                            && (usize::from(frame.barriers)
+                                + usize::from(self.threads[slot_index(self.thread.0)].depth)
+                                >= 197
+                                || !self.loads.is_empty())
+                        {
+                            self.check_iterator_call()?;
+                        }
+                        let actual = self.start_lua_call(
                             a,
                             count,
                             if i.op == Op::TailCall { OPEN } else { i.c },
                             i.op == Op::TailCall,
-                        )?
-                        else {
+                        )?;
+                        let Some(actual) = actual else {
+                            if i.op == Op::CallIter {
+                                self.frames.last_mut().expect("scheduled iterator").barriers += 1;
+                            }
                             continue 'frames;
                         };
                         if i.op == Op::TailCall {

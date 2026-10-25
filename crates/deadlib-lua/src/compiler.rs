@@ -152,7 +152,9 @@ impl<'a> Compiler<'a> {
             vararg: f.vararg,
             compat_arg: f.compat_arg,
             upvalues: upvalues.into_boxed_slice(),
+            bindings: Box::default(),
             debug: DebugInfo {
+                native: None,
                 defined: f.defined,
                 upvalues: names.into_boxed_slice(),
                 locals: f.debug_locals.into_boxed_slice(),
@@ -272,13 +274,14 @@ impl<'a> Compiler<'a> {
             | Op::Not
             | Op::Len
             | Op::Concat
+            | Op::ConcatRange
             | Op::Eq
             | Op::Ne
             | Op::Lt
             | Op::Le
             | Op::Gt
             | Op::Ge => self.live_register(u16::from(a)),
-            Op::Call | Op::TailCall | Op::Vararg => {
+            Op::Call | Op::CallIter | Op::TailCall | Op::Vararg => {
                 let saved = self.function.next;
                 self.reset(u16::from(a));
                 self.function.next = saved;

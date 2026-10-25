@@ -103,10 +103,10 @@ fn official_dumps_round_trip_across_every_stream_boundary() {
     for source in cases {
         for stripped in [false, true] {
             let bytes = dump(source, stripped);
-            assert_eq!(
-                crate::compile_named(&bytes, b"=binary").unwrap_err().kind(),
-                ErrorKind::Unsupported
-            );
+            crate::compile_named(&bytes, b"=binary")
+                .unwrap()
+                .verify()
+                .unwrap();
             assert_eq!(encode(&decoded(&bytes).chunk), bytes);
             for split in 0..=bytes.len() {
                 let mut decoder = Decoder::new(0);
@@ -274,4 +274,188 @@ fn official_constructor_payloads_and_all_opcodes_are_preserved() {
         "missing opcode mask: {:x}",
         ((1u64 << 38) - 1) & !coverage
     );
+}
+
+#[derive(Debug, PartialEq)]
+enum Scalar {
+    Nil,
+    Boolean(bool),
+    Number(u64),
+    Bytes(Vec<u8>),
+}
+#[allow(unsafe_code)] // The development C oracle requires its debug library.
+fn compare_execution(bytes: &[u8]) {
+    let program = crate::compile_named(bytes, b"=ignored loader name").unwrap();
+    program.verify().unwrap();
+    let mut vm = crate::Vm::new();
+    vm.set_instruction_limit(Some(10_000_000));
+    let result = vm.execute(&program).unwrap().to_vec();
+    let actual: Vec<_> = result
+        .into_iter()
+        .map(|v| match v {
+            crate::Value::Nil => Scalar::Nil,
+            crate::Value::Boolean(b) => Scalar::Boolean(b),
+            crate::Value::Number(n) => Scalar::Number(n.to_bits()),
+            crate::Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
+            v => panic!("return scalar observations: {v:?}"),
+        })
+        .collect();
+    // SAFETY: only the fixed valid official dumps in these tests are executed.
+    let lua = unsafe { Lua::unsafe_new() };
+    let expected: Vec<_> = lua
+        .load(bytes)
+        .set_name("=ignored loader name")
+        .eval::<lua_reference::MultiValue>()
+        .unwrap()
+        .into_iter()
+        .map(|v| match v {
+            lua_reference::Value::Nil => Scalar::Nil,
+            lua_reference::Value::Boolean(b) => Scalar::Boolean(b),
+            lua_reference::Value::Number(n) => Scalar::Number(n.to_bits()),
+            lua_reference::Value::Integer(n) => Scalar::Number((n as f64).to_bits()),
+            lua_reference::Value::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
+            v => panic!("return reference scalar observations: {v:?}"),
+        })
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn native_instructions_execute_with_shared_calls_tables_and_captures() {
+    let cases: &[&[u8]] = &[
+        b"local a,b=7,3;local x,y,z;return a+b,a-b,a*b,a/b,a%b,a^b,-a,not a,x==nil,true,false,a<b,a<=b,a>b,a>=b,a~=b,a and b or false",
+        b"local t={x='a\\0b',7,8};function t:add(n)return self[1]+n end;global=t:add(5);t.x=t.x..4 ..'tail';return #t,t.x,t[2],global",
+        b"local out={};for i=5,-3,-2 do out[#out+1]=i end;local n=0;for k,v in ipairs(out)do n=n+k*v end;local x=0;while x<3 do x=x+1 end;repeat x=x-1 until x==0;return n,x",
+        b"local f,g;do local x=1;f=function(n)x=x+n;return x end;g=function()return x end end;collectgarbage();return f(3),g(),f(-1),g()",
+        b"local function f(...)return ... end;local function g(a,...)local r={...};return a,#r,unpack(r)end;return f(g(3,7,8,9))",
+        b"local function f(a,...)return a,arg.n,arg[1],arg[2]end;return f(4,5,6)",
+        b"local function f(n,a)if n==0 then return a end;return f(n-1,a+n)end;return f(10000,0)",
+        b"local fs={};for i=1,6 do local a=i;fs[i]=function()return a end end;collectgarbage();return fs[1](),fs[6]()",
+        b"local out={};local mt={__add=function(a,b)return a.x+b.x end,__lt=function(a,b)return a.x<b.x end,__concat=function(a,b)return a.x..':'..b.x end};local a=setmetatable({x=2},mt);local b=setmetatable({x=3},mt);return a+b,a<b,a<=b,a..b",
+        b"local co=coroutine.create(function()local x=coroutine.yield(4);return x+1 end);local a,b=coroutine.resume(co);local c,d=coroutine.resume(co,8);return a,b,c,d,coroutine.status(co)",
+        b"local co=coroutine.create(function()for x in function()coroutine.yield(4)end do end end);return coroutine.resume(co)",
+        b"local out={};local function f()return missing()end;local ok,e=xpcall(f,debug.traceback);return ok,e",
+        b"local weak=setmetatable({},{__mode='v'});local function f(x)weak[1]=x;x=nil;collectgarbage();return weak[1]==nil end;local ok=f({});return ok",
+        b"local n=0;local function it()n=n+1;for _ in it do end;return nil end;local ok,e=pcall(function()for _ in it do end end);return n,ok,e",
+        b"local n=0;local function it()n=n+1;for _ in it do end;return nil end;local co=coroutine.create(function()local ok,e=pcall(function()for _ in it do end end);return n,ok,e end);return coroutine.resume(co)",
+        br#"local out={};local mt={__concat=function(a,b)
+          out[#out+1]=type(a)..':'..type(b)
+          for i=1,20 do local n,v=debug.getlocal(2,i);if not n then break end;out[#out+1]=n..':'..type(v)end
+          collectgarbage();return 'x'
+        end};local a=setmetatable({},mt);local b=setmetatable({},mt)
+        local text=3 .. a .. b .. 4 .. '';return text,table.concat(out,'|')"#,
+    ];
+    for source in cases {
+        for stripped in [false, true] {
+            compare_execution(&dump(source, stripped));
+        }
+    }
+    let large = format!(
+        "local t={{{}}};return #t,t[1],t[25551]",
+        vec!["4"; 25_551].join(",")
+    );
+    compare_execution(&dump(large.as_bytes(), false));
+}
+
+#[test]
+fn generated_native_control_flow_and_operand_forms_match_reference() {
+    let mut state = 0xc71a_3d29u32;
+    for case in 0..256 {
+        state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+        let a = (state >> 12) % 100 + 1;
+        let b = (state >> 20) % 17 + 1;
+        let source = format!(
+            "local a,b={a},{b};local out={{}};for i=1,4 do local x=a+i;local y=b-i;out[i]=(x<y and x or y)+(x==y and 7 or 3) end;local function f(x,...)local n=0;for k,v in ipairs({{...}})do n=n+v*k end;return x+n end;return f(out[1]+out[2]+out[3]+out[4],a,b),a/b,a%b,a^2,a..':'..b,(a<b)==(b>a),not (a and b)"
+        );
+        compare_execution(&dump(source.as_bytes(), case % 2 == 0));
+    }
+}
+
+#[test]
+fn native_hooks_debug_lines_names_and_locals_match_reference() {
+    let cases: &[&[u8]] = &[
+        br#"local out={};local function f()local d=debug.getinfo(1,'n');out[#out+1]=tostring(d.name)..':'..d.namewhat end;local function g()f()end;g();return table.concat(out,'|')"#,
+        br#"
+local out={}
+local function f(x)
+  local a=x+1
+  local d=debug.getinfo(1,'Slu');out[#out+1]=d.source..':'..d.currentline..':'..d.linedefined..':'..d.nups
+  for i=1,12 do local n,v=debug.getlocal(1,i);if not n then break end;out[#out+1]=n..':'..type(v)end
+  return a
+end
+local x=f(3)
+return x,table.concat(out,'|')
+"#,
+        br#"
+local out={}
+local function h(e,l)
+  local d=debug.getinfo(2,'nSl')
+  out[#out+1]=e..':'..tostring(l)..':'..d.what..':'..tostring(d.name)..':'..d.currentline
+end
+local function f(x)
+  local y=x+1
+  if y<4 then y=y*2 else y=0 end
+  return y
+end
+debug.sethook(h,'crl',3)
+local x=f(2)
+debug.sethook()
+return x,table.concat(out,'|')
+"#,
+        br#"
+local out={}
+local n=0
+debug.sethook(function(e,l)n=n+1 end,'',1)
+local sum=0;for i=1,4 do sum=sum+i end
+for k,v in ipairs({3,4})do sum=sum+v end
+local f;do local x=7;f=function()return x end end
+local x=f();debug.sethook()
+return n,sum,x
+"#,
+    ];
+    for source in cases {
+        for stripped in [false, true] {
+            compare_execution(&dump(source, stripped));
+        }
+    }
+}
+
+#[test]
+fn native_entry_cells_binding_sites_and_source_inheritance_are_independent() {
+    let mut decoder = decoded(&dump(b"local a,b=10,20;local f=function()return a end;local g=function()return b end;return f(),g()",false));
+    let p = &mut decoder.chunk.prototypes[0];
+    let closures: Vec<_> = p
+        .code
+        .iter()
+        .enumerate()
+        .filter(|(_, w)| **w & 63 == 36)
+        .map(|(i, _)| i)
+        .collect();
+    // Two sites instantiate the same child with different local cells.
+    p.code[closures[1]] &= (1 << 14) - 1;
+    compare_execution(&encode(&decoder.chunk));
+
+    let mut decoder = decoded(&dump(b"return x", false));
+    let p = &mut decoder.chunk.prototypes[0];
+    p.nups = 1;
+    p.names = vec![Some(Box::from(b"root".as_slice()))];
+    for w in &mut p.code {
+        if *w & 63 == 5 {
+            *w = (*w & 0x3fc0) | 4;
+        }
+    }
+    let bytes = encode(&decoder.chunk);
+    compare_execution(&bytes);
+    let program = crate::compile(&bytes).unwrap();
+    let mut vm = crate::Vm::new();
+    assert_eq!(vm.execute(&program).unwrap(), &[crate::Value::Nil]);
+    vm.collect_garbage().unwrap();
+    assert_eq!(vm.execute(&program).unwrap(), &[crate::Value::Nil]);
+
+    let mut decoder = decoded(&dump(
+        b"return (function()local d=debug.getinfo(1,'S');return d.source,d.short_src end)()",
+        false,
+    ));
+    decoder.chunk.prototypes[1].source = Some(Box::from(b"@distinct-child.lua".as_slice()));
+    compare_execution(&encode(&decoder.chunk));
 }

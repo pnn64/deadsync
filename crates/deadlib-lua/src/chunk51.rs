@@ -349,20 +349,21 @@ pub(crate) fn diagnostic(name: &[u8], why: &str) -> Error {
     message.extend_from_slice(b" in precompiled chunk");
     Error::from_bytes(ErrorKind::Syntax, 0, message)
 }
-pub(crate) fn unsupported() -> Error {
-    Error::new(
-        ErrorKind::Unsupported,
-        0,
-        "execution of Lua 5.1 precompiled chunks is not implemented yet",
-    )
+impl Decoder {
+    pub fn program(&mut self, name: &[u8]) -> Result<crate::Program, Error> {
+        let chunk = std::mem::take(&mut self.chunk);
+        translate::program(chunk).map_err(|why| diagnostic(name, why))
+    }
 }
 pub(crate) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<crate::Program, Error> {
-    Decoder::new(depth)
+    let mut decoder = Decoder::new(depth);
+    decoder
         .resume(source, true)
         .map_err(|why| diagnostic(name, why))?;
-    Err(unsupported())
+    decoder.program(name)
 }
 
+mod translate;
 mod verify;
 use verify::verify;
 

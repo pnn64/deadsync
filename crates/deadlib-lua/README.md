@@ -53,8 +53,13 @@ input prefixes or reserving storage from untrusted declared counts. Instruction
 checks cover all 38 native opcodes, constants, captures, jumps, open results and
 SETLIST payloads. Named binary files reopen in binary mode before validation.
 Malformed chunks report native-style diagnostics and reader stopping points.
-Valid native chunks currently return an unsupported-execution error; native
-instruction translation and `string.dump` remain unimplemented.
+Verified native chunks translate to the shared register VM, including closures,
+per-site captures, varargs, loops, native source/debug metadata and hook events.
+Translation scratch slots have collector liveness maps and remain hidden from
+debug locals. Native concatenation preserves range coercions and callbacks;
+generic-for iterator calls preserve native yield/depth boundaries. `string.dump`
+remains unimplemented. Binary execution coverage is incremental, not a claim of
+complete compatibility with every C-accepted chunk.
 
 Source diagnostics retain Lua 5.1 token labels, decoded string context, opening
 delimiter lines and local/assignment limit descriptions. Lexical capture checks
@@ -276,10 +281,10 @@ object handles retain their ownership restrictions. Package loading uses this
 value type for its observable sentinel.
 
 Other standard libraries, native C-library loading, complete diagnostic text and
-debug behavior, binary chunks, persistent caches, host callback registration and
+debug behavior, binary dump emission, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
-unsupported, locale behavior is fixed to C, and patterns/table operations have
+unsupported, native locales require Windows/MSVC, and patterns/table operations have
 work limits. Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
 are provisional. The CLI accepts a file, stdin or `-e source`.
@@ -305,5 +310,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-codec.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-exec.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
