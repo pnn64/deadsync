@@ -869,10 +869,8 @@ pub fn log_timing_hit_detail(
     }
     let note_time_s = song_time_ns_to_seconds(note_time_ns);
     let event_time_s = song_time_ns_to_seconds(event_time_ns);
-    let expected_stream_for_note_s =
-        note_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-    let expected_stream_for_hit_s =
-        event_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+    let expected_stream_for_note_s = note_time_s / rate + lead_in_s;
+    let expected_stream_for_hit_s = event_time_s / rate + lead_in_s;
     let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
     let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
     log::debug!(

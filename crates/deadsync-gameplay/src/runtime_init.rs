@@ -264,7 +264,7 @@ where
     });
     let mut timing_base = gameplay_charts[0].timing.clone();
     timing_base.shift_group_offset_seconds(pack_sync_offset_seconds);
-    timing_base.set_global_offset_seconds(config.global_offset_seconds);
+    timing_base.set_global_offset_seconds_with_rate(config.global_offset_seconds, rate);
     let timing = Arc::new(timing_base);
     let build_player_timing = |player: usize| {
         if player == 0 && player_global_offset_shift_seconds[player] == 0.0 {
@@ -272,8 +272,9 @@ where
         }
         let mut t = gameplay_charts[player].timing.clone();
         t.shift_group_offset_seconds(pack_sync_offset_seconds);
-        t.set_global_offset_seconds(
+        t.set_global_offset_seconds_with_rate(
             config.global_offset_seconds + player_global_offset_shift_seconds[player],
+            rate,
         );
         Arc::new(t)
     };

@@ -857,7 +857,6 @@ pub fn current_song_clock_snapshot(
     audio_snapshot: GameplayAudioSnapshot,
     music_rate: f32,
     audio_lead_in_seconds: f32,
-    global_offset_seconds: f32,
 ) -> SongClockSnapshot {
     let stream_clock = audio_snapshot.stream_clock;
     if stream_clock.has_music_mapping {
@@ -882,7 +881,6 @@ pub fn current_song_clock_snapshot(
     let song_time = music_time_from_stream_position(
         stream_clock.stream_seconds,
         audio_lead_in_seconds,
-        global_offset_seconds,
         fallback_rate,
     );
     SongClockSnapshot {

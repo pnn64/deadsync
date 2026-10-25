@@ -1647,10 +1647,8 @@ where
                     let global_offset_s = self.effective_player_global_offset_seconds(player);
                     let lead_in_s = self.clock.audio_clock.stream_lead_in_seconds(rate);
                     let stream_pos_s = self.clock.audio_clock.stream_position_seconds();
-                    let expected_stream_for_note_s =
-                        note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let expected_stream_for_miss_s =
-                        music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                    let expected_stream_for_note_s = note_time / rate + lead_in_s;
+                    let expected_stream_for_miss_s = music_time_sec / rate + lead_in_s;
                     let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
                     let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
 
