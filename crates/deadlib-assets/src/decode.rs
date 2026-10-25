@@ -399,17 +399,18 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
     for row_index in 0..size[1] {
         let y = if top_down { row_index } else { size[1] - 1 - row_index };
         input.read_exact(&mut row)?;
-        let destination = &mut image.as_mut()[y as usize * stride..][..stride];
-        for (x, pixel) in destination.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-            let index = match bits {
-                1 => (row[x / 8] >> (7 - x % 8)) & 1,
-                4 => (row[x / 2] >> (4 * (1 - x % 2))) & 15,
-                _ => row[x],
-            };
-            if u32::from(index) >= color_count {
-                return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
-            }
-            *pixel = colors[index as usize];
+        let pixels = image.as_mut()[y as usize * stride..][..stride]
+            .as_chunks_mut::<4>()
+            .0;
+        match bits {
+            1 => unpack_palette::<8>(&row, pixels, &colors),
+            4 => unpack_palette::<2>(&row, pixels, &colors),
+            _ => unpack_palette::<1>(&row, pixels, &colors),
+        }
+        // Valid BMP palette entries have alpha 255; missing entries retain 0.
+        // A complete palette needs no validation, and padding is never decoded.
+        if color_count < (1 << bits) && pixels.iter().any(|pixel| pixel[3] == 0) {
+            return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
         }
     }
     if color_key {
@@ -422,6 +423,22 @@ fn key_palette(colors: &mut [[u8; 4]; 256]) {
     for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
         if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
             color[3] = 0;
+        }
+    }
+}
+
+// A byte holds N palette indices, most-significant first. The final chunk
+// can be short: unused low bits in a padded scanline must not produce pixels.
+fn unpack_palette<const N: usize>(row: &[u8], pixels: &mut [[u8; 4]], colors: &[[u8; 4]; 256]) {
+    let index = |byte: u8, i| (byte >> (8 - (i + 1) * (8 / N))) & (u8::MAX >> (8 - 8 / N));
+    let (groups, tail) = pixels.as_chunks_mut::<N>();
+    for (pixels, &byte) in groups.iter_mut().zip(row) {
+        *pixels = std::array::from_fn(|i| colors[index(byte, i) as usize]);
+    }
+    if !tail.is_empty() {
+        let byte = row[groups.len()];
+        for (i, pixel) in tail.iter_mut().enumerate() {
+            *pixel = colors[index(byte, i) as usize];
         }
     }
 }
@@ -493,32 +510,39 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
                 *pixel = colors[index as usize];
             }
         } else {
-            let mask = ((1u16 << bits) - 1) as u8;
             for (pixels, row) in pixels
                 .chunks_exact_mut(info.width as usize)
                 .zip(bytes.chunks_exact(info.line_size))
             {
-                for (x, pixel) in pixels.iter_mut().enumerate() {
-                    let bit = x * bits;
-                    let index = (row[bit / 8] >> (8 - bits - bit % 8)) & mask;
-                    *pixel = colors[index as usize];
+                match bits {
+                    1 => unpack_palette::<8>(row, pixels, &colors),
+                    2 => unpack_palette::<4>(row, pixels, &colors),
+                    _ => unpack_palette::<2>(row, pixels, &colors),
                 }
             }
         }
     } else {
-        let channels = info.color_type.samples();
-        for (pixel, source) in image
-            .pixels_mut()
-            .zip(bytes[..info.buffer_size()].chunks_exact(channels))
-        {
-            pixel.0 = match info.color_type {
-                png::ColorType::Rgb => [source[0], source[1], source[2], 255],
-                png::ColorType::Grayscale => [source[0], source[0], source[0], 255],
-                png::ColorType::GrayscaleAlpha => [source[0], source[0], source[0], source[1]],
-                png::ColorType::Rgba | png::ColorType::Indexed => {
-                    unreachable!("RGBA and indexed branches handled above")
+        let pixels = image.as_mut().as_chunks_mut::<4>().0;
+        let bytes = &bytes[..info.buffer_size()];
+        match info.color_type {
+            png::ColorType::Rgb => {
+                for (pixel, rgb) in pixels.iter_mut().zip(bytes.as_chunks::<3>().0) {
+                    *pixel = [rgb[0], rgb[1], rgb[2], 255];
                 }
-            };
+            }
+            png::ColorType::Grayscale => {
+                for (pixel, &gray) in pixels.iter_mut().zip(bytes) {
+                    *pixel = [gray, gray, gray, 255];
+                }
+            }
+            png::ColorType::GrayscaleAlpha => {
+                for (pixel, ga) in pixels.iter_mut().zip(bytes.as_chunks::<2>().0) {
+                    *pixel = [ga[0], ga[0], ga[0], ga[1]];
+                }
+            }
+            png::ColorType::Rgba | png::ColorType::Indexed => {
+                unreachable!("RGBA and indexed branches handled above")
+            }
         }
         if color_key {
             key_rgba(&mut image);

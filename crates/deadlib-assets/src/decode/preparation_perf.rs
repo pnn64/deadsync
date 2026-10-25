@@ -3,7 +3,7 @@ use super::*;
 use std::hint::black_box;
 
 #[path = "../../../../tests/support/kernel_bench.rs"]
-mod bench;
+pub(super) mod bench;
 #[path = "../preparation_original.rs"]
 mod original;
 

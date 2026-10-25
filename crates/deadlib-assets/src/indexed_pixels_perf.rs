@@ -4,6 +4,9 @@ use std::hint::black_box;
 
 include!("indexed_pixels_original.rs");
 
+#[path = "decode/expansion_perf.rs"]
+mod expansion_perf;
+
 fn indices(width: u32, height: u32, bits: u8) -> Vec<u8> {
     let pitch = (width as usize * usize::from(bits)).div_ceil(8);
     (0..pitch * height as usize)
