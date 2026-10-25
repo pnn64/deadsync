@@ -58,6 +58,26 @@ def main() -> None:
         source_path.write_text(native_source,encoding='utf-8')
         native = subprocess.run([str(binary),'dump',str(source_path)],capture_output=True,check=True).stdout
     literal=lua_bytes(native)
+    case('dump_long_branches', """
+        local body=string.rep('x=x+1;',120000)
+        for _,source in ipairs({'local x=0;if x==1 then '..body..'end;return x',
+          'local x=0;for i=1,2 do '..body..'end;return x'})do
+          local f=assert(loadstring(source,'=long branch'));local s=string.dump(f)
+          local g=assert(loadstring(s));print(g(),s==string.dump(g))
+        end
+    """)
+    case('dump_relay_scope', """
+        local source='local x=0\\nif x==1 then\\nlocal hidden=9\\n'..string.rep('x=x+1\\n',80000)..'end\\nreturn x'
+        local original=assert(loadstring(source,'=relay scope'));local f=assert(loadstring(string.dump(original)))
+        local valid=true;local visits=0
+        debug.sethook(function()
+          local d=debug.getinfo(2,'fl');if d.func==f then
+            visits=visits+1;local name=debug.getlocal(2,2)
+            if name=='hidden' or (d.currentline>2 and d.currentline<80004) then valid=false end
+          end
+        end,'',1)
+        local result=f();debug.sethook();print(result,valid,visits>0)
+    """)
     case('dump_roundtrip', """
         local make=assert(loadstring('local x=7;return function(a)return x+a end','=dump fixture'))
         local f=make();local s=string.dump(f,true);print(string.byte(s,1,12))

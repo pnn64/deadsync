@@ -145,6 +145,25 @@ fn dump_return_hooks_see_the_retained_function_and_result_slots() {
 }
 
 #[test]
+fn long_dump_relays_retain_the_branch_scope_and_source_line() {
+    compare(br#"
+      local body='local x=0\nif x==1 then\nlocal hidden=9\n'..string.rep('x=x+1\n',80000)..'end\nreturn x'
+      local original=assert(loadstring(body,'=relay scope'))
+      local f=assert(loadstring(string.dump(original)))
+      local valid=true;local visits=0
+      debug.sethook(function()
+        local d=debug.getinfo(2,'fl')
+        if d.func==f then
+          visits=visits+1;local name=debug.getlocal(2,2)
+          if name=='hidden' or (d.currentline>2 and d.currentline<80004) then valid=false end
+        end
+      end,'',1)
+      local result=f();debug.sethook()
+      return result,valid,visits>0
+    "#);
+}
+
+#[test]
 fn binary_readers_stop_at_errors_and_preserve_the_initial_probe() {
     compare(br#"
       local header='\27Lua'..string.char(81,0,1,4,8,4,8,0)

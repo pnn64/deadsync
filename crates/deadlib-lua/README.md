@@ -62,7 +62,10 @@ lowers source-compiled functions to native Lua 5.1 chunks and re-exports importe
 functions using retained native words/debug offsets. Dumps omit captured values
 and function environments; loaded roots receive nil cells and the loading thread's
 environment. Additional arguments, including a strip flag, are ignored as in 5.1.
-Export checks native register/operand/jump limits. Source-compiled dump bytes need
+Export checks native register/operand limits and inserts guarded relays when
+lowering expands a branch beyond the native signed-jump range. Relays preserve
+capture/open-result instruction groups, source lines and named local scopes
+without reserving registers. Source-compiled dump bytes need
 not match the C compiler's instruction stream. Binary coverage is incremental, not a claim of
 complete compatibility with every C-accepted chunk.
 
@@ -314,5 +317,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua` and `calls.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-dump.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-chunk-jumps.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

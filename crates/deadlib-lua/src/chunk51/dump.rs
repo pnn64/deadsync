@@ -5,6 +5,7 @@ use crate::{
     bytecode::{Constant, ProgramData, Prototype},
 };
 
+mod jumps;
 mod lower;
 use lower::Lowered;
 
@@ -126,12 +127,20 @@ pub(crate) fn dump(data: &ProgramData, entry: usize) -> Result<Vec<u8>, Error> {
                 for line in body.lines() {
                     bytes.extend_from_slice(&line.to_ne_bytes());
                 }
-                integer(&mut bytes, p.debug.locals.len())?;
-                for (index, local) in p.debug.locals.iter().enumerate() {
+                let remapped = match &body {
+                    Body::Source(lowered) => lowered.locals.as_deref(),
+                    _ => None,
+                };
+                let count = remapped.map_or(p.debug.locals.len(), <[_]>::len);
+                integer(&mut bytes, count)?;
+                for index in 0..count {
+                    let local =
+                        &p.debug.locals[remapped.map_or(index, |ranges| ranges[index].index)];
                     string(&mut bytes, Some(&local.name));
-                    let bounds = match &body {
-                        Body::Native(wire) => wire.locals[index],
-                        Body::Source(lowered) => [
+                    let bounds = match (&body, remapped) {
+                        (Body::Native(wire), _) => wire.locals[index],
+                        (Body::Source(_), Some(ranges)) => [ranges[index].start, ranges[index].end],
+                        (Body::Source(lowered), None) => [
                             lowered.pcs[local.start as usize],
                             lowered.pcs[local.end as usize],
                         ],

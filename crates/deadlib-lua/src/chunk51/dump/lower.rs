@@ -12,6 +12,7 @@ pub(super) struct Lowered {
     pub pcs: Vec<u32>,
     pub children: Vec<usize>,
     pub stack: u8,
+    pub locals: Option<Vec<super::jumps::LocalRange>>,
 }
 struct Builder {
     code: Vec<u32>,
@@ -63,6 +64,16 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
     let mut skip = vec![false; n];
     let mut methods = vec![None; n];
     let mut gaps = Vec::new();
+    let mut captured = [0u64; 4];
+    for instruction in &p.code {
+        if instruction.op == Op::Closure && instruction.b == 0 {
+            for upvalue in &data.prototypes[instruction.c as usize].upvalues {
+                if let Upvalue::Local(register) = *upvalue {
+                    captured[usize::from(register) / 64] |= 1u64 << (register % 64);
+                }
+            }
+        }
+    }
     for pc in 2..n {
         let get = p.code[pc];
         let key = p.code[pc - 1];
@@ -131,7 +142,9 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
     let mut scopes: Vec<&Gap> = Vec::new();
     let mut next_gap = 0;
     let mut next_local = 0;
+    let mut captured_scopes: Vec<(u16, u32)> = Vec::new();
     for (pc, i) in p.code.iter().enumerate() {
+        captured_scopes.retain(|&(_, end)| pc <= end as usize);
         scopes.retain(|g| pc < g.end);
         while next_gap < gaps.len() && gaps[next_gap].start <= pc {
             scopes.push(&gaps[next_gap]);
@@ -148,6 +161,11 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             let local = &p.debug.locals[next_local];
             if pc < local.end as usize {
                 out.reg(mapped(local.register))?;
+            }
+            if pc <= local.end as usize
+                && captured[usize::from(local.register) / 64] & (1u64 << (local.register % 64)) != 0
+            {
+                captured_scopes.push((local.register, local.end));
             }
             next_local += 1;
         }
@@ -330,8 +348,13 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 }
             }
             Op::Close => {
-                out.reg(a)?;
-                out.abc(35, a, 0, 0)?;
+                // The compiler also emits closes for empty scopes. Keeping
+                // those in an export exposes stale lines from skipped arms.
+                // A local ending at this PC still needs closing (numeric for).
+                if captured_scopes.iter().any(|&(r, _)| r >= u16::from(i.a)) {
+                    out.reg(a)?;
+                    out.abc(35, a, 0, 0)?;
+                }
             }
             Op::Closure => {
                 if i.b != 0 {
@@ -358,14 +381,27 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
         }
     }
     pcs[n] = out.code.len() as u32;
-    for (pc, target) in out.patches {
+    let mut long = false;
+    for &(pc, target) in &out.patches {
         let target = *pcs.get(target).ok_or_else(fail)?;
         let offset = i64::from(target) - pc as i64 - 1;
         if !(-131071..=131071).contains(&offset) {
-            return Err(fail());
+            long = true;
+            continue;
         }
         out.code[pc] = (out.code[pc] & 0x3fff) | (((offset + 131071) as u32) << 14);
     }
+    let locals = if long {
+        Some(super::jumps::relax(
+            &mut out.code,
+            &mut out.lines,
+            &mut pcs,
+            &out.patches,
+            p,
+        )?)
+    } else {
+        None
+    };
     // Preserve the fixed parameter/compatibility window even if never read.
     if out.max > 250 {
         return Err(fail());
@@ -376,5 +412,6 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
         pcs,
         children,
         stack: out.max as u8,
+        locals,
     })
 }

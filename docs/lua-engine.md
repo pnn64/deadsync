@@ -30,7 +30,7 @@ performance JSON keeps its recorded measurement provenance.
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and fourteen Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`, `sort.lua`, `literals.lua`, `strings.lua`). `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. Lexical capture checks preserve upvalue-limit timing, owning functions and reader consumption, including unfinished source. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference and Rust passes among sixteen probes, including `calls.lua`. `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. Lexical capture checks preserve upvalue-limit timing, owning functions and reader consumption, including unfinished source. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 344 differential/adversarial integration tests, thirty parser/scanner/arena/verifier/GC tests and
+crate, 350 differential/adversarial integration tests, forty-two unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-chunk-dump.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-chunk-jumps.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -509,6 +509,18 @@ open-input rename failure. The [measurements](performance/2026-10-25-rust-lua-ch
 retain sixty runtime and twenty-two frontend workloads, adding source dumping,
 native re-export and dump/load execution. Native encoding limits, broader debug,
 collector/resource cases and the remaining standalone/integration gates remain open.
+
+The [long-branch export validation](testing/2026-10-25-rust-lua-chunk-jumps.md)
+adds guarded native jump relays after source lowering expands branches beyond
+Lua 5.1's signed encoding range. Batched relocation keeps closure bindings,
+extended SETLIST payloads, skip pairs and open-result consumers intact. Relays
+reserve no registers; their debug lines and named locals describe the originating
+branch. Export also omits CLOSE operations without a live captured local.
+All 393 tests and 138 process probes pass. The sixteen unchanged official files
+retain fifteen passes in each engine and the shared Windows rename failure.
+Two [measurement runs](performance/2026-10-25-rust-lua-chunk-jumps.md) cover
+sixty-two runtime and twenty-two frontend workloads. Register/operand limits,
+broader debug/collector cases and the full standalone-engine gates remain open.
 
 ## Reference contract
 

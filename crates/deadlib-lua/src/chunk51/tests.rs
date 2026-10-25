@@ -566,3 +566,95 @@ fn generated_source_dump_round_trips_keep_control_flow_and_captures() {
         compare_execution(&bytes);
     }
 }
+
+#[test]
+fn source_dump_long_control_flow_survives_native_instruction_expansion() {
+    let lua = Lua::new();
+    for count in [80_000, 120_000] {
+        let body = "x=x+1\n".repeat(count);
+        let sources = [
+            format!(
+                "local x=0\nif x==1 then\n{body}end\nreturn x,debug.getinfo(1,'l').currentline"
+            ),
+            format!("local x=1\nif x==1 then\n{body}end\nreturn x"),
+            format!("local x=0\nfor i=1,2 do\n{body}end\nreturn x"),
+            format!("local x=0\nfor k,v in ipairs({{1,2}})do\n{body}end\nreturn x"),
+            format!("local x=0\nwhile x<{count} do\n{body}end\nreturn x"),
+            format!("local x=0\nrepeat\n{body}until x>={};return x", 2 * count),
+        ];
+        for source in sources {
+            lua.load(source.as_bytes()).into_function().unwrap();
+            let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+            let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+            compare_execution_against(&bytes, source.as_bytes());
+            compare_execution(&bytes);
+        }
+    }
+}
+
+#[test]
+fn long_dump_relays_preserve_capture_bindings_and_setlist_payloads() {
+    let names = (0..60).map(|i| format!("a{i}")).collect::<Vec<_>>();
+    let source = format!(
+        "local {}={};local x=1;if x==1 then\n{}local function f()return {} end\na0=a0+3;local t={{{}}};\n{}x=x+#t+f() end;return x",
+        names.join(","),
+        vec!["0"; 60].join(","),
+        "x=x+1\n".repeat(32_710),
+        names.join("+"),
+        vec!["0"; 27_000].join(","),
+        "x=x+1\n".repeat(50_000)
+    );
+    let lua = Lua::new();
+    lua.load(source.as_bytes()).into_function().unwrap();
+    let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+    let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+    compare_execution_against(&bytes, source.as_bytes());
+    compare_execution(&bytes);
+    let imported = crate::compile(&bytes).unwrap();
+    assert_eq!(
+        super::dump(&imported.data, imported.data.entry as usize).unwrap(),
+        bytes
+    );
+}
+
+#[test]
+fn long_dump_relays_keep_open_varargs_adjacent_to_their_consumer() {
+    let source = format!(
+        "local x=1;if x==1 then\n{}local t={{...}};x=x+#t;\n{}end;return x",
+        "x=x+1\n".repeat(32_763),
+        "x=x+1\n".repeat(50_000)
+    );
+    let lua = Lua::new();
+    lua.load(source.as_bytes()).into_function().unwrap();
+    let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+    let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+    compare_execution_against(&bytes, source.as_bytes());
+    compare_execution(&bytes);
+}
+
+#[test]
+fn long_dump_relays_do_not_reserve_additional_registers() {
+    let names = (0..195)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!(
+        "local {names}={};local x=0;if x==1 then\n{}f({}) end;return x",
+        vec!["0"; 195].join(","),
+        "x=x+1\n".repeat(80_000),
+        vec!["1"; 52].join(",")
+    );
+    let lua = Lua::new();
+    let reference = lua
+        .load(source.as_bytes())
+        .into_function()
+        .unwrap()
+        .dump(false);
+    let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+    let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+    let actual = decoded(&bytes).chunk.prototypes[0].stack;
+    assert_eq!(actual, 249);
+    assert_eq!(actual, decoded(&reference).chunk.prototypes[0].stack);
+    compare_execution_against(&bytes, source.as_bytes());
+    compare_execution(&bytes);
+}

@@ -461,6 +461,18 @@ fn main() {
             10,
         ),
         (
+            "dump_long_skip",
+            "return assert(loadstring(string.dump(long_dump_target)))()",
+            0.0,
+            2,
+        ),
+        (
+            "dump_long_loop",
+            "return assert(loadstring(string.dump(long_dump_target)))()",
+            240000.0,
+            2,
+        ),
+        (
             "native_chunk_captures",
             "local x=0;local function f(n)x=x+n end;for i=1,2000 do f(i)end;return x",
             2001000.0,
@@ -505,6 +517,20 @@ fn main() {
             program.register_count()
         );
         let mut vm = Vm::new();
+        let long_setup = name.starts_with("dump_long_").then(|| {
+            let body = "x=x+1;".repeat(120_000);
+            if name == "dump_long_skip" {
+                format!("function long_dump_target()local x=0;if x==1 then {body}end;return x end")
+            } else {
+                format!("function long_dump_target()local x=0;for i=1,2 do {body}end;return x end")
+            }
+        });
+        if let Some(setup) = &long_setup {
+            vm.execute(
+                &deadlib_lua::compile_named(setup.as_bytes(), b"=(long-dump-bench)").unwrap(),
+            )
+            .unwrap();
+        }
         let rename_files = (name == "os_rename").then(|| {
             let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../target/lua-bench-fixtures");
@@ -552,6 +578,13 @@ fn main() {
         } else {
             lua_reference::Lua::new()
         };
+        if let Some(setup) = &long_setup {
+            reference
+                .load(setup.as_bytes())
+                .set_name("=(long-dump-bench)")
+                .exec()
+                .unwrap();
+        }
         if let Some(file) = &source_file {
             reference
                 .globals()
