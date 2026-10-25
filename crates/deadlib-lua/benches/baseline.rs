@@ -127,6 +127,12 @@ fn main() {
             50,
         ),
         (
+            "call_table",
+            "local function f(t)return t end;local sum=0;for i=1,1000 do sum=sum+f({key=i}).key end;return sum",
+            500500.0,
+            30,
+        ),
+        (
             "array_table",
             "local t={}; for i=1,10000 do t[i]=i end; local s=0; for i=1,10000 do s=s+t[i] end; return s",
             50005000.0,
@@ -494,7 +500,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(14);
+    let mut frontends = Vec::with_capacity(17);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -548,6 +554,22 @@ fn main() {
         ".a".repeat(10_000)
     );
     frontends.push(("frontend_index_10000".into(), source, 1.0, 3));
+    let source = format!(
+        "local t={}7{};local n=0;while type(t)=='table' do n=n+1;t=t.key end;return n",
+        "{key=".repeat(190),
+        "}".repeat(190)
+    );
+    frontends.push(("frontend_constructor_190".into(), source, 190.0, 20));
+    let source = format!(
+        "local n=0;local function f(a)n=n+(a or 1);return f end;local result=f{};return n",
+        "(1)".repeat(10_000)
+    );
+    frontends.push(("frontend_call_chain_10000".into(), source, 10_000.0, 3));
+    let source = format!(
+        "local n=0;local obj={{}};function obj:again(x)n=n+x;return self end;local result=obj{};return n",
+        ":again(1)".repeat(10_000)
+    );
+    frontends.push(("frontend_method_chain_10000".into(), source, 10_000.0, 3));
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
         println!(

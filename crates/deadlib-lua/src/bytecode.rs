@@ -561,11 +561,16 @@ mod tests {
                 8 => proto.debug.calls[0].temporaries = 0..u32::MAX,
                 _ => {
                     proto.debug.temporaries =
-                        Box::new([proto.code[proto.debug.calls[0].pc as usize].a - 1]);
+                        Box::new([proto.code[proto.debug.calls[0].pc as usize].a]);
                     proto.debug.calls[0].temporaries = 0..1;
                 }
             }
-            assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+            assert_eq!(
+                p.verify()
+                    .expect_err(&format!("corrupt debug case {corrupt}"))
+                    .kind(),
+                ErrorKind::Bytecode
+            );
         }
     }
 }

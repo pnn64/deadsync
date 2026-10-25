@@ -83,8 +83,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired measurements for {name}")
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 36 or len(rust_heap) != 36 or len(reference_collected_heap) != 36:
-        raise SystemExit(f"expected 36 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
+    if len(ratios) != 37 or len(rust_heap) != 37 or len(reference_collected_heap) != 37:
+        raise SystemExit(f"expected 37 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
     compile_ratios = {}
     for name in sorted({s["workload"] for s in samples if s["workload"].startswith("frontend_")}):
         rust = {s["sample"]: s["ns_per_iteration"] for s in samples
@@ -94,8 +94,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired compilation measurements for {name}")
         compile_ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(compile_ratios) != 14:
-        raise SystemExit(f"expected 14 frontend scaling measurements, received {len(compile_ratios)}")
+    if len(compile_ratios) != 17:
+        raise SystemExit(f"expected 17 frontend scaling measurements, received {len(compile_ratios)}")
     if rust_program_layout.keys() != ratios.keys() | compile_ratios.keys():
         raise SystemExit("missing program layout measurements")
     result = dict(

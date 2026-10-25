@@ -67,6 +67,7 @@ pub(super) enum Task<'a> {
     TableNext(TableState),
     TableKey(TableState, u8),
     TableValue(TableState, u8, u8),
+    TableConstant(TableState, u8, u32),
     TableList(TableState, bool),
     Call(ExprId, u8, u32),
     CallCallee(CallState),
@@ -423,9 +424,11 @@ impl<'a> Compiler<'a> {
                     let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
                         unreachable!()
                     };
-                    self.tasks.push(Task::TableValue(state, regs, self.result));
-                    self.tasks
-                        .push(Task::Operand(fields[state.index].1, regs + 1));
+                    let key = self.result;
+                    let value = fields[state.index].1;
+                    let value_reg = self.right_register(value, key, regs, false)?;
+                    self.tasks.push(Task::TableValue(state, regs, key));
+                    self.tasks.push(Task::Operand(value, value_reg));
                 }
                 Task::TableValue(mut state, regs, key) => {
                     self.emit(
@@ -435,6 +438,29 @@ impl<'a> Compiler<'a> {
                         u32::from(self.result),
                     )?;
                     self.reset(u16::from(regs));
+                    state.index += 1;
+                    self.tasks.push(Task::TableNext(state));
+                }
+                Task::TableConstant(mut state, scratch, constant) => {
+                    let value = self.result;
+                    let key = if value == scratch {
+                        self.alloc(1)?
+                    } else {
+                        scratch
+                    };
+                    let line = self.line;
+                    let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
+                        unreachable!()
+                    };
+                    self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
+                        .1
+                        .discharge;
+                    self.emit(Op::Load, key, 0, constant)?;
+                    self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
+                    self.debug_line(0);
+                    self.line = line;
+                    self.emit(Op::SetTable, state.table, u16::from(key), u32::from(value))?;
+                    self.reset(u16::from(scratch));
                     state.index += 1;
                     self.tasks.push(Task::TableNext(state));
                 }
@@ -458,15 +484,19 @@ impl<'a> Compiler<'a> {
                 Task::CallCallee(state) => {
                     let (_, method, _, _) = self.call_parts(state.id);
                     if let Some(method) = method {
+                        let receiver = self.alloc(1)?;
+                        debug_assert_eq!(u16::from(receiver), u16::from(state.base) + 1);
+                        self.emit(Op::Move, receiver, u16::from(state.base), 0)?;
                         let key = self.alloc(1)?;
                         self.load(key, Constant::String(method.into()))?;
                         self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
                         self.emit(
                             Op::GetTable,
                             state.base,
-                            u16::from(state.base + 1),
+                            u16::from(receiver),
                             u32::from(key),
                         )?;
+                        self.reset(u16::from(key));
                     }
                     self.tasks.push(Task::CallArgs(state));
                 }
@@ -474,10 +504,14 @@ impl<'a> Compiler<'a> {
                     let (_, method, args, _) = self.call_parts(state.id);
                     if let Some(&id) = args.get(usize::from(state.index)) {
                         let all = usize::from(state.index) + 1 == args.len() && self.multiple(id);
-                        let dst = (usize::from(state.base)
-                            + 1
-                            + usize::from(method.is_some())
-                            + usize::from(state.index)) as u8;
+                        let dst = self.alloc(1)?;
+                        debug_assert_eq!(
+                            usize::from(dst),
+                            usize::from(state.base)
+                                + 1
+                                + usize::from(method.is_some())
+                                + usize::from(state.index)
+                        );
                         state.index += 1;
                         self.tasks.push(Task::CallArgs(state));
                         self.tasks

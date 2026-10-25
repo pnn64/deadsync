@@ -58,7 +58,11 @@ impl<'a> Compiler<'a> {
                 self.tasks.push(Task::Operand(*table, work));
             }
             Expr::Table(_, load_line) => {
-                let table = self.alloc(1)?;
+                let table = if self.top_temporary(dst) {
+                    dst
+                } else {
+                    self.alloc(1)?
+                };
                 self.line = *load_line;
                 self.emit(Op::NewTable, table, 0, 0)?;
                 self.tasks.push(Task::TableNext(TableState {
@@ -158,6 +162,10 @@ impl<'a> Compiler<'a> {
             Ok(dst)
         }
     }
+    fn top_temporary(&self, dst: u8) -> bool {
+        u16::from(dst) + 1 == self.function.next
+            && self.function.debug_named[usize::from(dst) / 64] & (1u64 << (dst % 64)) == 0
+    }
     pub(super) fn right_register(
         &mut self,
         right: ExprId,
@@ -252,7 +260,13 @@ impl<'a> Compiler<'a> {
         };
         if let Some(&(key, value)) = fields.get(state.index) {
             if let Some(key) = key {
-                let regs = self.alloc(2)?;
+                if let Some(constant) = self.field_constant(key)? {
+                    let reg = self.alloc(1)?;
+                    self.tasks.push(Task::TableConstant(state, reg, constant));
+                    self.tasks.push(Task::Operand(value, reg));
+                    return Ok(());
+                }
+                let regs = self.alloc(1)?;
                 self.tasks.push(Task::TableKey(state, regs));
                 self.tasks.push(Task::Operand(key, regs));
             } else {
@@ -267,9 +281,29 @@ impl<'a> Compiler<'a> {
                 self.line = self.ast.exprs[state.id].1.end;
                 self.emit(Op::SetList, state.table, state.pending, state.flushed + 1)?;
             }
-            self.emit(Op::Move, state.dst, u16::from(state.table), 0)?;
+            if state.dst != state.table {
+                self.emit(Op::Move, state.dst, u16::from(state.table), 0)?;
+            }
         }
         Ok(())
+    }
+    fn field_constant(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
+        // Preserve constant-pool insertion order without keeping a literal key
+        // in a register while the field value is evaluated.
+        let constant = if let Some(number) = self.folded[id] {
+            Constant::Number(number)
+        } else {
+            match &self.ast.exprs[self.unparen(id)].0 {
+                Expr::Nil => Constant::Nil,
+                Expr::Boolean(value) => Constant::Boolean(*value),
+                Expr::String(value) => Constant::String(value.clone()),
+                _ => return Ok(None),
+            }
+        };
+        let compact =
+            matches!(constant, Constant::String(_)) || self.function.constants.len() <= 255;
+        let index = self.constant(constant)?;
+        Ok((compact && index <= 255).then_some(index))
     }
     pub(super) fn call_parts(&self, id: ExprId) -> (ExprId, Option<&'a [u8]>, &'a [ExprId], u32) {
         match &self.ast.exprs[id].0 {
@@ -279,14 +313,14 @@ impl<'a> Compiler<'a> {
         }
     }
     pub(super) fn call(&mut self, id: ExprId, dst: u8, wanted: u32) -> Result<(), Error> {
-        let (function, method, args, line) = self.call_parts(id);
+        let (function, _, _, line) = self.call_parts(id);
         self.line = line;
         let saved = self.function.next;
-        let count = args.len() + usize::from(method.is_some());
-        let base = self.alloc(
-            u16::try_from(count + 1)
-                .map_err(|_| self.error(ErrorKind::Limit, "too many call arguments"))?,
-        )?;
+        let base = if self.top_temporary(dst) {
+            dst
+        } else {
+            self.alloc(1)?
+        };
         self.tasks.push(Task::CallCallee(CallState {
             id,
             wanted,
@@ -295,8 +329,7 @@ impl<'a> Compiler<'a> {
             base,
             dst,
         }));
-        self.tasks
-            .push(Task::Expr(function, base + u8::from(method.is_some())));
+        self.tasks.push(Task::Expr(function, base));
         Ok(())
     }
     pub(super) fn call_end(&mut self, state: CallState) -> Result<(), Error> {
@@ -322,7 +355,9 @@ impl<'a> Compiler<'a> {
         } else if wanted == OPEN {
             self.record_call(function, method, base)?;
             self.emit(Op::Call, base, argc, OPEN)?;
-            self.emit(Op::Move, dst, u16::from(base), OPEN)?;
+            if dst != base {
+                self.emit(Op::Move, dst, u16::from(base), OPEN)?;
+            }
         } else {
             let needed = u16::from(base) + wanted as u16;
             if needed > self.function.next {
@@ -330,7 +365,7 @@ impl<'a> Compiler<'a> {
             }
             self.record_call(function, method, base)?;
             self.emit(Op::Call, base, argc, wanted)?;
-            for i in 0..wanted {
+            for i in 0..if dst != base { wanted } else { 0 } {
                 self.emit(
                     Op::Move,
                     (u32::from(dst) + i) as u8,

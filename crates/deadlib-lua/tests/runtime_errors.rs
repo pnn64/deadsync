@@ -62,6 +62,18 @@ fn destination_reuse_preserves_error_names_and_operand_types() {
 }
 
 #[test]
+fn call_target_and_constructor_reuse_preserve_chained_failure_context() {
+    Oracle::new().cases(&[
+        "local function f()return false end;return f()()",
+        "local obj={};function obj:m()return false end;return obj:m():m()",
+        "local obj={};function obj:m()return 42 end;return obj:m()(false)",
+        "local function f()return math.sin end;return f()(false)",
+        "local a={};local function f()return false end;a={key=f().missing}",
+        "local function f()return 1 end;return f().x()",
+    ]);
+}
+
+#[test]
 fn call_failures_identify_globals_locals_fields_methods_and_upvalues() {
     Oracle::new().cases(&[
         "a=1; bbbb=2; a=math.sin(3)+bbbb(3)",

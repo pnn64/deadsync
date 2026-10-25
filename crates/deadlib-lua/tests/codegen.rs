@@ -48,6 +48,34 @@ pub fn arithmetic_chain(count: usize, op: &str) -> String {
 pub fn index_chain(count: usize) -> String {
     format!("local t={{}};t.a=t;return t{}==t", ".a".repeat(count))
 }
+pub fn nested_constructor(depth: usize, kind: u8) -> String {
+    let (open, close, step) = match kind {
+        0 => ("{", "}", "t=t[1]"),
+        1 => ("{key=", "}", "t=t.key"),
+        2 => ("{[1]=", "}", "t=t[1]"),
+        3 => ("{[false]=", "}", "t=t[false]"),
+        _ => ("{[", "]=1}", "t=next(t)"),
+    };
+    format!(
+        "local t={}7{};local n=0;while type(t)=='table' do n=n+1;{step} end;return n,t",
+        open.repeat(depth),
+        close.repeat(depth)
+    )
+}
+pub fn call_chain(count: usize, kind: u8) -> String {
+    if kind == 2 {
+        format!(
+            "local n=0;local obj={{}};function obj:again(x)assert(self==obj);n=n+(x or 1);return self end;local result=obj{};return result==obj,n",
+            ":again(1)".repeat(count)
+        )
+    } else {
+        let args = if kind == 0 { "()" } else { "(1,2)" };
+        format!(
+            "local n=0;local function f(a,b)n=n+(a or 1)+(b or 0);return f end;local result=f{};return result==f,n",
+            args.repeat(count)
+        )
+    }
+}
 pub fn generated() -> Vec<String> {
     fn expr(seed: &mut u32, depth: u8) -> String {
         *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
@@ -260,6 +288,92 @@ mod tests {
             ] {
                 sources.push(format!("local a=3;local trace={{}};local function f(n)trace[#trace+1]=a;a=a+n;return n end;local function factory(x)return function(v)return x+v end end;a={left}{op}{right};return a,table.concat(trace,',')"));
             }
+        }
+        check(sources);
+    }
+    #[test]
+    fn nested_list_record_and_key_constructors_fit_source_depth_limits() {
+        check(
+            [60, 125, 190]
+                .into_iter()
+                .flat_map(|depth| (0..5).map(move |kind| nested_constructor(depth, kind)))
+                .collect(),
+        );
+    }
+    #[test]
+    fn chained_calls_and_methods_reuse_one_working_area() {
+        check_bound(
+            [300, 1000, 10_000]
+                .into_iter()
+                .flat_map(|count| (0..3).map(move |kind| call_chain(count, kind)))
+                .collect(),
+            Some(12),
+        );
+    }
+    #[test]
+    fn constructors_and_calls_preserve_preallocated_values_and_named_destinations() {
+        let mut sources = vec![
+            "local x={old=true};local function f()assert(x.old);return 7 end;x={key=f()};return x.key".into(),
+            "local f;f=function()return f end;local before=f;f=f();return f==before".into(),
+            "local f=function(x)return 'old'..x end;local function arg()f=function()return 'new'end;return 7 end;return f(arg())".into(),
+            "local obj={id=1};function obj:m(x)return self.id,x end;local function arg()obj={id=2};return 7 end;return obj:m(arg())".into(),
+            "local log={};local obj=setmetatable({},{__index=function()log[#log+1]='lookup';return function(self,x)log[#log+1]='call';return x end end});local function arg()log[#log+1]='arg';return 7 end;local n=obj:m(arg());return n,table.concat(log,',')".into(),
+            "local function many()return 1,nil,3 end;local function pack(...)return select('#',...),...end;return pack(many())".into(),
+            "local function none()end;local function pack(...)return select('#',...),...end;return pack(none())".into(),
+            "local obj={};function obj:pack(...)return self==obj,select('#',...),...end;local function many()return 1,nil,3 end;return obj:pack(many())".into(),
+            "local function many()return 1,nil,3 end;local t={many()};return t[1],t[2],t[3]".into(),
+        ];
+        let expression = format!("{}7{}", "{".repeat(190), "}".repeat(190));
+        sources.push(format!("local a,b,c={expression},{expression},{expression};local total=0;for _,t in ipairs({{a,b,c}})do while type(t)=='table' do total=total+1;t=t[1]end end;return total"));
+        check(sources);
+    }
+    #[test]
+    fn literal_keys_preserve_pool_order_errors_and_large_pool_fallbacks() {
+        let mut sources=vec![
+            "local t={[0]=-0.0};return 1/t[0]".into(),
+            "local t={[-0.0]=0.0};return 1/t[0]".into(),
+            "local n=0;local function f()n=n+1;return 7 end;local ok,e=pcall(function()return {[nil]=f()}end);return n,ok,e".into(),
+            "local n=0;local function f()n=n+1;return 7 end;local t={[false]=f(),[true]=f(),['x']=f(),[3]=f()};return n,t[false],t[true],t.x,t[3]".into(),
+            "local k='a';local function f()k='b';return 7 end;local t={[k]=f()};return t.a,t.b".into(),
+        ];
+        for count in [254, 255, 256, 300] {
+            let prefix = format!(
+                "local pad={{{}}};",
+                (1..=count)
+                    .map(|n| n.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            sources.push(format!("{prefix}local log={{}};local function f(n)log[#log+1]=n;return n end;local t={{[false]=f(1),[true]=f(2),['marker']=f(3),[1]=f(4)}};return #pad,t[false],t[true],t.marker,t[1],table.concat(log,',')"));
+        }
+        check(sources);
+    }
+    #[test]
+    fn reused_call_and_constructor_slots_keep_pending_objects_alive() {
+        check([
+            "local weak=setmetatable({},{__mode='v'});local obj={};weak[1]=obj;local function factory()local saved=obj;return function()return saved end end;local function arg()obj=nil;collectgarbage('collect');assert(weak[1]~=nil);return 1 end;local result=factory()(arg());return result==weak[1]",
+            "local weak=setmetatable({},{__mode='v'});local obj={};weak[1]=obj;function obj:m(x)collectgarbage('collect');return self==weak[1],x end;local function factory()return obj end;local function arg()obj=nil;collectgarbage('collect');assert(weak[1]~=nil);return 7 end;return factory():m(arg())",
+            "local weak=setmetatable({},{__mode='v'});local function item(n)local t={n};weak[n]=t;return t end;local function check()collectgarbage('collect');assert(weak[1]~=nil);return 7 end;local t={item(1),key=check(),item(2)};collectgarbage('collect');return t[1]==weak[1],t[2]==weak[2],t.key",
+            "local weak=setmetatable({},{__mode='kv'});local key={};local function makekey()local k=key;weak[k]=true;key=nil;return k end;local function makevalue()collectgarbage('collect');return 7 end;local t={[makekey()]=makevalue()};local k=next(t);return t[k],weak[k]",
+            "local t={};local co=coroutine.create(function()local function many()return t,nil,3 end;return coroutine.yield(many())end);local ok,a,b,c=coroutine.resume(co);collectgarbage('collect');local ok2,x,y,z=coroutine.resume(co,t,nil,5);return ok,a==t,b,c,ok2,x==t,y,z",
+        ].into_iter().map(str::to_owned).collect());
+    }
+    #[test]
+    fn generated_mixed_fields_preserve_calls_and_fifty_item_flushes() {
+        let mut sources = Vec::new();
+        for case in 0..128 {
+            let mut fields = Vec::new();
+            for i in 1..=80 + case % 12 {
+                fields.push(if (i + case) % 5 == 0 {
+                    format!("[mark('k{i}',{i})]=mark('v{i}',{})", i * 10)
+                } else if (i + case) % 7 == 0 {
+                    format!("[{i}]=mark('r{i}',{})", i * 11)
+                } else {
+                    format!("mark('a{i}',{i})")
+                });
+            }
+            fields.push("pair()".into());
+            sources.push(format!("local log={{}};local function mark(k,v)log[#log+1]=k;return v end;local function pair()log[#log+1]='pair';return 7,8 end;local t={{{}}};local sum=0;for i=1,100 do sum=sum+(t[i] or 0)end;return sum,t[1],t[50],table.concat(log,',')",fields.join(",")));
         }
         check(sources);
     }

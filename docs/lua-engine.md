@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 267 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 274 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-register-reuse.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-call-table-slots.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -254,8 +254,22 @@ The [measurements](performance/2026-10-25-rust-lua-register-reuse.md) add an ope
 workload and two long-chain frontend cases, bringing the harness to 36 execution
 and fourteen frontend workloads. The reports also retain instruction counts and
 entry register counts. Exact compiler resource limits and other expression
-layouts still require work: retained probes with 190 nested table constructors
-and 300 chained calls load in C but still exhaust this compiler's temporaries.
+layouts still require work. This milestone exposed excess temporary use in deep
+constructors and chained calls, addressed by the following change.
+
+The [call/constructor validation](testing/2026-10-25-rust-lua-call-table-slots.md)
+adds seven groups with 182 paired observations. Top anonymous result slots are
+reused; arguments reserve storage after the callee, one at a time. Methods retain
+their receiver before lookup/arguments. Compact literal record keys retain pool
+insertion order but materialize after field values. List/record/key constructors
+reach 190 levels, and ordinary/method chains reach 10,000 calls. Tests cover
+open results, snapshots, GC roots, errors, large constant pools and fifty-item
+list flushing. The earlier 190-constructor and 300-call failure probes now load.
+The [measurements](performance/2026-10-25-rust-lua-call-table-slots.md) expand to
+37 execution and seventeen frontend workloads. Exact reference register budgets,
+remaining resource diagnostics and broader scratch/debug parity remain open. A
+249-argument `print` loader probe is still accepted here and rejected by C;
+both accept 248, so exact budgeting remains a concrete compatibility gap.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.
