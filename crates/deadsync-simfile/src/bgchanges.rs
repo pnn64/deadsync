@@ -92,9 +92,7 @@ impl<'a> Iterator for BgChangeSets<'a> {
 
 #[inline]
 fn next_bgchange_delimiter(changes: &str, start: usize) -> Option<(usize, u8)> {
-    changes.as_bytes()[start..]
-        .iter()
-        .position(|byte| matches!(byte, b'=' | b','))
+    memchr::memchr2(b'=', b',', &changes.as_bytes()[start..])
         .map(|offset| {
             let index = start + offset;
             (index, changes.as_bytes()[index])
@@ -421,3 +419,6 @@ mod tests {
 mod parse_perf {
     include!("bgchanges_parse_perf.rs");
 }
+
+#[cfg(test)]
+mod delimiter_perf;
