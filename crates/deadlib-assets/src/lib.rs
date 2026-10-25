@@ -648,14 +648,15 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
         return;
     }
 
-    for pixel in image.pixels_mut() {
-        let [r, g, b, a] = pixel.0;
-        let lum = ((u16::from(r) * 30 + u16::from(g) * 59 + u16::from(b) * 11) / 100) as u8;
-        if hints.alphamap {
-            pixel.0 = [255, 255, 255, lum];
+    for pixel in image.as_mut().as_chunks_mut::<4>().0 {
+        let word = u32::from_le_bytes(*pixel);
+        let lum = ((word & 255) * 30 + ((word >> 8) & 255) * 59 + ((word >> 16) & 255) * 11) / 100;
+        let output = if hints.alphamap {
+            0x00ff_ffff | (lum << 24)
         } else {
-            pixel.0 = [lum, lum, lum, a];
-        }
+            (word & 0xff00_0000) | (lum * 0x0001_0101)
+        };
+        *pixel = output.to_le_bytes();
     }
 }
 

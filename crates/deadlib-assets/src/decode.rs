@@ -450,8 +450,6 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
             },
     );
     let mut reader = decoder.read_info().map_err(png_error)?;
-    let palette = reader.info().palette.clone();
-    let alpha = reader.info().trns.clone();
     let mut bytes = vec![0; reader.output_buffer_size().ok_or_else(image_limit)?];
     let info = reader.next_frame(&mut bytes).map_err(png_error)?;
     if info.color_type == png::ColorType::Rgba {
@@ -466,9 +464,11 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     }
     let mut image = RgbaImage::new(info.width, info.height);
     if indexed {
+        // Indexed palettes are fixed before IDAT; borrow the decoder's storage.
+        let palette = reader.info().palette.as_deref();
+        let alpha = reader.info().trns.as_deref();
         let mut colors = [[0, 0, 0, 255]; 256];
         for (i, rgb) in palette
-            .as_deref()
             .unwrap_or_default()
             .chunks_exact(3)
             .enumerate()
@@ -478,7 +478,6 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
                 rgb[1],
                 rgb[2],
                 alpha
-                    .as_deref()
                     .and_then(|a| a.get(i))
                     .copied()
                     .unwrap_or(255),
@@ -586,31 +585,28 @@ fn key_rgba(image: &mut RgbaImage) {
  */
 // RageSurfaceUtils_Zoom uses float coordinates and 24-bit fixed-point weights;
 // it floors horizontal interpolation and rounds the final vertical blend.
-fn zoom_axis(source: u32, destination: u32) -> Vec<(u32, u32, u32)> {
+fn zoom_axis(source: u32, destination: u32) -> impl Iterator<Item = (u32, u32, u32)> {
     let ratio = source as f32 / destination as f32;
-    (0..destination)
-        .map(|x| {
-            if source >= destination {
-                let center = ratio * x as f32 + ratio / 2.0;
-                let left = (center - ratio / 4.0) as u32;
-                let right = (center + ratio / 4.0) as u32;
-                let weight = if left == right {
-                    1 << 24
-                } else {
-                    ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0)
-                        as u32
-                };
-                (left, right, weight)
+    (0..destination).map(move |x| {
+        if source >= destination {
+            let center = ratio * x as f32 + ratio / 2.0;
+            let left = (center - ratio / 4.0) as u32;
+            let right = (center + ratio / 4.0) as u32;
+            let weight = if left == right {
+                1 << 24
             } else {
-                let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
-                (
-                    (center as u32).min(source - 1),
-                    ((center + 1.0) as u32).min(source - 1),
-                    ((1.0 - (center - center.floor())) * 16777216.0) as u32,
-                )
-            }
-        })
-        .collect()
+                ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0) as u32
+            };
+            (left, right, weight)
+        } else {
+            let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
+            (
+                (center as u32).min(source - 1),
+                ((center + 1.0) as u32).min(source - 1),
+                ((1.0 - (center - center.floor())) * 16777216.0) as u32,
+            )
+        }
+    })
 }
 
 fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
@@ -620,17 +616,17 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             let ratio = (size[axis] as f32 / current as f32).clamp(0.5, 2.0);
             (current as f32 * ratio).round_ties_even() as u32
         });
-        let xs = zoom_axis(image.width(), next[0]);
+        let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
         let ys = zoom_axis(image.height(), next[1]);
         let mut output = RgbaImage::new(next[0], next[1]);
         let width = image.width() as usize;
         let source = image.as_raw().as_chunks::<4>().0;
-        for (row, &(top, bottom, wy)) in output
+        for (row, (top, bottom, wy)) in output
             .as_mut()
             .as_chunks_mut::<4>()
             .0
             .chunks_exact_mut(next[0] as usize)
-            .zip(&ys)
+            .zip(ys)
         {
             let upper_row = &source[top as usize * width..(top as usize + 1) * width];
             let lower_row = &source[bottom as usize * width..(bottom as usize + 1) * width];
@@ -935,3 +931,6 @@ mod texture_pixels_perf;
 #[cfg(test)]
 #[path = "indexed_pixels_perf.rs"]
 mod indexed_pixels_perf;
+
+#[cfg(test)]
+mod preparation_perf;
