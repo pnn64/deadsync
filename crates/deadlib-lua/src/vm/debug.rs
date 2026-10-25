@@ -4,11 +4,23 @@ use super::*;
 pub(super) const GET_INFO: u64 = 112;
 pub(super) const GET_UPVALUE: u64 = 113;
 pub(super) const SET_UPVALUE: u64 = 114;
+pub(super) const GET_LOCAL: u64 = 115;
+pub(super) const SET_LOCAL: u64 = 116;
 
 #[derive(Clone, Copy)]
 enum StackEntry {
     Frame(usize),
     Tail,
+}
+
+enum LocalSlot {
+    Register(usize),
+    Copy(Value),
+}
+
+enum LocalName {
+    Named(usize, usize, usize),
+    Temporary,
 }
 
 fn c_bytes(bytes: &[u8]) -> &[u8] {
@@ -70,6 +82,9 @@ impl Vm {
             .binary_search_by_key(&pc, |c| c.pc)
             .ok()
             .map(|i| &proto.debug.calls[i])?;
+        if call.kind.bytes().is_empty() {
+            return None;
+        }
         Some((c_bytes(&call.name).into(), call.kind.bytes()))
     }
     fn debug_nups(&self, id: u64) -> usize {
@@ -99,6 +114,9 @@ impl Vm {
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
+        if matches!(id, GET_LOCAL | SET_LOCAL) {
+            return self.debug_local(id, base, count);
+        }
         if id != GET_INFO {
             return self.debug_upvalue(id, base, count);
         }
@@ -252,6 +270,225 @@ impl Vm {
         if id == GET_UPVALUE {
             self.resize_registers(self.registers.len().max(base + 2));
             self.registers[base + 1] = self.cell_value(cell as usize);
+            Ok(2)
+        } else {
+            Ok(1)
+        }
+    }
+
+    fn debug_register(&self, thread: ThreadId, register: usize) -> Option<Value> {
+        if thread == self.thread {
+            self.registers.get(register).copied()
+        } else {
+            self.threads[slot_index(thread.0)]
+                .registers
+                .get(register)
+                .copied()
+        }
+    }
+    fn debug_set_register(&mut self, thread: ThreadId, register: usize, value: Value) {
+        if thread == self.thread {
+            self.registers[register] = value;
+        } else {
+            self.threads[slot_index(thread.0)].registers[register] = value;
+        }
+    }
+    fn local_slot(
+        &self,
+        thread: ThreadId,
+        index: usize,
+        n: usize,
+    ) -> Option<(LocalName, LocalSlot)> {
+        let frames = self.debug_frames(thread);
+        let frame = frames[index];
+        match frame.function {
+            FrameKind::Lua(id) => {
+                let closure = &self.functions[slot_index(id.0)];
+                let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
+                let pc = frame.pc.saturating_sub(1);
+                let mut active = [0u64; 4];
+                let mut named = 0;
+                for (local_index, local) in proto.debug.locals.iter().enumerate() {
+                    if local.start <= pc && pc < local.end {
+                        if named == n {
+                            return Some((
+                                LocalName::Named(closure.program, closure.prototype, local_index),
+                                LocalSlot::Register(frame.base + usize::from(local.register)),
+                            ));
+                        }
+                        named += 1;
+                        active[usize::from(local.register) / 64] |= 1u64 << (local.register % 64);
+                    }
+                }
+                let limit = frames
+                    .get(index + 1)
+                    .map_or(usize::from(proto.registers), |f| {
+                        f.result.saturating_sub(frame.base)
+                    })
+                    .min(usize::from(proto.registers));
+                let pc = (pc as usize).min(proto.gc_live.len() - 1);
+                if let Ok(i) = proto
+                    .debug
+                    .calls
+                    .binary_search_by_key(&(pc as u32), |c| c.pc)
+                {
+                    let range = &proto.debug.calls[i].temporaries;
+                    let register = *proto.debug.temporaries
+                        [range.start as usize..range.end as usize]
+                        .get(n.checked_sub(named)?)?;
+                    return Some((
+                        LocalName::Temporary,
+                        LocalSlot::Register(frame.base + usize::from(register)),
+                    ));
+                }
+                let live = &proto.gc_maps[proto.gc_live[pc] as u16 as usize];
+                let mut wanted = n.checked_sub(named)?;
+                for r in 0..limit {
+                    if live[r / 64] & !active[r / 64] & (1u64 << (r % 64)) != 0 {
+                        if wanted == 0 {
+                            return Some((
+                                LocalName::Temporary,
+                                LocalSlot::Register(frame.base + r),
+                            ));
+                        }
+                        wanted -= 1;
+                    }
+                }
+                None
+            }
+            FrameKind::Native(id) => {
+                let current = thread == self.thread && index + 1 == frames.len();
+                let position = match id {
+                    SET_LOCAL if current => {
+                        let arg = usize::from(matches!(
+                            self.debug_register(thread, frame.vararg_start),
+                            Some(Value::Thread(_))
+                        ));
+                        if n >= arg + 3 {
+                            return None;
+                        }
+                        frame.vararg_start + n
+                    }
+                    PCALL if !current && frame.pc == 1 => return None,
+                    XPCALL if !current && frame.pc == 1 => {
+                        if n != 0 {
+                            return None;
+                        }
+                        frame.vararg_start + 1
+                    }
+                    threads::CO_YIELD if frame.pc != 0 => return None,
+                    LOAD_READER if frame.pc != 0 => {
+                        if n >= 3 {
+                            return None;
+                        }
+                        frame.base + n
+                    }
+                    TOSTRING if !current => {
+                        if n != 0 {
+                            return None;
+                        }
+                        frame.vararg_start
+                    }
+                    PRINT if !current && frame.pc >= 2 => {
+                        if n == frame.argc() {
+                            frame.base + 1
+                        } else if n < frame.argc() {
+                            frame.vararg_start + n
+                        } else {
+                            return None;
+                        }
+                    }
+                    tables::TAB_FOREACH if !current && frame.pc == 1 => {
+                        if n == frame.argc() {
+                            frame.base + 3
+                        } else if n == frame.argc() + 1 {
+                            frame.base + 2
+                        } else if n < frame.argc() {
+                            frame.vararg_start + n
+                        } else {
+                            return None;
+                        }
+                    }
+                    _ => {
+                        if n >= frame.argc() {
+                            return None;
+                        }
+                        frame.vararg_start + n
+                    }
+                };
+                self.debug_register(thread, position)?;
+                Some((LocalName::Temporary, LocalSlot::Register(position)))
+            }
+        }
+    }
+    fn debug_local(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        let (thread, arg) = match self.argument(base, count, 0) {
+            Value::Thread(id) => (id, 1),
+            _ => (self.thread, 0),
+        };
+        let level = self
+            .number(self.argument(base, count, arg))
+            .ok_or_else(|| bad(arg, "number expected"))? as i64 as i32;
+        let entry = self
+            .debug_stack(thread, level)
+            .ok_or_else(|| bad(arg, "level out of range"))?;
+        if id == SET_LOCAL && count < arg + 3 {
+            return Err(bad(arg + 2, "value expected"));
+        }
+        let n = self
+            .number(self.argument(base, count, arg + 1))
+            .ok_or_else(|| bad(arg + 1, "number expected"))? as i64 as i32;
+        let slot = match entry {
+            StackEntry::Frame(i) => {
+                let frames = self.debug_frames(thread);
+                if id == SET_LOCAL
+                    && thread != self.thread
+                    && i + 1 == frames.len()
+                    && n == 1
+                    && matches!(frames[i].function, FrameKind::Native(threads::CO_YIELD))
+                    && frames[i].pc != 0
+                {
+                    Some((
+                        LocalName::Temporary,
+                        LocalSlot::Copy(self.argument(base, count, arg + 2)),
+                    ))
+                } else {
+                    n.checked_sub(1)
+                        .and_then(|n| usize::try_from(n).ok())
+                        .and_then(|n| self.local_slot(thread, i, n))
+                }
+            }
+            StackEntry::Tail => None,
+        };
+        let Some((name, slot)) = slot else {
+            self.registers[base] = Value::Nil;
+            return Ok(1);
+        };
+        let value = match slot {
+            LocalSlot::Register(r) => self
+                .debug_register(thread, r)
+                .expect("validated debug register"),
+            LocalSlot::Copy(v) => v,
+        };
+        if id == SET_LOCAL
+            && let LocalSlot::Register(r) = slot
+        {
+            self.debug_set_register(thread, r, self.argument(base, count, arg + 2));
+        }
+        let name = match name {
+            LocalName::Named(program, prototype, local) => {
+                let bytes = &self.programs[program].data.prototypes[prototype]
+                    .debug
+                    .locals[local]
+                    .name;
+                Value::String(self.strings.intern(c_bytes(bytes)))
+            }
+            LocalName::Temporary => self.intern(b"(*temporary)"),
+        };
+        self.resize_registers(self.registers.len().max(base + 2));
+        self.registers[base] = name;
+        if id == GET_LOCAL {
+            self.registers[base + 1] = value;
             Ok(2)
         } else {
             Ok(1)

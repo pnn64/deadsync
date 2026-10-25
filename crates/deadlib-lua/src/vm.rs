@@ -362,6 +362,8 @@ impl Vm {
             (debug::GET_INFO, b"getinfo"),
             (debug::GET_UPVALUE, b"getupvalue"),
             (debug::SET_UPVALUE, b"setupvalue"),
+            (debug::GET_LOCAL, b"getlocal"),
+            (debug::SET_LOCAL, b"setlocal"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]

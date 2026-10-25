@@ -40,8 +40,11 @@ Native callbacks and metamethods use explicit continuation frames.
 upvalue counts, caller-derived names and function identity. Stack queries include
 lost tail calls and active, suspended or failed coroutine frames. `getupvalue`
 and `setupvalue` inspect and mutate shared Lua cells, including cells owned by
-other threads. Prototype metadata and call sites are verified; name lookup runs
-only during inspection. Local inspection, tracebacks and hooks remain unfinished.
+other threads. `getlocal` and `setlocal` access parameters, scoped locals, loop
+controls and mapped temporary/argument slots, including suspended/failed threads.
+Prototype metadata, call sites and temporary ranges are verified; names resolve
+through prototype indices during inspection. Tracebacks, hooks and broader native
+scratch-stack compatibility remain unfinished.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
@@ -105,7 +108,7 @@ debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
-work limits. Broader source/register diagnostics, local inspection, tracebacks
+work limits. Broader source/register diagnostics, native scratch-stack behavior, tracebacks
 and hooks remain open. The API and bytecode
 are provisional. The CLI accepts a file, stdin or `-e source`.
 

@@ -280,7 +280,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::SET_UPVALUE)
+                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::SET_LOCAL)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,

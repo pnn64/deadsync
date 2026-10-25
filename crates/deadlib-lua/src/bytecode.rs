@@ -111,6 +111,7 @@ pub(crate) struct DebugLocal {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum NameKind {
+    Unknown,
     Local,
     Global,
     Upvalue,
@@ -120,6 +121,7 @@ pub(crate) enum NameKind {
 impl NameKind {
     pub fn bytes(self) -> &'static [u8] {
         match self {
+            Self::Unknown => b"",
             Self::Local => b"local",
             Self::Global => b"global",
             Self::Upvalue => b"upvalue",
@@ -134,6 +136,7 @@ pub(crate) struct DebugCall {
     pub pc: u32,
     pub name: Box<[u8]>,
     pub kind: NameKind,
+    pub temporaries: std::ops::Range<u32>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -143,6 +146,7 @@ pub(crate) struct DebugInfo {
     pub locals: Box<[DebugLocal]>,
     pub calls: Box<[DebugCall]>,
     pub active_lines: Box<[u32]>,
+    pub temporaries: Box<[u8]>,
 }
 impl DebugInfo {
     pub fn heap_bytes(&self) -> usize {
@@ -153,6 +157,7 @@ impl DebugInfo {
             + self.locals.iter().map(|l| l.name.len()).sum::<usize>()
             + std::mem::size_of_val(self.calls.as_ref())
             + self.calls.iter().map(|c| c.name.len()).sum::<usize>()
+            + self.temporaries.len()
     }
 }
 
@@ -268,9 +273,27 @@ impl Prototype {
             })
             || self.debug.calls.windows(2).any(|c| c[0].pc >= c[1].pc)
             || self.debug.calls.iter().any(|c| {
-                self.code
-                    .get(c.pc as usize)
-                    .is_none_or(|i| !matches!(i.op, Op::Call | Op::TailCall))
+                let Some(i) = self.code.get(c.pc as usize) else {
+                    return true;
+                };
+                !matches!(i.op, Op::Call | Op::TailCall)
+                    || c.temporaries.start > c.temporaries.end
+                    || c.temporaries.end as usize > self.debug.temporaries.len()
+                    || self.debug.temporaries
+                        [c.temporaries.start as usize..c.temporaries.end as usize]
+                        .windows(2)
+                        .any(|r| r[0] >= r[1])
+                    || self.debug.temporaries
+                        [c.temporaries.start as usize..c.temporaries.end as usize]
+                        .iter()
+                        .any(|&r| {
+                            r >= i.a
+                                || u16::from(r) >= self.registers
+                                || self.gc_maps[self.gc_live[c.pc as usize] as u16 as usize]
+                                    [usize::from(r) / 64]
+                                    & (1u64 << (r % 64))
+                                    == 0
+                        })
             })
         {
             return Err(fail(0, "invalid program layout"));
@@ -461,7 +484,7 @@ mod tests {
     fn verifier_rejects_corrupt_debug_ranges_names_and_call_sites() {
         let good =
             crate::compile(b"local x=1;local function f()return x end;f();return f()").unwrap();
-        for corrupt in 0..8 {
+        for corrupt in 0..10 {
             let mut p = good.clone();
             let data = Arc::make_mut(&mut p.data);
             let proto = &mut data.prototypes[data.entry as usize];
@@ -473,13 +496,19 @@ mod tests {
                 4 => proto.debug.calls[0].pc = 0,
                 5 => proto.debug.calls[1].pc = proto.debug.calls[0].pc,
                 6 => proto.debug.active_lines = Box::new([3, 2]),
-                _ => {
+                7 => {
                     data.prototypes
                         .iter_mut()
                         .find(|p| !p.upvalues.is_empty())
                         .unwrap()
                         .debug
                         .upvalues = Box::new([])
+                }
+                8 => proto.debug.calls[0].temporaries = 0..u32::MAX,
+                _ => {
+                    proto.debug.temporaries =
+                        Box::new([proto.code[proto.debug.calls[0].pc as usize].a - 1]);
+                    proto.debug.calls[0].temporaries = 0..1;
                 }
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);

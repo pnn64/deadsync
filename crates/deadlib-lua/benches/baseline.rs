@@ -240,13 +240,19 @@ fn main() {
             3000.0,
             10,
         ),
+        (
+            "debug_locals",
+            "local function f(n)local _,v=debug.getlocal(1,1);return v end;local sum=0;for i=1,1000 do sum=sum+f(i)end;return sum",
+            500500.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
         let program = compile(source).unwrap();
         let mut vm = Vm::new();
         assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
-        let reference = if name == "debug_info" {
-            // SAFETY: only this fixed developer workload needs the debug library.
+        let reference = if matches!(name, "debug_info" | "debug_locals") {
+            // SAFETY: only these fixed developer workloads need the debug library.
             unsafe {
                 lua_reference::Lua::unsafe_new_with(
                     lua_reference::StdLib::ALL_SAFE | lua_reference::StdLib::DEBUG,
@@ -348,8 +354,9 @@ fn main() {
         );
     }
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
-    println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_info only");
+    println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_info/debug_locals only");
     // Source bytes and initial correctness checks remain outside compile timing.
+    let mut frontends = Vec::with_capacity(8);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -363,57 +370,67 @@ fn main() {
             } else {
                 (format!("--[=[{text}]=]\nreturn 7"), 7.0)
             };
-            let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
-            let mut vm = Vm::new();
-            assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
-            let reference = lua_reference::Lua::new();
-            let function = reference
-                .load(source.as_bytes())
-                .set_name("=(frontend)")
-                .into_function()
-                .unwrap();
-            assert_eq!(function.call::<f64>(()).unwrap(), expected);
-            for sample in 0..5 {
-                for engine in if sample % 2 == 0 {
-                    ["rust", "lua51"]
+            frontends.push((name, source, expected, repeats));
+        }
+    }
+    for (scopes, repeats) in [(1000, 5), (10000, 2)] {
+        let source = format!(
+            "local function consume(x,y)return x end;\n{}return 7",
+            "do local x=1;consume(x,consume(x,0))end;\n".repeat(scopes)
+        );
+        frontends.push((format!("frontend_scopes_{scopes}"), source, 7.0, repeats));
+    }
+    for (name, source, expected, repeats) in frontends {
+        let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
+        let mut vm = Vm::new();
+        assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
+        let reference = lua_reference::Lua::new();
+        let function = reference
+            .load(source.as_bytes())
+            .set_name("=(frontend)")
+            .into_function()
+            .unwrap();
+        assert_eq!(function.call::<f64>(()).unwrap(), expected);
+        for sample in 0..5 {
+            for engine in if sample % 2 == 0 {
+                ["rust", "lua51"]
+            } else {
+                ["lua51", "rust"]
+            } {
+                if engine == "rust" {
+                    measure(
+                        || {
+                            black_box(
+                                deadlib_lua::compile_named(
+                                    black_box(source.as_bytes()),
+                                    b"=(frontend)",
+                                )
+                                .unwrap(),
+                            );
+                        },
+                        repeats,
+                        "compile_drop",
+                        engine,
+                        &name,
+                        sample,
+                    );
                 } else {
-                    ["lua51", "rust"]
-                } {
-                    if engine == "rust" {
-                        measure(
-                            || {
-                                black_box(
-                                    deadlib_lua::compile_named(
-                                        black_box(source.as_bytes()),
-                                        b"=(frontend)",
-                                    )
+                    measure(
+                        || {
+                            black_box(
+                                reference
+                                    .load(black_box(source.as_bytes()))
+                                    .set_name("=(frontend)")
+                                    .into_function()
                                     .unwrap(),
-                                );
-                            },
-                            repeats,
-                            "compile_drop",
-                            engine,
-                            &name,
-                            sample,
-                        );
-                    } else {
-                        measure(
-                            || {
-                                black_box(
-                                    reference
-                                        .load(black_box(source.as_bytes()))
-                                        .set_name("=(frontend)")
-                                        .into_function()
-                                        .unwrap(),
-                                );
-                            },
-                            repeats,
-                            "compile_drop",
-                            engine,
-                            &name,
-                            sample,
-                        );
-                    }
+                            );
+                        },
+                        repeats,
+                        "compile_drop",
+                        engine,
+                        &name,
+                        sample,
+                    );
                 }
             }
         }

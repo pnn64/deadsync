@@ -19,10 +19,10 @@ performance JSON keeps its recorded measurement provenance.
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
 | Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, register compiler, verifier, literal folding, VM and CLI exist. Fixed-source compilation and protected reader-based text loading share the frontend without replaying prefixes. Complete reference-suite coverage remains open. |
-| Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Verified prototype metadata supports `debug.getinfo`, caller names and shared upvalue inspection/mutation. Full diagnostics/debug behavior and broader numeric/resource edge cases remain open. |
+| Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Full diagnostics/debug behavior and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
-| Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. `getinfo` inspects active/suspended/failed stacks and lost tail calls; upvalue mutation reaches other thread stacks. Local inspection, tracebacks/hooks, full diagnostics and broader resource tests remain open. |
+| Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. `getinfo` inspects active/suspended/failed stacks and lost tail calls; local/upvalue mutation reaches other thread stacks and shared cells. Tracebacks/hooks, full diagnostics and broader resource tests remain open. |
 | Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Complete base, I/O, OS, package/require, debug, binary dumps and broader numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
 | Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 93 differential/adversarial integration tests, twelve parser/scanner/arena/verifier tests and
+crate, 102 differential/adversarial integration tests, twelve parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-debug.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-debug-locals.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38–13.51 times the reference duration. Subsequent
@@ -97,6 +97,15 @@ lost tail calls and retains debug results through collection. Local inspection,
 tracebacks, hooks and broader source/register diagnostics remain open. The
 [debug measurements](performance/2026-10-25-rust-lua-debug.md) add inspection to
 the 23-workload runtime harness and account for prototype metadata storage.
+
+The [local inspection validation](testing/2026-10-25-rust-lua-debug-locals.md) adds
+`getlocal`/`setlocal`, compact temporary maps, native argument slots, shared-cell
+mutation and GC roots. Its 512 generated assignment combinations also cover
+callback-driven local changes and address conflicts. The
+[measurements](performance/2026-10-25-rust-lua-debug-locals.md) expand to 24 runtime
+workloads and eight compilation cases, including 1,000/10,000 short scopes with
+nested calls. Tracebacks, hooks and private native/parser scratch slots remain
+outside the current completed work.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

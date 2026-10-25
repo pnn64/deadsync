@@ -39,6 +39,8 @@ struct Function<'a> {
     gc_maps: Vec<[u64; 4]>,
     gc_index: HashMap<[u64; 4], u16>,
     live: [u64; 4],
+    debug_hidden: [u64; 4],
+    debug_named: [u64; 4],
     constants: Vec<Constant>,
     locals: Vec<Local<'a>>,
     upvalues: Vec<(&'a [u8], Upvalue)>,
@@ -51,6 +53,7 @@ struct Function<'a> {
     defined: [u32; 2],
     debug_locals: Vec<DebugLocal>,
     debug_calls: Vec<DebugCall>,
+    debug_temporaries: Vec<u8>,
     debug_lines: Vec<u32>,
 }
 
@@ -117,6 +120,7 @@ impl<'a> Compiler<'a> {
                 locals: f.debug_locals.into_boxed_slice(),
                 calls: f.debug_calls.into_boxed_slice(),
                 active_lines: f.debug_lines.into_boxed_slice(),
+                temporaries: f.debug_temporaries.into_boxed_slice(),
             },
         });
         id
@@ -221,11 +225,14 @@ impl<'a> Compiler<'a> {
         if word < 4 {
             self.function.live[word] &= (1u64 << bit) - 1;
             self.function.live[word + 1..].fill(0);
+            self.function.debug_hidden[word] &= (1u64 << bit) - 1;
+            self.function.debug_hidden[word + 1..].fill(0);
         }
     }
     fn live_register(&mut self, register: u16) {
         if register < 256 {
             self.function.live[usize::from(register) / 64] |= 1u64 << (register % 64);
+            self.function.debug_hidden[usize::from(register) / 64] &= !(1u64 << (register % 64));
         }
     }
     fn live_map(&mut self) -> Result<u16, Error> {
@@ -338,6 +345,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
     fn debug_local(&mut self, name: &[u8], reg: u8) -> usize {
+        self.function.debug_named[usize::from(reg) / 64] |= 1u64 << (reg % 64);
         let index = self.function.debug_locals.len();
         self.function.debug_locals.push(DebugLocal {
             name: name.into(),
@@ -351,6 +359,7 @@ impl<'a> Compiler<'a> {
         let end = self.function.code.len() as u32;
         for local in &self.function.locals[retained..] {
             self.function.debug_locals[local.debug].end = end;
+            self.function.debug_named[usize::from(local.reg) / 64] &= !(1u64 << (local.reg % 64));
         }
         self.function.locals.truncate(retained);
     }
@@ -422,9 +431,9 @@ impl<'a> Compiler<'a> {
                 return Ok(());
             }
             Stmt::Assign(targets, values) | Stmt::FunctionDefinition(targets, values) => {
-                let mut locations = Vec::with_capacity(targets.len());
+                let mut locations: Vec<Target> = Vec::with_capacity(targets.len());
                 for &id in targets.iter() {
-                    locations.push(match &self.ast.exprs[id].0 {
+                    let target = match &self.ast.exprs[id].0 {
                         Expr::Name(name) => {
                             if let Some(reg) = self.local(name) {
                                 Target::Local(reg)
@@ -436,12 +445,24 @@ impl<'a> Compiler<'a> {
                         }
                         Expr::Index(table, key) => {
                             let t = self.alloc(2)?;
-                            self.operand(*table, t)?;
-                            self.operand(*key, t + 1)?;
-                            Target::Index(t, t + 1)
+                            let table = self.operand(*table, t)?;
+                            let key = self.operand(*key, t + 1)?;
+                            Target::Index(table, key)
                         }
                         _ => return Err(self.error(ErrorKind::Syntax, "invalid assignment target")),
-                    });
+                    };
+                    if let Target::Local(reg) = target
+                        && locations.iter().any(|t| matches!(t, Target::Index(table, key) if *table == reg || *key == reg)) {
+                            let saved = self.alloc(1)?;
+                            self.emit(Op::Move, saved, u16::from(reg), 0)?;
+                            for target in &mut locations {
+                                if let Target::Index(table, key) = target {
+                                    if *table == reg { *table = saved; }
+                                    if *key == reg { *key = saved; }
+                                }
+                            }
+                    }
+                    locations.push(target);
                 }
                 let base = self.values(values, targets.len())?;
                 if matches!(stmt, Stmt::FunctionDefinition(..)) {
@@ -591,6 +612,8 @@ impl<'a> Compiler<'a> {
                 let end = self.function.code.len() as u32;
                 for local in &mut self.function.debug_locals[controls..controls + 3] {
                     local.end = end;
+                    self.function.debug_named[usize::from(local.register) / 64] &=
+                        !(1u64 << (local.register % 64));
                 }
                 self.finish_loop();
             }
@@ -652,10 +675,12 @@ impl<'a> Compiler<'a> {
                     pc: self.function.code.len() as u32,
                     name: b"(for generator)".as_slice().into(),
                     kind: NameKind::Local,
+                    temporaries: 0..0,
                 });
                 self.emit(Op::Call, results, 2, names.len() as u32)?;
                 self.load(test, Constant::Nil)?;
                 self.emit(Op::Eq, test, u16::from(results), u32::from(test))?;
+                self.function.debug_hidden[usize::from(test) / 64] |= 1u64 << (test % 64);
                 let done = self.emit(Op::JumpTrue, test, 0, 0)?;
                 self.emit(Op::Move, base + 2, u16::from(results), 0)?;
                 let locals = self.function.locals.len();
@@ -671,6 +696,8 @@ impl<'a> Compiler<'a> {
                 let end = self.function.code.len() as u32;
                 for local in &mut self.function.debug_locals[controls..controls + 3] {
                     local.end = end;
+                    self.function.debug_named[usize::from(local.register) / 64] &=
+                        !(1u64 << (local.register % 64));
                 }
                 self.finish_loop();
             }
@@ -732,6 +759,7 @@ impl<'a> Compiler<'a> {
             self.expr(function, base + 1)?;
             let key = self.alloc(1)?;
             self.load(key, Constant::String(method.into()))?;
+            self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
             self.emit(Op::GetTable, base, u16::from(base + 1), u32::from(key))?;
         } else {
             self.expr(function, base)?;
@@ -750,12 +778,12 @@ impl<'a> Compiler<'a> {
         }
         self.line = call_line;
         if wanted == TAIL {
-            self.record_call(function, method);
+            self.record_call(function, method, base)?;
             self.emit(Op::TailCall, base, argc, 0)?;
             // Lua tail calls replace the frame. A resumable native call returns here.
             self.emit(Op::Return, base, 0, OPEN)?;
         } else if wanted == OPEN {
-            self.record_call(function, method);
+            self.record_call(function, method, base)?;
             // Open result ranges are relocated by Call using b/c-independent metadata in Move.
             self.emit(Op::Call, base, argc, OPEN)?;
             self.emit(Op::Move, dst, u16::from(base), OPEN)?;
@@ -764,7 +792,7 @@ impl<'a> Compiler<'a> {
             if needed > self.function.next {
                 self.alloc(needed - self.function.next)?;
             }
-            self.record_call(function, method);
+            self.record_call(function, method, base)?;
             self.emit(Op::Call, base, argc, wanted)?;
             for i in 0..wanted {
                 self.emit(
@@ -779,7 +807,12 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn record_call(&mut self, mut function: ExprId, method: Option<&[u8]>) {
+    fn record_call(
+        &mut self,
+        mut function: ExprId,
+        method: Option<&[u8]>,
+        base: u8,
+    ) -> Result<(), Error> {
         let (name, kind) = if let Some(name) = method {
             (name, NameKind::Method)
         } else {
@@ -818,14 +851,30 @@ impl<'a> Compiler<'a> {
                     };
                     (name, NameKind::Field)
                 }
-                _ => return,
+                _ => (b"".as_slice(), NameKind::Unknown),
             }
         };
+        let start = u32::try_from(self.function.debug_temporaries.len())
+            .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
+        for r in 0..base {
+            if self.function.live[usize::from(r) / 64]
+                & !self.function.debug_hidden[usize::from(r) / 64]
+                & !self.function.debug_named[usize::from(r) / 64]
+                & (1u64 << (r % 64))
+                != 0
+            {
+                self.function.debug_temporaries.push(r);
+            }
+        }
+        let end = u32::try_from(self.function.debug_temporaries.len())
+            .map_err(|_| self.error(ErrorKind::Limit, "too many debug temporaries"))?;
         self.function.debug_calls.push(DebugCall {
             pc: self.function.code.len() as u32,
             name: name.into(),
             kind,
+            temporaries: start..end,
         });
+        Ok(())
     }
 
     fn expr(&mut self, id: ExprId, dst: u8) -> Result<(), Error> {
@@ -915,21 +964,24 @@ impl<'a> Compiler<'a> {
                         .last_mut()
                         .expect("condition emits a branch") = 0;
                 }
+                self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
                 self.expr(*right, dst)?;
                 self.discharge_line(*right, self.ast.exprs[id].1.discharge, LineUse::Copy);
                 self.patch(done);
             }
             Expr::Binary(op, left, right, op_line) => {
                 let regs = self.alloc(2)?;
-                if *op == Kind::Concat {
+                let (left_reg, right_reg) = if *op == Kind::Concat {
                     self.expr(*left, regs)?;
                     self.discharge_line(*left, *op_line, LineUse::Copy);
                     self.expr(*right, regs + 1)?;
+                    (regs, regs + 1)
                 } else {
-                    self.operand(*left, regs)?;
+                    let left_reg = self.operand(*left, regs)?;
                     self.discharge_line(*left, *op_line, LineUse::Operand);
-                    self.operand(*right, regs + 1)?;
-                }
+                    let right_reg = self.operand(*right, regs + 1)?;
+                    (left_reg, right_reg)
+                };
                 self.line = self.ast.exprs[id].1.end;
                 let op = match op {
                     Kind::Plus => Op::Add,
@@ -947,7 +999,7 @@ impl<'a> Compiler<'a> {
                     Kind::Ge => Op::Ge,
                     _ => unreachable!("parser produced invalid binary operator"),
                 };
-                self.emit(op, dst, u16::from(regs), u32::from(regs + 1))?;
+                self.emit(op, dst, u16::from(left_reg), u32::from(right_reg))?;
                 if matches!(op, Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge) {
                     self.function
                         .debug_lines
@@ -956,10 +1008,10 @@ impl<'a> Compiler<'a> {
             }
             Expr::Index(table, key) => {
                 let regs = self.alloc(2)?;
-                self.operand(*table, regs)?;
-                self.operand(*key, regs + 1)?;
+                let table = self.operand(*table, regs)?;
+                let key = self.operand(*key, regs + 1)?;
                 self.line = self.ast.exprs[id].1.discharge;
-                self.emit(Op::GetTable, dst, u16::from(regs), u32::from(regs + 1))?;
+                self.emit(Op::GetTable, dst, u16::from(table), u32::from(key))?;
             }
             Expr::Table(fields, load_line) => {
                 let table = self.alloc(1)?;
@@ -970,9 +1022,9 @@ impl<'a> Compiler<'a> {
                 for (i, (key, value)) in fields.iter().enumerate() {
                     if let Some(key) = key {
                         let regs = self.alloc(2)?;
-                        self.operand(*key, regs)?;
-                        self.operand(*value, regs + 1)?;
-                        self.emit(Op::SetTable, table, u16::from(regs), u32::from(regs + 1))?;
+                        let key = self.operand(*key, regs)?;
+                        let value = self.operand(*value, regs + 1)?;
+                        self.emit(Op::SetTable, table, u16::from(key), u32::from(value))?;
                         self.reset(u16::from(regs));
                     } else {
                         let reg = self.alloc(1)?;
@@ -1022,27 +1074,34 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
 
-    fn operand(&mut self, mut id: ExprId, dst: u8) -> Result<(), Error> {
-        self.expr(id, dst)?;
-        // Lua 5.1 can use a local register or an RK constant directly. Our
-        // explicit operand copies are not distinct source-level instructions.
-        while let Expr::Paren(inner) = self.ast.exprs[id].0 {
-            id = inner;
+    fn operand(&mut self, id: ExprId, dst: u8) -> Result<u8, Error> {
+        let mut reference = id;
+        while let Expr::Paren(inner) = self.ast.exprs[reference].0 {
+            reference = inner;
         }
+        if let Expr::Name(name) = &self.ast.exprs[reference].0
+            && let Some(reg) = self.local(name)
+        {
+            self.line = self.ast.exprs[id].1.discharge;
+            return Ok(reg);
+        }
+        self.expr(id, dst)?;
+        // RK constants do not occupy a visible temporary in the 5.1 stack.
+        let id = reference;
         if self.folded[id].is_some()
             || matches!(
                 &self.ast.exprs[id].0,
                 Expr::Nil | Expr::Boolean(_) | Expr::String(_)
             )
-            || matches!(&self.ast.exprs[id].0, Expr::Name(n) if self.local(n).is_some())
         {
+            self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
             *self
                 .function
                 .debug_lines
                 .last_mut()
                 .expect("operand emits a value") = 0;
         }
-        Ok(())
+        Ok(dst)
     }
 
     fn discharge_line(&mut self, mut id: ExprId, line: u32, usage: LineUse) {
