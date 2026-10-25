@@ -3,6 +3,17 @@ use deadlib_render_core::Yuv420Upload;
 use image::RgbaImage;
 use std::error::Error;
 
+// Preserve division's rounding exactly; multiplying by 1/255 can differ by one ULP.
+const NORMALIZED_U8: [f32; 256] = {
+    let mut values = [0.0; 256];
+    let mut i = 0;
+    while i < values.len() {
+        values[i] = i as f32 / 255.0;
+        i += 1;
+    }
+    values
+};
+
 pub(super) fn yuv420_to_rgba(upload: Yuv420Upload<'_>) -> Result<RgbaImage, Box<dyn Error>> {
     if !upload.is_valid() {
         return Err(std::io::Error::other("invalid YUV420 planes").into());
@@ -33,7 +44,7 @@ pub(super) fn update_yuv420_image(
 
 #[inline]
 fn rgba_pixel(y: u8, u: f32, v: f32, levels: [f32; 4], coeffs: [f32; 4]) -> [u8; 4] {
-    let y = (f32::from(y) / 255.0).mul_add(levels[0], levels[1]);
+    let y = NORMALIZED_U8[y as usize].mul_add(levels[0], levels[1]);
     [
         (coeffs[0].mul_add(v, y) * 255.0).round() as u8,
         (coeffs[2].mul_add(v, coeffs[1].mul_add(u, y)) * 255.0).round() as u8,
@@ -52,10 +63,10 @@ fn write_yuv420(upload: Yuv420Upload<'_>, rgba: &mut [u8]) {
         let chroma_start = row_pair * (width / 2);
         for col_pair in 0..width / 2 {
             let chroma = chroma_start + col_pair;
-            let u =
-                (f32::from(upload.u[chroma]) / 255.0).mul_add(upload.levels[2], upload.levels[3]);
-            let v =
-                (f32::from(upload.v[chroma]) / 255.0).mul_add(upload.levels[2], upload.levels[3]);
+            let u = NORMALIZED_U8[upload.u[chroma] as usize]
+                .mul_add(upload.levels[2], upload.levels[3]);
+            let v = NORMALIZED_U8[upload.v[chroma] as usize]
+                .mul_add(upload.levels[2], upload.levels[3]);
             let col = col_pair * 2;
             for (y_row, out) in [(y_start, &mut *top), (y_start + width, &mut *bottom)] {
                 let pixel = col * 4;

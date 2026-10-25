@@ -266,6 +266,13 @@ fn mix_sfx_panned_stereo(src: &[i16], dst: &mut [f32], gain: f32, pan: SfxPan) {
     let channel = usize::from(pan == SfxPan::Right);
     // RageSoundUtil::Pan at -1/+1 routes the source's right channel entirely
     // to the owning side. The prepared mine OGG is mono expanded to stereo.
+    if gain == 1.0 {
+        // Normalized i16 samples are finite; multiplying by one is exact.
+        for (source, target) in src.as_chunks::<2>().0.iter().zip(dst.as_chunks_mut::<2>().0) {
+            target[channel] += i16_to_f32(source[1]);
+        }
+        return;
+    }
     for (source, target) in src.chunks_exact(2).zip(dst.chunks_exact_mut(2)) {
         target[channel] = i16_to_f32(source[1]).mul_add(gain, target[channel]);
     }
