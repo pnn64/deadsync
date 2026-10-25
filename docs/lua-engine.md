@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 282 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 285 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-register-budget.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-index-targets.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -284,6 +284,18 @@ The [measurements](performance/2026-10-25-rust-lua-register-budget.md) cover
 accounting costs. Full physical allocation parity remains open: 150 literal-key
 indexed assignment targets still exhaust Rust storage in a reference-valid
 program. Broader resource/debug/scratch behavior remains unfinished.
+
+The [indexed-target validation](testing/2026-10-25-rust-lua-index-targets.md)
+adds three groups with 155 paired programs. Local table/key references reserve
+no unused slots; compact literal keys retain pool insertion order and materialize
+in one scratch slot immediately before each reverse-ordered store. Tests cover
+up to 200 targets, snapshots/conflicts, pending objects during GC, coroutine
+returns, mixed generated targets, large pools and multiline error locations.
+The original 150-target probe now executes. A prefixed variant whose backend
+constant pool no longer has compact keys still exhausts physical storage, so
+complete allocation parity remains open. The
+[measurements](performance/2026-10-25-rust-lua-index-targets.md) cover
+38 runtime and nineteen frontend workloads.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

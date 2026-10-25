@@ -107,6 +107,16 @@ fn main() {
         "state",
         0,
     );
+    let indexed_targets = (1..=16)
+        .map(|i| format!("t[{i}]"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let indexed_values = (0..16)
+        .map(|i| format!("n+{i}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let indexed_kernel =
+        format!("local t={{}};for n=1,1000 do {indexed_targets}={indexed_values} end;return t[16]");
     for (name, source, expected, repeats) in [
         (
             "numeric_for",
@@ -132,6 +142,7 @@ fn main() {
             500500.0,
             30,
         ),
+        ("indexed_assignment", indexed_kernel.as_str(), 1015.0, 30),
         (
             "array_table",
             "local t={}; for i=1,10000 do t[i]=i end; local s=0; for i=1,10000 do s=s+t[i] end; return s",
@@ -500,7 +511,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(18);
+    let mut frontends = Vec::with_capacity(19);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -580,6 +591,16 @@ fn main() {
         .join(",");
     let source = format!("local function f(...)return ... end;local {names}=f({args});return a199");
     frontends.push(("frontend_results_199".into(), source, 199.0, 30));
+    let targets = (1..=150)
+        .map(|i| format!("t[{i}]"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let values = (1..=150)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!("local t={{}};{targets}={values};return t[150]");
+    frontends.push(("frontend_indexed_targets_150".into(), source, 150.0, 30));
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
         println!(

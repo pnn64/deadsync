@@ -76,6 +76,17 @@ pub fn call_chain(count: usize, kind: u8) -> String {
         )
     }
 }
+pub fn indexed_assignment(count: usize) -> String {
+    let targets = (1..=count)
+        .map(|i| format!("t[{i}]"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let values = (1..=count)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("local t={{}};{targets}={values};return t[1],t[{count}]")
+}
 pub fn generated() -> Vec<String> {
     fn expr(seed: &mut u32, depth: u8) -> String {
         *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
@@ -410,5 +421,72 @@ mod tests {
                 "local function f(...)local {names}=...;collectgarbage('collect');return a1,a199 end;return f({args})"
             ),
         ]);
+    }
+    #[test]
+    fn many_literal_indexed_targets_use_bounded_storage() {
+        check_bound(
+            [100, 150, 190, 200]
+                .into_iter()
+                .map(indexed_assignment)
+                .collect(),
+            Some(203),
+        );
+    }
+    #[test]
+    fn deferred_index_keys_preserve_pool_order_conflicts_and_store_order() {
+        let mut sources = [
+            "local t={};local old=t;local function f()t={};return 7 end;t[1]=f();return old[1],t[1]",
+            "t={};local old=t;local function f()t={};return 7 end;t[1]=f();return old[1],t[1]",
+            "local t={};local old=t;local function f()local function g()t={};return 7 end;t[1]=g()end;f();return old[1],t[1]",
+            "local t={};local old=t;t[1],t=7,{};return old[1],t[1]",
+            "local t={};local old=t;t,t[1]={},7;return old[1],t[1]",
+            "local t={};local old=t;t[t],t=7,{};return old[old],t[old]",
+            "local t={};local k=1;t[k],k=7,2;return t[1],t[2],k",
+            "local t={};local old=t;local k=t;t[k],k,t=7,1,{};return old[old],k,t[old]",
+            "local t={};t[-0.0],t[1]=0.0,1;return 1/t[0],t[1]",
+            "local log={};local t=setmetatable({},{__newindex=function(_,k,v)log[#log+1]=k..':'..v end});t.a,t.b,t.a=1,2,3;return table.concat(log,',')",
+            "local n=0;local function f()n=n+1;return 7 end;local t={};local ok,e=pcall(function()t[nil]=f()end);return n,ok,e",
+            "local function f(...)\nlocal t=nil\nt[\n1\n]=\n...\nend;return pcall(f,7)",
+            "local function f(...)\nlocal t=nil;local i=1\nt[\ni\n]=\n...\nend;return pcall(f,7)",
+            "local function f()\nlocal t=nil\nt[1]=math.abs(\n-1\n)\nend;return pcall(f)",
+            "local log={};local function key(n)log[#log+1]='k'..n;return n end;local function value(n)log[#log+1]='v'..n;return n end;local t={};t[key(1)],t[key(2)]=value(1),value(2);return t[1],t[2],table.concat(log,',')",
+        ].into_iter().map(str::to_owned).collect::<Vec<_>>();
+        for count in [254, 255, 256, 300] {
+            let prefix = format!(
+                "local pad={{{}}};",
+                (1..=count)
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+            sources.push(format!("{prefix}local t={{}};t[false],t[true],t['marker'],t[-0.0]=1,2,3,0.0;return #pad,t[false],t[true],t.marker,1/t[0]"));
+        }
+        for case in 0..128 {
+            let count = 24 + case % 24;
+            let mut targets = (1..=count)
+                .map(|i| match (i + case) % 4 {
+                    0 => format!("t[{i}]"),
+                    1 => format!("t.field{i}"),
+                    2 => "t[i]".into(),
+                    _ => format!("t[key({i})]"),
+                })
+                .collect::<Vec<_>>();
+            targets.extend(["i".into(), "t".into()]);
+            let mut values = (1..=count)
+                .map(|i| format!("value({i})"))
+                .collect::<Vec<_>>();
+            values.extend(["7".into(), "{}".into()]);
+            sources.push(format!("local log={{}};local t={{}};local old=t;local i=1;local function key(n)log[#log+1]='k'..n..':'..i;return n end;local function value(n)log[#log+1]='v'..n..':'..i;i=i+1;return n end;{}={};local sum,count=0,0;for _,v in pairs(old)do sum=sum+v;count=count+1 end;return sum,count,i,old~=t,table.concat(log,',')",targets.join(","),values.join(",")));
+        }
+        check(sources);
+    }
+    #[test]
+    fn indexed_target_callbacks_keep_pending_objects_alive() {
+        check([
+            "local weak=setmetatable({},{__mode='v'});local function item(n)local t={n};weak[n]=t;return t end;local seen=0;local obj=setmetatable({},{__newindex=function(t,k,v)collectgarbage('collect');assert(weak[1]~=nil and weak[2]~=nil);rawset(t,k,v);seen=seen+1 end});obj.a,obj.b=item(1),item(2);collectgarbage();return seen,obj.a==weak[1],obj.b==weak[2]",
+            "local weak=setmetatable({},{__mode='v'});local target={};weak[1]=target;local function lhs()local t=target;target=nil;return t end;local function rhs()collectgarbage('collect');assert(weak[1]~=nil);return 7 end;lhs().a=rhs();return weak[1].a",
+            "local weak=setmetatable({},{__mode='v'});local function key()local k={};weak[1]=k;return k end;local function rhs()collectgarbage('collect');assert(weak[1]~=nil);return 7 end;local t={};t[key()]=rhs();return t[weak[1]]",
+            "local obj={};local co=coroutine.create(function()obj.a,obj.b=coroutine.yield(1)end);local ok,n=coroutine.resume(co);collectgarbage();local ok2=coroutine.resume(co,7,9);return ok,n,ok2,obj.a,obj.b",
+        ].into_iter().map(str::to_owned).collect());
     }
 }

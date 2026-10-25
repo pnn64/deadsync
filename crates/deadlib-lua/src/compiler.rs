@@ -26,7 +26,11 @@ enum Target {
     Local(u8),
     Upvalue(u16),
     Global(u32),
-    Index(u8, u8),
+    Index(u8, TargetKey),
+}
+enum TargetKey {
+    Register(u8),
+    Constant(u32),
 }
 
 #[derive(Clone, Copy)]

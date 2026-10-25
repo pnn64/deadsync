@@ -31,7 +31,7 @@ pub(super) enum Task<'a> {
     BindLocal(StmtId),
     LocalFunctionEnd,
     AssignNext(StmtId, usize, Vec<Target>),
-    AssignKey(StmtId, usize, Vec<Target>, u8),
+    AssignKey(StmtId, usize, Vec<Target>),
     AssignIndex(StmtId, usize, Vec<Target>, u8),
     AssignEnd(StmtId, Vec<Target>),
     ReturnNext(StmtId, u8, usize, u32),
@@ -155,23 +155,22 @@ impl<'a> Compiler<'a> {
                     self.function.debug_locals[index].start = self.function.code.len() as u32;
                 }
                 Task::AssignNext(id, index, locations) => self.assign_next(id, index, locations)?,
-                Task::AssignKey(id, index, locations, regs) => {
+                Task::AssignKey(id, index, locations) => {
                     let table = self.result;
-                    let (targets, _) = self.assignment(id);
-                    let Expr::Index(_, key) = self.ast.exprs[targets[index]].0 else {
-                        unreachable!()
-                    };
-                    self.tasks
-                        .push(Task::AssignIndex(id, index, locations, table));
-                    self.tasks.push(Task::Operand(key, regs + 1));
+                    self.assign_key(id, index, locations, table)?;
                 }
                 Task::AssignIndex(id, index, mut locations, table) => {
-                    locations.push(Target::Index(table, self.result));
+                    locations.push(Target::Index(table, TargetKey::Register(self.result)));
                     self.tasks.push(Task::AssignNext(id, index + 1, locations));
                 }
                 Task::AssignEnd(id, locations) => {
                     if matches!(self.ast.stmts[id].0, Stmt::FunctionDefinition(..)) {
                         self.line = self.ast.stmts[id].1;
+                    } else {
+                        let (_, values) = self.assignment(id);
+                        self.line = self.ast.exprs[*values.last().expect("assignment value")]
+                            .1
+                            .discharge;
                     }
                     let base = self.result;
                     for (i, target) in locations.iter().enumerate().rev() {
@@ -187,7 +186,20 @@ impl<'a> Compiler<'a> {
                                 self.emit(Op::SetGlobal, src, 0, *k)?;
                             }
                             Target::Index(table, key) => {
-                                self.emit(Op::SetTable, *table, u16::from(*key), u32::from(src))?;
+                                let saved = self.function.next;
+                                let reg = match key {
+                                    TargetKey::Register(reg) => *reg,
+                                    TargetKey::Constant(constant) => {
+                                        let reg = self.alloc(1)?;
+                                        self.emit(Op::Load, reg, 0, *constant)?;
+                                        self.function.debug_hidden[usize::from(reg) / 64] |=
+                                            1u64 << (reg % 64);
+                                        self.debug_line(0);
+                                        reg
+                                    }
+                                };
+                                self.emit(Op::SetTable, *table, u16::from(reg), u32::from(src))?;
+                                self.reset(saved);
                             }
                         }
                     }

@@ -108,6 +108,7 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
     pub(super) fn expr_results(&mut self, id: ExprId, dst: u8, wanted: u32) -> Result<(), Error> {
+        self.line = self.ast.exprs[id].1.discharge;
         match &self.ast.exprs[id].0 {
             Expr::Call(..) | Expr::Method(..) => self.tasks.push(Task::Call(id, dst, wanted)),
             Expr::Vararg => self.vararg(dst, wanted)?,
@@ -291,7 +292,7 @@ impl<'a> Compiler<'a> {
         }
         Ok(())
     }
-    fn field_constant(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
+    pub(super) fn field_constant(&mut self, id: ExprId) -> Result<Option<u32>, Error> {
         // Preserve constant-pool insertion order without keeping a literal key
         // in a register while the field value is evaluated.
         let constant = if let Some(number) = self.folded[id] {
