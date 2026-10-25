@@ -69,6 +69,8 @@ pub struct PlayerStageSummary {
     pub show_fa_plus_pane: bool,
     pub track_early_judgments: bool,
     pub dim_post_fail_scatter: bool,
+    pub golf_score: Option<deadsync_rules::golf::GolfScore>,
+    pub golf_par: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -427,6 +429,25 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
             show_hard_ex_score: show_hard_ex,
             track_early_judgments,
             dim_post_fail_scatter: first_player.dim_post_fail_scatter,
+            golf_score: input
+                .stage_summaries
+                .iter()
+                .filter_map(|stage| stage.players[idx].as_ref())
+                .map(|p| p.golf_score)
+                .try_fold(
+                    deadsync_rules::golf::GolfScore::default(),
+                    |mut total, stage| {
+                        let stage = stage?;
+                        total.raw_strokes = total.raw_strokes.saturating_add(stage.raw_strokes);
+                        total.judged_rows = total.judged_rows.saturating_add(stage.judged_rows);
+                        Some(total)
+                    },
+                ),
+            golf_par: input
+                .stage_summaries
+                .iter()
+                .filter_map(|stage| stage.players[idx].as_ref())
+                .try_fold(0.0, |total, p| Some(total + p.golf_par?)),
         });
     }
 
@@ -664,6 +685,8 @@ mod tests {
             show_fa_plus_pane: true,
             track_early_judgments: true,
             dim_post_fail_scatter: true,
+            golf_score: None,
+            golf_par: None,
         }
     }
 

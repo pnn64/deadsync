@@ -18,6 +18,7 @@ pub struct LeaderboardEntry {
     pub rank: u32,
     pub name: String,
     pub machine_tag: Option<String>,
+    /// Hundredths of a percent, or raw strokes for a Golf pane.
     pub score: f64,
     pub date: String,
     pub is_rival: bool,
@@ -598,7 +599,9 @@ impl LeaderboardPane {
     #[inline(always)]
     #[must_use]
     pub fn is_arrowcloud(&self) -> bool {
-        self.arrowcloud_kind.is_some() || self.name.eq_ignore_ascii_case("ArrowCloud")
+        self.arrowcloud_kind.is_some()
+            || self.name.eq_ignore_ascii_case("ArrowCloud")
+            || self.name == "Golf (ArrowCloud)"
     }
 
     #[inline(always)]
@@ -611,6 +614,7 @@ impl LeaderboardPane {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScoreboxPaneKind {
+    Golf,
     Gs,
     Ex,
     HardEx,
@@ -621,6 +625,7 @@ pub enum ScoreboxPaneKind {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SelectMusicScoreboxFilter {
+    pub golf: bool,
     pub itg: bool,
     pub ex: bool,
     pub hard_ex: bool,
@@ -634,6 +639,7 @@ impl Default for SelectMusicScoreboxFilter {
             ex: true,
             hard_ex: true,
             tournaments: true,
+            golf: false,
         }
     }
 }
@@ -641,7 +647,7 @@ impl Default for SelectMusicScoreboxFilter {
 #[inline(always)]
 #[must_use]
 pub const fn select_music_scorebox_filter_has_any(filter: SelectMusicScoreboxFilter) -> bool {
-    filter.itg || filter.ex || filter.hard_ex || filter.tournaments
+    filter.itg || filter.ex || filter.hard_ex || filter.tournaments || filter.golf
 }
 
 #[inline(always)]
@@ -651,6 +657,7 @@ pub const fn select_music_scorebox_filter_allows_kind(
     filter: SelectMusicScoreboxFilter,
 ) -> bool {
     match kind {
+        ScoreboxPaneKind::Golf => filter.golf,
         ScoreboxPaneKind::Gs => filter.itg,
         ScoreboxPaneKind::Ex => filter.ex,
         ScoreboxPaneKind::HardEx => filter.hard_ex,
@@ -716,6 +723,9 @@ pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
 }
 
 fn known_scorebox_pane_kind(pane: &LeaderboardPane) -> Option<ScoreboxPaneKind> {
+    if pane.name == "Golf (ArrowCloud)" {
+        return Some(ScoreboxPaneKind::Golf);
+    }
     if pane.is_arrowcloud() {
         Some(if pane.is_hard_ex() {
             ScoreboxPaneKind::HardEx
@@ -749,6 +759,7 @@ fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
 #[must_use]
 pub const fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -> &str {
     match kind {
+        ScoreboxPaneKind::Golf => "GOLF (AC)",
         ScoreboxPaneKind::Gs => "ITG",
         ScoreboxPaneKind::Ex => "EX",
         ScoreboxPaneKind::HardEx => "H.EX",
@@ -810,24 +821,28 @@ pub fn leaderboard_pane(
 }
 
 #[must_use]
-pub fn arrowcloud_hard_ex_leaderboard_pane(
+pub fn arrowcloud_leaderboard_pane(
+    kind: ArrowCloudPaneKind,
     entries: Vec<LeaderboardEntry>,
     personalized: bool,
 ) -> LeaderboardPane {
     LeaderboardPane {
         name: "ArrowCloud".to_string(),
         entries,
-        is_ex: false,
+        is_ex: kind == ArrowCloudPaneKind::Ex,
         disabled: false,
         personalized,
-        arrowcloud_kind: Some(ArrowCloudPaneKind::HardEx),
+        arrowcloud_kind: Some(kind),
     }
 }
 
 #[inline(always)]
 #[must_use]
-pub fn arrowcloud_empty_hard_ex_leaderboard_pane() -> LeaderboardPane {
-    arrowcloud_hard_ex_leaderboard_pane(Vec::new(), false)
+pub fn arrowcloud_hard_ex_leaderboard_pane(
+    entries: Vec<LeaderboardEntry>,
+    personalized: bool,
+) -> LeaderboardPane {
+    arrowcloud_leaderboard_pane(ArrowCloudPaneKind::HardEx, entries, personalized)
 }
 
 #[derive(Debug, Clone)]
@@ -1913,6 +1928,7 @@ mod tests {
             ex: true,
             hard_ex: false,
             tournaments: true,
+            golf: false,
         };
 
         assert!(select_music_scorebox_filter_has_any(filter));
@@ -1942,6 +1958,7 @@ mod tests {
             ex: true,
             hard_ex: false,
             tournaments: true,
+            golf: false,
         };
 
         let filtered = select_music_scorebox_filtered_panes(&panes, filter);
@@ -2372,3 +2389,28 @@ mod tests {
 #[cfg(test)]
 #[path = "leaderboard_request_perf.rs"]
 mod request_perf;
+
+/// Refresh cached and in-flight boards when the optional golf pane changes.
+pub fn runtime_invalidate_golf_leaderboards() {
+    let mut cache = RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    let keys: HashSet<_> = cache.by_key.keys().chain(cache.in_flight.keys())
+        .map(|key| (key.api_key.clone(), key.chart_hash.clone())).collect();
+    let now = Instant::now();
+    for (api_key, chart_hash) in keys { cache.invalidate_chart_for_api(&api_key, &chart_hash, now); }
+    mark_runtime_player_leaderboards_changed();
+}
+
+#[cfg(test)]
+mod golf_tests {
+    use super::*;
+    #[test]
+    fn golf_board_requires_explicit_filter_selection() {
+        let panes = [LeaderboardPane { name: "Golf (ArrowCloud)".into(), entries: Vec::new(), is_ex: false, disabled: false, personalized: false, arrowcloud_kind: None }];
+        let mut filter = SelectMusicScoreboxFilter::default();
+        assert!(select_music_scorebox_pane_refs(&panes, filter).is_empty());
+        filter.golf = true;
+        assert_eq!(select_music_scorebox_pane_refs(&panes, filter).len(), 1);
+        assert_eq!(scorebox_pane_kind(&panes[0]), ScoreboxPaneKind::Golf);
+        assert!(!panes[0].is_hard_ex());
+    }
+}

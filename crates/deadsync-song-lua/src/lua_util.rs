@@ -2027,7 +2027,7 @@ fn actor_def_children(
     let mut children = smallvec::SmallVec::<[(Value, Table); 16]>::new();
     // XmlFileUtil::XNodeFromTableRecursive visits raw array entries until the
     // first nil, then lua_next. Its duplicate range counts tables, not slots.
-    for index in 1_i64.. {
+    for index in 1.. {
         match source.raw_get::<Value>(index)? {
             Value::Nil => break,
             Value::Table(child) => children.push((Value::Integer(index), child)),
@@ -6905,8 +6905,14 @@ pub fn make_actor_capture_f32_method(
     key: &'static str,
     probe_name: Option<&'static str>,
 ) -> mlua::Result<Function> {
+    let setter = if crate::live::active(lua) { match key {
+        "x" => Some(crate::actor_methods::Setter::X),
+        "y" => Some(crate::actor_methods::Setter::Y),
+        _ => None,
+    }} else { None };
+    let target = setter.map(|_| actor.to_pointer() as usize);
     let actor = actor.clone();
-    lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
+    let function = lua.create_function(move |lua, (_self, value): (Option<Value>, Option<Value>)| {
         if let Some(probe_name) = probe_name {
             record_probe_method_call(lua, &actor, probe_name)?;
         }
@@ -6914,7 +6920,11 @@ pub fn make_actor_capture_f32_method(
             capture_block_set_f32(lua, &actor, key, value)?;
         }
         Ok(actor.clone())
-    })
+    })?;
+    if let Some((setter, target)) = setter.zip(target) {
+        crate::actor_methods::register(lua, &function, crate::actor_methods::Method::Bound(setter, target))?;
+    }
+    Ok(function)
 }
 
 pub fn make_actor_add_f32_method(
@@ -7143,7 +7153,7 @@ pub fn install_actor_command_methods(lua: &Lua, actor: &Table) -> mlua::Result<(
     })?;
     if crate::live::active(lua) {
         crate::actor_methods::register(lua, &visible,
-            crate::actor_methods::Method::VisibleBound(actor.to_pointer() as usize))?;
+            crate::actor_methods::Method::Bound(crate::actor_methods::Setter::Visible, actor.to_pointer() as usize))?;
     }
     actor.set("visible", visible)?;
     actor.set(
@@ -7854,32 +7864,8 @@ end
 }
 
 pub fn install_actor_transform_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
-    actor.set(
-        "x",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-                record_probe_method_call(lua, &actor, "x")?;
-                if let Some(value) = value.and_then(read_actor_scalar_f32) {
-                    capture_block_set_f32(lua, &actor, "x", value)?;
-                }
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
-    actor.set(
-        "y",
-        lua.create_function({
-            let actor = actor.clone();
-            move |lua, (_self, value): (Option<Value>, Option<Value>)| {
-                record_probe_method_call(lua, &actor, "y")?;
-                if let Some(value) = value.and_then(read_actor_scalar_f32) {
-                    capture_block_set_f32(lua, &actor, "y", value)?;
-                }
-                Ok(actor.clone())
-            }
-        })?,
-    )?;
+    actor.set("x", make_actor_capture_f32_method(lua, actor, "x", Some("x"))?)?;
+    actor.set("y", make_actor_capture_f32_method(lua, actor, "y", Some("y"))?)?;
     actor.set(
         "fov",
         lua.create_function({
@@ -10431,7 +10417,7 @@ pub fn install_actor_tap_note_methods(lua: &Lua, actor: &Table) -> mlua::Result<
                     actor.get::<Option<Function>>("__songlua_did_tap_note_callback")?
                 {
                     let mut callback_args = MultiValue::new();
-                    callback_args.push_back(Value::Integer(i64::from(column)));
+                    callback_args.push_back(Value::Integer(column.into()));
                     callback_args.push_back(score);
                     callback_args.push_back(Value::Boolean(bright));
                     let _ = callback.call::<Value>(callback_args)?;
@@ -10667,7 +10653,7 @@ pub fn install_actor_wrapper_query_methods(lua: &Lua, actor: &Table) -> mlua::Re
             let actor = actor.clone();
             move |lua, args: MultiValue| {
                 let Some(index) = method_arg(&args, 0).cloned().and_then(|value| match value {
-                    Value::Integer(value) => Some(value),
+                    Value::Integer(value) => Some(i64::from(value)),
                     Value::Number(value) => Some(value as i64),
                     _ => None,
                 }) else {
@@ -11024,7 +11010,7 @@ fn adopt_actor_child(parent: &Table, child: &Table) -> mlua::Result<()> {
 
 fn compact_actor_children(lua: &Lua, actor: &Table) -> mlua::Result<()> {
     let (_, children) = actor_def_children(lua, actor)?;
-    let mut indices = smallvec::SmallVec::<[i64; 16]>::new();
+    let mut indices = smallvec::SmallVec::<[mlua::Integer; 16]>::new();
     actor.for_each::<Value, Value>(|key, _value| {
         if let Value::Integer(index) = key
             && index > 0
@@ -11739,6 +11725,30 @@ pub(crate) struct LiveActorPlayback;
 
 fn live_actor_playback(lua: &Lua) -> bool {
     lua.app_data_ref::<LiveActorPlayback>().is_some()
+}
+
+// Position writes target the actual current pose only with no tween/effect
+// owner that can alter it outside the compiled callback unit.
+pub(crate) fn can_compile_actor_position(lua: &Lua, actor: &Table) -> bool {
+    use mlua::InspectionValue;
+    if lua.app_data_ref::<SongLuaProbeCaptureActive>().is_some() { return false; }
+    if !lua.app_data_ref::<ActorTweenReplays>().is_some_and(|replays|
+        replays.0.get(&(actor.to_pointer() as usize)).is_some_and(|replay| replay.queue.is_empty())) {
+        return false;
+    }
+    for key in ["__songlua_command_queue", "__songlua_state_spin"] {
+        match actor.raw_get::<InspectionValue>(key) {
+            Ok(InspectionValue::Nil) => {},
+            Ok(InspectionValue::Table(table)) if key == "__songlua_command_queue" && table.raw_len() == 0 => {},
+            _ => return false,
+        }
+    }
+    match actor.raw_get::<InspectionValue>("__songlua_state_effect_mode") {
+        Ok(InspectionValue::Nil) => {},
+        Ok(InspectionValue::Bytes(mode)) if mode.as_ref() == b"none" => {},
+        _ => return false,
+    }
+    actor.raw_get::<Option<bool>>("__songlua_state_rainbow").is_ok_and(|value| !value.unwrap_or(false))
 }
 
 pub(crate) fn can_compile_actor_input(lua: &Lua) -> bool {
@@ -18833,7 +18843,7 @@ fn read_function_upvalue(
     }
 }
 
-fn restore_function_action_tables(lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
+fn restore_function_action_tables(_lua: &Lua, snapshot: FunctionActionSnapshot) -> mlua::Result<()> {
     for cell in snapshot.cells.sequence_values::<Table>() {
         let cell = cell?;
         let function = cell.raw_get::<Function>(1)?;
@@ -23840,7 +23850,7 @@ pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
                 return Ok((Value::Nil, Value::Nil));
             };
             let Some(index) = args.get(1).cloned().and_then(|value| match value {
-                Value::Integer(value) => Some(value),
+                Value::Integer(value) => Some(i64::from(value)),
                 Value::Number(value) => Some(value as i64),
                 _ => None,
             }) else {

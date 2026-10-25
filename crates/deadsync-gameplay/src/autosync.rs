@@ -30,7 +30,10 @@ pub fn autosync_stddev_seconds(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AutosyncOffsetCorrection {
+    /// Mean early/late error in real seconds; multiply by the batch's music rate
+    /// before applying it to a song offset, which is measured in song seconds.
     Song(f32),
+    /// Mean early/late error in real seconds, matching machine calibration units.
     Machine(f32),
 }
 
@@ -46,6 +49,8 @@ pub fn apply_autosync_offset_sample(
     mode: AutosyncMode,
     note_off_by_ns: SongTimeNs,
 ) -> AutosyncSampleResult {
+    // Samples stay in real time so the 30 ms consistency gate is independent
+    // of playback speed. A rate change must discard a partial sample batch.
     if song_time_ns_invalid(note_off_by_ns) || mode == AutosyncMode::Off {
         return AutosyncSampleResult::default();
     }

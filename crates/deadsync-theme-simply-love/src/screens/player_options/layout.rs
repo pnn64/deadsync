@@ -1,5 +1,13 @@
 use super::*;
 
+pub(super) const fn row_layout_slots(id: RowId) -> usize {
+    if matches!(id, RowId::GameplayExtras) {
+        2
+    } else {
+        1
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(super) struct RowWindow {
     pub(super) first_start: i32,
@@ -137,7 +145,7 @@ pub(super) fn init_row_tweens(
 
     let (first_row_center_y, row_step) = row_layout_params();
     let visibility = row_visibility(row_map, active, option_masks, policy);
-    let visible_rows = count_visible_rows(row_map, visibility);
+    let visible_rows = count_visible_row_slots(row_map, visibility);
     if visible_rows == 0 {
         let y = row_step.mul_add(-0.5, first_row_center_y);
         return (0..total_rows)
@@ -195,7 +203,7 @@ pub(super) fn retarget_row_tweens(
 ) {
     let total_rows = row_map.len();
     let (first_row_center_y, row_step) = row_layout_params();
-    let visible_rows = count_visible_rows(row_map, visibility);
+    let visible_rows = count_visible_row_slots(row_map, visibility);
     if visible_rows == 0 {
         let y = row_step.mul_add(-0.5, first_row_center_y);
         for tween in row_tweens {
@@ -281,13 +289,25 @@ pub(super) fn row_f_pos_for_index(
 ) -> (f32, bool) {
     if is_row_visible(row_map, row_idx, visibility) {
         let idx = *visible_idx;
-        *visible_idx += 1;
-        return f_pos_for_visible_idx(idx, window, mid_pos, bottom_pos);
+        let slots = row_layout_slots(row_map.id_at(row_idx)) as i32;
+        *visible_idx += slots;
+        let (first, first_hidden) = f_pos_for_visible_idx(idx, window, mid_pos, bottom_pos);
+        let (last, last_hidden) =
+            f_pos_for_visible_idx(idx + slots - 1, window, mid_pos, bottom_pos);
+        // A wrapped row occupies complete slots; never show half at a window edge.
+        return ((first + last) * 0.5, first_hidden || last_hidden);
     }
 
-    if let Some(anchor_idx) = hidden_row_anchor_visible_index(row_map, row_idx, visibility) {
-        let (anchor_f_pos, _) = f_pos_for_visible_idx(anchor_idx, window, mid_pos, bottom_pos);
-        return (anchor_f_pos, true);
+    if let Some(slot) = hidden_row_anchor_visible_index(row_map, row_idx, visibility) {
+        let parent_id = conditional_row_parent(row_map.id_at(row_idx)).unwrap();
+        let (first, _) = f_pos_for_visible_idx(slot, window, mid_pos, bottom_pos);
+        let (last, _) = f_pos_for_visible_idx(
+            slot + row_layout_slots(parent_id) as i32 - 1,
+            window,
+            mid_pos,
+            bottom_pos,
+        );
+        return ((first + last) * 0.5, true);
     }
 
     (-0.5, true)
@@ -390,7 +410,8 @@ pub(super) fn cursor_dest_for_player_with_visibility(
         }
         let spacing = INLINE_SPACING;
         let choice_inner_left = inline_choice_left_x_for_row(state, row_idx);
-        let text_h = row.choice_height;
+        let choice_scale = inline_choice_scale(row);
+        let text_h = row.choice_height * choice_scale;
         if arcade_row_focuses_next_row(state, player_idx, row_idx) {
             let (left_x, draw_w, draw_h) = arcade_next_row_layout(state, row_idx, asset_manager);
             let mut size_t = draw_w / width_ref;
@@ -411,7 +432,9 @@ pub(super) fn cursor_dest_for_player_with_visibility(
         let focus_idx = focused_inline_choice_index(state, player_idx, row_idx)
             .unwrap_or_else(|| row.selected_choice_index[player_idx])
             .min(row.choices.len().saturating_sub(1));
-        let [center_x, draw_w] = inline_choice_geometry(row, choice_inner_left, focus_idx)?;
+        let draw_w = *row.choice_widths.get(focus_idx)? * choice_scale;
+        let [offset_x, offset_y] = inline_choice_position(row, focus_idx);
+        let center_x = choice_inner_left + offset_x + draw_w * 0.5;
 
         let mut size_t = draw_w / width_ref;
         if !size_t.is_finite() {
@@ -419,13 +442,13 @@ pub(super) fn cursor_dest_for_player_with_visibility(
         }
         size_t = size_t.clamp(0.0, 1.0);
         let mut pad_x = (max_pad_x - min_pad_x).mul_add(size_t, min_pad_x);
-        let max_pad_by_spacing = (spacing - border_w).max(min_pad_x);
+        let max_pad_by_spacing = (spacing * choice_scale - border_w).max(min_pad_x);
         if pad_x > max_pad_by_spacing {
             pad_x = max_pad_by_spacing;
         }
         let ring_w = draw_w + pad_x * 2.0;
         let ring_h = text_h + pad_y * 2.0;
-        return Some((center_x, y, ring_w, ring_h));
+        return Some((center_x, y + offset_y, ring_w, ring_h));
     }
 
     // Single value rows (ShowOneInRow).

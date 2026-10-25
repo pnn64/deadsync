@@ -2177,6 +2177,7 @@ mod tests {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EvalPane {
+    Golf,
     Standard,
     FaPlus,
     HardEx,
@@ -4107,7 +4108,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                     state.context.policy.enable_groovestats,
                 );
                 let player = &state.context.players[profile_data::player_side_index(gs_side)];
-                let panes = eval_pane_cycle(
+                let mut panes = eval_pane_cycle(
                     si.show_hard_ex_score,
                     false,
                     has_gs,
@@ -4122,6 +4123,9 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                     eval_has_test_input_pane(state.context.policy.only_dedicated_menu_buttons),
                     eval_has_arrow_timing_pane(si),
                 );
+                if si.golf_score.is_some() {
+                    panes.push(EvalPane::Golf);
+                }
                 let other_idx = 1 - controller_idx;
                 state.active_pane[controller_idx] = eval_pane_skip_duplicate(
                     state.active_pane[controller_idx],
@@ -5304,7 +5308,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             arrowcloud_linked[profile_data::player_side_index(gs_side)],
         );
 
-        let panes = eval_pane_cycle(
+        let mut panes = eval_pane_cycle(
             has_hard_ex,
             has_qr,
             has_gs,
@@ -5314,6 +5318,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             eval_has_test_input_pane(only_dedicated_menu_buttons),
             eval_has_arrow_timing_pane(si),
         );
+        if si.golf_score.is_some() {
+            panes.push(EvalPane::Golf);
+        }
         state.active_pane[controller_idx] =
             eval_pane_shift_in_cycle(state.active_pane[controller_idx], dir, &panes);
 
@@ -6197,7 +6204,9 @@ pub fn push_actors(
                 state.active_pane[controller_idx]
             };
 
-            if let Some(text) = state.percentage_text[player_idx].as_ref() {
+            if pane != EvalPane::Golf
+                && let Some(text) = state.percentage_text[player_idx].as_ref()
+            {
                 eval_panes::push_pane_percentage_display_with_palette(
                     actors,
                     si,
@@ -6210,7 +6219,12 @@ pub fn push_actors(
                 );
             }
 
+            if pane == EvalPane::Golf {
+                push_golf_results(actors, si, controller, policy.machine_font);
+                continue;
+            }
             match pane {
+                EvalPane::Golf => unreachable!("golf pane rendered above"),
                 EvalPane::Timing => eval_panes::push_timing_pane_with_palette(
                     actors,
                     si,
@@ -7095,4 +7109,37 @@ pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
         crate::views::SimplyLoveVisualPolicyView::default(),
     );
     actors
+}
+
+fn push_golf_results(
+    actors: &mut Vec<Actor>,
+    si: &ScoreInfo,
+    controller: profile_data::PlayerSide,
+    machine_font: deadsync_config::theme::MachineFont,
+) {
+    let Some(score) = si.golf_score else {
+        return;
+    };
+    let x = eval_panes::test_input_pane_origin_x(controller);
+    let y = screen_center_y() + 35.0;
+    let par_label = tr("Golf", "Par");
+    let par_text = si.golf_par.map_or_else(|| format!("{par_label}: -"), |par| format!("{par_label}: {par:.2}"));
+    let delta = si.golf_par.map_or_else(
+        || tr("Golf", "LowerIsBetter").to_string(),
+        |par| format!("{:+.3}", score.displayed() - par),
+    );
+    let lines = [
+        tr("Golf", "ResultsTitle").to_string(),
+        format!("{:.2}", score.displayed()),
+        par_text,
+        delta,
+        format!("{}: {}", tr("Golf", "JudgedRows"), score.judged_rows),
+    ];
+    for (i, line) in lines.into_iter().enumerate() {
+        actors.push(act!(text:
+            font(machine_font_key(machine_font, FontRole::Normal)):
+            settext(line): align(0.5, 0.5): xy(x, y - 70.0 + i as f32 * 34.0):
+            zoom(if i == 1 { 1.2 } else { 0.75 }): diffuse(0.2, 0.85, 0.3, 1.0): z(130)
+        ));
+    }
 }

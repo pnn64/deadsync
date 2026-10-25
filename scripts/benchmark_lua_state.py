@@ -27,12 +27,12 @@ def main():
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     paths = [Path(__file__).resolve(), root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml"]
-    for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin"):
+    for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin"):
         for folder in ("src", "examples"):
             paths += list((root / "crates" / crate / folder).rglob("*.rs"))
     paths += [root / "crates/deadsync-noteskin/tests/fixtures/alias-normalization/NoteSkin.lua",
               root / "tests/support/song_lua_metrics.rs",
-              root / "crates/deadlib-lua/tests/raw_array.rs", root / "crates/deadlib-lua/tests/upvalues.rs"]
+              root / "crates/deadlib-lua-legacy/tests/raw_array.rs", root / "crates/deadlib-lua-legacy/tests/upvalues.rs"]
     sources = {path.relative_to(root).as_posix(): sha(path) for path in paths}
     binaries = {key: getattr(args, key).resolve() for key in ("song", "noteskin_before", "noteskin_after", "noteskin_tests")}
     hashes = {key: sha(path) for key, path in binaries.items()}

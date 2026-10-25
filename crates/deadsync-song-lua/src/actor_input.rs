@@ -5,20 +5,34 @@ use mlua::{InspectionValue, Lua, Table};
 use rustc_hash::FxHashMap;
 
 pub(crate) mod update;
+mod tables;
 pub use update::SongLuaCompiledActorInteractions;
 
 /// An authored native actor write, in callback execution order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SongLuaActorInputAction {
     /// Actor indices address overlays first, followed by tracked actors.
-    Visible { actor: usize, visible: bool },
+    Visible {
+        actor: usize,
+        visible: bool,
+    },
+    /// The exact f32 bits written by the authored numeric setter.
+    X {
+        actor: usize,
+        bits: u32,
+    },
+    Y {
+        actor: usize,
+        bits: u32,
+    },
 }
 
 /// Primitive state captured from a raw scalar table.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum SongLuaInputScalar {
+pub enum SongLuaInputScalar<'a> {
     Boolean(bool),
     Number(f64),
+    Bytes(&'a [u8]),
 }
 
 /// A closed snapshot of screen input callbacks and their actor states.
@@ -39,7 +53,8 @@ pub struct SongLuaCompiledActorInputs {
 }
 
 impl SongLuaCompiledActorInputs {
-    /// Execute an input and apply its actor writes without Lua or allocation.
+    /// Execute an input and apply its actor writes without Lua. First writes of
+    /// new Boolean-table keys may allocate native storage.
     pub fn input(&mut self, input: &SongLuaInputEvent<'_>) -> bool {
         self.input_with_actions(input, |_| {})
     }
@@ -68,17 +83,40 @@ impl SongLuaCompiledActorInputs {
         mut observe: impl FnMut(SongLuaActorInputAction),
     ) -> bool {
         self.callbacks
-            .run(index, values, |tag, args| {
-                let Some(Datum::Boolean(visible)) = args.get(1) else {
-                    unreachable!("verified visible(boolean) action")
-                };
-                let actor = tag as usize;
-                self.states[actor].visible = visible;
-                observe(SongLuaActorInputAction::Visible { actor, visible });
+            .run_truthy(index, values, |tag, args| {
+                let actor = (tag >> 2) as usize;
+                match tag & 3 {
+                    0 => {
+                        let Some(Datum::Boolean(visible)) = args.get(1) else {
+                            unreachable!("verified visible(boolean) action")
+                        };
+                        self.states[actor].visible = visible;
+                        observe(SongLuaActorInputAction::Visible { actor, visible });
+                    }
+                    axis @ 1..=2 => {
+                        let Some(Datum::Number(value)) = args.get(1) else {
+                            unreachable!("verified position(number) action")
+                        };
+                        let value = value as f32;
+                        if axis == 1 {
+                            self.states[actor].x = value;
+                            observe(SongLuaActorInputAction::X {
+                                actor,
+                                bits: value.to_bits(),
+                            });
+                        } else {
+                            self.states[actor].y = value;
+                            observe(SongLuaActorInputAction::Y {
+                                actor,
+                                bits: value.to_bits(),
+                            });
+                        }
+                    }
+                    _ => unreachable!("verified setter tag"),
+                }
             })
             .expect("input registry index")
             .expect("complete typed input frame")
-            .is_truthy()
     }
 
     /// Overlay states, using the live scene's original overlay indices.
@@ -98,7 +136,9 @@ impl SongLuaCompiledActorInputs {
 
     /// Captured scalar cells by table identity ordinal and byte key. Distinct
     /// tables keep distinct ordinals even when their initial values are equal.
-    pub fn scalar_states(&self) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar)> + '_ {
+    pub fn scalar_states(
+        &self,
+    ) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar<'_>)> + '_ {
         self.scalar_fields
             .iter()
             .enumerate()
@@ -106,10 +146,20 @@ impl SongLuaCompiledActorInputs {
                 let value = match self.callbacks.cell(index).expect("bound scalar cell") {
                     Datum::Boolean(value) => SongLuaInputScalar::Boolean(value),
                     Datum::Number(value) => SongLuaInputScalar::Number(value),
+                    Datum::Bytes(value) => SongLuaInputScalar::Bytes(value),
                     _ => unreachable!("scalar table cell"),
                 };
                 (*table, key.as_ref(), value)
             })
+    }
+
+    /// Declared native table identities and their present Boolean entries.
+    /// Nil entries are absent; byte keys and false values remain exact.
+    pub fn boolean_states(&self) -> impl Iterator<Item = (u32, &[u8], bool)> + '_ {
+        self.callbacks.boolean_objects().flat_map(|object| {
+            self.callbacks.boolean_entries(object).into_iter().flatten()
+                .map(move |(key, value)| (object, key, value))
+        })
     }
 
     /// Native owned payload, excluding allocator and Arc bookkeeping.
@@ -141,14 +191,16 @@ fn compile_with_updates(
     states: &[SongLuaOverlayState],
     tracked: &[(SongLuaTrackedActorTarget, Table, SongLuaOverlayState)],
     updates: &[(mlua::Function, usize)],
-    traversal: &[update::SourceJob],
+    reserved: &[usize],
 ) -> Option<SongLuaCompiledActorInputs> {
     if !crate::lua_util::can_compile_actor_input(lua) {
         return None;
     }
-    let mut callbacks = crate::input::functions(lua)?;
-    let input_count = callbacks.len();
-    callbacks.extend(updates.iter().map(|(function, _)| function.clone()));
+    let inputs = crate::input::functions(lua)?;
+    let input_count = inputs.len();
+    let callback_count = input_count + updates.len();
+    // The snapshot roots inputs; the caller already roots every update function.
+    let callbacks = || inputs.iter().chain(updates.iter().map(|(function, _)| function));
     let tables = actors
         .iter()
         .chain(tracked.iter().map(|(_, table, _)| table))
@@ -163,14 +215,17 @@ fn compile_with_updates(
     if indices.len() != tables.len() || actors.len() != states.len() {
         return None;
     }
-    u32::try_from(tables.len()).ok()?.checked_add(2)?;
+    u32::try_from(tables.len())
+        .ok()?
+        .checked_mul(4)?
+        .checked_add(2)?;
     let mut bindings = crate::input::compiled::bindings();
     let first_state_object = u32::try_from(tables.len()).ok()?.checked_add(2)?;
     let mut state_ids = FxHashMap::<usize, u32>::default();
-    let mut scalar_fields = Vec::new();
+    let mut byte_fields = Vec::new();
     let mut pending = updates.iter().map(|(_, actor)| *actor).collect::<Vec<_>>();
-    let mut captures = Vec::with_capacity(callbacks.len());
-    for callback in &callbacks {
+    let mut captures = Vec::with_capacity(callback_count);
+    for callback in callbacks() {
         let mut upvalues = Vec::new();
         let mut supported = true;
         callback
@@ -183,7 +238,7 @@ fn compile_with_updates(
                 let object = if let Some(&index) = indices.get(&pointer) {
                     pending.push(index);
                     index as u32 + 2
-                } else if traversal.iter().any(|job| matches!(job, update::SourceJob::Enter { actor, .. } if actor.to_pointer() as usize == pointer)) {
+                } else if reserved.contains(&pointer) {
                     // Timing fields belong to the frozen traversal. A table
                     // outside the render inventory must not enter a second,
                     // mutable scalar store through a captured alias.
@@ -205,6 +260,9 @@ fn compile_with_updates(
                         return Ok(());
                     };
                     state_ids.insert(pointer, object);
+                    if table.raw_len() > 0 {
+                        tables::capture_array(&table, object, first_state_object, &indices, reserved, &mut state_ids, &mut bindings)?;
+                    } else {
                     table.for_each::<InspectionValue, InspectionValue>(|key, value| {
                         let InspectionValue::Bytes(name) = key else {
                             return Err(mlua::Error::runtime("native input state needs byte keys"));
@@ -214,9 +272,10 @@ fn compile_with_updates(
                             InspectionValue::Integer(value) => program::Cell::Number(value as f64),
                             InspectionValue::Number(value) => program::Cell::Number(value),
                             InspectionValue::Bytes(value) => {
+                                byte_fields.push(bindings.fields.len());
                                 bindings.fields.push(Field {
                                     object,
-                                    name,
+                                    name: name.into_vec().into(),
                                     value: FieldValue::Value(Binding::Literal(
                                         program::Literal::Bytes(value),
                                     )),
@@ -231,14 +290,14 @@ fn compile_with_updates(
                         };
                         let index = bindings.cells.len();
                         bindings.cells.push(cell);
-                        scalar_fields.push((ordinal, name.clone()));
                         bindings.fields.push(Field {
                             object,
-                            name,
+                            name: name.into_vec().into(),
                             value: FieldValue::Value(Binding::Cell(index)),
                         });
                         Ok(())
                     })?;
+                    }
                     object
                 };
                 upvalues.push(Binding::Object(object));
@@ -256,52 +315,155 @@ fn compile_with_updates(
             continue;
         }
         visited[index] = true;
-        let Some(target) = crate::actor_classes::visible_target(lua, tables[index]).ok()? else {
-            continue;
-        };
-        let &target = indices.get(&target)?;
-        // A copied setter writes its captured target, not the receiver.
-        if target != index
-            && let Some(mt) = tables[target].metatable()
+        let targets = crate::actor_classes::setter_targets(lua, tables[index]).ok()?;
+        let mut motion = None;
+        'method: for (requested, selected) in
+            crate::actor_methods::Setter::ALL.into_iter().zip(targets)
         {
-            match mt.raw_get::<InspectionValue>("__newindex").ok()? {
-                InspectionValue::Nil => {}
-                InspectionValue::Function(method)
-                    if crate::actor_methods::identity(lua, &method).ok()?
-                        == Some(crate::actor_methods::Method::Assign) => {}
-                _ => return None,
+            let Some((setter, pointer)) = selected else {
+                continue;
+            };
+            let Some(&target) = indices.get(&pointer) else {
+                continue;
+            };
+            if setter != crate::actor_methods::Setter::Visible {
+                let ready = match motion {
+                    Some((previous, ready)) if previous == target => ready,
+                    _ => {
+                        let ready =
+                            crate::lua_util::can_compile_actor_position(lua, tables[target]);
+                        motion = Some((target, ready));
+                        ready
+                    }
+                };
+                if !ready {
+                    continue;
+                }
             }
+            // A copied setter writes and returns its captured target.
+            if target != index
+                && let Some(mt) = tables[target].metatable()
+            {
+                match mt.raw_get::<InspectionValue>("__newindex").ok()? {
+                    InspectionValue::Nil => {}
+                    InspectionValue::Function(method)
+                        if crate::actor_methods::identity(lua, &method).ok()?
+                            == Some(crate::actor_methods::Method::Assign) => {}
+                    _ => continue 'method,
+                }
+            }
+            pending.push(target);
+            let receiver = index as u32 + 2;
+            let (opcode, parameters): (_, &'static [Parameter]) = match setter {
+                crate::actor_methods::Setter::Visible => {
+                    (0, &[Parameter::Receiver, Parameter::Type(Types::BOOLEAN)])
+                }
+                crate::actor_methods::Setter::X => {
+                    (1, &[Parameter::Receiver, Parameter::Type(Types::NUMBER)])
+                }
+                crate::actor_methods::Setter::Y => {
+                    (2, &[Parameter::Receiver, Parameter::Type(Types::NUMBER)])
+                }
+            };
+            bindings.fields.push(Field {
+                object: receiver,
+                name: requested.name().as_bytes().into(),
+                value: FieldValue::Action(Action {
+                    tag: ((target as u32) << 2) | opcode,
+                    parameters: parameters.into(),
+                    result: Some(Binding::Object(target as u32 + 2)),
+                }),
+            });
         }
-        pending.push(target);
-        let receiver = index as u32 + 2;
-        bindings.fields.push(Field {
-            object: receiver,
-            name: b"visible".as_slice().into(),
-            value: FieldValue::Action(Action {
-                tag: target as u32,
-                parameters: vec![Parameter::Object(receiver), Parameter::Type(Types::BOOLEAN)],
-                result: Some(Binding::Object(target as u32 + 2)),
-            }),
-        });
     }
     // Reuse the complete schema. Only each callback's capture vector changes.
-    let mut programs = Vec::with_capacity(callbacks.len());
-    let compiler = program::Compiler::new(&bindings).ok()?;
-    for (index, (callback, upvalues)) in callbacks.iter().zip(captures).enumerate() {
-        let update_arguments;
-        let arguments = if index < input_count {
-            &bindings.arguments[..]
-        } else {
-            update_arguments = [
-                Binding::Object(updates[index - input_count].1 as u32 + 2),
-                Binding::Input {
-                    slot: 0,
-                    types: Types::NUMBER,
-                },
-            ];
-            &update_arguments[..]
-        };
-        programs.push(compiler.compile(callback, arguments, &upvalues).ok()?);
+    // Retain dumps only when byte-state specialization can require a retry.
+    // Populate on demand so an earlier rejection still avoids later Lua reads.
+    let mut bytecode = if byte_fields.is_empty() {
+        Vec::new()
+    } else {
+        (0..callback_count).map(|_| None).collect::<Vec<_>>()
+    };
+    let mut lower = |bindings: &program::Bindings| {
+        let mut programs = Vec::with_capacity(callback_count);
+        let compiler = program::Compiler::new(bindings).ok()?;
+        let mut batch = (callback_count >= 8).then(|| compiler.batch());
+        for (index, (callback, upvalues)) in callbacks().zip(&captures).enumerate() {
+            let update_arguments;
+            let arguments = if index < input_count {
+                &bindings.arguments[..]
+            } else {
+                update_arguments = [
+                    Binding::Object(updates[index - input_count].1 as u32 + 2),
+                    Binding::Input {
+                        slot: 0,
+                        types: Types::NUMBER,
+                    },
+                ];
+                &update_arguments[..]
+            };
+            let program = if bytecode.is_empty() {
+                if let Some(batch) = &mut batch {
+                    batch.compile(callback, arguments, upvalues)
+                } else {
+                    compiler.compile(callback, arguments, upvalues)
+                }
+            } else {
+                let bytes = &mut bytecode[index];
+                if bytes.is_none() {
+                    *bytes = Some(program::dump(callback).ok()?);
+                }
+                if let Some(batch) = &mut batch {
+                    batch.compile_bytecode(bytes.as_ref()?, arguments, upvalues)
+                } else {
+                    compiler.compile_bytecode(bytes.as_ref()?, arguments, upvalues)
+                }
+            };
+            programs.push(program.ok()?);
+        }
+        Some(programs)
+    };
+    // Keep existing immutable-byte specializations, including constant field
+    // names. Only a rejected body needs the mutable byte-cell schema retry.
+    let programs = if let Some(programs) = lower(&bindings) {
+        programs
+    } else {
+        if byte_fields.is_empty() {
+            return None;
+        }
+        for field_index in byte_fields {
+            let cell = bindings.cells.len();
+            let FieldValue::Value(Binding::Literal(program::Literal::Bytes(value))) =
+                std::mem::replace(
+                    &mut bindings.fields[field_index].value,
+                    FieldValue::Value(Binding::Cell(cell)),
+                )
+            else {
+                unreachable!("captured byte literal")
+            };
+            let index = if bindings.strings.last().is_some_and(|bytes| *bytes == value) {
+                bindings.strings.len() - 1
+            } else {
+                let index = bindings.strings.len();
+                bindings.strings.push(value);
+                index
+            };
+            bindings.cells.push(program::Cell::Bytes(index));
+        }
+        lower(&bindings)?
+    };
+    // Every cell belongs to a raw captured table. Transfer its schema key
+    // after lowering, preserving cell order without a second key allocation.
+    let mut scalar_fields = vec![(0usize, Box::<[u8]>::default()); bindings.cells.len()];
+    for field in &mut bindings.fields {
+        if let FieldValue::Value(Binding::Cell(index)) = &field.value {
+            scalar_fields[*index] = (
+                field.object.checked_sub(first_state_object)? as usize,
+                std::mem::take(&mut field.name)
+                    .into_owned()
+                    .into_boxed_slice(),
+            );
+        }
     }
     Some(SongLuaCompiledActorInputs {
         callbacks: Group::new(programs).ok()?,

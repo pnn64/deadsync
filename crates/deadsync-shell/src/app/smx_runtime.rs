@@ -46,6 +46,18 @@ pub(super) const fn screen_work(
 }
 
 impl App {
+    /// Deliver the last queued edit even if the user closes the overlay or
+    /// application before the next configuration-screen refresh.
+    pub(super) fn apply_pending_pad_config_commands(&mut self) {
+        use screens::pad_config;
+        let commands = pad_config::take_commands(&mut self.state.screens.pad_config_state);
+        apply_pad_commands(&mut self.fsr_monitor, &mut self.pad_config_sync, commands);
+        let commands = pad_config::take_commands(
+            &mut self.state.screens.select_music_state.pad_config_overlay,
+        );
+        apply_pad_commands(&mut self.fsr_monitor, &mut self.pad_config_sync, commands);
+    }
+
     /// Drive the Configure Pads screen: enable live FSR reads while it's open,
     /// apply queued threshold edits, and refresh the pad snapshot.
     #[inline(always)]
@@ -75,6 +87,7 @@ impl App {
                 self.fsr_pads_active = true;
             }
             Some(false) => {
+                self.apply_pending_pad_config_commands();
                 self.fsr_monitor.set_active(false);
                 self.fsr_pads_active = false;
             }
@@ -101,13 +114,7 @@ impl App {
         {
             let mut pads = pad_config::take_pads(target!());
             self.fsr_monitor.poll_pads_into(&mut pads);
-            // Drain queued edits in a short-lived borrow so we can touch
-            // `smx_applied` (a sibling of `target`) below without a borrow clash.
-            let commands = {
-                let target = target!();
-                pad_config::take_commands(target)
-            };
-            apply_pad_commands(&mut self.fsr_monitor, &mut self.pad_config_sync, commands);
+            self.apply_pending_pad_config_commands();
             let target = target!();
             pad_config::set_pads(target, pads);
             pad_config::set_managed_active(target, plan.managed_active);

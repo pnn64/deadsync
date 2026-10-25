@@ -227,6 +227,11 @@ pub fn stage_result<A, C, D>(
             show_hard_ex_score: prof.show_hard_ex_score,
             track_early_judgments: prof.track_early_judgments,
             dim_post_fail_scatter: prof.dim_post_fail_scatter,
+            golf_score: prof.show_golf_results.then(|| p.golf_score()),
+            golf_par: deadsync_chart::golf::par(
+                &gs.song().simfile_path,
+                &gs.charts()[player_idx].difficulty,
+            ),
         });
     }
     let music_rate = gs.music_rate();

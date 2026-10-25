@@ -162,6 +162,7 @@ update_config_fn!(pub fn update_show_srpg_shop(enabled: bool) => set_show_srpg_s
 update_config_fn!(pub fn update_srpg_shop_folder(folder: SrpgShopFolder) => set_srpg_shop_folder);
 update_config_fn!(pub fn update_enable_boogiestats(enabled: bool) => set_enable_boogiestats);
 update_config_fn!(pub fn update_enable_arrowcloud(enabled: bool) => set_enable_arrowcloud);
+update_config_fn!(pub fn update_enable_golf(enabled: bool) => set_enable_golf);
 update_config_fn!(pub fn update_submit_arrowcloud_fails(enabled: bool) => set_submit_arrowcloud_fails);
 update_config_fn!(pub fn update_show_arrowcloud_result_dialogs(enabled: bool) => set_show_arrowcloud_result_dialogs);
 update_config_fn!(pub fn update_share_rips(enabled: bool) => set_share_rips);
@@ -395,3 +396,6 @@ pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_h
         save_without_keymaps();
     }
 }
+
+update_config_fn!(pub fn update_select_music_scorebox_cycle_golf(enabled: bool) => set_select_music_scorebox_cycle_golf);
+update_config_fn!(pub fn update_select_music_show_golf_pars(enabled: bool) => set_select_music_show_golf_pars);

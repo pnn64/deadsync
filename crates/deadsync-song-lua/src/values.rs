@@ -78,7 +78,7 @@ pub fn read_u32_value(value: Value) -> Option<u32> {
 #[inline(always)]
 pub fn read_i32_value(value: Value) -> Option<i32> {
     match value {
-        Value::Integer(value) => Some(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
+        Value::Integer(value) => Some(value.clamp(i32::MIN.into(), i32::MAX.into()) as i32),
         Value::Number(value) if value.is_finite() => Some(
             value
                 .round()

@@ -2,6 +2,7 @@ use crate::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use crate::note::Note;
 use deadsync_core::input::MAX_COLS;
 use deadsync_core::note::NoteType;
+use deadsync_core::song_time::normalized_song_rate;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use log::debug;
 use std::borrow::Cow;
@@ -377,7 +378,7 @@ struct ScrollPrefix {
     ratio: f32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct TimingData {
     /// A pre-calculated mapping from a note row index to its precise beat.
     row_to_beat: Arc<[f32]>,
@@ -398,12 +399,43 @@ pub struct TimingData {
     pause_rows_sorted: [bool; 2],
     scroll_prefix_sorted: bool,
     bpms_strictly_sorted: bool,
+    // Calibration is stored in real seconds for native helpers with explicit rates.
     global_offset_sec: f32,
+    global_offset_rate: f32,
+    // Integer timing uses the calibration already scaled into music nanoseconds.
     global_offset_ns: TimingNs,
     beat0_offset_ns: TimingNs,
     native_song_offset_sec: f32,
     native_group_offset_sec: f32,
     max_bpm: f32,
+}
+
+impl Default for TimingData {
+    fn default() -> Self {
+        Self {
+            row_to_beat: Arc::default(),
+            bpms: Arc::default(),
+            stops: Arc::default(),
+            delays: Arc::default(),
+            warps: Arc::default(),
+            speeds: Arc::default(),
+            scrolls: Arc::default(),
+            fakes: Arc::default(),
+            time_signatures: Arc::default(),
+            speed_runtime: Arc::default(),
+            scroll_prefix: Arc::default(),
+            pause_rows_sorted: [false; 2],
+            scroll_prefix_sorted: false,
+            bpms_strictly_sorted: false,
+            global_offset_sec: 0.0,
+            global_offset_rate: 1.0,
+            global_offset_ns: 0,
+            beat0_offset_ns: 0,
+            native_song_offset_sec: 0.0,
+            native_group_offset_sec: 0.0,
+            max_bpm: 0.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Copy)]
@@ -752,6 +784,7 @@ impl TimingData {
             scroll_prefix_sorted,
             bpms_strictly_sorted,
             global_offset_sec,
+            global_offset_rate: 1.0,
             global_offset_ns,
             beat0_offset_ns,
             native_song_offset_sec: -song_offset_sec,
@@ -956,7 +989,7 @@ impl TimingData {
     /// this separate from the integer clock used for note judgment.
     #[must_use]
     pub fn get_song_position(&self, seconds: f32) -> BeatInfo {
-        self.get_song_position_with_rate(seconds, 1.0)
+        self.get_song_position_with_rate(seconds, self.global_offset_rate)
     }
 
     /// Native beatnooffset effect clock. ITGmania's offset-independent lookup
@@ -984,7 +1017,7 @@ impl TimingData {
         seconds: f32,
         cache: &mut SongPositionCache,
     ) -> BeatInfo {
-        self.get_song_position_cached_with_rate(seconds, 1.0, cache)
+        self.get_song_position_cached_with_rate(seconds, self.global_offset_rate, cache)
     }
 
     #[must_use]
@@ -1527,26 +1560,41 @@ impl TimingData {
             }
             start.last_row = row;
         }
-        (time - self.global_offset_sec) - delay
+        (time - self.global_offset_rate * self.global_offset_sec) - delay
     }
 
-    /// Update the global offset used for time⇄beat conversion, mirroring
-    /// `ITGmania` semantics while keeping precomputed data consistent.
+    /// Playback rate used to convert real-time calibration into music seconds.
+    #[inline(always)]
+    #[must_use]
+    pub const fn global_offset_rate(&self) -> f32 {
+        self.global_offset_rate
+    }
+
+    /// Update real-time calibration while retaining the configured playback rate.
     #[inline(always)]
     pub fn set_global_offset_seconds(&mut self, new_offset: f32) {
-        let old = self.global_offset_sec;
-        if (old - new_offset).abs() < f32::EPSILON {
+        self.set_global_offset_seconds_with_rate(new_offset, self.global_offset_rate);
+    }
+
+    /// Configure real-time calibration for integer judgment timing. Native
+    /// float helpers that accept a rate retain the unscaled offset and apply
+    /// their supplied rate once; ordinary conversions use this stored rate.
+    #[inline(always)]
+    pub fn set_global_offset_seconds_with_rate(&mut self, new_offset: f32, music_rate: f32) {
+        let music_rate = normalized_song_rate(music_rate);
+        let new_offset_ns = timing_ns_from_seconds(new_offset * music_rate);
+        if self.global_offset_sec == new_offset && self.global_offset_rate == music_rate {
             return;
         }
-        let new_offset_ns = timing_ns_from_seconds(new_offset);
-        // Adjust beat0 offset so that beat→time mapping shifts by (old - new)
-        // instead of being recomputed from raw timing data.
+        // Preserve the pre-calibration music origin. Only the offset applied
+        // when converting between beats and calibrated song time changes.
         if !self.bpms.is_empty() {
             self.beat0_offset_ns = self
                 .beat0_offset_ns
                 .saturating_add(self.global_offset_ns.saturating_sub(new_offset_ns));
         }
         self.global_offset_sec = new_offset;
+        self.global_offset_rate = music_rate;
         self.global_offset_ns = new_offset_ns;
         self.rebuild_speed_runtime();
         // scroll_prefix depends only on beats/ratios, not absolute time.
@@ -4257,6 +4305,111 @@ mod tests {
 
         // At 120 BPM beat 8 lands at 4.0 s of internal music time.
         assert!((timing_ns_to_seconds(no_offset_ns) - 4.0).abs() < 0.000_001);
+    }
+
+    #[test]
+    fn calibration_uses_playback_rate_without_changing_audio_origin() {
+        for global in [-0.040, 0.0, 0.040] {
+            let mut timing = TimingData::from_segments(
+                0.125,
+                global,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0)],
+                    ..Default::default()
+                },
+                &[],
+            );
+            timing.shift_group_offset_seconds(-0.009);
+            let native = timing.clone();
+            let mut beat_cache = BeatTimeCache::new(&timing);
+            let mut info_cache = BeatInfoCache::new(&timing);
+            let mut song_cache = SongPositionCache::new(&timing);
+            for rate in [0.5, 1.0, 1.5, 2.0, 1.0] {
+                timing.set_global_offset_seconds_with_rate(global, rate);
+                for beat in [-2.0, 0.0, 8.0, 16.0] {
+                    let audio_time = native.get_time_for_beat_no_offset_ns(beat);
+                    let expected = audio_time - timing_ns_from_seconds(global * rate);
+                    assert_eq!(timing.get_time_for_beat_no_offset_ns(beat), audio_time);
+                    assert_eq!(
+                        timing.get_time_for_beat_no_offset_ns_cached(beat, &mut beat_cache),
+                        audio_time,
+                    );
+                    assert_eq!(timing.get_time_for_beat_ns(beat), expected);
+                    assert_eq!(
+                        timing.get_time_for_beat_ns_cached(beat, &mut beat_cache),
+                        expected,
+                    );
+                    assert!(
+                        (timing
+                            .get_beat_info_from_time_ns_cached(expected, &mut info_cache)
+                            .beat
+                            - beat)
+                            .abs()
+                            < 0.000_01
+                    );
+                    let seconds = timing_ns_to_seconds(expected);
+                    assert!((timing.get_song_position(seconds).beat - beat).abs() < 0.000_01);
+                    assert!(
+                        (timing.get_song_position_cached(seconds, &mut song_cache).beat - beat)
+                            .abs()
+                            < 0.000_01
+                    );
+                    assert_eq!(
+                        timing.get_time_for_beat_exact(beat),
+                        timing_ns_to_seconds(expected),
+                    );
+                    // Explicit native rates operate on the original real-time
+                    // offset, irrespective of the configured integer-clock rate.
+                    for explicit_rate in [0.5, 1.0, 2.0] {
+                        assert_eq!(
+                            timing.get_song_time_for_beat(beat, explicit_rate).to_bits(),
+                            native.get_song_time_for_beat(beat, explicit_rate).to_bits(),
+                        );
+                        assert_eq!(
+                            timing
+                                .get_song_position_with_rate(seconds, explicit_rate)
+                                .beat
+                                .to_bits(),
+                            native
+                                .get_song_position_with_rate(seconds, explicit_rate)
+                                .beat
+                                .to_bits(),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn calibration_offset_updates_keep_rate_and_rebuild_speed_timing() {
+        let mut timing = timing_with_speeds(vec![speed_segment(4.0, 2.0, 4.0)]);
+        let audio_time = timing.get_time_for_beat_no_offset_ns(6.0);
+        timing.set_global_offset_seconds_with_rate(0.125, 2.0);
+        for offset in [0.125, -0.250, 0.0, 0.040] {
+            timing.set_global_offset_seconds(offset);
+            let expected = audio_time - timing_ns_from_seconds(offset * 2.0);
+            assert_eq!(timing.get_time_for_beat_no_offset_ns(6.0), audio_time);
+            assert_eq!(timing.get_time_for_beat_ns(6.0), expected);
+            assert!(
+                (timing.get_song_position(timing_ns_to_seconds(expected)).beat - 6.0).abs()
+                    < 0.000_01
+            );
+            assert!(
+                (timing.get_speed_multiplier(6.0, timing_ns_to_seconds(expected)) - 1.5).abs()
+                    < 0.000_01
+            );
+            assert!((timing.get_speed_multiplier_ns(6.0, expected) - 1.5).abs() < 0.000_01);
+        }
+        for rate in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+            timing.set_global_offset_seconds_with_rate(0.040, rate);
+            assert_eq!(
+                timing.get_time_for_beat_ns(6.0),
+                audio_time - timing_ns_from_seconds(0.040),
+            );
+            assert_eq!(timing.global_offset_rate, 1.0);
+        }
+        assert_eq!(TimingData::default().global_offset_rate, 1.0);
     }
 
     #[test]

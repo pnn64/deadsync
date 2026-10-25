@@ -252,6 +252,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.show_srpg_shop = loaded.show_srpg_shop;
     cfg.srpg_shop_folder = loaded.srpg_shop_folder;
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
+    cfg.enable_golf = loaded.enable_golf;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
     cfg.show_arrowcloud_result_dialogs = loaded.show_arrowcloud_result_dialogs;
@@ -384,6 +385,8 @@ const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_scorebox_cycle_ex = loaded.scorebox_cycle_ex;
     cfg.select_music_scorebox_cycle_hard_ex = loaded.scorebox_cycle_hard_ex;
     cfg.select_music_scorebox_cycle_tournaments = loaded.scorebox_cycle_tournaments;
+    cfg.select_music_scorebox_cycle_golf = loaded.scorebox_cycle_golf;
+    cfg.select_music_show_golf_pars = loaded.show_golf_pars;
     cfg.select_music_chart_info_peak_nps = loaded.chart_info_peak_nps;
     cfg.select_music_chart_info_effective_bpm = loaded.chart_info_effective_bpm;
     cfg.select_music_chart_info_matrix_rating = loaded.chart_info_matrix_rating;

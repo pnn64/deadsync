@@ -757,7 +757,8 @@ where
         ),
         deadsync_score::GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
-            lua_submit_allowed: deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
+            lua_submit_allowed: gs.mods.song_lua_compile_succeeded
+                || deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
             song_completed_naturally: outcome.song_completed_naturally,
             is_failing: outcome.is_failing,
             life: outcome.life,
@@ -1050,6 +1051,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn crossover_cue_brackets(&self) -> bool {
         self.crossover_cue_brackets
+    }
+
+    fn golf_scoring_enabled(&self) -> bool {
+        self.show_golf_score || self.show_golf_results
     }
 
     fn nps_graph_at_top(&self) -> bool {

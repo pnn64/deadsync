@@ -12,3 +12,4 @@ pub use song::{
     SongBackgroundChangeTarget, SongBackgroundLuaChange, SongData, SongForegroundChange,
     SongForegroundLuaChange, SongPack, SyncPref,
 };
+pub mod golf;

@@ -1,3 +1,6 @@
+// Software texture lookup checks traverse wgpu's nested Send/Sync bounds.
+#![recursion_limit = "256"]
+
 use deadlib_render_backend_gl as opengl;
 #[cfg(target_os = "macos")]
 use deadlib_render_backend_metal as metal;

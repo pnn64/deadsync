@@ -205,6 +205,7 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
                 .mul_add(SCOREBOX_HARD_EX_BORDER_TINT, SCOREBOX_GS_BLUE[2]),
             1.0,
         ],
+        PaneKind::Golf => [0.2, 0.8, 0.2, 1.0],
         PaneKind::Srpg => SCOREBOX_SRPG_YELLOW,
         PaneKind::Itl => SCOREBOX_ITL_PINK,
     }
@@ -313,7 +314,7 @@ fn local_self_score_10000(view: &ScoreboxSideView, kind: PaneKind) -> Option<(f6
         PaneKind::Ex => view.local_ex,
         PaneKind::HardEx => view.local_hard_ex,
         PaneKind::Itl => view.local_itl,
-        PaneKind::Srpg | PaneKind::Other => None,
+        PaneKind::Golf | PaneKind::Srpg | PaneKind::Other => None,
     }?;
     Some((score.score_10000, score.failed))
 }
@@ -468,14 +469,22 @@ fn build_select_music_scorebox_view(
             world.machine_tag.as_deref(),
             &world.name,
         ));
-        view.machine_score = score_text_with_percent(world.score);
+        view.machine_score = if kind == PaneKind::Golf {
+            Arc::from(format!("{:.2}", world.score / 1000.0))
+        } else {
+            score_text_with_percent(world.score)
+        };
     }
     if let Some(player_entry) = entries.iter().find(|entry| entry.is_self) {
         view.player_name = Arc::from(score_data::scorebox_machine_tag(
             player_entry.machine_tag.as_deref(),
             &player_entry.name,
         ));
-        view.player_score = score_text_with_percent(player_entry.score);
+        view.player_score = if kind == PaneKind::Golf {
+            Arc::from(format!("{:.2}", player_entry.score / 1000.0))
+        } else {
+            score_text_with_percent(player_entry.score)
+        };
     } else if let Some((local_score_10000, _)) = local_self_score_10000(runtime, kind) {
         view.player_name = Arc::from(local_self_scorebox_name(runtime));
         view.player_score = score_text_with_percent(local_score_10000);
@@ -491,7 +500,11 @@ fn build_select_music_scorebox_view(
                 rival.machine_tag.as_deref(),
                 &rival.name,
             )),
-            score_text_with_percent(rival.score),
+            if kind == PaneKind::Golf {
+                Arc::from(format!("{:.2}", rival.score / 1000.0))
+            } else {
+                score_text_with_percent(rival.score)
+            },
         );
     }
     view
@@ -583,7 +596,11 @@ fn gameplay_row_from_entry(
     GameplayScoreboxRow {
         rank: rank_text(entry.rank),
         name: pane_text(name, retained),
-        score: score_text_without_percent(entry.score),
+        score: if kind == PaneKind::Golf {
+            Arc::from(format!("{:.2}", entry.score / 1000.0))
+        } else {
+            score_text_without_percent(entry.score)
+        },
         rank_color,
         name_color,
         score_color,
@@ -1511,6 +1528,7 @@ mod tests {
                 ex: false,
                 hard_ex: true,
                 tournaments: false,
+                golf: false,
             },
             crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         );
@@ -1528,3 +1546,17 @@ mod select_data_original;
 #[cfg(test)]
 #[path = "gs_scorebox/select_data_perf.rs"]
 mod select_data_perf;
+
+#[cfg(test)]
+mod golf_tests {
+    use super::*;
+    #[test]
+    fn golf_rows_format_raw_strokes_without_percent_clamping() {
+        let entry = score_data::LeaderboardEntry { rank: 1, name: "Golf Player".into(), machine_tag: None, score: 123456.0, date: String::new(), is_rival: false, is_self: false, is_fail: false };
+        let row = gameplay_row_from_entry(&entry, PaneKind::Golf, color::SIMPLY_LOVE_JUDGMENT_PALETTE, false);
+        assert_eq!(row.score.as_ref(), "123.46");
+        let ace = score_data::LeaderboardEntry { score: 0.0, ..entry };
+        let row = gameplay_row_from_entry(&ace, PaneKind::Golf, color::SIMPLY_LOVE_JUDGMENT_PALETTE, false);
+        assert_eq!(row.score.as_ref(), "0.00");
+    }
+}

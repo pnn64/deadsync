@@ -849,7 +849,7 @@ pub fn fetch_combined_player_leaderboards(
     let mut arrowcloud_error = None;
 
     if let Some(arrowcloud_api_key) = arrowcloud_api_key {
-        match crate::arrowcloud::fetch_hard_ex_leaderboard_panes(chart_hash, arrowcloud_api_key) {
+        match crate::arrowcloud::fetch_leaderboard_panes(chart_hash, arrowcloud_api_key, max_entries) {
             Ok(arrowcloud_panes) => insert_arrowcloud_panes(&mut fetched, arrowcloud_panes),
             Err(error) => arrowcloud_error = Some(error),
         }
@@ -1610,7 +1610,8 @@ where
         ),
         GrooveStatsGameplayEvalInput {
             song_has_lua: gs.song().has_lua,
-            lua_submit_allowed: lua_submit_allowed(chart.short_hash.as_str()),
+            lua_submit_allowed: gs.mods.song_lua_compile_succeeded
+                || lua_submit_allowed(chart.short_hash.as_str()),
             song_completed_naturally: outcome.song_completed_naturally,
             is_failing: outcome.is_failing,
             life: outcome.life,
@@ -1687,7 +1688,7 @@ where
         invalid_reason: groovestats_submit_invalid_reason_from_profile(
             chart,
             gs.song().has_lua,
-            lua_submit_allowed(chart_hash),
+            gs.mods.song_lua_compile_succeeded || lua_submit_allowed(chart_hash),
             profile,
             gs.music_rate(),
             fail_type_ok,

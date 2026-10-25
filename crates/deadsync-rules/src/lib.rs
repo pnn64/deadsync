@@ -1,4 +1,5 @@
 pub mod combo;
+pub mod golf;
 pub mod judgment;
 pub mod life;
 pub mod note;

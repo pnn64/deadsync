@@ -1,6 +1,7 @@
 //! Native input/update callback units using the loading scene's update order.
 use super::*;
 use mlua::{Function, Value};
+use smallvec::SmallVec;
 
 pub(crate) enum SourceJob {
     Enter {
@@ -65,7 +66,9 @@ impl SongLuaCompiledActorInteractions {
     ) -> impl Iterator<Item = (SongLuaTrackedActorTarget, SongLuaOverlayState)> + '_ {
         self.owner.tracked_states()
     }
-    pub fn scalar_states(&self) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar)> + '_ {
+    pub fn scalar_states(
+        &self,
+    ) -> impl Iterator<Item = (usize, &[u8], SongLuaInputScalar<'_>)> + '_ {
         self.owner.scalar_states()
     }
 
@@ -80,7 +83,8 @@ impl SongLuaCompiledActorInteractions {
         delta_seconds: f64,
         mut observe: impl FnMut(SongLuaActorInputAction),
     ) {
-        self.deltas.fill(Delta::default());
+        // The frozen plan enters each parent and slot before any read. Every
+        // Enter overwrites both fields, including paused/hibernating slots.
         for job in &self.jobs {
             match *job {
                 Job::Enter(slot) => {
@@ -150,6 +154,7 @@ pub(crate) fn compile(
         .enumerate()
         .map(|(index, actor)| (actor.to_pointer() as usize, index))
         .collect::<FxHashMap<_, _>>();
+    let mut reserved = SmallVec::<[usize; 8]>::new();
     let mut nodes = Vec::new();
     let mut jobs = Vec::new();
     let mut updates = Vec::<(Function, usize)>::new();
@@ -161,7 +166,11 @@ pub(crate) fn compile(
                 wrappers,
             } => {
                 // The loader's synthetic root has no renderable actor state.
-                let index = indices.get(&(actor.to_pointer() as usize)).copied();
+                let pointer = actor.to_pointer() as usize;
+                let index = indices.get(&pointer).copied();
+                if index.is_none() {
+                    reserved.push(pointer);
+                }
                 // Scheduling/foreground overrides require their own runtime
                 // owners rather than a frozen interpretation of those fields.
                 for key in ["__songlua_live_delta", "__songlua_recurring_update_command"] {
@@ -220,7 +229,7 @@ pub(crate) fn compile(
             }
         }
     }
-    let owner = super::compile_with_updates(lua, actors, states, tracked, &updates, &source)?;
+    let owner = super::compile_with_updates(lua, actors, states, tracked, &updates, &reserved)?;
     for job in &mut jobs {
         if let Job::Callback { program, .. } = job {
             *program += owner.input_count;

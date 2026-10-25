@@ -1319,13 +1319,20 @@ dependencies = [
 
 [[package]]
 name = "deadlib-lua"
+version = "0.1.0"
+dependencies = [
+ "deadlib-lua-legacy",
+]
+
+[[package]]
+name = "deadlib-lua-legacy"
 version = "0.12.2"
 dependencies = [
  "anyhow",
  "bstr",
  "criterion",
- "deadlib-lua-derive",
- "deadlib-lua-sys",
+ "deadlib-lua-legacy-derive",
+ "deadlib-lua-legacy-sys",
  "either",
  "erased-serde",
  "futures-util",
@@ -1350,7 +1357,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadlib-lua-derive"
+name = "deadlib-lua-legacy-derive"
 version = "0.12.2"
 dependencies = [
  "proc-macro2",
@@ -1359,7 +1366,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadlib-lua-sys"
+name = "deadlib-lua-legacy-sys"
 version = "0.13.0"
 dependencies = [
  "cc",
@@ -1520,7 +1527,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.2356"
+version = "0.5.2373"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1754,7 +1761,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "deadlib-bincode",
- "deadlib-lua",
+ "deadlib-lua-legacy",
  "hashbrown 0.17.1",
  "image",
  "log",
@@ -1952,7 +1959,7 @@ dependencies = [
  "chrono",
  "deadlib-assets",
  "deadlib-audio-decode",
- "deadlib-lua",
+ "deadlib-lua-legacy",
  "deadlib-present",
  "deadlib-render",
  "deadlib-render-core",
@@ -1994,14 +2001,14 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.2356"
+version = "0.5.2373"
 dependencies = [
  "askama",
  "bitflags 2.13.2",
  "chrono",
  "deadlib-assets",
  "deadlib-input-native",
- "deadlib-lua",
+ "deadlib-lua-legacy",
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render",
@@ -2064,7 +2071,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.2356"
+version = "0.5.2373"
 dependencies = [
  "log",
  "semver",
@@ -4360,8 +4367,6 @@ dependencies = [
 [[package]]
 name = "opusic-sys"
 version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9d1ecdf206421bc74343ab3bb2f30ad2abbfee41fa341f7181fecbaf957769a"
 dependencies = [
  "cmake",
 ]

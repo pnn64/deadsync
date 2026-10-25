@@ -441,7 +441,7 @@ pub fn create_theme_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::R
                 screen_width,
                 screen_height,
             )
-            .map_or(Value::Nil, |value| Value::Integer(value.round() as i64)))
+            .map_or(Value::Nil, |value| lua_number_value(value.round())))
         })?,
     )?;
     theme.set(
@@ -2041,9 +2041,9 @@ fn prefsmgr_default_value_normalized(
     } else if lower == "displayaspectratio" {
         Ok(Value::Number(f64::from(display_aspect_ratio)))
     } else if lower == "displaywidth" {
-        Ok(Value::Integer(i64::from(display_width)))
+        Ok(Value::Integer(display_width.into()))
     } else if lower == "displayheight" {
-        Ok(Value::Integer(i64::from(display_height)))
+        Ok(Value::Integer(display_height.into()))
     } else if lower == "videorenderers" {
         Ok(Value::String(lua.create_string(video_renderers)?))
     } else if lower == "lastseenvideodriver" {
@@ -2423,7 +2423,7 @@ pub fn map_lua_table(lua: &Lua, function: &Function, table: &Table) -> mlua::Res
 // comparisons without storing a large tagged key for every numeric entry.
 struct DeduplicateIndex {
     booleans: u8,
-    integers: std::collections::HashSet<i64>,
+    integers: std::collections::HashSet<mlua::Integer>,
     numbers: std::collections::HashSet<u64>,
     integer_numbers: Option<std::collections::HashSet<u64>>,
     strings: std::collections::HashSet<mlua::LuaString>,
@@ -3026,8 +3026,13 @@ fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
 }
 
 fn lua_number_value(value: f32) -> Value {
-    if value.is_finite() && value.fract().abs() <= f32::EPSILON {
-        Value::Integer(value as i64)
+    // Integer::MAX rounds up as f32, so the upper bound must be exclusive.
+    if value.is_finite()
+        && value.fract().abs() <= f32::EPSILON
+        && value >= mlua::Integer::MIN as f32
+        && value < -(mlua::Integer::MIN as f32)
+    {
+        Value::Integer(value as mlua::Integer)
     } else {
         Value::Number(value.into())
     }

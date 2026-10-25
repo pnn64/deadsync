@@ -132,8 +132,13 @@ pub fn create_song_position_table(lua: &Lua, song_runtime: &Table) -> mlua::Resu
 }
 
 pub fn song_lua_runtime_number(value: f32) -> mlua::Result<Value> {
-    if value.is_finite() && value.fract().abs() <= f32::EPSILON {
-        Ok(Value::Integer(value as i64))
+    // Integer::MAX rounds up as f32, so the upper bound must be exclusive.
+    if value.is_finite()
+        && value.fract().abs() <= f32::EPSILON
+        && value >= mlua::Integer::MIN as f32
+        && value < -(mlua::Integer::MIN as f32)
+    {
+        Ok(Value::Integer(value as mlua::Integer))
     } else {
         Ok(Value::Number(f64::from(value)))
     }

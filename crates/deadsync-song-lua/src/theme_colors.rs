@@ -951,7 +951,7 @@ end
 
 fn difficulty_index_from_value(value: Value) -> Option<i64> {
     match value {
-        Value::Integer(value) => Some(value),
+        Value::Integer(value) => Some(i64::from(value)),
         Value::Number(value) if value.is_finite() => Some(value.trunc() as i64),
         Value::String(text) => song_lua_difficulty_index(text.to_str().ok()?.as_ref()),
         _ => None,

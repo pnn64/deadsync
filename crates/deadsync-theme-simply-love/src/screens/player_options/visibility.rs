@@ -29,6 +29,7 @@ pub(super) struct RowVisibility {
     pub(super) show_mini_indicator_position: bool,
     pub(super) show_column_flash_judgments: bool,
     pub(super) show_live_timing_stats: bool,
+    pub(super) show_golf_options: bool,
     pub(super) show_crossover_cue_options: bool,
     pub(super) show_global_offset_shift: bool,
     pub(super) show_tap_explosion_options: bool,
@@ -42,6 +43,9 @@ pub(super) struct RowVisibility {
 
 #[inline(always)]
 pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bool {
+    if id == RowId::GolfDisplay || id == RowId::GolfStrokeFeedback {
+        return visibility.show_golf_options;
+    }
     if id == RowId::DataVisualizations {
         return visibility.show_data_visualizations;
     }
@@ -177,6 +181,9 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
 
 #[inline(always)]
 pub(super) fn conditional_row_parent(id: RowId) -> Option<RowId> {
+    if id == RowId::GolfDisplay || id == RowId::GolfStrokeFeedback {
+        return Some(RowId::GameplayExtras);
+    }
     if id == RowId::MeasureCounterLookahead || id == RowId::MeasureCounterOptions {
         return Some(RowId::MeasureCounter);
     }
@@ -774,6 +781,13 @@ pub(super) fn row_visibility(
         show_mini_indicator_position: mini_indicator_position_visible(row_map, active),
         show_column_flash_judgments: column_flash_judgments_visible(active, option_masks),
         show_live_timing_stats: live_timing_stats_visible(active, option_masks),
+        show_golf_options: policy.golf_enabled
+            && active.iter().enumerate().any(|(i, &joined)| {
+                joined
+                    && option_masks[i]
+                        .gameplay_extras
+                        .contains(GameplayExtrasMask::GOLF_SCORE)
+            }),
         show_crossover_cue_options: crossover_cue_options_visible(row_map, active),
         show_global_offset_shift: policy.allow_per_player_global_offsets,
         show_tap_explosion_options: tap_explosion_options_visible(row_map, active),
@@ -798,15 +812,17 @@ pub(super) fn is_row_visible(row_map: &RowMap, row_idx: usize, visibility: RowVi
         .is_some_and(|row| row_visible_with_flags(row.id, visibility))
 }
 
-pub(super) fn count_visible_rows(row_map: &RowMap, visibility: RowVisibility) -> usize {
+pub(super) fn count_visible_row_slots(row_map: &RowMap, visibility: RowVisibility) -> usize {
     row_map
         .display_order()
         .iter()
         .filter_map(|&id| row_map.get(id))
         .filter(|row| row_visible_with_flags(row.id, visibility))
-        .count()
+        .map(|row| row_layout_slots(row.id))
+        .sum()
 }
 
+/// The first layout slot occupied by a visible row (wrapped rows occupy two).
 pub(super) fn row_to_visible_index(
     row_map: &RowMap,
     row_idx: usize,
@@ -821,7 +837,7 @@ pub(super) fn row_to_visible_index(
     let mut pos = 0usize;
     for i in 0..row_idx {
         if is_row_visible(row_map, i, visibility) {
-            pos += 1;
+            pos += row_layout_slots(row_map.id_at(i));
         }
     }
     Some(pos)
@@ -911,7 +927,7 @@ pub(super) fn parent_anchor_visible_index(
             .get(id)
             .is_some_and(|row| row_visible_with_flags(row.id, visibility))
         {
-            visible_index += 1;
+            visible_index += row_layout_slots(id);
         }
     }
     None

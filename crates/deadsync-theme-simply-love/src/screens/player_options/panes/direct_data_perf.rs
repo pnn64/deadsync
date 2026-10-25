@@ -42,7 +42,7 @@ fn rows(pane: usize) -> RowMap {
     match pane {
         0 => RowMap::new(),
         1 => build_uncommon_rows(Screen::SelectMusic),
-        2 => build_advanced_rows(Screen::SelectMusic, true),
+        2 => build_advanced_rows(Screen::SelectMusic, true, true),
         _ => build_display_rows(&[], &[], &[], Screen::SelectMusic),
     }
 }

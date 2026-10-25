@@ -25,7 +25,7 @@ def main():
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     binaries = {key: getattr(args, key).resolve() for key in ("sdk_before", "sdk_contracts", "sdk_decode", "actor")}
-    paths = list((root / "crates/deadlib-lua/src").rglob("*.rs"))
+    paths = list((root / "crates/deadlib-lua-legacy/src").rglob("*.rs"))
     paths += list((root / "crates/deadsync-song-lua/src").rglob("*.rs"))
     paths += [root / "crates/deadsync-song-lua/examples/actor_input.rs", Path(__file__).resolve()]
     sources = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}

@@ -160,7 +160,9 @@ pub fn song_lua_time_to_second(
 ) -> f32 {
     match unit {
         SongLuaRuntimeTimeUnit::Beat => timing_player.get_time_for_beat_exact(value),
-        SongLuaRuntimeTimeUnit::Second => value - global_offset_seconds,
+        SongLuaRuntimeTimeUnit::Second => {
+            value - global_offset_seconds * timing_player.global_offset_rate()
+        }
         SongLuaRuntimeTimeUnit::BeatClock => value + timing_player.get_time_for_beat_exact(0.0),
     }
 }

@@ -13,7 +13,7 @@ mod runtime_regression_tests {
     use std::time::Instant;
 
     #[derive(Clone)]
-    struct TestProfile {
+    pub(super) struct TestProfile {
         remove_mask_bits: u8,
         turn_option: GameplayTurnOption,
         attack_mode: GameplayAttackMode,
@@ -24,10 +24,11 @@ mod runtime_regression_tests {
         fantastic_feedback_options: FantasticFeedbackOptions,
         noteskin_name: &'static str,
         mini_percent: f32,
-        global_offset_shift_ms: i32,
+        pub(super) global_offset_shift_ms: i32,
         mini_indicator_options: GameplayMiniIndicatorOptions,
         target_score: GameplayTargetScoreSetting,
         density_graph: bool,
+        golf_enabled: bool,
         combo_milestones_enabled: bool,
     }
 
@@ -52,6 +53,7 @@ mod runtime_regression_tests {
                 mini_indicator_options: GameplayMiniIndicatorOptions::default(),
                 target_score: GameplayTargetScoreSetting::default(),
                 density_graph: false,
+                golf_enabled: false,
                 combo_milestones_enabled: true,
             }
         }
@@ -78,6 +80,7 @@ mod runtime_regression_tests {
     }
 
     impl GameplayProfileData for TestProfile {
+        fn golf_scoring_enabled(&self) -> bool { self.golf_enabled }
         fn insert_mask_bits(&self) -> u8 {
             0
         }
@@ -246,7 +249,7 @@ mod runtime_regression_tests {
         }
     }
 
-    struct NoSongLuaRuntime;
+    pub(super) struct NoSongLuaRuntime;
 
     impl SongLuaRuntimeBuilder<(), (), ()> for NoSongLuaRuntime {
         fn build_song_lua_runtime(
@@ -283,7 +286,7 @@ mod runtime_regression_tests {
         }
     }
 
-    type State = GameplayRuntimeState<TestProfile, (), (), ()>;
+    pub(super) type State = GameplayRuntimeState<TestProfile, (), (), ()>;
 
     fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_sec: f32) {
         debug_assert!(
@@ -843,7 +846,7 @@ mod runtime_regression_tests {
         }
     }
 
-    fn regression_song() -> SongData {
+    pub(super) fn regression_song() -> SongData {
         SongData {
             simfile_path: PathBuf::from("songs/Tests/gameplay-regression.ssc"),
             title: "Gameplay Regression".to_string(),
@@ -881,7 +884,7 @@ mod runtime_regression_tests {
         }
     }
 
-    fn regression_payload_with_segments(
+    pub(super) fn regression_payload_with_segments(
         timing_segments: TimingSegments,
         last_row: usize,
     ) -> GameplayChartData {
@@ -2721,6 +2724,9 @@ mod runtime_regression_tests {
                 );
                 state.chart_runtime.notes[0].note_type = NoteType::Roll;
                 state.progress.stage.autoplay_enabled = true;
+                // Isolate roll life from float row-crossing rounding at a
+                // calibrated head time (e.g. 0.516 s rounds below beat 1).
+                state.apply_global_offset_delta(-state.global_offset_seconds());
                 state.set_music_rate(rate);
                 state.display.noteskin_effects.set_receptor_step_behavior(
                     0,
@@ -3313,6 +3319,32 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn golf_scores_chords_once_and_leaves_disabled_player_untouched() {
+        for enabled in [false, true] {
+            let p1 = TestProfile { golf_enabled: enabled, ..TestProfile::default() };
+            let mut state = regression_state_with_profiles([p1, TestProfile::default()]);
+            let row = 48;
+            state.chart_runtime.notes = vec![test_note(0, row, NoteType::Hold), test_note(1, row, NoteType::Tap)];
+            state.chart_runtime.note_time_cache_ns = vec![song_time_ns_from_seconds(1.0); 2];
+            state.chart_runtime.row_entries = vec![test_row_entry_with_times(&state.chart_runtime.notes, &state.chart_runtime.note_time_cache_ns, row, vec![0, 1])];
+            state.chart_runtime.row_indices.row_entry_ranges = [(0, 1), (0, 0)];
+            state.chart_runtime.row_indices.note_row_entry_indices = vec![0, 0];
+            for (note, error) in [(0, 23.0), (1, 50.0)] {
+                state.set_final_note_result(note, Judgment { time_error_ms: error, time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(error, 1.0), grade: JudgeGrade::Great, window: Some(TimingWindow::W3), miss_because_held: false });
+            }
+            state.finalize_row_judgment(0, row, 0, false);
+            let taps = state.players()[0].golf_taps;
+            assert_eq!(taps.judged_rows, u32::from(enabled));
+            assert_eq!(taps.raw_strokes, if enabled { 30 } else { 0 });
+            assert_eq!(state.players()[1].golf_taps.raw_strokes, 0);
+            // Resolving the hold tail adds no second head tap.
+            state.players_runtime.players[0].holds_resolved_for_score = 1;
+            assert_eq!(state.players()[0].golf_score().raw_strokes, taps.raw_strokes + 100);
+            assert_eq!(state.players()[0].golf_score().judged_rows, taps.judged_rows);
+        }
+    }
+
+    #[test]
     fn jump_row_finalization_uses_row_judgment_for_error_bar_hud() {
         let p1 = error_bar_profile(GameplayErrorBarOptions {
             mask_bits: GAMEPLAY_ERROR_BAR_TEXT,
@@ -3748,30 +3780,50 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn autosync_rate_correction() {
+    fn autosync_rate_correction_eliminates_the_measured_error() {
         for mode in [AutosyncMode::Song, AutosyncMode::Machine] {
             for rate in [0.5, 1.0, 1.5, 2.0] {
                 for error_ms in [-10.0, 10.0] {
-                    let mut state = regression_state();
+                    let mut state = regression_state_with_segments(
+                        TimingSegments {
+                            bpms: vec![(0.0, 120.0)],
+                            ..TimingSegments::default()
+                        },
+                        96,
+                    );
+                    state.apply_global_offset_delta(-state.global_offset_seconds());
                     state.set_music_rate(rate);
                     state.set_autosync_mode(mode);
                     set_single_judged_tap(&mut state, 0, 48, JudgeGrade::Fantastic, error_ms);
+                    state.refresh_timing_after_offset_change();
                     let song_offset = state.song_offset_seconds();
                     let global_offset = state.global_offset_seconds();
                     let error_ns = judgment::judgment_time_error_music_ns_from_ms(error_ms, rate);
-                    let hit = state
-                        .note_hit_eval(0, 1_000_000_000, 1_000_000_000 + error_ns)
-                        .expect("10 ms hit is inside the judgment window");
-                    state.chart_runtime.notes[0].result =
-                        Some(state.build_final_note_hit_plan(0, hit, rate).judgment);
+                    let event_source_time_ns =
+                        state.chart_runtime.note_time_cache_ns[0] + error_ns;
 
-                    for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
-                        state.apply_autosync_for_row_hits(0);
+                    // Replay the same physical timing after correction, using the real
+                    // mapped-clock and note-cache paths rather than only inspecting
+                    // the offset setting. A second batch must remain centered.
+                    for batch in 0..2 {
+                        for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT {
+                            let judgment =
+                                autosync_judgment_at_source_time(&mut state, event_source_time_ns);
+                            state.chart_runtime.notes[0].result = Some(judgment);
+                            state.apply_autosync_for_row_hits(0);
+                        }
+                        let residual =
+                            autosync_judgment_at_source_time(&mut state, event_source_time_ns);
+                        assert!(
+                            residual.time_error_ms.abs() < 0.001,
+                            "mode={mode:?}, rate={rate}, error_ms={error_ms}, batch={batch}, residual_ms={}",
+                            residual.time_error_ms,
+                        );
                     }
 
                     let correction = -error_ms / 1000.0;
                     let (song_delta, global_delta) = match mode {
-                        AutosyncMode::Song => (correction, 0.0),
+                        AutosyncMode::Song => (correction * rate, 0.0),
                         AutosyncMode::Machine => (0.0, correction),
                         AutosyncMode::Off => unreachable!(),
                     };
@@ -3788,6 +3840,71 @@ mod runtime_regression_tests {
                     assert_eq!(state.autosync_standard_deviation(), 0.0);
                 }
             }
+        }
+    }
+
+    fn autosync_judgment_at_source_time(state: &mut State, source_time_ns: SongTimeNs) -> Judgment {
+        let rate = state.music_rate();
+        let now = Instant::now();
+        let clock = current_song_clock_snapshot(
+            GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_nanos: source_time_ns,
+                    music_seconds_per_second: rate,
+                    has_music_mapping: true,
+                    valid_at: now,
+                    valid_at_host_nanos: 1,
+                    ..GameplayStreamClockSnapshot::default()
+                },
+                ..GameplayAudioSnapshot::default()
+            },
+            rate,
+            0.0,
+        );
+        let event_time_ns = song_clock_music_time_ns(clock, now, 1);
+        let hit = state
+            .note_hit_eval(0, state.chart_runtime.note_time_cache_ns[0], event_time_ns)
+            .expect("autosync probe stays within the judgment window");
+        state.build_final_note_hit_plan(0, hit, rate).judgment
+    }
+
+    #[test]
+    fn autosync_discards_partial_samples_when_music_rate_changes() {
+        for mode in [AutosyncMode::Song, AutosyncMode::Machine] {
+            let mut state = regression_state();
+            state.set_music_rate(0.5);
+            state.set_autosync_mode(mode);
+            for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT / 2 {
+                state.apply_autosync_offset_correction(song_time_ns_from_seconds(0.010));
+            }
+            assert_eq!(
+                state.autosync_sample_count(),
+                AUTOSYNC_OFFSET_SAMPLE_COUNT / 2
+            );
+            let song_offset = state.song_offset_seconds();
+            let global_offset = state.global_offset_seconds();
+            assert!(!state.set_music_rate(0.5));
+            assert_eq!(
+                state.autosync_sample_count(),
+                AUTOSYNC_OFFSET_SAMPLE_COUNT / 2
+            );
+
+            assert!(state.set_music_rate(2.0));
+            assert_eq!(state.autosync_sample_count(), 0);
+            for _ in 0..AUTOSYNC_OFFSET_SAMPLE_COUNT - 1 {
+                state.apply_autosync_offset_correction(song_time_ns_from_seconds(-0.010));
+            }
+            assert_eq!(state.song_offset_seconds(), song_offset);
+            assert_eq!(state.global_offset_seconds(), global_offset);
+            state.apply_autosync_offset_correction(song_time_ns_from_seconds(-0.010));
+
+            let (song_delta, global_delta) = match mode {
+                AutosyncMode::Song => (-0.020, 0.0),
+                AutosyncMode::Machine => (0.0, -0.010),
+                AutosyncMode::Off => unreachable!(),
+            };
+            assert!((state.song_offset_seconds() - song_offset - song_delta).abs() < 1e-6);
+            assert!((state.global_offset_seconds() - global_offset - global_delta).abs() < 1e-6);
         }
     }
 
@@ -3823,7 +3940,7 @@ mod runtime_regression_tests {
                     // ITGmania accepts only standard deviations strictly below 30 ms.
                     let correction = if spread_ms < 30.0 { 0.010 } else { 0.0 };
                     let (song_delta, global_delta) = match mode {
-                        AutosyncMode::Song => (correction, 0.0),
+                        AutosyncMode::Song => (correction * rate, 0.0),
                         AutosyncMode::Machine => (0.0, correction),
                         AutosyncMode::Off => unreachable!(),
                     };

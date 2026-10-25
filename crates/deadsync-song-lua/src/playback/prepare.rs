@@ -1,4 +1,8 @@
 use super::*;
+
+#[cfg(test)]
+#[path = "prepare_tests.rs"]
+mod submission_tests;
 pub(crate) type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
 
@@ -20,12 +24,19 @@ pub(crate) struct GameplaySongLuaLayer<S> {
 /// then hand it to the shared gameplay runtime builder.
 #[derive(Debug)]
 pub struct PreparedGameplaySongLua<S> {
+    pub(crate) compile_succeeded: bool,
     pub(crate) primary: Option<GameplayCompiledSongLua<S>>,
     pub(crate) background_layers: Vec<GameplaySongLuaLayer<S>>,
     pub(crate) foreground_layers: Vec<GameplaySongLuaLayer<S>>,
 }
 
 impl<S> PreparedGameplaySongLua<S> {
+    /// Approval belongs to this preparation, never to a persistent chart hash.
+    /// Failed sessions, skipped layers, and unsupported captures do not qualify.
+    pub fn compile_succeeded(&self) -> bool {
+        self.compile_succeeded
+    }
+
     /// Inspect compiled data without preparation timings or transferring a VM.
     #[cfg(any(feature = "test-support", feature = "performance"))]
     pub fn compiled_layers(&self) -> impl Iterator<Item = &CompiledSongLua<S>> {
@@ -44,7 +55,10 @@ impl<S> PreparedGameplaySongLua<S> {
             .chain(self.foreground_layers.iter().map(|p| &p.compiled))
             .filter(|compiled| compiled.live_scene.is_some()).count();
         if count == 0 { return Ok(None); }
-        if count != 1 { return Err("live gameplay requires one shared Lua session".into()); }
+        if count != 1 {
+            self.compile_succeeded = false;
+            return Err("live gameplay requires one shared Lua session".into());
+        }
         let mut scene = None;
         let mut targets = Vec::new();
         if let Some(primary) = &mut self.primary {
@@ -63,7 +77,10 @@ impl<S> PreparedGameplaySongLua<S> {
                 .map(|(local, &global)| (global, LiveTarget::Foreground(layer, local))));
         }
         let mut scene = scene.expect("one scene counted before transferring ownership");
-        scene.bind_targets(targets)?;
+        if let Err(error) = scene.bind_targets(targets) {
+            self.compile_succeeded = false;
+            return Err(error);
+        }
         Ok(Some(scene))
     }
 
@@ -125,6 +142,10 @@ impl<S: Clone + std::fmt::Debug>
         SongLuaRuntimeOverlayStateDelta,
     > for PreparedGameplaySongLua<S>
 {
+    fn song_lua_compile_succeeded(&self) -> bool {
+        self.compile_succeeded
+    }
+
     fn build_song_lua_runtime(
         self,
         params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
@@ -260,6 +281,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
             return Err("empty song layers did not retain the owned gameplay scene".into());
         }
         return Ok(PreparedGameplaySongLua {
+            compile_succeeded: false,
             primary: Some(GameplayCompiledSongLua {
                 compiled: compiled.pop().expect("one owned scene checked"),
                 compile_ms: compile_started.elapsed().as_secs_f64() * 1000.0,
@@ -276,6 +298,18 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     }
     let compile_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
     let mut data = PreparedGameplaySongLua::default();
+    data.compile_succeeded = targets.len()
+        == song.background_lua_changes.len() + song.foreground_lua_changes.len()
+        && compiled.iter().all(|compiled| {
+            let info = &compiled.info;
+            info.unsupported_perframes == 0
+                && info.unsupported_function_eases == 0
+                && info.unsupported_function_actions == 0
+                && info.unsupported_perframe_captures.is_empty()
+                && info.unsupported_function_ease_captures.is_empty()
+                && info.unsupported_function_action_captures.is_empty()
+                && info.skipped_message_command_captures.is_empty()
+        });
     for (compiled, target) in compiled.into_iter().zip(targets) {
         match target {
             SongLuaLayerTarget::Primary => {
@@ -358,6 +392,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
         primary,
         background_layers,
         foreground_layers,
+        compile_succeeded: false,
     }
 }
 
@@ -406,10 +441,14 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
         primary: None,
         background_layers,
         foreground_layers,
+        compile_succeeded: false,
     }
 }
 
 /// Compile all song layers with one session, retaining the independent-layer fallback.
+///
+/// This entry point preserves the requested execution mode. Application loading
+/// may use [`prepare_song_lua_with_runtime_fallback`] for interactive sources.
 pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     song: &SongData,
     context: &crate::SongLuaCompileContext,
@@ -446,6 +485,36 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
             |primary_ix| compile_song_lua_separately(song, primary_ix, &context, &compile_song_lua),
         )
     })
+}
+
+/// Prefer compiled playback, retrying input-dependent sources as one live
+/// session. The first runtime update waits for the gameplay clock handoff.
+/// Other compiler errors retain the ordinary preparation behavior.
+pub fn prepare_song_lua_with_runtime_fallback<S: Clone + std::fmt::Debug>(
+    song: &SongData,
+    context: &crate::SongLuaCompileContext,
+    compile_song_lua: impl Fn(
+        &Path,
+        &crate::SongLuaCompileContext,
+    ) -> Result<CompiledSongLua<S>, String>,
+    compile_song_lua_layers: impl Fn(
+        &[&Path],
+        usize,
+        &crate::SongLuaCompileContext,
+    ) -> Result<Vec<CompiledSongLua<S>>, String>,
+) -> PreparedGameplaySongLua<S> {
+    prepare_song_lua(
+        song,
+        context,
+        |path, context| {
+            crate::runtime_fallback::compile(context, |context| compile_song_lua(path, context))
+        },
+        |paths, primary, context| {
+            crate::runtime_fallback::compile(context, |context| {
+                compile_song_lua_layers(paths, primary, context)
+            })
+        },
+    )
 }
 
 /// Load the same song's replacement screen while transferring its Lua VM.
@@ -615,7 +684,7 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
         let mut draw_frames = compiled.draw_frames.clone();
         for frame in &mut draw_frames {
             // Match the chart-second clock used by rendered update tracks.
-            frame.second -= global_offset_seconds;
+            frame.second -= global_offset_seconds * timing_player.global_offset_rate();
         }
         overlays.push(SongLuaOverlayActor {
             kind: SongLuaOverlayKind::UpdateTracks {
@@ -1368,6 +1437,7 @@ mod tests {
 impl<S> Default for PreparedGameplaySongLua<S> {
     fn default() -> Self {
         Self {
+            compile_succeeded: false,
             primary: None,
             background_layers: Vec::new(),
             foreground_layers: Vec::new(),

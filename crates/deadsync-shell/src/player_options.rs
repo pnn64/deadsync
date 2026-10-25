@@ -21,6 +21,7 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
             smx_input: config.smx_input,
             smx_panel_lights: config.smx_panel_lights,
             scorebox_available: deadsync_online::score_compat::is_gs_get_scores_service_allowed(),
+            golf_enabled: config.enable_golf,
             keyboard_features: config.keyboard_features,
             tournament_mode: config.tournament.enabled,
         },
@@ -58,9 +59,11 @@ pub(crate) fn gameplay_profiles(
     tournament: deadsync_config::theme::TournamentModeOptions,
     play_style: profile_data::PlayStyle,
 ) -> [profile_data::Profile; MAX_PLAYERS] {
+    let golf_enabled = deadsync_config::runtime::get().enable_golf;
     std::array::from_fn(|idx| {
         let mut options = options[idx].clone();
         apply_tournament_policy(&mut options, tournament, play_style);
+        apply_golf_policy(&mut options, golf_enabled);
         gameplay_profile(
             profile::get_for_side(profile_data::player_side_for_index(idx)),
             options,
@@ -68,6 +71,13 @@ pub(crate) fn gameplay_profiles(
             heart_rate_device_ids[idx].clone(),
         )
     })
+}
+
+fn apply_golf_policy(options: &mut profile_data::PlayerOptionsData, enabled: bool) {
+    if !enabled {
+        options.show_golf_score = false;
+        options.show_golf_results = false;
+    }
 }
 
 fn apply_tournament_policy(
@@ -135,6 +145,26 @@ mod tests {
         assert_eq!(merged.current_player_options(), options);
         assert_eq!(merged.judgment_palette_id.as_deref(), Some("palette-1"));
         assert_eq!(merged.heart_rate_device_id.as_deref(), Some("hrm-1"));
+    }
+
+    #[test]
+    fn golf_master_switch_disables_only_the_gameplay_copy() {
+        let original = profile_data::PlayerOptionsData {
+            show_golf_score: true,
+            show_golf_results: true,
+            golf_all_charts: true,
+            golf_stroke_feedback: true,
+            ..Default::default()
+        };
+        let mut effective = original.clone();
+        apply_golf_policy(&mut effective, false);
+        assert!(!effective.show_golf_score && !effective.show_golf_results);
+        assert!(effective.golf_all_charts && effective.golf_stroke_feedback);
+        assert!(original.show_golf_score && original.show_golf_results);
+
+        let mut effective = original.clone();
+        apply_golf_policy(&mut effective, true);
+        assert_eq!(effective, original);
     }
 
     #[test]

@@ -1529,6 +1529,84 @@ fn online_enable_choice_persists_before_reinitializing_services() {
 }
 
 #[test]
+fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config {
+        select_music_show_golf_pars: true,
+        select_music_scorebox_cycle_golf: true,
+        ..Default::default()
+    });
+    let pars_row = SELECT_MUSIC_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ShowGolfPars)
+        .unwrap();
+    let boards_row = SELECT_MUSIC_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::GsBoxLeaderboards)
+        .unwrap();
+    let original_mask = state.scorebox_cycle_mask;
+    assert!(!golf_features_enabled(&state));
+    assert!(
+        !submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
+            .contains(&pars_row)
+    );
+    assert_eq!(
+        row_choices(
+            &state,
+            SubmenuKind::SelectMusic,
+            SELECT_MUSIC_OPTIONS_ROWS,
+            boards_row
+        )
+        .len(),
+        4
+    );
+    assert!(matches!(
+        toggle_select_music_scorebox_cycle_option(&mut state, 4),
+        ThemeEffect::None
+    ));
+    assert_eq!(state.scorebox_cycle_mask, original_mask);
+
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::EnableGolf);
+    let effect = apply_submenu_choice_delta(&mut state, &assets, 1, NavWrap::Clamp).unwrap();
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::EnableGolf(true)
+            )
+        ))
+    ));
+    assert!(golf_features_enabled(&state));
+    assert!(
+        submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
+            .contains(&pars_row)
+    );
+    assert_eq!(
+        row_choices(
+            &state,
+            SubmenuKind::SelectMusic,
+            SELECT_MUSIC_OPTIONS_ROWS,
+            boards_row
+        )
+        .len(),
+        5
+    );
+    state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row] = 4;
+    apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(!golf_features_enabled(&state));
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row],
+        3
+    );
+    assert_eq!(state.scorebox_cycle_mask, original_mask);
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        1
+    );
+}
+
+#[test]
 fn arrowcloud_enable_persists_before_reinitializing_services() {
     let asset_manager = AssetManager::new();
     let mut state = init();

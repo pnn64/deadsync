@@ -168,6 +168,7 @@ pub enum SubRowId {
     WheelShowFails,
     WheelItlPoints,
     NewPackBadge,
+    ShowGolfPars,
     FolderStats,
     ShowPatternInfo,
     StepArtistBox,
@@ -206,6 +207,7 @@ pub enum SubRowId {
     GrooveStatsQrLogin,
     // ArrowCloud Options
     EnableArrowCloud,
+    EnableGolf,
     ArrowCloudSubmitFails,
     ArrowCloudResultDialogs,
     ArrowCloudQrLogin,

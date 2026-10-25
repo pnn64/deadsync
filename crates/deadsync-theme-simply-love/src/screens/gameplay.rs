@@ -187,6 +187,26 @@ fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
 /// Compare the precise normal score values rather than their formatted or
 /// predictive display values, matching the upstream theme's behavior.
 pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAYERS] {
+    let golf: [bool; MAX_PLAYERS] = std::array::from_fn(|i| {
+        let p = &state.profiles()[i];
+        p.show_golf_score
+            && (p.golf_all_charts
+                || deadsync_chart::golf::par(
+                    &state.song().simfile_path,
+                    &state.charts()[i].difficulty,
+                )
+                .is_some())
+    });
+    if golf.iter().any(|&enabled| enabled) {
+        return if state.num_players() == 2 && golf == [true, true] {
+            score_leader_alphas([
+                -state.players()[0].golf_score().displayed(),
+                -state.players()[1].golf_score().displayed(),
+            ])
+        } else {
+            [1.0; MAX_PLAYERS]
+        };
+    }
     let show_ex_score = [
         state.profiles()[0].show_ex_score,
         state.profiles()[1].show_ex_score,
@@ -967,6 +987,9 @@ impl State {
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
+        if !self.song_lua_output.errors.is_empty() {
+            self.gameplay.mods.song_lua_compile_succeeded = false;
+        }
         scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
         self.song_lua = Some(scene);
         Ok(())
@@ -997,6 +1020,9 @@ impl State {
     /// The shell drains sounds and requests once after each gameplay frame.
     /// Broadcast listeners have already run in the retained Lua scene.
     pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
+        if !self.song_lua_output.errors.is_empty() {
+            self.gameplay.mods.song_lua_compile_succeeded = false;
+        }
         std::mem::take(&mut self.song_lua_output)
     }
 
@@ -1823,6 +1849,7 @@ pub fn init(
     state.hide_song_intro = startup.hide_in;
     if let Some(scene) = live_scene {
         if let Err(error) = state.attach_song_lua(scene) {
+            state.gameplay.mods.song_lua_compile_succeeded = false;
             log::warn!("Cannot attach prepared song Lua: {error}");
         }
     }
@@ -4918,6 +4945,12 @@ pub fn frame_layers<'a>(
                     diff_x,
                 );
                 let chart = &state.charts()[player_idx];
+                if let Some((_, par)) = crate::screens::components::gameplay::golf::score(state, player_idx) {
+                    crate::screens::components::gameplay::golf::push_par_badge(
+                        actors, state.machine_font(), par, [diff_x, y],
+                    );
+                    return;
+                }
                 let difficulty_color = color::difficulty_rgba_with_scheme(
                     &chart.difficulty,
                     state.active_color_index(),
@@ -4996,7 +5029,10 @@ pub fn frame_layers<'a>(
 
                 if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
                     let show_ex_score = profile.show_ex_score;
-                    let show_hard_ex_score = show_ex_score && profile.show_hard_ex_score;
+                    let show_hard_ex_score = show_ex_score
+                        && profile.show_hard_ex_score
+                        && crate::screens::components::gameplay::golf::score(state, player_idx)
+                            .is_none();
                     let score_mode = score_display_mode_from_profile(profile.score_display_mode);
                     // EX and H.EX share one score snapshot.
                     let ex_score = show_ex_score.then(|| {
@@ -5026,6 +5062,13 @@ pub fn frame_layers<'a>(
                         },
                     );
 
+                    crate::screens::components::gameplay::golf::push_details(
+                        actors,
+                        state,
+                        player_idx,
+                        [score_x, score_y],
+                        score_zoom,
+                    );
                     if show_hard_ex_score && let Some(ex_score) = &ex_score {
                         let hard_ex_percent =
                             deadsync_gameplay::display_hard_ex_score_percent_for_mode(
@@ -5530,6 +5573,16 @@ pub fn frame_layers<'a>(
                     z: 90,
                 },
             );
+            crate::screens::components::gameplay::golf::push_details(
+                actors,
+                state,
+                player,
+                [
+                    screen_center_x() + if p2 { width / 2.75 } else { -width / 4.3 },
+                    56.0,
+                ],
+                0.5,
+            );
         }
         ScreenLayer::Stage => push_stage_label(actors, state, asset_manager),
         ScreenLayer::System => {
@@ -5540,6 +5593,12 @@ pub fn frame_layers<'a>(
 }
 
 fn score_value_color(state: &State, player: usize) -> (f64, [f32; 4]) {
+    if let Some((score, _)) = crate::screens::components::gameplay::golf::score(state, player) {
+        return (
+            score.displayed(),
+            crate::screens::components::gameplay::golf::COLOR,
+        );
+    }
     let profile = &state.profiles()[player];
     let mode = score_display_mode_from_profile(profile.score_display_mode);
     if profile.show_ex_score {

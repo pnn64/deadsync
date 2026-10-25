@@ -24,7 +24,7 @@ def main():
                         help="Measure only the named workload; may be repeated")
     parser.add_argument("--reverse-first", action="store_true",
                         help="Start with after/before, then alternate subsequent pairs")
-    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs", "state_boundaries", "shared_inputs", "timed_inputs"), default="live")
+    parser.add_argument("--suite", choices=("live", "startup", "actor_state", "finalization_events", "asset_strings", "sound_paths", "comparison_text", "borrowed_compat", "capture_inputs", "navigation_inputs", "state_boundaries", "shared_inputs", "timed_inputs", "string_states", "movement_inputs", "runtime_inputs", "native_inputs", "batch_inputs"), default="live")
     args = parser.parse_args()
     assert args.pairs > 0 and args.samples > 0
     root = Path(__file__).resolve().parent.parent
@@ -88,6 +88,28 @@ def main():
             ("offline_state_boundaries", "offline", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
             ("live_state_boundaries", "live", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
         ]
+    if args.suite == "string_states":
+        cases = [
+            ("offline_basic", "offline", "tests/fixtures/song_lua/basic.lua"),
+            ("live_string_states", "live", "crates/deadsync-song-lua/tests/fixtures/state-machine-input.lua"),
+            ("live_timed_inputs", "live", "crates/deadsync-song-lua/tests/fixtures/timed-input.lua"),
+            ("offline_state_boundaries", "offline", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+            ("live_state_boundaries", "live", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+        ]
+    if args.suite in ("movement_inputs", "runtime_inputs", "native_inputs", "batch_inputs"):
+        cases = [
+            ("offline_basic", "offline", "tests/fixtures/song_lua/basic.lua"),
+            ("live_movement", "live", "crates/deadsync-song-lua/tests/fixtures/movement-input.lua"),
+            ("live_timed_inputs", "live", "crates/deadsync-song-lua/tests/fixtures/timed-input.lua"),
+            ("offline_state_boundaries", "offline", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+            ("live_state_boundaries", "live", "crates/deadsync-song-lua/tests/perf/state_boundaries.lua"),
+        ]
+        if args.suite in ("runtime_inputs", "native_inputs", "batch_inputs"):
+            cases.append(("live_update_only", "live", "crates/deadsync-song-lua/tests/fixtures/update-only-input.lua"))
+        if args.suite in ("native_inputs", "batch_inputs"):
+            cases.append(("live_fanout", "live", "crates/deadsync-song-lua/tests/fixtures/fanout-input.lua"))
+        if args.suite == "batch_inputs":
+            cases.append(("live_fanout_states", "live", "crates/deadsync-song-lua/tests/fixtures/fanout-state-input.lua"))
     if args.only:
         selected = set(args.only)
         cases = [case for case in cases if case[0] in selected]
@@ -95,7 +117,7 @@ def main():
         if missing:
             parser.error(f"Unknown workload(s) in this suite: {', '.join(sorted(missing))}")
     args.out.mkdir(parents=True, exist_ok=True)
-    paths = [path for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin")
+    paths = [path for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin")
              for path in (root / "crates" / crate / "src").rglob("*.rs")]
     paths += [root / name for name in sorted({case[2] for case in cases})]
     paths += [root / name for name in ["Cargo.toml", "Cargo.lock", ".cargo/config.toml",

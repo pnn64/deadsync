@@ -45,3 +45,33 @@ fn method_identity_is_exact_and_does_not_root_replaced_functions() {
         lua.gc_collect().unwrap();
     }
 }
+
+#[test]
+fn position_identities_keep_setter_target_and_weak_function_roots() {
+    struct Dropped(Arc<AtomicBool>);
+    impl Drop for Dropped {
+        fn drop(&mut self) {
+            self.0.store(true, Relaxed);
+        }
+    }
+    let lua = Lua::new();
+    for setter in actor_methods::Setter::ALL {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let marker = Dropped(dropped.clone());
+        let function = lua
+            .create_function(move |_, ()| {
+                let _ = &marker;
+                Ok(())
+            })
+            .unwrap();
+        let method = Method::Bound(setter, 0x1230);
+        register(&lua, &function, method).unwrap();
+        assert_eq!(identity(&lua, &function).unwrap(), Some(method));
+        drop(function);
+        lua.gc_collect().unwrap();
+        assert!(
+            dropped.load(Relaxed),
+            "method metadata must not root a bound function"
+        );
+    }
+}

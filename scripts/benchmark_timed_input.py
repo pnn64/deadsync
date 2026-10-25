@@ -20,10 +20,10 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     binaries = {name: getattr(args, name).resolve() for name in ("sdk_before", "sdk_after", "frames", "timed", "actor_before", "actor_after")}
     hashes = {name: sha(path) for name, path in binaries.items()}
-    paths = [p for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin") for p in (root/"crates"/crate/"src").rglob("*.rs")]
-    paths += [root/name for name in ("crates/deadlib-lua/examples/prepared_schema.rs", "crates/deadsync-song-lua/examples/input_frames.rs", "crates/deadsync-song-lua/examples/timed_input.rs", "crates/deadsync-song-lua/examples/actor_input.rs", "crates/deadsync-song-lua/tests/perf/input_frame_2355.rs", "crates/deadsync-song-lua/tests/fixtures/actor-input.lua", "crates/deadsync-song-lua/tests/fixtures/timed-input.lua")]
+    paths = [p for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin") for p in (root/"crates"/crate/"src").rglob("*.rs")]
+    paths += [root/name for name in ("crates/deadlib-lua-legacy/examples/prepared_schema.rs", "crates/deadsync-song-lua/examples/input_frames.rs", "crates/deadsync-song-lua/examples/timed_input.rs", "crates/deadsync-song-lua/examples/actor_input.rs", "crates/deadsync-song-lua/tests/perf/input_frame_2355.rs", "crates/deadsync-song-lua/tests/fixtures/actor-input.lua", "crates/deadsync-song-lua/tests/fixtures/timed-input.lua")]
     paths += [Path(__file__).resolve(), root/"scripts/benchmark_shared_input.py"]
-    paths += [root/name for name in ("Cargo.toml", "Cargo.lock", ".cargo/config.toml", "crates/deadlib-lua/Cargo.toml", "crates/deadsync-song-lua/Cargo.toml", "tests/support/song_lua_metrics.rs")]
+    paths += [root/name for name in ("Cargo.toml", "Cargo.lock", ".cargo/config.toml", "crates/deadlib-lua-legacy/Cargo.toml", "crates/deadsync-song-lua/Cargo.toml", "tests/support/song_lua_metrics.rs")]
     sources = {p.relative_to(root).as_posix(): sha(p) for p in paths}
     template = (root/"crates/deadsync-song-lua/tests/fixtures/actor-input.lua").read_text()
     fixtures = {}

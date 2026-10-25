@@ -58,7 +58,8 @@ pub(crate) fn evaluation_view(
             outcome.fail_time.is_some(),
         );
         let chart_hash = gs.charts()[player_idx].short_hash.as_str();
-        let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
+        let lua_submit_allowed = gs.mods.song_lua_compile_succeeded
+            || score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
         let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
         let expected_groovestats_submit = policy.enable_groovestats
             && passed
@@ -143,6 +144,8 @@ pub(crate) fn evaluation_view(
                 show_fa_plus_pane: player.show_fa_plus_pane,
                 track_early_judgments: player.track_early_judgments,
                 dim_post_fail_scatter: player.dim_post_fail_scatter,
+                golf_score: player.golf_score,
+                golf_par: player.golf_par,
                 disabled_timing_windows: prof.timing_windows.disabled_windows(),
                 machine_records,
                 machine_record_highlight_rank,

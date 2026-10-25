@@ -1,6 +1,6 @@
 # Lua captured-state and table boundaries, 2026-10-23
 
-Baseline: `a85295a5e`. This pass adds safe closure restoration and fixed array reads to `deadlib-lua`, batches RGB extraction in Song Lua, and removes repeated key borrowing from noteskin alias normalization. The release patch moves from `0.5.2350` to `0.5.2351`.
+Baseline: `a85295a5e`. This pass adds safe closure restoration and fixed array reads to `deadlib-lua-legacy`, batches RGB extraction in Song Lua, and removes repeated key borrowing from noteskin alias normalization. The release patch moves from `0.5.2350` to `0.5.2351`.
 
 ## Changes and ownership
 
@@ -61,7 +61,7 @@ No theme or rendering policy changed. Pixel comparisons, whole-app FPS and a rep
 ## Reproduction
 
 ```powershell
-cargo test -p deadlib-lua --no-default-features --features lua51,vendored,send --test raw_array --test upvalues --release --locked -j 2 --config profile.release.lto=false
+cargo test -p deadlib-lua-legacy --no-default-features --features lua51,vendored,send --test raw_array --test upvalues --release --locked -j 2 --config profile.release.lto=false
 # Repeat the focused native targets with lua54 in place of lua51.
 cargo build -p deadsync-song-lua --example state_boundaries --example compile_pipeline --release --locked -j 2 --config profile.release.lto=false
 cargo build -p deadsync-noteskin --example compile_boundaries --release --locked -j 2 --config profile.release.lto=false

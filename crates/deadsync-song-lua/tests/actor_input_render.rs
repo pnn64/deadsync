@@ -1,6 +1,10 @@
 #![cfg(target_os = "windows")]
 //! One focused production playback/pixel differential, without the Song lib harness.
 pub use deadsync_song_lua::*;
+#[path = "../src/input.rs"]
+mod input;
+#[path = "../src/runtime_fallback.rs"]
+mod runtime_fallback;
 #[path = "../src/actor_quaternion.rs"]
 mod actor_quaternion;
 #[allow(dead_code)]
@@ -150,7 +154,17 @@ mod renderer {
             backend.draw(frame, textures, false).unwrap();
             backend.capture_frame().unwrap()
         }
-        for fixture in ["actor-input.lua", "stateful-input.lua", "timed-input.lua"] {
+        for fixture in [
+            "actor-input.lua",
+            "stateful-input.lua",
+            "timed-input.lua",
+            "state-machine-input.lua",
+            "movement-input.lua",
+            "update-only-input.lua",
+            "fanout-input.lua",
+            "fanout-state-input.lua",
+            "indexed-input.lua",
+        ] {
             let path = Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures")
                 .join(fixture);

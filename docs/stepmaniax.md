@@ -11,8 +11,12 @@ pad, the per-profile config system, how it's stored, the firmware/hardware
 caveats, the internal architecture, and how to capture diagnostics for a bug
 report.
 
-> FSRio pads share the same Configure Pads UI and profile system; most of this
-> applies to them too. SMX-specific behavior is called out where it matters.
+> FSRio pads share the Configure Pads threshold UI. Named pad configs and
+> automatic default restoration currently apply only to SMX. FSRio edits are
+> saved to the board after two seconds without another edit, and pending changes
+> are flushed when leaving the editor or exiting DeadSync. See the
+> [FSRio persistence investigation](fsrio-persistence.md) for implementation
+> details and a power-cycle verification procedure.
 
 ## Contents
 

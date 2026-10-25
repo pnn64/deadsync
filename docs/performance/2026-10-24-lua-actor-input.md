@@ -10,7 +10,7 @@ Three retained changes:
 
 Method identity comes from a private weak-key registry populated at native function creation. Names and C-function status alone are insufficient. Compilation inspects raw fields, authenticated lookup/assignment adapters, class inheritance and the bound method's actual target. Authored replacements and functional metamethods reject the snapshot. Weak keys avoid rooting replaced functions; opaque target pointers are identities only and are never dereferenced. Registration runs only in live loading, before which `begin_live_runtime` is established by the loader. Offline compilation does not build this registry.
 
-The common input schema is reused by predicates and actor snapshots. Actor schemas, field names, class rules and state ownership remain in deadsync-song-lua; bytecode decoding, action contracts and execution remain in deadlib-lua. No theme or renderer implementation changed. The full register clear retained by the preceding pass is unchanged.
+The common input schema is reused by predicates and actor snapshots. Actor schemas, field names, class rules and state ownership remain in deadsync-song-lua; bytecode decoding, action contracts and execution remain in deadlib-lua-legacy. No theme or renderer implementation changed. The full register clear retained by the preceding pass is unchanged.
 
 ## Measurements
 

@@ -1,0 +1,33 @@
+diff --git a/opus/CMakeLists.txt b/opus/CMakeLists.txt
+index fcf034b..afef617 100644
+--- a/opus/CMakeLists.txt
++++ b/opus/CMakeLists.txt
+@@ -281,9 +281,17 @@ endif()
+ 
+ if(MSVC)
+   if(OPUS_STATIC_RUNTIME)
+-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
++    if(CMAKE_BUILD_TYPE MATCHES DEBUG)
++      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDebug")
++    else()
++      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
++    endif()
+   else()
+-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
++    if(CMAKE_BUILD_TYPE MATCHES DEBUG)
++      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL")
++    else()
++      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
++    endif()
+   endif()
+ endif()
+ 
+@@ -423,7 +431,7 @@ endif()
+ 
+ if (OPUS_OSCE)
+   add_sources_group(opus lpcnet ${osce_headers} ${osce_sources})
+-  target_compile_definitions(opus PRIVATE ENABLE_OSCE)
++  target_compile_definitions(opus PRIVATE ENABLE_OSCE ENABLE_OSCE_BWE)
+ endif()
+ 
+ if(NOT OPUS_DISABLE_INTRINSICS)

@@ -209,6 +209,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::ShowGolfPars,
+        label: lookup_key("OptionsSelectMusic", "ShowGolfPars"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::NewPackBadge,
         label: lookup_key("OptionsSelectMusic", "NewPackBadge"),
         choices: &[
@@ -337,6 +346,7 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
             localized_choice("OptionsSelectMusic", "ScoreboxCycleEX"),
             localized_choice("OptionsSelectMusic", "ScoreboxCycleHEX"),
             localized_choice("OptionsSelectMusic", "ScoreboxCycleTournaments"),
+            localized_choice("OptionsSelectMusic", "ScoreboxCycleGolf"),
         ],
         inline: true,
     },
@@ -512,6 +522,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::SmGolfPars,
+        name: lookup_key("OptionsSelectMusic", "ShowGolfPars"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusic",
+            "ShowGolfParsHelp",
+        ))],
+    },
+    Item {
         id: ItemId::SmNewPackBadge,
         name: lookup_key("OptionsSelectMusic", "NewPackBadge"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -618,10 +636,10 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     Item {
         id: ItemId::SmScoreboxCycle,
         name: lookup_key("OptionsSelectMusic", "GSBoxLeaderboards"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsSelectMusicHelp",
-            "GsBoxLeaderboardsHelp",
-        ))],
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsSelectMusicHelp", "GsBoxLeaderboardsHelp")),
+            HelpEntry::Paragraph(lookup_key("OptionsSelectMusicHelp", "GolfLeaderboardHelp")),
+        ],
     },
     Item {
         id: ItemId::Exit,
@@ -642,7 +660,7 @@ pub(in crate::screens::options) const fn scorebox_cycle_mask_from_config(
         cfg.select_music_scorebox_cycle_ex,
         cfg.select_music_scorebox_cycle_hard_ex,
         cfg.select_music_scorebox_cycle_tournaments,
-    )
+    ) | ((cfg.select_music_scorebox_cycle_golf as u8) << 4)
 }
 
 pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
@@ -650,7 +668,7 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
     choice_idx: usize,
 ) -> ThemeEffect {
     let bit = scorebox_cycle_bit_from_choice(choice_idx);
-    if bit == 0 {
+    if bit == 0 || (choice_idx == 4 && !golf_features_enabled(state)) {
         return ThemeEffect::None;
     }
     let mut mask = state.scorebox_cycle_mask;

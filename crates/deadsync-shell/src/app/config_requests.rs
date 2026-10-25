@@ -402,6 +402,12 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         Request::EnableArrowCloud(enabled) => {
             config::runtime_update::update_enable_arrowcloud(enabled)
         }
+        Request::EnableGolf(enabled) => {
+            if config::runtime::get().enable_golf != enabled {
+                config::runtime_update::update_enable_golf(enabled);
+                deadsync_score::runtime_invalidate_golf_leaderboards();
+            }
+        }
         Request::SubmitArrowCloudFails(enabled) => {
             config::runtime_update::update_submit_arrowcloud_fails(enabled)
         }
@@ -489,6 +495,9 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::WheelItlPoints(value) => {
             config::runtime_update::update_select_music_wheel_itl_points(value)
         }
+        Request::ShowGolfPars(enabled) => {
+            config::runtime_update::update_select_music_show_golf_pars(enabled);
+        }
         Request::NewPackMode(mode) => {
             config::runtime_update::update_select_music_new_pack_mode(mode)
         }
@@ -526,6 +535,10 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
             config::runtime_update::update_select_music_scorebox_placement(mode)
         }
         Request::ScoreboxCycleMask(mask) => {
+            if config::runtime::get().select_music_scorebox_cycle_golf != (mask & (1 << 4) != 0) {
+                deadsync_score::runtime_invalidate_golf_leaderboards();
+            }
+            config::runtime_update::update_select_music_scorebox_cycle_golf(mask & (1 << 4) != 0);
             config::runtime_update::update_select_music_scorebox_cycle_itg(mask & (1 << 0) != 0);
             config::runtime_update::update_select_music_scorebox_cycle_ex(mask & (1 << 1) != 0);
             config::runtime_update::update_select_music_scorebox_cycle_hard_ex(

@@ -1058,6 +1058,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::WheelItlPoints => crate::SimplyLoveSelectMusicConfigRequest::WheelItlPoints(
                 yes_no_from_choice(new_index),
             ),
+            SubRowId::ShowGolfPars => {
+                crate::SimplyLoveSelectMusicConfigRequest::ShowGolfPars(new_index == 1)
+            }
             SubRowId::NewPackBadge => crate::SimplyLoveSelectMusicConfigRequest::NewPackMode(
                 select_music_new_pack_mode_from_choice(new_index),
             ),
@@ -1155,6 +1158,24 @@ pub(super) fn apply_submenu_choice_delta(
         let request = match row.id {
             SubRowId::EnableArrowCloud => {
                 crate::SimplyLoveOnlineConfigRequest::EnableArrowCloud(enabled)
+            }
+            SubRowId::EnableGolf => {
+                if !enabled {
+                    let select_music = &mut state.sub[SubmenuKind::SelectMusic];
+                    for indices in [
+                        &mut select_music.choice_indices,
+                        &mut select_music.cursor_indices,
+                    ] {
+                        if let Some(index) = get_choice_by_id_mut(
+                            indices,
+                            SELECT_MUSIC_OPTIONS_ROWS,
+                            SubRowId::GsBoxLeaderboards,
+                        ) {
+                            *index = (*index).min(3);
+                        }
+                    }
+                }
+                crate::SimplyLoveOnlineConfigRequest::EnableGolf(enabled)
             }
             SubRowId::ArrowCloudSubmitFails => {
                 crate::SimplyLoveOnlineConfigRequest::SubmitArrowCloudFails(enabled)

@@ -754,6 +754,7 @@ const fn scorebox_pane_filter(
         ex: config.select_music_scorebox_cycle_ex,
         hard_ex: config.select_music_scorebox_cycle_hard_ex,
         tournaments: config.select_music_scorebox_cycle_tournaments,
+        golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
     }
 }
 
@@ -3597,6 +3598,7 @@ impl App {
                 MusicWheelSlotRuntimeRequest::Song {
                     song,
                     chart_hashes,
+                    golf_pars,
                     lua_submit_allowed,
                     has_edit,
                     is_srpg_event,
@@ -3608,6 +3610,7 @@ impl App {
                     view.has_edit = has_edit;
                     view.is_srpg_event = is_srpg_event;
                     view.sync_pref = sync_pref;
+                    view.golf_pars = golf_pars;
                     for side_idx in 0..2 {
                         if !joined[side_idx] {
                             continue;
@@ -4502,6 +4505,7 @@ impl App {
         let update_started = Instant::now();
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
+        self.fsr_monitor.poll_pending_saves();
         let smx_screen_work = smx_runtime::screen_work(
             self.state.screens.current_screen,
             self.fsr_pads_active,
@@ -11044,6 +11048,8 @@ impl ApplicationHandler<UserEvent> for App {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.apply_pending_pad_config_commands();
+        self.fsr_monitor.flush_pending_saves();
         if let Err(error) = self.state.shell.fullscreen_state.restore() {
             warn!("Failed to restore desktop on exit: {error}");
         }
@@ -11769,6 +11775,8 @@ mod tests {
             show_fa_plus_pane: false,
             track_early_judgments: false,
             dim_post_fail_scatter: true,
+            golf_score: None,
+            golf_par: None,
             disabled_timing_windows: [false; 5],
             machine_records: Vec::new(),
             machine_record_highlight_rank: None,
@@ -11964,6 +11972,8 @@ mod tests {
             show_fa_plus_pane: true,
             track_early_judgments: true,
             dim_post_fail_scatter: true,
+            golf_score: None,
+            golf_par: None,
         }
     }
 

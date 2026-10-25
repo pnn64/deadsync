@@ -1647,10 +1647,8 @@ where
                     let global_offset_s = self.effective_player_global_offset_seconds(player);
                     let lead_in_s = self.clock.audio_clock.stream_lead_in_seconds(rate);
                     let stream_pos_s = self.clock.audio_clock.stream_position_seconds();
-                    let expected_stream_for_note_s =
-                        note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let expected_stream_for_miss_s =
-                        music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                    let expected_stream_for_note_s = note_time / rate + lead_in_s;
+                    let expected_stream_for_miss_s = music_time_sec / rate + lead_in_s;
                     let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
                     let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
 
@@ -1736,6 +1734,11 @@ where
             self.tap_row_judgment_callback = Some(callback);
         }
         record_player_live_timing_stats(&mut self.players_runtime.players[player], &final_judgment);
+        if self.profiles_runtime.profiles[player].golf_scoring_enabled() {
+            self.players_runtime.players[player].golf_taps.record_tap(
+                (final_judgment.grade != JudgeGrade::Miss).then_some(final_judgment.time_error_ms),
+            );
+        }
         if plan.record_display_window_counts {
             self.progress.window_counts.record_judgment(
                 player,

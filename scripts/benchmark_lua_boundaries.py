@@ -30,11 +30,11 @@ def main():
     if args.song:
         runs.append((args.song.resolve(), "lua_util::upvalue_batches_perf::benchmark_upvalue_batches"))
     paths = [root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml", Path(__file__).resolve()]
-    for crate in ("deadlib-lua", "deadsync-song-lua", "deadsync-noteskin"):
+    for crate in ("deadlib-lua-legacy", "deadsync-song-lua", "deadsync-noteskin"):
         paths += list((root / "crates" / crate / "src").rglob("*.rs"))
     paths += list((root / "crates/deadsync-song-lua/tests/perf").glob("upvalue_batches*.rs"))
     paths += [root / name for name in (
-        "crates/deadlib-lua/tests/upvalues.rs", "crates/deadlib-lua/tests/ignored_args.rs",
+        "crates/deadlib-lua-legacy/tests/upvalues.rs", "crates/deadlib-lua-legacy/tests/ignored_args.rs",
         "tests/support/perf.rs",
         "tests/perf/resource_support.rs",
         "crates/deadsync-song-lua/tests/perf/draw_capture.rs",

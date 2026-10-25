@@ -1,0 +1,515 @@
+//! Lua string handling.
+//!
+//! This module provides types for working with Lua strings from Rust.
+
+use std::borrow::Borrow;
+use std::hash::{Hash, Hasher};
+use std::ops::Deref;
+use std::os::raw::{c_int, c_void};
+use std::{cmp, fmt, mem, slice, str};
+
+use crate::error::{Error, Result};
+use crate::state::{Lua, WeakLua};
+use crate::traits::IntoLua;
+use crate::types::{LuaType, ValueRef};
+use crate::value::Value;
+
+#[cfg(feature = "serde")]
+use {
+    serde::ser::{Serialize, Serializer},
+    std::result::Result as StdResult,
+};
+
+/// Handle to an internal Lua string.
+///
+/// Unlike Rust strings, Lua strings may not be valid UTF-8.
+#[derive(Clone, PartialEq)]
+pub struct LuaString(pub(crate) ValueRef);
+
+impl LuaString {
+    /// Get a [`BorrowedStr`] if the Lua string is valid UTF-8.
+    ///
+    /// The returned `BorrowedStr` holds a strong reference to the Lua state to guarantee the
+    /// validity of the underlying data.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use mlua::{Lua, LuaString, Result};
+    /// # fn main() -> Result<()> {
+    /// # let lua = Lua::new();
+    /// let globals = lua.globals();
+    ///
+    /// let version: LuaString = globals.get("_VERSION")?;
+    /// assert!(version.to_str()?.contains("Lua"));
+    ///
+    /// let non_utf8: LuaString = lua.load(r#"  "test\255"  "#).eval()?;
+    /// assert!(non_utf8.to_str().is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline]
+    pub fn to_str(&self) -> Result<BorrowedStr> {
+        BorrowedStr::try_from(self)
+    }
+
+    /// Converts this Lua string to a [`String`].
+    ///
+    /// Any non-Unicode sequences are replaced with [`U+FFFD REPLACEMENT CHARACTER`][U+FFFD].
+    ///
+    /// This method returns [`String`] instead of [`Cow<'_, str>`] because lifetime cannot be
+    /// bound to a weak Lua object.
+    ///
+    /// [U+FFFD]: std::char::REPLACEMENT_CHARACTER
+    /// [`Cow<'_, str>`]: std::borrow::Cow
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use mlua::{Lua, Result};
+    /// # fn main() -> Result<()> {
+    /// let lua = Lua::new();
+    ///
+    /// let s = lua.create_string(b"test\xff")?;
+    /// assert_eq!(s.to_string_lossy(), "test\u{fffd}");
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline]
+    pub fn to_string_lossy(&self) -> String {
+        String::from_utf8_lossy(&self.as_bytes()).into_owned()
+    }
+
+    /// Returns an object that implements [`Display`] for safely printing a [`LuaString`] that may
+    /// contain non-Unicode data.
+    ///
+    /// This may perform lossy conversion.
+    ///
+    /// [`Display`]: fmt::Display
+    pub fn display(&self) -> impl fmt::Display + '_ {
+        Display(self)
+    }
+
+    /// Get the bytes that make up this string.
+    ///
+    /// The returned `BorrowedStr` holds a strong reference to the Lua state to guarantee the
+    /// validity of the underlying data. The data will not contain the terminating null byte, but
+    /// will contain any null bytes embedded into the Lua string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use mlua::{Lua, LuaString, Result};
+    /// # fn main() -> Result<()> {
+    /// # let lua = Lua::new();
+    /// let non_utf8: LuaString = lua.load(r#"  "test\255"  "#).eval()?;
+    /// assert!(non_utf8.to_str().is_err());    // oh no :(
+    /// assert_eq!(non_utf8.as_bytes(), &b"test\xff"[..]);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline]
+    pub fn as_bytes(&self) -> BorrowedBytes {
+        BorrowedBytes::from(self)
+    }
+
+    /// Inspect immutable bytes while borrowing an existing Lua context.
+    ///
+    /// The string remains rooted by `self`, and `lua` keeps its VM alive. No
+    /// reference or state handle is cloned, and the callback cannot return a
+    /// borrow of the byte view. The VM lock is held through the callback;
+    /// reentrant Lua calls and collection are supported.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `lua` belongs to a different main Lua state.
+    ///
+    /// ```compile_fail
+    /// # use mlua::{Lua, Result};
+    /// # fn main() -> Result<()> {
+    /// let lua = Lua::new();
+    /// let name = lua.create_string("name")?;
+    /// let escaped = name.inspect_bytes(&lua, |bytes| bytes);
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[inline]
+    pub fn inspect_bytes<R>(&self, lua: &Lua, inspect: impl FnOnce(&[u8]) -> R) -> R {
+        let raw = lua.lock();
+        assert!(
+            raw.weak() == &self.0.lua,
+            "Lua instance passed Value created from a different main Lua state"
+        );
+        // SAFETY: the checked context and its lock keep this VM alive. The
+        // borrowed ValueRef pins its immutable string in the auxiliary thread.
+        // The higher-ranked callback cannot let this temporary view escape.
+        inspect(unsafe { self.bytes_in(&raw) })
+    }
+
+    /// Get the bytes that make up this string, including the trailing null byte.
+    pub fn as_bytes_with_nul(&self) -> BorrowedBytes {
+        let BorrowedBytes { buf, vref, _lua } = BorrowedBytes::from(self);
+        // Include the trailing null byte (it's always present but excluded by default)
+        let buf = unsafe { slice::from_raw_parts((*buf).as_ptr(), (*buf).len() + 1) };
+        BorrowedBytes { buf, vref, _lua }
+    }
+
+    // Does not return the terminating null byte
+    unsafe fn to_slice(&self) -> (&[u8], Lua) {
+        let lua = self.0.lua.upgrade();
+        let slice = {
+            let rawlua = lua.lock();
+            // SAFETY: this string's own upgraded context is locked, and the
+            // returned Lua handle keeps the VM alive after the lock is released.
+            self.bytes_in(&rawlua)
+        };
+        (slice, lua)
+    }
+
+    // SAFETY: raw must be this string's live, locked VM. The caller must retain
+    // its context as long as the returned bytes are used. ValueRef roots self.
+    #[inline]
+    unsafe fn bytes_in(&self, raw: &crate::state::RawLua) -> &[u8] {
+        let ref_thread = raw.ref_thread();
+        mlua_debug_assert!(
+            ffi::lua_type(ref_thread, self.0.index) == ffi::LUA_TSTRING,
+            "string ref is not string type"
+        );
+        let mut size = 0;
+        // SAFETY: the caller supplies this rooted string's live VM; tolstring
+        // reads an existing string and cannot allocate or run Lua code.
+        let data = unsafe { ffi::lua_tolstring(ref_thread, self.0.index, &mut size) };
+        unsafe { slice::from_raw_parts(data as *const u8, size) }
+    }
+
+    /// Converts this Lua string to a generic C pointer.
+    ///
+    /// There is no way to convert the pointer back to its original value.
+    ///
+    /// Typically this function is used only for hashing and debug information.
+    #[inline]
+    pub fn to_pointer(&self) -> *const c_void {
+        // In Lua < 5.4 (excluding Luau), string pointers are NULL
+        // Use alternative approach
+        let lua = self.0.lua.lock();
+        unsafe { ffi::lua_tostring(lua.ref_thread(), self.0.index) as *const c_void }
+    }
+
+    /// Returns a weak reference to the Lua instance owning this value.
+    #[doc(hidden)]
+    #[inline]
+    pub fn weak_lua(&self) -> &WeakLua {
+        &self.0.lua
+    }
+}
+
+impl fmt::Debug for LuaString {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let bytes = self.as_bytes();
+        // Check if the string is valid utf8
+        if let Ok(s) = str::from_utf8(&bytes) {
+            return s.fmt(f);
+        }
+
+        // Format as bytes
+        write!(f, "b")?;
+        <bstr::BStr as fmt::Debug>::fmt(bstr::BStr::new(&bytes), f)
+    }
+}
+
+// Lua strings are basically `&[u8]` slices, so implement `PartialEq` for anything resembling that.
+//
+// This makes our `LuaString` comparable with `Vec<u8>`, `[u8]`, `&str` and `String`.
+//
+// The only downside is that this disallows a comparison with `Cow<str>`, as that only implements
+// `AsRef<str>`, which collides with this impl. Requiring `AsRef<str>` would fix that, but limit us
+// in other ways.
+impl<T> PartialEq<T> for LuaString
+where
+    T: AsRef<[u8]> + ?Sized,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.as_bytes() == other.as_ref()
+    }
+}
+
+impl Eq for LuaString {}
+
+impl<T> PartialOrd<T> for LuaString
+where
+    T: AsRef<[u8]> + ?Sized,
+{
+    fn partial_cmp(&self, other: &T) -> Option<cmp::Ordering> {
+        <[u8]>::partial_cmp(&self.as_bytes(), other.as_ref())
+    }
+}
+
+impl PartialOrd for LuaString {
+    fn partial_cmp(&self, other: &LuaString) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for LuaString {
+    fn cmp(&self, other: &LuaString) -> cmp::Ordering {
+        self.as_bytes().cmp(&other.as_bytes())
+    }
+}
+
+impl Hash for LuaString {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_bytes().hash(state);
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for LuaString {
+    fn serialize<S>(&self, serializer: S) -> StdResult<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self.to_str() {
+            Ok(s) => serializer.serialize_str(&s),
+            Err(_) => serializer.serialize_bytes(&self.as_bytes()),
+        }
+    }
+}
+
+struct Display<'a>(&'a LuaString);
+
+impl fmt::Display for Display<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let bytes = self.0.as_bytes();
+        <bstr::BStr as fmt::Display>::fmt(bstr::BStr::new(&bytes), f)
+    }
+}
+
+/// A borrowed string (`&str`) that holds a strong reference to the Lua state.
+pub struct BorrowedStr {
+    // `buf` points to a readonly memory managed by Lua
+    pub(crate) buf: &'static str,
+    pub(crate) vref: ValueRef,
+    pub(crate) _lua: Lua,
+}
+
+impl Deref for BorrowedStr {
+    type Target = str;
+
+    #[inline(always)]
+    fn deref(&self) -> &str {
+        self.buf
+    }
+}
+
+impl Borrow<str> for BorrowedStr {
+    #[inline(always)]
+    fn borrow(&self) -> &str {
+        self.buf
+    }
+}
+
+impl AsRef<str> for BorrowedStr {
+    #[inline(always)]
+    fn as_ref(&self) -> &str {
+        self.buf
+    }
+}
+
+impl Hash for BorrowedStr {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.buf.hash(state);
+    }
+}
+
+impl fmt::Display for BorrowedStr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.buf.fmt(f)
+    }
+}
+
+impl fmt::Debug for BorrowedStr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.buf.fmt(f)
+    }
+}
+
+impl<T> PartialEq<T> for BorrowedStr
+where
+    T: AsRef<str>,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.buf == other.as_ref()
+    }
+}
+
+impl Eq for BorrowedStr {}
+
+impl<T> PartialOrd<T> for BorrowedStr
+where
+    T: AsRef<str>,
+{
+    fn partial_cmp(&self, other: &T) -> Option<cmp::Ordering> {
+        self.buf.partial_cmp(other.as_ref())
+    }
+}
+
+impl Ord for BorrowedStr {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.buf.cmp(other.buf)
+    }
+}
+
+impl TryFrom<&LuaString> for BorrowedStr {
+    type Error = Error;
+
+    #[inline]
+    fn try_from(value: &LuaString) -> Result<Self> {
+        Self::try_from(value.clone())
+    }
+}
+
+impl TryFrom<LuaString> for BorrowedStr {
+    type Error = Error;
+
+    #[inline]
+    fn try_from(value: LuaString) -> Result<Self> {
+        let BorrowedBytes { buf, vref, _lua } = BorrowedBytes::from(value);
+        let buf =
+            str::from_utf8(buf).map_err(|e| Error::from_lua_conversion("string", "&str", e.to_string()))?;
+        Ok(Self { buf, vref, _lua })
+    }
+}
+
+/// A borrowed byte slice (`&[u8]`) that holds a strong reference to the Lua state.
+pub struct BorrowedBytes {
+    // `buf` points to a readonly memory managed by Lua
+    pub(crate) buf: &'static [u8],
+    pub(crate) vref: ValueRef,
+    pub(crate) _lua: Lua,
+}
+
+impl Deref for BorrowedBytes {
+    type Target = [u8];
+
+    #[inline(always)]
+    fn deref(&self) -> &[u8] {
+        self.buf
+    }
+}
+
+impl Borrow<[u8]> for BorrowedBytes {
+    #[inline(always)]
+    fn borrow(&self) -> &[u8] {
+        self.buf
+    }
+}
+
+impl AsRef<[u8]> for BorrowedBytes {
+    #[inline(always)]
+    fn as_ref(&self) -> &[u8] {
+        self.buf
+    }
+}
+
+impl Hash for BorrowedBytes {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.buf.hash(state);
+    }
+}
+
+impl fmt::Debug for BorrowedBytes {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.buf.fmt(f)
+    }
+}
+
+impl<T> PartialEq<T> for BorrowedBytes
+where
+    T: AsRef<[u8]>,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.buf == other.as_ref()
+    }
+}
+
+impl Eq for BorrowedBytes {}
+
+impl<T> PartialOrd<T> for BorrowedBytes
+where
+    T: AsRef<[u8]>,
+{
+    fn partial_cmp(&self, other: &T) -> Option<cmp::Ordering> {
+        self.buf.partial_cmp(other.as_ref())
+    }
+}
+
+impl Ord for BorrowedBytes {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.buf.cmp(other.buf)
+    }
+}
+
+impl<'a> IntoIterator for &'a BorrowedBytes {
+    type Item = &'a u8;
+    type IntoIter = slice::Iter<'a, u8>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl From<&LuaString> for BorrowedBytes {
+    #[inline]
+    fn from(value: &LuaString) -> Self {
+        Self::from(value.clone())
+    }
+}
+
+impl From<LuaString> for BorrowedBytes {
+    #[inline]
+    fn from(value: LuaString) -> Self {
+        let (buf, _lua) = unsafe { value.to_slice() };
+        // SAFETY: The `buf` is valid for the lifetime of the Lua state and occupied slot index
+        let buf = unsafe { mem::transmute::<&[u8], &'static [u8]>(buf) };
+        Self {
+            buf,
+            vref: value.0,
+            _lua,
+        }
+    }
+}
+
+struct WrappedString<T: AsRef<[u8]>>(T);
+
+impl LuaString {
+    /// Wraps bytes, returning an opaque type that implements [`IntoLua`] trait.
+    ///
+    /// This function uses [`Lua::create_string`] under the hood.
+    pub fn wrap(data: impl AsRef<[u8]>) -> impl IntoLua {
+        WrappedString(data)
+    }
+}
+
+impl<T: AsRef<[u8]>> IntoLua for WrappedString<T> {
+    fn into_lua(self, lua: &Lua) -> Result<Value> {
+        lua.create_string(self.0).map(Value::String)
+    }
+}
+
+impl LuaType for LuaString {
+    const TYPE_ID: c_int = ffi::LUA_TSTRING;
+}
+
+#[cfg(test)]
+mod assertions {
+    use super::*;
+
+    #[cfg(not(feature = "send"))]
+    static_assertions::assert_not_impl_any!(LuaString: Send);
+    #[cfg(feature = "send")]
+    static_assertions::assert_impl_all!(LuaString: Send, Sync);
+    #[cfg(feature = "send")]
+    static_assertions::assert_impl_all!(BorrowedBytes: Send, Sync);
+    #[cfg(feature = "send")]
+    static_assertions::assert_impl_all!(BorrowedStr: Send, Sync);
+}

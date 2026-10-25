@@ -99,6 +99,28 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
 ```
 
+## Test fixtures
+
+Test fixtures live in [deadsync-tests](https://github.com/pnn64/deadsync-tests),
+mounted as a Git submodule at `tests/fixtures`. Initialize the pinned fixture
+revision before compiling or running tests, examples, or benchmarks (Python
+3.11 or newer is required to restore split archives):
+
+```sh
+git submodule update --init tests/fixtures
+python scripts/prepare_test_fixtures.py
+```
+
+Normal game builds do not need the fixture submodule.
+
+Archives over 50 MB are stored as parts of at most 48,000,000 bytes. The Python
+command verifies each part and restores the exact archives locally; restored
+files are ignored by Git. Run both commands again after fixture updates.
+
+When updating fixtures, commit and push changes in `tests/fixtures` first, then
+commit the updated submodule pointer in this repository. Test runners and fixture
+maintenance scripts stay in this repository; their existing paths still work.
+
 ## Full song Lua tests
 
 Run a full song Lua fixture with live progress and a final comparison tally:
@@ -109,7 +131,7 @@ cargo test --test full_song_lua -- --list
 ```
 
 Fixtures are consolidated under `tests/fixtures/full_song_lua` and compressed at
-zstd level 22. See its [fixture guide](tests/fixtures/full_song_lua/README.md) for
+zstd level 22. See its [fixture guide](https://github.com/pnn64/deadsync-tests/blob/main/full_song_lua/README.md) for
 selection, corpus runs, and reference maintenance.
 
 ## Getting Started
@@ -246,6 +268,56 @@ A `save` directory is created inside the data directory to store your personal d
 
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
+
+### Lua chart score submission
+
+Lua charts can submit scores when all declared song Lua compiles without errors
+for the current play, alongside the existing chart allowlist. Missing layers,
+failed compilation, partial captures, or Lua errors during play do not grant
+automatic approval. This result is never saved against the chart hash, since
+the Lua files can change independently of the notes. Other submission rules
+(such as autoplay, disqualifying modifiers, and course eligibility) still apply.
+
+### Golf extras
+
+Golf features are optional and disabled by default. First enable
+**Options > Online Score Services > ArrowCloud Options > Enable Golf Features**.
+This master switch reveals the golf options below. Turning it off hides them
+and disables golf scoring, displays, and online boards while preserving saved
+player and Select Music choices.
+
+- **Player Options > Advanced Modifiers > Gameplay Extras > Golf Score** enables
+  the native stroke counter. Its **Golf Display** setting selects golf charts only
+  (charts with an authored par) or all charts. **Stroke Feedback** enables ACE and
+  penalty flashes. Each player saves these choices independently.
+- **Player Options > Advanced Modifiers > Results Extras > Golf Results** adds a
+  golf evaluation pane, independently of the gameplay counter.
+- **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
+- **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
+  enables the online event board alongside the other selectable leaderboards.
+
+The native display uses the supplied `GolfScoring.lua` curved formula: errors
+below 5 ms are free, hits are rounded to whole raw strokes individually, and
+misses, dropped holds/rolls, and hit mines cost 100 raw strokes each. One displayed
+stroke is 1,000 raw strokes; lower is better. Normal ITG/EX/HardEX scoring and
+ArrowCloud submissions continue alongside it. The online golf board shows
+ArrowCloud's server-calculated event scores, whose formula may differ from the
+native display.
+
+Pack authors can place `Golf.ini` beside the pack's song folders:
+
+```ini
+[Song Folder]
+Par=2.1
+
+[Song Folder:Challenge]
+Par=4
+```
+
+Section names use the actual song folder name; a difficulty-specific entry takes
+precedence over the song-wide entry. Pars are already in displayed strokes.
+`Golf.ini` never enables a feature by itself. Metadata refreshes when the library
+reloads and when entering Select Music with golf extras enabled.
 
 ### Custom sound packs
 

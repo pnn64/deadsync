@@ -208,6 +208,7 @@ pub enum ItemId {
     SmWheelShowFails,
     SmWheelItlPoints,
     SmNewPackBadge,
+    SmGolfPars,
     SmFolderStats,
     SmPatternInfo,
     SmStepArtistBox,
@@ -250,6 +251,7 @@ pub enum ItemId {
 
     // ArrowCloud Options submenu
     AcEnable,
+    AcGolf,
     AcSubmitFails,
     AcResultDialogs,
     AcQrLogin,

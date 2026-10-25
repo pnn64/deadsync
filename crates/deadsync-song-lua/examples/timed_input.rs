@@ -68,7 +68,7 @@ fn frame(index: usize, seconds: f64) -> SongLuaLiveFrame {
         ..Default::default()
     }
 }
-fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, u64)> {
+fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, serde_json::Value)> {
     let mut result = owner
         .scalar_states()
         .map(|(table, key, value)| {
@@ -76,8 +76,9 @@ fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, u64
                 table,
                 key.to_vec(),
                 match value {
-                    SongLuaInputScalar::Boolean(v) => u64::from(v),
-                    SongLuaInputScalar::Number(v) => v.to_bits(),
+                    SongLuaInputScalar::Boolean(v) => u64::from(v).into(),
+                    SongLuaInputScalar::Number(v) => v.to_bits().into(),
+                    SongLuaInputScalar::Bytes(v) => serde_json::json!({"bytes":v}),
                 },
             )
         })
@@ -87,8 +88,22 @@ fn scalars(owner: &SongLuaCompiledActorInteractions) -> Vec<(usize, Vec<u8>, u64
 }
 fn main() {
     pin();
+    let mode = std::env::args().nth(3);
+    let native_rounds = (mode.as_deref() == Some("native")).then(|| {
+        let rounds = std::env::args()
+            .nth(4)
+            .map(|value| value.parse::<usize>().unwrap())
+            .unwrap_or(4096);
+        assert!(rounds > 0);
+        rounds
+    });
     let report = std::env::args().nth(1).expect("timed_input REPORT");
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/timed-input.lua");
+    let path = std::env::args()
+        .nth(2)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/timed-input.lua")
+        });
     let mut scene = load(&path);
     let mut native = scene
         .compile_actor_interactions()
@@ -120,7 +135,12 @@ fn main() {
     }
     let memory = serde_json::json!({"native_payload_bytes":native.retained_bytes(),"current_lua_allocator_bytes":scene.lua_memory_bytes(),"scope":"Native input/update code, scalar cells, actor states and schedule payload. Allocator/Arc bookkeeping excluded; Lua bytes include pending garbage without forced GC and exclude Rust payload."});
     let mut rows = Vec::new();
-    for sample in 0..10 {
+    let runtime_samples = if mode.as_deref() == Some("prepare") || native_rounds.is_some() {
+        0
+    } else {
+        10
+    };
+    for sample in 0..runtime_samples {
         let mut expected = None;
         for current in [sample % 2 == 0, sample % 2 != 0] {
             let measure = metrics::Measurement::start();
@@ -172,6 +192,8 @@ fn main() {
         row["workload"] = "input_update_prepare".into();
         rows.push(row);
     }
+    drop(scene);
+    drop(native);
     let marker =
         std::env::temp_dir().join(format!("deadsync-timed-vm-drop-{}.txt", std::process::id()));
     let directory = tempfile::tempdir().unwrap();
@@ -210,5 +232,36 @@ fn main() {
             trace[index * 2 + 1]["scalars"]
         );
     }
-    std::fs::write(report,serde_json::to_vec_pretty(&serde_json::json!({"rows":rows,"trace":trace,"retained_memory":memory,"loading_vm_destroyed":true})).unwrap()).unwrap();
+    let mut native_digest = None;
+    if let Some(rounds) = native_rounds {
+        for sample in 0..10 {
+            let measure = metrics::Measurement::start();
+            let mut digest = 0u64;
+            for _ in 0..rounds {
+                for index in 0..96 {
+                    let input = event(index);
+                    let handled = black_box(&mut detached).input(black_box(&input));
+                    black_box(&mut detached).update(black_box(delta(index)));
+                    digest = digest.wrapping_mul(31).wrapping_add(u64::from(handled));
+                }
+            }
+            let mut row = measure.finish();
+            black_box(digest);
+            if let Some(expected) = native_digest {
+                assert_eq!(digest, expected);
+            } else {
+                native_digest = Some(digest);
+            }
+            if sample == 0 {
+                continue;
+            }
+            row["operations"] = (rounds * 96).into();
+            row["sample"] = sample.into();
+            row["current"] = true.into();
+            row["workload"] = "detached_input_update_pair".into();
+            rows.push(row);
+        }
+    }
+    let native_end = native_rounds.map(|_| serde_json::json!({"digest":native_digest,"states":format!("{:?}",detached.states()),"scalars":scalars(&detached)}));
+    std::fs::write(report,serde_json::to_vec_pretty(&serde_json::json!({"rows":rows,"trace":trace,"retained_memory":memory,"loading_vm_destroyed":true,"native_end":native_end})).unwrap()).unwrap();
 }

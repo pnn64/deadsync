@@ -12,7 +12,7 @@ pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
 
 pub fn timing_window_arg_index(value: Value) -> Option<i32> {
     match value {
-        Value::Integer(value) => Some(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32),
+        Value::Integer(value) => Some(value.clamp(i32::MIN.into(), i32::MAX.into()) as i32),
         Value::Number(value) if value.is_finite() => Some(
             value
                 .round()

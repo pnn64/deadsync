@@ -43,8 +43,9 @@ members = [
     "crates/deadlib-assets",
     "crates/deadlib-bincode",
     "crates/deadlib-lua",
-    "crates/deadlib-lua/mlua-sys",
-    "crates/deadlib-lua/mlua_derive",
+    "crates/deadlib-lua-legacy",
+    "crates/deadlib-lua-legacy/mlua-sys",
+    "crates/deadlib-lua-legacy/mlua_derive",
     "crates/deadlib-platform",
     "crates/deadlib-present",
     "crates/deadsync-profile",
@@ -75,7 +76,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.2356"
+version = "0.5.2373"
 
 [[bin]]
 name = "generate_pseudo"
@@ -145,6 +146,8 @@ dirs-sys = { path = "vendor/dirs-sys-win7" }
 # windows-sys 0.61. Windows 7 only provides that API from ole32.dll, so the
 # local patch resolves it at runtime.
 rfd = { path = "vendor/rfd-win7" }
+# Opus must honor Rust's static MSVC runtime; its CMake default selects /MD.
+opusic-sys = { path = "vendor/opusic-sys" }
 
 [build-dependencies]
 fs_extra = "1.3.0"
@@ -195,10 +198,10 @@ opt-level = 3
 [profile.dev.package.deadsync-song-lua]
 opt-level = 3
 
-[profile.dev.package.deadlib-lua]
+[profile.dev.package.deadlib-lua-legacy]
 opt-level = 3
 
-[profile.dev.package.deadlib-lua-sys]
+[profile.dev.package.deadlib-lua-legacy-sys]
 opt-level = 3
 
 [profile.local]
@@ -218,6 +221,6 @@ perf = { level = "warn", priority = -1 }
 inline_always = "allow"
 
 [workspace.dependencies]
-mlua = { package = "deadlib-lua", version = "=0.12.2", path = "crates/deadlib-lua" }
+mlua = { package = "deadlib-lua-legacy", version = "=0.12.2", path = "crates/deadlib-lua-legacy" }
 serde_json = "1.0.151"
 windows-core = "0.100.0"

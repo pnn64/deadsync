@@ -30,7 +30,7 @@ pub fn fetch_player_leaderboards(
     show_ex_score: bool,
     max_entries: usize,
 ) -> Result<groovestats::FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
-    let combined = groovestats::fetch_validated_combined_player_leaderboards(
+    let mut combined = groovestats::fetch_validated_combined_player_leaderboards(
         service,
         api_key,
         username,
@@ -43,6 +43,18 @@ pub fn fetch_player_leaderboards(
         warn!("ArrowCloud leaderboard fetch failed for chart {chart_hash}: {error}");
     }
 
+    let config = deadsync_config::runtime::get();
+    if config.enable_golf && config.select_music_scorebox_cycle_golf {
+        if let Some(key) = arrowcloud_api_key.filter(|key| !key.is_empty()) {
+            match crate::golf::fetch_pane(chart_hash, key, max_entries) {
+                Ok(Some(pane)) => combined.fetched.data.panes.push(pane),
+                Ok(None) => {}
+                Err(error) => {
+                    warn!("Golf leaderboard fetch failed for chart {chart_hash}: {error}")
+                }
+            }
+        }
+    }
     Ok(combined.fetched)
 }
 

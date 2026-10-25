@@ -58,6 +58,8 @@ const ROW_IDS: &[RowId] = &[
     RowId::MiniIndicatorColor,
     RowId::MiniIndicatorPosition,
     RowId::GameplayExtras,
+    RowId::GolfDisplay,
+    RowId::GolfStrokeFeedback,
     RowId::ColumnFlashJudgments,
     RowId::ColumnFlashBrightness,
     RowId::ColumnFlashSize,
@@ -122,6 +124,7 @@ const ROW_IDS: &[RowId] = &[
 
 fn visibility(mask: u64) -> RowVisibility {
     RowVisibility {
+        show_golf_options: mask & (1 << 35) != 0,
         show_data_visualizations: mask & (1 << 0) != 0,
         show_measure_counter_children: mask & (1 << 1) != 0,
         show_judgment_offsets: mask & (1 << 2) != 0,
