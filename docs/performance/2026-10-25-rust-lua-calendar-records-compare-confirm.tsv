@@ -1,0 +1,84 @@
+layout	os_date_table	27	9
+sample	os_date_table	parent	0	50	1380656	100000	150000	49600000
+sample	os_date_table	current	0	50	932246	100000	0	17600000
+sample	os_date_table	current	1	50	916070	100000	0	17600000
+sample	os_date_table	parent	1	50	1330892	100000	150000	49600000
+sample	os_date_table	parent	2	50	1394430	100000	150000	49600000
+sample	os_date_table	current	2	50	988736	100000	0	17600000
+sample	os_date_table	current	3	50	1007194	100000	0	17600000
+sample	os_date_table	parent	3	50	1345050	100000	150000	49600000
+sample	os_date_table	parent	4	50	1391038	100000	150000	49600000
+sample	os_date_table	current	4	50	951816	100000	0	17600000
+sample	os_date_table	current	5	50	956422	100000	0	17600000
+sample	os_date_table	parent	5	50	1344678	100000	150000	49600000
+sample	os_date_table	parent	6	50	1321924	100000	150000	49600000
+sample	os_date_table	current	6	50	926070	100000	0	17600000
+sample	os_date_table	current	7	50	1017740	100000	0	17600000
+sample	os_date_table	parent	7	50	1572802	100000	150000	49600000
+sample	os_date_table	parent	8	50	1566896	100000	150000	49600000
+sample	os_date_table	current	8	50	1050420	100000	0	17600000
+heap	os_date_table	parent	37114	49754	74522	7274	450980
+heap	os_date_table	current	65194	71578	71930	4797	450906
+layout	os_date_table_gc_stopped	27	9
+sample	os_date_table_gc_stopped	parent	0	30	1516636	60000	90023	35773888
+sample	os_date_table_gc_stopped	current	0	30	946366	60000	23	16573888
+sample	os_date_table_gc_stopped	current	1	30	1016910	60005	0	10560020
+sample	os_date_table_gc_stopped	parent	1	30	1504183	60005	90000	29760020
+sample	os_date_table_gc_stopped	parent	2	30	1364290	60005	90000	29760020
+sample	os_date_table_gc_stopped	current	2	30	991810	60005	0	10560020
+sample	os_date_table_gc_stopped	current	3	30	920410	60005	0	10560020
+sample	os_date_table_gc_stopped	parent	3	30	1359370	60005	90000	29760020
+sample	os_date_table_gc_stopped	parent	4	30	1460803	60005	90000	29760020
+sample	os_date_table_gc_stopped	current	4	30	994173	60005	0	10560020
+sample	os_date_table_gc_stopped	current	5	30	973360	60005	0	10560020
+sample	os_date_table_gc_stopped	parent	5	30	1449346	60005	90000	29760020
+sample	os_date_table_gc_stopped	parent	6	30	1335253	60005	90000	29760020
+sample	os_date_table_gc_stopped	current	6	30	955110	60005	0	10560020
+sample	os_date_table_gc_stopped	current	7	30	935050	60005	0	10560020
+sample	os_date_table_gc_stopped	parent	7	30	1354383	60005	90000	29760020
+sample	os_date_table_gc_stopped	parent	8	30	1410986	60005	90000	29760020
+sample	os_date_table_gc_stopped	current	8	30	997433	60005	0	10560020
+heap	os_date_table_gc_stopped	parent	24572	3176764	20456784	25	271047
+heap	os_date_table_gc_stopped	current	24572	3176764	13736784	19	271047
+layout	os_date_table_extended	33	9
+sample	os_date_table_extended	parent	0	50	1518982	100000	150000	49600000
+sample	os_date_table_extended	current	0	50	1321202	100000	50000	46400000
+sample	os_date_table_extended	current	1	50	1349684	100000	50000	46400000
+sample	os_date_table_extended	parent	1	50	1523114	100000	150000	49600000
+sample	os_date_table_extended	parent	2	50	1506598	100000	150000	49600000
+sample	os_date_table_extended	current	2	50	1202930	100000	50000	46400000
+sample	os_date_table_extended	current	3	50	1334676	100000	50000	46400000
+sample	os_date_table_extended	parent	3	50	1533988	100000	150000	49600000
+sample	os_date_table_extended	parent	4	50	1423096	100000	150000	49600000
+sample	os_date_table_extended	current	4	50	1206302	100000	50000	46400000
+sample	os_date_table_extended	current	5	50	1197750	100000	50000	46400000
+sample	os_date_table_extended	parent	5	50	1418496	100000	150000	49600000
+sample	os_date_table_extended	parent	6	50	1436116	100000	150000	49600000
+sample	os_date_table_extended	current	6	50	1217686	100000	50000	46400000
+sample	os_date_table_extended	current	7	50	1206906	100000	50000	46400000
+sample	os_date_table_extended	parent	7	50	1456598	100000	150000	49600000
+sample	os_date_table_extended	parent	8	50	1397276	100000	150000	49600000
+sample	os_date_table_extended	current	8	50	1185562	100000	50000	46400000
+heap	os_date_table_extended	parent	37300	49924	74692	7274	450980
+heap	os_date_table_extended	current	41492	53764	75236	7912	450976
+layout	constant_left	21	11
+sample	constant_left	parent	0	50	796652	0	0	0
+sample	constant_left	current	0	50	795152	0	0	0
+sample	constant_left	current	1	50	796566	0	0	0
+sample	constant_left	parent	1	50	792418	0	0	0
+sample	constant_left	parent	2	50	791912	0	0	0
+sample	constant_left	current	2	50	833048	0	0	0
+sample	constant_left	current	3	50	843458	0	0	0
+sample	constant_left	parent	3	50	860342	0	0	0
+sample	constant_left	parent	4	50	819852	0	0	0
+sample	constant_left	current	4	50	792210	0	0	0
+sample	constant_left	current	5	50	822212	0	0	0
+sample	constant_left	parent	5	50	840168	0	0	0
+sample	constant_left	parent	6	50	799836	0	0	0
+sample	constant_left	current	6	50	789756	0	0	0
+sample	constant_left	current	7	50	849680	0	0	0
+sample	constant_left	parent	7	50	794684	0	0	0
+sample	constant_left	parent	8	50	824854	0	0	0
+sample	constant_left	current	8	50	790806	0	0	0
+heap	constant_left	parent	19490	24946	24946	0	0
+heap	constant_left	current	19490	24946	24946	0	0

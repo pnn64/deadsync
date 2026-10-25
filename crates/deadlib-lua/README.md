@@ -201,6 +201,8 @@ scheduler, preserving metamethods, errors, yield restrictions and collection.
 Native conversion normalizes an owned calendar record without changing the Lua
 input table. `date` returns local or UTC fields and formats each conversion with
 the native formatter, retaining the reference's NUL and percent handling.
+Calendar result tables reserve their known field count and charge that storage
+to the collector before filling the fields.
 Calendar validity, DST rules and format extensions follow the pinned runtime.
 Windows has differential runtime coverage; selected Linux/Apple targets have
 compile coverage only. Android declarations need target validation. Other
@@ -267,5 +269,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-calendar.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-calendar-records.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

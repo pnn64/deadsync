@@ -521,6 +521,12 @@ impl Vm {
     fn new_table(&mut self) -> TableId {
         TableId(self.tables.insert(Table::default()))
     }
+    fn new_record_table(&mut self, capacity: usize) -> TableId {
+        let table = Table::with_record_capacity(capacity);
+        self.tables.note_alloc(table.heap_bytes());
+        self.gc.pending = true;
+        TableId(self.tables.insert(table))
+    }
     fn number(&self, value: Value) -> Option<f64> {
         match value {
             Value::Number(n) => Some(n),

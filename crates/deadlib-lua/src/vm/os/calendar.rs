@@ -145,7 +145,7 @@ impl Vm {
                 self.registers[base] = Value::Nil;
                 return Ok(1);
             };
-            let table = self.new_table();
+            let table = self.new_record_table(8 + usize::from(date.fields[8] >= 0));
             for (index, name) in [
                 b"sec".as_slice(),
                 b"min",

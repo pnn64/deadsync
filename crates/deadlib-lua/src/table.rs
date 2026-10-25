@@ -93,6 +93,20 @@ pub(crate) struct Table {
 }
 
 impl Table {
+    pub fn with_record_capacity(capacity: usize) -> Self {
+        if capacity == 0 {
+            return Self::default();
+        }
+        // Keep the final insert below the strict 3/4 rebuild threshold.
+        let slots = (capacity.checked_mul(4).expect("table capacity overflow") / 3 + 1)
+            .max(8)
+            .next_power_of_two();
+        Self {
+            entries: Vec::with_capacity(capacity),
+            slots: vec![0; slots],
+            ..Self::default()
+        }
+    }
     pub fn heap_bytes(&self) -> usize {
         self.array.capacity() * std::mem::size_of::<Value>()
             + self.entries.capacity() * std::mem::size_of::<Entry>()

@@ -289,3 +289,32 @@ fn generated_calendar_normalization_and_round_trips_match_the_reference() {
       return table.concat(out,';')
     "#);
 }
+
+#[test]
+fn date_result_tables_preserve_mutation_traversal_and_collection_after_hash_growth() {
+    compare(
+        br#"
+      local out={};local weak=setmetatable({},{__mode='v'})
+      for _,prefix in ipairs({'','!'})do
+        local d=os.date(prefix..'*t',951782400);weak[1]=d
+        local original={};for key,value in pairs(d)do original[key]=value end
+        local keys={};local key=next(d)
+        while key~=nil do keys[#keys+1]=key;d[key]=nil;key=next(d,key)end
+        table.sort(keys);out[#out+1]=table.concat(keys,',')
+        out[#out+1]=tostring(next(d)==nil and #d==0)
+        for key,value in pairs(original)do d[key]=value end
+        for i=1,257 do d['extra'..i]=i;d[i]=i*2 end
+        d.self=d;d[original]=original
+        setmetatable(d,{__index=function(_,key)return key end})
+        collectgarbage();local sum=0;local count=0
+        for i=1,257 do sum=sum+d['extra'..i]+d[i]end
+        for _ in pairs(d)do count=count+1 end
+        out[#out+1]=tostring(sum);out[#out+1]=tostring(count)
+        out[#out+1]=tostring(d.self==d and d[original]==original and weak[1]==d)
+        out[#out+1]=tostring(os.time(d)==os.time(original));out[#out+1]=d.missing
+        d=nil;collectgarbage();out[#out+1]=tostring(weak[1]==nil)
+      end
+      return table.concat(out,'|')
+    "#,
+    );
+}
