@@ -1541,6 +1541,25 @@ pub fn push_step_stats(
     }
     let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     let player_idx = step_stats_player_idx(state, player_side);
+    let profile = &state.profiles()[player_idx];
+    let show_duration = mask.contains(profile_data::StepStatisticsMask::SONG_DURATION);
+    let show_timing_rows =
+        mask.contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER) || show_duration;
+    let live_timing_rows = if show_timing_rows && profile.live_timing_stats {
+        live_timing_enabled_count(profile.live_timing_stats_mask)
+    } else {
+        0
+    };
+    let graph = step_stats_density_graph_rect(state, layout);
+    let song_info_slide = step_stats_theme::song_info_slide(
+        layout,
+        player_side,
+        wide,
+        state.num_players(),
+        show_duration,
+        live_timing_rows,
+        graph.y,
+    );
     let extra_actor_count = state.step_stats_extra_resolved[player_idx].actor_count();
     let mut pane_actors = Vec::with_capacity(48 + extra_actor_count);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
@@ -1548,9 +1567,16 @@ pub fn push_step_stats(
     }
     let show_pack_info = mask.pack_info_enabled();
     if show_pack_info {
-        build_pack_banner(&mut pane_actors, state, layout, player_side);
+        build_pack_banner(&mut pane_actors, state, song_info_slide);
     }
-    build_steps_info(&mut pane_actors, state, layout, player_side, show_pack_info);
+    build_steps_info(
+        &mut pane_actors,
+        state,
+        layout,
+        player_side,
+        show_pack_info,
+        song_info_slide,
+    );
     step_stats_gifs::push_step_stats_extra(
         &mut pane_actors,
         state,
@@ -2520,16 +2546,13 @@ fn build_banner(
 fn build_pack_banner(
     actors: &mut Vec<Actor>,
     state: &State,
-    layout: StepStatsPaneLayout,
-    player_side: profile_data::PlayerSide,
+    slide: step_stats_theme::StepStatsSongInfoSlide,
 ) {
     let Some(pack_key) = state.pack_banner_key.as_ref() else {
         return;
     };
 
-    // Arrow Cloud Banner2.lua parity for non-double Step Statistics. The
-    // doubles-specific renderer handles its separate left-edge alignment.
-    let placement = step_stats_theme::pack_banner_placement(layout, player_side);
+    let placement = step_stats_theme::pack_banner_placement(slide);
 
     actors.push(act!(sprite(pack_key):
         align(0.5, 0.5):
@@ -2546,13 +2569,13 @@ fn build_steps_info(
     layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
     show_song_info: bool,
+    slide: step_stats_theme::StepStatsSongInfoSlide,
 ) {
     actors.reserve(if layout.note_field_is_centered { 5 } else { 9 });
     if !show_song_info {
         return;
     }
     let note_field_is_centered = layout.note_field_is_centered;
-    let banner_data_zoom = layout.banner_data_zoom;
 
     let player_idx = match (state.num_players(), player_side) {
         (2, profile_data::PlayerSide::P2) => 1,
@@ -2562,50 +2585,28 @@ fn build_steps_info(
         .gameplay_stats_text
         .description(player_idx, state.gameplay.total_elapsed_in_screen());
 
-    let ar = screen_width() / screen_height().max(1.0);
-    let pnum = profile_data::player_side_number(player_side);
-    let pos_sign: f32 = if pnum == 1 { -1.0 } else { 1.0 };
-
-    let mut x: f32 = -190.0;
-    let xoffset: f32 = if pnum == 1 { 285.0 } else { 0.0 };
-    let mut yoffset: f32 = 0.0;
-    let mut xvalues = 45.0;
-    let mut maxwidth: f32 = 320.0;
-    if note_field_is_centered {
-        xvalues = 0.0;
-        yoffset = -5.0;
-        if ar > 1.7 {
-            x = if pnum == 1 { -220.0 } else { -150.0 };
-            maxwidth = 240.0;
-        } else {
-            x = if pnum == 1 { -240.0 } else { -150.0 };
-            maxwidth = 210.0;
-        }
-    }
-
-    let origin_x =
-        step_stats_theme::pane_anchor_x(layout, (x + xoffset) * pos_sign * banner_data_zoom);
-    let origin_y = (-8.0 + yoffset).mul_add(banner_data_zoom, layout.sidepane_center_y);
     let group_zoom = song_info_text_zoom(layout);
-
+    let show_labels = !note_field_is_centered;
+    let text_placement = step_stats_theme::song_info_text_placement(slide, show_labels);
     let row_h = 16.0;
+    let first_row_y = slide.center_y - row_h * 1.5 * group_zoom;
     let z = 72i16;
-    if !note_field_is_centered {
+    if show_labels {
         for i in 0..4 {
-            let y = (row_h * (i as f32 + 1.0)).mul_add(group_zoom, origin_y);
+            let y = (row_h * i as f32).mul_add(group_zoom, first_row_y);
             actors.push(act!(text:
                 font("miso"): settext(step_info_label_text(state, i)):
-                align(0.0, 0.5): xy(origin_x, y):
+                align(0.0, 0.5): xy(text_placement.labels_x, y):
+                maxwidth(text_placement.labels_max_width):
                 zoom(group_zoom): z(z):
                 horizalign(left)
             ));
         }
     }
 
-    let values_x = origin_x + (xvalues * group_zoom);
-    let pane_right = layout.sidepane_center_x + layout.sidepane_width * 0.5;
-    let maxwidth = maxwidth.min((pane_right - values_x - 8.0).max(1.0));
-    let y_song = (row_h * 1.0).mul_add(group_zoom, origin_y);
+    let values_x = text_placement.values_x;
+    let maxwidth = text_placement.values_max_width;
+    let y_song = first_row_y;
     actors.push(act!(text:
         font("miso"): settext(state.song_full_title.clone()):
         align(0.0, 0.5): xy(values_x, y_song):
@@ -2613,7 +2614,7 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-    let y_artist = (row_h * 2.0).mul_add(group_zoom, origin_y);
+    let y_artist = (row_h * 1.0).mul_add(group_zoom, first_row_y);
     actors.push(act!(text:
         font("miso"): settext(Arc::clone(&state.gameplay_stats_text.song_artist)):
         align(0.0, 0.5): xy(values_x, y_artist):
@@ -2621,7 +2622,7 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-    let y_pack = (row_h * 3.0).mul_add(group_zoom, origin_y);
+    let y_pack = (row_h * 2.0).mul_add(group_zoom, first_row_y);
     actors.push(act!(text:
         font("miso"): settext(state.pack_group.clone()):
         align(0.0, 0.5): xy(values_x, y_pack):
@@ -2629,7 +2630,7 @@ fn build_steps_info(
         zoom(group_zoom): z(z):
         horizalign(left)
     ));
-    let y_desc = (row_h * 4.0).mul_add(group_zoom, origin_y);
+    let y_desc = (row_h * 3.0).mul_add(group_zoom, first_row_y);
     actors.push(act!(text:
         font("miso"): settext(desc_text):
         align(0.0, 0.5): xy(values_x, y_desc):
