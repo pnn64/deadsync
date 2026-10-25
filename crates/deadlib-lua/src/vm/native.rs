@@ -556,7 +556,7 @@ impl Vm {
             return self.proxy_native(base, count);
         }
         if matches!(id, COLLECT_GARBAGE | GC_INFO) {
-            return self.gc_native(id, base, count);
+            return self.gc_native(id, base, count).map(|_| 1);
         }
         if (threads::CO_CREATE..=threads::CO_YIELD).contains(&id) {
             return self.coroutine_native(id, base, count);

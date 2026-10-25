@@ -81,11 +81,17 @@ impl Strings {
         StringId(id)
     }
     fn intern(&mut self, bytes: &[u8]) -> StringId {
-        self.find(bytes).unwrap_or_else(|| self.add(bytes.into()))
+        if let Some(id) = self.find(bytes) {
+            self.bytes.preserve_new_reference(id.0);
+            id
+        } else {
+            self.add(bytes.into())
+        }
     }
     fn substring(&mut self, id: StringId, range: std::ops::Range<usize>) -> StringId {
         let bytes = &self.bytes[slot_index(id.0)][range];
         if let Some(id) = self.find(bytes) {
+            self.bytes.preserve_new_reference(id.0);
             return id;
         }
         let owned = bytes.into();

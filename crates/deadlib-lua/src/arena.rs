@@ -8,6 +8,7 @@ pub(crate) struct Arena<T> {
     free: Vec<u32>,
     marks: Vec<u64>,
     live: usize,
+    protect_new: bool,
     pub allocated: usize,
 }
 impl<T> Default for Arena<T> {
@@ -18,6 +19,7 @@ impl<T> Default for Arena<T> {
             free: Vec::new(),
             marks: Vec::new(),
             live: 0,
+            protect_new: false,
             allocated: 0,
         }
     }
@@ -45,6 +47,9 @@ impl<T> Arena<T> {
             slot
         };
         self.live += 1;
+        if self.protect_new {
+            self.marks[slot / 64] |= 1u64 << (slot % 64);
+        }
         self.allocated = self
             .allocated
             .saturating_add(self.storage_bytes().saturating_sub(before))
@@ -103,6 +108,28 @@ impl<T> Arena<T> {
     }
     pub fn clear_marks(&mut self) {
         self.marks.fill(0);
+    }
+    pub fn protect_new(&mut self, enabled: bool) {
+        self.protect_new = enabled;
+    }
+    pub fn preserve_new_reference(&mut self, key: u64) {
+        if self.protect_new {
+            self.mark(key);
+        }
+    }
+    pub fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+        let end = cursor.saturating_sub(budget);
+        let mut reclaimed = 0;
+        for i in (end..*cursor).rev() {
+            if let Some(key) = self.key(i)
+                && !self.marked(key)
+            {
+                self.remove(key);
+                reclaimed += 1;
+            }
+        }
+        *cursor = end;
+        reclaimed
     }
     pub fn len(&self) -> usize {
         self.values.len()
@@ -166,5 +193,35 @@ mod tests {
         assert_eq!(arena.live_len(), 2);
         arena.clear_marks();
         assert!(!arena.marked(b));
+    }
+
+    #[test]
+    fn bounded_sweeping_preserves_insertions_and_reused_generations() {
+        let mut arena = Arena::default();
+        let old: Vec<_> = (0..257).map(|n| arena.insert(n)).collect();
+        for &key in old.iter().step_by(3) {
+            arena.mark(key);
+        }
+        arena.protect_new(true);
+        let mut cursor = arena.len();
+        let mut fresh = Vec::new();
+        while cursor != 0 {
+            let before = cursor;
+            arena.sweep_some(&mut cursor, 7);
+            assert_eq!(before - cursor, before.min(7));
+            let key = arena.insert(1000);
+            assert!(arena.marked(key));
+            fresh.push(key);
+        }
+        for (index, &key) in old.iter().enumerate() {
+            assert_eq!(arena.contains(key), index % 3 == 0);
+        }
+        assert!(fresh.iter().all(|&key| arena.get(key) == Some(&1000)));
+        arena.protect_new(false);
+        arena.clear_marks();
+        let mut cursor = arena.len();
+        let count = arena.live_len();
+        assert_eq!(arena.sweep_some(&mut cursor, usize::MAX), count as u64);
+        assert_eq!(arena.live_len(), 0);
     }
 }

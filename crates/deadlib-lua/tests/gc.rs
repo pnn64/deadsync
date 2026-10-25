@@ -132,6 +132,8 @@ fn explicit_collections_and_steps_resume_automatic_collection() {
         "collectgarbage('step',0)",
         "collectgarbage('step',1)",
         "collectgarbage('step',1000000)",
+        "collectgarbage('step',-1)",
+        "collectgarbage('setstepmul',0);assert(collectgarbage('step',0))",
         "collectgarbage('restart')",
         "collectgarbage('collect');collectgarbage('stop')",
         "collectgarbage('step',0);collectgarbage('stop')",
@@ -164,6 +166,7 @@ fn successful_finalizers_restore_controls_and_errors_preserve_the_last_change() 
         "collectgarbage('stop');error(tag,0)",
         "collectgarbage('restart');error(tag,0)",
         "collectgarbage('step',0);error(tag,0)",
+        "collectgarbage('setpause',2000000000);error(tag,0)",
     ] {
         control_compare(&format!(
             r#"
@@ -185,6 +188,40 @@ fn successful_automatic_finalizers_do_not_leave_collection_stopped() {
       p=nil;collectgarbage('restart')
       for i=1,20000 do local t={};if hit then break end end
       return hit,pressure()
+    "#,
+    );
+}
+
+#[test]
+fn explicit_steps_resume_pending_finalizers_and_queries_leave_them_pending() {
+    control_compare(
+        r#"
+      local tag={};local log={};local p=newproxy(true);debug.setfenv(p,{id=0})
+      getmetatable(p).__gc=function(o)
+        local id=debug.getfenv(o).id;log[#log+1]=id;if id==3 then error(tag,0)end
+      end
+      for i=1,3 do local q=newproxy(p);debug.setfenv(q,{id=i})end
+      p=nil;local ok,e=pcall(collectgarbage);local first=table.concat(log,',')
+      collectgarbage('stop');collectgarbage('count');local second=table.concat(log,',')
+      local complete=collectgarbage('step',1000000)
+      return ok,e==tag,first,second,complete,table.concat(log,',')
+    "#,
+    );
+}
+
+#[test]
+fn nested_steps_finish_sweeping_before_running_new_finalizers() {
+    control_compare(
+        r#"
+      local log={};local p=newproxy(true)
+      getmetatable(p).__gc=function()
+        log[#log+1]='outer';local q=newproxy(true)
+        getmetatable(q).__gc=function()log[#log+1]='inner'end;q=nil
+        collectgarbage('step',1000000);collectgarbage('step',0)
+        after_step={value=17}
+      end
+      p=nil;collectgarbage()
+      return table.concat(log,','),after_step.value,pressure()
     "#,
     );
 }

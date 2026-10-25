@@ -71,6 +71,9 @@ impl Vm {
             // Error unwinding skips this continuation and retains its changes.
             self.leave_gc_finalizer(owner, frame);
         }
+        // A tag method can start another cycle with an explicit step. Finish
+        // its sweep before dispatching the newly separated tag methods.
+        self.finish_pending_sweep();
         while let Some(id) = self.gc.finalizers.pop_front() {
             let value = Value::Userdata(id);
             let finalizer = self.metafield(value, Meta::Gc);
@@ -102,10 +105,9 @@ impl Vm {
                 frame.vararg_start..frame.vararg_start + frame.argc(),
                 frame.base + 1,
             );
-            let before = self.gc.collections;
-            self.gc_native(COLLECT_GARBAGE, frame.base, frame.argc())?;
+            let dispatch = self.gc_native(COLLECT_GARBAGE, frame.base, frame.argc())?;
             self.frames[index].pc = 1;
-            if self.gc.collections != before && !self.gc.finalizers.is_empty() {
+            if dispatch && !self.gc.finalizers.is_empty() {
                 self.push_finalizers(false);
             }
             return Ok(None);
@@ -133,7 +135,8 @@ impl Vm {
     }
 
     /// Complete a tracing cycle and run pending Lua userdata finalizers.
-    /// Host values that must survive need a root. Cycles run atomically.
+    /// Host values that must survive need a root. Full collection is synchronous;
+    /// automatic and explicit-step sweeping can run in slices.
     ///
     /// # Errors
     /// Returns a finalizer's Lua error or an instruction-limit error. Remaining

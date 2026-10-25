@@ -1,5 +1,5 @@
--- Remaining incremental-phase difference, not a passing compatibility probe.
--- Reference: true false true false; whole-cycle Rust collector: true false true true.
+-- Regression: finish pending finalization without starting another mark/sweep.
+-- Expected tab-separated output: true false true false.
 collectgarbage('restart')
 collectgarbage('setpause', 200)
 collectgarbage()

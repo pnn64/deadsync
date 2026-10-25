@@ -66,12 +66,14 @@ fn edge(value: Value) -> Option<Trace> {
 }
 #[derive(Debug)]
 pub(super) struct Collector {
+    phase: Phase,
+    sweep_arena: u8,
+    sweep_cursor: usize,
     stopped: bool,
     pause: i32,
     stepmul: i32,
     last_live: usize,
     threshold: usize,
-    credit: usize,
     pub(super) collections: u64,
     reclaimed: u64,
     peak: usize,
@@ -88,12 +90,14 @@ pub(super) struct Collector {
 impl Default for Collector {
     fn default() -> Self {
         Self {
+            phase: Phase::Pause,
+            sweep_arena: 0,
+            sweep_cursor: 0,
             stopped: false,
             pause: 200,
             stepmul: 200,
             last_live: 0,
             threshold: 64 * 1024,
-            credit: 0,
             collections: 0,
             reclaimed: 0,
             peak: 0,
@@ -110,7 +114,50 @@ impl Default for Collector {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Phase {
+    Pause,
+    Sweep,
+    Finalize,
+}
+
 impl Strings {
+    fn remove(&mut self, key: u64) {
+        let index = slot_index(key);
+        let mask = self.buckets.len() - 1;
+        let mut hole = Self::hash(&self.bytes[index]) & mask;
+        while self.buckets[hole] != index as u32 + 1 {
+            debug_assert_ne!(self.buckets[hole], 0);
+            hole = (hole + 1) & mask;
+        }
+        let mut cursor = (hole + 1) & mask;
+        while self.buckets[cursor] != 0 {
+            // Backshift the cluster before freeing/reusing its arena slot.
+            let entry = self.buckets[cursor];
+            let home = Self::hash(&self.bytes[entry as usize - 1]) & mask;
+            if (cursor.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
+                self.buckets[hole] = entry;
+                hole = cursor;
+            }
+            cursor = (cursor + 1) & mask;
+        }
+        self.buckets[hole] = 0;
+        self.bytes.remove(key);
+    }
+    fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+        let end = cursor.saturating_sub(budget);
+        let mut reclaimed = 0;
+        for index in (end..*cursor).rev() {
+            if let Some(key) = self.bytes.key(index)
+                && !self.bytes.marked(key)
+            {
+                self.remove(key);
+                reclaimed += 1;
+            }
+        }
+        *cursor = end;
+        reclaimed
+    }
     fn rebuild(&mut self) {
         let size = (self.bytes.live_len().saturating_mul(2))
             .max(16)
@@ -125,18 +172,6 @@ impl Strings {
             self.buckets[slot] = i as u32 + 1;
         }
     }
-}
-fn sweep<T>(arena: &mut Arena<T>) -> u64 {
-    let mut count = 0;
-    for i in (0..arena.len()).rev() {
-        if let Some(key) = arena.key(i)
-            && !arena.marked(key)
-        {
-            arena.remove(key);
-            count += 1;
-        }
-    }
-    count
 }
 fn jobs_bytes(substitutions: &[strings::Substitution]) -> usize {
     substitutions
@@ -299,13 +334,18 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|io::FIRST..=io::LAST)
+                (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|io::FIRST..=io::LAST|os::FIRST..=os::LAST)
                     || package::contains(id))
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
         };
-        if valid {
+        let live_during_sweep = self.gc.phase != Phase::Sweep
+            || match value {
+                Value::String(id) => self.strings.bytes.marked(id.0),
+                _ => self.marked_value(value),
+            };
+        if valid && live_during_sweep {
             Ok(())
         } else {
             Err(Error::new(
@@ -459,6 +499,10 @@ impl Vm {
     pub(super) fn finish_gc_cycle(&mut self) {
         self.gc.stopped = false;
         self.set_gc_threshold();
+        if self.gc.finalizers.is_empty() {
+            self.gc.phase = Phase::Pause;
+            self.protect_new_allocations(false);
+        }
     }
     pub(super) fn enter_gc_finalizer(&mut self, owner: usize) {
         // CONT_GC has no arguments. Its unused argument start saves the native
@@ -500,9 +544,14 @@ impl Vm {
             && !self.gc.closing
             && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
         {
-            self.collect_cycle();
-            if !self.gc.finalizers.is_empty() {
-                self.push_finalizers(false);
+            if self.advance_gc_some(self.gc_step_budget(0)) {
+                if self.gc.finalizers.is_empty() {
+                    self.finish_gc_cycle();
+                } else {
+                    self.push_finalizers(false);
+                }
+            } else {
+                self.defer_gc_until_allocation();
             }
         }
     }
@@ -693,8 +742,9 @@ impl Vm {
             }
         }
     }
-    pub(super) fn collect_cycle(&mut self) -> HeapStats {
+    fn begin_gc_cycle(&mut self) {
         self.heap_stats();
+        self.protect_new_allocations(false);
         self.strings.bytes.clear_marks();
         self.tables.clear_marks();
         self.functions.clear_marks();
@@ -789,15 +839,64 @@ impl Vm {
                 }
             }
         }
-        let reclaimed = sweep(&mut self.tables)
-            + sweep(&mut self.functions)
-            + sweep(&mut self.upvalues)
-            + sweep(&mut self.threads)
-            + sweep(&mut self.native_closures)
-            + sweep(&mut self.programs)
-            + sweep(&mut self.strings.bytes);
-        let reclaimed = reclaimed + sweep(&mut self.userdata);
-        let reclaimed = reclaimed + sweep(&mut self.io.files);
+        self.gc.work = work;
+        self.protect_new_allocations(true);
+        self.gc.phase = Phase::Sweep;
+        self.gc.sweep_arena = 0;
+        self.gc.sweep_cursor = self.tables.len();
+    }
+    fn protect_new_allocations(&mut self, enabled: bool) {
+        self.tables.protect_new(enabled);
+        self.functions.protect_new(enabled);
+        self.upvalues.protect_new(enabled);
+        self.threads.protect_new(enabled);
+        self.native_closures.protect_new(enabled);
+        self.programs.protect_new(enabled);
+        self.strings.bytes.protect_new(enabled);
+        self.userdata.protect_new(enabled);
+        self.io.files.protect_new(enabled);
+    }
+    fn sweep_arena_len(&self, arena: u8) -> usize {
+        match arena {
+            0 => self.tables.len(),
+            1 => self.functions.len(),
+            2 => self.upvalues.len(),
+            3 => self.threads.len(),
+            4 => self.native_closures.len(),
+            5 => self.programs.len(),
+            6 => self.strings.bytes.len(),
+            7 => self.userdata.len(),
+            8 => self.io.files.len(),
+            _ => 0,
+        }
+    }
+    fn sweep_gc_some(&mut self, mut budget: usize) {
+        while budget != 0 && self.gc.sweep_arena < 9 {
+            let mut cursor = self.gc.sweep_cursor;
+            let before = cursor;
+            let count = match self.gc.sweep_arena {
+                0 => self.tables.sweep_some(&mut cursor, budget),
+                1 => self.functions.sweep_some(&mut cursor, budget),
+                2 => self.upvalues.sweep_some(&mut cursor, budget),
+                3 => self.threads.sweep_some(&mut cursor, budget),
+                4 => self.native_closures.sweep_some(&mut cursor, budget),
+                5 => self.programs.sweep_some(&mut cursor, budget),
+                6 => self.strings.sweep_some(&mut cursor, budget),
+                7 => self.userdata.sweep_some(&mut cursor, budget),
+                8 => self.io.files.sweep_some(&mut cursor, budget),
+                _ => unreachable!(),
+            };
+            self.gc.reclaimed += count;
+            budget -= before - cursor;
+            if cursor == 0 {
+                self.gc.sweep_arena += 1;
+                cursor = self.sweep_arena_len(self.gc.sweep_arena);
+            }
+            self.gc.sweep_cursor = cursor;
+        }
+        if self.gc.sweep_arena != 9 {
+            return;
+        }
         self.proxy_metatables
             .retain(|id| self.tables.contains(id.0));
         self.strings.rebuild();
@@ -806,17 +905,54 @@ impl Vm {
         self.native_envs.retain(|id, _| {
             *id < 256 && self.gc.natives[*id as usize / 64] & (1u64 << (*id % 64)) != 0
         });
-        self.gc.work = work;
+        self.gc.phase = Phase::Finalize;
         self.gc.collections += 1;
-        self.gc.reclaimed += reclaimed;
-        self.gc.credit = 0;
         self.reset_gc_debt();
+        self.heap_stats();
+    }
+    fn advance_gc_some(&mut self, budget: usize) -> bool {
+        if self.gc.phase == Phase::Pause {
+            self.begin_gc_cycle();
+        }
+        if self.gc.phase == Phase::Sweep {
+            self.sweep_gc_some(budget);
+        }
+        self.gc.phase == Phase::Finalize
+    }
+    fn gc_step_budget(&self, extra: i32) -> usize {
+        if self.gc.stepmul == 0 {
+            return usize::MAX;
+        }
+        (extra as usize)
+            .wrapping_shl(10)
+            .max(1024)
+            .saturating_mul(self.gc.stepmul.max(1) as usize)
+            .saturating_div(100)
+            .saturating_div(16)
+            .max(1)
+    }
+    fn defer_gc_until_allocation(&mut self) {
+        self.gc.threshold = self
+            .gc
+            .last_live
+            .saturating_add(self.gc_debt())
+            .saturating_add(1);
+    }
+    pub(super) fn finish_pending_sweep(&mut self) {
+        if self.gc.phase == Phase::Sweep {
+            self.sweep_gc_some(usize::MAX);
+        }
+    }
+    pub(super) fn collect_cycle(&mut self) -> HeapStats {
+        self.finish_pending_sweep();
+        self.begin_gc_cycle();
+        self.sweep_gc_some(usize::MAX);
         self.heap_stats()
     }
-    pub(super) fn gc_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+    pub(super) fn gc_native(&mut self, id: u64, base: usize, count: usize) -> Result<bool, Error> {
         if id == GC_INFO {
             self.registers[base] = Value::Number((self.heap_stats().live_bytes / 1024) as f64);
-            return Ok(1);
+            return Ok(false);
         }
         let option = if self.argument(base, count, 0) == Value::Nil {
             None
@@ -842,6 +978,7 @@ impl Vm {
             .ok_or_else(|| self.argument_option_error(0, option))?;
         let extra = self.integer_argument(base, count, 1, Some(0))? as i32;
         let option = choices[choice];
+        let mut dispatch = false;
         let value = match option {
             b"stop" => {
                 self.gc.stopped = true;
@@ -850,16 +987,13 @@ impl Vm {
             b"restart" => {
                 self.gc.stopped = false;
                 // Frame-boundary checks must wait for the next allocation.
-                self.gc.threshold = self
-                    .gc
-                    .last_live
-                    .saturating_add(self.gc_debt())
-                    .saturating_add(1);
+                self.defer_gc_until_allocation();
                 Value::Number(0.0)
             }
             b"collect" => {
                 self.collect_cycle();
                 self.finish_gc_cycle();
+                dispatch = true;
                 Value::Number(0.0)
             }
             b"count" => Value::Number(self.heap_stats().live_bytes as f64 / 1024.0),
@@ -875,26 +1009,139 @@ impl Vm {
             }
             b"step" => {
                 self.gc.stopped = false;
-                let bytes = (extra.max(1) as usize)
-                    .saturating_mul(1024)
-                    .saturating_mul(self.gc.stepmul.max(1) as usize)
-                    / 100;
-                self.gc.credit = self.gc.credit.saturating_add(bytes.max(1));
-                let complete = self.gc.credit >= self.heap_stats().live_bytes;
+                let complete = self.advance_gc_some(self.gc_step_budget(extra));
                 if complete {
-                    self.collect_cycle();
+                    self.finish_gc_cycle();
+                    dispatch = true;
                 } else {
-                    self.gc.threshold = self
-                        .gc
-                        .last_live
-                        .saturating_add(self.gc_debt())
-                        .saturating_add(1);
+                    self.defer_gc_until_allocation();
                 }
                 Value::Boolean(complete)
             }
             _ => unreachable!("validated collector option"),
         };
         self.registers[base] = value;
-        Ok(1)
+        Ok(dispatch)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn string_sweeping_repairs_wrapped_clusters_and_preserves_reinterned_values() {
+        let mut pool = Strings::default();
+        let texts: Vec<_> = (0..)
+            .map(|n| format!("collision-{n}").into_bytes())
+            .filter(|s| Strings::hash(s) & 15 == 14)
+            .take(6)
+            .collect();
+        let ids: Vec<_> = texts.iter().map(|s| pool.intern(s)).collect();
+        pool.bytes.mark(ids[0].0);
+        pool.bytes.mark(ids[3].0);
+        pool.bytes.protect_new(true);
+        let mut cursor = pool.bytes.len();
+        assert_eq!(pool.sweep_some(&mut cursor, 2), 2);
+        assert_eq!(pool.intern(&texts[2]), ids[2]);
+        let fresh = pool.intern(b"new-after-sweep");
+        while cursor != 0 {
+            pool.sweep_some(&mut cursor, 2);
+        }
+        for index in [0, 2, 3] {
+            assert_eq!(pool.find(&texts[index]), Some(ids[index]));
+        }
+        for index in [1, 4, 5] {
+            assert_eq!(pool.find(&texts[index]), None);
+            assert!(!pool.bytes.contains(ids[index].0));
+        }
+        assert_eq!(pool.find(b"new-after-sweep"), Some(fresh));
+        pool.bytes.protect_new(false);
+        pool.bytes.clear_marks();
+        let mut cursor = pool.bytes.len();
+        pool.sweep_some(&mut cursor, usize::MAX);
+        assert_eq!(pool.find(b"new-after-sweep"), None);
+        assert_eq!(pool.bytes.live_len(), 0);
+    }
+
+    #[test]
+    fn sweep_slices_keep_new_mutable_graphs_and_reject_logically_dead_handles() {
+        let mut vm = Vm::new();
+        vm.execute(
+            &crate::compile(b"collectgarbage('stop');holder={};for i=1,1000 do local t={}end")
+                .unwrap(),
+        )
+        .unwrap();
+        let stale = Value::Table(vm.new_table());
+        let old_string = vm.intern(b"revived-during-sweep");
+        vm.begin_gc_cycle();
+        assert_eq!(vm.gc.phase, Phase::Sweep);
+        assert!(vm.pin(stale).is_err());
+        assert!(vm.pin(old_string).is_err());
+        assert_eq!(vm.intern(b"revived-during-sweep"), old_string);
+        let string_root = vm.pin(old_string).unwrap();
+        let mutate = crate::compile(
+            br#"
+          fresh=fresh or {};local obj={text='new'..#fresh};fresh[#fresh+1]=obj
+          holder.value=obj;local state=obj;getter=function()return state end
+          co=coroutine.create(function()coroutine.yield(state);return state end)
+          local ok,v=coroutine.resume(co);assert(ok and v==obj)
+          guard=newproxy(true);getmetatable(guard).__gc=function()finalized=(finalized or 0)+1 end
+          obj.guard=guard
+        "#,
+        )
+        .unwrap();
+        let mut appends = 0;
+        for step in 0..10000 {
+            if step % 31 == 0 {
+                vm.execute(&mutate).unwrap();
+                appends += 1;
+            }
+            let before = vm.gc.reclaimed;
+            vm.sweep_gc_some(1);
+            assert!(vm.gc.reclaimed - before <= 1);
+            if vm.gc.phase == Phase::Finalize {
+                break;
+            }
+        }
+        assert_eq!(vm.gc.phase, Phase::Finalize);
+        vm.finish_gc_cycle();
+        assert_eq!(vm.rooted(string_root).unwrap(), old_string);
+        let check=crate::compile(b"local ok,v=coroutine.resume(co);return ok and v==holder.value and getter()==v,#fresh,finalized or 0").unwrap();
+        assert_eq!(
+            vm.execute(&check).unwrap(),
+            &[
+                Value::Boolean(true),
+                Value::Number(f64::from(appends)),
+                Value::Number(0.0)
+            ]
+        );
+        vm.collect_garbage().unwrap();
+        vm.execute(&crate::compile(b"fresh=nil;holder=nil;getter=nil;co=nil;guard=nil").unwrap())
+            .unwrap();
+        vm.collect_garbage().unwrap();
+        assert_eq!(vm.global(b"finalized"), Value::Number(f64::from(appends)));
+        vm.unpin(string_root).unwrap();
+    }
+
+    #[test]
+    fn all_registered_builtins_can_be_pinned_across_sweeping() {
+        let mut vm = Vm::new();
+        let code=crate::compile(b"local out={};for _,lib in ipairs{_G,math,string,table,coroutine,debug,io,os,package}do for _,v in pairs(lib)do if type(v)=='function'then out[#out+1]=v end end end;return unpack(out)").unwrap();
+        let values = vm.execute(&code).unwrap().to_vec();
+        let roots: Vec<_> = values
+            .iter()
+            .map(|&value| vm.pin(value).unwrap_or_else(|e| panic!("{value:?}: {e}")))
+            .collect();
+        vm.begin_gc_cycle();
+        for (&value, &root) in values.iter().zip(&roots) {
+            assert_eq!(vm.rooted(root).unwrap(), value);
+        }
+        vm.sweep_gc_some(usize::MAX);
+        vm.finish_gc_cycle();
+        for (&value, &root) in values.iter().zip(&roots) {
+            assert_eq!(vm.rooted(root).unwrap(), value);
+            vm.unpin(root).unwrap();
+        }
     }
 }

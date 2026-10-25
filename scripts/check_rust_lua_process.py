@@ -26,6 +26,7 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     sources = list((root/'crates/deadlib-lua').rglob('*.rs'))
     sources += [root/'crates/deadlib-lua/Cargo.toml', Path(__file__).resolve()]
+    sources += [root/'docs/testing/lua51-gc-finalizer-phase.lua']
     def hashes() -> dict[str, str]:
         return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(sources)}
@@ -63,8 +64,21 @@ def main() -> None:
         ('gc_hook_return_stop', "local hit=0;debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==collectgarbage then hit=hit+1;collectgarbage('stop')end end,'r');collectgarbage();debug.sethook();print(hit,pressure())"),
         ('gc_invalid_stays_stopped', "local ok,e=pcall(collectgarbage,'restart',{});print(ok,type(e),pressure())"),
         ('gc_finalizer_coroutine', "local co;local p=newproxy(true);getmetatable(p).__gc=function()co=coroutine.create(function()collectgarbage('stop');coroutine.yield(7);collectgarbage('restart');return 11 end);local ok,n=coroutine.resume(co);assert(ok and n==7)end;p=nil;collectgarbage();local automatic=pressure();local ok,n=coroutine.resume(co);print(automatic,ok,n,coroutine.status(co))"),
+        ('gc_zero_multiplier', "collectgarbage('setstepmul',0);print(collectgarbage('step',0),pressure())"),
+        ('gc_negative_step_budget', "print(collectgarbage('step',-1),pressure())"),
     ):
         case(name, gc_setup+operation)
+    case('gc_finalizer_phase', (root/'docs/testing/lua51-gc-finalizer-phase.lua').read_text(encoding='utf-8'))
+    case('gc_sweep_churn', """
+        collectgarbage('stop');local held={}
+        for i=1,3000 do local t={'garbage'..i}end
+        for i=1,500 do local s=tostring(i);held[i]={s=s,call=function()return s end}
+          if i%7==0 then collectgarbage('step',0)end
+        end
+        collectgarbage();local n=0
+        for i=1,500 do assert(held[i].call()==tostring(i));n=n+#held[i].s end
+        print(n,#held)
+    """)
     case('calendar_native_zone', "print(os.date('%Z|%z',0),os.date('!%Z|%z',0));print(type(os.time()),type(os.date()),select('#',os.time(nil,false)))")
     for index, fmt in enumerate(('%Q','%E','%O','%#d','%','%n','%t','%F','%g','%V','%s','%10Y')):
         case(f'calendar_format_{index}',f"print('before');print(os.date({lua(fmt)},0));print('after')")

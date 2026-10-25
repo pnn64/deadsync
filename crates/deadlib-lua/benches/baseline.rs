@@ -317,6 +317,12 @@ fn main() {
             10,
         ),
         (
+            "gc_steps",
+            "collectgarbage('stop');local keep={};for i=1,256 do keep[i]={i}end;for i=1,2048 do local t={}end;local step=collectgarbage;for i=1,64 do step('step',0)end;local n=0;for i=1,256 do n=n+keep[i][1]end;collectgarbage();return n",
+            32896.0,
+            20,
+        ),
+        (
             "reader_load_single",
             "local sum=0;for i=1,200 do local once=false;local f=load(function()if once then return nil end;once=true;return 'return 1+2'end);sum=sum+f()end;return sum",
             600.0,
