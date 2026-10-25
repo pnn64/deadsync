@@ -52,6 +52,7 @@ impl Vm {
                     id,
                     PCALL
                         | LOAD_READER
+                        | debug::TRACEBACK
                         | COLLECT_GARBAGE
                         | XPCALL
                         | TOSTRING
@@ -171,6 +172,7 @@ impl Vm {
         self.registers.extend_from_slice(&[first, value]);
         self.frames[index].pc = 2;
         self.trim_loads();
+        self.trim_tracebacks();
         self.top = frame.base + 2;
     }
     pub(super) fn catch_error(&mut self, error: &Error, _line: u32) -> Result<bool, Error> {
@@ -255,6 +257,16 @@ impl Vm {
         let base = frame.base;
         let index = self.frames.len() - 1;
         match id {
+            debug::TRACEBACK => self.traceback_step(frame).map_err(|error| {
+                // lua_concat raises in the C traceback frame; it does not add
+                // the caller location used by Lua-level arithmetic failures.
+                if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+                    let value = self.intern(error.message().as_bytes());
+                    error.with_value(value)
+                } else {
+                    error
+                }
+            }),
             LOAD_READER => self.load_step(frame),
             COLLECT_GARBAGE => self.collect_step(frame),
             CONT_GC => self.finalizer_step(frame),

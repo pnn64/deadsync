@@ -6,9 +6,10 @@ pub(super) const GET_UPVALUE: u64 = 113;
 pub(super) const SET_UPVALUE: u64 = 114;
 pub(super) const GET_LOCAL: u64 = 115;
 pub(super) const SET_LOCAL: u64 = 116;
+pub(super) const TRACEBACK: u64 = 117;
 
 #[derive(Clone, Copy)]
-enum StackEntry {
+pub(super) enum StackEntry {
     Frame(usize),
     Tail,
 }
@@ -26,6 +27,16 @@ enum LocalName {
 fn c_bytes(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
+pub(super) fn integer(value: f64) -> i32 {
+    // MSVC x64's signed conversion returns MIN for non-finite/out-of-range
+    // values; Lua 5.1 then narrows lua_Integer to its 32-bit stack index.
+    let value = if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value) {
+        i64::MIN
+    } else {
+        value as i64
+    };
+    value as i32
+}
 fn bad(index: usize, message: &str) -> Error {
     Error::new(
         ErrorKind::Runtime,
@@ -35,14 +46,14 @@ fn bad(index: usize, message: &str) -> Error {
 }
 
 impl Vm {
-    fn debug_frames(&self, thread: ThreadId) -> &[Frame] {
+    pub(super) fn debug_frames(&self, thread: ThreadId) -> &[Frame] {
         if thread == self.thread {
             &self.frames
         } else {
             &self.threads[slot_index(thread.0)].frames
         }
     }
-    fn debug_stack(&self, thread: ThreadId, mut level: i32) -> Option<StackEntry> {
+    pub(super) fn debug_stack(&self, thread: ThreadId, mut level: i32) -> Option<StackEntry> {
         // The 5.1 API represents both negative levels and lost tail calls with
         // its synthetic tail record. Preserve that observable behavior.
         if level < 0 {
@@ -64,7 +75,11 @@ impl Vm {
         }
         None
     }
-    fn debug_name(&self, thread: ThreadId, index: usize) -> Option<(Box<[u8]>, &'static [u8])> {
+    pub(super) fn debug_name(
+        &self,
+        thread: ThreadId,
+        index: usize,
+    ) -> Option<(Box<[u8]>, &'static [u8])> {
         let frames = self.debug_frames(thread);
         if matches!(frames[index].function, FrameKind::Lua(_)) && frames[index].tail_calls != 0 {
             return None;
@@ -134,7 +149,7 @@ impl Vm {
         };
         let target = self.argument(base, count, arg);
         let (function, frame, tail) = if let Some(level) = self.number(target) {
-            match self.debug_stack(thread, level as i64 as i32) {
+            match self.debug_stack(thread, integer(level)) {
                 None => {
                     self.registers[base] = Value::Nil;
                     return Ok(1);
@@ -242,9 +257,10 @@ impl Vm {
         if id == SET_UPVALUE && count < 3 {
             return Err(bad(2, "value expected"));
         }
-        let n = self
-            .number(self.argument(base, count, 1))
-            .ok_or_else(|| bad(1, "number expected"))? as i64 as i32;
+        let n = integer(
+            self.number(self.argument(base, count, 1))
+                .ok_or_else(|| bad(1, "number expected"))?,
+        );
         let function = self.argument(base, count, 0);
         let Value::Function(function) = function else {
             if matches!(function, Value::Native(_)) {
@@ -383,6 +399,18 @@ impl Vm {
                         }
                         frame.base + n
                     }
+                    TRACEBACK if frame.pc != 0 => {
+                        let jobs = if thread == self.thread {
+                            &self.tracebacks
+                        } else {
+                            &self.threads[slot_index(thread.0)].tracebacks
+                        };
+                        let job = jobs.iter().rev().find(|j| j.owner == index)?;
+                        if n >= job.arg + job.top {
+                            return None;
+                        }
+                        frame.base + n
+                    }
                     TOSTRING if !current => {
                         if n != 0 {
                             return None;
@@ -426,18 +454,20 @@ impl Vm {
             Value::Thread(id) => (id, 1),
             _ => (self.thread, 0),
         };
-        let level = self
-            .number(self.argument(base, count, arg))
-            .ok_or_else(|| bad(arg, "number expected"))? as i64 as i32;
+        let level = integer(
+            self.number(self.argument(base, count, arg))
+                .ok_or_else(|| bad(arg, "number expected"))?,
+        );
         let entry = self
             .debug_stack(thread, level)
             .ok_or_else(|| bad(arg, "level out of range"))?;
         if id == SET_LOCAL && count < arg + 3 {
             return Err(bad(arg + 2, "value expected"));
         }
-        let n = self
-            .number(self.argument(base, count, arg + 1))
-            .ok_or_else(|| bad(arg + 1, "number expected"))? as i64 as i32;
+        let n = integer(
+            self.number(self.argument(base, count, arg + 1))
+                .ok_or_else(|| bad(arg + 1, "number expected"))?,
+        );
         let slot = match entry {
             StackEntry::Frame(i) => {
                 let frames = self.debug_frames(thread);

@@ -280,7 +280,7 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::SET_LOCAL)
+                matches!(id,0..=30|32..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::TRACEBACK)
                     && (self.gc.collections == 0 || self.marked_value(value))
             }
             _ => true,
@@ -346,6 +346,7 @@ impl Vm {
             + jobs_bytes(&self.substitutions)
             + self.sorts.capacity() * std::mem::size_of::<tables::Sort>();
         control += loads::storage_bytes(&self.loads);
+        control += self.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
         for (_, t) in self.threads.entries() {
             control += t.registers.capacity() * std::mem::size_of::<Value>()
                 + t.frames.capacity() * std::mem::size_of::<Frame>()
@@ -354,6 +355,7 @@ impl Vm {
                 + jobs_bytes(&t.substitutions)
                 + t.sorts.capacity() * std::mem::size_of::<tables::Sort>();
             control += loads::storage_bytes(&t.loads);
+            control += t.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
         }
         control += self.buffers.capacity() * std::mem::size_of::<Vec<u8>>()
             + self.buffers.iter().map(Vec::capacity).sum::<usize>()

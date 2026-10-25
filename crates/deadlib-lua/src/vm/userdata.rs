@@ -111,6 +111,7 @@ impl Vm {
         self.trim_substitutions();
         self.sorts.clear();
         self.trim_loads();
+        self.trim_tracebacks();
         self.registers.truncate(len);
         self.top = top;
         result.map(|_| ())

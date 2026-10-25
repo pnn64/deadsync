@@ -43,8 +43,11 @@ and `setupvalue` inspect and mutate shared Lua cells, including cells owned by
 other threads. `getlocal` and `setlocal` access parameters, scoped locals, loop
 controls and mapped temporary/argument slots, including suspended/failed threads.
 Prototype metadata, call sites and temporary ranges are verified; names resolve
-through prototype indices during inspection. Tracebacks, hooks and broader native
-scratch-stack compatibility remain unfinished.
+through prototype indices during inspection. `debug.traceback` formats current or
+other-thread stacks, including lost tail calls, reference truncation and native
+concatenation callbacks. Formatting resumes through flat VM continuations, with
+retained target roots across callbacks and coroutine switches. Hooks and broader
+native scratch-stack compatibility remain unfinished.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
@@ -108,7 +111,7 @@ debug behavior, binary chunks, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. In particular, `string.dump` is
 unsupported, locale behavior is fixed to C, and patterns/table operations have
-work limits. Broader source/register diagnostics, native scratch-stack behavior, tracebacks
+work limits. Broader source/register diagnostics, native scratch-stack behavior
 and hooks remain open. The API and bytecode
 are provisional. The CLI accepts a file, stdin or `-e source`.
 
@@ -126,10 +129,10 @@ as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: all thirteen reference probes pass; the Rust engine
-passes unchanged `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`
-and `gc.lua`, while other probes reach
-missing functions. It verifies the official
+currently exits unsuccessfully: all fifteen reference probes pass; the Rust engine
+passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
+`pm.lua`, `events.lua`, `gc.lua` and `closure.lua`. Remaining probes reach missing
+functions or a syntax-diagnostic mismatch. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-userdata.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-traceback.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

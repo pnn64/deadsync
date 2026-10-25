@@ -14,7 +14,7 @@ import urllib.request
 URL = "https://www.lua.org/tests/lua5.1-tests.tar.gz"
 SHA256 = "49e4ca6561f82ea605908c5041ab5fad66ed9930fa0686675bd51b02767f18ad"
 FILES = ["constructs.lua", "locals.lua", "calls.lua", "events.lua", "nextvar.lua",
-         "literals.lua", "closure.lua", "vararg.lua", "strings.lua", "pm.lua", "sort.lua", "math.lua", "gc.lua", "db.lua"]
+         "literals.lua", "closure.lua", "vararg.lua", "strings.lua", "pm.lua", "sort.lua", "math.lua", "gc.lua", "db.lua", "errors.lua"]
 
 
 def main() -> None:

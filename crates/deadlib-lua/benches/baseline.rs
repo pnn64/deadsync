@@ -246,12 +246,23 @@ fn main() {
             500500.0,
             10,
         ),
+        (
+            "debug_traceback",
+            r#"local function f(n)return debug.traceback(n,1)end;local suffix="\nstack traceback:\n\t(traceback-bench):1: in function 'f'\n\t(traceback-bench):1: in main chunk";local sum=0;for i=1,200 do local text=f(i);if text==i..suffix then sum=sum+1 end end;return sum"#,
+            200.0,
+            10,
+        ),
     ] {
         let source = source.as_bytes();
-        let program = compile(source).unwrap();
+        let chunk_name = (name == "debug_traceback").then_some("=(traceback-bench)");
+        let program = match chunk_name {
+            Some(name) => deadlib_lua::compile_named(source, name.as_bytes()),
+            None => compile(source),
+        }
+        .unwrap();
         let mut vm = Vm::new();
         assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
-        let reference = if matches!(name, "debug_info" | "debug_locals") {
+        let reference = if name.starts_with("debug_") {
             // SAFETY: only these fixed developer workloads need the debug library.
             unsafe {
                 lua_reference::Lua::unsafe_new_with(
@@ -262,11 +273,26 @@ fn main() {
         } else {
             lua_reference::Lua::new()
         };
-        let function = reference.load(source).into_function().unwrap();
+        let chunk = reference.load(source);
+        let function = if let Some(name) = chunk_name {
+            chunk.set_name(name)
+        } else {
+            chunk
+        }
+        .into_function()
+        .unwrap();
         assert_eq!(function.call::<f64>(()).unwrap(), expected);
         measure(
             || {
-                black_box(compile(black_box(source)).unwrap());
+                black_box(
+                    match chunk_name {
+                        Some(name) => {
+                            deadlib_lua::compile_named(black_box(source), name.as_bytes())
+                        }
+                        None => compile(black_box(source)),
+                    }
+                    .unwrap(),
+                );
             },
             1000,
             "compile_drop",
@@ -276,7 +302,16 @@ fn main() {
         );
         measure(
             || {
-                black_box(reference.load(black_box(source)).into_function().unwrap());
+                let chunk = reference.load(black_box(source));
+                black_box(
+                    if let Some(name) = chunk_name {
+                        chunk.set_name(name)
+                    } else {
+                        chunk
+                    }
+                    .into_function()
+                    .unwrap(),
+                );
             },
             1000,
             "compile_drop",
@@ -354,7 +389,7 @@ fn main() {
         );
     }
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
-    println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_info/debug_locals only");
+    println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
     let mut frontends = Vec::with_capacity(8);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {

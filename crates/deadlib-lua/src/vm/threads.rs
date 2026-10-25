@@ -54,6 +54,7 @@ pub(super) struct Thread {
     pub(super) substitutions: Vec<strings::Substitution>,
     pub(super) sorts: Vec<tables::Sort>,
     pub(super) loads: Vec<loads::Loading>,
+    pub(super) tracebacks: Vec<traces::Traceback>,
     pub(super) entry: Option<FunctionId>,
     pub(super) status: Status,
     pub(super) resumer: Option<ThreadId>,
@@ -72,6 +73,7 @@ impl Thread {
             substitutions: Vec::new(),
             sorts: Vec::new(),
             loads: Vec::new(),
+            tracebacks: Vec::new(),
             entry: None,
             status: Status::Running,
             resumer: None,
@@ -201,6 +203,7 @@ impl Vm {
         std::mem::swap(&mut self.substitutions, &mut state.substitutions);
         std::mem::swap(&mut self.sorts, &mut state.sorts);
         std::mem::swap(&mut self.loads, &mut state.loads);
+        std::mem::swap(&mut self.tracebacks, &mut state.tracebacks);
         std::mem::swap(line, &mut state.line);
     }
     fn switch_thread(&mut self, id: ThreadId, line: &mut u32) {
@@ -291,6 +294,9 @@ impl Vm {
             self.trim_substitutions();
             self.sorts.clear();
             self.trim_loads();
+            self.trim_tracebacks();
+            self.registers.clear();
+            self.top = 0;
             self.threads[slot_index(id.0)].status = Status::Dead;
             self.switch_thread(parent, line);
         }

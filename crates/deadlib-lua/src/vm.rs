@@ -16,6 +16,7 @@ mod native;
 mod strings;
 mod tables;
 mod threads;
+mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{HeapStats, Root};
@@ -260,6 +261,7 @@ pub struct Vm {
     roots: Arena<Value>,
     identity: u64,
     loads: Vec<loads::Loading>,
+    tracebacks: Vec<traces::Traceback>,
     userdata: Arena<userdata::Userdata>,
     proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
@@ -310,6 +312,7 @@ impl Vm {
             roots: Arena::default(),
             identity: gc::new_vm_identity(),
             loads: Vec::new(),
+            tracebacks: Vec::new(),
             userdata: Arena::default(),
             proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
@@ -364,6 +367,7 @@ impl Vm {
             (debug::SET_UPVALUE, b"setupvalue"),
             (debug::GET_LOCAL, b"getlocal"),
             (debug::SET_LOCAL, b"setlocal"),
+            (debug::TRACEBACK, b"traceback"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]
@@ -742,9 +746,17 @@ impl Vm {
         self.trim_substitutions();
         self.sorts.clear();
         self.trim_loads();
+        self.trim_tracebacks();
         match result {
             Ok(count) => Ok(&self.registers[..count]),
-            Err(error) => Err(error),
+            Err(error) => {
+                self.registers.clear();
+                if let Some(value) = error.value() {
+                    self.registers.push(value);
+                }
+                self.top = self.registers.len();
+                Err(error)
+            }
         }
     }
 
