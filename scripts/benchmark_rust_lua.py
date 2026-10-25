@@ -52,6 +52,7 @@ def main() -> None:
     reference_heap = {}
     reference_collected_heap = {}
     rust_heap = {}
+    rust_program_layout = {}
     metadata = {}
     for line in run.stdout.splitlines():
         fields = line.split("\t")
@@ -69,6 +70,8 @@ def main() -> None:
             _, name, phase, live, reserved, peak, collections, reclaimed, userdata = fields
             rust_heap.setdefault(name, {})[phase] = dict(live_bytes=int(live), reserved_bytes=int(reserved),
                 observed_peak_reserved_bytes=int(peak), collections=int(collections), reclaimed_objects=int(reclaimed), userdata=int(userdata))
+        elif fields[0] == "rust_program_layout":
+            rust_program_layout[fields[1]] = dict(instructions=int(fields[2]), entry_registers=int(fields[3]))
         elif len(fields) == 2:
             metadata[fields[0]] = fields[1]
     ratios = {}
@@ -80,8 +83,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired measurements for {name}")
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 35 or len(rust_heap) != 35 or len(reference_collected_heap) != 35:
-        raise SystemExit(f"expected 35 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
+    if len(ratios) != 36 or len(rust_heap) != 36 or len(reference_collected_heap) != 36:
+        raise SystemExit(f"expected 36 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
     compile_ratios = {}
     for name in sorted({s["workload"] for s in samples if s["workload"].startswith("frontend_")}):
         rust = {s["sample"]: s["ns_per_iteration"] for s in samples
@@ -91,8 +94,10 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired compilation measurements for {name}")
         compile_ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(compile_ratios) != 12:
-        raise SystemExit(f"expected 12 frontend scaling measurements, received {len(compile_ratios)}")
+    if len(compile_ratios) != 14:
+        raise SystemExit(f"expected 14 frontend scaling measurements, received {len(compile_ratios)}")
+    if rust_program_layout.keys() != ratios.keys() | compile_ratios.keys():
+        raise SystemExit("missing program layout measurements")
     result = dict(
         command=command, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         build_and_run_seconds=time.time() - started,
@@ -108,6 +113,7 @@ def main() -> None:
         median_paired_compile_rust_over_lua51=compile_ratios,
         reference_live_heap_bytes=reference_heap, metadata=metadata,
         rust_heap_estimates=rust_heap, reference_after_collect_heap_bytes=reference_collected_heap,
+        rust_program_layout=rust_program_layout,
         missing_metrics=["exact Rust allocator live/peak heap", "process peak RSS", "native C allocation counts",
                          "per-thread CPU cycles", "other Rust engines", "full standard-library workloads"],
     )

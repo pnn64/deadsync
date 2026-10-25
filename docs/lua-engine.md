@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 260 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 267 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-flat-codegen.md) identifies the
+The [official suite report](testing/2026-10-25-rust-lua-register-reuse.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -241,6 +241,21 @@ complete 59- and 60-capture nested fixtures. The
 and long-expression frontend cases, bringing the harness to 35 execution and
 twelve frontend workloads. Exact register allocation/resource limits and broader
 diagnostics remain required compiler work.
+
+The [register-reuse validation](testing/2026-10-25-rust-lua-register-reuse.md)
+adds seven groups with 92 paired execution/error observations. Arithmetic and
+index expressions reuse anonymous result slots and allocate right-hand scratch
+storage after the left finishes. Named destinations remain unchanged during
+callbacks and metamethods, including unary assignment. Ten-thousand-term
+arithmetic and index chains now compile with bounded entry register counts;
+190-term right-associated concatenation also fits. Tests preserve number bits,
+late local reads, captured intermediates, GC roots and complete diagnostics.
+The [measurements](performance/2026-10-25-rust-lua-register-reuse.md) add an operand
+workload and two long-chain frontend cases, bringing the harness to 36 execution
+and fourteen frontend workloads. The reports also retain instruction counts and
+entry register counts. Exact compiler resource limits and other expression
+layouts still require work: retained probes with 190 nested table constructors
+and 300 chained calls load in C but still exhaust this compiler's temporaries.
 
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.

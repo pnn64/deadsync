@@ -30,6 +30,10 @@ Code generation also uses flat continuations for blocks, expressions, argument
 lists and nested functions. Ancestor capture propagation is iterative. Compilation
 does not consume host stack in proportion to source nesting or expression-tree
 depth; the frontend's Lua syntax limits still apply.
+Arithmetic and index chains reuse anonymous result registers and defer right
+operand storage. Named destinations retain their old values through callbacks
+and metamethods. This keeps long left-associated chains within bounded scratch
+storage while preserving local operand reads and floating-point evaluation order.
 Text `loadfile` and `dofile` share this frontend and the buffered stream backend.
 They accept named files or underlying stdin, skip an initial `#` line, and retain
 file source names. `dofile` runs through the flat scheduler, preserving multiple
@@ -201,5 +205,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. Other
 probes reach missing libraries/functions. It verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-25-rust-lua-flat-codegen.md) and
+[suite report](../../docs/testing/2026-10-25-rust-lua-register-reuse.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

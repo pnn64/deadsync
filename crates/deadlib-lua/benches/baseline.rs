@@ -121,6 +121,12 @@ fn main() {
             100,
         ),
         (
+            "operand_reuse",
+            "local x=1;local y=0;for i=1,10000 do y=(x+x)+(x+x)+(x+x)+(x+x)end;return y",
+            8.0,
+            50,
+        ),
+        (
             "array_table",
             "local t={}; for i=1,10000 do t[i]=i end; local s=0; for i=1,10000 do s=s+t[i] end; return s",
             50005000.0,
@@ -332,6 +338,11 @@ fn main() {
             None => compile(source),
         }
         .unwrap();
+        println!(
+            "rust_program_layout\t{name}\t{}\t{}",
+            program.instruction_count(),
+            program.register_count()
+        );
         let mut vm = Vm::new();
         let source_file = (name == "loadfile_text").then(|| {
             let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -483,7 +494,7 @@ fn main() {
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
-    let mut frontends = Vec::with_capacity(12);
+    let mut frontends = Vec::with_capacity(14);
     for (size, repeats) in [(10_000, 30), (100_000, 10), (1_000_000, 3)] {
         for quoted in [false, true] {
             let name = format!(
@@ -530,8 +541,20 @@ fn main() {
         vec!["f()"; 20_000].join(" and ")
     );
     frontends.push(("frontend_logical_20000".into(), source, 20_000.0, 3));
+    let source = format!("local x=1.25;return {}", vec!["x"; 10_000].join("+"));
+    frontends.push(("frontend_arithmetic_10000".into(), source, 12_500.0, 3));
+    let source = format!(
+        "local t={{}};t.a=t;return t{}==t and 1 or 0",
+        ".a".repeat(10_000)
+    );
+    frontends.push(("frontend_index_10000".into(), source, 1.0, 3));
     for (name, source, expected, repeats) in frontends {
         let program = deadlib_lua::compile_named(source.as_bytes(), b"=(frontend)").unwrap();
+        println!(
+            "rust_program_layout\t{name}\t{}\t{}",
+            program.instruction_count(),
+            program.register_count()
+        );
         let mut vm = Vm::new();
         assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
         let reference = lua_reference::Lua::new();

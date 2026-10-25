@@ -57,7 +57,7 @@ pub(super) enum Task<'a> {
     Operand(ExprId, u8),
     OperandEnd(ExprId, u8),
     Paren(ExprId, u32),
-    Unary(Kind, u8, u32),
+    Unary(Kind, u8, u8, u32),
     LogicalLeft(ExprId, u8),
     LogicalEnd(ExprId, u32, usize),
     BinaryLeft(ExprId, u8, u8),
@@ -366,7 +366,7 @@ impl<'a> Compiler<'a> {
                     self.result = dst;
                 }
                 Task::Paren(inner, line) => self.discharge_line(inner, line, LineUse::Copy),
-                Task::Unary(op, dst, line) => {
+                Task::Unary(op, dst, work, line) => {
                     self.line = line;
                     let op = match op {
                         Kind::Minus => Op::Neg,
@@ -374,14 +374,14 @@ impl<'a> Compiler<'a> {
                         Kind::Hash => Op::Len,
                         _ => unreachable!(),
                     };
-                    self.emit(op, dst, u16::from(dst), 0)?;
+                    self.emit(op, dst, u16::from(work), 0)?;
                 }
                 Task::LogicalLeft(id, dst) => self.logical_left(id, dst)?,
                 Task::LogicalEnd(right, line, done) => {
                     self.discharge_line(right, line, LineUse::Copy);
                     self.patch(done);
                 }
-                Task::BinaryLeft(id, dst, regs) => {
+                Task::BinaryLeft(id, dst, work) => {
                     let Expr::Binary(op, left, right, line) = self.ast.exprs[id].0 else {
                         unreachable!()
                     };
@@ -395,20 +395,24 @@ impl<'a> Compiler<'a> {
                             LineUse::Operand
                         },
                     );
+                    let right_reg =
+                        self.right_register(right, left_reg, work, op == Kind::Concat)?;
                     self.tasks.push(Task::BinaryRight(id, dst, left_reg));
                     self.tasks.push(if op == Kind::Concat {
-                        Task::Expr(right, regs + 1)
+                        Task::Expr(right, right_reg)
                     } else {
-                        Task::Operand(right, regs + 1)
+                        Task::Operand(right, right_reg)
                     });
                 }
                 Task::BinaryRight(id, dst, left) => self.binary_right(id, dst, left)?,
-                Task::IndexTable(id, dst, regs) => {
+                Task::IndexTable(id, dst, work) => {
                     let Expr::Index(_, key) = self.ast.exprs[id].0 else {
                         unreachable!()
                     };
-                    self.tasks.push(Task::IndexKey(id, dst, self.result));
-                    self.tasks.push(Task::Operand(key, regs + 1));
+                    let table = self.result;
+                    let key_reg = self.right_register(key, table, work, false)?;
+                    self.tasks.push(Task::IndexKey(id, dst, table));
+                    self.tasks.push(Task::Operand(key, key_reg));
                 }
                 Task::IndexKey(id, dst, table) => {
                     self.line = self.ast.exprs[id].1.discharge;

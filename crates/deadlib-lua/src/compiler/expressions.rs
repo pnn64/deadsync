@@ -35,26 +35,27 @@ impl<'a> Compiler<'a> {
                 self.tasks.push(Task::Expr(*inner, dst));
             }
             Expr::Unary(op, inner) => {
-                self.tasks.push(Task::Unary(*op, dst, span.end));
-                self.tasks.push(Task::Expr(*inner, dst));
+                let work = self.work_register(dst)?;
+                self.tasks.push(Task::Unary(*op, dst, work, span.end));
+                self.tasks.push(Task::Expr(*inner, work));
             }
             Expr::Binary(Kind::And | Kind::Or, left, _, _) => {
                 self.tasks.push(Task::LogicalLeft(id, dst));
                 self.tasks.push(Task::Expr(*left, dst));
             }
             Expr::Binary(op, left, _, _) => {
-                let regs = self.alloc(2)?;
-                self.tasks.push(Task::BinaryLeft(id, dst, regs));
+                let work = self.work_register(dst)?;
+                self.tasks.push(Task::BinaryLeft(id, dst, work));
                 self.tasks.push(if *op == Kind::Concat {
-                    Task::Expr(*left, regs)
+                    Task::Expr(*left, work)
                 } else {
-                    Task::Operand(*left, regs)
+                    Task::Operand(*left, work)
                 });
             }
             Expr::Index(table, _) => {
-                let regs = self.alloc(2)?;
-                self.tasks.push(Task::IndexTable(id, dst, regs));
-                self.tasks.push(Task::Operand(*table, regs));
+                let work = self.work_register(dst)?;
+                self.tasks.push(Task::IndexTable(id, dst, work));
+                self.tasks.push(Task::Operand(*table, work));
             }
             Expr::Table(_, load_line) => {
                 let table = self.alloc(1)?;
@@ -126,19 +127,49 @@ impl<'a> Compiler<'a> {
         Ok(())
     }
     pub(super) fn operand(&mut self, id: ExprId, dst: u8) {
-        let mut reference = id;
-        while let Expr::Paren(inner) = self.ast.exprs[reference].0 {
-            reference = inner;
-        }
-        if let Expr::Name(name) = &self.ast.exprs[reference].0
-            && let Some(reg) = self.local(name)
-        {
+        let reference = self.unparen(id);
+        if let Some(reg) = self.local_operand(reference) {
             self.line = self.ast.exprs[id].1.discharge;
             self.result = reg;
             return;
         }
         self.tasks.push(Task::OperandEnd(reference, dst));
         self.tasks.push(Task::Expr(id, dst));
+    }
+    fn unparen(&self, mut id: ExprId) -> ExprId {
+        while let Expr::Paren(inner) = self.ast.exprs[id].0 {
+            id = inner;
+        }
+        id
+    }
+    pub(super) fn local_operand(&self, id: ExprId) -> Option<u8> {
+        if let Expr::Name(name) = &self.ast.exprs[self.unparen(id)].0 {
+            self.local(name)
+        } else {
+            None
+        }
+    }
+    fn work_register(&mut self, dst: u8) -> Result<u8, Error> {
+        // A named destination must keep its previous value until the complete
+        // expression finishes: callbacks and metamethods can inspect it.
+        if self.function.debug_named[usize::from(dst) / 64] & (1u64 << (dst % 64)) != 0 {
+            self.alloc(1)
+        } else {
+            Ok(dst)
+        }
+    }
+    pub(super) fn right_register(
+        &mut self,
+        right: ExprId,
+        left: u8,
+        work: u8,
+        copy: bool,
+    ) -> Result<u8, Error> {
+        if left == work && (copy || self.local_operand(right).is_none()) {
+            self.alloc(1)
+        } else {
+            Ok(work)
+        }
     }
     pub(super) fn logical_left(&mut self, id: ExprId, dst: u8) -> Result<(), Error> {
         let Expr::Binary(op, left, right, op_line) = self.ast.exprs[id].0 else {

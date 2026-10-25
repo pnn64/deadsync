@@ -46,6 +46,22 @@ impl Oracle {
 }
 
 #[test]
+fn destination_reuse_preserves_error_names_and_operand_types() {
+    Oracle::new().cases(&[
+        "local a=1;local function f()return false end;a=-f()",
+        "local a=1;local function f()return false end;a=(f()+1)+2",
+        "local t={a=false};return t.a+1",
+        "local t={a={b=false}};return t.a.b+1",
+        "local t={a={}};return t.a.b[1]",
+        "local a=1;local function f()a=false;return 1 end;return a+f()",
+        "local t={a=false};local key='a';return t[key]+1",
+        "local t={a=false};return #t.a",
+        "local a={};local function f()return false end;a=f().x",
+        "local t={a=false};return t.a[1]",
+    ]);
+}
+
+#[test]
 fn call_failures_identify_globals_locals_fields_methods_and_upvalues() {
     Oracle::new().cases(&[
         "a=1; bbbb=2; a=math.sin(3)+bbbb(3)",

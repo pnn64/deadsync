@@ -42,6 +42,12 @@ pub fn logical_chain(count: usize, and: bool) -> String {
         vec!["f()"; count].join(if and { " and " } else { " or " })
     )
 }
+pub fn arithmetic_chain(count: usize, op: &str) -> String {
+    format!("local x=1.25;return {}", vec!["x"; count].join(op))
+}
+pub fn index_chain(count: usize) -> String {
+    format!("local t={{}};t.a=t;return t{}==t", ".a".repeat(count))
+}
 pub fn generated() -> Vec<String> {
     fn expr(seed: &mut u32, depth: u8) -> String {
         *seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
@@ -85,6 +91,9 @@ mod tests {
         Bytes(Vec<u8>),
     }
     fn check(sources: Vec<String>) {
+        check_bound(sources, None);
+    }
+    fn check_bound(sources: Vec<String>, max_registers: Option<u16>) {
         // SAFETY: fixed developer programs run under the official protected VM.
         let lua = unsafe { Lua::unsafe_new() };
         let expected: Vec<Vec<Scalar>> = sources
@@ -116,6 +125,9 @@ mod tests {
                 vm.set_instruction_limit(Some(5_000_000));
                 for (source, expected) in sources.iter().zip(expected) {
                     let program = compile_named(source.as_bytes(), b"=codegen").unwrap();
+                    if let Some(max) = max_registers {
+                        assert!(program.register_count() <= max);
+                    }
                     let values = vm.execute(&program).unwrap().to_vec();
                     let actual: Vec<_> = values
                         .into_iter()
@@ -166,5 +178,89 @@ mod tests {
     #[test]
     fn generated_expression_contexts_preserve_values_effects_and_conflicting_assignments() {
         check(generated());
+    }
+    #[test]
+    fn long_arithmetic_trees_use_bounded_registers_without_reassociation() {
+        check_bound(
+            [128, 200, 1000, 10_000]
+                .into_iter()
+                .flat_map(|count| {
+                    ["+", "-", "*", "/", "%"]
+                        .into_iter()
+                        .map(move |op| arithmetic_chain(count, op))
+                })
+                .collect(),
+            Some(4),
+        );
+        check(
+            [
+                "local a,b,c=1e16,-1e16,1;return a+b+c,a+(b+c),a-b-c,a-(b-c)",
+                "local x,z=-0.0,0.0;return x+z,x-z,x*z,x/1,z/(-1)",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        );
+    }
+    #[test]
+    fn long_index_chains_reuse_table_and_key_temporaries() {
+        check_bound(
+            [128, 200, 1000, 10_000]
+                .into_iter()
+                .map(index_chain)
+                .collect(),
+            Some(6),
+        );
+    }
+    #[test]
+    fn right_associated_concatenation_fits_the_source_syntax_budget() {
+        check(
+            [100, 150, 190]
+                .into_iter()
+                .map(|count| format!("local x='a';return {}", vec!["x"; count].join("..")))
+                .collect(),
+        );
+    }
+    #[test]
+    fn named_destinations_remain_unchanged_until_callbacks_and_metamethods_finish() {
+        check([
+            "local x=10;local function f()local old=x;x=20;return old end;x=(x+1)+f();return x",
+            "local x=10;local function f()x=20;return 1 end;x=x+f();return x",
+            "local x=10;local function f()x=20;return 1 end;x=f()+x;return x",
+            "local x=10;local function f()x=20;return 1 end;x=(x)+f();return x",
+            "x=10;local function f()x=20;return 1 end;return x+f()",
+            "local x=10;local function f()x=20;return 1 end;local function g()return x+f()end;return g()",
+            "local x=10;local obj=setmetatable({},{__unm=function()return x end});local function f()return obj end;x=-f();return x",
+            "local x=10;local seen;local function f()return {7}end;local function k()seen=x;return 1 end;x=f()[k()];return seen,x",
+            "local x=10;local obj=setmetatable({},{__index=function()return x end});local function f()return obj end;x=f().a;return x",
+            "local x='a';local function f()x='b';return 'c' end;x=x..f();return x",
+        ].into_iter().map(str::to_owned).collect());
+    }
+    #[test]
+    fn reused_operands_remain_roots_during_collection_callbacks() {
+        check([
+            "local weak=setmetatable({},{__mode='v'});local mt={__add=function(a,b)collectgarbage('collect');assert(weak[1]==a);return a end};local a=setmetatable({},mt);weak[1]=a;local r=(function()return a end)()+(function()a=nil;collectgarbage('collect');return 1 end)();collectgarbage('collect');return r==weak[1]",
+            "local weak=setmetatable({},{__mode='v'});local target={[1]=7};weak[1]=target;local function get()local t=target;target=nil;return t end;local function key()collectgarbage('collect');assert(weak[1]~=nil);return 1 end;return get()[key()],weak[1]~=nil",
+            "local weak=setmetatable({},{__mode='v'});local x=10;local obj=newproxy(true);getmetatable(obj).__unm=function(a)collectgarbage('collect');assert(weak[1]==a);return x end;weak[1]=obj;local function f()local a=obj;obj=nil;return a end;x=-f();return x",
+        ].into_iter().map(str::to_owned).collect());
+    }
+    #[test]
+    fn generated_mutating_operands_preserve_late_local_reads_and_captured_intermediates() {
+        let mut sources = Vec::new();
+        for op in ["+", "-", "*", "/", "%"] {
+            for (left, right) in [
+                ("a", "f(1)"),
+                ("(a+1)", "f(1)"),
+                ("f(1)", "a"),
+                ("a", "(a+f(1))"),
+                ("(a+f(1))", "(a+f(2))"),
+                ("(a)", "f(2)"),
+                ("factory(a)(f(1))", "a"),
+                ("({a=f(1)}).a", "(a+f(2))"),
+            ] {
+                sources.push(format!("local a=3;local trace={{}};local function f(n)trace[#trace+1]=a;a=a+n;return n end;local function factory(x)return function(v)return x+v end end;a={left}{op}{right};return a,table.concat(trace,',')"));
+            }
+        }
+        check(sources);
     }
 }
