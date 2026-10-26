@@ -247,15 +247,13 @@ pub const fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str
 }
 
 pub fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget> {
-    let key = raw
-        .trim()
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .map(|ch| ch.to_ascii_lowercase())
-        .collect::<String>();
-    match key.as_str() {
-        "digest" => Some(KernelTarget::Digest),
-        "accumulator" => Some(KernelTarget::Accumulator),
+    let mut key = raw
+        .bytes()
+        .filter(u8::is_ascii_alphanumeric)
+        .map(|byte| byte.to_ascii_lowercase());
+    match key.next()? {
+        b'd' if key.by_ref().eq(b"igest".iter().copied()) => Some(KernelTarget::Digest),
+        b'a' if key.by_ref().eq(b"ccumulator".iter().copied()) => Some(KernelTarget::Accumulator),
         _ => None,
     }
 }
@@ -288,15 +286,13 @@ pub const fn null_or_die_kernel_type_str(kind: BiasKernel) -> &'static str {
 }
 
 pub fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
-    let key = raw
-        .trim()
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .map(|ch| ch.to_ascii_lowercase())
-        .collect::<String>();
-    match key.as_str() {
-        "rising" => Some(BiasKernel::Rising),
-        "loudest" => Some(BiasKernel::Loudest),
+    let mut key = raw
+        .bytes()
+        .filter(u8::is_ascii_alphanumeric)
+        .map(|byte| byte.to_ascii_lowercase());
+    match key.next()? {
+        b'r' if key.by_ref().eq(b"ising".iter().copied()) => Some(BiasKernel::Rising),
+        b'l' if key.by_ref().eq(b"oudest".iter().copied()) => Some(BiasKernel::Loudest),
         _ => None,
     }
 }
@@ -341,7 +337,7 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     push_line(
         content,
         "NullOrDieFingerprintMs",
-        format!(
+        format_args!(
             "{:.1}",
             clamp_null_or_die_positive_ms(options.fingerprint_ms)
         ),
@@ -349,12 +345,12 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     push_line(
         content,
         "NullOrDieWindowMs",
-        format!("{:.1}", clamp_null_or_die_positive_ms(options.window_ms)),
+        format_args!("{:.1}", clamp_null_or_die_positive_ms(options.window_ms)),
     );
     push_line(
         content,
         "NullOrDieStepMs",
-        format!("{:.1}", clamp_null_or_die_positive_ms(options.step_ms)),
+        format_args!("{:.1}", clamp_null_or_die_positive_ms(options.step_ms)),
     );
     push_line(
         content,
