@@ -10,6 +10,7 @@ mod demux;
 mod index;
 mod page;
 mod reader;
+mod validation;
 mod writer;
 
 pub use capture::{CaptureInfo, CapturedPacket, PacketCapture};
@@ -18,6 +19,7 @@ pub use demux::{Demuxer, Limits, Packet, PacketInfo};
 pub use index::{GranuleLocation, IndexOptions, IndexedPage, OggIndex, StreamIndex, find_granule};
 pub use page::{Fragment, Fragments, Page, PageHeader, encode_page, write_page};
 pub use reader::{LocatedPage, PageDecoder, PageProgress, PageReader, SyncMode};
+pub use validation::{CompatibilityStats, ValidationOptions};
 pub use writer::{PacketWriter, WriteOptions};
 
 pub const MAX_PAGE_SIZE: usize = 27 + 255 + 255 * 255;

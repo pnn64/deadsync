@@ -136,6 +136,15 @@ Vorbis index elements, setup/synthesis memory, and packet resources. Indexing is
 eager and requires two container passes; sparse/index-free codec seeking and
 comparative startup/seek optimization remain performance work.
 
+Legacy handling is explicit and disabled by default.
+`OggOptions::allow_zero_span_granules` and the same `SeekOptions` flag ignore
+only granule zero on an unfinished nonempty page. The indexed reader alone
+offers `SeekOptions::trim_to_final_granule`, using the known final length to
+clip PCM across earlier packets/pages. Applied container exceptions are counted;
+`SeekStream` reports trailing padding and extended trimming. See
+[LEGACY.md](LEGACY.md) for the precise policies, strict rejection tests and
+pinned historical/ITGmania evidence, including a reference count discrepancy.
+
 **Native audio encoding remains pending.**
 Raw decoder positions count overlap output before container initial/final trim.
 There is no synthetic final flush; the container mapping supplies final length.

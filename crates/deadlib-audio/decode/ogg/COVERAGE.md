@@ -34,6 +34,12 @@ Sources are linked in the parent directory's work plan.
   multiple captures per chunk, EOF prefixes and returning available pages before
   a subsequent blocking/failing read are tested. An 8 KiB noise fixture takes
   fewer than 15 underlying reads with a source permitting 4 KiB reads.
+* Explicit, independently selectable compatibility flags for zero granules on
+  unfinished nonempty pages and decreasing EOS granules. Strict defaults reject
+  both. Three tests cover exception counts, reset, sorted seek landmarks and
+  continued rejection of nonzero span granules, non-EOS decreases, CRC failures,
+  sequence holes and packet-limit violations. Compatibility changes neither
+  page bytes nor unrelated validation. Codec endpoint handling is separate.
 
 Evidence on Windows x86-64, rustc 1.99.1:
 
@@ -67,11 +73,13 @@ Evidence on Windows x86-64, rustc 1.99.1:
   use the fully validated index for trusted page boundaries.
 * Additional independent generated multiplexed/chained and malformed-stream
   differential corpora, official conformance material, sustained fuzzing and
-  actual ITGmania/StepMania song-pack validation (assets are not song packs).
+  wider ITGmania/StepMania song-pack validation beyond two pinned shipped songs
+  covered by the Vorbis tests (theme assets are not song packs).
 * Reproducible comparative throughput/startup/allocation/memory/seek benchmarks,
   and subsequent measured optimization. No competitive performance claim yet.
 * Broader platforms and benchmark targets.
 
 Transport validation does not validate codec headers or mapping-specific packet
 ordering. Metadata, channel layout, sample counts and exact seeking belong to
-the codec. No legacy compatibility exceptions have been introduced.
+the codec. Named legacy exceptions and their evidence are documented in
+[Vorbis LEGACY.md](../vorbis/LEGACY.md); they are disabled by default.

@@ -12,6 +12,8 @@ use std::io::Read;
 pub struct OggOptions {
     pub limits: Limits,
     pub container_limits: container::Limits,
+    /// Explicit legacy exception for granule zero on unfinished pages.
+    pub allow_zero_span_granules: bool,
     pub max_active_streams: usize,
     /// Combined retained setup, metadata and synthesis elements across active
     /// streams. Container assembly storage has its own independent limit.
@@ -22,6 +24,7 @@ impl Default for OggOptions {
         Self {
             limits: Limits::default(),
             container_limits: container::Limits::default(),
+            allow_zero_span_granules: false,
             max_active_streams: 16,
             max_stream_memory: 256 << 20,
         }
@@ -75,6 +78,7 @@ pub(crate) struct Timing {
     pub(crate) origin: Option<i128>,
     pub(crate) frames: u64,
     last_span: u64,
+    extended_end_trim: bool,
 }
 pub(crate) struct Crop {
     pub(crate) skip: usize,
@@ -83,6 +87,12 @@ pub(crate) struct Crop {
     pub(crate) start_granule: u64,
 }
 impl Timing {
+    pub(crate) fn with_extended_end_trim(allow: bool) -> Self {
+        Self {
+            extended_end_trim: allow,
+            ..Self::default()
+        }
+    }
     pub(crate) fn advance(
         &mut self,
         raw_start: u64,
@@ -158,15 +168,27 @@ impl Timing {
     pub(crate) fn end(&self, id: StreamId, page: PageHeader) -> Result<StreamEnd, Error> {
         let origin = self.origin.unwrap_or(0).max(0) as u64;
         let end = granule(page.granule_position)?;
-        if end.checked_sub(origin) != Some(self.frames) {
+        let frames = end
+            .checked_sub(origin)
+            .ok_or(Error::Invalid("final Vorbis sample count"))?;
+        if (!self.extended_end_trim && frames != self.frames)
+            || end as i128 > self.origin.unwrap_or(0) + self.raw_end as i128
+        {
             return Err(Error::Invalid("final Vorbis sample count"));
         }
         Ok(StreamEnd {
             stream: id,
-            frames: self.frames,
+            frames,
             start_granule: origin,
             end_granule: end,
         })
+    }
+    pub(crate) fn end_padding(&self, page: PageHeader) -> Result<(u64, bool), Error> {
+        let padding = self.origin.unwrap_or(0) + self.raw_end as i128
+            - granule(page.granule_position)? as i128;
+        let padding =
+            u64::try_from(padding).map_err(|_| Error::Invalid("negative Vorbis end padding"))?;
+        Ok((padding, padding > self.last_span))
     }
 }
 struct Stream {
@@ -200,7 +222,13 @@ impl OggDecoder {
     pub fn new(options: OggOptions) -> Self {
         Self {
             options,
-            demux: Demuxer::new(options.container_limits),
+            demux: Demuxer::with_validation(
+                options.container_limits,
+                container::ValidationOptions {
+                    allow_zero_span_granules: options.allow_zero_span_granules,
+                    ..container::ValidationOptions::default()
+                },
+            ),
             streams: Vec::new(),
             memory: 0,
             failed: false,
@@ -216,6 +244,9 @@ impl OggDecoder {
     }
     pub fn storage_bytes(&self) -> usize {
         self.memory
+    }
+    pub fn compatibility(&self) -> container::CompatibilityStats {
+        self.demux.compatibility()
     }
     /// Supply pages in physical order with their absolute byte offsets. Events
     /// borrow page/decoder storage and must be consumed before this call returns.
@@ -507,7 +538,7 @@ fn check_granule(timing: &Timing, page: PageHeader, span: u64) -> Result<(), Err
     let end = granule(page.granule_position)? as i128;
     let expected = timing.origin.unwrap_or(0) + timing.raw_end as i128;
     if page.is_eos() {
-        if end > expected || end < expected - span as i128 {
+        if end > expected || (!timing.extended_end_trim && end < expected - span as i128) {
             return Err(Error::Invalid("EOS granule outside final packet overlap"));
         }
     } else if end != expected {
@@ -545,6 +576,9 @@ impl OggStreamDecoder {
         self.decoder.reset();
         self.failed = false;
         self.offset = 0;
+    }
+    pub fn compatibility(&self) -> container::CompatibilityStats {
+        self.decoder.compatibility()
     }
     pub fn push(&mut self, input: &[u8], emit: impl FnMut(OggEvent<'_>)) -> Result<usize, Error> {
         if self.failed {
@@ -622,6 +656,9 @@ impl<R: Read> OggReader<R> {
     }
     pub fn into_inner(self) -> R {
         self.pages.into_inner()
+    }
+    pub fn compatibility(&self) -> container::CompatibilityStats {
+        self.decoder.compatibility()
     }
 }
 pub fn decode_reader(

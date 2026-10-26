@@ -1,4 +1,7 @@
-use crate::{Demuxer, Error, Limits, PageHeader, PageReader, UNKNOWN_GRANULE_POSITION, reserve};
+use crate::{
+    CompatibilityStats, Demuxer, Error, Limits, PageHeader, PageReader, UNKNOWN_GRANULE_POSITION,
+    ValidationOptions, reserve,
+};
 use core::ops::Range;
 use std::io::{self, Read, Seek, SeekFrom};
 
@@ -7,6 +10,7 @@ pub struct IndexOptions {
     pub container_limits: Limits,
     /// Bounds retained page entries; this is an application policy.
     pub max_pages: usize,
+    pub validation: ValidationOptions,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,7 +62,10 @@ pub fn find_granule<R: Read + Seek>(
                 return Ok(None);
             }
             let header = page.page.header();
-            if header.serial == serial && header.granule_position != UNKNOWN_GRANULE_POSITION {
+            if header.serial == serial
+                && header.granule_position != UNKNOWN_GRANULE_POSITION
+                && (page.page.completed_packets() != 0 || page.page.lacing().is_empty())
+            {
                 return Ok(Some(GranuleLocation {
                     offset: page.offset,
                     length: page.page.bytes().len() as u32,
@@ -133,6 +140,7 @@ impl Default for IndexOptions {
         Self {
             container_limits: Limits::default(),
             max_pages: 1 << 20,
+            validation: ValidationOptions::default(),
         }
     }
 }
@@ -165,7 +173,8 @@ pub struct IndexedPage {
     landmark: usize,
 }
 
-/// CRC- and grammar-validated full physical-file index. Entries are stored in
+/// CRC- and grammar-validated full physical-file index, with any explicitly
+/// enabled compatibility exceptions counted by compatibility(). Entries are stored in
 /// flat per-stream ranges, ordered by byte offset within each stream. The
 /// granule lookup is logarithmic, including arbitrarily long packet spans.
 /// Granules remain codec-defined integers; pre-roll and sample interpretation
@@ -174,15 +183,17 @@ pub struct OggIndex {
     streams: Vec<StreamIndex>,
     pages: Vec<IndexedPage>,
     length: u64,
+    compatibility: CompatibilityStats,
 }
 impl OggIndex {
     pub fn read(reader: impl Read, options: IndexOptions) -> Result<Self, Error> {
         let mut reader = PageReader::new(reader);
-        let mut demux = Demuxer::new(options.container_limits);
+        let mut demux = Demuxer::with_validation(options.container_limits, options.validation);
         let mut index = Self {
             streams: Vec::new(),
             pages: Vec::new(),
             length: 0,
+            compatibility: CompatibilityStats::default(),
         };
         let mut partial_starts = Vec::new();
         while let Some(located) = reader.next_page()? {
@@ -254,6 +265,7 @@ impl OggIndex {
             }
         }
         demux.finish()?;
+        index.compatibility = demux.compatibility();
         index
             .pages
             .sort_unstable_by_key(|page| (page.stream, page.offset));
@@ -264,7 +276,10 @@ impl OggIndex {
             let mut landmark = start;
             while position < index.pages.len() && index.pages[position].stream == stream_id {
                 let page = &mut index.pages[position];
-                if page.header.granule_position != UNKNOWN_GRANULE_POSITION {
+                if page.header.granule_position != UNKNOWN_GRANULE_POSITION
+                    && (page.completed_packets != 0 || page.length == 27)
+                    && page.header.granule_position >= floor
+                {
                     floor = page.header.granule_position;
                     landmark = position;
                 }
@@ -278,6 +293,9 @@ impl OggIndex {
     }
     pub fn streams(&self) -> &[StreamIndex] {
         &self.streams
+    }
+    pub fn compatibility(&self) -> CompatibilityStats {
+        self.compatibility
     }
     pub fn stream(&self, serial: u32) -> Option<&StreamIndex> {
         self.streams.iter().find(|s| s.serial == serial)
@@ -294,6 +312,9 @@ impl OggIndex {
     }
     /// Last known granule <= target. Equal granules choose the latest page,
     /// including a nil EOS. Unknown-granule span pages are never returned.
+    /// With explicit compatibility options, ignored zero span granules and a
+    /// decreasing EOS are excluded from ordered landmarks. Raw header values
+    /// remain available in pages(), including the declared final endpoint.
     pub fn granule_at_or_before(&self, serial: u32, target: u64) -> Option<&IndexedPage> {
         let pages = self.pages(serial)?;
         let end = pages.partition_point(|page| page.granule_floor <= target);

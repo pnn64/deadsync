@@ -34,6 +34,13 @@ streams.finish()?; // Require complete logical streams, including EOS.
   packets borrow the page without allocation/copying. Only spanning packets
   require assembly storage. `Limits` imposes configurable resource policies,
   not format limits. Zero-length packets and nil EOS pages are supported.
+* `ValidationOptions` enables two named legacy exceptions through
+  `Demuxer::with_validation`, `PacketCapture::with_validation` (or
+  `at_page_with_validation`), and `IndexOptions::validation`. Both default to
+  false. `compatibility()` counts accepted exceptions; ordered seek landmarks
+  omit ignored span granules and decreasing EOS granules. Raw page headers are
+  preserved. A codec must supply any resulting sample-trimming policy; see
+  [the Vorbis policies](../vorbis/LEGACY.md).
 * `PacketWriter` paginates one logical stream, isolates the initial header and
   writes incrementally to `Write`. `finish` emits EOS, including a nil page when
   necessary. `write_page` is a lower-level payload-copy-free page writer.

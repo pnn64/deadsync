@@ -15,6 +15,11 @@ use std::io::{Read, Seek, SeekFrom};
 pub struct SeekOptions {
     pub limits: Limits,
     pub container_limits: container::Limits,
+    pub allow_zero_span_granules: bool,
+    /// Explicit legacy endpoint policy. The index knows the final granule in
+    /// advance and can trim across earlier packets/pages, including a decreasing
+    /// EOS granule. Streaming APIs deliberately do not offer this exception.
+    pub trim_to_final_granule: bool,
     pub max_index_pages: usize,
     /// Retained Vorbis metadata, setup packets and seek entries. The native
     /// container index has its own page-count bound, separately from this budget.
@@ -27,9 +32,19 @@ impl Default for SeekOptions {
         Self {
             limits: Limits::default(),
             container_limits: container::Limits::default(),
+            allow_zero_span_granules: false,
+            trim_to_final_granule: false,
             max_index_pages: 1 << 20,
             max_index_memory: 128 << 20,
             max_stream_memory: 256 << 20,
+        }
+    }
+}
+impl SeekOptions {
+    fn validation(self) -> container::ValidationOptions {
+        container::ValidationOptions {
+            allow_zero_span_granules: self.allow_zero_span_granules,
+            allow_decreasing_eos_granule: self.trim_to_final_granule,
         }
     }
 }
@@ -45,6 +60,9 @@ pub struct SeekStream {
     pub info: StreamInfo,
     pub end: StreamEnd,
     pub comment_error: Option<Error>,
+    pub end_padding_frames: u64,
+    /// True when the declared endpoint needs the explicit cross-packet policy.
+    pub extended_end_trim: bool,
     origin: i128,
     setup_packet: Vec<u8>,
     marks: Vec<SeekMark>,
@@ -71,6 +89,7 @@ impl VorbisIndex {
             container::IndexOptions {
                 container_limits: options.container_limits,
                 max_pages: options.max_index_pages,
+                validation: options.validation(),
             },
         )?;
         let mut pages = PageReader::new(reader);
@@ -89,7 +108,11 @@ impl VorbisIndex {
                 serial: physical.serial,
                 chain: physical.chain,
             };
-            let mut capture = PacketCapture::at_page(&entries[0], options.container_limits);
+            let mut capture = PacketCapture::at_page_with_validation(
+                &entries[0],
+                options.container_limits,
+                options.validation(),
+            );
             capture.push_page(first, entries[0].offset, |_| {})?;
             let mut stream = SeekStream {
                 info: StreamInfo {
@@ -104,6 +127,8 @@ impl VorbisIndex {
                     end_granule: 0,
                 },
                 comment_error: None,
+                end_padding_frames: 0,
+                extended_end_trim: false,
                 origin: 0,
                 setup_packet: Vec::new(),
                 marks: Vec::new(),
@@ -113,7 +138,7 @@ impl VorbisIndex {
             let mut setup_page = None;
             let mut previous_size = 0;
             let mut last_audio = None;
-            let mut timing = Timing::default();
+            let mut timing = Timing::with_extended_end_trim(options.trim_to_final_granule);
             for entry in &entries[1..] {
                 let page = read_page(&mut pages, entry)?;
                 let header = page.header();
@@ -218,7 +243,12 @@ impl VorbisIndex {
                     }
                 } else if page.completed_packets() != 0 || header.is_eos() {
                     timing.check_page(header)?;
-                    if let Some(packet) = last_audio {
+                    if let Some(packet) = last_audio
+                        && stream
+                            .marks
+                            .last()
+                            .is_none_or(|mark: &SeekMark| header.granule_position >= mark.granule)
+                    {
                         reserve_index(&mut stream.marks, 1, &mut memory, options.max_index_memory)?;
                         stream.marks.push(SeekMark {
                             granule: granule(header.granule_position)?,
@@ -233,6 +263,8 @@ impl VorbisIndex {
                 return Err(Error::Invalid("EOS before all Vorbis headers"));
             }
             stream.end = timing.end(id, entries.last().unwrap().header)?;
+            (stream.end_padding_frames, stream.extended_end_trim) =
+                timing.end_padding(entries.last().unwrap().header)?;
             stream.origin = timing.origin.unwrap_or(0);
             reserve_index(&mut streams, 1, &mut memory, options.max_index_memory)?;
             streams.push(stream);
@@ -364,12 +396,13 @@ impl<R: Read + Seek> OggSeekReader<R> {
             .info
             .id;
         let limits = index.options.container_limits;
+        let validation = index.options.validation();
         let mut out = Self {
             pages: PageReader::new(reader),
             index,
             selected: None,
             decoder: None,
-            capture: PacketCapture::new(id.serial, limits),
+            capture: PacketCapture::with_validation(id.serial, limits, validation),
             next_page: 0,
             prime_packet: 0,
             primed: false,
@@ -551,7 +584,9 @@ impl<R: Read + Seek> OggSeekReader<R> {
             let expected = stream.origin + decoder.position() as i128;
             let actual = granule(page.header().granule_position)? as i128;
             if page.header().is_eos() {
-                if actual > expected || actual < expected - self.last_span as i128 {
+                if actual > expected
+                    || (!stream.extended_end_trim && actual < expected - self.last_span as i128)
+                {
                     return Err(Error::Invalid("seek EOS granule"));
                 }
             } else if actual != expected {

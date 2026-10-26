@@ -1,4 +1,6 @@
-use crate::{Error, MAX_PAGE_SIZE, Page, UNKNOWN_GRANULE_POSITION, reserve};
+use crate::{
+    CompatibilityStats, Error, MAX_PAGE_SIZE, Page, ValidationOptions, reserve, validation,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
@@ -53,7 +55,8 @@ struct Stream {
     granule: Option<u64>,
 }
 
-/// Strict physical-stream validator and demultiplexer. Errors are terminal
+/// Physical-stream validator and demultiplexer, strict by default. Named
+/// compatibility exceptions require with_validation. Errors are terminal
 /// until reset. Codec-specific header ordering and time interpretation belong
 /// to the codec mapping, not this container.
 pub struct Demuxer {
@@ -64,6 +67,8 @@ pub struct Demuxer {
     bos_phase: bool,
     pending: usize,
     failed: bool,
+    validation: ValidationOptions,
+    compatibility: CompatibilityStats,
 }
 impl Default for Demuxer {
     fn default() -> Self {
@@ -72,6 +77,9 @@ impl Default for Demuxer {
 }
 impl Demuxer {
     pub fn new(limits: Limits) -> Self {
+        Self::with_validation(limits, ValidationOptions::default())
+    }
+    pub fn with_validation(limits: Limits, validation: ValidationOptions) -> Self {
         Self {
             streams: Vec::new(),
             limits,
@@ -80,10 +88,15 @@ impl Demuxer {
             bos_phase: true,
             pending: 0,
             failed: false,
+            validation,
+            compatibility: CompatibilityStats::default(),
         }
     }
     pub fn reset(&mut self) {
-        *self = Self::new(self.limits);
+        *self = Self::with_validation(self.limits, self.validation);
+    }
+    pub fn compatibility(&self) -> CompatibilityStats {
+        self.compatibility
     }
     pub fn chain(&self) -> u32 {
         self.chain
@@ -127,17 +140,6 @@ impl Demuxer {
     ) -> Result<(), Error> {
         let header = page.header();
         let complete = page.completed_packets();
-        if complete == 0
-            && !page.lacing().is_empty()
-            && header.granule_position != UNKNOWN_GRANULE_POSITION
-        {
-            return Err(Error::Invalid("granule on page without a completed packet"));
-        }
-        if complete != 0 && header.granule_position == UNKNOWN_GRANULE_POSITION {
-            return Err(Error::Invalid(
-                "unknown granule on page with completed packets",
-            ));
-        }
         let index = match self.streams.iter().position(|s| s.serial == header.serial) {
             Some(index) => {
                 let stream = &self.streams[index];
@@ -205,14 +207,9 @@ impl Demuxer {
             }
         };
         let stream = &mut self.streams[index];
-        if header.granule_position != UNKNOWN_GRANULE_POSITION {
-            if stream
-                .granule
-                .is_some_and(|last| header.granule_position < last)
-            {
-                return Err(Error::Invalid("decreasing granule position"));
-            }
-            stream.granule = Some(header.granule_position);
+        let (granule, compatibility) = validation::granule(page, stream.granule, self.validation)?;
+        if granule.is_some() {
+            stream.granule = granule;
         }
         // Preflight the entire page before emitting any of its packets.
         let mut length = stream.partial.len();
@@ -297,6 +294,7 @@ impl Demuxer {
         if !header.is_bos() {
             self.bos_phase = false;
         }
+        self.compatibility.add(compatibility)?;
         Ok(())
     }
 }

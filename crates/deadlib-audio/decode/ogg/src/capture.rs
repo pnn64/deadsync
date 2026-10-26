@@ -1,4 +1,7 @@
-use crate::{Error, IndexedPage, Limits, MAX_PAGE_SIZE, Page, UNKNOWN_GRANULE_POSITION, reserve};
+use crate::{
+    CompatibilityStats, Error, IndexedPage, Limits, MAX_PAGE_SIZE, Page, ValidationOptions,
+    reserve, validation,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CaptureInfo {
@@ -22,6 +25,7 @@ pub struct CapturedPacket<'a> {
 /// Discards only the initial unavailable continuation, then validates sequence,
 /// continuation, granules, packet sizes and EOS strictly. Other serials are
 /// ignored; physical group/chaining validation is provided by Demuxer/OggIndex.
+/// Named compatibility exceptions require with_validation/at_page_with_validation.
 /// This is a seek/capture API, not silent packet-hole concealment.
 pub struct PacketCapture {
     serial: u32,
@@ -36,9 +40,14 @@ pub struct PacketCapture {
     ended: bool,
     granule: Option<u64>,
     failed: bool,
+    validation: ValidationOptions,
+    compatibility: CompatibilityStats,
 }
 impl PacketCapture {
     pub fn new(serial: u32, limits: Limits) -> Self {
+        Self::with_validation(serial, limits, ValidationOptions::default())
+    }
+    pub fn with_validation(serial: u32, limits: Limits, validation: ValidationOptions) -> Self {
         Self {
             serial,
             limits,
@@ -52,10 +61,19 @@ impl PacketCapture {
             ended: false,
             granule: None,
             failed: false,
+            validation,
+            compatibility: CompatibilityStats::default(),
         }
     }
     pub fn at_page(page: &IndexedPage, limits: Limits) -> Self {
-        let mut capture = Self::new(page.header.serial, limits);
+        Self::at_page_with_validation(page, limits, ValidationOptions::default())
+    }
+    pub fn at_page_with_validation(
+        page: &IndexedPage,
+        limits: Limits,
+        validation: ValidationOptions,
+    ) -> Self {
+        let mut capture = Self::with_validation(page.header.serial, limits, validation);
         capture.reset_at(page);
         capture
     }
@@ -72,6 +90,7 @@ impl PacketCapture {
         self.ended = false;
         self.granule = None;
         self.failed = false;
+        self.compatibility = CompatibilityStats::default();
     }
     /// Seed a repeated indexed seek, retaining scratch capacity. Supplying a
     /// different stream changes the selected serial. Index/source identity is
@@ -84,6 +103,9 @@ impl PacketCapture {
     }
     pub fn pending_bytes(&self) -> usize {
         self.partial.len()
+    }
+    pub fn compatibility(&self) -> CompatibilityStats {
+        self.compatibility
     }
     pub fn is_ended(&self) -> bool {
         self.ended
@@ -136,17 +158,6 @@ impl PacketCapture {
             });
         }
         let complete = page.completed_packets();
-        if complete == 0
-            && !page.lacing().is_empty()
-            && header.granule_position != UNKNOWN_GRANULE_POSITION
-        {
-            return Err(Error::Invalid("granule on page without a completed packet"));
-        }
-        if complete != 0 && header.granule_position == UNKNOWN_GRANULE_POSITION {
-            return Err(Error::Invalid(
-                "unknown granule on page with completed packets",
-            ));
-        }
         if self.started {
             if header.is_bos() {
                 return Err(Error::Invalid("BOS during packet capture"));
@@ -168,11 +179,16 @@ impl PacketCapture {
             self.skipping = header.is_continued();
             self.continuing = self.skipping;
         }
-        if header.granule_position != UNKNOWN_GRANULE_POSITION {
-            if self.granule.is_some_and(|gp| header.granule_position < gp) {
-                return Err(Error::Invalid("decreasing captured granule"));
-            }
-            self.granule = Some(header.granule_position);
+        let (granule, compatibility) = validation::granule(page, self.granule, self.validation)
+            .map_err(|error| {
+                if error == Error::Invalid("decreasing granule position") {
+                    Error::Invalid("decreasing captured granule")
+                } else {
+                    error
+                }
+            })?;
+        if granule.is_some() {
+            self.granule = granule;
         }
         let mut skipping = self.skipping;
         let mut length = self.partial.len();
@@ -249,6 +265,7 @@ impl PacketCapture {
             self.ended = true;
             self.partial = Vec::new();
         }
+        self.compatibility.add(compatibility)?;
         Ok(())
     }
 }

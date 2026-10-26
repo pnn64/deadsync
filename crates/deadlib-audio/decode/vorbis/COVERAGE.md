@@ -145,6 +145,15 @@ Windows x86-64, rustc 1.99.1 evidence:
   on this Windows build. See `validation/2026-10-26-upstream.tsv` and
   `validation/2026-10-26-upstream.sha256`. This is upstream coded test material,
   not exhaustive conformance certification.
+* Four hash-pinned historical/ITGmania files: **68,398,796 retained channel
+  samples** compared with libvorbisfile, plus **36 repeated native seeks**
+  returning 229,384 channel samples. Floor-zero peak/RMS error is
+  2.533197403e-5 / 1.510427612e-6; floor-one peaks are <=7.152557373e-7.
+  The two malformed files require separate explicit options; both are rejected
+  by strict defaults. The other two decode strictly. Mecha's reference-emitted
+  count differs from its declared count, recorded separately rather than
+  accepted as ordinary count parity. See [LEGACY.md](LEGACY.md) and
+  [validation/2026-10-26-legacy.tsv](validation/2026-10-26-legacy.tsv).
 
 ## Numerical criteria
 
@@ -182,10 +191,11 @@ counts match without discarding comparison samples.
   The native decoder follows the specification and matches libvorbis. A named
   regression test keeps this discrepancy visible; reference tolerances are not
   widened for it. Symphonia is pinned to 0.6.1 in development dependencies.
-* The historical floor-zero file assigns granules to pages without a completed
-  packet. Native strict Ogg correctly rejects it. The raw codec test uses the
-  independent development-only Ogg reader to extract packets, isolating codec
-  validation. No production compatibility exception has been introduced yet.
+* The historical floor-zero file assigns zero to one unfinished setup-header
+  page. Strict Ogg rejects it. The explicit `allow_zero_span_granules` option
+  ignores that value without changing the timeline. Streaming/pull/indexed
+  decoding then matches reference counts and the floor-zero numerical bounds.
+  The original raw tests still isolate synthesis from container handling.
 * Symphonia 0.6.1 assigns negative timestamps for an edited negative initial
   offset but does not discard those samples (`trim_start == 0`). A named test
   documents the extra 37 samples on the edited fixture and compares the retained
@@ -193,18 +203,23 @@ counts match without discarding comparison samples.
   Native strict counts and the initial-trimmed samples match libvorbisfile.
 * Strict final trimming is limited to the last packet's overlap span. Synthetic
   larger trims make libvorbisfile's declared total disagree with its emitted PCM;
-  they are rejected rather than silently treated as a compatibility policy.
+  strict decoding rejects them. Indexed `trim_to_final_granule` can clip across
+  packets/pages using the endpoint known in advance. Synthetic tests check both
+  layouts, repeated seeks and invalid endpoints. Streaming stays strict.
 * libvorbisfile 1.3.7 reports PCM position 900 after requesting retained frame 1
   in the generated stream with broadcast offset +900. A named external regression
   records this discrepancy. Native seeking preserves frame 1 / granule 901 and
   matches sequential PCM; the Symphonia pre-roll comparison also covers this case.
 * The pinned ITGmania shipped song `Mecha-Tribe Assault.ogg` (libVorbis 20040629)
   has final granule 4,630,500 after a preceding page at 4,692,672. Strict decoding
-  rejects this decreasing granule. `Goin' Under.ogg` (libVorbis 20070622) passes
+  rejects this decreasing granule. Explicit indexed endpoint clipping emits
+  4,630,500 frames per channel; libvorbisfile reports that length but emits
+  4,762,304. Native PCM matches the reference prefix inside the declared interval,
+  including endpoint seeks. `Goin' Under.ogg` (libVorbis 20070622) passes
   strict PCM/count comparison against libvorbisfile and Symphonia: 10,886,400
   channel samples, peak errors 7.152557373e-7 / 4.768371582e-7. Sources/hashes and
-  paired SSC charts are pinned in `validation/corpus.json`. Compatibility for
-  the malformed final granule remains open; no silent length repair is applied.
+  paired SSC charts are pinned in `validation/corpus.json`. Policy details and
+  reproduction commands are in [LEGACY.md](LEGACY.md).
 * FFmpeg's `Lumme-Badloop.ogg` (libVorbis 20020713) passes strict container/mapping
   decoding with 17,862,912 frames per channel. Its name alone is not treated as
   evidence of a required compatibility exception.
@@ -217,7 +232,8 @@ counts match without discarding comparison samples.
   packet concealment differential validation remains necessary.
 * Broader conformance material, unusual/legacy encoders, malformed/fuzz corpora,
   and wider real ITGmania/StepMania song-pack coverage beyond the pinned shipped
-  songs. No nonstandard legacy compatibility policy has been added yet.
+  songs. The two documented compatibility policies do not conceal packet holes
+  or repair arbitrary malformed containers.
 * Native encoding, independently decoded lossy validation, measured pipeline
   optimization and reproducible throughput/startup/memory/allocation/seek
   comparisons with libvorbis and Symphonia. No SIMD or performance claims yet.

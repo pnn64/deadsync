@@ -72,7 +72,8 @@ Create the destination directory before download. Expected SHA-256:
 This file has known nonconforming container granules. Its raw test deliberately
 uses the independent Rust Ogg development dependency to extract codec packets,
 without relaxing the native container's strict validation. See COVERAGE.md for
-the separate floor-zero numerical criteria and unresolved legacy container work.
+the separate floor-zero numerical criteria. [LEGACY.md](../../LEGACY.md) covers
+the explicit native container option and separate indexed endpoint policy.
 The seek test repacketizes unchanged floor-zero codec packets with strict native
 granules; it validates floor-zero pre-roll without accepting the legacy container.
 
@@ -118,3 +119,17 @@ native diagnostic example reports parameters, counts and strict failures:
 ```powershell
 cargo run -p deadlib-audio-decode-vorbis --release --example inspect -- path/to/song.ogg
 ```
+
+To validate the original historical and shipped-song containers with explicit
+options, set the oracle variable above, fetch the manifest, then run:
+
+```powershell
+$env:DEADLIB_VORBIS_EXTERNAL_CORPUS = "$pwd/target/deadlib-audio-reference/corpus"
+$env:DEADLIB_VORBIS_LEGACY_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/legacy.tsv"
+cargo test -p deadlib-audio-decode-vorbis --release --test legacy -- --include-ignored --nocapture
+```
+
+The diagnostic accepts `--allow-zero-span-granules` and
+`--trim-to-final-granule` separately. The second uses indexed decoding because a
+forward-only reader cannot retract PCM emitted before a decreasing EOS granule.
+Reports keep reference declared/emitted counts separate for the malformed song.
