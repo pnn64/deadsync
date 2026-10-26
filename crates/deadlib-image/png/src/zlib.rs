@@ -45,6 +45,23 @@ impl<'a> Bits<'a> {
             self.count += 8;
         }
     }
+    fn fill_huffman(&mut self, n: u8) {
+        // Only Huffman lookahead may refill this widely. Fast lookahead starts
+        // with at most 8 bits; a slow miss starts with at most 14 and consumes
+        // at least 10. After EOB and alignment, at most four bytes remain: the
+        // zlib Adler trailer. A streaming caller's suffix is never accepted.
+        // General field/checksum reads retain their conservative byte refill.
+        if self.count < n {
+            if self.input.len() - self.pos >= 4 {
+                let bytes = self.input[self.pos..self.pos + 4].try_into().unwrap();
+                self.word |= u64::from(u32::from_le_bytes(bytes)) << self.count;
+                self.pos += 4;
+                self.count += 32;
+            } else {
+                self.fill(n);
+            }
+        }
+    }
     fn read(&mut self, n: u8) -> Result<u32, Error> {
         self.fill(n);
         if self.count < n {
@@ -136,7 +153,7 @@ impl Huffman {
         Ok(h)
     }
     fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
-        bits.fill(9);
+        bits.fill_huffman(9);
         let entry = self.fast[(bits.word & 511) as usize];
         let n = (entry & 15) as u8;
         if n != 0 && n <= bits.count {
@@ -144,10 +161,12 @@ impl Huffman {
             bits.count -= n;
             return Ok((entry >> 4) as usize);
         }
-        bits.fill(self.max);
-        let mut code = 0u16;
-        for n in 1..=self.max.min(bits.count) as usize {
-            code = (code << 1) | ((bits.word >> (n - 1)) & 1) as u16;
+        bits.fill_huffman(self.max);
+        // A primary-table miss cannot match a code of length 1 through 9.
+        // Reverse once, then compare only the remaining canonical lengths.
+        let prefix = (bits.word as u16).reverse_bits();
+        for n in 10..=self.max.min(bits.count) as usize {
+            let code = prefix >> (16 - n);
             if code >= self.first[n] && code - self.first[n] < self.counts[n] {
                 bits.word >>= n;
                 bits.count -= n as u8;

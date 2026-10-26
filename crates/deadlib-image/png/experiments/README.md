@@ -1,8 +1,9 @@
 # Replaying compression experiments
 
-The final source in this milestone includes the selected direct-emission matcher.
-Each alternative patch changes only `src/zlib.rs`, `src/zlib/deflate.rs` and
-`src/zlib/matcher.rs`. Apply one in a separate checkout of this milestone, from
+The LZ77 experiments use base commit `5a6747e32`, which includes the selected
+direct-emission matcher. Each `lz-*` alternative patch changes only `src/zlib.rs`,
+`src/zlib/deflate.rs` and `src/zlib/matcher.rs`. Apply one in a separate checkout
+of that commit, from
 the repository root. Patches are alternatives, not cumulative:
 
 ```powershell
@@ -50,3 +51,23 @@ structured fuzz harness, relative to the repository root. It changes only
 sentinel scan and its larger mutation limit. The patch passes `git apply --check`
 against this milestone. The original timeout, exact input and corrected replay
 are retained under `fuzz/reports/`; no production codec fix was needed.
+
+## Inflation checkpoints
+
+The later Huffman optimization changes only `src/zlib.rs`. The selected version
+combines 32-bit lookahead refill and direct long-prefix comparison. Its
+`inflate-baseline-from-selected.patch`, `inflate-wide-from-selected.patch` and
+`inflate-canonical-from-selected.patch` are alternatives from that selected
+source, relative to the PNG package:
+
+```powershell
+git -c core.autocrlf=false apply --check --directory=crates/deadlib-image/png crates/deadlib-image/png/experiments/inflate-baseline-from-selected.patch
+```
+
+Use a separate checkout and apply only one alternative. Each patch passed the
+check and reconstructed its byte-exact source in a fresh temporary directory.
+`inflate-checkpoints.json` records source/patch hashes and benchmark manifests.
+Baseline production code is `5a6747e32`, with the Huffman audit from `f4b3b3eed`.
+The same new benchmark harness is used for each variant. Exploratory component
+trials have one ten-iteration run; baseline and selected measurements have three
+runs, with separate saved-binary controls. `BENCHMARKS.md` interprets the results.

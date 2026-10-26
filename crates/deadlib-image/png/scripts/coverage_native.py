@@ -97,6 +97,8 @@ def main():
 
     manifest = {
         'rustc': version, 'branches': args.branches, 'commands': commands,
+        'environment': {k: env[k] for k in ['RUSTFLAGS', 'LLVM_PROFILE_FILE', 'CARGO_BUILD_JOBS']},
+        'runner_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         'production_source_sha256': hashes(sources),
         'test_source_sha256': hashes(sorted((package / 'tests').rglob('*.rs'))),
         'test_executables': [{'path': p, 'sha256': hashlib.sha256(Path(p).read_bytes()).hexdigest()}

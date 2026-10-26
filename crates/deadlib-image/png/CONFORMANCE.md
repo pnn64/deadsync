@@ -99,6 +99,8 @@ fuzz evidence, independent reuse and no DeadSync integration. Package isolation
 and the production dependency boundary are verified by the retained offline
 build. Performance is explicitly incomplete in `BENCHMARKS.md`; the current
 fixed-Huffman encoder's ratio and pipeline speed require substantial work.
+The later Huffman refill/prefix optimization improves measured photo decoding,
+but the native 78.98 MiB/s still trails Rust png's 202.58 on that corpus.
 Resolve the open rows above, obtain broader external APNG rendering comparisons,
 extend structured malformed/coverage campaigns, and repeat the requirement audit
 against the resulting implementation and measurements before claiming completion.

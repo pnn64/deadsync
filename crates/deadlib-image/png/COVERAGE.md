@@ -24,7 +24,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 220,000 recorded successful sanitizer executions across milestones, including 20,000 structured Huffman runs; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 240,000 recorded successful sanitizer executions across milestones, including 20,000 selected-inflater runs; compatible raw positive oracle, longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -450,6 +450,39 @@ malformed APNG framing/encoder validation, PNG chunk/field boundaries, stream IO
 errors and public error formatting. `coverage-reports/README.md` records scope,
 commands, tool versions, uncovered annotations and the next targeted work.
 
+Inflation optimization milestone: portable 32-bit Huffman refill and direct
+canonical prefix comparison improve the measured photo pipeline. Three warmed
+single-CPU repetitions give 78.98 MiB/s buffered PNG decoding versus 68.19 before,
+and 64.03 MiB/s reader decoding versus 56.69. Saved old binaries give later
+controls of 70.81 / 58.54; Rust png is 198.02 / 202.58 / 204.23 across the three
+groups. Relative to that reference, the evidence suggests about 13% buffered and
+10% reader improvement on these inputs. Raw inflation and synthetic measurements,
+reference drift, exact source/patch/binary hashes and methodological limits are
+retained in `BENCHMARKS.md`, `benchmark-inflate-summary.json` and `experiments/`.
+Encoded sizes and measured pipeline capacities match the old-code controls.
+The much faster Rust png results show that competitive performance remains open.
+
+`inflate-validation.log` / `.json` record all 81 passing tests including five C
+checks, all fuzz harnesses/normal targets under strict Clippy, both special C
+configurations and an isolated offline build. Fresh selected-source ASan runs
+complete 5,000 executions each of Huffman (118 seconds, 396 MiB), PNG streaming
+(15 seconds, 193 MiB), raw zlib (6 seconds, 128 MiB) and profiles (65 seconds,
+368 MiB). Their binary definitions of `__asan_init` and source/harness/binary
+hashes are retained in `fuzz/reports/inflate-source.json`. These 20,000 executions
+bring historical successful campaigns to 240,000 across eight targets.
+An initial Linux metadata-copy failure happened before execution; a fresh native
+Windows copy was byte-verified and used instead. No failed staging is counted.
+
+The final coverage script also completes a fresh run in one pass, with embedded
+unit-test binaries and reference/harness sources excluded from report mapping.
+The selected ordinary library has 3,793/3,926 covered lines (96.61%),
+4,574/4,953 regions (92.35%) and 1,081/1,290 instrumented branch outcomes (83.80%).
+Results, environment and runner/source/executable hashes are under
+`coverage-reports/inflate-*`. Native fuzz coverage remains a separate open item.
+The general raw flate2 fuzzer also needs a compatible positive oracle for legal
+HDIST 31/32 streams; the structured Huffman and C compatibility checks cover
+those positives, while default flate2 rejects them.
+
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
@@ -457,7 +490,8 @@ integration, preserving unrelated work and committing verified milestones:
    covered indexed-color recovery, text decoding and encoder field distinctions.
 2. Resolve the open rows in the Third Edition clause matrix, including ancillary
    semantic edge cases and the scope of BCP47 extension semantics,
-   arbitrary Huffman symbol permutations, malformed APNG ordering, and unknown chunks.
+   arbitrary Huffman symbol permutations, the general raw fuzzer's positive
+   reference policy, malformed APNG ordering, and unknown chunks.
 3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and
    coverage review beyond the current streaming and CRC-repaired smoke targets.

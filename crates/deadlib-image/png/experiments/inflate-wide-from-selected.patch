@@ -1,0 +1,19 @@
+diff --git a/src/zlib.rs b/src/zlib.rs
+index 1cb336d88..f45b50cc1 100644
+--- a/src/zlib.rs
++++ b/src/zlib.rs
+@@ -162,11 +162,9 @@ impl Huffman {
+             return Ok((entry >> 4) as usize);
+         }
+         bits.fill_huffman(self.max);
+-        // A primary-table miss cannot match a code of length 1 through 9.
+-        // Reverse once, then compare only the remaining canonical lengths.
+-        let prefix = (bits.word as u16).reverse_bits();
+-        for n in 10..=self.max.min(bits.count) as usize {
+-            let code = prefix >> (16 - n);
++        let mut code = 0u16;
++        for n in 1..=self.max.min(bits.count) as usize {
++            code = (code << 1) | ((bits.word >> (n - 1)) & 1) as u16;
+             if code >= self.first[n] && code - self.first[n] < self.counts[n] {
+                 bits.word >>= n;
+                 bits.count -= n as u8;

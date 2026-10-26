@@ -46,3 +46,12 @@ Compression branches are substantially exercised (buffered zlib 96.27%,
 streaming inflate 93.55%); APNG remains 67.92%. More generated grammar tests,
 external rendered-frame comparisons and native fuzz coverage analysis remain
 open. Increasing a percentage alone is not a reason to change codec behavior.
+
+The `inflate-*` snapshot covers the selected wider-refill/canonical-prefix
+decoder. The corrected script runs all 22 test executables and reporting stages
+in one pass. It maps the same 20 integration executables, reporting 96.61% lines,
+92.35% regions and 83.80% instrumented branch outcomes (3,793/3,926 lines;
+1,081/1,290 branch outcomes). Its manifest also records the instrumentation
+environment and runner hash. There are still 133 missed lines; the earlier
+gap categories remain applicable. This snapshot is separate from the selected
+code's four 5,000-execution sanitizer campaigns.

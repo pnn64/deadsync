@@ -38,7 +38,11 @@ directory). This keeps each campaign's initial corpus separate from mutations.
 the independent Rust png decoder also accepts the image. Reference ancillary
 policies differ, so a reference rejection does not automatically mean a native
 sample bug. `zlib` compares every native-accepted stream with bounded flate2
-decompression. Integration tests separately check generated valid streams and
+decompression. This raw harness currently assumes flate2 accepts every native
+positive. Published HDIST 31/32 definitions are known counterexamples, so a
+compatible positive oracle remains required for that target. The structured
+Huffman target and C compatibility tests explicitly verify those legal cases.
+Integration tests separately check generated valid streams and
 native output rejected for truncation/checksum/limit errors. Coverage counters
 include the harness and reference codecs, not just the native implementation.
 
@@ -120,6 +124,24 @@ successful campaigns this records 220,000 executions across eight targets.
 `reports/huffman-source.json` preserves options, source/binary hashes and the
 separate preliminary timeout. Native-only integration-test coverage is recorded
 under `../coverage-reports/`; it is not a native fuzz coverage measurement.
+
+## Selected inflation follow-up
+
+The wider Huffman refill and canonical-prefix decoder passes fresh 5,000-run
+campaigns for `huffman`, `png_stream`, `zlib` and `profiles`. Logs are named
+`reports/inflate-<target>-linux.log`; `reports/inflate-source.json` binds all four
+binaries to exact production/harness source, options, initial corpus hashes and
+defined AddressSanitizer initialization symbols. They take 118 / 15 / 6 / 65
+seconds and peak at 396 / 193 / 128 / 368 MiB respectively. These add 20,000
+successful executions, bringing historical campaigns to 240,000 across eight
+targets. Their counters include references; the native integration-test coverage
+snapshot under `../coverage-reports/` remains a different measurement.
+
+The first staging attempt used Linux `copytree` on the Windows-mounted checkout
+and failed while preserving metadata, before any fuzzing started. Fresh Windows
+`Copy-Item` directories were compared byte for byte with the untouched seed
+generator output before use. No partly staged or previously mutated corpus was
+reused. Generate directly into a fresh Linux directory when reproducing there.
 
 The conformance follow-up used a fresh `fuzz/corpus/png_conformance_20261026`
 directory containing only the 175 checked-in PNGSuite files and independent
