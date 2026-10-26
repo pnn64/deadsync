@@ -50,13 +50,13 @@ struct Chunk {
 /// Native words/debug offsets retained for re-export of imported code.
 #[derive(Clone, Debug)]
 pub(crate) struct Wire {
-    code: Box<[u32]>,
-    lines: Box<[u32]>,
-    locals: Box<[[u32; 2]]>,
-    children: Box<[usize]>,
-    constants: usize,
-    names: usize,
-    vararg: u8,
+    pub(crate) code: Box<[u32]>,
+    pub(crate) lines: Box<[u32]>,
+    pub(crate) locals: Box<[[u32; 2]]>,
+    pub(crate) children: Box<[usize]>,
+    pub(crate) constants: usize,
+    pub(crate) names: usize,
+    pub(crate) vararg: u8,
 }
 impl Wire {
     pub fn heap_bytes(&self) -> usize {

@@ -327,6 +327,17 @@ frames, and uncaught runtime errors force collection after the handler returns.
 `run_interactive` runs the Lua 5.1 console inside a standalone context, reporting
 recoverable diagnostics through a caller-provided function.
 
+`ProgramCache` loads or saves immutable compiled programs in a caller-selected
+directory. It compares full source/name bytes, compiler build and lexer locale
+classes, bounds decoding, checks integrity and verifies shared bytecode. Native
+chunk debug/export metadata is preserved. Cache misses and I/O failures fall
+back to ordinary compilation; `CacheStatus` reports Hit, Stored or Bypassed.
+Each VM still creates its own runtime objects and environments. Use a directory
+trusted to hold executable code. Default limits are 64 MiB per file and 256 MiB
+of decoded object/payload storage. Tiny programs and native chunks can be slower
+through disk caching; the API is opt-in. See the [format and API notes](../../docs/lua-cache.md)
+and [measurements](../../docs/performance/2026-10-26-rust-lua-program-cache.md).
+
 `debug.debug` runs commands against the current thread while preserving the
 suspended caller stack for inspection and mutation. It uses original stdin,
 writes prompts and diagnostics to stderr, and resumes after syntax/runtime
@@ -342,7 +353,7 @@ object handles retain their ownership restrictions. Package loading uses this
 value type for its observable sentinel.
 
 Other standard libraries, native C-library loading, complete diagnostic text and
-debug behavior, persistent caches, host callback registration and
+debug behavior, cache eviction/package integration, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. Native locales require Windows/MSVC,
 and broader native resource bounds need validation.
@@ -377,5 +388,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-table-slices.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-program-cache.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

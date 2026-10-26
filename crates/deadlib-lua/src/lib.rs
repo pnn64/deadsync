@@ -15,6 +15,7 @@
 
 mod arena;
 mod bytecode;
+mod cache;
 mod chunk51;
 mod compiler;
 mod error;
@@ -31,6 +32,8 @@ mod vm;
 
 #[doc(inline)]
 pub use bytecode::Program;
+#[doc(inline)]
+pub use cache::{CacheStatus, CachedProgram, ProgramCache};
 #[doc(inline)]
 pub use error::{Error, ErrorKind};
 #[doc(inline)]

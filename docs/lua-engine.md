@@ -24,7 +24,7 @@ performance JSON keeps its recorded measurement provenance.
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking advances a persistent frontier; mutator barriers and final stack/open-cell/metatable refreshes preserve new references. Table propagation advances in 64-slot physical slices, restarting after compaction, hash-to-array moves and metatable changes. Sweeping advances in bounded arena-slot batches. Other object scans, final root/metatable/weak processing, cache rebuilding and callback batches still contain atomic work; fully bounded pauses and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
 | Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Windows/MSVC native locales connect numeric conversion/formatting, ctype, patterns, collation and calendar formatting. Native locales on other targets, remaining base functions, native C-library loading, broader debug and I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
-| Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
+| Persistent compiled cache | Opt-in ProgramCache persists the shared bytecode, constants, collector/debug metadata and native re-export words. Entries bind the format/dialect/target, Cargo compiler build and lexer character classes; full source/name equality guards filename collisions. Bounded decoding, integrity checks, Program verification and native tree/range checks reject incompatible entries. Temporary-file replacement and compile fallback preserve availability. Fresh-process source/native reloads and concurrent writers are tested. Directory eviction, a memory cache and package/CLI integration remain open; tiny/native inputs may reload more slowly than recompilation. |
 | Native host calls | Builtins use numeric IDs and register argument ranges. Host calls into live Lua/builtin/callable values, chunk arguments, raw table construction and direct file loading share the VM driver and handle validation. Initial typed-entry overhead measurements exist. Public Rust callback registration, host objects and broader error/yield/overhead work remain open. |
 | Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
@@ -36,12 +36,12 @@ performance JSON keeps its recorded measurement provenance.
 
 Next work should finish the standalone engine: register allocation/resource limits, incremental collection,
 remaining standard libraries, complete diagnostics/debug behavior, native export/resource edges and
-caches. Production migration requires the complete compatibility and
+cache integration/eviction. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 421 differential/adversarial integration tests, forty-three unit tests and
-a runnable documentation example. Generated cases include 1,000 numeric/logical
+crate, 423 differential/adversarial integration tests, sixty unit tests and
+two runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
 radix conversion cases. Sort tests compare comparator
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-table-slices.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-program-cache.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -665,6 +665,16 @@ report step latency, complete-cycle cost, retained frontier capacity, allocation
 events and process CPU counters. Final root/metatable/weak work and other object
 scans still contain atomic work, so collector pauses are not fully bounded.
 The full standalone-engine and integration gates remain open.
+
+The [persistent-program milestone](testing/2026-10-26-rust-lua-program-cache.md)
+adds a disk cache for the complete shared compiler representation, including
+native chunk metadata. Exact source/name checks, compiler/target/locale identity,
+bounded decoding, structural verification and temporary-file replacement govern
+reuse. Cache failures retain ordinary compilation and source errors. Programs
+reload in fresh processes and retain independent VM bindings. [Measurements](performance/2026-10-26-rust-lua-program-cache.md)
+compare compilation, stores and reloads with allocation/heap and process CPU
+counters; tiny programs and native chunks are not assumed to benefit. Cache
+eviction and package/CLI integration remain open alongside the full engine gates.
 
 ## Reference contract
 
