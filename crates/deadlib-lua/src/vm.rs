@@ -1296,7 +1296,7 @@ impl Vm {
                         let target = self.registers[b];
                         let key = self.registers[base + c];
                         if let Value::Table(id) = target
-                            && self.tables[slot_index(id.0)].metatable.is_none()
+                            && self.tables[slot_index(id.0)].metatable().is_none()
                         {
                             self.registers[a] = self.tables[slot_index(id.0)].get(key);
                         } else {
@@ -1308,7 +1308,7 @@ impl Vm {
                         let key = self.registers[b];
                         let value = self.registers[base + c];
                         if let Value::Table(id) = target
-                            && self.tables[slot_index(id.0)].metatable.is_none()
+                            && self.tables[slot_index(id.0)].metatable().is_none()
                         {
                             self.raw_set(id, key, value)?;
                         } else {

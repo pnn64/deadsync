@@ -193,12 +193,15 @@ continuations and compiler register maps, and closes surviving cells before
 freeing their thread. Object slots carry generations so stale handles cannot
 alias reused slots. `collectgarbage`, `gcinfo`, automatic pressure checks and
 `Vm::collect_garbage` are available. Automatic checks and `step` advance a marking
-frontier and sweep bounded batches of arena slots. Mutator barriers preserve new
-references in reached tables, closures, environments and cells. Thread stacks,
+frontier and sweep bounded batches of arena slots. Table propagation visits at
+most 64 physical array/hash slots per work item, counting holes and tombstones.
+Scans resume after their children; compaction, hash-to-array moves and metatable
+changes restart pending scans. Mutator barriers preserve new references in
+reached tables, closures, environments and cells. Thread stacks,
 open cells and tables with metatables are refreshed before weak processing.
 New allocations and re-interned strings survive the active cycle. Full collection
-restarts marking and remains synchronous. Individual object scans, final root
-and weak processing, cache rebuilding and callback batches still contain atomic
+restarts marking and remains synchronous. Other object scans, final root and
+metatable refreshes, weak processing, cache rebuilding and callback batches contain atomic
 work; fully bounded pauses remain unfinished.
 
 Full collection, explicit steps and the host collection API re-enable automatic
@@ -374,5 +377,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-intern-hash.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-table-slices.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

@@ -106,16 +106,6 @@ impl<T> Arena<T> {
         let slot = index(key);
         self.contains(key) && self.marks[slot / 64] & (1u64 << (slot % 64)) != 0
     }
-    pub fn unmark(&mut self, key: u64) -> bool {
-        if !self.contains(key) {
-            return false;
-        }
-        let slot = index(key);
-        let bit = 1u64 << (slot % 64);
-        let old = self.marks[slot / 64];
-        self.marks[slot / 64] &= !bit;
-        old & bit != 0
-    }
     pub fn clear_marks(&mut self) {
         self.marks.fill(0);
     }

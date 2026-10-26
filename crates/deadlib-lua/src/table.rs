@@ -89,10 +89,27 @@ pub(crate) struct Table {
     array: Vec<Value>,
     entries: Vec<Entry>,
     slots: Vec<u32>,
-    pub metatable: Option<TableId>,
+    // Arena identities have a nonzero generation; zero denotes no metatable.
+    // This leaves room for the scan state without growing the table header.
+    metatable: u64,
+    pub trace: TableTrace,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum TableTrace {
+    #[default]
+    Idle,
+    Pending(bool, bool),
+    Restart,
 }
 
 impl Table {
+    pub fn metatable(&self) -> Option<TableId> {
+        (self.metatable != 0).then_some(TableId(self.metatable))
+    }
+    pub fn set_metatable(&mut self, table: Option<TableId>) {
+        self.metatable = table.map_or(0, |id| id.0);
+    }
     pub fn with_record_capacity(capacity: usize) -> Self {
         if capacity == 0 {
             return Self::default();
@@ -125,6 +142,55 @@ impl Table {
                     .map(|e| (e.key.value(), e.value)),
             )
     }
+    /// Visit at most `budget` physical slots, including holes and tombstones.
+    /// The low cursor bit selects array/hash storage; the other bits are an index.
+    pub fn trace_slice(
+        &self,
+        cursor: usize,
+        budget: usize,
+    ) -> (Option<usize>, impl Iterator<Item = (Value, Value)> + '_) {
+        let start = cursor >> 1;
+        let (array, entries, next) = if cursor & 1 == 0 {
+            let end = start.saturating_add(budget).min(self.array.len());
+            let hash_end = if end == self.array.len() {
+                budget.saturating_sub(end - start).min(self.entries.len())
+            } else {
+                0
+            };
+            let next = if end < self.array.len() {
+                Some(end << 1)
+            } else {
+                (hash_end < self.entries.len()).then_some((hash_end << 1) | 1)
+            };
+            (&self.array[start..end], &self.entries[..hash_end], next)
+        } else {
+            let end = start.saturating_add(budget).min(self.entries.len());
+            (
+                &self.array[..0],
+                &self.entries[start..end],
+                (end < self.entries.len()).then_some((end << 1) | 1),
+            )
+        };
+        (
+            next,
+            array
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| **v != Value::Nil)
+                .map(move |(i, v)| (Value::Number((start + i + 1) as f64), *v))
+                .chain(
+                    entries
+                        .iter()
+                        .filter(|e| e.value != Value::Nil)
+                        .map(|e| (e.key.value(), e.value)),
+                ),
+        )
+    }
+    fn invalidate_trace(&mut self) {
+        if self.trace != TableTrace::Idle {
+            self.trace = TableTrace::Restart;
+        }
+    }
     fn slot(&self, key: Key) -> Option<(usize, Option<usize>)> {
         if self.slots.is_empty() {
             return None;
@@ -142,7 +208,11 @@ impl Table {
         }
     }
     fn rebuild(&mut self) {
+        let old_len = self.entries.len();
         self.entries.retain(|entry| entry.value != Value::Nil);
+        if self.entries.len() != old_len {
+            self.invalidate_trace();
+        }
         if (self.entries.len() + 1) * 4 >= self.slots.len() * 3 {
             self.slots.resize((self.slots.len() * 2).max(8), 0);
         }
@@ -161,6 +231,9 @@ impl Table {
             return None;
         };
         let old = std::mem::replace(&mut self.entries[i].value, Value::Nil);
+        if old != Value::Nil {
+            self.invalidate_trace();
+        }
         (old != Value::Nil).then_some(old)
     }
     pub fn get(&self, key: Value) -> Value {

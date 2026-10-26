@@ -1,5 +1,6 @@
 //! Iterative tracing, weak tables, host roots and reusable object generations.
 use super::*;
+use crate::table::TableTrace;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static VM_ID: AtomicU64 = AtomicU64::new(1);
@@ -57,6 +58,7 @@ pub(super) enum Trace {
     MarkedValue(Value),
     ThreadAgain(ThreadId),
     TableAgain(TableId),
+    TableSlice(TableId, usize),
     CellAgain(usize),
     Program(usize),
     Cell(usize),
@@ -561,7 +563,13 @@ impl Vm {
                 self.strings.bytes.mark(id.0);
                 false
             }
-            Value::Table(id) => self.tables.mark(id.0),
+            Value::Table(id) => {
+                let fresh = self.tables.mark(id.0);
+                if fresh {
+                    self.tables[slot_index(id.0)].trace = TableTrace::Restart;
+                }
+                fresh
+            }
             Value::Function(id) => self.functions.mark(id.0),
             Value::Thread(id) => self.threads.mark(id.0),
             Value::Userdata(id) => self.userdata.mark(id.0),
@@ -627,8 +635,12 @@ impl Vm {
             return;
         }
         if let Value::Table(id) = owner {
-            if self.tables.unmark(id.0) {
-                self.gc.work.push(Trace::Value(owner));
+            if self.tables.marked(id.0) {
+                let table = &mut self.tables[slot_index(id.0)];
+                if table.trace == TableTrace::Idle {
+                    self.gc.work.push(Trace::TableSlice(id, 0));
+                }
+                table.trace = TableTrace::Restart;
             }
         } else if let Some(table) = table {
             if matches!(owner, Value::Userdata(_)) {
@@ -657,7 +669,7 @@ impl Vm {
         }
     }
     fn table_mode(&self, table: &Table) -> (bool, bool) {
-        let Some(mt) = table.metatable else {
+        let Some(mt) = table.metatable() else {
             return (false, false);
         };
         let Value::String(mode) =
@@ -821,6 +833,7 @@ impl Vm {
                 }
                 Trace::ThreadAgain(id) => self.trace_thread(id, work),
                 Trace::TableAgain(id) => self.trace_table(id, work),
+                Trace::TableSlice(id, cursor) => self.trace_table_slice(id, cursor, work),
                 Trace::CellAgain(i) => work.extend(edge(self.cell_value(i))),
                 Trace::Program(i) => {
                     if let Some(key) = self.programs.key(i)
@@ -849,19 +862,45 @@ impl Vm {
     fn trace_graph(&mut self, work: &mut Vec<Trace>) {
         self.trace_some(work, usize::MAX);
     }
-    fn trace_table(&self, id: TableId, work: &mut Vec<Trace>) {
+    fn trace_table(&mut self, id: TableId, work: &mut Vec<Trace>) {
+        // Fresh marks also discard scan state left by an interrupted cycle.
+        self.tables[slot_index(id.0)].trace = TableTrace::Restart;
+        self.trace_table_slice(id, 0, work);
+    }
+    fn trace_table_slice(&mut self, id: TableId, cursor: usize, work: &mut Vec<Trace>) {
         let table = &self.tables[slot_index(id.0)];
-        if let Some(mt) = table.metatable {
+        // Read __mode once per scan. The atomic metatable refresh observes mode
+        // mutations before weak cleanup, just as for an unsliced table scan.
+        let (cursor, weak_keys, weak_values) = match table.trace {
+            TableTrace::Pending(wk, wv) => (cursor, wk, wv),
+            TableTrace::Idle | TableTrace::Restart => {
+                let (wk, wv) = self.table_mode(table);
+                (0, wk, wv)
+            }
+        };
+        self.tables[slot_index(id.0)].trace = TableTrace::Pending(weak_keys, weak_values);
+        let table = &self.tables[slot_index(id.0)];
+        let (next, pairs) = table.trace_slice(cursor, 64);
+        // Resume after children: a wide table needs only one pending slice and
+        // the current slice's edges rather than a frontier for its entire width.
+        if let Some(next) = next {
+            work.push(Trace::TableSlice(id, next));
+        }
+        if cursor == 0
+            && let Some(mt) = table.metatable()
+        {
             work.push(Trace::Value(Value::Table(mt)));
         }
-        let (weak_keys, weak_values) = self.table_mode(table);
-        for (key, value) in table.pairs() {
+        for (key, value) in pairs {
             if !weak_keys || matches!(key, Value::String(_)) {
                 work.extend(edge(key));
             }
             if !weak_values || matches!(value, Value::String(_)) {
                 work.extend(edge(value));
             }
+        }
+        if next.is_none() {
+            self.tables[slot_index(id.0)].trace = TableTrace::Idle;
         }
     }
     fn begin_gc_cycle(&mut self) {
@@ -935,7 +974,7 @@ impl Vm {
             }
         }
         for (index, table) in self.tables.entries() {
-            if table.metatable.is_some()
+            if table.metatable().is_some()
                 && self
                     .tables
                     .key(index)
@@ -1225,6 +1264,220 @@ mod tests {
             assert_eq!(vm.gc.phase, Phase::Propagate);
         }
         panic!("mark frontier did not reach the requested objects");
+    }
+
+    #[test]
+    fn wide_table_frontiers_stay_bounded_and_preserve_every_child() {
+        for shape in 0..3 {
+            let mut vm = Vm::new();
+            let table = vm.new_table();
+            let root = vm.pin(Value::Table(table)).unwrap();
+            let mut children = Vec::new();
+            for i in 1..=4096 {
+                let value = Value::Table(vm.new_table());
+                let key = if shape == 1 || (shape == 2 && i % 2 == 0) {
+                    let key = Value::Table(vm.new_table());
+                    children.push(key);
+                    key
+                } else {
+                    Value::Number(f64::from(if shape == 2 { (i + 1) / 2 } else { i }))
+                };
+                vm.raw_set(table, key, value).unwrap();
+                children.push(value);
+            }
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(Value::Table(table))];
+            let mut peak = 0;
+            while !work.is_empty() {
+                assert_eq!(vm.trace_some(&mut work, 1), 1);
+                peak = peak.max(work.len());
+            }
+            assert!(peak <= 129, "wide table frontier grew to {peak}");
+            assert!(children.iter().all(|&value| vm.marked_value(value)));
+            finish_marked_cycle(&mut vm);
+            assert!(
+                children
+                    .iter()
+                    .all(|&value| vm.validate_value(value).is_ok())
+            );
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn sparse_table_slices_count_holes_and_tombstones() {
+        for hash in [false, true] {
+            let mut vm = Vm::new();
+            let table = vm.new_table();
+            let root = vm.pin(Value::Table(table)).unwrap();
+            let child = Value::Table(vm.new_table());
+            for i in 1..=16384 {
+                let key = Value::Number(if hash { -f64::from(i) } else { f64::from(i) });
+                vm.raw_set(table, key, child).unwrap();
+            }
+            for i in 1..16384 {
+                let key = Value::Number(if hash { -f64::from(i) } else { f64::from(i) });
+                vm.raw_set(table, key, Value::Nil).unwrap();
+            }
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(Value::Table(table))];
+            for _ in 0..200 {
+                assert_eq!(vm.trace_some(&mut work, 1), 1);
+                assert_eq!(work.len(), 1);
+                assert!(!vm.marked_value(child));
+            }
+            vm.trace_graph(&mut work);
+            assert!(vm.marked_value(child));
+            finish_marked_cycle(&mut vm);
+            assert!(vm.validate_value(child).is_ok());
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn hash_compaction_restarts_an_active_scan_before_shifted_entries() {
+        let mut vm = Vm::new();
+        let table = vm.new_record_table(128);
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let mut children = Vec::new();
+        for i in 1..=191 {
+            let child = Value::Table(vm.new_table());
+            vm.raw_set(table, Value::Number(-f64::from(i)), child)
+                .unwrap();
+            children.push(child);
+        }
+        for i in 1..=128 {
+            vm.raw_set(table, Value::Number(-f64::from(i)), Value::Nil)
+                .unwrap();
+        }
+        vm.begin_gc_cycle();
+        let mut work = vec![Trace::Value(Value::Table(table))];
+        assert_eq!(vm.trace_some(&mut work, 1), 1);
+        assert!(matches!(work.as_slice(), [Trace::TableSlice(_, 129)]));
+        vm.gc.work.extend(work);
+        vm.raw_set(table, Value::Number(-1000.0), Value::Boolean(true))
+            .unwrap();
+        assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Restart);
+        finish_marked_cycle(&mut vm);
+        assert!(
+            children[..128]
+                .iter()
+                .all(|&v| vm.validate_value(v).is_err())
+        );
+        assert!(
+            children[128..]
+                .iter()
+                .all(|&v| vm.validate_value(v).is_ok())
+        );
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn hash_to_array_moves_restart_an_active_hash_scan() {
+        let mut vm = Vm::new();
+        let table = vm.new_table();
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let mut children = Vec::new();
+        for i in 2..=256 {
+            let child = Value::Table(vm.new_table());
+            vm.raw_set(table, Value::Number(f64::from(i)), child)
+                .unwrap();
+            children.push(child);
+        }
+        vm.begin_gc_cycle();
+        let mut work = vec![Trace::Value(Value::Table(table))];
+        assert_eq!(vm.trace_some(&mut work, 2), 2);
+        assert!(children[64..].iter().all(|&v| !vm.marked_value(v)));
+        vm.gc.work.extend(work);
+        vm.raw_set(table, Value::Number(1.0), Value::Boolean(true))
+            .unwrap();
+        assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Restart);
+        finish_marked_cycle(&mut vm);
+        assert!(children.iter().all(|&v| vm.validate_value(v).is_ok()));
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn metatable_writes_keep_one_pending_table_scan() {
+        let mut vm = Vm::new();
+        vm.begin_gc_cycle();
+        let table = vm.new_table();
+        let root = vm.pin(Value::Table(table)).unwrap();
+        // A freshly allocated table is marked but its MarkedValue is still queued.
+        let before = vm.gc.work.len();
+        vm.set_metatable(Value::Table(table), Some(vm.registry));
+        vm.set_metatable(Value::Table(table), None);
+        assert_eq!(vm.gc.work.len(), before);
+        finish_marked_cycle(&mut vm);
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| {
+            vm.tables.marked(table.0) && vm.tables[slot_index(table.0)].trace == TableTrace::Idle
+        });
+        let before = vm.gc.work.len();
+        vm.set_metatable(Value::Table(table), Some(vm.registry));
+        vm.set_metatable(Value::Table(table), None);
+        assert_eq!(vm.gc.work.len(), before + 1);
+        finish_marked_cycle(&mut vm);
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn partial_weak_scans_refresh_changed_modes_and_removed_metatables() {
+        for remove in [false, true] {
+            let mut vm = Vm::new();
+            let table = vm.new_table();
+            let mt = vm.new_table();
+            let mode = vm.intern(b"__mode");
+            let weak = vm.intern(b"v");
+            let strong = vm.intern(b"");
+            vm.raw_set(mt, mode, weak).unwrap();
+            vm.set_metatable(Value::Table(table), Some(mt));
+            let root = vm.pin(Value::Table(table)).unwrap();
+            let mut children = Vec::new();
+            for i in 1..=1024 {
+                let child = Value::Table(vm.new_table());
+                vm.raw_set(table, Value::Number(f64::from(i)), child)
+                    .unwrap();
+                children.push(child);
+            }
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(Value::Table(table))];
+            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            assert!(children.iter().all(|&v| !vm.marked_value(v)));
+            vm.gc.work.extend(work);
+            if remove {
+                vm.set_metatable(Value::Table(table), None);
+            } else {
+                vm.raw_set(mt, mode, strong).unwrap();
+            }
+            finish_marked_cycle(&mut vm);
+            assert!(children.iter().all(|&v| vm.validate_value(v).is_ok()));
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn restarting_a_cycle_discards_stale_table_cursors() {
+        let mut vm = Vm::new();
+        let table = vm.new_table();
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let mut children = Vec::new();
+        for i in 1..=1000 {
+            let child = Value::Table(vm.new_table());
+            vm.raw_set(table, Value::Number(f64::from(i)), child)
+                .unwrap();
+            children.push(child);
+        }
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| vm.tables.marked(table.0));
+        assert_eq!(
+            vm.tables[slot_index(table.0)].trace,
+            TableTrace::Pending(false, false)
+        );
+        vm.collect_garbage().unwrap();
+        assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Idle);
+        assert!(children.iter().all(|&v| vm.validate_value(v).is_ok()));
+        vm.unpin(root).unwrap();
     }
 
     #[test]
