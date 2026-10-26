@@ -16,8 +16,16 @@ pub fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
     if !seconds.is_finite() {
         return INVALID_SONG_TIME_NS;
     }
+    let nanos = f64::from(seconds) * SONG_TIME_NS_PER_SECOND;
+    // This product has at most 45 significant bits, so a signed half cannot
+    // round a sub-half value up to one. At 2^52, f64 values are integral.
+    let rounded = if nanos.abs() < 4_503_599_627_370_496.0 {
+        nanos + 0.5f64.copysign(nanos)
+    } else {
+        nanos
+    };
     // The float-to-integer cast already saturates at the i64 bounds.
-    (f64::from(seconds) * SONG_TIME_NS_PER_SECOND).round() as SongTimeNs
+    rounded as SongTimeNs
 }
 
 #[inline(always)]
@@ -55,7 +63,8 @@ pub fn song_time_ns_add_seconds(time_ns: SongTimeNs, delta_seconds: f32) -> Song
 #[inline(always)]
 #[must_use]
 pub fn normalized_song_rate(seconds_per_second: f32) -> f32 {
-    if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+    // Positive finite f32 bit patterns occupy 1..0x7f80_0000.
+    if seconds_per_second.to_bits().wrapping_sub(1) < 0x7f7f_ffff {
         seconds_per_second
     } else {
         1.0
@@ -78,7 +87,23 @@ pub fn clamp_song_time_ns(value: i128) -> SongTimeNs {
 #[must_use]
 pub fn scaled_song_delta_ns(delta_host_nanos: i128, seconds_per_second: f32) -> i128 {
     let slope = normalized_song_rate(seconds_per_second);
-    (delta_host_nanos as f64 * f64::from(slope)).round() as i128
+    // Ordinary host deltas fit i64 and convert with one scalar instruction.
+    let delta = if let Ok(nanos) = i64::try_from(delta_host_nanos) {
+        nanos as f64
+    } else {
+        delta_host_nanos as f64
+    };
+    let scaled = delta * f64::from(slope);
+    let magnitude = scaled.abs();
+    if magnitude < 0.5 {
+        0
+    } else if magnitude < 4_503_599_627_370_496.0 {
+        // A sub-half guard prevents a value just below 0.5 from biasing to 1.
+        i128::from((scaled + 0.5f64.copysign(scaled)) as i64)
+    } else {
+        // Every f64 at or above 2^52 is integral; the cast also saturates.
+        scaled as i128
+    }
 }
 
 #[inline(always)]
