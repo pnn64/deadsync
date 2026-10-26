@@ -190,7 +190,7 @@ fn bcp47_grammar_grandfathered_private_extensions_and_duplicates() {
         "de-CH-1901",
         "sl-rozaj-biske-1994",
         "zh-cmn-Hans-CN",
-        "en-a-aaa-b-ccc-bbb-x-xyz",
+        "en-t-de-u-nu-latn-x-xyz",
         "en-US-x-twain",
         "sr-Latn-RS",
         "qaa-Qaaa-QM-x-southern",
@@ -286,4 +286,39 @@ fn bcp47_grammar_grandfathered_private_extensions_and_duplicates() {
     // RFC 5646 sets no fixed total tag length; metadata limits bound this.
     let language = format!("x{}", "-private".repeat(1000));
     assert!(decode(&fixture(wire(language.as_bytes(), b"", b"text", false, 0))).is_ok());
+}
+
+#[test]
+fn unregistered_tags_decode_for_forward_compatibility_but_cannot_be_encoded() {
+    for tag in [
+        "zzzz",
+        "en-Abcd",
+        "en-AB",
+        "en-abcde",
+        "en-a-aaa-b-ccc-bbb-x-xyz",
+        "en-cmn",
+    ] {
+        let bytes = fixture(wire(tag.as_bytes(), b"", b"text", false, 0));
+        let png = decode(&bytes).unwrap();
+        let expected = Metadata::Unknown {
+            kind: *b"iTXt",
+            data: png.ancillary[0].data.clone(),
+        };
+        assert_eq!(
+            png.metadata(Limits::default()).unwrap(),
+            vec![expected.clone()]
+        );
+        check_events(&bytes, &expected);
+        assert_eq!(
+            decode_reader(bytes.as_slice(), &Default::default()).unwrap(),
+            png
+        );
+        assert!(encode(&png, &Default::default()).is_err(), "{tag}");
+        let mut out = Vec::new();
+        assert!(
+            encode_writer(&png, &Default::default(), &mut out).is_err(),
+            "{tag}"
+        );
+        assert!(out.is_empty());
+    }
 }

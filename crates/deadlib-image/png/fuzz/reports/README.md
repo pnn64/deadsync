@@ -42,3 +42,12 @@ containing this report. `png_stream` now selects both palette policies. A fresh
 and limits. `png-conformance-linux.log` records the full run and corpus path.
 Buffered/streaming acceptance and every emitted native sample remained equal.
 This brings recorded campaigns to 110,000 executions across five targets.
+
+IANA follow-up: the registration milestone containing this report passes a
+further 20,000 executions, 90 seconds, peak RSS 395 MiB. The initial 176-file,
+178,558-byte corpus was independently copied into fresh
+`fuzz/corpus/png_registry_20261026`; all other options and tool versions match
+the conformance campaign. `png-registry-linux.log` records the full run.
+The current instrumented binary exports `__asan_init`. Buffered/streaming
+acceptance and native sample assertions pass with registry lookup and unknown
+ancillary-field recovery. Total recorded executions: 130,000.

@@ -1,7 +1,7 @@
 # PNG and zlib fuzz targets
 
 This is an isolated Cargo workspace. It never adds libFuzzer, png, flate2, or any
-other codec to the production dependency graph. Both targets bound decompression,
+other codec to the production dependency graph. All targets bound decompression,
 metadata, frame counts and input sizes before exercising untrusted inputs.
 
 On Linux with nightly Rust, rust-src, a C++ compiler, and cargo-fuzz:
@@ -62,3 +62,6 @@ directory containing only the 175 checked-in PNGSuite files and independent
 to reproduce the initial seeds. The 20,000-run log is
 `reports/png-conformance-linux.log`; the corpus directory must be fresh because
 libFuzzer adds and reduces files during a campaign.
+The IANA follow-up uses the same fresh initial files in
+`fuzz/corpus/png_registry_20261026`, with diagnostics in
+`reports/png-registry-linux.log`.

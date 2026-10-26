@@ -18,7 +18,7 @@ pub use codec::{
 pub use apng::{Animation, BlendOp, DisposeOp, Frame, FrameControl};
 pub use composite::{Compositor, RenderedFrame};
 pub use deadlib_image::{ColorType, Image, Samples};
-pub use metadata::Metadata;
+pub use metadata::{LANGUAGE_SUBTAG_REGISTRY_DATE, Metadata};
 pub use stream::{
     DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, Row, RowSamples,
     StreamDecoder, decode_reader,

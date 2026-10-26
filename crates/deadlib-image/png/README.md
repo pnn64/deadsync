@@ -37,8 +37,12 @@ values. ICC and Exif payloads remain opaque to this codec. No color management i
 applied implicitly. Color-description precedence is exposed separately.
 Typed iTXt follows WHATWG UTF-8 decoding, consuming one leading BOM and replacing
 malformed sequences; raw chunk bytes remain unchanged. Encoders require valid
-UTF-8 and method 0 even for uncompressed iTXt. BCP47 syntax and duplicate variants
-/ extensions are checked; IANA subtag registration remains a documented gap.
+UTF-8 and method 0 even for uncompressed iTXt. BCP47 syntax, duplicate variants /
+extensions, IANA subtag registration and extlang prefixes are checked. Encoder
+registration uses a bundled offline snapshot (`LANGUAGE_SUBTAG_REGISTRY_DATE`).
+Well-formed tags unknown to that snapshot decode as `Metadata::Unknown`, keeping
+their raw chunks for future registry versions. Refreshing the tables requires
+an explicit development script; decoding and encoding perform no network access.
 Encoding zeroes unused tRNS/bKGD sample bits and rejects hIST zero frequencies
 for palette indices used by the default image or animation frames.
 

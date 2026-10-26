@@ -1,8 +1,27 @@
 use std::collections::HashSet;
+mod registry;
+
+pub(super) const REGISTRY_DATE: &str = registry::DATE;
+
+fn key(part: &[u8]) -> [u8; 8] {
+    let mut key = [b' '; 8];
+    for (a, b) in key.iter_mut().zip(part) {
+        *a = b.to_ascii_lowercase();
+    }
+    key
+}
+
+pub(super) fn registered(value: &[u8]) -> bool {
+    check(value, true)
+}
 
 // RFC 5646 2.1/2.2.9: grammar plus variant/singleton uniqueness. Registration
 // and extension-specific semantics are separate from syntactic well-formedness.
 pub(super) fn well_formed(value: &[u8]) -> bool {
+    check(value, false)
+}
+
+fn check(value: &[u8], registration: bool) -> bool {
     if value.is_empty() {
         return true; // PNG permits an unspecified language.
     }
@@ -50,13 +69,27 @@ pub(super) fn well_formed(value: &[u8]) -> bool {
     if !(2..=8).contains(&first.len()) || !first.iter().all(u8::is_ascii_alphabetic) {
         return false;
     }
+    if registration && registry::LANGUAGE.binary_search(&key(first)).is_err() {
+        return false;
+    }
+    let mut prefix_len = first.len();
     if first.len() <= 3 {
         for _ in 0..3 {
             if parts
                 .peek()
                 .is_some_and(|p| p.len() == 3 && p.iter().all(u8::is_ascii_alphabetic))
             {
-                parts.next();
+                let part = parts.next().unwrap();
+                if registration {
+                    let Ok(n) = registry::EXTLANG.binary_search_by_key(&key(part), |v| v.0) else {
+                        return false;
+                    };
+                    if !value[..prefix_len].eq_ignore_ascii_case(registry::EXTLANG[n].1.as_bytes())
+                    {
+                        return false;
+                    }
+                }
+                prefix_len += 1 + part.len();
             } else {
                 break;
             }
@@ -66,13 +99,19 @@ pub(super) fn well_formed(value: &[u8]) -> bool {
         .peek()
         .is_some_and(|p| p.len() == 4 && p.iter().all(u8::is_ascii_alphabetic))
     {
-        parts.next();
+        let part = parts.next().unwrap();
+        if registration && registry::SCRIPT.binary_search(&key(part)).is_err() {
+            return false;
+        }
     }
     if parts.peek().is_some_and(|p| {
         (p.len() == 2 && p.iter().all(u8::is_ascii_alphabetic))
             || (p.len() == 3 && p.iter().all(u8::is_ascii_digit))
     }) {
-        parts.next();
+        let part = parts.next().unwrap();
+        if registration && registry::REGION.binary_search(&key(part)).is_err() {
+            return false;
+        }
     }
     let mut variants = HashSet::new();
     while let Some(&part) = parts.peek() {
@@ -81,11 +120,11 @@ pub(super) fn well_formed(value: &[u8]) -> bool {
         {
             break;
         }
-        let mut key = [0; 8];
-        for (a, b) in key.iter_mut().zip(part) {
-            *a = b.to_ascii_lowercase();
+        let variant_key = key(part);
+        if !variants.insert(variant_key) {
+            return false;
         }
-        if !variants.insert(key) {
+        if registration && registry::VARIANT.binary_search(&variant_key).is_err() {
             return false;
         }
         parts.next();
@@ -99,6 +138,9 @@ pub(super) fn well_formed(value: &[u8]) -> bool {
             return false;
         }
         let b = part[0].to_ascii_lowercase();
+        if registration && !registry::EXTENSIONS.contains(&b) {
+            return false;
+        }
         let bit = if b.is_ascii_digit() {
             b - b'0'
         } else {

@@ -15,12 +15,12 @@ performance. Milestones are committed only after their relevant checks pass.
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
-| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field tests, PNGSuite | Typed wire roundtrips, UTF-8 BOM/replacement, BCP47 grammar, method distinctions, tRNS/bKGD masks and hIST usage checked; language registry and embedded ICC/Exif semantics still require audit |
+| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA registry tests, PNGSuite | Typed wire roundtrips, UTF-8 BOM/replacement, BCP47 grammar/registration, method distinctions, tRNS/bKGD masks and hIST usage checked; extension-specific and embedded ICC/Exif semantics still require audit |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 libpng cases including streaming encodings, format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Five sanitized targets pass 110,000 total executions; longer campaigns and coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Five sanitized targets pass 130,000 total executions; longer campaigns and coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -105,8 +105,8 @@ cap, 5-second per-input timeout and 1024 MiB RSS cap. PNG: 10,000 runs, no failu
 170 MiB peak RSS; zlib: 20,000 runs, no failure, 360 MiB peak RSS. Zlib compares
 native-accepted output against flate2; PNG compares native samples on inputs also
 accepted by Rust png. These are smoke checks, not exhaustive fuzz evidence.
-The seed generator and full logs are in the crate. Longer structured campaigns,
-longer structured campaigns and coverage review remain required.
+The seed generator and full logs are in the crate. Longer structured campaigns
+and coverage review remain required.
 
 ## Remaining completion gates
 
@@ -194,9 +194,9 @@ Explicit typed reserialization can replace malformed text before reencoding.
 case-insensitive variant/singleton uniqueness, grandfathered tags and private-use
 sequences are checked. Tests cover all 26 grandfathered tags, PNG and RFC examples,
 malformed subtags/order/duplicates and long private tags. This checks syntax;
-IANA registration, extlang prefixes and extension-specific semantics are not yet
-validated and remain a completion gate. The implementation does not perform
-network requests while processing images.
+IANA registration and extlang prefixes are validated by the following milestone.
+Extension-specific semantics remain under audit. The implementation does not
+perform network requests while processing images.
 
 Decoders mask unused tRNS/bKGD bits before use while retaining original wire
 values. Both encoders zero those unused bits; tests cover every legal nonindexed
@@ -214,13 +214,43 @@ peak RSS was 396 MiB. The report records the full command, seed and diagnostics.
 Full release tests, strict Clippy, the 1,061-file C libpng oracle and isolated
 offline builds pass with these field changes.
 
+IANA registration milestone: encoders and typed iTXt serialization check primary
+languages, scripts, regions, variants, extlang registrations and their prefixes,
+and registered extension singletons against the bundled 2026-09-17 registry
+(extensions registry 2014-04-02). Reserved private ranges and deprecated records
+remain accepted; private-use sequences require no registration. The tables are
+flat, sorted, read-only byte keys with binary search and no runtime IO or new
+dependencies. `LANGUAGE_SUBTAG_REGISTRY_DATE` identifies the encoder snapshot.
+Well-formed tags outside that snapshot are retained as unknown raw ancillary
+metadata by decoders (PNG 13.2), so future registries do not make images unreadable.
+Malformed language grammar still reports an error. Reencoding unknown tags
+requires a registry update or an explicitly chosen registered tag.
+
+The pinned CC0 IANA source snapshots and SHA-256 hashes are checked in.
+`scripts/update_language_registry.py --check` verifies reproducible offline
+generation; `--refresh` explicitly updates source data. An independent test
+parser checks all 9,902 records/expanded private codes: 8,795 languages, 258
+extlangs, 274 scripts, 343 regions, 139 variants, 26 grandfathered and 67 redundant
+tags, in original and upper case. Every extlang also rejects a wrong prefix.
+Tests exercise all private-range endpoints, deprecated codes, unregistered keys,
+extension singletons, encoder rejection before writing, and forward-compatible
+buffered/reader/row-event retention. Unicode extension payload interpretation is
+not claimed by these registration checks.
+Full release tests (52 top-level tests), strict Clippy, the external 1,061-file
+libpng oracle, fuzz-target builds and an isolated offline package build pass.
+A further fresh-corpus AddressSanitizer campaign passes 20,000 PNG executions
+in 90 seconds with 395 MiB peak RSS. The full report is
+`fuzz/reports/png-registry-linux.log`; the current instrumented binary's
+`__asan_init` symbol was verified. Recorded sanitized campaigns now total
+130,000 executions, without a saturation or exhaustive-conformance claim.
+
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
 1. Continue the clause-by-clause field and error-behavior audit beyond the now-
    covered indexed-color recovery, text decoding and encoder field distinctions.
 2. Extend independent conformance evidence to the full Third Edition clause
-   matrix, including ancillary semantic edge cases, BCP47 subtag registration,
+   matrix, including ancillary semantic edge cases and BCP47 extension semantics,
    all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
 3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and

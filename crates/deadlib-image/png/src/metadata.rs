@@ -1,5 +1,8 @@
 use crate::codec::{Header, be16, be32};
 mod language;
+/// IANA snapshot used for encoder-side BCP47 subtag registration checks.
+/// Decoders retain well-formed, unregistered tags as unknown raw metadata.
+pub const LANGUAGE_SUBTAG_REGISTRY_DATE: &str = language::REGISTRY_DATE;
 
 pub(crate) fn is_known(kind: &[u8; 4]) -> bool {
     matches!(
@@ -322,8 +325,20 @@ fn parse(
                 return Err(Error::Invalid("iTXt compression"));
             }
             let language = nul(&mut d)?;
-            if !language::well_formed(language) {
-                return Err(Error::Invalid("iTXt language tag"));
+            if !language::registered(language) {
+                if encoding {
+                    return Err(Error::Invalid("invalid or unregistered iTXt language tag"));
+                }
+                if !language::well_formed(language) {
+                    return Err(Error::Invalid("iTXt language tag"));
+                }
+                // PNG 13.2 permits an ancillary field we cannot interpret to
+                // be handled as an unknown chunk. Preserve it for future
+                // registry versions without interpreting an invalid tag.
+                return Ok(Metadata::Unknown {
+                    kind: c.kind,
+                    data: c.data.clone(),
+                });
             }
             let translated = nul(&mut d)?;
             let text = if flags[0] == 1 {
@@ -628,7 +643,7 @@ impl Metadata {
             } => {
                 keyword(key)?;
                 text_valid(language.as_bytes())?;
-                if !language::well_formed(language.as_bytes()) {
+                if !language::registered(language.as_bytes()) {
                     return Err(Error::Invalid("iTXt language tag"));
                 }
                 text_valid(translated_keyword.as_bytes())?;
