@@ -299,6 +299,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
             }
         }
     }
+    crate::metadata::validate(&ancillary, header, palette.len(), limits)?;
     // PNG Third Edition 11.2.3 recommends ignoring unused bytes in final IDAT.
     let (mut raw, _) = zlib::decompress_prefix(&compressed, expected)?;
     if raw.len() != expected {
@@ -397,6 +398,15 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
         depth: png.image.bit_depth,
         interlaced: options.interlaced,
     };
+    crate::metadata::validate(
+        &png.ancillary,
+        header,
+        png.palette.len(),
+        Limits {
+            max_metadata_bytes: usize::MAX,
+            ..Default::default()
+        },
+    )?;
     write_chunk(&mut out, b"IHDR", &header.wire())?;
     write_ancillary(&mut out, png, ChunkPosition::BeforePalette)?;
     if !png.palette.is_empty() {

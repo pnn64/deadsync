@@ -3,6 +3,7 @@
 
 mod checksum;
 mod codec;
+mod metadata;
 mod scanline;
 pub mod zlib;
 
@@ -12,6 +13,7 @@ pub use codec::{
 };
 
 pub use deadlib_image::{ColorType, Image, Samples};
+pub use metadata::Metadata;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {

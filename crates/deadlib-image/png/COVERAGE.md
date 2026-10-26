@@ -14,7 +14,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
-| Metadata, including Third Edition color chunks | Pending | Pending |
+| Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
 | APNG frame decoding, compositing, encoding | Pending | Pending |
 | Bounded streaming with arbitrary input boundaries | Pending | Pending |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1 and vendored PNGSuite | Rust png / PNGSuite pass; libpng pending |
@@ -47,7 +47,15 @@ vendored PNGSuite (161 valid / 14 malformed files) also pass. All 161 valid
 PNGSuite images reencode with both interlace settings. No implicit gamma,
 precision, palette, alpha, or color-space transformations are performed.
 
-Current limitations: ancillary metadata is preserved as raw chunks but not yet
-fully validated or exposed as typed values; APNG chunks are retained but not yet
+Milestone 3a validation: all metadata chunk types in PNG Third Edition have typed
+representations, exact fixed-point integer serialization and parsing. Raw chunks
+remain available for lossless retention. Tests cover compressed/uncompressed
+Latin-1 and international text (including Japanese and emoji), ICC streams,
+palette metadata, Exif retention, all HDR/color chunks and precedence, singleton
+and placement errors, invalid methods/values, and cumulative expansion limits.
+Rust png independently checks decoded text. `cargo clippy -p deadlib-image
+-p deadlib-image-png --all-targets -- -D warnings` passes.
+
+Current limitations: APNG chunks are retained but not yet
 interpreted; decoding currently buffers the complete compressed and filtered
 image; no performance parity claim has been made.

@@ -26,6 +26,10 @@ chunks are rejected, and unknown ancillary chunks are retained with placement.
 PNG Third Edition's recommended tolerance for trailing bytes inside final IDAT
 is implemented. Bytes after IEND are rejected by this whole-datastream API.
 
+Typed metadata is available through `Png::metadata`; `Metadata::to_chunk` encodes
+values. ICC and Exif payloads remain opaque to this codec. No color management is
+applied implicitly. Color-description precedence is exposed separately.
+
 See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. In particular,
-full metadata, APNG, streaming and performance validation remain under development.
+APNG, streaming and performance validation remain under development.
 This crate is registered in the workspace but is not used by DeadSync loaders.
