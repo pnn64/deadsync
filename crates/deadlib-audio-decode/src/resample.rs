@@ -77,10 +77,19 @@ impl PlanarAccum {
         for (index, channel) in self.channels.iter_mut().enumerate() {
             channel.reserve(frames);
             if index < channels {
-                channel.extend(
-                    complete.iter().skip(index).step_by(channels)
-                        .map(|&sample| f32::from(sample) / 32768.0),
-                );
+                match channels {
+                    3 => push_planar_channel::<3>(complete, index, channel),
+                    4 => push_planar_channel::<4>(complete, index, channel),
+                    6 => push_planar_channel::<6>(complete, index, channel),
+                    8 => push_planar_channel::<8>(complete, index, channel),
+                    _ => channel.extend(
+                        complete
+                            .iter()
+                            .skip(index)
+                            .step_by(channels)
+                            .map(|&sample| f32::from(sample) / 32768.0),
+                    ),
+                }
             }
         }
     }
@@ -99,6 +108,19 @@ impl PlanarAccum {
             channel.clear();
         }
     }
+}
+
+// Fixed strides expose packed loads/shuffles to the vectorizer. Other channel
+// counts retain the dynamic-stride loop without extra storage or conversion.
+#[inline]
+fn push_planar_channel<const CHANNELS: usize>(input: &[i16], index: usize, output: &mut Vec<f32>) {
+    output.extend(
+        input
+            .as_chunks::<CHANNELS>()
+            .0
+            .iter()
+            .map(|frame| f32::from(frame[index]) / 32768.0),
+    );
 }
 
 #[inline(always)]
@@ -260,6 +282,12 @@ pub fn write_channel_mapped_i16(
 // Keep mono's strided loop out of the stereo and repeated-channel kernels.
 #[inline(never)]
 fn copy_mono_channel(input: &[i16], channels: usize, output: &mut [i16]) {
+    if channels == 2 {
+        for (frame, dst) in input.as_chunks::<2>().0.iter().zip(output) {
+            *dst = frame[0];
+        }
+        return;
+    }
     for (frame, dst) in input.chunks_exact(channels).zip(output) {
         *dst = frame[0];
     }
@@ -326,6 +354,12 @@ pub fn append_channel_mapped_i16(
         } else {
             out.extend(input.chunks_exact(in_ch).map(|frame| frame[0]));
         }
+        return frames;
+    }
+    if in_ch <= 2 {
+        let start = out.len();
+        out.resize(start + produced_samples, 0);
+        repeat_mono_stereo(input, in_ch, out_ch, &mut out[start..]);
         return frames;
     }
     let repeats = out_ch / in_ch;

@@ -9,7 +9,7 @@ mod perf;
 
 #[test]
 fn planar_preserves_every_pcm_value_and_partial_frames() {
-    for channels in [1usize, 2, 3, 4, 6, 8] {
+    for channels in [1usize, 2, 3, 4, 5, 6, 7, 8, 9] {
         let input: Vec<_> = (i16::MIN..=i16::MAX).collect();
         let mut planar = PlanarAccum::new(channels, 0);
         planar.push_i16_interleaved(&input, channels);
@@ -58,12 +58,11 @@ fn benchmark_planar_kernel() {
 
 #[test]
 fn channel_mapping_preserves_prefix_and_complete_frames() {
-    let input: Vec<i16> = (i16::MIN..i16::MIN + 257).collect();
+    let input: Vec<i16> = (i16::MIN..=i16::MAX).collect();
     for in_ch in 0..=9 {
         for out_ch in 0..=9 {
-            for length in [0, 1, 3, 16, 257] {
-                let mut actual = vec![123, -456];
-                let mut expected = actual.clone();
+            for length in [0, 1, 3, 16, 257, input.len()] {
+                let mut expected = vec![123, -456];
                 let frames = if in_ch == 0 || out_ch == 0 {
                     0
                 } else {
@@ -74,11 +73,17 @@ fn channel_mapping_preserves_prefix_and_complete_frames() {
                         expected.push(input[frame * in_ch + channel % in_ch]);
                     }
                 }
-                assert_eq!(
-                    append_channel_mapped_i16(&input[..length], in_ch, out_ch, &mut actual),
-                    frames
-                );
+                let mut actual = Vec::with_capacity(expected.len());
+                actual.extend_from_slice(&[123, -456]);
+                let pointer = actual.as_ptr();
+                perf::assert_no_churn(|| {
+                    assert_eq!(
+                        append_channel_mapped_i16(&input[..length], in_ch, out_ch, &mut actual),
+                        frames
+                    );
+                });
                 assert_eq!(actual, expected);
+                assert_eq!(actual.as_ptr(), pointer);
             }
         }
     }
@@ -88,6 +93,11 @@ fn channel_mapping_preserves_prefix_and_complete_frames() {
 #[ignore = "release CPU and allocation benchmark"]
 fn benchmark_mapping_kernel() {
     for (in_ch, out_ch) in [
+        (1usize, 3),
+        (1, 6),
+        (1, 8),
+        (2, 3),
+        (2, 5),
         (6usize, 1),
         (8, 1),
         (2, 6),

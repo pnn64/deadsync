@@ -6,7 +6,7 @@ mod paired_bench;
 
 #[test]
 fn planar_queue_matches_original_across_packet_boundaries() {
-    for channels in [1, 2, 3, 6] {
+    for channels in [1, 2, 3, 4, 5, 6, 8, 9] {
         for capacity in [0, 17, 4096] {
             let mut old = original::PlanarAccum::new(channels, capacity);
             let mut new = PlanarAccum::new(channels, capacity);
