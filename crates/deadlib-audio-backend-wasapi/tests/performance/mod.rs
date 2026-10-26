@@ -276,6 +276,34 @@ fn benchmark_frame_setup() {
 }
 
 #[test]
+fn reciprocal_setup_matches_wide_precision() {
+    let check = |rate: u32| {
+        let converter = FramesToNanos::new(rate);
+        let expected = if rate > 1 {
+            (1u128 << (64 + converter.shift)).div_ceil(u128::from(rate)) as u64
+        } else {
+            0
+        };
+        assert_eq!(converter.reciprocal, expected, "rate {rate}");
+    };
+    for rate in 0..=65_536 {
+        check(rate);
+    }
+    for power in 1..32 {
+        let rate = 1u32 << power;
+        for rate in [rate - 1, rate, rate + 1] {
+            check(rate);
+        }
+    }
+    check(u32::MAX);
+    let mut random = 0x4a17_c3d9u32;
+    for _ in 0..100_000 {
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        check(random);
+    }
+}
+
+#[test]
 #[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
 fn benchmark_frame_conversion() {
     for (rate, frames) in [

@@ -90,7 +90,12 @@ impl FramesToNanos {
             0
         };
         let reciprocal = if divisor > 1 {
-            (1u128 << (64 + shift)).div_ceil(divisor as u128) as u64
+            // 2^64 = quotient * divisor + remainder, with 0 < remainder <= divisor.
+            // Split the shifted numerator to use only 64-bit divisions.
+            let divisor = divisor as u64;
+            let quotient = u64::MAX / divisor;
+            let remainder = u64::MAX % divisor + 1;
+            (quotient << shift) + (remainder << shift).div_ceil(divisor)
         } else {
             0
         };
