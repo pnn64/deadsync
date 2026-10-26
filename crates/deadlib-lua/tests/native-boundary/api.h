@@ -14,6 +14,7 @@ typedef int (*lua_CFunction)(lua_State *);
 #define LUA_GLOBALSINDEX (-10002)
 #define lua_upvalueindex(i) (LUA_GLOBALSINDEX-(i))
 #define lua_pushcfunction(L,f) lua_pushcclosure(L,(f),0)
+#define lua_newtable(L) lua_createtable(L,0,0)
 typedef struct BoundaryValue {
   int integer;
   double number;
@@ -40,4 +41,20 @@ API void lua_replace(lua_State *, int);
 API void lua_pushlightuserdata(lua_State *, void *);
 API void *lua_touserdata(lua_State *, int);
 API void lua_pushcclosure(lua_State *, lua_CFunction, int);
+API void lua_createtable(lua_State *, int, int);
+API void lua_gettable(lua_State *, int);
+API void lua_settable(lua_State *, int);
+API void lua_rawget(lua_State *, int);
+API void lua_rawset(lua_State *, int);
+API void lua_getfield(lua_State *, int, const char *);
+API void lua_setfield(lua_State *, int, const char *);
+API void lua_rawgeti(lua_State *, int, int);
+API void lua_rawseti(lua_State *, int, int);
+API int lua_getmetatable(lua_State *, int);
+API int lua_setmetatable(lua_State *, int);
+API int lua_next(lua_State *, int);
+API int lua_type(lua_State *, int);
+API int lua_rawequal(lua_State *, int, int);
+API void lua_remove(lua_State *, int);
+API void lua_insert(lua_State *, int);
 #endif

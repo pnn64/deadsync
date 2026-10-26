@@ -1,5 +1,6 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
+mod tables;
 
 /// A rooted mutable stack for one synchronous native callback.
 ///
@@ -182,6 +183,40 @@ impl NativeStack<'_, '_> {
             .ok_or_else(|| self.error(b"invalid native stack index"))?;
         self.call.vm.registers[position] = value;
         self.call.vm.gc_new_value(value);
+        Ok(())
+    }
+    /// Remove an ordinary stack slot and shift later values down.
+    ///
+    /// # Errors
+    /// Rejects pending errors, absent indexes and pseudo-indexes.
+    pub fn remove(&mut self, index: isize) -> Result<(), Error> {
+        self.check_error()?;
+        let position = self
+            .position(index)
+            .ok_or_else(|| self.error(b"invalid native stack index"))?;
+        let end = self.base + self.top();
+        self.call
+            .vm
+            .registers
+            .copy_within(position + 1..end, position);
+        self.set_top(self.top() - 1)
+    }
+    /// Move the top value into an ordinary stack slot, shifting values up.
+    ///
+    /// # Errors
+    /// Rejects pending errors, absent indexes and pseudo-indexes.
+    pub fn insert(&mut self, index: isize) -> Result<(), Error> {
+        self.check_error()?;
+        let position = self
+            .position(index)
+            .ok_or_else(|| self.error(b"invalid native stack index"))?;
+        let end = self.base + self.top() - 1;
+        let value = self.call.vm.registers[end];
+        self.call
+            .vm
+            .registers
+            .copy_within(position..end, position + 1);
+        self.call.vm.registers[position] = value;
         Ok(())
     }
     /// Read a number, accepting numeric strings in any live stack slot.

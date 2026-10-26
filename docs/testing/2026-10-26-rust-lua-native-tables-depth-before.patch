@@ -1,0 +1,739 @@
+diff --git a/crates/deadlib-lua/examples/native_boundary.rs b/crates/deadlib-lua/examples/native_boundary.rs
+index 5f45db059..9bab2593f 100644
+--- a/crates/deadlib-lua/examples/native_boundary.rs
++++ b/crates/deadlib-lua/examples/native_boundary.rs
+@@ -181,6 +181,52 @@ mod windows {
+                         },
+                     )?;
+                 }
++                15 => {
++                    let array = usize::try_from(a)
++                        .map_err(|_| self.stack.error(b"invalid array capacity"))?;
++                    let records = usize::try_from(b)
++                        .map_err(|_| self.stack.error(b"invalid record capacity"))?;
++                    self.stack.create_table(array, records)?;
++                }
++                16 => self.stack.get_table(a as isize, b != 0)?,
++                17 => self.stack.set_table(a as isize, b != 0)?,
++                18 | 19 => {
++                    // SAFETY: getfield/setfield lend a string for this dispatch.
++                    let name =
++                        unsafe { std::slice::from_raw_parts(value.bytes.cast(), value.length) };
++                    if op == 18 {
++                        self.stack.get_field(a as isize, name)?;
++                    } else {
++                        self.stack.set_field(a as isize, name)?;
++                    }
++                }
++                20 => self.stack.raw_get_integer(a as isize, b)?,
++                21 => self.stack.raw_set_integer(a as isize, b)?,
++                22 => value.integer = c_int::from(self.stack.get_metatable(a as isize)?),
++                23 => self.stack.set_metatable(a as isize)?,
++                24 => value.integer = c_int::from(self.stack.next_table(a as isize)?),
++                25 => {
++                    value.integer = match self.stack.value(a as isize) {
++                        None => -1,
++                        Some(Value::Nil) => 0,
++                        Some(Value::Boolean(_)) => 1,
++                        Some(Value::LightUserdata(_)) => 2,
++                        Some(Value::Number(_)) => 3,
++                        Some(Value::String(_)) => 4,
++                        Some(Value::Table(_)) => 5,
++                        Some(Value::Function(_) | Value::Native(_)) => 6,
++                        Some(Value::Userdata(_)) => 7,
++                        Some(Value::Thread(_)) => 8,
++                    };
++                }
++                26 => {
++                    value.integer = c_int::from(matches!(
++                        (self.stack.value(a as isize), self.stack.value(b as isize)),
++                        (Some(first), Some(second)) if first == second
++                    ));
++                }
++                27 => self.stack.remove(a as isize)?,
++                28 => self.stack.insert(a as isize)?,
+                 _ => return Err(self.stack.error(b"unknown boundary-probe operation")),
+             }
+             Ok(())
+@@ -296,6 +342,14 @@ mod windows {
+             "boundary_set_globals",
+             "boundary_registry_roundtrip",
+             "boundary_make_many",
++            "boundary_table",
++            "boundary_get",
++            "boundary_set",
++            "boundary_field",
++            "boundary_raw",
++            "boundary_metatable",
++            "boundary_count",
++            "boundary_shuffle",
+         ] {
+             let function = vm
+                 .new_host_function_with_data(
+@@ -348,7 +402,12 @@ mod windows {
+ }
+ fn main() {
+     #[cfg(windows)]
+-    windows::run();
++    std::thread::Builder::new()
++        .stack_size(16 * 1024 * 1024)
++        .spawn(windows::run)
++        .unwrap()
++        .join()
++        .unwrap();
+     #[cfg(not(windows))]
+     panic!("Windows/MSVC development-only boundary probe");
+ }
+diff --git a/crates/deadlib-lua/src/table.rs b/crates/deadlib-lua/src/table.rs
+index ee0c02aa3..c0d86c07d 100644
+--- a/crates/deadlib-lua/src/table.rs
++++ b/crates/deadlib-lua/src/table.rs
+@@ -104,6 +104,27 @@ pub(crate) enum TableTrace {
+ }
+ 
+ impl Table {
++    pub fn with_capacity(array: usize, records: usize) -> Result<Self, Error> {
++        let failed = || Error::new(ErrorKind::Runtime, 0, "not enough memory");
++        let slots = if records == 0 {
++            0
++        } else {
++            records
++                .checked_mul(4)
++                .and_then(|n| (n / 3 + 1).max(8).checked_next_power_of_two())
++                .ok_or_else(failed)?
++        };
++        let mut table = Self::default();
++        table.array.try_reserve_exact(array).map_err(|_| failed())?;
++        table.array.resize(array, Value::Nil);
++        table
++            .entries
++            .try_reserve_exact(records)
++            .map_err(|_| failed())?;
++        table.slots.try_reserve_exact(slots).map_err(|_| failed())?;
++        table.slots.resize(slots, 0);
++        Ok(table)
++    }
+     pub fn metatable(&self) -> Option<TableId> {
+         (self.metatable != 0).then_some(TableId(self.metatable))
+     }
+diff --git a/crates/deadlib-lua/src/vm/host.rs b/crates/deadlib-lua/src/vm/host.rs
+index fa113ef56..e36343071 100644
+--- a/crates/deadlib-lua/src/vm/host.rs
++++ b/crates/deadlib-lua/src/vm/host.rs
+@@ -7,6 +7,21 @@ pub use stack::NativeStack;
+ pub use thread::HostThreadState;
+ pub(super) use thread::ThreadData;
+ 
++enum Action<'a> {
++    Call(Value, &'a [Value]),
++    Get([Value; 2]),
++    Set([Value; 3]),
++}
++impl Action<'_> {
++    fn arguments(&self) -> &[Value] {
++        match self {
++            Self::Call(_, values) => values,
++            Self::Get(values) => values,
++            Self::Set(values) => values,
++        }
++    }
++}
++
+ /// A synchronous Rust callback. Append results through [`HostCall::push`].
+ ///
+ /// Arguments and captures borrow VM storage. Callbacks may allocate Lua values
+@@ -189,7 +204,11 @@ impl Vm {
+         if frame.pc == 2 {
+             Err(self.host_error(self.registers[frame.base + 1]))
+         } else {
+-            Ok(Some(self.top - frame.base))
++            Ok(Some(if frame.wanted == FRAME_OPEN {
++                self.top - frame.base
++            } else {
++                usize::from(frame.wanted)
++            }))
+         }
+     }
+ 
+@@ -305,11 +324,22 @@ impl HostCall<'_> {
+         function: Value,
+         arguments: &[Value],
+         protected: bool,
++    ) -> Result<std::ops::Range<usize>, Error> {
++        self.run_action(Action::Call(function, arguments), protected)
++    }
++
++    fn run_action(
++        &mut self,
++        action: Action<'_>,
++        protected: bool,
+     ) -> Result<std::ops::Range<usize>, Error> {
+         if let Some(error) = &self.abort {
+             return Err(error.clone());
+         }
+-        self.vm.validate_value(function)?;
++        if let Action::Call(function, _) = action {
++            self.vm.validate_value(function)?;
++        }
++        let arguments = action.arguments();
+         for &value in arguments {
+             self.vm.validate_value(value)?;
+         }
+@@ -325,7 +355,10 @@ impl HostCall<'_> {
+         let base = self.output + self.results;
+         self.vm.registers.truncate(base);
+         self.vm.resize_registers(base + 1 + arguments.len());
+-        self.vm.registers[base] = function;
++        self.vm.registers[base] = match action {
++            Action::Call(function, _) => function,
++            _ => Value::Nil,
++        };
+         self.vm.registers[base + 1..].copy_from_slice(arguments);
+         self.vm.push_record(Frame {
+             function: FrameKind::Native(CONT_HOST_CALL),
+@@ -333,25 +366,33 @@ impl HostCall<'_> {
+             base,
+             stack_start: base,
+             result: base,
+-            wanted: FRAME_OPEN,
++            wanted: match action {
++                Action::Call(..) => FRAME_OPEN,
++                Action::Get(..) => 1,
++                Action::Set(..) => 0,
++            },
+             barriers: self.vm.frames.last().unwrap().barriers,
+             vararg_start: base + 1,
+             vararg_count: arguments.len() as u32,
+             tail_calls: 0,
+         });
+-        let start = self
+-            .vm
+-            .start_call(base, arguments.len(), OPEN, false)
+-            .map_err(|error| {
+-                // There is no Lua call-site location for failure to enter a value
+-                // supplied by Rust. Preserve the native-boundary diagnostic.
+-                if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+-                    let value = self.vm.intern(error.message_bytes());
+-                    error.with_value(value)
+-                } else {
+-                    error
+-                }
+-            });
++        let start = match action {
++            Action::Call(..) => self.vm.start_call(base, arguments.len(), OPEN, false),
++            Action::Get([target, key]) => self.vm.get_table(target, key, base).map(|()| None),
++            Action::Set([target, key, value]) => {
++                self.vm.set_table(target, key, value).map(|()| None)
++            }
++        }
++        .map_err(|error| {
++            // There is no Lua call-site location for failure to enter a value
++            // supplied by Rust. Preserve the native-boundary diagnostic.
++            if error.kind() == ErrorKind::Runtime && error.value().is_none() {
++                let value = self.vm.intern(error.message_bytes());
++                error.with_value(value)
++            } else {
++                error
++            }
++        });
+         let result = self.vm.drive_host(owner, depth, start);
+         if !protected
+             && self.vm.thread == owner
+diff --git a/crates/deadlib-lua/src/vm/host/stack.rs b/crates/deadlib-lua/src/vm/host/stack.rs
+index ac4ca40f1..066889d27 100644
+--- a/crates/deadlib-lua/src/vm/host/stack.rs
++++ b/crates/deadlib-lua/src/vm/host/stack.rs
+@@ -1,5 +1,6 @@
+ //! Mutable native argument/temporary storage in the VM register window.
+ use super::*;
++mod tables;
+ 
+ /// A rooted mutable stack for one synchronous native callback.
+ ///
+@@ -184,6 +185,40 @@ impl NativeStack<'_, '_> {
+         self.call.vm.gc_new_value(value);
+         Ok(())
+     }
++    /// Remove an ordinary stack slot and shift later values down.
++    ///
++    /// # Errors
++    /// Rejects pending errors, absent indexes and pseudo-indexes.
++    pub fn remove(&mut self, index: isize) -> Result<(), Error> {
++        self.check_error()?;
++        let position = self
++            .position(index)
++            .ok_or_else(|| self.error(b"invalid native stack index"))?;
++        let end = self.base + self.top();
++        self.call
++            .vm
++            .registers
++            .copy_within(position + 1..end, position);
++        self.set_top(self.top() - 1)
++    }
++    /// Move the top value into an ordinary stack slot, shifting values up.
++    ///
++    /// # Errors
++    /// Rejects pending errors, absent indexes and pseudo-indexes.
++    pub fn insert(&mut self, index: isize) -> Result<(), Error> {
++        self.check_error()?;
++        let position = self
++            .position(index)
++            .ok_or_else(|| self.error(b"invalid native stack index"))?;
++        let end = self.base + self.top() - 1;
++        let value = self.call.vm.registers[end];
++        self.call
++            .vm
++            .registers
++            .copy_within(position..end, position + 1);
++        self.call.vm.registers[position] = value;
++        Ok(())
++    }
+     /// Read a number, accepting numeric strings in any live stack slot.
+     ///
+     /// # Errors
+diff --git a/crates/deadlib-lua/tests/native-boundary/api.h b/crates/deadlib-lua/tests/native-boundary/api.h
+index f4cdb9d98..9e98d42e9 100644
+--- a/crates/deadlib-lua/tests/native-boundary/api.h
++++ b/crates/deadlib-lua/tests/native-boundary/api.h
+@@ -14,6 +14,7 @@ typedef int (*lua_CFunction)(lua_State *);
+ #define LUA_GLOBALSINDEX (-10002)
+ #define lua_upvalueindex(i) (LUA_GLOBALSINDEX-(i))
+ #define lua_pushcfunction(L,f) lua_pushcclosure(L,(f),0)
++#define lua_newtable(L) lua_createtable(L,0,0)
+ typedef struct BoundaryValue {
+   int integer;
+   double number;
+@@ -40,4 +41,20 @@ API void lua_replace(lua_State *, int);
+ API void lua_pushlightuserdata(lua_State *, void *);
+ API void *lua_touserdata(lua_State *, int);
+ API void lua_pushcclosure(lua_State *, lua_CFunction, int);
++API void lua_createtable(lua_State *, int, int);
++API void lua_gettable(lua_State *, int);
++API void lua_settable(lua_State *, int);
++API void lua_rawget(lua_State *, int);
++API void lua_rawset(lua_State *, int);
++API void lua_getfield(lua_State *, int, const char *);
++API void lua_setfield(lua_State *, int, const char *);
++API void lua_rawgeti(lua_State *, int, int);
++API void lua_rawseti(lua_State *, int, int);
++API int lua_getmetatable(lua_State *, int);
++API int lua_setmetatable(lua_State *, int);
++API int lua_next(lua_State *, int);
++API int lua_type(lua_State *, int);
++API int lua_rawequal(lua_State *, int, int);
++API void lua_remove(lua_State *, int);
++API void lua_insert(lua_State *, int);
+ #endif
+diff --git a/crates/deadlib-lua/tests/native-boundary/boundary.c b/crates/deadlib-lua/tests/native-boundary/boundary.c
+index 8bcfc2e37..9ca4d0498 100644
+--- a/crates/deadlib-lua/tests/native-boundary/boundary.c
++++ b/crates/deadlib-lua/tests/native-boundary/boundary.c
+@@ -3,6 +3,7 @@
+ #include "api.h"
+ #include <setjmp.h>
+ #include <stdlib.h>
++#include <string.h>
+ 
+ typedef struct BoundaryFrame {
+   void *context;
+@@ -108,3 +109,53 @@ API void lua_pushcclosure(lua_State *L, lua_CFunction function, int count) {
+   BoundaryValue value = {0}; value.bytes = (const char *)function;
+   operation(L, 14, count, 0, &value);
+ }
++API void lua_createtable(lua_State *L, int array, int records) {
++  BoundaryValue value = {0}; operation(L, 15, array, records, &value);
++}
++API void lua_gettable(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 16, index, 0, &value);
++}
++API void lua_rawget(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 16, index, 1, &value);
++}
++API void lua_settable(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 17, index, 0, &value);
++}
++API void lua_rawset(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 17, index, 1, &value);
++}
++API void lua_getfield(lua_State *L, int index, const char *name) {
++  BoundaryValue value = {0}; value.bytes = name; value.length = strlen(name);
++  operation(L, 18, index, 0, &value);
++}
++API void lua_setfield(lua_State *L, int index, const char *name) {
++  BoundaryValue value = {0}; value.bytes = name; value.length = strlen(name);
++  operation(L, 19, index, 0, &value);
++}
++API void lua_rawgeti(lua_State *L, int index, int key) {
++  BoundaryValue value = {0}; operation(L, 20, index, key, &value);
++}
++API void lua_rawseti(lua_State *L, int index, int key) {
++  BoundaryValue value = {0}; operation(L, 21, index, key, &value);
++}
++API int lua_getmetatable(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 22, index, 0, &value); return value.integer;
++}
++API int lua_setmetatable(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 23, index, 0, &value); return 1;
++}
++API int lua_next(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 24, index, 0, &value); return value.integer;
++}
++API int lua_type(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 25, index, 0, &value); return value.integer;
++}
++API int lua_rawequal(lua_State *L, int first, int second) {
++  BoundaryValue value = {0}; operation(L, 26, first, second, &value); return value.integer;
++}
++API void lua_remove(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 27, index, 0, &value);
++}
++API void lua_insert(lua_State *L, int index) {
++  BoundaryValue value = {0}; operation(L, 28, index, 0, &value);
++}
+diff --git a/crates/deadlib-lua/tests/native-boundary/cases.lua b/crates/deadlib-lua/tests/native-boundary/cases.lua
+index e67cd247c..9a34ec24c 100644
+--- a/crates/deadlib-lua/tests/native-boundary/cases.lua
++++ b/crates/deadlib-lua/tests/native-boundary/cases.lua
+@@ -230,3 +230,96 @@ assert(not ok and not ok2)
+ print('closure-errors',capture_error,negative_error)
+ collectgarbage()
+ print('boundary',sum,top,#binary,'identity','nil','reentry','gc','yield-barrier','recovered')
++
++do
++  local payload={tag=42}
++  local module,r,e,g=boundary_table(payload)
++  assert(module.payload==payload and module[1]==17 and r==debug.getregistry()and e==_G and g==_G)
++  collectgarbage();assert(module.snapshot()==debug.getregistry())
++  assert(boundary_raw(module,'raw',payload)==payload)
++  assert(boundary_raw(module,'raw')==payload)
++  assert(boundary_count(module)==4)
++  assert(boundary_get(module,'payload')==payload)
++  boundary_set(module,'value',99);assert(module.value==99)
++  assert(boundary_field(module,17)==17 and boundary_field(module)==17)
++  local mt={__metatable='hidden'}
++  assert(boundary_metatable(module,mt)==mt and getmetatable(module)=='hidden')
++  assert(boundary_metatable(module,nil)==nil)
++  local a,b,c,d,f,h,j=boundary_shuffle(payload,payload,17)
++  assert(a==payload and b==payload and c==17 and d==3 and f and not h and j==-1)
++end
++
++do
++  local trace={};local object={};local backing={}
++  local mt={
++    __index=function(t,k)
++      assert(t==object);collectgarbage();trace[#trace+1]='get:'..k
++      return backing[k]
++    end,
++    __newindex=function(t,k,v)
++      assert(t==object);collectgarbage();trace[#trace+1]='set:'..k
++      backing[k]=v
++    end,
++  }
++  boundary_metatable(object,mt)
++  boundary_set(object,'answer',42);assert(boundary_get(object,'answer')==42)
++  assert(boundary_field(object,17)==17)
++  assert(boundary_raw(object,'answer')==nil)
++  assert(table.concat(trace,',')=='set:answer,get:answer,set:field,get:field')
++  local proxy=setmetatable({},{__index=object,__newindex=object})
++  assert(boundary_get(proxy,'answer')==42)
++  boundary_set(proxy,'answer',43);assert(backing.answer==43)
++end
++
++do
++  local payload={};local object={};local observed=false;local escaped
++  local function failing(t,k,v)
++    local retained={tag=17};escaped=function()return retained end;error(payload,0)
++  end
++  setmetatable(object,{__index=failing,__newindex=failing})
++  local ok,e=xpcall(function()boundary_set(object,'key',payload)end,function(e)
++    local saw_native,saw_lua=false,false
++    for level=2,15 do
++      local info=debug.getinfo(level,'f');if not info then break end
++      if info.func==boundary_set then
++        local _,key=debug.getlocal(level,4);local _,value=debug.getlocal(level,5)
++        assert(key=='key'and value==payload);saw_native=true
++      elseif info.func==failing then
++        for index=1,6 do
++          local name,value=debug.getlocal(level,index)
++          if name=='retained' then
++            assert(value.tag==17);debug.setlocal(level,index,{tag=42});saw_lua=true
++          end
++        end
++      end
++    end
++    collectgarbage();observed=saw_native and saw_lua;return e
++  end)
++  assert(not ok and e==payload and observed and escaped().tag==42)
++  local ok,e=xpcall(function()boundary_field(object)end,function(e)
++    local seen=false
++    for level=2,15 do
++      local info=debug.getinfo(level,'f');if not info then break end
++      if info.func==boundary_field then
++        assert(debug.getlocal(level,2)==nil);seen=true
++      end
++    end
++    assert(seen);return e
++  end)
++  assert(not ok and e==payload)
++end
++
++do
++  local ok,a=pcall(boundary_get,false,'key')
++  local ok2,b=pcall(boundary_set,{},nil,42)
++  local ok3,c=pcall(boundary_raw,{},0/0,42)
++  assert(not ok and not ok2 and not ok3)
++  print('table-errors',a,b,c)
++  local depth=0
++  local object=setmetatable({},{__index=function(t,k)
++    depth=depth+1;return boundary_get(t,k)
++  end})
++  local ok,e=pcall(boundary_get,object,'key')
++  assert(not ok and e:find('C stack overflow',1,true))
++  print('table-depth',depth)
++end
+diff --git a/crates/deadlib-lua/tests/native-boundary/module.c b/crates/deadlib-lua/tests/native-boundary/module.c
+index 6ea3378e2..a02aa8045 100644
+--- a/crates/deadlib-lua/tests/native-boundary/module.c
++++ b/crates/deadlib-lua/tests/native-boundary/module.c
+@@ -128,3 +128,52 @@ EXPORT int boundary_make_many(lua_State *L) {
+   for (i = 1; i <= 255; i++) lua_pushnumber(L, i);
+   lua_pushcclosure(L, many, 255); return 1;
+ }
++EXPORT int boundary_table(lua_State *L) {
++  lua_createtable(L, 4, 2);
++  lua_pushvalue(L, 1); lua_setfield(L, -2, "payload");
++  lua_pushnumber(L, 17); lua_rawseti(L, -2, 1);
++  lua_pushcfunction(L, boundary_snapshot); lua_setfield(L, -2, "snapshot");
++  lua_getfield(L, -1, "snapshot"); lua_call(L, 0, 3);
++  return 4;
++}
++EXPORT int boundary_get(lua_State *L) {
++  lua_pushvalue(L, 2); lua_gettable(L, 1); return 1;
++}
++EXPORT int boundary_set(lua_State *L) {
++  lua_pushvalue(L, 2); lua_pushvalue(L, 3); lua_settable(L, 1); return 0;
++}
++EXPORT int boundary_field(lua_State *L) {
++  if (lua_gettop(L) >= 2) {
++    lua_pushvalue(L, 2); lua_setfield(L, 1, "field");
++  }
++  lua_getfield(L, 1, "field"); return 1;
++}
++EXPORT int boundary_raw(lua_State *L) {
++  if (lua_gettop(L) >= 3) {
++    lua_pushvalue(L, 2); lua_pushvalue(L, 3); lua_rawset(L, 1);
++  }
++  lua_pushvalue(L, 2); lua_rawget(L, 1); return 1;
++}
++EXPORT int boundary_metatable(lua_State *L) {
++  if (lua_gettop(L) >= 2) {
++    lua_pushvalue(L, 2); lua_setmetatable(L, 1);
++  }
++  if (!lua_getmetatable(L, 1)) lua_pushnil(L);
++  return 1;
++}
++EXPORT int boundary_count(lua_State *L) {
++  int count = 0;
++  lua_pushnil(L);
++  while (lua_next(L, 1)) {
++    count++; lua_settop(L, -2);
++  }
++  lua_pushnumber(L, count); return 1;
++}
++EXPORT int boundary_shuffle(lua_State *L) {
++  lua_pushvalue(L, 1); lua_insert(L, 2); lua_remove(L, 1);
++  lua_pushnumber(L, lua_type(L, -1));
++  lua_pushboolean(L, lua_rawequal(L, 1, 2));
++  lua_pushboolean(L, lua_rawequal(L, 1, 99));
++  lua_pushnumber(L, lua_type(L, 99));
++  return lua_gettop(L);
++}
+diff --git a/scripts/check_rust_lua_native_boundary.py b/scripts/check_rust_lua_native_boundary.py
+index fdf20e661..6ff134c14 100644
+--- a/scripts/check_rust_lua_native_boundary.py
++++ b/scripts/check_rust_lua_native_boundary.py
+@@ -61,7 +61,7 @@ def main():
+     compile_native('reference_module','reference',['/DREFERENCE','/I'+str(source),fixture/'module.c',directory/'reference/lua51.lib'])
+     compile_native('boundary','rust',['/I'+str(fixture),fixture/'boundary.c'])
+     compile_native('rust_module','rust',['/I'+str(fixture),fixture/'module.c',directory/'rust/boundary.lib'])
+-    names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate','boundary_state','boundary_state_reenter','boundary_cached_top','boundary_make_counter','boundary_snapshot','boundary_set_environment','boundary_set_globals','boundary_registry_roundtrip','boundary_make_many']
++    names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate','boundary_state','boundary_state_reenter','boundary_cached_top','boundary_make_counter','boundary_snapshot','boundary_set_environment','boundary_set_globals','boundary_registry_roundtrip','boundary_make_many','boundary_table','boundary_get','boundary_set','boundary_field','boundary_raw','boundary_metatable','boundary_count','boundary_shuffle']
+     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
+     runs={}
+     for engine in ['reference','rust']:
+--- /dev/null
++++ b/crates/deadlib-lua/src/vm/host/stack/tables.rs
+@@ -0,0 +1,173 @@
++//! Native table operations share VM lookup, metamethod and collector paths.
++use super::*;
++
++impl NativeStack<'_, '_> {
++    fn indexed_value(&self, index: isize) -> Result<Value, Error> {
++        self.value(index)
++            .ok_or_else(|| self.error(b"invalid native stack index"))
++    }
++    /// Create and push a table with array and record capacity hints.
++    ///
++    /// # Errors
++    /// Rejects a pending error or full native stack.
++    pub fn create_table(&mut self, array: usize, records: usize) -> Result<(), Error> {
++        self.check_error()?;
++        if self.top() == limits::MAX_CSTACK {
++            return Err(self.error(b"native stack overflow"));
++        }
++        let table = Table::with_capacity(array, records)?;
++        self.call.vm.tables.note_alloc(table.heap_bytes());
++        self.call.vm.gc.pending = true;
++        let table = Value::Table(TableId(self.call.vm.tables.insert(table)));
++        self.call.vm.gc_new_value(table);
++        self.push(table)
++    }
++    fn read_table(&mut self, target: Value, key: Value, raw: bool) -> Result<Value, Error> {
++        self.check_error()?;
++        if raw {
++            return Ok(self.call.vm.table(target)?.get(key));
++        }
++        let range = self.call.run_action(Action::Get([target, key]), false)?;
++        Ok(self.call.vm.registers[range.start])
++    }
++    fn write_table(
++        &mut self,
++        target: Value,
++        key: Value,
++        value: Value,
++        raw: bool,
++    ) -> Result<(), Error> {
++        self.check_error()?;
++        if raw {
++            let Value::Table(table) = target else {
++                return Err(self.error(b"raw native access requires a table"));
++            };
++            return self.call.vm.raw_set(table, key, value);
++        }
++        self.call
++            .run_action(Action::Set([target, key, value]), false)?;
++        Ok(())
++    }
++    /// Replace the top key with a table lookup; raw access bypasses metamethods.
++    ///
++    /// # Errors
++    /// Runtime/metamethod errors propagate without unwinding the fault stack.
++    /// Raw access requires a table. Rejects missing keys or invalid indexes.
++    pub fn get_table(&mut self, index: isize, raw: bool) -> Result<(), Error> {
++        self.check_error()?;
++        let target = self.indexed_value(index)?;
++        let key = self.indexed_value(-1)?;
++        let value = self.read_table(target, key, raw)?;
++        self.set(-1, value)?;
++        self.call.vm.registers.truncate(self.base + self.top());
++        Ok(())
++    }
++    /// Push a field lookup without adding its key to the visible native stack.
++    ///
++    /// # Errors
++    /// Propagates lookup/metamethod errors and rejects a full stack or invalid index.
++    pub fn get_field(&mut self, index: isize, name: &[u8]) -> Result<(), Error> {
++        self.check_error()?;
++        if self.top() == limits::MAX_CSTACK {
++            return Err(self.error(b"native stack overflow"));
++        }
++        let target = self.indexed_value(index)?;
++        let key = self.intern(name);
++        let value = self.read_table(target, key, false)?;
++        self.push(value)
++    }
++    /// Pop a key and value after successful assignment to the indexed target.
++    /// Raw access bypasses metamethods.
++    ///
++    /// # Errors
++    /// Propagates table/metamethod errors, retaining original inputs on failure.
++    pub fn set_table(&mut self, index: isize, raw: bool) -> Result<(), Error> {
++        self.check_error()?;
++        let target = self.indexed_value(index)?;
++        let key = self.indexed_value(-2)?;
++        let value = self.indexed_value(-1)?;
++        self.write_table(target, key, value, raw)?;
++        self.set_top(self.top() - 2)
++    }
++    /// Pop the top value after successful field assignment.
++    ///
++    /// # Errors
++    /// Propagates table/metamethod errors, retaining original inputs on failure.
++    pub fn set_field(&mut self, index: isize, name: &[u8]) -> Result<(), Error> {
++        self.check_error()?;
++        let target = self.indexed_value(index)?;
++        let value = self.indexed_value(-1)?;
++        let key = self.intern(name);
++        self.write_table(target, key, value, false)?;
++        self.set_top(self.top() - 1)
++    }
++    /// Push a raw integer-key lookup.
++    ///
++    /// # Errors
++    /// Rejects non-tables, invalid indexes, pending errors or a full stack.
++    pub fn raw_get_integer(&mut self, index: isize, key: i32) -> Result<(), Error> {
++        let target = self.indexed_value(index)?;
++        let value = self.read_table(target, Value::Number(f64::from(key)), true)?;
++        self.push(value)
++    }
++    /// Pop the top value after raw integer-key assignment.
++    ///
++    /// # Errors
++    /// Rejects non-tables, invalid indexes, pending errors or missing values.
++    pub fn raw_set_integer(&mut self, index: isize, key: i32) -> Result<(), Error> {
++        let target = self.indexed_value(index)?;
++        let value = self.indexed_value(-1)?;
++        self.write_table(target, Value::Number(f64::from(key)), value, true)?;
++        self.set_top(self.top() - 1)
++    }
++    /// Push the actual metatable, bypassing `__metatable`; false leaves the stack unchanged.
++    ///
++    /// # Errors
++    /// Rejects a pending error, invalid index or a full stack when pushing a result.
++    pub fn get_metatable(&mut self, index: isize) -> Result<bool, Error> {
++        self.check_error()?;
++        let value = self.indexed_value(index)?;
++        let Some(table) = self.call.vm.metatable(value) else {
++            return Ok(false);
++        };
++        self.push(Value::Table(table))?;
++        Ok(true)
++    }
++    /// Pop a table or nil and set the actual metatable, bypassing `__metatable`.
++    /// Primitive values update their shared type metatable.
++    ///
++    /// # Errors
++    /// Rejects pending errors, invalid indexes or a top value other than table/nil.
++    pub fn set_metatable(&mut self, index: isize) -> Result<(), Error> {
++        self.check_error()?;
++        let value = self.indexed_value(index)?;
++        let table = match self.indexed_value(-1)? {
++            Value::Nil => None,
++            Value::Table(table) => Some(table),
++            _ => return Err(self.error(b"native metatable must be a table or nil")),
++        };
++        self.call.vm.set_metatable(value, table);
++        self.set_top(self.top() - 1)
++    }
++    /// Replace a traversal key with the next key/value pair, or pop it at the end.
++    ///
++    /// # Errors
++    /// Rejects non-tables, invalid traversal keys, missing values or a full stack.
++    pub fn next_table(&mut self, index: isize) -> Result<bool, Error> {
++        self.check_error()?;
++        let target = self.indexed_value(index)?;
++        let key = self.indexed_value(-1)?;
++        let next = self.call.vm.table(target)?.next(key)?;
++        if let Some((key, value)) = next {
++            if self.top() == limits::MAX_CSTACK {
++                return Err(self.error(b"native stack overflow"));
++            }
++            self.set(-1, key)?;
++            self.push(value)?;
++            Ok(true)
++        } else {
++            self.set_top(self.top() - 1)?;
++            Ok(false)
++        }
++    }
++}

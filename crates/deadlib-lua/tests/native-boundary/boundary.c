@@ -3,6 +3,7 @@
 #include "api.h"
 #include <setjmp.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct BoundaryFrame {
   void *context;
@@ -107,4 +108,54 @@ API void lua_pushcclosure(lua_State *L, lua_CFunction function, int count) {
   /* The fixture targets the pinned MSVC ABI, where these pointer sizes match. */
   BoundaryValue value = {0}; value.bytes = (const char *)function;
   operation(L, 14, count, 0, &value);
+}
+API void lua_createtable(lua_State *L, int array, int records) {
+  BoundaryValue value = {0}; operation(L, 15, array, records, &value);
+}
+API void lua_gettable(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 16, index, 0, &value);
+}
+API void lua_rawget(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 16, index, 1, &value);
+}
+API void lua_settable(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 17, index, 0, &value);
+}
+API void lua_rawset(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 17, index, 1, &value);
+}
+API void lua_getfield(lua_State *L, int index, const char *name) {
+  BoundaryValue value = {0}; value.bytes = name; value.length = strlen(name);
+  operation(L, 18, index, 0, &value);
+}
+API void lua_setfield(lua_State *L, int index, const char *name) {
+  BoundaryValue value = {0}; value.bytes = name; value.length = strlen(name);
+  operation(L, 19, index, 0, &value);
+}
+API void lua_rawgeti(lua_State *L, int index, int key) {
+  BoundaryValue value = {0}; operation(L, 20, index, key, &value);
+}
+API void lua_rawseti(lua_State *L, int index, int key) {
+  BoundaryValue value = {0}; operation(L, 21, index, key, &value);
+}
+API int lua_getmetatable(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 22, index, 0, &value); return value.integer;
+}
+API int lua_setmetatable(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 23, index, 0, &value); return 1;
+}
+API int lua_next(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 24, index, 0, &value); return value.integer;
+}
+API int lua_type(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 25, index, 0, &value); return value.integer;
+}
+API int lua_rawequal(lua_State *L, int first, int second) {
+  BoundaryValue value = {0}; operation(L, 26, first, second, &value); return value.integer;
+}
+API void lua_remove(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 27, index, 0, &value);
+}
+API void lua_insert(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 28, index, 0, &value);
 }

@@ -7,6 +7,21 @@ pub use stack::NativeStack;
 pub use thread::HostThreadState;
 pub(super) use thread::ThreadData;
 
+enum Action<'a> {
+    Call(Value, &'a [Value]),
+    Get([Value; 2]),
+    Set([Value; 3]),
+}
+impl Action<'_> {
+    fn arguments(&self) -> &[Value] {
+        match self {
+            Self::Call(_, values) => values,
+            Self::Get(values) => values,
+            Self::Set(values) => values,
+        }
+    }
+}
+
 /// A synchronous Rust callback. Append results through [`HostCall::push`].
 ///
 /// Arguments and captures borrow VM storage. Callbacks may allocate Lua values
@@ -189,7 +204,11 @@ impl Vm {
         if frame.pc == 2 {
             Err(self.host_error(self.registers[frame.base + 1]))
         } else {
-            Ok(Some(self.top - frame.base))
+            Ok(Some(if frame.wanted == FRAME_OPEN {
+                self.top - frame.base
+            } else {
+                usize::from(frame.wanted)
+            }))
         }
     }
 
@@ -306,10 +325,21 @@ impl HostCall<'_> {
         arguments: &[Value],
         protected: bool,
     ) -> Result<std::ops::Range<usize>, Error> {
+        self.run_action(Action::Call(function, arguments), protected)
+    }
+
+    fn run_action(
+        &mut self,
+        action: Action<'_>,
+        protected: bool,
+    ) -> Result<std::ops::Range<usize>, Error> {
         if let Some(error) = &self.abort {
             return Err(error.clone());
         }
-        self.vm.validate_value(function)?;
+        if let Action::Call(function, _) = action {
+            self.vm.validate_value(function)?;
+        }
+        let arguments = action.arguments();
         for &value in arguments {
             self.vm.validate_value(value)?;
         }
@@ -325,7 +355,10 @@ impl HostCall<'_> {
         let base = self.output + self.results;
         self.vm.registers.truncate(base);
         self.vm.resize_registers(base + 1 + arguments.len());
-        self.vm.registers[base] = function;
+        self.vm.registers[base] = match action {
+            Action::Call(function, _) => function,
+            _ => Value::Nil,
+        };
         self.vm.registers[base + 1..].copy_from_slice(arguments);
         self.vm.push_record(Frame {
             function: FrameKind::Native(CONT_HOST_CALL),
@@ -333,25 +366,33 @@ impl HostCall<'_> {
             base,
             stack_start: base,
             result: base,
-            wanted: FRAME_OPEN,
+            wanted: match action {
+                Action::Call(..) => FRAME_OPEN,
+                Action::Get(..) => 1,
+                Action::Set(..) => 0,
+            },
             barriers: self.vm.frames.last().unwrap().barriers,
             vararg_start: base + 1,
             vararg_count: arguments.len() as u32,
             tail_calls: 0,
         });
-        let start = self
-            .vm
-            .start_call(base, arguments.len(), OPEN, false)
-            .map_err(|error| {
-                // There is no Lua call-site location for failure to enter a value
-                // supplied by Rust. Preserve the native-boundary diagnostic.
-                if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                    let value = self.vm.intern(error.message_bytes());
-                    error.with_value(value)
-                } else {
-                    error
-                }
-            });
+        let start = match action {
+            Action::Call(..) => self.vm.start_call(base, arguments.len(), OPEN, false),
+            Action::Get([target, key]) => self.vm.get_table(target, key, base).map(|()| None),
+            Action::Set([target, key, value]) => {
+                self.vm.set_table(target, key, value).map(|()| None)
+            }
+        }
+        .map_err(|error| {
+            // There is no Lua call-site location for failure to enter a value
+            // supplied by Rust. Preserve the native-boundary diagnostic.
+            if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+                let value = self.vm.intern(error.message_bytes());
+                error.with_value(value)
+            } else {
+                error
+            }
+        });
         let result = self.vm.drive_host(owner, depth, start);
         if !protected
             && self.vm.thread == owner

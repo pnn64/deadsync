@@ -428,6 +428,17 @@ index. The [C closure checks](../../docs/testing/2026-10-26-rust-lua-c-closures.
 exercise these operations against the same C module built for official Lua.
 The Lua source compiler's separate 60-upvalue limit remains in place.
 
+Native stacks now support table creation with capacity hints, raw and
+metamethod-aware access, field and integer-key operations, actual metatable
+access, traversal and ordinary stack insertion/removal. Metamethods run through
+the shared VM scheduler without adding Lua wrapper frames. Their failures keep
+the native inputs and failing Lua frames available to outer handlers; field
+keys remain private temporaries. The
+[native table checks](../../docs/testing/2026-10-26-rust-lua-native-tables.md)
+compare these operations, call limits and overflow-handler reserves against
+official Lua in matching standalone contexts. The development bridge still
+does not enable production native-module loading.
+
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected
 nested Lua boundary; `call_and_return` appends its results without an intermediate

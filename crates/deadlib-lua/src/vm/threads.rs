@@ -388,6 +388,8 @@ impl Vm {
         let boundaries = self.frames[..end]
             .iter()
             .filter(|f| {
+                // The standalone outer main is the implicit root C call,
+                // already accounted for by the depth-limit convention.
                 matches!(
                     f.function,
                     FrameKind::Native(
@@ -412,7 +414,7 @@ impl Vm {
                             | CONT_HOOK
                             | CONT_STANDALONE
                     )
-                ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) >= 2))
+                ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) == 3))
                     || (matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             })

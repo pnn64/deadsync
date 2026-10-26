@@ -128,3 +128,57 @@ EXPORT int boundary_make_many(lua_State *L) {
   for (i = 1; i <= 255; i++) lua_pushnumber(L, i);
   lua_pushcclosure(L, many, 255); return 1;
 }
+EXPORT int boundary_table(lua_State *L) {
+  lua_createtable(L, 4, 2);
+  lua_pushvalue(L, 1); lua_setfield(L, -2, "payload");
+  lua_pushnumber(L, 17); lua_rawseti(L, -2, 1);
+  lua_pushcfunction(L, boundary_snapshot); lua_setfield(L, -2, "snapshot");
+  lua_getfield(L, -1, "snapshot"); lua_call(L, 0, 3);
+  return 4;
+}
+EXPORT int boundary_get(lua_State *L) {
+  lua_pushvalue(L, 2); lua_gettable(L, 1); return 1;
+}
+EXPORT int boundary_set(lua_State *L) {
+  lua_pushvalue(L, 2); lua_pushvalue(L, 3); lua_settable(L, 1); return 0;
+}
+EXPORT int boundary_field(lua_State *L) {
+  if (lua_gettop(L) >= 2) {
+    lua_pushvalue(L, 2); lua_setfield(L, 1, "field");
+  }
+  lua_getfield(L, 1, "field"); return 1;
+}
+EXPORT int boundary_raw(lua_State *L) {
+  if (lua_gettop(L) >= 3) {
+    lua_pushvalue(L, 2); lua_pushvalue(L, 3); lua_rawset(L, 1);
+  }
+  lua_pushvalue(L, 2); lua_rawget(L, 1); return 1;
+}
+EXPORT int boundary_metatable(lua_State *L) {
+  if (lua_gettop(L) >= 2) {
+    lua_pushvalue(L, 2); lua_setmetatable(L, 1);
+  }
+  if (!lua_getmetatable(L, 1)) lua_pushnil(L);
+  return 1;
+}
+EXPORT int boundary_count(lua_State *L) {
+  int count = 0;
+  if (lua_gettop(L) >= 2) {
+    lua_pushvalue(L, 2);
+    if (lua_next(L, 1)) return 2;
+    lua_pushnil(L); return 1;
+  }
+  lua_pushnil(L);
+  while (lua_next(L, 1)) {
+    count++; lua_settop(L, -2);
+  }
+  lua_pushnumber(L, count); return 1;
+}
+EXPORT int boundary_shuffle(lua_State *L) {
+  lua_pushvalue(L, 1); lua_insert(L, 2); lua_remove(L, 1);
+  lua_pushnumber(L, lua_type(L, -1));
+  lua_pushboolean(L, lua_rawequal(L, 1, 2));
+  lua_pushboolean(L, lua_rawequal(L, 1, 99));
+  lua_pushnumber(L, lua_type(L, 99));
+  return lua_gettop(L);
+}

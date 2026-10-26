@@ -230,3 +230,110 @@ assert(not ok and not ok2)
 print('closure-errors',capture_error,negative_error)
 collectgarbage()
 print('boundary',sum,top,#binary,'identity','nil','reentry','gc','yield-barrier','recovered')
+
+do
+  local payload={tag=42}
+  local module,r,e,g=boundary_table(payload)
+  assert(module.payload==payload and module[1]==17 and r==debug.getregistry()and e==_G and g==_G)
+  collectgarbage();assert(module.snapshot()==debug.getregistry())
+  assert(boundary_raw(module,'raw',payload)==payload)
+  assert(boundary_raw(module,'raw')==payload)
+  assert(boundary_count(module)==4)
+  assert(boundary_get(module,'payload')==payload)
+  boundary_set(module,'value',99);assert(module.value==99)
+  assert(boundary_field(module,17)==17 and boundary_field(module)==17)
+  local mt={__metatable='hidden'}
+  assert(boundary_metatable(module,mt)==mt and getmetatable(module)=='hidden')
+  assert(boundary_metatable(module,nil)==nil)
+  local a,b,c,d,f,h,j=boundary_shuffle(payload,payload,17)
+  assert(a==payload and b==payload and c==17 and d==3 and f and not h and j==-1)
+end
+
+do
+  local trace={};local object={};local backing={}
+  local mt={
+    __index=function(t,k)
+      assert(t==object);collectgarbage();trace[#trace+1]='get:'..k
+      return backing[k]
+    end,
+    __newindex=function(t,k,v)
+      assert(t==object);collectgarbage();trace[#trace+1]='set:'..k
+      backing[k]=v
+    end,
+  }
+  boundary_metatable(object,mt)
+  boundary_set(object,'answer',42);assert(boundary_get(object,'answer')==42)
+  assert(boundary_field(object,17)==17)
+  assert(boundary_raw(object,'answer')==nil)
+  assert(table.concat(trace,',')=='set:answer,get:answer,set:field,get:field')
+  local proxy=setmetatable({},{__index=object,__newindex=object})
+  assert(boundary_get(proxy,'answer')==42)
+  boundary_set(proxy,'answer',43);assert(backing.answer==43)
+end
+
+do
+  local payload={};local object={};local observed=false;local escaped
+  local function failing(t,k,v)
+    local retained={tag=17};escaped=function()return retained end;error(payload,0)
+  end
+  setmetatable(object,{__index=failing,__newindex=failing})
+  local ok,e=xpcall(function()boundary_set(object,'key',payload)end,function(e)
+    local saw_native,saw_lua=false,false
+    for level=2,15 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_set then
+        local _,key=debug.getlocal(level,4);local _,value=debug.getlocal(level,5)
+        assert(key=='key'and value==payload);saw_native=true
+      elseif info.func==failing then
+        for index=1,6 do
+          local name,value=debug.getlocal(level,index)
+          if name=='retained' then
+            assert(value.tag==17);debug.setlocal(level,index,{tag=42});saw_lua=true
+          end
+        end
+      end
+    end
+    collectgarbage();observed=saw_native and saw_lua;return e
+  end)
+  assert(not ok and e==payload and observed and escaped().tag==42)
+  local ok,e=xpcall(function()boundary_field(object)end,function(e)
+    local seen=false
+    for level=2,15 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_field then
+        assert(debug.getlocal(level,2)==nil);seen=true
+      end
+    end
+    assert(seen);return e
+  end)
+  assert(not ok and e==payload)
+end
+
+do
+  local ok,a=pcall(boundary_get,false,'key')
+  local ok2,b=pcall(boundary_set,{},nil,42)
+  local ok3,c=pcall(boundary_raw,{},0/0,42)
+  local ok4,d=pcall(boundary_count,{x=1},'absent')
+  assert(not ok and not ok2 and not ok3 and not ok4)
+  print('table-errors',a,b,c,d)
+  local depth=0
+  local object=setmetatable({},{__index=function(t,k)
+    depth=depth+1;return boundary_get(t,k)
+  end})
+  local ok,e=pcall(boundary_get,object,'key')
+  assert(not ok and e:find('C stack overflow',1,true))
+  print('table-depth',depth)
+  local attempts=0;depth=0
+  local ok,e=xpcall(function()boundary_get(object,'key')end,function(e)
+    attempts=attempts+1
+    if attempts<4 then return boundary_get(object,'key')end
+    return e
+  end)
+  assert(not ok)
+  print('table-handler-depth',depth,attempts,e)
+  local co=coroutine.create(function()
+    return boundary_get(setmetatable({},{__index=function()coroutine.yield()end}),'key')
+  end)
+  local ok,e=coroutine.resume(co)
+  assert(not ok and e:find('yield across',1,true))
+end

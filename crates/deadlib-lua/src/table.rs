@@ -104,6 +104,27 @@ pub(crate) enum TableTrace {
 }
 
 impl Table {
+    pub fn with_capacity(array: usize, records: usize) -> Result<Self, Error> {
+        let failed = || Error::new(ErrorKind::Runtime, 0, "not enough memory");
+        let slots = if records == 0 {
+            0
+        } else {
+            records
+                .checked_mul(4)
+                .and_then(|n| (n / 3 + 1).max(8).checked_next_power_of_two())
+                .ok_or_else(failed)?
+        };
+        let mut table = Self::default();
+        table.array.try_reserve_exact(array).map_err(|_| failed())?;
+        table.array.resize(array, Value::Nil);
+        table
+            .entries
+            .try_reserve_exact(records)
+            .map_err(|_| failed())?;
+        table.slots.try_reserve_exact(slots).map_err(|_| failed())?;
+        table.slots.resize(slots, 0);
+        Ok(table)
+    }
     pub fn metatable(&self) -> Option<TableId> {
         (self.metatable != 0).then_some(TableId(self.metatable))
     }

@@ -181,6 +181,52 @@ mod windows {
                         },
                     )?;
                 }
+                15 => {
+                    let array = usize::try_from(a)
+                        .map_err(|_| self.stack.error(b"invalid array capacity"))?;
+                    let records = usize::try_from(b)
+                        .map_err(|_| self.stack.error(b"invalid record capacity"))?;
+                    self.stack.create_table(array, records)?;
+                }
+                16 => self.stack.get_table(a as isize, b != 0)?,
+                17 => self.stack.set_table(a as isize, b != 0)?,
+                18 | 19 => {
+                    // SAFETY: getfield/setfield lend a string for this dispatch.
+                    let name =
+                        unsafe { std::slice::from_raw_parts(value.bytes.cast(), value.length) };
+                    if op == 18 {
+                        self.stack.get_field(a as isize, name)?;
+                    } else {
+                        self.stack.set_field(a as isize, name)?;
+                    }
+                }
+                20 => self.stack.raw_get_integer(a as isize, b)?,
+                21 => self.stack.raw_set_integer(a as isize, b)?,
+                22 => value.integer = c_int::from(self.stack.get_metatable(a as isize)?),
+                23 => self.stack.set_metatable(a as isize)?,
+                24 => value.integer = c_int::from(self.stack.next_table(a as isize)?),
+                25 => {
+                    value.integer = match self.stack.value(a as isize) {
+                        None => -1,
+                        Some(Value::Nil) => 0,
+                        Some(Value::Boolean(_)) => 1,
+                        Some(Value::LightUserdata(_)) => 2,
+                        Some(Value::Number(_)) => 3,
+                        Some(Value::String(_)) => 4,
+                        Some(Value::Table(_)) => 5,
+                        Some(Value::Function(_) | Value::Native(_)) => 6,
+                        Some(Value::Userdata(_)) => 7,
+                        Some(Value::Thread(_)) => 8,
+                    };
+                }
+                26 => {
+                    value.integer = c_int::from(matches!(
+                        (self.stack.value(a as isize), self.stack.value(b as isize)),
+                        (Some(first), Some(second)) if first == second
+                    ));
+                }
+                27 => self.stack.remove(a as isize)?,
+                28 => self.stack.insert(a as isize)?,
                 _ => return Err(self.stack.error(b"unknown boundary-probe operation")),
             }
             Ok(())
@@ -296,6 +342,14 @@ mod windows {
             "boundary_set_globals",
             "boundary_registry_roundtrip",
             "boundary_make_many",
+            "boundary_table",
+            "boundary_get",
+            "boundary_set",
+            "boundary_field",
+            "boundary_raw",
+            "boundary_metatable",
+            "boundary_count",
+            "boundary_shuffle",
         ] {
             let function = vm
                 .new_host_function_with_data(
@@ -316,8 +370,10 @@ mod windows {
         // Moving Vm and growing its thread arena must not move native states.
         let mut vm = Box::new(vm);
         assert_eq!(vm.call(state_function, &[]).unwrap()[0], before);
+        vm.begin_standalone().unwrap();
         vm.execute(&compile_named(&source, b"@boundary.lua").unwrap())
             .unwrap();
+        vm.end_standalone().unwrap();
         vm.collect_garbage().unwrap();
         assert!(
             DESTROYED.load(Ordering::Relaxed) > 0,
@@ -348,7 +404,12 @@ mod windows {
 }
 fn main() {
     #[cfg(windows)]
-    windows::run();
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(windows::run)
+        .unwrap()
+        .join()
+        .unwrap();
     #[cfg(not(windows))]
     panic!("Windows/MSVC development-only boundary probe");
 }

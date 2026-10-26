@@ -210,6 +210,7 @@ const CONT_FILE: u64 = 265;
 const CONT_CONCAT: u64 = 266;
 const CONT_STANDALONE: u64 = 267;
 const CONT_HOST_CALL: u64 = 268;
+const CONT_HOST_META: u64 = 269;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]

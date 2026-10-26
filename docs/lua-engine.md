@@ -46,7 +46,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 510 differential/adversarial integration tests, seventy-three unit tests and
+crate, 520 differential/adversarial integration tests, seventy-three unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -100,6 +100,18 @@ collection, coroutine calls, inherited environments, temporary registry
 replacement and exact negative-index argument errors. The runner releases its
 external DLL owner before callbacks and verifies that all owners are released
 after VM destruction. Complete native-module loading remains unfinished.
+The [native table API checks](testing/2026-10-26-rust-lua-native-tables.md) add
+creation hints, raw access, field/integer operations, metamethod-aware reads and
+writes, actual metatables, traversal and stack movement. Native table actions
+reuse the shared lookup and child-call scheduler, preserve fault frames and
+inputs, and keep field-name temporaries outside the visible C stack. Table
+metamethod continuations share their caller's C boundary instead of counting it
+twice. The C runner now enters the standalone main context used by its reference;
+the outer main is counted once. Both engines reach 196 ordinary recursive table
+calls and 219 while handling overflow. Ten new Rust groups also cover embedded
+versus standalone depth, collection, field privacy, coroutine scheduling,
+metatable protection, capacity failures and quota recovery. Production native
+loading and the remaining C API remain open.
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
 150 live locals, automatic concatenation/array pressure, stale host handles and

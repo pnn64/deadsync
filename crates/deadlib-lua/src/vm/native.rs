@@ -188,17 +188,31 @@ impl Vm {
         result: usize,
         continuation: u64,
     ) -> Result<(), Error> {
+        // A table API operation already crosses its host callback's C-call
+        // boundary. Its result continuation must not count that boundary twice.
+        let host_table = self.frames.last().is_some_and(|f| {
+            matches!(f.function, FrameKind::Native(CONT_HOST_CALL))
+                && f.pc == 0
+                && f.wanted != FRAME_OPEN
+        });
         let base = self.registers.len();
         self.registers.push(function);
         self.registers.extend_from_slice(args);
         self.push_record(Frame {
-            function: FrameKind::Native(continuation),
+            function: FrameKind::Native(if host_table {
+                CONT_HOST_META
+            } else {
+                continuation
+            }),
             pc: 1,
             base,
             stack_start: base,
             result,
             wanted: if continuation == CONT_IGNORE { 0 } else { 1 },
-            barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
+            barriers: self
+                .frames
+                .last()
+                .map_or(1, |f| f.barriers + u16::from(!host_table)),
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
@@ -353,6 +367,7 @@ impl Vm {
         let scheduled = self.scheduled_native(id);
         match id {
             CONT_HOST_CALL => self.host_return(frame),
+            CONT_HOST_META => Ok(self.return_frame(frame, base, usize::from(frame.wanted != 0))),
             CONT_STANDALONE => self.standalone_driver(frame),
             debug::CONSOLE => self.debug_console_step(frame),
             _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),
