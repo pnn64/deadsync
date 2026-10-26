@@ -634,40 +634,23 @@ fn write_frames(
             .GetBuffer(frames_available)
             .map_err(|e| format!("failed to get WASAPI output buffer: {e}"))?;
         let samples = samples_for_frames(frames_available, prep.samples_per_frame);
-        match prep.sample_format {
+        let out = match prep.sample_format {
             WasapiSampleFormat::I16 => {
-                let out = slice::from_raw_parts_mut(buffer as *mut i16, samples);
-                let result = render.render(
-                    OutputBufferMut::I16(out),
-                    CallbackInfo {
-                        anchor_nanos,
-                        clock: CallbackClockSource::Qpc,
-                    },
-                    sfx_receiver.try_iter(),
-                );
-                report_audio_render_callback(
-                    result,
-                    log::log_enabled!(log::Level::Trace),
-                    now_nanos,
-                );
+                OutputBufferMut::I16(slice::from_raw_parts_mut(buffer as *mut i16, samples))
             }
             WasapiSampleFormat::F32 => {
-                let out = slice::from_raw_parts_mut(buffer as *mut f32, samples);
-                let result = render.render(
-                    OutputBufferMut::F32(out),
-                    CallbackInfo {
-                        anchor_nanos,
-                        clock: CallbackClockSource::Qpc,
-                    },
-                    sfx_receiver.try_iter(),
-                );
-                report_audio_render_callback(
-                    result,
-                    log::log_enabled!(log::Level::Trace),
-                    now_nanos,
-                );
+                OutputBufferMut::F32(slice::from_raw_parts_mut(buffer as *mut f32, samples))
             }
-        }
+        };
+        let result = render.render(
+            out,
+            CallbackInfo {
+                anchor_nanos,
+                clock: CallbackClockSource::Qpc,
+            },
+            sfx_receiver.try_iter(),
+        );
+        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
         render_client
             .ReleaseBuffer(frames_available, 0)
             .map_err(|e| format!("failed to release WASAPI output buffer: {e}"))?;

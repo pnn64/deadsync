@@ -1,6 +1,9 @@
 //! Setup-path regression checks and opt-in benchmarks of production functions.
 use super::*;
+use std::cell::{Cell, RefCell};
 use std::hint::black_box;
+use std::rc::Rc;
+use std::sync::Arc;
 use windows::core::{GUID, HRESULT, Interface, Result, implement};
 
 #[path = "../../../../tests/support/kernel_bench.rs"]
@@ -385,6 +388,136 @@ fn benchmark_playback_anchor() {
                 playback_anchor_nanos_after_delay(black_box(&clock), black_box(delay)).unwrap(),
             );
         });
+    }
+}
+
+struct Packet {
+    words: RefCell<Vec<u32>>,
+    frames: u32,
+    acquired: Cell<bool>,
+    gets: Cell<usize>,
+    releases: Cell<usize>,
+}
+
+#[implement(Audio::IAudioRenderClient)]
+struct PacketRenderer(Rc<Packet>);
+
+impl Audio::IAudioRenderClient_Impl for PacketRenderer_Impl {
+    fn GetBuffer(&self, frames: u32) -> Result<*mut u8> {
+        if frames != self.0.frames || self.0.acquired.replace(true) {
+            return Err(Foundation::E_INVALIDARG.into());
+        }
+        self.0.gets.set(self.0.gets.get() + 1);
+        // SAFETY: the initialized allocation has one leading guard word, enough
+        // stereo samples for the negotiated format, and a trailing guard. The
+        // fixture retains it throughout the packet; no Vec resize is performed.
+        Ok(unsafe { self.0.words.borrow_mut().as_mut_ptr().add(1).cast() })
+    }
+    fn ReleaseBuffer(&self, frames: u32, flags: u32) -> Result<()> {
+        if frames != self.0.frames || flags != 0 || !self.0.acquired.replace(false) {
+            return Err(Foundation::E_INVALIDARG.into());
+        }
+        self.0.releases.set(self.0.releases.get() + 1);
+        Ok(())
+    }
+}
+
+struct RenderFixture {
+    prep: WasapiOutputPrep,
+    render: RenderState,
+    receiver: SfxReceiver,
+    clock: Audio::IAudioClock,
+    renderer: Audio::IAudioRenderClient,
+    packet: Rc<Packet>,
+    _stream: deadlib_audio_core::AudioStreamHandle,
+    _sender: deadlib_audio_core::SfxSender,
+}
+
+impl RenderFixture {
+    fn new(format: WasapiSampleFormat, frames: u32) -> Self {
+        let words = frames as usize * 2 * format.sample_size() / size_of::<u32>();
+        let packet = Rc::new(Packet {
+            words: RefCell::new(vec![0x91ed_6a73; words + 2]),
+            frames,
+            acquired: Cell::new(false),
+            gets: Cell::new(0),
+            releases: Cell::new(0),
+        });
+        let renderer = PacketRenderer(Rc::clone(&packet)).into();
+        let (stream, handle) = deadlib_audio_core::music_transport(48_000, 2);
+        let render = RenderState::new(handle, Arc::new(deadlib_audio_core::MixControls::new()), 2);
+        let (sender, receiver) = deadlib_audio_core::sfx_transport(16);
+        Self {
+            prep: WasapiOutputPrep {
+                device_id: None,
+                device_name: String::new(),
+                format: Vec::new(),
+                sample_rate_hz: 48_000,
+                frame_time: FramesToNanos::new(48_000),
+                channels: 2,
+                samples_per_frame: 2,
+                sample_format: format,
+                mode: WasapiAccessMode::Shared,
+            },
+            render,
+            receiver,
+            clock: FixedClock(123_456_789_012).into(),
+            renderer,
+            packet,
+            _stream: stream,
+            _sender: sender,
+        }
+    }
+
+    fn write(&mut self, frames: u32) {
+        write_frames(
+            &self.clock,
+            &self.renderer,
+            &mut self.render,
+            &mut self.receiver,
+            &self.prep,
+            frames,
+            2_666_666,
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn write_frames_overwrites_one_packet_without_allocating_or_touching_guards() {
+    for format in [WasapiSampleFormat::I16, WasapiSampleFormat::F32] {
+        for frames in [0, 1, 127, 128, 129, 480] {
+            let mut fixture = RenderFixture::new(format, frames);
+            let before = deadlib_audio_core::music_total_frames();
+            perf::assert_no_churn(|| fixture.write(frames));
+            assert_eq!(fixture.packet.gets.get(), usize::from(frames != 0));
+            assert_eq!(fixture.packet.releases.get(), usize::from(frames != 0));
+            assert!(!fixture.packet.acquired.get());
+            assert_eq!(
+                deadlib_audio_core::music_total_frames() - before,
+                u64::from(frames)
+            );
+            let words = fixture.packet.words.borrow();
+            assert_eq!(words[0], 0x91ed_6a73);
+            assert_eq!(words[words.len() - 1], 0x91ed_6a73);
+            assert!(words[1..words.len() - 1].iter().all(|&word| word == 0));
+        }
+    }
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
+fn benchmark_write_frames() {
+    for (format, label) in [
+        (WasapiSampleFormat::I16, "i16"),
+        (WasapiSampleFormat::F32, "f32"),
+    ] {
+        for frames in [128, 256, 480] {
+            let mut fixture = RenderFixture::new(format, frames);
+            measure(&format!("wasapi/write_{label}_{frames}"), 20_000, || {
+                fixture.write(black_box(frames));
+            });
+        }
     }
 }
 
