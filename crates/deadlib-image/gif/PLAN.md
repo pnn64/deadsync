@@ -22,3 +22,8 @@ Completed:
 - Milestone 2: compositor and explicit policies; rectangle snapshots, background
   selection, external palettes, text rendering callback, scoped controls,
   extension/loop preservation. Nine integration tests pass in debug mode.
+- Milestone 3: pinned upstream corpus, gif-dispose full-canvas differential
+  validation, 73 giflib oracle cases with 64 independent encoder rewrites,
+  independently packed malformed/LZW and resource tests, every split/truncation,
+  a 512-graphic independent compositor model, ASan/coverage fuzz smoke runs.
+  Stage/pipeline benchmark baseline also recorded before optimization.

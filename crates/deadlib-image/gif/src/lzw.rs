@@ -111,14 +111,14 @@ impl Decoder {
                 } else {
                     output.push(first);
                 }
-                if let Some((offset, previous_len)) = self.previous {
-                    if self.next < 4096 {
-                        self.offsets[self.next as usize] = offset;
-                        self.lengths[self.next as usize] = (previous_len + 1) as u16;
-                        self.next += 1;
-                        if self.next == 1 << self.width && self.width < 12 {
-                            self.width += 1;
-                        }
+                if let Some((offset, previous_len)) = self.previous
+                    && self.next < 4096
+                {
+                    self.offsets[self.next as usize] = offset;
+                    self.lengths[self.next as usize] = (previous_len + 1) as u16;
+                    self.next += 1;
+                    if self.next == 1 << self.width && self.width < 12 {
+                        self.width += 1;
                     }
                 }
                 self.previous = Some((start, length));

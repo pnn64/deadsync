@@ -1261,6 +1261,8 @@ version = "0.1.0"
 dependencies = [
  "deadlib-image",
  "gif",
+ "gif-dispose",
+ "weezl",
 ]
 
 [[package]]
@@ -2603,6 +2605,17 @@ checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
 dependencies = [
  "color_quant",
  "weezl",
+]
+
+[[package]]
+name = "gif-dispose"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8286d15964fdb9c181187f910412c964f62ce91306d890fd93e36b3c909e0de2"
+dependencies = [
+ "gif",
+ "imgref",
+ "rgb",
 ]
 
 [[package]]
@@ -5107,6 +5120,9 @@ name = "rgb"
 version = "0.8.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47b34b781b31e5d73e9fbc8689c70551fd1ade9a19e3e28cfec8580a79290cc4"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "ring"

@@ -12,6 +12,8 @@ deadlib-image = { path = "..", version = "0.1.0" }
 
 [dev-dependencies]
 gif = "0.14"
+gif-dispose = "6.0"
+weezl = "0.1"
 
 [[bench]]
 name = "pipeline"

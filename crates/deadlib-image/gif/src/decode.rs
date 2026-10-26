@@ -586,7 +586,7 @@ fn le(s: &[u8]) -> u16 {
 fn palette(s: &[u8]) -> Result<Palette, Error> {
     let mut out = Vec::new();
     reserve(&mut out, s.len() / 3)?;
-    out.extend(s.chunks_exact(3).map(|c| [c[0], c[1], c[2]]));
+    out.extend_from_slice(s.as_chunks::<3>().0);
     Ok(out)
 }
 pub(crate) fn interlace_rows(height: usize) -> impl Iterator<Item = usize> {

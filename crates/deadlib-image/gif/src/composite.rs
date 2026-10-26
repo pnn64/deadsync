@@ -119,7 +119,7 @@ impl Compositor {
     }
     /// Start another playback with the configured background.
     pub fn reset(&mut self) {
-        for pixel in self.pixels.chunks_exact_mut(4) {
+        for pixel in self.pixels.as_chunks_mut::<4>().0 {
             pixel.copy_from_slice(&self.background);
         }
         self.pending = None;
@@ -151,7 +151,7 @@ impl Compositor {
                     [(r.y + row) * stride + r.x * 4..(r.y + row) * stride + (r.x + r.w) * 4];
                 match method {
                     Disposal::Background => {
-                        for p in dest.chunks_exact_mut(4) {
+                        for p in dest.as_chunks_mut::<4>().0 {
                             p.copy_from_slice(&self.background);
                         }
                     }
@@ -195,13 +195,13 @@ impl Compositor {
             let dest = &mut self.pixels
                 [(r.y + row) * stride + r.x * 4..(r.y + row) * stride + (r.x + r.w) * 4];
             if let Some(t) = transparent {
-                for (pixel, &index) in dest.chunks_exact_mut(4).zip(indices) {
+                for (pixel, &index) in dest.as_chunks_mut::<4>().0.iter_mut().zip(indices) {
                     if index != t {
                         pixel.copy_from_slice(&table[index as usize]);
                     }
                 }
             } else {
-                for (pixel, &index) in dest.chunks_exact_mut(4).zip(indices) {
+                for (pixel, &index) in dest.as_chunks_mut::<4>().0.iter_mut().zip(indices) {
                     pixel.copy_from_slice(&table[index as usize]);
                 }
             }

@@ -211,3 +211,80 @@ fn missing_and_external_palette() {
         assert_eq!(e.loop_count(), Some(count));
     }
 }
+
+#[test]
+fn deterministic_animation_against_independent_full_canvas_model() {
+    let h = header();
+    let mut c = Compositor::new(&h).unwrap();
+    let p = h.global_palette.as_ref().unwrap();
+    let mut expected = vec![[0, 0, 0, 255]; 12];
+    let mut pending: Option<(Frame, Vec<[u8; 4]>)> = None;
+    let mut seed = 1234567u32;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        seed
+    };
+    for n in 0..512 {
+        if let Some((f, before)) = pending.take() {
+            for y in 0..3 {
+                for x in 0..4 {
+                    if x >= f.left as usize
+                        && x < f.left as usize + f.width as usize
+                        && y >= f.top as usize
+                        && y < f.top as usize + f.height as usize
+                    {
+                        match f.control.unwrap().disposal {
+                            Disposal::Previous => expected[y * 4 + x] = before[y * 4 + x],
+                            Disposal::Background => expected[y * 4 + x] = [0, 0, 0, 255],
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        let before = expected.clone();
+        let disposal = [
+            Disposal::Unspecified,
+            Disposal::Keep,
+            Disposal::Background,
+            Disposal::Previous,
+            Disposal::Reserved4,
+            Disposal::Reserved5,
+            Disposal::Reserved6,
+            Disposal::Reserved7,
+        ][n % 8];
+        let mut f = frame(
+            (next() % 6) as u16,
+            (next() % 5) as u16,
+            (next() % 5 + 1) as u16,
+            (next() % 4 + 1) as u16,
+            0,
+            disposal,
+        );
+        for index in &mut f.indices {
+            *index = (next() % 4) as u8;
+        }
+        if n % 3 == 0 {
+            f.control.as_mut().unwrap().transparent_index = Some((next() % 4) as u8);
+        }
+        for y in 0..f.height as usize {
+            for x in 0..f.width as usize {
+                let sx = f.left as usize + x;
+                let sy = f.top as usize + y;
+                let index = f.indices[y * f.width as usize + x];
+                if sx < 4 && sy < 3 && Some(index) != f.control.unwrap().transparent_index {
+                    let color = p[index as usize];
+                    expected[sy * 4 + sx] = [color[0], color[1], color[2], 255];
+                }
+            }
+        }
+        assert_eq!(
+            c.render(&f).unwrap().rgba,
+            expected.iter().flatten().copied().collect::<Vec<_>>(),
+            "frame {n}"
+        );
+        pending = Some((f, before));
+    }
+}

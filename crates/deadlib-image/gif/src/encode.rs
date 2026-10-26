@@ -228,7 +228,7 @@ impl<W: Write> Encoder<W> {
 }
 fn write_palette<W: Write>(writer: &mut W, p: &[[u8; 3]]) -> Result<(), Error> {
     let mut data = [0; 768];
-    for (dest, src) in data.chunks_exact_mut(3).zip(p) {
+    for (dest, src) in data.as_chunks_mut::<3>().0.iter_mut().zip(p) {
         dest.copy_from_slice(src);
     }
     writer.write_all(&data[..p.len() * 3])?;
