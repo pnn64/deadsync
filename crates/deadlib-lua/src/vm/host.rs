@@ -224,7 +224,7 @@ impl HostCall<'_> {
     /// can be handled in Rust. Instruction/resource limits remain fatal to the
     /// outer entry even if this callback ignores the returned error.
     pub fn call(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
-        let range = self.call_range(function, arguments)?;
+        let range = self.call_range(function, arguments, true)?;
         Ok(&self.vm.registers[range])
     }
 
@@ -233,7 +233,7 @@ impl HostCall<'_> {
     /// # Errors
     /// Returns the errors from [`Self::call`] or the native result-count limit.
     pub fn call_and_return(&mut self, function: Value, arguments: &[Value]) -> Result<(), Error> {
-        let range = self.call_range(function, arguments)?;
+        let range = self.call_range(function, arguments, true)?;
         let count = range.len();
         let arguments = if self.stack_opened { 0 } else { self.count };
         if count > limits::MAX_CSTACK.saturating_sub(arguments + self.results) {
@@ -247,6 +247,7 @@ impl HostCall<'_> {
         &mut self,
         function: Value,
         arguments: &[Value],
+        protected: bool,
     ) -> Result<std::ops::Range<usize>, Error> {
         if let Some(error) = &self.abort {
             return Err(error.clone());
@@ -271,7 +272,7 @@ impl HostCall<'_> {
         self.vm.registers[base + 1..].copy_from_slice(arguments);
         self.vm.push_record(Frame {
             function: FrameKind::Native(CONT_HOST_CALL),
-            pc: 1,
+            pc: u32::from(protected),
             base,
             stack_start: base,
             result: base,
@@ -295,6 +296,17 @@ impl HostCall<'_> {
                 }
             });
         let result = self.vm.drive_host(owner, depth, start);
+        if !protected
+            && self.vm.thread == owner
+            && let Err(error) = &result
+            && error.kind() == ErrorKind::Runtime
+        {
+            // Return through Rust/C first, retaining the Lua fault stack for
+            // an enclosing handler. This callback cannot resume execution.
+            self.vm.active_native = active;
+            self.abort = Some(error.clone());
+            return Err(error.clone());
+        }
         let mut line = 0;
         self.vm.abort_threads_to(owner, &mut line);
         self.vm.close_upvalues(base);
@@ -399,6 +411,9 @@ impl HostCall<'_> {
     /// Returns an error for invalid/collected values or the 8,000-slot native
     /// stack bound, including the original arguments.
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
+        if let Some(error) = &self.abort {
+            return Err(error.clone());
+        }
         self.vm.validate_value(value)?;
         let arguments = if self.stack_opened { 0 } else { self.count };
         if self.results >= limits::MAX_CSTACK.saturating_sub(arguments) {

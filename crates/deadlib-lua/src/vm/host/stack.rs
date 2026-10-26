@@ -5,7 +5,8 @@ use super::*;
 ///
 /// Positive indexes start at one; negative indexes count back from the top.
 /// This window is separate from closure captures. Nested calls preserve the
-/// live prefix and use the host API's protected, non-yielding call boundary.
+/// live prefix and cannot yield across this callback. [`Self::call`] protects
+/// errors; [`Self::call_unprotected`] propagates them with their fault frames.
 /// Call [`Self::finish`] to select the last values as callback results. Dropping
 /// the stack without finishing selects zero results; the window remains
 /// available to fault/return inspectors until the native frame exits.
@@ -55,6 +56,12 @@ impl<'vm> HostCall<'vm> {
 }
 
 impl NativeStack<'_, '_> {
+    fn check_error(&self) -> Result<(), Error> {
+        if let Some(error) = &self.call.abort {
+            return Err(error.clone());
+        }
+        Ok(())
+    }
     fn sync(&mut self) {
         self.call.vm.frames[self.frame].vararg_start = self.base;
         self.call.vm.frames[self.frame].vararg_count = self.call.results as u32;
@@ -78,6 +85,9 @@ impl NativeStack<'_, '_> {
     /// Reserve extra slots without changing the visible top.
     /// Returns false for allocation failure or the 8,000-slot limit.
     pub fn check_stack(&mut self, extra: usize) -> bool {
+        if self.call.abort.is_some() {
+            return false;
+        }
         let Some(top) = self
             .top()
             .checked_add(extra)
@@ -100,6 +110,7 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Returns a runtime error above the 8,000-slot bound.
     pub fn set_top(&mut self, top: usize) -> Result<(), Error> {
+        self.check_error()?;
         if top > limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
@@ -113,6 +124,7 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects collected/invalid handles or a full stack.
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
+        self.check_error()?;
         self.call.vm.validate_value(value)?;
         let top = self.top();
         self.set_top(top + 1)?;
@@ -125,6 +137,7 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects an invalid stack index or collected/invalid value.
     pub fn set(&mut self, index: isize, value: Value) -> Result<(), Error> {
+        self.check_error()?;
         self.call.vm.validate_value(value)?;
         let position = self
             .position(index)
@@ -138,6 +151,7 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Returns a native argument/type error for an absent or nonnumeric slot.
     pub fn number(&self, index: isize) -> Result<f64, Error> {
+        self.check_error()?;
         let relative = self.position(index).map_or(self.top(), |p| p - self.base);
         self.value(index)
             .and_then(|v| self.call.vm.number(v))
@@ -154,6 +168,34 @@ impl NativeStack<'_, '_> {
     /// Preserves Lua error identity and the host call's sticky resource limits.
     /// The faulting child frames are unwound, as with [`HostCall::call`].
     pub fn call(&mut self, arguments: usize, results: Option<usize>) -> Result<usize, Error> {
+        self.call_impl(arguments, results, true)
+    }
+    /// Unprotected call of the function below the last `arguments` values.
+    /// Results replace the function and arguments; None keeps all results.
+    ///
+    /// # Errors
+    /// Runtime failures retain child frames, locals and open upvalues for the
+    /// enclosing Lua error handler. Any failure must escape this callback;
+    /// later fallible stack operations and callback return repeat the error,
+    /// even if Rust ignores it. Resource failures clean up child threads first.
+    pub fn call_unprotected(
+        &mut self,
+        arguments: usize,
+        results: Option<usize>,
+    ) -> Result<usize, Error> {
+        let result = self.call_impl(arguments, results, false);
+        if let Err(error) = &result {
+            self.call.abort = Some(error.clone());
+        }
+        result
+    }
+    fn call_impl(
+        &mut self,
+        arguments: usize,
+        results: Option<usize>,
+        protected: bool,
+    ) -> Result<usize, Error> {
+        self.check_error()?;
         let prefix = self
             .top()
             .checked_sub(
@@ -170,7 +212,7 @@ impl NativeStack<'_, '_> {
             self.call.vm.registers[self.base + prefix + 1..self.base + self.top()].to_vec();
         self.call.results = prefix;
         self.sync();
-        let outcome = self.call.call_range(function, &values);
+        let outcome = self.call.call_range(function, &values, protected);
         match outcome {
             Ok(range) => {
                 let count = results.unwrap_or(range.len());
@@ -184,8 +226,10 @@ impl NativeStack<'_, '_> {
                 Ok(count)
             }
             Err(error) => {
-                self.call.results = self.call.vm.registers.len() - self.base;
-                self.sync();
+                if protected {
+                    self.call.results = self.call.vm.registers.len() - self.base;
+                    self.sync();
+                }
                 Err(error)
             }
         }
@@ -196,6 +240,7 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects a result count greater than the current top.
     pub fn finish(mut self, count: usize) -> Result<(), Error> {
+        self.check_error()?;
         if count > self.top() {
             return Err(self.error(b"invalid native result count"));
         }

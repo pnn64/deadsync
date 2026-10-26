@@ -82,7 +82,7 @@ def main():
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
     artifacts=[reference,runner,*directory.rglob('*.dll')]
-    result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,persistent_state_lifetimes_balanced=states,limitations=__doc__+' The probe uses VM-owned native stacks and thread-owned persistent C states. Cross-thread/inactive-state API access, complete C APIs, unprotected-call fault-stack semantics, production library caching/unload, package.loadlib and require integration remain unfinished.')
+    result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,persistent_state_lifetimes_balanced=states,limitations=__doc__+' The probe uses VM-owned native stacks, thread-owned persistent C states and unprotected calls retaining Lua fault frames. Cross-thread/inactive-state API access, complete C APIs, production library caching/unload, package.loadlib and require integration remain unfinished.')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)

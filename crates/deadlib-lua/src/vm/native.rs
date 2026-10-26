@@ -269,18 +269,19 @@ impl Vm {
             // function. An enclosing xpcall transforms reader runtime errors even
             // though the loader subsequently returns nil plus that transformed value.
             let inherited = if loads::protected(frame.function) {
-                self.frames[floor..index]
-                    .iter()
-                    .rposition(|f| {
-                        (matches!(
-                            f.function,
-                            FrameKind::Native(
-                                PCALL | XPCALL | CONT_STANDALONE | CONT_HOST_CALL | debug::CONSOLE
-                            )
-                        ) && matches!(f.pc, 1 | 3 | 7))
-                            || (loads::protected(f.function) && f.pc == 3)
-                    })
-                    .map(|i| floor + i)
+                // An unprotected host call keeps its Rust boundary outside
+                // this search's unwind floor, but lua_load still inherits the
+                // enclosing error function. A protected host boundary stops
+                // inheritance just like any other handler-free protection.
+                self.frames[..index].iter().rposition(|f| {
+                    (matches!(
+                        f.function,
+                        FrameKind::Native(
+                            PCALL | XPCALL | CONT_STANDALONE | CONT_HOST_CALL | debug::CONSOLE
+                        )
+                    ) && matches!(f.pc, 1 | 3 | 7))
+                        || (loads::protected(f.function) && f.pc == 3)
+                })
             } else {
                 None
             };

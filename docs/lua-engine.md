@@ -46,7 +46,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 495 differential/adversarial integration tests, seventy-three unit tests and
+crate, 502 differential/adversarial integration tests, seventy-three unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -71,8 +71,16 @@ does not close that compatibility gate.
 The [VM-owned native stack](testing/2026-10-26-rust-lua-native-stack.md) now
 replaces capture-based temporary roots with the native frame's register window.
 It supports mutable slots, an 8,000-slot bound, popping argument roots and
-in-place return-hook result mutation. Native calls still use the Rust host API's
-protected child-call boundary; full unprotected C API fault stacks remain open.
+in-place return-hook result mutation. The
+[unprotected-call path](testing/2026-10-26-rust-lua-unprotected.md) now retains
+failing child frames, locals and open upvalues until an outer Lua handler runs.
+The development bridge uses it for `lua_call`; recoverable Rust calls retain
+their protected boundary. Pending unprotected errors reject subsequent stack
+writes and escape the callback even if Rust ignores the return value. Protected
+loaders inherit the enclosing error function through an unprotected boundary,
+while an intervening protected call stops inheritance. C fixtures cover nested
+native calls, local mutation, collection, reader errors, hooks, finalizers and
+diagnostic bytes. This does not supply the remaining C API or production loader.
 The [persistent thread-state proof](testing/2026-10-26-rust-lua-thread-states.md)
 adds typed host resources owned by each Lua thread. Their immutable Lua roots
 participate in tracing and incremental barriers; suspension preserves state and

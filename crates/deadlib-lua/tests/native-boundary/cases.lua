@@ -91,6 +91,89 @@ end)
 assert(not ok and value==payload)
 assert(boundary_cached_top(1,2,3,4)==4)
 
+local escaped,inspected_fault,inspected_native
+local function fault(value)
+  local retained={tag=321}
+  escaped=function()return retained end
+  error(value,0)
+end
+local ok,value=xpcall(function()boundary_call(fault,payload)end,function(e)
+  for level=2,12 do
+    local info=debug.getinfo(level,'f')
+    if not info then break end
+    if info.func==fault then
+      for index=1,10 do
+        local name,value=debug.getlocal(level,index)
+        if name=='retained' then
+          assert(value.tag==321)
+          assert(debug.setlocal(level,index,{tag=654})=='retained')
+          inspected_fault=true
+        end
+      end
+    elseif info.func==boundary_call then
+      local _,value=debug.getlocal(level,2)
+      assert(value==payload);inspected_native=true
+    end
+  end
+  assert(inspected_fault and inspected_native)
+  collectgarbage();assert(escaped().tag==654)
+  return e
+end)
+assert(not ok and value==payload and escaped().tag==654)
+
+local handled=0
+local ok,a,b=xpcall(function()
+  return boundary_call(function()
+    return load(function()error('reader',0)end)
+  end)
+end,function(e)handled=handled+1;collectgarbage();return 'outer:'..e end)
+assert(ok and a==nil and b=='outer:reader' and handled==1)
+
+local function layered(value)
+  local marker=17
+  boundary_call(fault,value)
+  error('continued after lua_call')
+end
+local native_frames,found_layer=0,false
+local ok,value=xpcall(function()boundary_call(layered,payload)end,function(e)
+  for level=2,16 do
+    local info=debug.getinfo(level,'f');if not info then break end
+    if info.func==boundary_call then native_frames=native_frames+1 end
+    if info.func==layered then
+      local name,value=debug.getlocal(level,2)
+      assert(name=='marker'and value==17);found_layer=true
+    end
+  end
+  collectgarbage();return e
+end)
+assert(not ok and value==payload and native_frames==2 and found_layer)
+
+local hook_child=function()local marker=42;return marker end
+local hook=function(event)
+  if event=='call'and debug.getinfo(2,'f').func==hook_child then error(payload,0)end
+end
+debug.sethook(hook,'c')
+local ok,value=xpcall(function()boundary_call(hook_child)end,function(e)
+  assert(debug.gethook()==hook);collectgarbage()
+  assert(boundary_state()==main_state);return e
+end)
+debug.sethook();assert(not ok and value==payload)
+
+local ok,value=xpcall(function()
+  boundary_call(function()
+    local value=newproxy(true);getmetatable(value).__gc=function()error(payload,0)end
+    value=nil;collectgarbage()
+  end)
+end,function(e)collectgarbage();return e end)
+assert(not ok and value==payload)
+
+local bad=assert(loadstring('local x=false;return x+1','=native-child'))
+local ok,arithmetic=pcall(boundary_call,bad)
+local ok2,native=pcall(boundary_call,math.abs,false)
+local ok3,callable=pcall(boundary_call,false)
+assert(not ok and not ok2 and not ok3)
+print('native-errors',arithmetic,native,callable)
+
 local co=coroutine.create(function()
   return boundary_call(function()coroutine.yield()end)
 end)

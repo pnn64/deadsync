@@ -133,7 +133,8 @@ mod windows {
                 8 => {
                     let count = usize::try_from(a)
                         .map_err(|_| self.stack.error(b"invalid probe call count"))?;
-                    self.stack.call(count, (b >= 0).then_some(b as usize))?;
+                    self.stack
+                        .call_unprotected(count, (b >= 0).then_some(b as usize))?;
                 }
                 9 => value.integer = c_int::from(a >= 0 && self.stack.check_stack(a as usize)),
                 10 => {
