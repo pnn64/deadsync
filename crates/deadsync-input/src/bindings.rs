@@ -70,7 +70,11 @@ where
                     bindings.push(binding);
                 }
             }
-            km.bind(action, &bindings);
+            if bindings.len() == bindings.capacity() {
+                km.bind_owned(action, bindings);
+            } else {
+                km.bind(action, &bindings);
+            }
             seen |= action.bit();
         }
     }
