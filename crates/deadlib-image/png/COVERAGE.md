@@ -15,12 +15,12 @@ performance. Milestones are committed only after their relevant checks pass.
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
-| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA registry tests, PNGSuite | Typed wire roundtrips, UTF-8 BOM/replacement, BCP47 grammar/registration, method distinctions, tRNS/bKGD masks and hIST usage checked; extension-specific and embedded ICC/Exif semantics still require audit |
+| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
-| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 libpng cases including streaming encodings, format matrices and PNGSuite pass |
+| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Five sanitized targets pass 130,000 total executions; longer campaigns and coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Six sanitized targets pass 150,000 total executions; longer campaigns and coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -243,6 +243,38 @@ in 90 seconds with 395 MiB peak RSS. The full report is
 `fuzz/reports/png-registry-linux.log`; the current instrumented binary's
 `__asan_init` symbol was verified. Recorded sanitized campaigns now total
 130,000 executions, without a saturation or exhaustive-conformance claim.
+
+Profile-container milestone: ICC framing now checks declared size, `acsp`,
+RGB/GRAY correspondence to the PNG color type, connection space, embedded class,
+rendering intent and tag-table bounds/alignment. ICC v4.4 additionally checks
+unique signatures, complete-data sharing and contiguous nonoverlapping elements.
+Older storage layouts remain accepted; pinned independent v2.1 compact profiles
+exercise overlap/reuse that must not be rejected using the newer v4.4 rules.
+Exif checks both TIFF byte orders, magic, first-directory offset/count and table
+bounds. Unsupported containers become unknown raw ancillary metadata when
+decoding, and encoders reject them before writing. ICC transform/tag semantics,
+Exif tag meanings, additional directories and thumbnails remain opaque.
+
+`color_description_with_limits` checks candidates in precedence order, skips
+unsupported ICC containers and propagates resource errors. The convenience method
+uses default limits and returns None on errors. It does not scan image samples
+or inflate lower-precedence metadata after finding a supported description.
+
+Eight CC0 [independent ICC profiles](tests/fixtures/icc/README.md), with pinned
+source commits/hashes, pass 960 native/reference wire cases across every legal
+PNG format, both interlace settings, both metadata compression modes, reversed
+tag-table order and both writers. Mutation tests cover profile lengths/signatures,
+color mismatches, tables, aliases, v4.4 overlap/gaps and Exif framing/truncations.
+The C oracle adds 480 byte-exact ICC/Exif comparisons across all formats and both
+Exif byte orders. Full release tests (57 passed, two optional C tests ignored),
+strict Clippy, separate external C tests and isolated offline package tests pass.
+
+The new structured profile fuzzer reconstructs metadata compression and chunk
+CRCs to reach these validators; it checks buffered/fragmented acceptance, raw
+retention, encoder rejection, supported roundtrips and Rust png metadata parity.
+It passes 20,000 Linux AddressSanitizer executions in 245 seconds, peak RSS
+372 MiB, from 1,800 deterministic eight-byte seeds. The full log is
+`fuzz/reports/profiles-linux.log`; `__asan_init` was verified in its binary.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:

@@ -147,7 +147,7 @@ fn icc_and_palette_metadata() {
     let mut png = base();
     let profile = M::IccProfile {
         name: b"Test Profile".to_vec(),
-        profile: (0..=255).cycle().take(4096).collect(),
+        profile: include_bytes!("fixtures/icc/sRGB-v4.icc").to_vec(),
     };
     png.ancillary.push(
         profile

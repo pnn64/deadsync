@@ -33,8 +33,13 @@ PNG Third Edition's recommended tolerance for trailing bytes inside final IDAT
 is implemented. Bytes after IEND are rejected by this whole-datastream API.
 
 Typed metadata is available through `Png::metadata`; `Metadata::to_chunk` encodes
-values. ICC and Exif payloads remain opaque to this codec. No color management is
-applied implicitly. Color-description precedence is exposed separately.
+values. ICC container headers, tag bounds and PNG color-space compatibility,
+and Exif TIFF headers / first-directory framing are checked. Profile transforms,
+Exif tag meanings and thumbnails remain opaque. Unsupported containers decode as
+unknown raw ancillary metadata; encoders reject them. No color management is
+applied implicitly. `color_description` skips unsupported ICC containers; the
+fallible `color_description_with_limits` preserves resource errors instead of
+silently selecting a lower-precedence description.
 Typed iTXt follows WHATWG UTF-8 decoding, consuming one leading BOM and replacing
 malformed sequences; raw chunk bytes remain unchanged. Encoders require valid
 UTF-8 and method 0 even for uncompressed iTXt. BCP47 syntax, duplicate variants /

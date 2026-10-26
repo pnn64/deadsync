@@ -7,6 +7,18 @@ fn main() -> std::io::Result<()> {
     let png_stream = root.join("fuzz/corpus/png_stream");
     let inflate_stream = root.join("fuzz/corpus/inflate_stream");
     let encode_stream = root.join("fuzz/corpus/encode_stream");
+    let profiles = root.join("fuzz/corpus/profiles");
+    fs::create_dir_all(&profiles)?;
+    for format in 0..15 {
+        for profile in 0..8 {
+            for flags in [0, 1, 2, 3, 4, 5, 8, 9, 16, 20, 32, 64, 65, 128, 129] {
+                fs::write(
+                    profiles.join(format!("profile-{format}-{profile}-{flags}")),
+                    [flags, profile, format, 9, 0, 0, 0, 0],
+                )?;
+            }
+        }
+    }
     fs::create_dir_all(&encode_stream)?;
     for format in 0..15 {
         for flags in [0, 1, 2, 3, 4, 6, 12, 14, 16, 32, 64, 127] {

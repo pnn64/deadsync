@@ -1,5 +1,6 @@
 use crate::codec::{Header, be16, be32};
 mod language;
+mod profile;
 /// IANA snapshot used for encoder-side BCP47 subtag registration checks.
 /// Decoders retain well-formed, unregistered tags as unknown raw metadata.
 pub const LANGUAGE_SUBTAG_REGISTRY_DATE: &str = language::REGISTRY_DATE;
@@ -203,9 +204,17 @@ fn parse(
             if take(&mut d, 1)?[0] != 0 {
                 return Err(Error::Invalid("ICC compression method"));
             }
-            Metadata::IccProfile {
-                name: name.to_vec(),
-                profile: inflate(d, remaining)?,
+            let bytes = inflate(d, remaining)?;
+            match profile::icc(&bytes, Some(h.color)) {
+                Ok(()) => Metadata::IccProfile {
+                    name: name.to_vec(),
+                    profile: bytes,
+                },
+                Err(Error::Invalid(_)) if !encoding => Metadata::Unknown {
+                    kind: c.kind,
+                    data: c.data.clone(),
+                },
+                Err(error) => return Err(error),
             }
         }
         b"bKGD" => {
@@ -280,7 +289,14 @@ fn parse(
                 entries,
             }
         }
-        b"eXIf" => Metadata::Exif(d.to_vec()),
+        b"eXIf" => match profile::exif(d) {
+            Ok(()) => Metadata::Exif(d.to_vec()),
+            Err(_) if !encoding => Metadata::Unknown {
+                kind: c.kind,
+                data: d.to_vec(),
+            },
+            Err(error) => return Err(error),
+        },
         b"tIME"
             if d.len() == 7
                 && (1..=12).contains(&d[2])
@@ -492,11 +508,47 @@ impl Png {
             limits,
         )
     }
-    /// The highest-precedence understood color-description chunk (PNG 3, 4.7).
+    /// The highest-precedence supported color-description chunk (PNG 3, 4.7).
+    /// Invalid/unsupported ICC containers are skipped. Returns None on metadata
+    /// errors or default resource limits; use the fallible variant to distinguish them.
     pub fn color_description(&self) -> Option<&AncillaryChunk> {
-        [b"cICP", b"iCCP", b"sRGB", b"gAMA", b"cHRM"]
-            .iter()
-            .find_map(|kind| self.ancillary.iter().find(|c| &c.kind == *kind))
+        self.color_description_with_limits(Limits::default())
+            .ok()
+            .flatten()
+    }
+    /// Validate candidates in precedence order, without applying color transforms
+    /// or inflating metadata below the first supported description. Limit errors
+    /// are returned, so an unexamined high-precedence profile is never silently
+    /// replaced by a lower-precedence description.
+    pub fn color_description_with_limits(
+        &self,
+        limits: Limits,
+    ) -> Result<Option<&AncillaryChunk>, Error> {
+        if !self.image.color_type.allows_depth(self.image.bit_depth) {
+            return Err(Error::Invalid("image format"));
+        }
+        let h = Header {
+            width: self.image.width,
+            height: self.image.height,
+            color: self.image.color_type,
+            depth: self.image.bit_depth,
+            interlaced: self.interlaced,
+        };
+        let mut remaining = limits.max_metadata_bytes;
+        for kind in [b"cICP", b"iCCP", b"sRGB", b"gAMA", b"cHRM"] {
+            if let Some(chunk) = self.ancillary.iter().find(|c| &c.kind == kind) {
+                remaining = remaining
+                    .checked_sub(chunk.data.len())
+                    .ok_or(Error::LimitExceeded)?;
+                if !matches!(
+                    parse(chunk, h, self.palette.len(), &mut remaining, false)?,
+                    Metadata::Unknown { .. }
+                ) {
+                    return Ok(Some(chunk));
+                }
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -552,6 +604,7 @@ impl Metadata {
             }
             Self::IccProfile { name, profile } => {
                 keyword(name)?;
+                profile::icc(profile, None)?;
                 data.extend_from_slice(name);
                 data.extend_from_slice(&[0, 0]);
                 data.extend_from_slice(&zlib::compress(profile, compression)?);
@@ -606,6 +659,7 @@ impl Metadata {
                 *b"sPLT"
             }
             Self::Exif(v) => {
+                profile::exif(v)?;
                 data.extend_from_slice(v);
                 *b"eXIf"
             }

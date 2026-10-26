@@ -4,6 +4,7 @@
 #include <png.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
@@ -20,7 +21,9 @@ int main(int argc,char **argv) {
     png_bytepp rows;
     png_uint_32 width,height,y;
     size_t stride;
-    if (argc!=2 || !(file=fopen(argv[1],"rb"))) return 2;
+    int metadata=argc==3 && strcmp(argv[1],"--metadata")==0;
+    const char *path=argc==2 ? argv[1] : (metadata ? argv[2] : NULL);
+    if (path==NULL || !(file=fopen(path,"rb"))) return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
 #endif
@@ -42,7 +45,19 @@ int main(int argc,char **argv) {
     if (!data || !rows) return 3;
     for (y=0;y<height;y++) rows[y]=data+y*stride;
     png_read_image(png,rows); png_read_end(png,info);
-    word(width);word(height);word(png_get_bit_depth(png,info));word(png_get_color_type(png,info));
-    if (fwrite(data,stride,height,stdout)!=height) return 3;
+    if (metadata) {
+        png_charp name=NULL;
+        int compression=0;
+        png_bytep icc=NULL,exif=NULL;
+        png_uint_32 icc_size=0,exif_size=0;
+        (void)png_get_iCCP(png,info,&name,&compression,&icc,&icc_size);
+        (void)png_get_eXIf_1(png,info,&exif_size,&exif);
+        word(icc_size);word(exif_size);
+        if (icc_size && fwrite(icc,1,icc_size,stdout)!=icc_size) return 3;
+        if (exif_size && fwrite(exif,1,exif_size,stdout)!=exif_size) return 3;
+    } else {
+        word(width);word(height);word(png_get_bit_depth(png,info));word(png_get_color_type(png,info));
+        if (fwrite(data,stride,height,stdout)!=height) return 3;
+    }
     free(rows);free(data);png_destroy_read_struct(&png,&info,NULL);fclose(file);return 0;
 }

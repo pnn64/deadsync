@@ -51,3 +51,14 @@ the conformance campaign. `png-registry-linux.log` records the full run.
 The current instrumented binary exports `__asan_init`. Buffered/streaming
 acceptance and native sample assertions pass with registry lookup and unknown
 ancillary-field recovery. Total recorded executions: 130,000.
+
+Profile-container milestone: the new structured `profiles` target passes 20,000
+executions in 245 seconds, peak RSS 372 MiB, from 1,800 generated eight-byte seeds
+(14,400 bytes). It uses seed 782347, `-max_len=4096`, the same 5-second timeout /
+1024 MiB cap, Linux nightly/cargo-fuzz toolchain and default AddressSanitizer.
+`profiles-linux.log` records the complete command, tool build and run. The binary
+exports `__asan_init`. Metadata compression and PNG CRCs are reconstructed after
+mutations so the run reaches profile validation and recovery. Native acceptance,
+raw retention, encoder behavior and independent Rust png profile bytes match.
+Recorded totals are now 150,000 executions across six targets; coverage counters
+still include harness/reference code, and saturation is not claimed.

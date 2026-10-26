@@ -14,6 +14,7 @@ cargo +nightly fuzz run zlib -- -runs=20000 -seed=782347 -max_len=65536 -timeout
 cargo +nightly fuzz run png_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run inflate_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run encode_stream -- -runs=20000 -seed=782347 -max_len=256 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
+cargo +nightly fuzz run profiles -- -runs=20000 -seed=782347 -max_len=4096 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 ```
 
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
@@ -44,6 +45,17 @@ both decoders, bounded capacity, byte counts, and independent Rust png frame
 samples. The seed generator provides 1,080 deterministic structured inputs.
 An initial harness assumed distinct metadata slots without PLTE; the corrected
 canonical placement and a fixed-input replay are documented in `reports/`.
+
+## Structured profile target
+
+`profiles` mutates ICC headers, tag-table records, version fields, Exif byte-order
+signatures and first-directory bounds, or consumes arbitrary payloads. It uses
+independent flate2 compression and repaired chunk CRCs so mutations reach the
+native metadata validators. It compares buffered and fragmented-reader acceptance,
+exact raw metadata/native samples, encoder validation before writing, supported
+profile roundtrips, and Rust png's retained ICC/Exif bytes. The deterministic
+generator provides 1,800 eight-byte seeds across all 15 PNG formats, eight
+independent profiles, both compression modes, invalid fields and resource limits.
 
 The harness type-checks on Windows, but the instrumented MSVC build encountered
 unresolved `__start___sancov_*` / `__stop___sancov_*` linker symbols on this host.
