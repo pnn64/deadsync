@@ -1,0 +1,21 @@
+[package]
+name = "deadlib-image-gif"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent indexed GIF87a/GIF89a codec with native LZW and incremental decoding"
+repository = "https://github.com/pnn64/deadsync"
+
+[dependencies]
+deadlib-image = { path = "..", version = "0.1.0" }
+
+[dev-dependencies]
+gif = "0.14"
+
+[[bench]]
+name = "pipeline"
+harness = false
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

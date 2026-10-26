@@ -44,6 +44,7 @@ members = [
     "crates/deadlib-bincode",
     "crates/deadlib-image",
     "crates/deadlib-image/png",
+    "crates/deadlib-image/gif",
     "crates/deadlib-lua",
     "crates/deadlib-lua-legacy",
     "crates/deadlib-lua-legacy/mlua-sys",
