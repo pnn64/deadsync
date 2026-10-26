@@ -19,20 +19,38 @@ SOURCE = ROOT / "crates/deadlib-audio/src/stream/stretch.rs"
 ARCHIVES = ROOT / "target/audio-sola"
 
 
-def build(name, source):
+def build(name, source, test_source=None):
     archive = ARCHIVES / name
     archive.mkdir(parents=True, exist_ok=True)
     harness = archive / "harness.rs"
     snapshot = source.read_bytes()
     (archive / "stretch.rs").write_bytes(snapshot)
+    if test_source is None:
+        test_source = source.parent / "perf_tests-source.rs"
+        if not test_source.exists():
+            test_source = SOURCE.parent / "stretch/perf_tests.rs"
+    tests = test_source.read_bytes()
+    (archive / "perf_tests-source.rs").write_bytes(tests)
+    rate_source = SOURCE.parent / "stretch/rate_bench.rs"
+    rate_tests = rate_source.read_bytes()
+    (archive / "rate_bench.rs").write_bytes(rate_tests)
+    relocated_tests = tests.decode("utf-8").replace(
+        '#[path = "../../../../../tests/support/kernel_bench.rs"]',
+        f'#[path = {json.dumps((ROOT / "tests/support/kernel_bench.rs").as_posix())}]',
+    )
+    relocated_tests = relocated_tests.replace(
+        '#[path = "rate_bench.rs"]',
+        f'#[path = {json.dumps((archive / "rate_bench.rs").as_posix())}]',
+    )
+    (archive / "compiled-tests.rs").write_text(relocated_tests, encoding="utf-8", newline="\n")
     relocated = snapshot.decode("utf-8").replace(
         '#[path = "stretch/perf_tests.rs"]',
-        f'#[path = {json.dumps((SOURCE.parent / "stretch/perf_tests.rs").as_posix())}]',
+        f'#[path = {json.dumps((archive / "compiled-tests.rs").as_posix())}]',
     )
     if '#[path = "stretch/perf_tests.rs"]' not in snapshot.decode("utf-8"):
         # A source exported from the parent commit predates the test include.
         relocated += (f'\n#[cfg(test)]\n#[path = '
-                      f'{json.dumps((SOURCE.parent / "stretch/perf_tests.rs").as_posix())}]\n'
+                      f'{json.dumps((archive / "compiled-tests.rs").as_posix())}]\n'
                       'mod perf_tests;\n')
     (archive / "compiled.rs").write_text(relocated, encoding="utf-8", newline="\n")
     support = ROOT / "tests/support/perf.rs"
@@ -51,14 +69,17 @@ def build(name, source):
     (archive / "correctness.log").write_text(result.stdout, encoding="utf-8")
     manifest = dict(command=command, rustc=subprocess.check_output(["rustc", "-Vv"], text=True),
                     source_sha256=hashlib.sha256(snapshot).hexdigest(),
+                    test_source_sha256=hashlib.sha256(tests).hexdigest(),
+                    rate_source_sha256=hashlib.sha256(rate_tests).hexdigest(),
                     binary_sha256=hashlib.sha256((archive / "sola.exe").read_bytes()).hexdigest())
     (archive / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(result.stdout, flush=True)
 
 
-def compare(names, output, runs):
+def compare(names, output, runs, benchmark):
     timing = re.compile(r"(sola/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
     churn = re.compile(r"(sola/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
+    storage = re.compile(r"(sola/[^:\r\n]+): storage Churn \{ ([^}]+) \}")
     fingerprints = re.compile(r"(sola/[^:\r\n]+): fingerprint ([0-9a-f]+)")
     rows = []
     expected_hashes = None
@@ -68,7 +89,7 @@ def compare(names, output, runs):
         order = names[run % len(names):] + names[:run % len(names)]
         for name in order:
             binary = ARCHIVES / name / "sola.exe"
-            result = subprocess.run([str(binary), "benchmark_sola_kernels", "--ignored",
+            result = subprocess.run([str(binary), benchmark, "--ignored",
                                      "--nocapture", "--test-threads=1"],
                                     capture_output=True, text=True, check=True)
             (logs / f"{run}-{name}.log").write_text(result.stdout, encoding="utf-8")
@@ -79,13 +100,18 @@ def compare(names, output, runs):
                 raise ValueError(f"PCM fingerprint mismatch: {name}: {hashes}")
             counts = {label: dict(re.findall(r"(\w+): (\d+)", values))
                       for label, values in churn.findall(result.stdout)}
+            retained = {label: dict(re.findall(r"(\w+): (\d+)", values))
+                        for label, values in storage.findall(result.stdout)}
             measurements = timing.findall(result.stdout)
-            if len(measurements) != 19 or len(counts) != 19:
-                raise ValueError(f"Expected 19 workloads: {name}")
+            expected = 6 if benchmark == "benchmark_sola_rates" else 19
+            if len(measurements) != expected or len(counts) != expected:
+                raise ValueError(f"Expected {expected} workloads: {name}")
             for label, cpu, ns in measurements:
                 rows.append(dict(run=run, stage=name, workload=label, cycles_per_op=float(cpu),
                                  ns_per_op=float(ns), fingerprint=hashes.get(label, ""),
-                                 **counts[label]))
+                                 **counts[label], **{
+                                     'storage_' + key: retained.get(label, {}).get(key, '')
+                                     for key in counts[label]}))
             print(f"run {run + 1}/{runs}: {name}", flush=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="", encoding="utf-8") as handle:
@@ -131,17 +157,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build")
     parser.add_argument("--source", type=Path, default=SOURCE)
+    parser.add_argument("--test-source", type=Path)
     parser.add_argument("--compare", nargs="+")
     parser.add_argument("--verify", nargs="+")
+    parser.add_argument("--benchmark", choices=["benchmark_sola_kernels", "benchmark_sola_rates"],
+                        default="benchmark_sola_kernels")
     parser.add_argument("--runs", type=int, default=4)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.build:
-        build(args.build, args.source)
+        build(args.build, args.source, args.test_source)
     if args.compare:
         if not args.output or args.runs < 1:
             parser.error("--compare requires --output and positive --runs")
-        compare(args.compare, args.output, args.runs)
+        compare(args.compare, args.output, args.runs, args.benchmark)
     if args.verify:
         if not args.output:
             parser.error("--verify requires --output")

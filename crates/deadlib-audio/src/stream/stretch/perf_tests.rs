@@ -5,24 +5,28 @@ use std::hint::black_box;
 
 #[path = "../../../../../tests/support/kernel_bench.rs"]
 pub(crate) mod bench;
+#[path = "rate_bench.rs"]
+mod rates;
 
-fn noise(len: usize, mut seed: u32) -> Vec<f32> {
+fn noise(len: usize, mut seed: u32) -> Vec<i16> {
     (0..len)
         .map(|_| {
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
-            f32::from((seed >> 16) as i16) * I16_SCALE
+            (seed >> 16) as i16
         })
         .collect()
 }
 
-pub(super) fn reference(buffer: &[f32], pattern: &[f32]) -> usize {
+pub(super) fn reference(buffer: &[i16], pattern: &[i16]) -> usize {
     let mut best = f32::INFINITY;
     let mut offset = 0;
     for (index, candidate) in buffer.windows(pattern.len()).enumerate() {
         let score = candidate
             .iter()
             .zip(pattern)
-            .fold(0.0f32, |score, (&a, &b)| score + (a - b).abs());
+            .fold(0.0f32, |score, (&a, &b)| {
+                score + (f32::from(a) * I16_SCALE - f32::from(b) * I16_SCALE).abs()
+            });
         if score < best {
             best = score;
             offset = index;
@@ -41,20 +45,20 @@ fn correlation_matches_scalar_oracle() {
             let mut rp = noise(len, seed + 300);
             match seed % 8 {
                 0 => {
-                    left.fill(0.0);
-                    lp.fill(0.0);
+                    left.fill(0);
+                    lp.fill(0);
                 }
                 1 => {
-                    right.fill(0.0);
-                    rp.fill(0.0);
+                    right.fill(0);
+                    rp.fill(0);
                 }
                 2 => {
-                    left.fill(-0.0);
-                    lp.fill(0.0);
+                    left.fill(i16::MIN);
+                    lp.fill(0);
                 }
                 3 => {
-                    left[3] = f32::NAN;
-                    right[4] = f32::INFINITY;
+                    left[3] = i16::MIN;
+                    right[4] = i16::MAX;
                 }
                 4 => {
                     left[97..].copy_from_slice(&lp);
@@ -65,8 +69,8 @@ fn correlation_matches_scalar_oracle() {
                     rp.clone_from(&lp);
                 }
                 6 => {
-                    left.fill(0.25);
-                    right.fill(-0.25);
+                    left.fill(8192);
+                    right.fill(-8192);
                 }
                 _ => {}
             }
@@ -88,17 +92,17 @@ fn grouped_pcm_scores_preserve_rounding_and_rejection() {
             let mut frames = noise(len, seed);
             let mut pattern = noise(len, seed + 7);
             if seed == 0 {
-                frames.fill(32767.0 / 32768.0);
-                pattern.fill(-1.0);
+                frames.fill(i16::MAX);
+                pattern.fill(i16::MIN);
             }
             if seed == 1 {
-                frames.fill(1.0 / 32768.0);
-                pattern.fill(-1.0);
+                frames.fill(1);
+                pattern.fill(i16::MIN);
             }
             for best in [0.0, 1.0, 8.0, 128.0, 496.0, 512.0, 1000.0, f32::INFINITY] {
                 let mut expected = 0.0f32;
                 for (index, (&a, &b)) in frames.iter().zip(&pattern).enumerate() {
-                    expected += (a - b).abs();
+                    expected += (f32::from(a) * I16_SCALE - f32::from(b) * I16_SCALE).abs();
                     if (index + 1) % 8 == 0 && expected >= best {
                         break;
                     }
@@ -142,10 +146,7 @@ fn deinterleaving_preserves_every_i16_value_and_channel() {
         for (index, channel) in stretch.state.iter().enumerate() {
             assert_eq!(channel.data.len(), 65_536);
             for (frame, &sample) in channel.data.iter().enumerate() {
-                assert_eq!(
-                    sample.to_bits(),
-                    (f32::from(input[frame * channels + index]) / 32768.0).to_bits()
-                );
+                assert_eq!(sample, input[frame * channels + index]);
             }
         }
     }
@@ -163,7 +164,11 @@ fn dispatched_crossfade_matches_scalar_bits() {
             .iter()
             .zip(&current)
             .zip(&weights)
-            .map(|((&a, &b), &t)| (b - a).mul_add(t, a).to_bits())
+            .map(|((&a, &b), &t)| {
+                let a = f32::from(a) * I16_SCALE;
+                let b = f32::from(b) * I16_SCALE;
+                (b - a).mul_add(t, a).to_bits()
+            })
             .collect::<Vec<_>>();
         let mut actual = Vec::new();
         append_crossfade(&prev, &current, &weights, &mut actual);
@@ -171,12 +176,38 @@ fn dispatched_crossfade_matches_scalar_bits() {
             actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
             expected
         );
+        actual.clear();
+        append_crossfade(&prev, &prev, &weights, &mut actual);
+        assert_eq!(
+            actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            prev.iter()
+                .map(|&v| (f32::from(v) * I16_SCALE).to_bits())
+                .collect::<Vec<_>>()
+        );
     }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     println!(
-        "FMA available: {}",
-        std::arch::is_x86_feature_detected!("fma")
+        "FMA available: {}; AVX2 available: {}",
+        std::arch::is_x86_feature_detected!("fma"),
+        std::arch::is_x86_feature_detected!("avx2")
     );
+}
+
+#[test]
+fn crossfade_preserves_original_float_formula_across_pcm_range() {
+    let previous: Vec<_> = (0..=u16::MAX).map(|sample| sample as i16).collect();
+    let current: Vec<_> = (0..=u16::MAX).map(|sample| !sample as i16).collect();
+    let weights: Vec<_> = (0..previous.len())
+        .map(|i| (i % 1440 + 137) as f32 / 2048.0)
+        .collect();
+    let mut output = Vec::new();
+    append_crossfade(&previous, &current, &weights, &mut output);
+    assert_eq!(output.len(), previous.len());
+    for (((&a, &b), &weight), &actual) in previous.iter().zip(&current).zip(&weights).zip(&output) {
+        let a = f32::from(a) * I16_SCALE;
+        let b = f32::from(b) * I16_SCALE;
+        assert_eq!(actual.to_bits(), (b - a).mul_add(weight, a).to_bits());
+    }
 }
 
 #[test]
@@ -275,6 +306,13 @@ fn drain(stretch: &mut SolaStretcher, input: &[i16], output: &mut [Vec<f32>]) ->
 fn benchmark_sola_kernels() {
     for channels in [6, 8, 16] {
         let input = stream_input(channels, "noise");
+        let (storage, counts) = allocations::measure(|| {
+            let mut stretch = SolaStretcher::new(channels, 48_000);
+            stretch.push_interleaved_i16(&input);
+            stretch
+        });
+        println!("sola/append-{channels}ch: storage {counts:?}");
+        black_box(storage);
         let mut stretch = SolaStretcher::new(channels, 48_000);
         stretch.push_interleaved_i16(&input);
         let mut work = || {
@@ -314,7 +352,7 @@ fn benchmark_sola_kernels() {
         let right = noise(len * 2, 2);
         let lp = noise(len, 3);
         let rp = noise(len, 4);
-        let zero = vec![0.0; len * 2];
+        let zero = vec![0; len * 2];
         for kind in ["mono", "stereo", "left-silent", "right-silent"] {
             let work = || match kind {
                 "mono" => {

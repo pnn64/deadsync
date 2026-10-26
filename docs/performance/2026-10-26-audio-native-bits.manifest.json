@@ -1,0 +1,50 @@
+{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "stages": {
+    "native-retained": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "7a574944e0b9b7b60f71e921104365073c9a12d5d5b53ef52812e509b33faba5",
+      "test_source_sha256": "41bee83fc1407e9f9c57887b443ea2cf8b1b24644e51a36d88c5eec840fa77a1",
+      "binary_sha256": "23b6f908b367e3b18e4af307f1391a07e6b2ffe3c958ebfaac4ff64a7a70eba2"
+    },
+    "native-bits": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-bits\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-bits\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "b3ee29a319fc72fa91d914b6a31e5c245e986d9a7b63c37acccb00da7f5ca45c",
+      "test_source_sha256": "4e962a2609d6f5ffee9022453428cbd8356b7629af559b898fb39d1cd824224d",
+      "binary_sha256": "a114f0842d33a5f0c5dc69fb776add5b2ebdfe0ef4f8f8a880224edb1db5d4a7"
+    }
+  }
+}

@@ -10,7 +10,7 @@
 //! Architecture: the decoder pushes interleaved `i16` source frames in via
 //! [`SolaStretcher::push_interleaved_i16`]; the next stage pulls planar `f32`
 //! stretched frames out via [`SolaStretcher::pull`]. Source frames stay buffered
-//! until the SOLA algorithm has slid past them.
+//! as native i16 until the SOLA algorithm has slid past them.
 //!
 //! Algorithm parameters match upstream:
 //! * `WINDOW_SIZE_MS = 30`
@@ -38,27 +38,25 @@ const WINDOW_SIZE_MS: u32 = 30;
 const I16_SCALE: f32 = 1.0 / 32768.0;
 
 #[inline]
-fn append_mono_i16(data: &mut Vec<f32>, interleaved: &[i16]) {
-    data.extend(
-        interleaved
-            .iter()
-            .map(|sample| f32::from(*sample) * I16_SCALE),
-    );
-}
-
-#[inline]
-fn append_stereo_i16(left: &mut Vec<f32>, right: &mut Vec<f32>, interleaved: &[i16]) {
+fn append_stereo_i16(left: &mut Vec<i16>, right: &mut Vec<i16>, interleaved: &[i16]) {
     let frames = interleaved.as_chunks::<2>().0;
-    left.extend(frames.iter().map(|frame| f32::from(frame[0]) * I16_SCALE));
-    right.extend(frames.iter().map(|frame| f32::from(frame[1]) * I16_SCALE));
+    left.extend(frames.iter().map(|frame| frame[0]));
+    right.extend(frames.iter().map(|frame| frame[1]));
 }
 
 #[inline]
-fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+fn append_crossfade(prev: &[i16], current: &[i16], weights: &[f32], out: &mut Vec<f32>) {
     debug_assert_eq!(prev.len(), current.len());
     debug_assert_eq!(prev.len(), weights.len());
     if std::ptr::eq(prev.as_ptr(), current.as_ptr()) {
-        out.extend_from_slice(current);
+        out.extend(current.iter().map(|&sample| f32::from(sample) * I16_SCALE));
+        return;
+    }
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: both target features are detected before the call. The
+        // specialized body uses only safe slice and Vec operations.
+        unsafe { append_crossfade_avx2(prev, current, weights, out) };
         return;
     }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -72,21 +70,33 @@ fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Ve
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2,fma")]
+/// # Safety
+/// The caller must establish CPU and OS support for AVX2 and FMA.
+unsafe fn append_crossfade_avx2(
+    prev: &[i16],
+    current: &[i16],
+    weights: &[f32],
+    out: &mut Vec<f32>,
+) {
+    append_crossfade_samples(prev, current, weights, out);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "fma")]
 /// # Safety
 /// The caller must establish CPU and OS support for FMA before entering.
-unsafe fn append_crossfade_fma(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+unsafe fn append_crossfade_fma(prev: &[i16], current: &[i16], weights: &[f32], out: &mut Vec<f32>) {
     append_crossfade_samples(prev, current, weights, out);
 }
 
 #[inline(always)]
-fn append_crossfade_samples(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
-    out.extend(
-        prev.iter()
-            .zip(current)
-            .zip(weights)
-            .map(|((&a, &b), &t)| (b - a).mul_add(t, a)),
-    );
+fn append_crossfade_samples(prev: &[i16], current: &[i16], weights: &[f32], out: &mut Vec<f32>) {
+    out.extend(prev.iter().zip(current).zip(weights).map(|((&a, &b), &t)| {
+        let a = f32::from(a) * I16_SCALE;
+        let b = f32::from(b) * I16_SCALE;
+        (b - a).mul_add(t, a)
+    }));
 }
 
 #[inline(always)]
@@ -140,7 +150,7 @@ fn earliest_cached(uncorrelated_pos: usize, min_correlated_pos: usize) -> usize 
 }
 
 struct ChannelState {
-    data: Vec<f32>,
+    data: Vec<i16>,
     correlated_pos: usize,
     last_correlated_pos: usize,
 }
@@ -317,7 +327,7 @@ impl SolaStretcher {
         let frames = interleaved.len() / self.channels;
         self.reclaim_source_prefix(frames);
         match self.channels {
-            1 => append_mono_i16(&mut self.state[0].data, interleaved),
+            1 => self.state[0].data.extend_from_slice(interleaved),
             2 => {
                 let (left, right) = self.state.split_at_mut(1);
                 append_stereo_i16(&mut left[0].data, &mut right[0].data, interleaved);
@@ -332,13 +342,9 @@ impl SolaStretcher {
                 let block_samples = (4096 / self.channels).max(1) * self.channels;
                 for block in complete.chunks(block_samples) {
                     for (index, channel) in self.state.iter_mut().enumerate() {
-                        channel.data.extend(
-                            block
-                                .iter()
-                                .skip(index)
-                                .step_by(self.channels)
-                                .map(|&sample| f32::from(sample) * I16_SCALE),
-                        );
+                        channel
+                            .data
+                            .extend(block.iter().skip(index).step_by(self.channels).copied());
                     }
                 }
             }
@@ -615,7 +621,7 @@ impl SolaStretcher {
 /// C++ uses `i < iBufferDistanceToSearch`, which never considers the last
 /// position; matching there is a deliberate off-by-one fix (see
 /// `correlation_checks_final_valid_position` test).
-fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
+fn find_closest_match(buffer: &[i16], correlate: &[i16]) -> usize {
     if buffer.len() <= correlate.len() {
         return 0;
     }
@@ -626,17 +632,12 @@ fn find_closest_match(buffer: &[f32], correlate: &[f32]) -> usize {
     if first_score == 0.0 {
         return 0;
     }
-    let best_score = if first_score.is_nan() {
-        f32::INFINITY
-    } else {
-        first_score
-    };
-    find_closest_match_after_first(buffer, correlate, best_score)
+    find_closest_match_after_first(buffer, correlate, first_score)
 }
 
 // Continue with candidate zero already scored, preserving its lead on ties.
 #[inline]
-fn find_closest_match_after_first(buffer: &[f32], correlate: &[f32], mut best_score: f32) -> usize {
+fn find_closest_match_after_first(buffer: &[i16], correlate: &[i16], mut best_score: f32) -> usize {
     let distance = buffer.len() - correlate.len();
     let mut best_offset = 0usize;
     for i in 1..=distance {
@@ -657,10 +658,10 @@ fn find_closest_match_after_first(buffer: &[f32], correlate: &[f32], mut best_sc
 /// Search each channel independently using the exact, grouped PCM scorer.
 /// Dual-mono buffers share the selected offset and need only one search.
 fn find_closest_match_stereo(
-    left_buffer: &[f32],
-    left_correlate: &[f32],
-    right_buffer: &[f32],
-    right_correlate: &[f32],
+    left_buffer: &[i16],
+    left_correlate: &[i16],
+    right_buffer: &[i16],
+    right_correlate: &[i16],
 ) -> (usize, usize) {
     debug_assert_eq!(left_buffer.len(), right_buffer.len());
     debug_assert_eq!(left_correlate.len(), right_correlate.len());
@@ -674,22 +675,26 @@ fn find_closest_match_stereo(
 }
 
 #[inline(always)]
-fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 {
+fn correlation_score(frames: &[i16], correlate: &[i16], best_score: f32) -> f32 {
     let mut score = 0.0f32;
     let (frames, frame_tail) = frames[..correlate.len()].as_chunks::<8>();
     let (correlate, correlate_tail) = correlate.as_chunks::<8>();
     for (frames, correlate) in frames.iter().zip(correlate) {
-        // Source samples are i16 / 32768, so every difference is an exact
-        // multiple of 2^-15 below 2. A f32 holds every such sum through 512.
-        // With a prefix <= 496, all eight additions fit in that exact range:
-        // grouping them exposes SIMD without changing any rounding. Larger
-        // prefixes keep the original scalar order, including early rejection.
+        // Eight u16 differences fit in u32 and convert to f32 exactly. In
+        // normalized units each difference is a multiple of 2^-15 below 2.
+        // With a prefix <= 496, the combined score remains below 512, where
+        // every such sum is exact. Larger prefixes retain scalar addition
+        // order, including the eight-sample early-rejection boundary.
         if score <= 496.0 {
-            let d: [f32; 8] = std::array::from_fn(|i| (frames[i] - correlate[i]).abs());
-            score += ((d[0] + d[1]) + (d[2] + d[3])) + ((d[4] + d[5]) + (d[6] + d[7]));
+            let differences: [u16; 8] = std::array::from_fn(|i| frames[i].abs_diff(correlate[i]));
+            let sum: u32 = differences
+                .iter()
+                .map(|&difference| u32::from(difference))
+                .sum();
+            score += sum as f32 * I16_SCALE;
         } else {
             for index in 0..8 {
-                score += (frames[index] - correlate[index]).abs();
+                score += f32::from(frames[index].abs_diff(correlate[index])) * I16_SCALE;
             }
         }
         if score >= best_score {
@@ -697,7 +702,7 @@ fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 
         }
     }
     for (&frame, &sample) in frame_tail.iter().zip(correlate_tail) {
-        score += (frame - sample).abs();
+        score += f32::from(frame.abs_diff(sample)) * I16_SCALE;
     }
     score
 }
@@ -726,10 +731,10 @@ mod tests {
         let start = 137;
         let frames = 911;
         let prev = (0..frames)
-            .map(|index| (index as f32 * 0.017).sin())
+            .map(|index| ((index as f32 * 0.017).sin() * 30_000.0) as i16)
             .collect::<Vec<_>>();
         let current = (0..frames)
-            .map(|index| (index as f32 * 0.029).cos())
+            .map(|index| ((index as f32 * 0.029).cos() * 30_000.0) as i16)
             .collect::<Vec<_>>();
         let expected = prev
             .iter()
@@ -737,6 +742,8 @@ mod tests {
             .enumerate()
             .map(|(index, (&a, &b))| {
                 let t = (start + index) as f32 / stretcher.window_frames as f32;
+                let a = f32::from(a) * I16_SCALE;
+                let b = f32::from(b) * I16_SCALE;
                 (b - a).mul_add(t, a)
             })
             .collect::<Vec<_>>();
@@ -756,7 +763,7 @@ mod tests {
     fn identity_crossfade_copies_source_samples_bit_for_bit() {
         let frames = 517usize;
         let samples = (0..frames)
-            .map(|index| (index as f32 * 0.037).sin() * 0.75)
+            .map(|index| ((index as f32 * 0.037).sin() * 24_576.0) as i16)
             .collect::<Vec<_>>();
         let weights = (0..frames)
             .map(|index| (137 + index) as f32 / 1_440.0)
@@ -771,7 +778,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             samples
                 .iter()
-                .map(|sample| sample.to_bits())
+                .map(|&sample| (f32::from(sample) * I16_SCALE).to_bits())
                 .collect::<Vec<_>>()
         );
     }
@@ -785,7 +792,7 @@ mod tests {
                         let bits = (index as u32)
                             .wrapping_mul(multiplier)
                             .wrapping_add(increment);
-                        (bits as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+                        (bits >> 16) as i16
                     })
                     .collect::<Vec<_>>()
             };
@@ -824,7 +831,7 @@ mod tests {
             channel.data = Vec::with_capacity(16);
             channel
                 .data
-                .extend((0..14).map(|index| index as f32 + channel_index as f32 * 100.0));
+                .extend((0..14).map(|index| index as i16 + channel_index as i16 * 100));
         }
         let expected = stretcher
             .state
@@ -900,12 +907,12 @@ mod tests {
 
     #[test]
     fn correlation_returns_earliest_exact_match() {
-        let pattern = [1.0, -2.0, 3.0, -4.0];
-        let buffer = [0.0, 0.5, 1.0, -2.0, 3.0, -4.0, 1.0, -2.0, 3.0, -4.0];
+        let pattern = [2, -4, 6, -8];
+        let buffer = [0, 1, 2, -4, 6, -8, 2, -4, 6, -8];
 
         assert_eq!(find_closest_match(&buffer, &pattern), 2);
         assert_eq!(
-            find_closest_match(&[0.0; 32], &[0.0; 8]),
+            find_closest_match(&[0; 32], &[0; 8]),
             0,
             "silence has a perfect match at the first candidate"
         );
@@ -1144,8 +1151,8 @@ mod tests {
     /// its scan, not stop just before it.
     #[test]
     fn correlation_checks_final_valid_position() {
-        let mut buffer = vec![0.0f32; 10];
-        let pattern = [1.0f32, 2.0, 3.0, 4.0];
+        let mut buffer = vec![0i16; 10];
+        let pattern = [1i16, 2, 3, 4];
         // Plant the only perfect match at the last valid position.
         let last = buffer.len() - pattern.len();
         buffer[last..].copy_from_slice(&pattern);
