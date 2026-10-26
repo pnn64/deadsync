@@ -213,6 +213,49 @@ fn maximum_unpack_results_remain_live_during_collection() {
 }
 
 #[test]
+fn table_concat_wide_intervals_preserve_first_value_errors() {
+    for arguments in [
+        "{},'',-2147483648,2147483647",
+        "{false},'',1,10000002",
+        "{'a'},'',1,10000002",
+        "{},false,1,10000002",
+        "{},'',2147483647,-2147483648",
+    ] {
+        compare(format!("return pcall(table.concat,{arguments})").as_bytes());
+    }
+}
+
+#[test]
+fn table_insert_accepts_a_large_negative_position_without_an_invented_limit() {
+    compare(br#"local t=setmetatable({4,5},{__newindex=function()error('metamethod')end});table.insert(t,-10000001,'x');return t[-10000001],t[-10000000],t[0],t[1],t[2],t[3]"#);
+}
+
+#[test]
+fn sort_reserves_native_stack_before_comparator_validation() {
+    for count in 7957..=7962 {
+        for comparator in ["nil", "false"] {
+            compare(format!("local args={{}};for i=1,{count} do args[i]=true end;return pcall(function()return table.sort({{}},{comparator},unpack(args))end)").as_bytes());
+        }
+    }
+}
+
+#[test]
+fn sort_discards_unused_argument_roots_before_comparison() {
+    compare(br#"local weak=setmetatable({},{__mode='v'});local function extra()local p={};weak[1]=p;return p end;local gone;local t={2,1};table.sort(t,function(a,b)collectgarbage();gone=weak[1]==nil;return a<b end,extra());return gone,t[1],t[2]"#);
+}
+
+#[test]
+fn finite_pattern_searches_and_backtracking_have_no_invented_work_limit() {
+    compare(br#"local s=string.rep('a',400);return string.find(s,'^a*a*a*b'),string.match(s,'^a*a*a*b'),string.gsub(s,'^a*a*a*b','x')"#);
+    compare(br#"local next=string.gmatch(string.rep('a',140),'a*a*a*b');return next()"#);
+}
+
+#[test]
+fn deferred_pattern_errors_remain_reachable_after_long_searches() {
+    compare(br#"local s=string.rep('a',500000)..'1';local p=string.rep('a',31)..'%d[';return pcall(string.find,s,p)"#);
+}
+
+#[test]
 fn patterns_captures_backtracking_and_boundaries() {
     for source in [
         "return string.find('hello world','world'),string.match('hello world','(%a+)%s+(%a+)')",

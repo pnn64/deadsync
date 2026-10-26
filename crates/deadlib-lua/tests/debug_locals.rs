@@ -9,6 +9,11 @@ enum Scalar {
 }
 
 #[test]
+fn sort_return_hook_sees_the_normalized_optional_comparator_slot() {
+    compare(br#"local name,kind;local sort=table.sort;debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==sort then local n,v=debug.getlocal(2,2);name=n;kind=type(v)end end,'r');sort({});debug.sethook();return name,kind"#);
+}
+
+#[test]
 fn named_local_ranges_include_parameters_shadowing_varargs_and_loops() {
     compare(
         br#"

@@ -237,3 +237,17 @@ fn global_lookup_callbacks_keep_previous_results_alive_and_recover_after_errors(
         vm.end_standalone().unwrap();
     }
 }
+
+#[test]
+fn host_sort_padding_does_not_overlap_native_comparison_storage() {
+    for standalone in [false, true] {
+        let mut vm = Vm::new();
+        if standalone {
+            vm.begin_standalone().unwrap();
+        }
+        let values = vm.execute(&compile(b"padded=false;local sort=table.sort;debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==sort then local name,value=debug.getlocal(2,2);padded=name=='(*temporary)' and value==nil end end,'r');return sort,{2,1}").unwrap()).unwrap().to_vec();
+        vm.call(values[0], &[values[1]]).unwrap();
+        assert_eq!(vm.global(b"padded"), Value::Boolean(true));
+        vm.end_standalone().unwrap();
+    }
+}

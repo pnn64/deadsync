@@ -119,7 +119,6 @@ pub(crate) struct Work {
     undo: [(u8, Capture); 64],
     undo_len: usize,
     count: u8,
-    steps: u64,
 }
 impl Default for Work {
     fn default() -> Self {
@@ -129,7 +128,6 @@ impl Default for Work {
             undo: [(0, EMPTY); 64],
             undo_len: 0,
             count: 0,
-            steps: 0,
         }
     }
 }
@@ -348,7 +346,6 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        work.steps = 0;
         for pos in start..=source.len() {
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
@@ -372,14 +369,6 @@ impl Pattern {
         let mut pc = 0;
         let mut pos = start;
         'match_loop: loop {
-            work.steps += 1;
-            if work.steps > 10_000_000 {
-                return Err(Error::new(
-                    ErrorKind::Limit,
-                    0,
-                    "pattern matching limit exceeded",
-                ));
-            }
             if pc == self.code.len() {
                 return Ok(Some(Matched {
                     start,
@@ -560,8 +549,5 @@ impl Pattern {
             }
             return Ok(None);
         }
-    }
-    pub fn reset(work: &mut Work) {
-        work.steps = 0;
     }
 }

@@ -147,6 +147,30 @@ fn main() {
         ),
         ("concat_chain_16", concat16.as_str(), 51_200.0, 10),
         ("concat_chain_128", concat128.as_str(), 409_600.0, 10),
+        (
+            "pattern_scan_long",
+            "if not scan_input then scan_input=string.rep('a',32768)end;local p=string.rep('a',31)..'%d';return string.find(scan_input,p)==nil and 0 or 1",
+            0.0,
+            10,
+        ),
+        (
+            "pattern_backtrack_long",
+            "if not backtrack_input then backtrack_input=string.rep('a',400)end;return string.find(backtrack_input,'^a*a*a*b')==nil and 0 or 1",
+            0.0,
+            3,
+        ),
+        (
+            "table_insert_gap",
+            "if not gap_input then gap_input={}end;local n=0;for i=1,100 do table.insert(gap_input,-1024,'x');n=n+#gap_input[-1024];gap_input[-1024]=nil end;return n",
+            100.0,
+            10,
+        ),
+        (
+            "table_concat_wide_error",
+            "local t={};local n=0;for i=1,1000 do local ok,e=pcall(table.concat,t,'',-2147483648,2147483647);if not ok and type(e)=='string' then n=n+1 end end;return n",
+            1000.0,
+            20,
+        ),
         ("unpack_4", unpack4.as_str(), 400.0, 20),
         ("unpack_512", unpack512.as_str(), 51_200.0, 10),
         ("unpack_7999", unpack7999.as_str(), 799_900.0, 10),
@@ -787,6 +811,7 @@ fn main() {
         );
     }
     println!("value_size_bytes\t{}", std::mem::size_of::<Value>());
+    println!("vm_size_bytes\t{}", std::mem::size_of::<Vm>());
     println!("debug_reference_libraries\tALL_SAFE plus DEBUG for debug_* workloads only");
     // Source bytes and initial correctness checks remain outside compile timing.
     let mut frontends = Vec::with_capacity(22);

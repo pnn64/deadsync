@@ -159,6 +159,10 @@ matching reaches them. The table library includes raw concatenation, insertion,
 removal, size queries, traversal callbacks and sorting. Sort comparison order and
 callback mutations are checked against the reference. Scratch buffers are reused
 across calls; nested native callbacks keep separate continuation state.
+Pattern searches, table concatenation and insertion impose no artificial work
+count limit. Execution quotas apply at VM driver steps and do not interrupt a
+running native loop. `table.sort` checks its native stack reserve before validating
+the comparator and discards unused arguments before comparisons.
 
 Coroutines provide `create`, `resume`, `running`, `status`, `wrap` and `yield`.
 Each thread owns its register/frame vectors and environment; threads share the
@@ -316,8 +320,8 @@ Other standard libraries, native C-library loading, complete diagnostic text and
 debug behavior, persistent caches, host callback registration and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. Native locales require Windows/MSVC,
-and patterns/table operations have
-work limits. Broader source/register diagnostics, hook coverage and native
+and broader native resource bounds need validation.
+Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
 are provisional. The CLI accepts scripts with positional arguments, stdin, chained
 `-e`/`-l` actions, `--`, `-` and `LUA_INIT` strings/files. Script values appear in
@@ -348,5 +352,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-native-bounds.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-work-limits.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

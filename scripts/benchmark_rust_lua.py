@@ -83,8 +83,8 @@ def main() -> None:
         if len(rust) != 5 or rust.keys() != official.keys():
             raise SystemExit(f"missing paired measurements for {name}")
         ratios[name] = statistics.median(rust[i] / official[i] for i in rust)
-    if len(ratios) != 72 or len(rust_heap) != 72 or len(reference_collected_heap) != 72:
-        raise SystemExit(f"expected 72 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
+    if len(ratios) != 76 or len(rust_heap) != 76 or len(reference_collected_heap) != 76:
+        raise SystemExit(f"expected 76 workloads with timing and heap measurements, received {len(ratios)} timings/{len(rust_heap)} Rust heaps/{len(reference_collected_heap)} reference heaps")
     compile_ratios = {}
     for name in sorted({s["workload"] for s in samples if s["workload"].startswith("frontend_")}):
         rust = {s["sample"]: s["ns_per_iteration"] for s in samples

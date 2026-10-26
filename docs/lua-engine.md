@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 378 differential/adversarial integration tests, forty-three unit tests and
+crate, 386 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-native-bounds.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-work-limits.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -592,6 +592,19 @@ only that leading banner is removed. Both engines still pass seventeen of
 eighteen official files. Two [measurement runs](performance/2026-10-26-rust-lua-native-bounds.md)
 cover 72 runtime and 22 frontend workloads, including result-width scaling and
 failure paths. Complete standalone compatibility and the full goal remain open.
+
+The [native work validation](testing/2026-10-26-rust-lua-work-limits.md) removes
+synthetic ten-million-step limits from pattern searches and table concat/insert.
+Finite backtracking and late malformed-pattern errors remain reachable. Sort now
+checks its 40-slot native reserve, normalizes the comparator slot and releases
+unused argument roots before comparison; host-entry padding stays separate from
+scratch storage. All 430 tests and 140 process probes pass. The CLI audit retains
+112/150 raw matches; all thirty-eight differences are the project banner, with
+150/150 after only its leading banner is removed. Official isolated files remain
+17/18 in both engines. Two [measurement runs](performance/2026-10-26-rust-lua-work-limits.md)
+cover 76 runtime and 22 frontend workloads. The measured x64 VM struct shrinks
+from 4,440 to 4,432 bytes. Native loops still run between execution-budget checks;
+full resource, standalone and integration gates remain open.
 
 ## Reference contract
 

@@ -134,13 +134,6 @@ impl Vm {
                     _ => return Err(failure("wrong number of arguments to 'insert'")),
                 };
                 let end = (len + 1).max(position);
-                if end.saturating_sub(position) > 10_000_000 {
-                    return Err(Error::new(
-                        ErrorKind::Limit,
-                        0,
-                        "table operation limit exceeded",
-                    ));
-                }
                 for index in (position + 1..=end).rev() {
                     let v = self.raw_index(table, index - 1);
                     self.set_index(table, index, v);
@@ -167,13 +160,6 @@ impl Vm {
                 let last = self.integer_argument(base, count, 3, Some(len))? as i32 as i64;
                 let separator = separator.expect("concat has a separator");
                 let mut output = self.take_buffer(0);
-                if last.saturating_sub(first) > 10_000_000 {
-                    return Err(Error::new(
-                        ErrorKind::Limit,
-                        0,
-                        "table operation limit exceeded",
-                    ));
-                }
                 for index in first..=last {
                     if index != first {
                         output.extend_from_slice(&self.strings.bytes[slot_index(separator.0)]);
@@ -313,13 +299,17 @@ impl Vm {
         self.sorts[index].saved[1] = value;
         self.sort_compare(index, pivot, value, SortStage::Right, base)
     }
-    pub(super) fn sort_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+    pub(super) fn sort_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
-        let base = frame.base;
+        let mut base = frame.base;
         let index = if frame.pc() == 0 {
             let args = frame.vararg_start - 1;
             let count = frame.argc();
             let table = self.table_argument(args, count)?;
+            let len = self.tables[slot_index(table.0)].len() as i64;
+            if count > limits::MAX_CSTACK - 40 {
+                return Err(failure("stack overflow ()"));
+            }
             let comparator = self.argument(args, count, 1);
             if !matches!(
                 comparator,
@@ -327,7 +317,23 @@ impl Vm {
             ) {
                 return Err(self.argument_type_error(args, count, 1, "function"));
             }
-            let len = self.tables[slot_index(table.0)].len() as i64;
+            // lua_settop(L, 2) discards extras before the first comparator and
+            // pads a missing comparator with nil. Drop their roots as well as
+            // their visible native argument slots.
+            if count < 2 {
+                let padding = frame.vararg_start + 1;
+                self.registers[padding] = Value::Nil;
+                if padding >= base {
+                    base = padding + 1;
+                    frame.base = base;
+                    self.frames[owner].base = base;
+                    self.resize_registers(self.registers.len().max(base + 6));
+                }
+            } else {
+                self.registers[frame.vararg_start + 2..frame.vararg_start + count].fill(Value::Nil);
+            }
+            frame.vararg_count = 2;
+            self.frames[owner].vararg_count = 2;
             let index = self.sorts.len();
             let mut ranges = [(0, 0); 32];
             ranges[0] = (1, len);

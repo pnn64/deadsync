@@ -553,7 +553,6 @@ impl Vm {
         let (source, pattern, cursor, replacement) =
             (state.source, state.pattern, state.cursor, state.replacement);
         self.prepare_pattern(pattern, true);
-        Pattern::reset(&mut self.pattern_work);
         let found = self.patterns[&(pattern, true)].match_at(
             &self.strings.bytes[slot_index(source.0)],
             cursor,

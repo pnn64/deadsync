@@ -51,6 +51,17 @@ def main() -> None:
         case(f'native_unpack_range_{n}',['-e',f"local function count(...)return select('#',...)end;local ok,n=pcall(function()return count(unpack({{}},1,{n}))end);print(ok,n)"])
         case(f'native_byte_range_{n}',['-e',f"local function count(...)return select('#',...)end;local ok,n=pcall(function()return count(string.byte(string.rep('a',{n}),1,{n}))end);print(ok,n)"])
     case('native_unused_arguments_count_toward_limit',['-e',"print(pcall(unpack,{},1,7997,true));print(pcall(string.byte,string.rep('a',7997),1,7997,true))"])
+    for name,arguments in [('empty',"{},'',-2147483648,2147483647"),('boolean',"{false},'',1,10000002"),('second',"{'a'},'',1,10000002"),('separator',"{},false,1,10000002")]:
+        case(f'table_concat_wide_{name}',['-e',f'print(pcall(table.concat,{arguments}))'])
+    case('table_insert_large_gap',['-e',"local t={4,5};table.insert(t,-10000001,'x');print(t[-10000001],t[-10000000],t[0],t[1],t[2],t[3])"])
+    for name,expression in [('find',"string.find(s,'^a*a*a*b')"),('match',"string.match(s,'^a*a*a*b')"),('gmatch',"string.gmatch(string.rep('a',140),'a*a*a*b')()"),('gsub',"string.gsub(s,'^a*a*a*b','x')")]:
+        case(f'pattern_finite_backtracking_{name}',['-e',f"local s=string.rep('a',400);print({expression})"])
+    case('pattern_deferred_error_after_long_search',['-e',"local s=string.rep('a',500000)..'1';local p=string.rep('a',31)..'%d[';print(pcall(string.find,s,p))"])
+    case('sort_discards_unused_roots',['-e',"local weak=setmetatable({},{__mode='v'});local function extra()local p={};weak[1]=p;return p end;local gone;local t={2,1};table.sort(t,function(a,b)collectgarbage();gone=weak[1]==nil;return a<b end,extra());print(gone,t[1],t[2])"])
+    case('sort_return_hook_optional_slot',['-e',"local name,kind;local sort=table.sort;debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==sort then local n,v=debug.getlocal(2,2);name=n;kind=type(v)end end,'r');sort({});debug.sethook();print(name,kind)"])
+    for n in range(7957,7963):
+        for name,comparator in [('nil','nil'),('invalid','false')]:
+            case(f'sort_stack_{n}_{name}',['-e',f"local args={{}};for i=1,{n} do args[i]=true end;print(pcall(function()return table.sort({{}},{comparator},unpack(args))end))"])
     case('command_chain',['-ex=3','-e','print(x,arg==nil)'])
     case('empty_command',['-e',''],b"error('stdin should not execute')")
     case('module_then_command',['-lmath','-eprint(math.sqrt(81))'])
