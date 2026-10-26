@@ -15,6 +15,7 @@ cmake --build target/deadlib-image-reference/oracle-build --config Release --tar
 $env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-build/Release/deadlib_png_oracle.exe).Path
 cargo test -p deadlib-image-png --release --test libpng libpng_native_sample_conformance -- --ignored
 cargo test -p deadlib-image-png --release --test profiles -- --ignored
+cargo test -p deadlib-image-png --release --test zlib_headers c_zlib_header_and_history_oracle -- --ignored --nocapture
 ```
 
 Omit `-A x64` and use the platform's executable path for other CMake generators.
@@ -36,3 +37,40 @@ inputs are fetched into ignored build storage; acquisition and commands are in
 [BENCHMARKS.md](../../BENCHMARKS.md#external-rgb8-corpus). Its 24 original images
 and eight reencodings each add 216 exact native-sample comparisons, covering
 both writers, Stored/Fast compression and plain/Adam7 output.
+
+`--zlib-batch FILE` cross-checks independent raw compression fixtures in one
+process. Each input record contains a big-endian u32 compressed length, a
+big-endian u32 output capacity, then compressed bytes. Capacities must be 1 byte
+through 1 MiB; compressed inputs are capped at 16 MiB. Each result contains the
+signed zlib status encoded as a big-endian i32, a big-endian u32 successful output
+length, then those output bytes. Failed records have length zero. The driver
+also rejects unused compressed bytes, matching the whole-stream zlib API.
+
+The header/history test sends 65,652 records: every CMF/FLG pair, 92 window
+boundary/padding/history cases and 24 references before available output. It
+also checks 24 malformed PNG wrappers through the normal libpng mode. Successful
+outputs are compared byte for byte. Default C zlib accepts over-advertised-window
+distances; an explicit strict configuration validates the native rejection policy:
+
+```powershell
+$referenceRoot = (Resolve-Path target/deadlib-image-reference).Path
+cmake -S crates/deadlib-image/png/tests/oracle -B target/deadlib-image-reference/oracle-strict-build "-DREFERENCE_ROOT=$referenceRoot" -DDEADLIB_ZLIB_STRICT_WINDOW=ON -A x64
+cmake --build target/deadlib-image-reference/oracle-strict-build --config Release --target deadlib_png_oracle --parallel 4
+$env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-strict-build/Release/deadlib_png_oracle.exe).Path
+$env:DEADLIB_ZLIB_STRICT_WINDOW = '1'
+cargo test -p deadlib-image-png --release --test zlib_headers c_zlib_header_and_history_oracle -- --ignored --nocapture
+Remove-Item Env:DEADLIB_ZLIB_STRICT_WINDOW
+```
+
+The flag enables zlib's existing `INFLATE_STRICT` checks in the reference library;
+the production Rust crate has no C dependency. Its source remains unchanged.
+Default and strict results, tool versions, active reference features and hashes
+are retained in [zlib-conformance.log](../../zlib-conformance.log) and
+[zlib-conformance.json](../../zlib-conformance.json).
+
+These fixtures follow [RFC 1950 sections 2.2/2.3](https://www.rfc-editor.org/rfc/rfc1950)
+and [RFC 1951 section 3.2.3](https://www.rfc-editor.org/rfc/rfc1951).
+The flate2/miniz reference accepts the 24 raw fixtures that refer before output
+exists. Native decoding and C zlib reject them; Rust png and libpng reject the
+PNG wrappers. Reference acceptance of malformed data is recorded as a policy
+difference and does not override the native rejection asserted by the tests.

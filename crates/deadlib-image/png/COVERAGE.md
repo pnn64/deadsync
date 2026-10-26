@@ -11,7 +11,7 @@ evidence, application responsibilities and explicitly open items.
 | Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
-| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history and output limits; `tests/compression.rs` | Bidirectional flate2 differential tests pass; exhaustive tree fixtures still pending |
+| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header suites | All 65,536 headers and 92 window fixtures pass; C zlib default/strict comparisons recorded; broader tree fixtures still pending |
 | Native compression | Stored/fixed Huffman LZ77, bounded 16-candidate chains and per-block coding choice; `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments, mixed coding and 32 KiB block/history boundaries pass |
 | PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
@@ -358,6 +358,39 @@ and binary hashes, options and exact logs are recorded in
 These 10,000 runs bring recorded sanitizer history to 200,000 executions across
 seven targets. The retained prototype counts remain separate from final-code
 evidence; no saturation or complete conformance claim follows from these totals.
+
+Zlib framing audit milestone: `tests/zlib_headers.rs` enumerates all 65,536
+CMF/FLG pairs through buffered and one-byte zlib input, and buffered/reader PNG
+decoding. Exactly 32 dictionary-free combinations succeed, 34 otherwise-valid
+dictionary headers fail, and 65,470 invalid headers fail. This includes all four
+FLEVEL hints and the two dictionary combinations with two legal FCHECK values.
+Valid header fixtures also match independent flate2 and Rust png output; prefix
+consumption, zero-output decoding and terminal header errors are checked.
+
+Independently assembled stored/fixed streams exercise 92 combinations of eight
+advertised window sizes, distances immediately below/at/above the boundary,
+history beyond 64 KiB, zero/one alignment padding and four IO fragment pairs.
+Another 24 fixtures reject references before any available output, including PNG
+wrappers with valid filtering, dimensions, CRC and Adler values.
+
+The C oracle adds a bounded `--zlib-batch` protocol and an optional build using
+zlib's `INFLATE_STRICT` flag. Both builds check 65,652 raw cases. Default zlib
+accepts all 28 over-advertised-window references; its strict build rejects them
+and matches native behavior. Both reject the 24 unavailable-history references;
+libpng also rejects all 24 PNG wrappers at distance validation. The flate2/miniz
+reference accepts those 24 raw malformed streams, while Rust png rejects the
+PNG wrappers. Negative-oracle acceptance is therefore not used to weaken native
+validation. These behaviors follow the context-sensitive RFC 1950/1951 checks,
+not an assumption that every reference library has identical recovery policy.
+
+`zlib-conformance.log` records both configurations and the existing 1,757
+PNG/profile C regression comparisons. `zlib-conformance.json` records exact
+source/binary hashes, reference features and pinned commits. Full release tests
+(70 passed, four optional C tests ignored), strict Clippy, both C configurations
+and an isolated offline package build pass. Production source is byte-for-byte
+unchanged from `5a6747e32`, so this milestone strengthens conformance evidence
+without changing the measured encoder/decoder implementation. Broader malformed
+Huffman and PNG/APNG grammar audits remain open.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:

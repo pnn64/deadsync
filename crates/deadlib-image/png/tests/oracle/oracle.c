@@ -2,6 +2,7 @@
  * Emits width/height/depth/color (all u32 BE), then packed, big-endian scanlines.
  * libpng's setjmp error boundary stays entirely within this C process. */
 #include <png.h>
+#include <zlib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +14,39 @@ static void word(unsigned int n) {
     unsigned char bytes[4]={(unsigned char)(n>>24),(unsigned char)(n>>16),(unsigned char)(n>>8),(unsigned char)n};
     if (fwrite(bytes,1,4,stdout)!=4) exit(3);
 }
+/* Batch protocol: input length, output capacity, compressed bytes. Emit signed
+ * zlib status, successful output length, then successful output bytes (u32 BE).
+ * A failed stream is a result record, not a failure of the batch transport. */
+static int zlib_batch(FILE *file) {
+    unsigned char fields[8];
+    size_t count;
+    while ((count=fread(fields,1,8,file))!=0) {
+        unsigned int input_size,capacity;
+        unsigned char *input,*output;
+        uLong source_size;
+        uLongf output_size;
+        int status;
+        if (count!=8) return 2;
+        input_size=((unsigned int)fields[0]<<24)|((unsigned int)fields[1]<<16)|
+            ((unsigned int)fields[2]<<8)|fields[3];
+        capacity=((unsigned int)fields[4]<<24)|((unsigned int)fields[5]<<16)|
+            ((unsigned int)fields[6]<<8)|fields[7];
+        if (input_size>16777216 || capacity==0 || capacity>1048576) return 2;
+        input=(unsigned char*)malloc(input_size ? input_size : 1);
+        output=(unsigned char*)malloc(capacity);
+        if (!input || !output) { free(input);free(output);return 3; }
+        if (fread(input,1,input_size,file)!=input_size) { free(input);free(output);return 2; }
+        source_size=input_size;output_size=capacity;
+        status=uncompress2(output,&output_size,input,&source_size);
+        if (status==Z_OK && source_size!=input_size) status=Z_DATA_ERROR;
+        word((unsigned int)status);word(status==Z_OK ? (unsigned int)output_size : 0);
+        if (status==Z_OK && fwrite(output,1,output_size,stdout)!=output_size) {
+            free(input);free(output);return 3;
+        }
+        free(input);free(output);
+    }
+    return ferror(file) ? 2 : 0;
+}
 int main(int argc,char **argv) {
     FILE *file;
     png_structp png;
@@ -22,11 +56,13 @@ int main(int argc,char **argv) {
     png_uint_32 width,height,y;
     size_t stride;
     int metadata=argc==3 && strcmp(argv[1],"--metadata")==0;
-    const char *path=argc==2 ? argv[1] : (metadata ? argv[2] : NULL);
+    int batch=argc==3 && strcmp(argv[1],"--zlib-batch")==0;
+    const char *path=argc==2 ? argv[1] : ((metadata || batch) ? argv[2] : NULL);
     if (path==NULL || !(file=fopen(path,"rb"))) return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
 #endif
+    if (batch) { int result=zlib_batch(file);fclose(file);return result; }
     png=png_create_read_struct(PNG_LIBPNG_VER_STRING,NULL,NULL,NULL);
     info=png_create_info_struct(png);
     if (!png || !info) return 3;

@@ -2,6 +2,7 @@
 *.rs text eol=lf
 *.json text eol=lf
 independent-build.log text eol=lf
+zlib-conformance.log text eol=lf
 tests/fixtures/language/* text eol=lf
 src/metadata/language/registry.rs text eol=lf
 # Keep raw tool diagnostics, including libFuzzer's intentional trailing spaces.
