@@ -41,6 +41,16 @@ Each tested milestone is committed separately. Per-crate coverage documents
 record current evidence and outstanding work; this checklist preserves the full
 scope while implementation progresses.
 
+## Current checkpoint
+
+Ogg framing/streaming and Vorbis headers/setup/codebooks are implemented, with
+libogg, libvorbis and Symphonia differential evidence. Both packages are Cargo
+workspace members and pass tests in an extracted two-package workspace.
+**This is not the completed goal:** PCM synthesis, codec seeking, encoding,
+broader conformance and comparative performance work remain. The next codec
+milestone is raw-packet floor/residue/coupling/MDCT/window/overlap synthesis with
+independent floating-point PCM parity, before Ogg sample positioning and seeking.
+
 ## Normative sources
 
 * [RFC 3533](https://www.rfc-editor.org/rfc/rfc3533.txt).

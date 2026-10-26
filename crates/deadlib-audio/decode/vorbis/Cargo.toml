@@ -1,0 +1,17 @@
+[package]
+name = "deadlib-audio-decode-vorbis"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent pure-Rust Vorbis I codec with raw packet support"
+repository = "https://github.com/pnn64/deadsync"
+
+[dependencies]
+deadlib-audio-decode-ogg = { path = "../ogg", version = "0.1.0" }
+
+[dev-dependencies]
+symphonia = { version = "0.6.1", default-features = false, features = ["ogg", "vorbis"] }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

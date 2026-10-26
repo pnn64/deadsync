@@ -34,6 +34,8 @@ Evidence on Windows x86-64, rustc 1.99.1:
   Command: `cargo test -p deadlib-audio-decode-ogg --release --test libogg --
   --ignored --nocapture` with the oracle/corpus variables described in its README.
 * `cargo tree -p deadlib-audio-decode-ogg --edges normal`: only this package.
+* Parent `scripts/verify_independent.ps1`: copied only Ogg and Vorbis into a
+  separate workspace and passed offline package tests and dependency trees.
 
 ## Outstanding work
 
@@ -46,7 +48,7 @@ Evidence on Windows x86-64, rustc 1.99.1:
   actual ITGmania/StepMania song-pack validation (assets are not song packs).
 * Reproducible comparative throughput/startup/allocation/memory/seek benchmarks,
   and subsequent measured optimization. No competitive performance claim yet.
-* Broader platforms, extracted-manifest validation and benchmark targets.
+* Broader platforms and benchmark targets.
 
 Transport validation does not validate codec headers or mapping-specific packet
 ordering. Metadata, channel layout, sample counts and exact seeking belong to
