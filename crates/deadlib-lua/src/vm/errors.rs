@@ -109,6 +109,11 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
 impl Vm {
     #[cold]
     pub(super) fn argument_error(&self, index: usize, detail: &[u8]) -> Error {
+        self.argument_error_at(index as i64 + 1, detail)
+    }
+
+    #[cold]
+    pub(super) fn argument_error_at(&self, mut argument: i64, detail: &[u8]) -> Error {
         let frame = self
             .active_native
             .or_else(|| self.frames.len().checked_sub(1));
@@ -118,17 +123,15 @@ impl Vm {
             .map_or((b"?".as_slice(), false), |(name, kind)| {
                 (name.as_ref(), *kind == b"method")
             });
-        let mut bytes = if method && index == 0 {
+        argument = argument.saturating_sub(i64::from(method));
+        let bad_self = method && argument == 0;
+        let mut bytes = if bad_self {
             b"calling '".to_vec()
         } else {
-            format!("bad argument #{} to '", index + usize::from(!method)).into_bytes()
+            format!("bad argument #{argument} to '").into_bytes()
         };
         bytes.extend_from_slice(name);
-        bytes.extend_from_slice(if method && index == 0 {
-            b"' on bad self ("
-        } else {
-            b"' ("
-        });
+        bytes.extend_from_slice(if bad_self { b"' on bad self (" } else { b"' (" });
         bytes.extend_from_slice(detail);
         bytes.push(b')');
         Error::from_bytes(ErrorKind::Runtime, 0, bytes)

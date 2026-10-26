@@ -1,5 +1,6 @@
 //! Direct Rust function pointers over the native register call boundary.
 use super::*;
+use std::any::Any;
 mod stack;
 mod thread;
 pub use stack::NativeStack;
@@ -15,10 +16,24 @@ pub(super) use thread::ThreadData;
 /// VM; its Lua finalizers are skipped because execution was interrupted.
 pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 
-#[derive(Debug)]
 pub(super) struct Function {
     callback: HostFunction,
     pub upvalues: Box<[Value]>,
+    data: Option<Box<dyn Any + Send + Sync>>,
+}
+impl std::fmt::Debug for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HostFunction")
+            .field("upvalues", &self.upvalues)
+            .field("has_data", &self.data.is_some())
+            .finish_non_exhaustive()
+    }
+}
+impl Function {
+    pub(super) fn heap_bytes(&self) -> usize {
+        std::mem::size_of_val(self.upvalues.as_ref())
+            + self.data.as_deref().map_or(0, std::mem::size_of_val)
+    }
 }
 
 /// A native callback's arguments, captured values and result writer.
@@ -60,13 +75,41 @@ impl Vm {
     /// ```
     ///
     /// # Errors
-    /// Returns an error for invalid/collected captures or more than 60 captures.
+    /// Returns an error for invalid/collected captures or more than 255 captures.
     pub fn new_host_function(
         &mut self,
         callback: HostFunction,
         captures: &[Value],
     ) -> Result<Value, Error> {
-        if captures.len() > 60 {
+        self.host_function(callback, captures, None)
+    }
+
+    /// Create a host closure with private owned binding data and Lua captures.
+    ///
+    /// Data is inaccessible to Lua and does not count as an upvalue. Retained
+    /// Lua values must be in `captures`; opaque data is not traced. Data drops
+    /// when the closure is collected, or after Lua shutdown finalizers. Its
+    /// destructor must not reenter Lua or panic. Heap accounting includes the
+    /// boxed object's size, excluding allocations it owns indirectly.
+    ///
+    /// # Errors
+    /// Rejects invalid/collected captures or more than 255 captures.
+    pub fn new_host_function_with_data<T: Any + Send + Sync>(
+        &mut self,
+        callback: HostFunction,
+        captures: &[Value],
+        data: T,
+    ) -> Result<Value, Error> {
+        self.host_function(callback, captures, Some(Box::new(data)))
+    }
+
+    fn host_function(
+        &mut self,
+        callback: HostFunction,
+        captures: &[Value],
+        data: Option<Box<dyn Any + Send + Sync>>,
+    ) -> Result<Value, Error> {
+        if captures.len() > 255 {
             return Err(Error::new(
                 ErrorKind::Limit,
                 0,
@@ -76,10 +119,13 @@ impl Vm {
         for &value in captures {
             self.validate_value(value)?;
         }
-        let upvalues = captures.into();
-        self.native_closures
-            .note_alloc(std::mem::size_of_val(captures));
-        self.new_native(threads::NativeKind::Host(Function { callback, upvalues }))
+        let function = Function {
+            callback,
+            upvalues: captures.into(),
+            data,
+        };
+        self.native_closures.note_alloc(function.heap_bytes());
+        self.new_native(threads::NativeKind::Host(function))
     }
 
     #[inline]
@@ -198,6 +244,17 @@ impl Vm {
 }
 
 impl HostCall<'_> {
+    /// Borrow private binding data of the currently executing host closure.
+    /// The borrow ends before a mutable operation can reenter Lua.
+    pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&T> {
+        let threads::NativeKind::Host(function) =
+            &self.vm.native_closures[slot_index(self.id)].kind
+        else {
+            unreachable!("active host function")
+        };
+        function.data.as_deref()?.downcast_ref()
+    }
+
     /// Invoke a Lua/native function or callable value without leaving this callback.
     ///
     /// Results borrow register storage and remain rooted until another call or

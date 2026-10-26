@@ -410,11 +410,23 @@ recoverable diagnostics through a caller-provided function.
 `Vm::new_host_function` registers a Rust function pointer as a native Lua
 function. `HostCall::arguments` borrows the original register range, while
 `push` appends results in separate storage. Each registration has its own
-identity and up to 60 captured Lua values; `set_capture` updates them with the
+identity and up to 255 captured Lua values; `set_capture` updates them with the
 collector barrier. Captures and returned values can retain tables, functions,
 threads and userdata. Native userdata allocation inherits the function's
 environment. Callback errors use `error` for a message or `raise` for an exact
 Lua error value, including nil and object identities.
+
+`new_host_function_with_data` also owns private typed binding data, borrowed
+through `HostCall::function_data`. This data is separate from Lua upvalues and
+is released with the closure. Retained Lua values belong in traced captures;
+opaque data is not traced. Its boxed size enters heap accounting, while
+allocations it owns indirectly are excluded. `NativeStack::push_closure`
+replaces topmost captures with a closure inheriting the current environment.
+Native stack indexes also support the Lua 5.1 registry, environment, globals
+and upvalue pseudo-indexes. Negative numeric argument errors retain the supplied
+index. The [C closure checks](../../docs/testing/2026-10-26-rust-lua-c-closures.md)
+exercise these operations against the same C module built for official Lua.
+The Lua source compiler's separate 60-upvalue limit remains in place.
 
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected

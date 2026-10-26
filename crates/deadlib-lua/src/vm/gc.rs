@@ -453,7 +453,7 @@ impl Vm {
             .native_closures
             .iter()
             .map(|f| match &f.kind {
-                threads::NativeKind::Host(f) => std::mem::size_of_val(f.upvalues.as_ref()),
+                threads::NativeKind::Host(f) => f.heap_bytes(),
                 _ => 0,
             })
             .sum::<usize>();

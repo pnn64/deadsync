@@ -163,7 +163,7 @@ fn invalid_and_collected_captures_and_results_are_rejected() {
     );
     let callback = vm.new_host_function(invalid, &[]).unwrap();
     assert!(vm.call(callback, &[]).is_err());
-    assert!(vm.new_host_function(echo, &[Value::Nil; 61]).is_err());
+    assert!(vm.new_host_function(echo, &[Value::Nil; 256]).is_err());
     let dead = vm.new_host_function(echo, &[]).unwrap();
     vm.collect_garbage().unwrap();
     assert!(vm.new_host_function(echo, &[dead]).is_err());

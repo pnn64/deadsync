@@ -103,3 +103,8 @@ API void *lua_touserdata(lua_State *L, int index) {
   BoundaryValue value = {0}; operation(L, 13, index, 0, &value);
   return (void *)value.bytes;
 }
+API void lua_pushcclosure(lua_State *L, lua_CFunction function, int count) {
+  /* The fixture targets the pinned MSVC ABI, where these pointer sizes match. */
+  BoundaryValue value = {0}; value.bytes = (const char *)function;
+  operation(L, 14, count, 0, &value);
+}

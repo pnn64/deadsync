@@ -9,6 +9,11 @@
 #endif
 typedef struct lua_State lua_State;
 typedef int (*lua_CFunction)(lua_State *);
+#define LUA_REGISTRYINDEX (-10000)
+#define LUA_ENVIRONINDEX (-10001)
+#define LUA_GLOBALSINDEX (-10002)
+#define lua_upvalueindex(i) (LUA_GLOBALSINDEX-(i))
+#define lua_pushcfunction(L,f) lua_pushcclosure(L,(f),0)
 typedef struct BoundaryValue {
   int integer;
   double number;
@@ -34,4 +39,5 @@ API void lua_settop(lua_State *, int);
 API void lua_replace(lua_State *, int);
 API void lua_pushlightuserdata(lua_State *, void *);
 API void *lua_touserdata(lua_State *, int);
+API void lua_pushcclosure(lua_State *, lua_CFunction, int);
 #endif

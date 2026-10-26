@@ -1,5 +1,6 @@
 local sum,top=boundary_sum('17.5',25)
 assert(sum==42.5 and top==3)
+assert(debug.getinfo(boundary_sum,'u').nups==0)
 local payload={tag=42}
 local identity,nothing,boolean=boundary_identity(payload)
 assert(identity==payload and nothing==nil and boolean==false)
@@ -182,5 +183,50 @@ assert(not ok and message:find('yield across',1,true))
 local ok,message=pcall(boundary_sum,false,2)
 assert(not ok and message:find('number expected',1,true))
 assert(boundary_sum(40,2)==42)
+
+local weak_closure=setmetatable({},{__mode='v'})
+local closure_payload={tag=42};weak_closure[1]=closure_payload
+local counter=boundary_make_counter('17.5',closure_payload)
+assert(debug.getinfo(counter,'u').nups==2)
+assert(select('#',debug.getupvalue(counter,1))==0)
+assert(select('#',debug.setupvalue(counter,1,99))==0)
+closure_payload=nil;collectgarbage();assert(weak_closure[1]~=nil)
+local n,value=counter(24.5);assert(n==42 and value==weak_closure[1])
+local other=boundary_make_counter(0,value)
+assert(other~=counter and other()==1 and counter()==43)
+local closure_thread=coroutine.create(function()return counter(-1)end)
+local ok,n,thread_value=coroutine.resume(closure_thread)
+assert(ok and n==42 and thread_value==value)
+closure_thread=nil;thread_value=nil
+value.cycle=counter;weak_closure[2]=counter
+counter=nil;other=nil;value=nil;collectgarbage()
+assert(weak_closure[1]==nil and weak_closure[2]==nil)
+
+local many_captures=boundary_make_many()
+assert(debug.getinfo(many_captures,'u').nups==255)
+local a,b,c=many_captures();assert(a==1 and b==255 and c==nil)
+assert(select('#',many_captures())==3)
+local registry,environment,globals=boundary_snapshot()
+assert(registry==debug.getregistry()and environment==_G and globals==_G)
+local custom_environment={tag=17}
+local snapshot=boundary_set_environment(custom_environment)
+assert(debug.getfenv(snapshot)==custom_environment)
+local r,e,g=snapshot();assert(r==registry and e==custom_environment and g==globals)
+local custom_globals={tag=42}
+assert(boundary_set_globals(custom_globals)==globals)
+local r,e,g=snapshot();assert(r==registry and e==custom_environment and g==custom_globals)
+setfenv(0,globals)
+local custom_registry={tag=99}
+assert(boundary_registry_roundtrip(custom_registry,function()
+  assert(debug.getregistry()==custom_registry);collectgarbage()
+end)==custom_registry)
+assert(debug.getregistry()==registry)
+
+local invalid_capture=boundary_make_counter(false,{})
+local ok,capture_error=pcall(invalid_capture)
+local valid_capture=boundary_make_counter(0,{})
+local ok2,negative_error=pcall(valid_capture,false)
+assert(not ok and not ok2)
+print('closure-errors',capture_error,negative_error)
 collectgarbage()
 print('boundary',sum,top,#binary,'identity','nil','reentry','gc','yield-barrier','recovered')

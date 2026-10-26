@@ -74,6 +74,10 @@ mod windows {
         state: usize,
         bridge: Arc<Bridge>,
     }
+    struct Binding {
+        function: usize,
+        bridge: Arc<Bridge>,
+    }
     impl HostThreadState for StateOwner {
         fn heap_bytes(&self) -> usize {
             self.bridge.state_bytes
@@ -101,6 +105,7 @@ mod windows {
     struct Context<'a, 'vm> {
         stack: NativeStack<'a, 'vm>,
         error: Option<Error>,
+        bridge: Arc<Bridge>,
     }
     impl Context<'_, '_> {
         fn operation(
@@ -164,6 +169,18 @@ mod windows {
                         _ => std::ptr::null(),
                     }
                 }
+                14 => {
+                    let count = usize::try_from(a)
+                        .map_err(|_| self.stack.error(b"invalid C capture count"))?;
+                    self.stack.push_closure(
+                        native,
+                        count,
+                        Binding {
+                            function: value.bytes as usize,
+                            bridge: self.bridge.clone(),
+                        },
+                    )?;
+                }
                 _ => return Err(self.stack.error(b"unknown boundary-probe operation")),
             }
             Ok(())
@@ -191,17 +208,9 @@ mod windows {
         }
     }
     fn native(call: &mut HostCall<'_>) -> Result<(), Error> {
-        let [Value::LightUserdata(function), Value::LightUserdata(bridge)] = call.captures()[..2]
-        else {
-            unreachable!()
-        };
-        let pointer = bridge as usize as *const Bridge;
-        // SAFETY: run owns the Arc until after this VM and its callbacks drop.
-        // Thread state takes a separate strong owner, never a borrowed pointer.
-        let bridge = unsafe {
-            Arc::increment_strong_count(pointer);
-            Arc::from_raw(pointer)
-        };
+        let binding = call.function_data::<Binding>().expect("C function binding");
+        let function = binding.function;
+        let bridge = binding.bridge.clone();
         if call.thread_state::<StateOwner>().is_none() {
             // SAFETY: typed fixture constructor creates an idle, heap-owned state.
             let state = unsafe { (bridge.new_state)() };
@@ -217,16 +226,19 @@ mod windows {
         let owner = call.thread_state::<StateOwner>().unwrap();
         assert!(Arc::ptr_eq(&owner.bridge, &bridge));
         let state = owner.state as *mut c_void;
-        // SAFETY: every registered symbol has lua_CFunction's C signature.
-        let function: CFunction = unsafe { std::mem::transmute(function as usize) };
+        // SAFETY: bindings come from trusted symbols or lua_pushcclosure,
+        // both of which provide lua_CFunction's C signature.
+        let function: CFunction = unsafe { std::mem::transmute(function) };
+        let invoke = bridge.invoke;
         let mut context = Context {
             stack: call.native_stack()?,
             error: None,
+            bridge,
         };
         // SAFETY: trusted C functions borrow the Context only until return.
         // setjmp/longjmp and every skipped frame are within the C DLLs.
         let count = unsafe {
-            (bridge.invoke)(
+            invoke(
                 state,
                 (&mut context as *mut Context<'_, '_>).cast(),
                 dispatch,
@@ -278,13 +290,27 @@ mod windows {
             "boundary_state",
             "boundary_state_reenter",
             "boundary_cached_top",
+            "boundary_make_counter",
+            "boundary_snapshot",
+            "boundary_set_environment",
+            "boundary_set_globals",
+            "boundary_registry_roundtrip",
+            "boundary_make_many",
         ] {
-            let mut captures = [Value::Nil; 2];
-            captures[0] = Value::LightUserdata(bridge.module.symbol(name) as u64);
-            captures[1] = Value::LightUserdata(Arc::as_ptr(&bridge) as usize as u64);
-            let function = vm.new_host_function(native, &captures).unwrap();
+            let function = vm
+                .new_host_function_with_data(
+                    native,
+                    &[],
+                    Binding {
+                        function: bridge.module.symbol(name),
+                        bridge: bridge.clone(),
+                    },
+                )
+                .unwrap();
             vm.set_global(name.as_bytes(), function).unwrap();
         }
+        let library_owner = Arc::downgrade(&bridge);
+        drop(bridge);
         let state_function = vm.global(b"boundary_state");
         let before = vm.call(state_function, &[]).unwrap()[0];
         // Moving Vm and growing its thread arena must not move native states.
@@ -299,6 +325,7 @@ mod windows {
         );
         let collected = DESTROYED.load(Ordering::Relaxed);
         drop(vm);
+        assert!(library_owner.upgrade().is_none(), "all DLL owners released");
         let created = CREATED.load(Ordering::Relaxed);
         let destroyed = DESTROYED.load(Ordering::Relaxed);
         assert_eq!(

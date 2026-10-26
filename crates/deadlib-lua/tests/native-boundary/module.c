@@ -81,3 +81,50 @@ EXPORT int boundary_cached_top(lua_State *L) {
   lua_pushnumber(L, lua_gettop(cached));
   return 1;
 }
+static int counter(lua_State *L) {
+  double value = luaL_checknumber(L, lua_upvalueindex(1));
+  value += lua_gettop(L) ? luaL_checknumber(L, -1) : 1;
+  lua_pushnumber(L, value); lua_replace(L, lua_upvalueindex(1));
+  lua_pushvalue(L, lua_upvalueindex(1));
+  lua_pushvalue(L, lua_upvalueindex(2));
+  return 2;
+}
+EXPORT int boundary_make_counter(lua_State *L) {
+  lua_pushvalue(L, 1); lua_pushvalue(L, 2);
+  lua_pushcclosure(L, counter, 2); return 1;
+}
+EXPORT int boundary_snapshot(lua_State *L) {
+  lua_pushvalue(L, LUA_REGISTRYINDEX);
+  lua_pushvalue(L, LUA_ENVIRONINDEX);
+  lua_pushvalue(L, LUA_GLOBALSINDEX);
+  return 3;
+}
+EXPORT int boundary_set_environment(lua_State *L) {
+  lua_pushvalue(L, 1); lua_replace(L, LUA_ENVIRONINDEX);
+  lua_pushcfunction(L, boundary_snapshot); return 1;
+}
+EXPORT int boundary_set_globals(lua_State *L) {
+  lua_pushvalue(L, LUA_GLOBALSINDEX);
+  lua_pushvalue(L, 1); lua_replace(L, LUA_GLOBALSINDEX); return 1;
+}
+EXPORT int boundary_registry_roundtrip(lua_State *L) {
+  int original = lua_gettop(L) + 1;
+  lua_pushvalue(L, LUA_REGISTRYINDEX);
+  lua_pushvalue(L, 1); lua_replace(L, LUA_REGISTRYINDEX);
+  lua_pushvalue(L, 2); lua_call(L, 0, 0);
+  lua_pushvalue(L, LUA_REGISTRYINDEX);
+  lua_pushvalue(L, original); lua_replace(L, LUA_REGISTRYINDEX);
+  return 1;
+}
+static int many(lua_State *L) {
+  double first = luaL_checknumber(L, lua_upvalueindex(1));
+  double last = luaL_checknumber(L, lua_upvalueindex(255));
+  lua_pushnumber(L, first); lua_pushnumber(L, last);
+  lua_pushvalue(L, lua_upvalueindex(256)); return 3;
+}
+EXPORT int boundary_make_many(lua_State *L) {
+  int i;
+  if (!lua_checkstack(L, 255)) return 0;
+  for (i = 1; i <= 255; i++) lua_pushnumber(L, i);
+  lua_pushcclosure(L, many, 255); return 1;
+}

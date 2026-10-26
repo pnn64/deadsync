@@ -4,6 +4,8 @@ use super::*;
 /// A rooted mutable stack for one synchronous native callback.
 ///
 /// Positive indexes start at one; negative indexes count back from the top.
+/// Lua 5.1 pseudo-indexes access the registry (-10000), closure environment
+/// (-10001), thread globals (-10002) and captures (-10003 for the first).
 /// This window is separate from closure captures. Nested calls preserve the
 /// live prefix and cannot yield across this callback. [`Self::call`] protects
 /// errors; [`Self::call_unprotected`] propagates them with their fault frames.
@@ -56,6 +58,9 @@ impl<'vm> HostCall<'vm> {
 }
 
 impl NativeStack<'_, '_> {
+    fn capture_index(index: isize) -> Option<usize> {
+        usize::try_from((-10003isize).checked_sub(index)?).ok()
+    }
     fn check_error(&self) -> Result<(), Error> {
         if let Some(error) = &self.call.abort {
             return Err(error.clone());
@@ -78,9 +83,17 @@ impl NativeStack<'_, '_> {
     pub fn top(&self) -> usize {
         self.call.results
     }
-    /// Read a stack value; zero and out-of-range indexes return None.
+    /// Read a stack value or Lua 5.1 pseudo-index. Absent indexes return None.
     pub fn value(&self, index: isize) -> Option<Value> {
-        self.position(index).map(|p| self.call.vm.registers[p])
+        match index {
+            -10000 => Some(Value::Table(self.call.vm.registry)),
+            -10001 => Some(Value::Table(self.call.vm.native_environment(self.call.id))),
+            -10002 => Some(Value::Table(self.call.vm.globals)),
+            ..=-10003 => {
+                Self::capture_index(index).and_then(|i| self.call.captures().get(i).copied())
+            }
+            _ => self.position(index).map(|p| self.call.vm.registers[p]),
+        }
     }
     /// Reserve extra slots without changing the visible top.
     /// Returns false for allocation failure or the 8,000-slot limit.
@@ -139,6 +152,31 @@ impl NativeStack<'_, '_> {
     pub fn set(&mut self, index: isize, value: Value) -> Result<(), Error> {
         self.check_error()?;
         self.call.vm.validate_value(value)?;
+        match index {
+            -10002..=-10000 => {
+                let Value::Table(table) = value else {
+                    return Err(self.error(b"native pseudo-index requires a table"));
+                };
+                match index {
+                    -10000 => {
+                        self.call.vm.registry = table;
+                        self.call.vm.gc_new_value(value);
+                    }
+                    -10001 => self.call.vm.set_native_environment(self.call.id, table),
+                    _ => self
+                        .call
+                        .vm
+                        .set_thread_environment(self.call.vm.thread, table),
+                }
+                return Ok(());
+            }
+            ..=-10003 => {
+                let index = Self::capture_index(index)
+                    .ok_or_else(|| self.error(b"invalid native capture index"))?;
+                return self.call.set_capture(index, value);
+            }
+            _ => {}
+        }
         let position = self
             .position(index)
             .ok_or_else(|| self.error(b"invalid native stack index"))?;
@@ -152,14 +190,46 @@ impl NativeStack<'_, '_> {
     /// Returns a native argument/type error for an absent or nonnumeric slot.
     pub fn number(&self, index: isize) -> Result<f64, Error> {
         self.check_error()?;
-        let relative = self.position(index).map_or(self.top(), |p| p - self.base);
-        self.value(index)
-            .and_then(|v| self.call.vm.number(v))
-            .ok_or_else(|| {
-                self.call
-                    .vm
-                    .argument_type_error(self.base - 1, self.top(), relative, "number")
-            })
+        let value = self.value(index);
+        value.and_then(|v| self.call.vm.number(v)).ok_or_else(|| {
+            self.call.vm.argument_error_at(
+                index as i64,
+                format!(
+                    "number expected, got {}",
+                    value.map_or("no value", Value::type_name)
+                )
+                .as_bytes(),
+            )
+        })
+    }
+    /// Replace the last `captures` values with a new host closure.
+    /// The closure inherits this callback's environment and owns `data` privately.
+    /// Lua values retained by data must also occur in the traced captures.
+    ///
+    /// # Errors
+    /// Rejects a pending error, capture underflow, more than 255 captures or a
+    /// full stack. A rejected operation leaves the current stack unchanged.
+    pub fn push_closure<T: std::any::Any + Send + Sync>(
+        &mut self,
+        callback: HostFunction,
+        captures: usize,
+        data: T,
+    ) -> Result<(), Error> {
+        self.check_error()?;
+        let prefix = self
+            .top()
+            .checked_sub(captures)
+            .ok_or_else(|| self.error(b"native capture stack underflow"))?;
+        if prefix >= limits::MAX_CSTACK {
+            return Err(self.error(b"native stack overflow"));
+        }
+        let values = self.call.vm.registers[self.base + prefix..self.base + self.top()].to_vec();
+        let function = self
+            .call
+            .vm
+            .new_host_function_with_data(callback, &values, data)?;
+        self.set_top(prefix)?;
+        self.push(function)
     }
     /// Protected call of the function below the last `arguments` stack values.
     /// Results replace the function and arguments; None keeps all results.
