@@ -1654,6 +1654,7 @@ mod tests {
                     meter: 3,
                     lanes: 4,
                     notes: std::sync::Arc::from(Vec::new()),
+                    holds: std::sync::Arc::from(Vec::new()),
                 },
                 deadsync_online::smo_songs::PreviewChart {
                     doubles: false,
@@ -1661,6 +1662,7 @@ mod tests {
                     meter: 9,
                     lanes: 4,
                     notes: std::sync::Arc::from(Vec::new()),
+                    holds: std::sync::Arc::from(Vec::new()),
                 },
             ]),
             ..Default::default()

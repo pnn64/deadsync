@@ -145,8 +145,25 @@ pub struct PreviewNote {
     pub lifts: u8,
     /// Which of `cols` are mines.
     pub mines: u8,
+    /// Which of `cols` are hold and roll heads, drawn with their bodies from
+    /// the chart's `holds`.
+    pub holds: u8,
     /// 0 = 4th, 1 = 8th, 2 = 12th, 3 = 16th, 4 = 24th, 5 = 32nd, 6 = 48th,
     /// 7 = 64th, 8 = anything finer.
+    pub quant: u8,
+}
+
+/// One hold or roll that reaches into the sample window.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PreviewHold {
+    /// Seconds from the start of the sample window that the head is struck:
+    /// below zero for one already held when the window opens.
+    pub start: f32,
+    /// When the tail lets go, after `start`; may be past the window's end.
+    pub end: f32,
+    pub lane: u8,
+    pub roll: bool,
+    /// The head's, as [`PreviewNote::quant`].
     pub quant: u8,
 }
 
@@ -161,6 +178,8 @@ pub struct PreviewChart {
     pub lanes: u8,
     /// Time-ordered.
     pub notes: Arc<[PreviewNote]>,
+    /// Ordered by head.
+    pub holds: Arc<[PreviewHold]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -715,7 +734,19 @@ fn preview_charts(data: &song_preview::SongPreviewData) -> Arc<[PreviewChart]> {
                     cols: note.cols,
                     lifts: note.lifts,
                     mines: note.mines,
+                    holds: note.holds,
                     quant: note.quant,
+                })
+                .collect(),
+            holds: chart
+                .holds
+                .iter()
+                .map(|hold| PreviewHold {
+                    start: hold.start,
+                    end: hold.end,
+                    lane: hold.lane,
+                    roll: hold.roll,
+                    quant: hold.quant,
                 })
                 .collect(),
         })
@@ -1562,6 +1593,7 @@ mod tests {
             meter,
             lanes: if doubles { 8 } else { 4 },
             notes: Arc::from(Vec::<PreviewNote>::new()),
+            holds: Arc::from(Vec::<PreviewHold>::new()),
         }
     }
 
@@ -1680,9 +1712,17 @@ mod tests {
             lanes: 8,
             notes: vec![song_preview::NoteRow {
                 time: 1.5,
-                cols: 0b1000_0001,
+                cols: 0b1000_0011,
                 lifts: 0,
                 mines: 0b1000_0000,
+                holds: 0b0000_0010,
+                quant: 3,
+            }],
+            holds: vec![song_preview::HoldSpan {
+                start: 1.5,
+                end: 2.25,
+                lane: 1,
+                roll: true,
                 quant: 3,
             }],
         }];
@@ -1694,11 +1734,22 @@ mod tests {
             charts[0].notes[0],
             PreviewNote {
                 time: 1.5,
-                cols: 0b1000_0001,
+                cols: 0b1000_0011,
                 lifts: 0,
                 mines: 0b1000_0000,
+                holds: 0b0000_0010,
                 quant: 3
             }
+        );
+        assert_eq!(
+            *charts[0].holds,
+            [PreviewHold {
+                start: 1.5,
+                end: 2.25,
+                lane: 1,
+                roll: true,
+                quant: 3
+            }]
         );
     }
 
