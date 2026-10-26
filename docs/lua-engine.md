@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 417 differential/adversarial integration tests, forty-three unit tests and
+crate, 421 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-native-coercions.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-intern-hash.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -642,6 +642,18 @@ version banner is removed; official files remain 17/18 in both engines. Two
 [measurement runs](performance/2026-10-26-rust-lua-native-coercions.md) cover 81
 runtime and 22 frontend workloads. VM metadata stays at 4,432 B; complete
 compatibility and the full engine/integration gates remain open.
+
+The [interning hash milestone](testing/2026-10-26-rust-lua-intern-hash.md) processes
+long strings through four independent word lanes with safe loads. Every byte
+participates and full byte equality resolves collisions. No string/VM field is
+added. New regressions cover binary identity, unaligned slices, table growth,
+sweeping and reused object slots. All 465 tests pass. Paired comparisons against
+the committed parent and [reference measurements](performance/2026-10-26-rust-lua-intern-hash.md)
+record about 2.2 times faster wide callback execution and 13 times faster 4 KiB
+intern hits, with identical measured allocation/heap footprints. All 140 process
+probes pass. The CLI audit has 158/196 raw matches and 196/196 after only its
+known banner is removed; official files remain 17/18 in both engines. The full
+standalone engine and integration gates remain open.
 
 ## Reference contract
 

@@ -20,6 +20,9 @@ VMs retain code needed by escaped closures, globals, table identities and shared
 upvalue cells across executions. Registers and call frames are contiguous
 vectors. Calls use an explicit frame stack; tail calls reuse the frame. Values
 are copyable enum tags with numeric object handles.
+Interning accepts arbitrary byte slices and preserves string identity through
+growth and collection. Its safe word loads hash every input byte; collision
+resolution compares the complete byte slice. No per-string hash field is stored.
 
 Fixed-source compilation and reader-based text `load` share a resumable scanner
 and parser. Flat grammar continuations preserve partial tokens, expressions and
@@ -371,5 +374,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-native-coercions.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-intern-hash.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
