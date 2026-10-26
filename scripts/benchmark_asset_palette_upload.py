@@ -97,8 +97,8 @@ def build(args):
 def compare(args):
     logs = getattr(args, "log_root", Path("target/asset-palette-upload")) / args.output.stem
     logs.mkdir(parents=True, exist_ok=True)
-    timing = re.compile(r"((?:palette|uploads|cachepaths|open)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
-    allocation = re.compile(r"((?:palette|uploads|cachepaths|open)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
+    timing = re.compile(r"((?:palette|uploads|cachepaths|open|metadata)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
+    allocation = re.compile(r"((?:palette|uploads|cachepaths|open|metadata)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
     metadata, rows = {}, []
     for version in ["before", "after"]:
         binary = getattr(args, version).resolve()

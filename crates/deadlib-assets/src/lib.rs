@@ -25,6 +25,9 @@ mod perf_fixture;
 #[cfg(test)]
 mod path_scan_perf;
 
+#[cfg(test)]
+mod texture_hint_perf;
+
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
@@ -122,35 +125,29 @@ fn hint_starts_with(bytes: &[u8], start: usize, needle: &[u8]) -> bool {
 fn texture_hint_flags(bytes: &[u8]) -> u16 {
     let mut flags = 0u16;
     for index in 0..bytes.len() {
-        let (first, second) = match bytes[index].to_ascii_lowercase() {
-            b'1' => (b"16bpp".as_slice(), HINT_16BPP),
-            b'3' => (b"32bpp".as_slice(), HINT_32BPP),
-            b'a' => (b"alphamap".as_slice(), HINT_ALPHAMAP),
-            b'c' => (b"clamp".as_slice(), HINT_CLAMP),
-            b'g' => (b"grayscale".as_slice(), HINT_GRAYSCALE),
-            b'l' => (b"linear".as_slice(), HINT_LINEAR),
-            b'm' => (b"mipmaps".as_slice(), HINT_MIPMAPS),
-            b'p' => (b"point".as_slice(), HINT_POINT),
-            b'r' => (b"repeat".as_slice(), HINT_REPEAT),
-            b's' => (b"stretch".as_slice(), HINT_STRETCH),
-            b'w' => (b"wrap".as_slice(), HINT_WRAP),
+        // Keep each needle constant so the compiler can compare packed bytes.
+        flags |= match bytes[index].to_ascii_lowercase() {
+            b'1' => u16::from(hint_starts_with(bytes, index, b"16bpp")) * HINT_16BPP,
+            b'3' => u16::from(hint_starts_with(bytes, index, b"32bpp")) * HINT_32BPP,
+            b'a' => u16::from(hint_starts_with(bytes, index, b"alphamap")) * HINT_ALPHAMAP,
+            b'c' => u16::from(hint_starts_with(bytes, index, b"clamp")) * HINT_CLAMP,
+            b'g' => u16::from(hint_starts_with(bytes, index, b"grayscale")) * HINT_GRAYSCALE,
+            b'l' => u16::from(hint_starts_with(bytes, index, b"linear")) * HINT_LINEAR,
+            b'm' => u16::from(hint_starts_with(bytes, index, b"mipmaps")) * HINT_MIPMAPS,
+            b'p' => u16::from(hint_starts_with(bytes, index, b"point")) * HINT_POINT,
+            b'r' => u16::from(hint_starts_with(bytes, index, b"repeat")) * HINT_REPEAT,
+            b's' => u16::from(hint_starts_with(bytes, index, b"stretch")) * HINT_STRETCH,
+            b'w' => u16::from(hint_starts_with(bytes, index, b"wrap")) * HINT_WRAP,
             b'd' => {
-                if hint_starts_with(bytes, index, b"dither") {
-                    flags |= HINT_DITHER;
-                }
-                (b"doubleres".as_slice(), HINT_DOUBLERES)
+                (u16::from(hint_starts_with(bytes, index, b"dither")) * HINT_DITHER)
+                    | (u16::from(hint_starts_with(bytes, index, b"doubleres")) * HINT_DOUBLERES)
             }
             b'n' => {
-                if hint_starts_with(bytes, index, b"nearest") {
-                    flags |= HINT_NEAREST;
-                }
-                (b"nomipmaps".as_slice(), HINT_NOMIPMAPS)
+                (u16::from(hint_starts_with(bytes, index, b"nearest")) * HINT_NEAREST)
+                    | (u16::from(hint_starts_with(bytes, index, b"nomipmaps")) * HINT_NOMIPMAPS)
             }
-            _ => continue,
+            _ => 0,
         };
-        if hint_starts_with(bytes, index, first) {
-            flags |= second;
-        }
     }
     flags
 }
@@ -369,7 +366,19 @@ pub fn texture_filename_has_multiframe_hint(filename: &str) -> bool {
     while i < bytes.len() {
         if bytes[i] != b' ' {
             i += 1;
-            continue;
+            if i == bytes.len() {
+                break;
+            }
+            if bytes[i] != b' ' {
+                let Some(offset) = (if bytes.len() - i < 16 {
+                    bytes[i..].iter().position(|&byte| byte == b' ')
+                } else {
+                    memchr::memchr(b' ', &bytes[i..])
+                }) else {
+                    break;
+                };
+                i += offset;
+            }
         }
         let mut left = i + 1;
         while left < bytes.len() && bytes[left].is_ascii_digit() {

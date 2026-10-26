@@ -227,14 +227,14 @@ fn image_reader(
 /// GIF textures use the logical canvas, including the first frame's offsets.
 pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
     let (signature, input) = image_source(path)?;
-    drop(input);
     if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
-        let reader = gif_reader(path)?;
+        let reader = gif_reader_from_reader(image_reader(input, path)?)?;
         if reader.width() == 0 || reader.height() == 0 {
             return Err(image_limit());
         }
         return Ok((u32::from(reader.width()), u32::from(reader.height())));
     }
+    drop(input);
     image::ImageReader::open(path)?
         .with_guessed_format()?
         .into_dimensions()
@@ -274,6 +274,7 @@ fn gif_error(error: gif::DecodingError) -> image::ImageError {
     ))
 }
 
+#[cfg(test)]
 fn gif_reader(path: &Path) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
     gif_reader_from_reader(BufReader::new(std::fs::File::open(path)?))
 }
@@ -1073,3 +1074,6 @@ mod open_perf;
 
 #[cfg(test)]
 mod open_seek;
+
+#[cfg(test)]
+mod metadata_perf;
