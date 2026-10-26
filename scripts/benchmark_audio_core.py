@@ -13,6 +13,21 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 ARCHIVES = ROOT / "target/audio-core-kernels"
 SOURCE = ROOT / "crates/deadlib-audio-core"
+SUITES = {
+    "callback_kernels": ("benchmark_callback_kernels", (16, 32, 40, 48)),
+    "panned_kernel": ("benchmark_panned_mix", (36, 60)),
+    "query_kernels": ("benchmark_query", (66,)),
+    "rendering_kernels": ("benchmark_rendering_callbacks", (16, 32)),
+}
+FILTERS = {
+    "render::kernels::benchmark_callback_kernels": (16, 24),
+    "quantization::benchmark_callback_kernels_quantization": 16,
+    "mode_parser::benchmark_callback_kernels_mode_parser": 8,
+    "benchmark_panned_mix": (36, 60),
+    "position::probes::benchmark_query_positions": 42,
+    "telemetry::probes::benchmark_query_diagnostics": 24,
+    "benchmark_rendering_callbacks": (16, 32),
+}
 
 
 def build(stage, target):
@@ -51,21 +66,34 @@ def build(stage, target):
                     rustc=subprocess.check_output(["rustc", "-Vv"], text=True),
                     source_sha256={path: hashlib.sha256(data).hexdigest() for path, data in sources.items()},
                     binary_sha256=hashlib.sha256(executable.read_bytes()).hexdigest())
+    if target == "rendering_kernels":
+        trace = archive / "trace.bin"
+        capture = subprocess.run([str(executable), "dump_rendering_trace", "--ignored", "--nocapture", "--test-threads=1"],
+                                 env={**os.environ, "AUDIO_CORE_TRACE_OUT": str(trace)},
+                                 capture_output=True, text=True, check=True)
+        (archive / "trace.log").write_text(capture.stdout, encoding="utf-8")
+        manifest["trace_sha256"] = hashlib.sha256(trace.read_bytes()).hexdigest()
+        manifest["trace_bytes"] = trace.stat().st_size
     (archive / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(result.stdout, flush=True)
 
 
 def compare(stages, output, runs, bench_filter):
-    timing = re.compile(r"((?:callback|pan|query)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
-    churn = re.compile(r"((?:callback|pan|query)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
+    timing = re.compile(r"((?:callback|pan|query|rendering)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
+    churn = re.compile(r"((?:callback|pan|query|rendering)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
     rows = []
     logs = ARCHIVES / "runs" / output.stem
     logs.mkdir(parents=True, exist_ok=True)
+    traces = [(ARCHIVES / stage / "trace.bin").read_bytes() for stage in stages
+              if (ARCHIVES / stage / "trace.bin").exists()]
+    if traces and (len(traces) != len(stages) or any(trace != traces[0] for trace in traces)):
+        raise ValueError("Render PCM, reports, transport state, or timing records changed")
     for run in range(runs):
         for stage in stages[run % len(stages):] + stages[:run % len(stages)]:
             manifest = json.loads((ARCHIVES / stage / "manifest.json").read_text())
             target = manifest.get("target", "callback_kernels")
-            benchmark = bench_filter or ("benchmark_query" if target == "query_kernels" else "benchmark_panned_mix" if target == "panned_kernel" else "benchmark_callback_kernels")
+            default_benchmark, expected = SUITES[target]
+            benchmark = bench_filter or default_benchmark
             result = subprocess.run([str(ARCHIVES / stage / "callback.exe"), benchmark,
                                      "--ignored", "--nocapture", "--test-threads=1"],
                                     capture_output=True, text=True, check=True)
@@ -73,9 +101,10 @@ def compare(stages, output, runs, bench_filter):
             counts = {label: dict(re.findall(r"(\w+): (\d+)", values))
                       for label, values in churn.findall(result.stdout)}
             measurements = timing.findall(result.stdout)
-            expected = (66,) if target == "query_kernels" else (36,) if target == "panned_kernel" else (16, 32, 40)
             if bench_filter:
-                expected = (42 if "query_positions" in bench_filter else 24 if "query_diagnostics" in bench_filter else 8 if "mode_parser" in bench_filter else 36 if "panned_mix" in bench_filter else 16,)
+                expected = FILTERS[bench_filter]
+                if isinstance(expected, int):
+                    expected = (expected,)
             if len(measurements) not in expected or len(counts) != len(measurements):
                 raise ValueError(f"Expected {expected} workloads: {stage}")
             for label, cycles, ns in measurements:
@@ -104,12 +133,9 @@ def compare(stages, output, runs, bench_filter):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build")
-    parser.add_argument("--target", choices=["callback_kernels", "panned_kernel", "query_kernels"], default="callback_kernels")
+    parser.add_argument("--target", choices=list(SUITES), default="callback_kernels")
     parser.add_argument("--compare", nargs="+")
-    parser.add_argument("--benchmark", choices=["render::kernels::benchmark_callback_kernels",
-                        "quantization::benchmark_callback_kernels_quantization",
-                        "mode_parser::benchmark_callback_kernels_mode_parser", "benchmark_panned_mix",
-                        "position::probes::benchmark_query_positions", "telemetry::probes::benchmark_query_diagnostics"])
+    parser.add_argument("--benchmark", choices=list(FILTERS))
     parser.add_argument("--runs", type=int, default=4)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

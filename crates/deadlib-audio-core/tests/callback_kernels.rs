@@ -257,6 +257,10 @@ mod render {
                     ("ramp-down", 2, 0.8, 1.0, 0.0),
                     ("ramp-settles", 2, 0.8, 0.99, 1.0),
                     ("ramp-surround", 6, 0.8, 0.0, 1.0),
+                    ("ramp-muted", 2, 0.0, 0.0, 1.0),
+                    ("ramp-muted-negative-zero", 2, -0.0, 0.0, 1.0),
+                    ("ramp-muted-settles", 2, 0.0, 0.99, 1.0),
+                    ("ramp-muted-surround", 6, 0.0, 0.0, 1.0),
                 ] {
                     let label = format!("callback/{kind}/samples={samples}");
                     let mut work = || {
