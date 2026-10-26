@@ -11,14 +11,14 @@ performance. Milestones are committed only after their relevant checks pass.
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
 | Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history and output limits; `tests/compression.rs` | Bidirectional flate2 differential tests pass; exhaustive tree fixtures still pending |
 | Native compression | Stored and fixed Huffman LZ77 encoder; `tests/compression.rs` | Bidirectional flate2 differential tests pass |
-| PNG chunk framing and normative ordering | Pending | Pending |
-| All five color types and all legal bit depths | Pending | Pending |
-| Five filters and Adam7 decode / encode | Pending | Pending |
+| PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
+| All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
+| Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Metadata, including Third Edition color chunks | Pending | Pending |
 | APNG frame decoding, compositing, encoding | Pending | Pending |
 | Bounded streaming with arbitrary input boundaries | Pending | Pending |
-| Differential tests: Rust png, libpng, PNGSuite | Pending | Pending |
-| Independent fixtures / malformed streams / properties | Pending | Pending |
+| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1 and vendored PNGSuite | Rust png / PNGSuite pass; libpng pending |
+| Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
 | Fuzz targets and reproducible campaigns | Pending | Pending |
 | Benchmarks and profile-guided optimization | Pending | Pending |
 
@@ -35,4 +35,19 @@ three integration tests. Differential cases cover empty, short, random,
 repetitive, >32 KiB history, and >64 KiB stored-block boundaries, with flate2
 levels 0/1/6/9, both native compression modes, every truncation of two streams,
 checksum and limit failures, and single-bit mutations of a dynamic stream.
-CRC is temporarily unused outside tests until PNG framing is added.
+
+Milestone 2 validation: native static PNG decode and encode cover all 15 legal
+color/depth combinations, five filters plus adaptive selection, both compression
+modes, Adam7 and plain scanlines, nine dimensions including empty Adam7 passes,
+and seven-byte IDAT splits (3,240 combinations). The independent Rust png decoder
+checks every encoded case; 90 independent reference encodings check native
+decoding. One-byte IDAT splits, every truncation of a small file, malformed
+critical/chunk/sample/filter cases, CRC failures, resource limits, and the
+vendored PNGSuite (161 valid / 14 malformed files) also pass. All 161 valid
+PNGSuite images reencode with both interlace settings. No implicit gamma,
+precision, palette, alpha, or color-space transformations are performed.
+
+Current limitations: ancillary metadata is preserved as raw chunks but not yet
+fully validated or exposed as typed values; APNG chunks are retained but not yet
+interpreted; decoding currently buffers the complete compressed and filtered
+image; no performance parity claim has been made.

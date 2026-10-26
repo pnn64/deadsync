@@ -2,7 +2,14 @@
 #![forbid(unsafe_code)]
 
 mod checksum;
+mod codec;
+mod scanline;
 pub mod zlib;
+
+pub use codec::{
+    AncillaryChunk, ChunkPosition, DecodeOptions, EncodeOptions, Filter, Limits, Png, Transparency,
+    decode, decode_with_options, encode,
+};
 
 pub use deadlib_image::{ColorType, Image, Samples};
 
