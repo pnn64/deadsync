@@ -965,27 +965,42 @@ pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
     if mask == 0 {
         return "Off".to_string();
     }
-    let mut capacity = 0usize;
-    let mut selected = 0usize;
-    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
-        if (mask & auto_screenshot_bit(idx)) != 0 {
-            capacity += name.len();
-            selected += 1;
-        }
-    }
-    capacity += selected.saturating_sub(1);
-
-    let mut out = String::with_capacity(capacity);
-    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
-        if (mask & auto_screenshot_bit(idx)) == 0 {
-            continue;
-        }
-        if !out.is_empty() {
-            out.push('|');
-        }
-        out.push_str(name);
-    }
-    out
+    // All combinations of the five flags, in bit order.
+    const TEXT: [&str; 32] = [
+        "",
+        "PBs",
+        "Fails",
+        "PBs|Fails",
+        "Clears",
+        "PBs|Clears",
+        "Fails|Clears",
+        "PBs|Fails|Clears",
+        "Quads",
+        "PBs|Quads",
+        "Fails|Quads",
+        "PBs|Fails|Quads",
+        "Clears|Quads",
+        "PBs|Clears|Quads",
+        "Fails|Clears|Quads",
+        "PBs|Fails|Clears|Quads",
+        "Quints",
+        "PBs|Quints",
+        "Fails|Quints",
+        "PBs|Fails|Quints",
+        "Clears|Quints",
+        "PBs|Clears|Quints",
+        "Fails|Clears|Quints",
+        "PBs|Fails|Clears|Quints",
+        "Quads|Quints",
+        "PBs|Quads|Quints",
+        "Fails|Quads|Quints",
+        "PBs|Fails|Quads|Quints",
+        "Clears|Quads|Quints",
+        "PBs|Clears|Quads|Quints",
+        "Fails|Clears|Quads|Quints",
+        "PBs|Fails|Clears|Quads|Quints",
+    ];
+    TEXT[usize::from(mask & 0x1f)].to_owned()
 }
 
 #[must_use]
