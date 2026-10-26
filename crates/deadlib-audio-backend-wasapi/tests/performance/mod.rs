@@ -205,11 +205,159 @@ fn com_task_free_accepts_null_and_owned_memory_without_rust_allocations() {
     }
 }
 
-fn measure(label: &str, iterations: usize, mut work: impl FnMut()) {
+pub(crate) fn measure(label: &str, iterations: usize, mut work: impl FnMut()) {
     work();
     let (_, counts) = perf::measure(&mut work);
     println!("{label}: allocation {counts:?}");
     bench::measure(label, iterations, work);
+}
+
+#[test]
+fn frame_time_matches_integer_division_across_rates_and_frame_counts() {
+    for rate in [
+        0,
+        1,
+        2,
+        3,
+        44_100,
+        48_000,
+        96_000,
+        192_000,
+        1_000_000_000,
+        u32::MAX,
+    ] {
+        for frames in [0, 1, 2, 127, 128, 441, 480, 1024, u32::MAX - 1, u32::MAX] {
+            let expected = (u64::from(frames) * 1_000_000_000)
+                .checked_div(u64::from(rate))
+                .unwrap_or(0);
+            assert_eq!(FramesToNanos::new(rate).convert(frames), expected);
+        }
+    }
+    for rate in 1..=65_536u32 {
+        for frames in [rate - 1, rate, rate + 1, u32::MAX] {
+            assert_eq!(
+                FramesToNanos::new(rate).convert(frames),
+                u64::from(frames) * 1_000_000_000 / u64::from(rate)
+            );
+        }
+    }
+    for power in 1..32 {
+        let rate = 1u32 << power;
+        for rate in [rate - 1, rate, rate + 1] {
+            for frames in [1, rate, u32::MAX] {
+                assert_eq!(
+                    FramesToNanos::new(rate).convert(frames),
+                    u64::from(frames) * 1_000_000_000 / u64::from(rate)
+                );
+            }
+        }
+    }
+    let mut random = 0x7d51_24d3u32;
+    for _ in 0..100_000 {
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let rate = random;
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let frames = random;
+        let expected = (u64::from(frames) * 1_000_000_000)
+            .checked_div(u64::from(rate))
+            .unwrap_or(0);
+        assert_eq!(FramesToNanos::new(rate).convert(frames), expected);
+    }
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
+fn benchmark_frame_setup() {
+    for rate in [44_100, 48_000, 96_000, 192_000, 65_536, u32::MAX] {
+        measure(&format!("wasapi/frame_setup_{rate}"), 1_000_000, || {
+            black_box(FramesToNanos::new(black_box(rate)));
+        });
+    }
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
+fn benchmark_frame_conversion() {
+    for (rate, frames) in [
+        (48_000, 128),
+        (44_100, 441),
+        (192_000, 512),
+        (96_000, u32::MAX),
+        (1, u32::MAX),
+        (0, u32::MAX),
+    ] {
+        let converter = black_box(FramesToNanos::new(rate));
+        measure(
+            &format!("wasapi/frame_convert_{rate}_{frames}"),
+            1_000_000,
+            || {
+                black_box(converter.convert(black_box(frames)));
+            },
+        );
+    }
+}
+
+#[implement(Audio::IAudioClock)]
+struct FixedClock(u64);
+
+impl Audio::IAudioClock_Impl for FixedClock_Impl {
+    fn GetFrequency(&self) -> Result<u64> {
+        Ok(10_000_000)
+    }
+    fn GetPosition(&self, position: *mut u64, qpc: *mut u64) -> Result<()> {
+        // SAFETY: the production caller supplies writable out parameters. The
+        // optional QPC pointer is checked, as required by the COM signature.
+        unsafe {
+            *position = 0;
+            if !qpc.is_null() {
+                *qpc = self.0;
+            }
+        }
+        Ok(())
+    }
+    fn GetCharacteristics(&self) -> Result<u32> {
+        Ok(0)
+    }
+}
+
+#[test]
+fn playback_anchor_matches_wide_arithmetic_at_saturation_boundaries() {
+    for qpc in [
+        0,
+        1,
+        u64::MAX / 100 - 1,
+        u64::MAX / 100,
+        u64::MAX / 100 + 1,
+        u64::MAX,
+    ] {
+        let clock: Audio::IAudioClock = FixedClock(qpc).into();
+        for delay in [0, 1, 99, 100, u64::MAX - 1, u64::MAX] {
+            let expected =
+                (u128::from(qpc) * 100 + u128::from(delay)).min(u128::from(u64::MAX - 1)) as u64;
+            assert_eq!(
+                playback_anchor_nanos_after_delay(&clock, delay).unwrap(),
+                expected
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
+fn benchmark_playback_anchor() {
+    for (qpc, delay, label) in [
+        (123_456_789_012, 2_666_666, "typical"),
+        (0, 0, "zero"),
+        (u64::MAX / 100, 100, "add_saturates"),
+        (u64::MAX, 1, "multiply_saturates"),
+    ] {
+        let clock: Audio::IAudioClock = FixedClock(qpc).into();
+        measure(&format!("wasapi/anchor_{label}"), 1_000_000, || {
+            black_box(
+                playback_anchor_nanos_after_delay(black_box(&clock), black_box(delay)).unwrap(),
+            );
+        });
+    }
 }
 
 #[test]

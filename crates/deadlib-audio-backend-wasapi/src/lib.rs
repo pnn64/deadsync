@@ -74,23 +74,30 @@ pub struct WasapiOutputPrep {
 
 #[derive(Clone, Copy)]
 struct FramesToNanos {
-    divisor: u64,
     reciprocal: u64,
+    divisor: u32,
+    shift: u32,
 }
 
 impl FramesToNanos {
     const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
     const fn new(sample_rate_hz: u32) -> Self {
-        let divisor = sample_rate_hz as u64;
+        let divisor = sample_rate_hz;
+        let shift = if divisor > 1 {
+            (u32::BITS - (divisor - 1).leading_zeros()).saturating_sub(2)
+        } else {
+            0
+        };
         let reciprocal = if divisor > 1 {
-            ((1u128 << 64) / divisor as u128) as u64
+            (1u128 << (64 + shift)).div_ceil(divisor as u128) as u64
         } else {
             0
         };
         Self {
             divisor,
             reciprocal,
+            shift,
         }
     }
 
@@ -103,8 +110,10 @@ impl FramesToNanos {
         if self.divisor == 1 {
             return numerator;
         }
-        let quotient = ((numerator as u128 * self.reciprocal as u128) >> 64) as u64;
-        quotient + ((numerator - quotient * self.divisor) >= self.divisor) as u64
+        // u32 frames * 1e9 is below 2^62. With 2^(64+shift) >= 2^62 * divisor,
+        // rounding the reciprocal up adds less than 1/divisor to the quotient:
+        // it cannot cross the next integer. No remainder correction is needed.
+        (((numerator as u128 * self.reciprocal as u128) >> 64) as u64) >> self.shift
     }
 }
 
