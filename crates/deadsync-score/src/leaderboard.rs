@@ -156,7 +156,8 @@ pub fn scorebox_machine_tag(machine_tag: Option<&str>, name: &str) -> String {
     if src.is_empty() {
         return "----".to_string();
     }
-    let mut out = String::with_capacity(4);
+    // Four UTF-8 scalar values occupy at most sixteen bytes.
+    let mut out = String::with_capacity(16);
     for ch in src.chars().take(4) {
         out.push(ch.to_ascii_uppercase());
     }
@@ -490,19 +491,21 @@ pub enum ArrowCloudPaneKind {
 
 #[must_use]
 pub fn arrowcloud_pane_kind_from_type(lb_type: &str) -> Option<ArrowCloudPaneKind> {
-    if lb_type.is_empty() {
-        return None;
-    }
-    let mut compact = String::with_capacity(lb_type.len());
-    for ch in lb_type.chars() {
-        if ch.is_ascii_alphanumeric() {
-            compact.push(ch.to_ascii_lowercase());
+    let mut compact = [0; b"hardex".len()];
+    let mut len = 0;
+    for byte in lb_type.bytes() {
+        if byte.is_ascii_alphanumeric() {
+            if len == compact.len() {
+                return None;
+            }
+            compact[len] = byte.to_ascii_lowercase();
+            len += 1;
         }
     }
-    match compact.as_str() {
-        "itg" => Some(ArrowCloudPaneKind::Itg),
-        "ex" => Some(ArrowCloudPaneKind::Ex),
-        "hardex" | "hex" => Some(ArrowCloudPaneKind::HardEx),
+    match &compact[..len] {
+        b"itg" => Some(ArrowCloudPaneKind::Itg),
+        b"ex" => Some(ArrowCloudPaneKind::Ex),
+        b"hardex" | b"hex" => Some(ArrowCloudPaneKind::HardEx),
         _ => None,
     }
 }
@@ -1697,10 +1700,11 @@ pub fn queue_player_leaderboard_refresh(
     key: &PlayerLeaderboardCacheKey,
     requested_max_entries: usize,
 ) {
-    pending_refresh
-        .entry(key.clone())
-        .and_modify(|max_entries| *max_entries = (*max_entries).max(requested_max_entries))
-        .or_insert(requested_max_entries);
+    if let Some(max_entries) = pending_refresh.get_mut(key) {
+        *max_entries = (*max_entries).max(requested_max_entries);
+    } else {
+        pending_refresh.insert(key.clone(), requested_max_entries);
+    }
 }
 
 #[cfg(test)]
