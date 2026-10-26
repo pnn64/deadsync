@@ -264,6 +264,67 @@ fn recovery_finds_capture_inside_false_page_and_after_crc_error() {
 }
 
 #[test]
+fn recovery_scans_batches_and_preserves_split_captures_and_read_latency() {
+    struct Chunked<'a> {
+        bytes: &'a [u8],
+        chunk: usize,
+        calls: usize,
+        error_at_end: bool,
+    }
+    impl Read for Chunked<'_> {
+        fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+            self.calls += 1;
+            if self.bytes.is_empty() && self.error_at_end {
+                return Err(io::ErrorKind::WouldBlock.into());
+            }
+            let count = out.len().min(self.chunk).min(self.bytes.len());
+            out[..count].copy_from_slice(&self.bytes[..count]);
+            self.bytes = &self.bytes[count..];
+            Ok(count)
+        }
+    }
+    let valid = page(BOS | EOS, 0, 8, 0, &[5], b"hello");
+    for chunk in [1, 2, 3, 7, 4093, 4094, 4095, 4096, 4097] {
+        let mut bytes = vec![b'x'; 8191];
+        bytes.extend(&valid);
+        bytes.extend(b"junk");
+        bytes.extend(&valid);
+        bytes.extend(b"Ogg"); // An incomplete capture at EOF is discarded.
+        let source = Chunked {
+            bytes: &bytes,
+            chunk,
+            calls: 0,
+            error_at_end: false,
+        };
+        let mut reader = PageReader::with_mode(source, SyncMode::Recover);
+        let found = reader.next_page().unwrap().unwrap();
+        assert_eq!(found.offset, 8191);
+        assert_eq!(found.page.body(), b"hello");
+        let found = reader.next_page().unwrap().unwrap();
+        assert_eq!(found.offset, 8191 + valid.len() as u64 + 4);
+        assert_eq!(found.page.body(), b"hello");
+        assert!(reader.next_page().unwrap().is_none());
+        assert_eq!(reader.discarded_bytes(), 8198);
+        if chunk >= 4093 {
+            assert!(reader.into_inner().calls < 15);
+        }
+    }
+    let mut bytes = b"noise".to_vec();
+    bytes.extend(&valid);
+    let source = Chunked {
+        bytes: &bytes,
+        chunk: usize::MAX,
+        calls: 0,
+        error_at_end: true,
+    };
+    let mut reader = PageReader::with_mode(source, SyncMode::Recover);
+    assert_eq!(reader.next_page().unwrap().unwrap().page.body(), b"hello");
+    // Once a complete page is available, recovery must return it before
+    // requesting further input (which may block or fail on a live stream).
+    assert!(matches!(reader.next_page(), Err(Error::Io(_))));
+}
+
+#[test]
 fn page_and_physical_validation_reject_malformed_data() {
     let valid = page(BOS | EOS, 0, 1, 0, &[3], b"abc");
     for end in 0..valid.len() {

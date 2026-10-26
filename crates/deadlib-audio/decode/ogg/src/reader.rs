@@ -65,37 +65,35 @@ impl<R: Read> PageReader<R> {
     }
     fn fill(&mut self, required: usize) -> Result<bool, Error> {
         debug_assert!(required <= MAX_PAGE_SIZE);
-        if self.buffer.len() - self.start >= required {
-            return Ok(true);
+        while self.buffer.len() - self.start < required && !self.eof {
+            self.read_more(required)?;
         }
-        if self.eof {
-            return Ok(false);
-        }
+        Ok(self.buffer.len() - self.start >= required)
+    }
+    fn read_more(&mut self, target: usize) -> Result<(), Error> {
+        debug_assert!(target <= MAX_PAGE_SIZE && self.buffer.len() - self.start < target);
         if self.start != 0 {
             self.buffer.copy_within(self.start.., 0);
             self.buffer.truncate(self.buffer.len() - self.start);
             self.start = 0;
         }
-        while self.buffer.len() < required {
-            let old = self.buffer.len();
-            reserve(&mut self.buffer, required - old)?;
-            self.buffer.resize(required, 0);
-            let result = self.inner.read(&mut self.buffer[old..]);
-            match result {
-                Ok(0) => {
-                    self.buffer.truncate(old);
-                    self.eof = true;
-                    return Ok(false);
-                }
-                Ok(n) => self.buffer.truncate(old + n),
-                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => self.buffer.truncate(old),
-                Err(e) => {
-                    self.buffer.truncate(old);
-                    return Err(e.into());
-                }
+        let old = self.buffer.len();
+        reserve(&mut self.buffer, target - old)?;
+        self.buffer.resize(target, 0);
+        let result = self.inner.read(&mut self.buffer[old..]);
+        match result {
+            Ok(0) => {
+                self.buffer.truncate(old);
+                self.eof = true;
+            }
+            Ok(n) => self.buffer.truncate(old + n),
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => self.buffer.truncate(old),
+            Err(e) => {
+                self.buffer.truncate(old);
+                return Err(e.into());
             }
         }
-        Ok(true)
+        Ok(())
     }
 
     // Return only lengths here, so the recovery loop can mutate the buffer
@@ -122,8 +120,37 @@ impl<R: Read> PageReader<R> {
                     // may contain the actual next page (also at EOF).
                     self.discard(1);
                     self.discarded += 1;
+                    if let Err(error) = self.scan_capture() {
+                        self.failed = true;
+                        return Err(error);
+                    }
                 }
             }
+        }
+    }
+    // Scan noise in batches instead of moving a 27-byte header window and
+    // issuing one underlying read per discarded byte. Keep three trailing
+    // bytes so a capture split across reads remains visible. This also scans
+    // the body of a failed CRC candidate before reading past that candidate.
+    fn scan_capture(&mut self) -> Result<(), Error> {
+        loop {
+            let available = &self.buffer[self.start..];
+            if let Some(skip) = available.windows(4).position(|bytes| bytes == b"OggS") {
+                self.discard(skip);
+                self.discarded += skip as u64;
+                return Ok(());
+            }
+            let skip = if self.eof {
+                available.len()
+            } else {
+                available.len().saturating_sub(3)
+            };
+            self.discard(skip);
+            self.discarded += skip as u64;
+            if self.eof {
+                return Ok(());
+            }
+            self.read_more(4096)?;
         }
     }
     fn candidate(&mut self) -> Result<Option<usize>, Error> {

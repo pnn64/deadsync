@@ -14,8 +14,16 @@ cmake --build target/deadlib-audio-reference/ogg-oracle-build --config Release -
 $env:DEADLIB_LIBOGG_ORACLE = (Resolve-Path target/deadlib-audio-reference/ogg-oracle-build/Release/deadlib_ogg_oracle.exe).Path
 $env:DEADLIB_OGG_CORPUS = (Resolve-Path assets).Path
 cargo test -p deadlib-audio-decode-ogg --release --test libogg -- --ignored --nocapture
+cargo test -p deadlib-audio-decode-ogg --release --test seeking -- --include-ignored --nocapture
 ```
 
 Use the platform's executable path and omit `-A x64` for other generators.
 The v1.3.6 reference tag is recorded with the run evidence in `COVERAGE.md`.
 The corpus test checks every Ogg file recursively under the selected directory.
+
+`capture` uses the same unmodified libogg page/packet APIs as `decode`, allowing
+the intentional initial packet hole before the first returned packet after a
+mid-stream seek. Later holes remain errors. Rust tests compare every generated
+page-boundary capture and beginning/middle/end captures of the local corpus.
+The production PacketCapture validates sequence/continuation strictly after
+its initial page and never delegates packet assembly to this helper.

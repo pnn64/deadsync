@@ -37,6 +37,50 @@ streams.finish()?; // Require complete logical streams, including EOS.
 * `PacketWriter` paginates one logical stream, isolates the initial header and
   writes incrementally to `Write`. `finish` emits EOS, including a nil page when
   necessary. `write_page` is a lower-level payload-copy-free page writer.
+* `OggIndex::read` validates a complete physical stream and builds flat page
+  ranges for each serial/chain. `granule_at_or_before` finds the last known
+  granule in logarithmic time; `packet_start_page` finds a packet's starting
+  page even across long continuations. `IndexOptions` bounds the page count.
+* `find_granule` performs index-free bisection with CRC capture recovery inside
+  an explicit byte range, using one reusable page buffer. Reads stay inside the
+  range and positions use integer u64 arithmetic. This search assumes
+  nondecreasing known granules and does not validate the whole physical file.
+* `PacketCapture` selects one serial after a seek, discards an unavailable
+  initial continuation, then validates packet assembly and sequencing strictly.
+  Indexed capture knows absolute packet numbers; unindexed capture reports
+  unknown numbers unless it began at BOS. `reset_at` supports repeated seeks.
+
+```rust
+use std::io::Cursor;
+use deadlib_audio_decode_ogg::{IndexOptions, Limits, OggIndex, PacketCapture, PageReader};
+# fn seek_example(bytes: &[u8]) -> Result<(), deadlib_audio_decode_ogg::Error> {
+let index = OggIndex::read(bytes, IndexOptions::default())?;
+let stream = &index.streams()[0];
+if let Some(page) = index.packet_start_page(stream.serial, 3) {
+    let mut reader = PageReader::new(Cursor::new(bytes));
+    reader.seek(page.offset)?;
+    let mut capture = PacketCapture::at_page(page, Limits::default());
+    while let Some(located) = reader.next_page()? {
+        capture.push_page(located.page, located.offset, |packet| {
+            // A starting page can contain packets before the requested number.
+            if packet.info.number.is_some_and(|number| number >= 3) {
+                std::hint::black_box(packet.data);
+            }
+        })?;
+        if capture.is_ended() { break; }
+    }
+    capture.finish()?;
+}
+# Ok(())
+# }
+```
+
+Use an index with the exact immutable byte source from which it was built.
+Capture validates only its selected logical stream, including strict sequence
+and continuation after the initial discarded fragment. It does not silently
+conceal subsequent holes or validate the other interleaved serials. A codec
+chooses an earlier packet for pre-roll and discards samples to its seek target;
+a container granule landmark alone does not establish sample-accurate seeking.
 
 Granules are uninterpreted `u64` bit patterns; `UNKNOWN_GRANULE_POSITION` is the
 all-ones sentinel. This crate supplies no sample rate, PCM, codec metadata,

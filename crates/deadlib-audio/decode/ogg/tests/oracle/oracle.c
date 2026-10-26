@@ -25,8 +25,8 @@ static uint32_t get32(FILE *file) {
 }
 static void putbytes(const void *bytes, size_t len) { if (fwrite(bytes, 1, len, stdout) != len) fail("write"); }
 
-typedef struct { uint32_t serial; ogg_stream_state state; } logical;
-static void decode(FILE *file) {
+typedef struct { uint32_t serial; ogg_stream_state state; int emitted_packet; } logical;
+static void decode(FILE *file, int capture) {
     ogg_sync_state sync;
     logical *streams = (logical *)calloc(4096, sizeof(logical));
     size_t count = 0, i;
@@ -53,7 +53,13 @@ static void decode(FILE *file) {
             }
             if (ogg_stream_pagein(&streams[i].state, &page)) fail("pagein");
             while ((packet_result = ogg_stream_packetout(&streams[i].state, &packet)) != 0) {
-                if (packet_result < 0) fail("packet hole");
+                if (packet_result < 0) {
+                    /* A seek into the middle starts with an intentional hole.
+                       Only capture mode discards it before the first output. */
+                    if (capture && !streams[i].emitted_packet) continue;
+                    fail("packet hole");
+                }
+                streams[i].emitted_packet = 1;
                 put8('P'); put32(serial); put64((uint64_t)packet.granulepos);
                 put8(packet.b_o_s != 0); put8(packet.e_o_s != 0);
                 put64((uint64_t)packet.bytes); putbytes(packet.packet, (size_t)packet.bytes);
@@ -92,12 +98,13 @@ static void encode(FILE *file) {
 }
 int main(int argc, char **argv) {
     FILE *file;
-    if (argc != 3) fail("usage: oracle decode|encode input");
+    if (argc != 3) fail("usage: oracle decode|capture|encode input");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
-    if (!strcmp(argv[1], "decode")) decode(file);
+    if (!strcmp(argv[1], "decode")) decode(file, 0);
+    else if (!strcmp(argv[1], "capture")) decode(file, 1);
     else if (!strcmp(argv[1], "encode")) encode(file);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;

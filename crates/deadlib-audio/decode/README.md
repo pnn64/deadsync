@@ -50,10 +50,12 @@ coupling, native FFT MDCT, windows and overlap, with zero packet/reset allocatio
 The mapping adds metadata/header lifecycle, exact initial/final trimming,
 timestamps, arbitrary byte streaming, independent multiplexed streams and chains.
 All 38 repository assets have exact retained counts against libvorbisfile and
-Symphonia; strict behavior remains separate from legacy compatibility.
-**This is not the completed goal:** codec/container seeking, encoding, broader
+Symphonia; strict behavior remains separate from legacy compatibility. Native
+Ogg now provides a validated page/packet index, index-free granule bisection and
+strict packet capture after seeks, including continuation and multiplexing.
+**This is not the completed goal:** sample-accurate codec seeking, encoding, broader
 conformance/fuzzing and comparative performance work remain. The next milestone
-is native container indexing and sample-accurate Vorbis seeking with pre-roll.
+is sample-accurate Vorbis seeking with pre-roll using the native container APIs.
 
 ## Normative sources
 
