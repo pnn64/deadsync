@@ -80,6 +80,11 @@ decode, 4 KiB fragmented reads and warm-process startup against libvorbisfile an
 Symphonia with exact decoded counts. It exposes a substantial native throughput
 gap. Component profiling, memory/allocation/seek measurements, optimization and
 native encoding remain required.
+The first measured transform optimization replaces a length-N complex FFT with
+a paired-spectrum N/4 FFT. Its isolated kernel is 3.2–3.8x faster, transform
+elements shrink 65%, and observed full-file times improve 1.35–1.67x on the two
+longer tracks, with the same PCM/count/seek gates. Reference timing drift and
+remaining throughput gaps are documented in the performance report.
 
 ## Normative sources
 

@@ -1,5 +1,5 @@
 //! Resident-input timing worker. No PCM retention or file IO in timed regions.
-use deadlib_audio_decode_vorbis::{OggEvent, OggOptions, OggReader};
+use deadlib_audio_decode_vorbis::{Imdct, OggEvent, OggOptions, OggReader};
 use std::{
     hint::black_box,
     io::{self, Read, Seek, SeekFrom},
@@ -176,13 +176,36 @@ fn main() {
     assert_eq!(
         args.len(),
         4,
-        "ENGINE PHASE ITERATIONS FILE (native|symphonia; full|stream4096|startup)"
+        "ENGINE PHASE ITERATIONS FILE_OR_BLOCK_SIZE (native|symphonia; full|stream4096|startup|imdct)"
     );
     let engine = &args[0];
     let phase = &args[1];
-    assert!(["full", "stream4096", "startup"].contains(&phase.as_str()));
     let iterations: usize = args[2].parse().unwrap();
     assert!(iterations > 0);
+    if phase == "imdct" {
+        assert_eq!(engine, "native");
+        let n: usize = args[3].parse().unwrap();
+        let mut transform = Imdct::new(n).unwrap();
+        let spectrum: Vec<_> = (0..n / 2)
+            .map(|i| ((i * 17 % 101) as i32 - 50) as f32 / 256.0)
+            .collect();
+        let mut output = vec![0.0; n];
+        transform.inverse(&spectrum, &mut output).unwrap();
+        let begin = Instant::now();
+        for _ in 0..iterations {
+            transform
+                .inverse(black_box(&spectrum), black_box(&mut output))
+                .unwrap();
+            black_box(&output);
+        }
+        println!(
+            "native\timdct\t{iterations}\t{}\t{}\t0\t0",
+            begin.elapsed().as_nanos(),
+            iterations * n
+        );
+        return;
+    }
+    assert!(["full", "stream4096", "startup"].contains(&phase.as_str()));
     let data: Arc<[u8]> = std::fs::read(&args[3]).unwrap().into();
     // Initialize lazy registries and warm caches before recording stream work.
     black_box(run(engine, phase, &data));

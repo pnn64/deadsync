@@ -74,16 +74,27 @@ fn rejected_packets_preserve_overlap_and_limits_fail_before_use() {
     );
     let identification = Identification::parse(&packets[0]).unwrap();
     let setup = Setup::parse(&packets[2], &identification, &Limits::default()).unwrap();
+    let needed = PacketDecoder::required_storage(&setup);
     assert!(matches!(
         PacketDecoder::with_limits(
             setup,
             Limits {
-                max_decode_memory: 0,
+                max_decode_memory: needed - 1,
                 ..Limits::default()
             }
         ),
         Err(Error::LimitExceeded("decode memory"))
     ));
+    let setup = Setup::parse(&packets[2], &identification, &Limits::default()).unwrap();
+    let decoder = PacketDecoder::with_limits(
+        setup,
+        Limits {
+            max_decode_memory: needed,
+            ..Limits::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(decoder.storage_bytes(), needed);
 }
 
 #[test]

@@ -11,6 +11,9 @@
 #include <limits>
 #include <string>
 #include <vector>
+extern "C" {
+#include "mdct.h"
+}
 
 using Clock = std::chrono::steady_clock;
 static void require(bool condition, const char* message) {
@@ -66,10 +69,27 @@ static Measurement run(const std::vector<char>& bytes, const std::string& phase)
     return measured;
 }
 int main(int argc, char** argv) {
-    require(argc == 4, "PHASE ITERATIONS FILE");
+    require(argc == 4, "PHASE ITERATIONS FILE_OR_BLOCK_SIZE");
     const std::string phase = argv[1];
-    require(phase == "full" || phase == "stream4096" || phase == "startup", "unknown phase");
     size_t iterations = std::stoull(argv[2]); require(iterations != 0, "zero iterations");
+    if (phase == "imdct") {
+        size_t n = std::stoull(argv[3]);
+        require(n >= 64 && n <= 8192 && (n & (n - 1)) == 0, "MDCT block size");
+        mdct_lookup transform{}; mdct_init(&transform, static_cast<int>(n));
+        std::vector<float> spectrum(n / 2), output(n);
+        for (size_t i = 0; i < n / 2; ++i) spectrum[i] = (static_cast<int>(i * 17 % 101) - 50) / 256.0f;
+        mdct_backward(&transform, spectrum.data(), output.data());
+        const auto begin = Clock::now();
+        for (size_t i = 0; i < iterations; ++i) {
+            mdct_backward(&transform, spectrum.data(), output.data());
+            sink += output.front() + output.back();
+        }
+        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - begin).count();
+        mdct_clear(&transform);
+        std::printf("libvorbis\timdct\t%zu\t%llu\t%zu\t0\t0\n", iterations, static_cast<unsigned long long>(ns), iterations * n);
+        return 0;
+    }
+    require(phase == "full" || phase == "stream4096" || phase == "startup", "unknown phase");
     std::ifstream input(argv[3], std::ios::binary); require(input.good(), "open input");
     std::vector<char> bytes((std::istreambuf_iterator<char>(input)), {});
     run(bytes, phase); // Warm process/stream caches, matching the Rust worker.

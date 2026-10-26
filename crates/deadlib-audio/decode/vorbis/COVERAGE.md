@@ -170,6 +170,15 @@ Windows x86-64, rustc 1.99.1 evidence:
   decode is 3.2–3.5x slower than Symphonia and 2.0–2.7x slower than libvorbisfile
   on the two longer stereo tracks. See [PERFORMANCE.md](PERFORMANCE.md) for
   settings, raw evidence, variability, startup results and remaining metrics.
+* Measured MDCT optimization: paired-spectrum N/4 FFT, derived in
+  [MDCT.md](MDCT.md), reduces transform elements 65% and measured kernel time
+  3.2–3.8x. Two longer tracks improve 1.35–1.67x in observed full-file runs;
+  shared-machine reference drift and all trial data are in PERFORMANCE.md.
+  Direct cosine, 38-file raw/full PCM, 1,900 seeks, 528 upstream vectors, four
+  historical/shipped files, reset/allocation, exact memory-budget, release/Clippy
+  and offline independent builds pass without tolerance changes. New peaks:
+  raw/full libvorbis 7.152557373e-7; upstream 3.576278687e-7; corpus seeks
+  6.854534149e-7. Resumed sanitizer campaigns add 16,816 clean executions.
 
 ## Numerical criteria
 

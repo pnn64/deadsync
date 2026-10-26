@@ -45,9 +45,12 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--min-seconds", type=float, default=0.15)
     parser.add_argument("--seed", type=int, default=1337)
+    parser.add_argument("--imdct", action="store_true", help="compare isolated inverse transforms at all legal block sizes")
     args = parser.parse_args()
     if args.repeats < 3 or args.min_seconds <= 0:
         parser.error("use at least three repeats and a positive duration")
+    if args.imdct and args.files:
+        parser.error("--imdct uses generated spectra; do not supply files")
     run = (args.run_root or REPO / f"target/deadlib-audio-reference/benchmark-{uuid.uuid4().hex}").resolve()
     run.mkdir(parents=True, exist_ok=False)
     reference = args.reference_root.resolve()
@@ -79,12 +82,14 @@ def main() -> None:
     invoke(["cmake", "--build", cbuild, "--config", "Release", "--target", "deadlib_vorbis_benchmark", "--parallel", "4"], log=run / "c-build.log")
     oracle = cbuild / ("Release/deadlib_vorbis_benchmark.exe" if os.name == "nt" else "deadlib_vorbis_benchmark")
     files = args.files or [DECODE / "vorbis/tests/fixtures" / name for name in ("mono.ogg", "stereo.ogg", "surround.ogg")]
-    if not args.files:
+    if not args.files and not args.imdct:
         files += [REPO / "assets/music/in_two (loop).ogg"]
         song = reference / "corpus/itgmania/goin-under.ogg"
         if song.exists():
             files.append(song)
-    files = [p.resolve() for p in files]
+    files = [Path(str(n)) for n in (64, 128, 256, 512, 1024, 2048, 4096, 8192)] if args.imdct else [p.resolve() for p in files]
+    phases = ("imdct",) if args.imdct else ("full", "stream4096", "startup")
+    engines_available = ("native", "libvorbis") if args.imdct else ("native", "symphonia", "libvorbis")
     manifest = {
         "started_utc": datetime.now(timezone.utc).isoformat(), "git_head": invoke(["git", "rev-parse", "HEAD"]).strip(),
         "rustc": invoke(["rustc", "-Vv"]), "cmake": invoke(["cmake", "--version"]).splitlines()[0],
@@ -96,10 +101,11 @@ def main() -> None:
         "cargo_lock_sha256": sha(REPO / "Cargo.lock"),
         "rustflags_environment": {name: os.environ.get(name) for name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")},
         "cmake_release_flags": [line for line in (cbuild / "CMakeCache.txt").read_text(encoding="utf-8").splitlines() if line.startswith(("CMAKE_C_FLAGS_RELEASE:", "CMAKE_CXX_FLAGS_RELEASE:", "CMAKE_EXE_LINKER_FLAGS_RELEASE:"))],
-        "input_sha256": {label(p): sha(p) for p in files},
+        "input_sha256": {} if args.imdct else {label(p): sha(p) for p in files},
+        "workload": "isolated_imdct" if args.imdct else "container_pipeline",
         "source_sha256": {label(p): sha(p) for directory in (DECODE / "vorbis/src", DECODE / "ogg/src", DECODE / "vorbis/benches") for p in directory.rglob("*") if p.is_file()},
         "timer": "Rust Instant / C++ steady_clock; resident input; no process/file-load time",
-        "io": "forward-only Read callbacks; full and startup uncapped, stream4096 capped at 4096 bytes/read",
+        "io": None if args.imdct else "forward-only Read callbacks; full and startup uncapped, stream4096 capped at 4096 bytes/read",
     }
     manifest["source_sha256"][label(Path(__file__).resolve())] = sha(Path(__file__).resolve())
     for path in (REPO / "Cargo.toml", DECODE / "vorbis/Cargo.toml", DECODE / "ogg/Cargo.toml"):
@@ -133,9 +139,9 @@ def main() -> None:
                 "ns_per_run": ns / n, "samples_per_run": samples / n,
                 "msamples_per_second": samples * 1000 / ns}
     for path in files:
-        for phase in ("full", "stream4096", "startup"):
+        for phase in phases:
             iterations = {}
-            for engine in ("native", "symphonia", "libvorbis"):
+            for engine in engines_available:
                 pilot = worker(engine, phase, 1, path)
                 iterations[engine] = min(10000, max(1, math.ceil(args.min_seconds * 1e9 / pilot["elapsed_ns"])))
             for trial in range(args.repeats):
@@ -151,8 +157,8 @@ def main() -> None:
         writer.writeheader(); writer.writerows(rows)
     summary = []
     for path in files:
-        for phase in ("full", "stream4096", "startup"):
-            for engine in ("native", "symphonia", "libvorbis"):
+        for phase in phases:
+            for engine in engines_available:
                 group = [r for r in rows if r["path"] == label(path) and r["engine"] == engine and r["phase"] == phase]
                 times = [r["ns_per_run"] for r in group]
                 median = statistics.median(times)

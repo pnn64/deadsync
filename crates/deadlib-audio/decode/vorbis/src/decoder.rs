@@ -101,7 +101,7 @@ impl PacketDecoder {
         let channels = setup.channels() as usize;
         let [small, large] = setup.block_sizes();
         let transforms = small + if large != small { large } else { 0 };
-        channels * large * 12 + channels * (large / 2) + transforms * 22
+        channels * large * 12 + channels * (large / 2) + transforms * 9
     }
     pub fn position(&self) -> u64 {
         self.position

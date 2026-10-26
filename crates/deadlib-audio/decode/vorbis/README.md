@@ -30,7 +30,8 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   and allocations; decode/reset perform zero allocations after construction.
   `reset_at` also seeds the raw position for caller-managed packet seeks; supply
   the actual preceding packet to prime overlap before consuming output.
-* `Imdct`: reusable native inverse transform for all legal 64..=8192 block sizes.
+* `Imdct`: reusable native inverse transform for all legal 64..=8192 block sizes,
+  using a paired-spectrum N/4 FFT. [MDCT.md](MDCT.md) gives the derivation.
 
 ```rust
 use deadlib_audio_decode_vorbis::{Identification, Limits, PacketDecoder, Setup};
@@ -137,7 +138,8 @@ eager and requires two container passes; sparse/index-free codec seeking and
 comparative startup/seek optimization remain performance work.
 The initial [performance baseline](PERFORMANCE.md) compares resident full decode,
 4 KiB fragmented reads and time to first PCM against libvorbisfile and Symphonia.
-It records a substantial native throughput gap; allocation/memory/seek
+The measured N/4 transform update improves the two longer tracks by 1.35–1.67x
+in observed full-file runs, while a native throughput gap remains. Allocation/memory/seek
 comparisons and measured optimization remain open.
 
 Legacy handling is explicit and disabled by default.

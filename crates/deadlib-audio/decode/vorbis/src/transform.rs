@@ -4,10 +4,10 @@ use core::f64::consts::PI;
 /// Unnormalised Vorbis inverse MDCT. Initialization owns all tables/scratch;
 /// repeated transforms allocate nothing and never touch external codec code.
 ///
-/// The transform is derived by a phase-rotated, zero-padded complex FFT of
-/// length N, yielding an N/2 DCT-IV, then applying the MDCT's signed symmetry.
-/// This deliberately transparent O(N log N) baseline is independently tested
-/// against the direct cosine equation and libvorbis, before further tuning.
+/// Pair even and reversed odd spectrum values into a complex FFT of length N/4,
+/// recover the N/2 DCT-IV by phase rotation, then apply signed MDCT symmetry.
+/// See MDCT.md for the derivation. The direct cosine/reference tests cover all
+/// legal sizes independently of this factorization.
 pub struct Imdct {
     n: usize,
     rotation: Vec<[f32; 4]>,
@@ -21,23 +21,27 @@ impl Imdct {
             return Err(Error::Invalid("MDCT block size"));
         }
         let mut rotation = Vec::new();
-        reserve(&mut rotation, n / 2)?;
+        let m = n / 2;
+        let fft = n / 4;
+        reserve(&mut rotation, fft)?;
         let mut twiddle = Vec::new();
-        reserve(&mut twiddle, n / 2)?;
+        reserve(&mut twiddle, fft / 2)?;
         let mut scratch = Vec::new();
-        reserve(&mut scratch, n)?;
-        scratch.resize(n, [0.0; 2]);
-        for k in 0..n / 2 {
-            let phase = -PI * k as f64 / n as f64;
-            let post = -PI * (k as f64 + 0.5) / n as f64;
+        reserve(&mut scratch, fft)?;
+        scratch.resize(fft, [0.0; 2]);
+        for k in 0..fft {
+            let phase = -PI * k as f64 / m as f64;
+            let post = -PI * (k as f64 + 0.25) / m as f64;
             rotation.push([
                 phase.cos() as f32,
                 phase.sin() as f32,
                 post.cos() as f32,
                 post.sin() as f32,
             ]);
-            let phase = -2.0 * PI * k as f64 / n as f64;
-            twiddle.push([phase.cos() as f32, phase.sin() as f32]);
+            if k < fft / 2 {
+                let phase = -2.0 * PI * k as f64 / fft as f64;
+                twiddle.push([phase.cos() as f32, phase.sin() as f32]);
+            }
         }
         Ok(Self {
             n,
@@ -51,7 +55,7 @@ impl Imdct {
     }
     /// Owned table and scratch elements, excluding allocator/Vec metadata.
     pub fn storage_bytes(&self) -> usize {
-        self.n * 20
+        self.n * 7
     }
     pub fn inverse(&mut self, spectrum: &[f32], output: &mut [f32]) -> Result<(), Error> {
         let n = self.n;
@@ -59,15 +63,20 @@ impl Imdct {
         if spectrum.len() != m || output.len() != n {
             return Err(Error::Invalid("MDCT buffer length"));
         }
-        self.scratch.fill([0.0; 2]);
-        let shift = usize::BITS - n.trailing_zeros();
-        for (k, (&value, rotation)) in spectrum.iter().zip(&self.rotation).enumerate() {
-            self.scratch[k.reverse_bits() >> shift] = [value * rotation[0], value * rotation[1]];
+        let fft = n / 4;
+        let shift = usize::BITS - fft.trailing_zeros();
+        for (k, rotation) in self.rotation.iter().enumerate() {
+            let a = spectrum[2 * k];
+            let b = spectrum[m - 1 - 2 * k];
+            self.scratch[k.reverse_bits() >> shift] = [
+                a * rotation[0] - b * rotation[1],
+                a * rotation[1] + b * rotation[0],
+            ];
         }
         let mut width = 2;
-        while width <= n {
+        while width <= fft {
             let half = width / 2;
-            let step = n / width;
+            let step = fft / width;
             for group in self.scratch.chunks_exact_mut(width) {
                 let (left, right) = group.split_at_mut(half);
                 for (j, (a, b)) in left.iter_mut().zip(right).enumerate() {
@@ -84,10 +93,11 @@ impl Imdct {
         }
         // Store DCT-IV values in the middle region of the output, with sign
         // already inverted; the other two regions follow by exact symmetry.
-        for k in 0..m {
+        for k in 0..fft {
             let rotation = self.rotation[k];
             let [real, imag] = self.scratch[k];
-            output[3 * m / 2 - 1 - k] = -(real * rotation[2] - imag * rotation[3]);
+            output[3 * m / 2 - 1 - 2 * k] = -(real * rotation[2] - imag * rotation[3]);
+            output[m / 2 + 2 * k] = real * rotation[3] + imag * rotation[2];
         }
         for k in 0..m / 2 {
             output[k] = -output[m - 1 - k];
