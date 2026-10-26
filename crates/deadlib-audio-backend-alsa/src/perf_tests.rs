@@ -101,10 +101,13 @@ fn fixture_enumeration_preserves_devices() {
             device.pcm_id,
             format!("hw:CARD={},DEV={}", index / 4, index % 4)
         );
-        let name = if layout == "bad_name" {
-            format!("Fixture card 音楽, Device {}", index % 4)
-        } else {
-            "Fixture card 音楽, Fixture playback".to_owned()
+        let name = match layout.as_str() {
+            "bad_name" => format!("Fixture card 音楽, Device {}", index % 4),
+            "bad_card_info" | "bad_card_name" => "Fallback card 音楽, Fixture playback".to_owned(),
+            "missing_card_name" => format!("Card {}, Fixture playback", index / 4),
+            "long_names" => format!("{}, {}", "音楽".repeat(32), "音楽".repeat(16)),
+            "empty_names" => ", ".to_owned(),
+            _ => "Fixture card 音楽, Fixture playback".to_owned(),
         };
         assert_eq!(device.name, name);
         if layout == "probe_error" {
@@ -164,6 +167,55 @@ fn fixture_timing_preserves_delay_and_fallback() {
 }
 
 #[test]
+#[ignore = "requires the deterministic ALSA rate fixture"]
+fn fixture_rate_matrix_preserves_capabilities() {
+    let priority = [
+        48_000, 44_100, 96_000, 88_200, 192_000, 176_400, 32_000, 22_050, 16_000, 11_025, 384_000,
+    ];
+    for mask in 0..2048_u16 {
+        let pcm = open_pcm("null").unwrap();
+        let hw = HwParams::any(&pcm).unwrap();
+        let (rates, default) = sample_rate_capabilities(&hw).unwrap();
+        let mut expected = vec![8_000, 500_000];
+        for (index, rate) in priority.into_iter().enumerate() {
+            if mask & (1 << index) != 0 {
+                expected.push(rate);
+            }
+        }
+        let expected_default = expected.get(2).copied().unwrap_or(8_000);
+        expected.sort_unstable();
+        assert_eq!(default, expected_default, "mask={mask}");
+        assert_eq!(rates, expected, "mask={mask}");
+    }
+}
+
+#[test]
+#[ignore = "requires the deterministic ALSA rate fixture"]
+fn fixture_rate_edges_preserve_capabilities() {
+    let edge = std::env::var("ALSA_FIXTURE_RATE_EDGE").unwrap();
+    let mask: u16 = std::env::var("ALSA_FIXTURE_RATE_MASK")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let expected = match (edge.as_str(), mask) {
+        ("min_error" | "reject_edges" | "min_max_reversed" | "duplicate_bounds", 0) => None,
+        ("min_error", 1) => Some((vec![48_000, 500_000], 48_000)),
+        ("max_error", 0) => Some((vec![8_000], 8_000)),
+        ("max_error", 1) => Some((vec![8_000, 48_000], 48_000)),
+        ("reject_min", 0) => Some((vec![8_000, 500_000], 500_000)),
+        ("reject_min" | "reject_edges", 1) => Some((vec![8_000, 48_000, 500_000], 48_000)),
+        ("min_zero", 0) => Some((vec![0, 500_000], 500_000)),
+        ("min_zero", 1) => Some((vec![0, 48_000, 500_000], 48_000)),
+        ("min_max_reversed", 1) => Some((vec![48_000, 500_000, 600_000], 48_000)),
+        ("duplicate_bounds", 1) => Some((vec![48_000], 48_000)),
+        _ => panic!("unknown rate fixture {edge}/{mask}"),
+    };
+    let pcm = open_pcm("null").unwrap();
+    let hw = HwParams::any(&pcm).unwrap();
+    assert_eq!(sample_rate_capabilities(&hw), expected);
+}
+
+#[test]
 #[ignore = "performance workload; use scripts/benchmark_alsa.py"]
 fn benchmark_alsa() {
     let workload = std::env::var("ALSA_PERF_WORKLOAD").unwrap();
@@ -190,6 +242,16 @@ fn benchmark_alsa() {
         }
         "enumerate" => run_work(iterations, || {
             black_box(enumerate_output_devices());
+        }),
+        "rate_capabilities" => {
+            let pcm = open_pcm("null").unwrap();
+            let hw = HwParams::any(&pcm).unwrap();
+            run_work(iterations, || {
+                black_box(sample_rate_capabilities(black_box(&hw))).unwrap();
+            });
+        }
+        "probe_null" => run_work(iterations, || {
+            black_box(probe_output_device(black_box("null"))).unwrap();
         }),
         "timing_48000" | "timing_44100" | "timing_96000" => {
             let rate = match workload.as_str() {

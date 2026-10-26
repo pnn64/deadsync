@@ -95,12 +95,17 @@ pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
         let Ok(ctl) = Ctl::new(&format!("hw:{card_index}"), false) else {
             continue;
         };
-        let card_name = ctl
-            .card_info()
-            .ok()
-            .and_then(|info| info.get_name().ok().map(str::to_string))
-            .or_else(|| card.get_name().ok())
-            .unwrap_or_else(|| format!("Card {card_index}"));
+        let card_info = ctl.card_info().ok();
+        let fallback_card_name;
+        let card_name = match card_info.as_ref().and_then(|info| info.get_name().ok()) {
+            Some(name) => name,
+            None => {
+                fallback_card_name = card
+                    .get_name()
+                    .unwrap_or_else(|_| format!("Card {card_index}"));
+                &fallback_card_name
+            }
+        };
         for device_index in alsa::ctl::DeviceIter::new(&ctl) {
             let Ok(playback_info) = ctl.pcm_info(device_index as u32, 0, Direction::Playback)
             else {
@@ -108,7 +113,13 @@ pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
             };
             let pcm_id = format!("hw:CARD={card_index},DEV={}", device_index as u32);
             let name = match playback_info.get_name() {
-                Ok(device_name) => format!("{card_name}, {device_name}"),
+                Ok(device_name) => {
+                    let mut name = String::with_capacity(card_name.len() + 2 + device_name.len());
+                    name.push_str(card_name);
+                    name.push_str(", ");
+                    name.push_str(device_name);
+                    name
+                }
                 Err(_) => format!("{card_name}, Device {device_index}"),
             };
             devices.push(build_output_device(pcm_id, name, default_pcm_id.as_deref()));
@@ -162,14 +173,10 @@ fn probe_output_device(pcm_id: &str) -> Result<(Vec<u32>, u32, usize), String> {
     let channels = preferred_channels(&hw).ok_or_else(|| {
         format!("failed to determine a usable channel count for ALSA PCM '{pcm_id}'")
     })?;
-    let default_rate_hz = preferred_rate_hz(&hw).ok_or_else(|| {
+    let (sample_rates_hz, default_rate_hz) = sample_rate_capabilities(&hw).ok_or_else(|| {
         format!("failed to determine a usable sample rate for ALSA PCM '{pcm_id}'")
     })?;
-    Ok((
-        supported_sample_rates(&hw, default_rate_hz),
-        default_rate_hz,
-        channels,
-    ))
+    Ok((sample_rates_hz, default_rate_hz, channels))
 }
 
 fn preferred_channels(hw: &HwParams<'_>) -> Option<usize> {
@@ -183,36 +190,34 @@ fn preferred_channels(hw: &HwParams<'_>) -> Option<usize> {
     Some(min_channels as usize)
 }
 
-fn preferred_rate_hz(hw: &HwParams<'_>) -> Option<u32> {
+fn sample_rate_capabilities(hw: &HwParams<'_>) -> Option<(Vec<u32>, u32)> {
     const COMMON_SAMPLE_RATES: [u32; 11] = [
         48000, 44100, 96000, 88200, 192000, 176400, 32000, 22050, 16000, 11025, 384000,
     ];
-    for sample_rate_hz in COMMON_SAMPLE_RATES {
+    // Keep support in priority order without repeating ALSA constraint tests.
+    let mut supported = 0_u16;
+    for (index, sample_rate_hz) in COMMON_SAMPLE_RATES.into_iter().enumerate() {
         if hw.test_rate(sample_rate_hz).is_ok() {
-            return Some(sample_rate_hz);
+            supported |= 1 << index;
         }
     }
-    let min_rate_hz = hw.get_rate_min().ok()?.max(1);
-    if hw.test_rate(min_rate_hz).is_ok() {
-        return Some(min_rate_hz);
-    }
-    let max_rate_hz = hw.get_rate_max().ok()?.max(min_rate_hz);
-    hw.test_rate(max_rate_hz).ok()?;
-    Some(max_rate_hz)
-}
-
-fn supported_sample_rates(hw: &HwParams<'_>, default_rate_hz: u32) -> Vec<u32> {
-    const COMMON_SAMPLE_RATES: [u32; 11] = [
-        11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000, 384000,
-    ];
+    let default_rate_hz = if supported != 0 {
+        COMMON_SAMPLE_RATES[supported.trailing_zeros() as usize]
+    } else {
+        let min_rate_hz = hw.get_rate_min().ok()?.max(1);
+        if hw.test_rate(min_rate_hz).is_ok() {
+            min_rate_hz
+        } else {
+            let max_rate_hz = hw.get_rate_max().ok()?.max(min_rate_hz);
+            hw.test_rate(max_rate_hz).ok()?;
+            max_rate_hz
+        }
+    };
     let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES.len() + 3);
-    if default_rate_hz > 0 {
-        sample_rates_hz.push(default_rate_hz);
-    }
-    for sample_rate_hz in COMMON_SAMPLE_RATES {
-        if hw.test_rate(sample_rate_hz).is_ok() {
-            sample_rates_hz.push(sample_rate_hz);
-        }
+    sample_rates_hz.push(default_rate_hz);
+    while supported != 0 {
+        sample_rates_hz.push(COMMON_SAMPLE_RATES[supported.trailing_zeros() as usize]);
+        supported &= supported - 1;
     }
     if let Ok(min_rate_hz) = hw.get_rate_min() {
         sample_rates_hz.push(min_rate_hz);
@@ -222,7 +227,7 @@ fn supported_sample_rates(hw: &HwParams<'_>, default_rate_hz: u32) -> Vec<u32> {
     }
     sample_rates_hz.sort_unstable();
     sample_rates_hz.dedup();
-    sample_rates_hz
+    Some((sample_rates_hz, default_rate_hz))
 }
 
 pub fn prepare(

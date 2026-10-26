@@ -1,0 +1,7 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	borrowed-card-name	enumerate	20000	271722.1733	451134.4252	133640.0	134700.62285	39	9	2352
+0	borrowed-card-name	enumerate_failed	100000	41144.85147	81952.27429	19293.1	19389.25852	39	17	3248
+1	borrowed-card-name	enumerate	20000	263092.2121	451134.4454	123056.5	124053.24845	39	9	2352
+1	borrowed-card-name	enumerate_failed	100000	39474.28317	81952.26244	17911.8	18002.25596	39	17	3248
+2	borrowed-card-name	enumerate	20000	261183.6237	451134.44975	139138.0	140418.14275	39	9	2352
+2	borrowed-card-name	enumerate_failed	100000	46344.21243	81952.27051	19896.9	19982.21114	39	17	3248

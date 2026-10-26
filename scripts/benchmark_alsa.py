@@ -1,7 +1,7 @@
 """Archive real Linux ALSA test binaries and compare hardware counters per operation.
 
-Run in Linux/WSL. Build each stage before editing again. Every archived binary
-runs the same correctness tests; a preload fixture supplies two cards and eight
+Run in Linux/WSL. Build each stage before editing again. New archives run the
+current unit tests and fixtures; a preload fixture supplies two cards and eight
 devices backed by real libasound null PCMs. No sound hardware is needed.
 """
 import argparse
@@ -23,17 +23,24 @@ WORKLOADS = {"shared_alias": 2_000_000, "shared_hw": 2_000_000,
              "enumerate": 20_000, "frames_48000": 40_000_000,
              "frames_44100": 40_000_000, "frames_other": 40_000_000,
              "frames_mixed": 40_000_000, "timing_48000": 1_000_000,
-             "timing_44100": 1_000_000, "timing_96000": 1_000_000}
+             "timing_44100": 1_000_000, "timing_96000": 1_000_000,
+             "rate_capabilities": 200_000, "probe_null": 20_000,
+             "enumerate_failed": 100_000}
 
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def build(name):
+def build(name, debug):
     archive = ARCHIVES / name
     archive.mkdir(parents=True, exist_ok=True)
-    command = ["cargo", "test", "--locked", "--release", "-p",
+    if (archive / "manifest.json").exists():
+        raise FileExistsError(f"Archive already exists; use a fresh stage name: {archive}")
+    command = ["cargo", "test", "--locked"]
+    if not debug:
+        command.append("--release")
+    command += ["-p",
                "deadlib-audio-backend-alsa", "--lib", "--no-run", "--message-format=json"]
     result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=True)
     (archive / "build.log").write_text(result.stderr)
@@ -47,7 +54,8 @@ def build(name):
     (archive / "correctness.log").write_text(checks.stdout + checks.stderr)
     fixture_logs = []
     fixture_env = {**os.environ, "LD_PRELOAD": str(archive / "fixture.so")}
-    for layout in ["regular", "empty", "unmatched_default", "bad_name", "probe_error"]:
+    for layout in ["regular", "empty", "unmatched_default", "bad_name", "probe_error",
+                   "bad_card_info", "bad_card_name", "missing_card_name", "long_names", "empty_names"]:
         result = subprocess.run([str(binary), "fixture_enumeration", "--ignored", "--test-threads=1"],
                                 env={**fixture_env, "ALSA_FIXTURE_LAYOUT": layout},
                                 capture_output=True, text=True, check=True)
@@ -60,6 +68,18 @@ def build(name):
             result = subprocess.run([str(binary), "fixture_timing", "--ignored", "--test-threads=1"],
                                     env=env, capture_output=True, text=True, check=True)
             fixture_logs.append(f"delay={delay} status_error={failed}\n{result.stdout}{result.stderr}")
+    matrix = subprocess.run([str(binary), "fixture_rate_matrix", "--ignored", "--test-threads=1"],
+                            env={**fixture_env, "ALSA_FIXTURE_RATE_MATRIX": "1"},
+                            capture_output=True, text=True, check=True)
+    fixture_logs.append(f"rate_matrix=2048\n{matrix.stdout}{matrix.stderr}")
+    for edge in ["min_error", "max_error", "reject_min", "reject_edges", "min_zero",
+                 "min_max_reversed", "duplicate_bounds"]:
+        for mask in ["0", "1"]:
+            result = subprocess.run([str(binary), "fixture_rate_edges", "--ignored", "--test-threads=1"],
+                                    env={**fixture_env, "ALSA_FIXTURE_RATE_EDGE": edge,
+                                         "ALSA_FIXTURE_RATE_MASK": mask},
+                                    capture_output=True, text=True, check=True)
+            fixture_logs.append(f"rate_edge={edge}/{mask}\n{result.stdout}{result.stderr}")
     (archive / "fixture.log").write_text("\n".join(fixture_logs))
     for source in [SOURCE / "lib.rs", SOURCE / "perf_tests.rs", ROOT / "scripts/alsa_fixture.c"]:
         shutil.copyfile(source, archive / source.name)
@@ -71,17 +91,21 @@ def build(name):
                     cpu=Path("/proc/cpuinfo").read_text().split("\n\n")[0],
                     alsa=subprocess.check_output(["pkg-config", "--modversion", "alsa"], text=True).strip())
     (archive / "manifest.json").write_text(json.dumps(manifest, indent=2))
-    print(checks.stdout, f"13 fixture scenarios passed for {name}", flush=True)
+    print(checks.stdout, f"{len(fixture_logs) - 1} fixture scenarios and 2048 rate masks passed for {name}", flush=True)
 
 
 def compare(names, output, runs, workloads, fixture_stage):
     rows = []
     logdir = ARCHIVES / "runs" / output.stem
     logdir.mkdir(parents=True, exist_ok=True)
+    profiles = set()
     for name in names:
         archive = ARCHIVES / name
         manifest = json.loads((archive / "manifest.json").read_text())
         assert digest(archive / "alsa-tests") == manifest["binary_sha256"]
+        profiles.add("--release" in manifest["command"])
+    if len(profiles) != 1:
+        raise ValueError("Compare binaries compiled with the same profile")
     for run in range(runs):
         for workload in workloads:
             for name in names[run % len(names):] + names[:run % len(names)]:
@@ -89,9 +113,14 @@ def compare(names, output, runs, workloads, fixture_stage):
                 prefix = logdir / f"{run}-{workload}-{name}"
                 fixture = ARCHIVES / fixture_stage / "fixture.so" if fixture_stage else archive / "fixture.so"
                 env = {**os.environ, "LC_ALL": "C", "LD_PRELOAD": str(fixture),
-                       "ALSA_PERF_WORKLOAD": workload, "ALSA_PERF_ITERATIONS": str(WORKLOADS[workload])}
+                       "ALSA_PERF_WORKLOAD": "enumerate" if workload == "enumerate_failed" else workload,
+                       "ALSA_PERF_ITERATIONS": str(WORKLOADS[workload])}
                 if workload.startswith("timing_"):
                     env["ALSA_FIXTURE_DELAY"] = "240"
+                if workload in ["rate_capabilities", "probe_null"]:
+                    env.pop("LD_PRELOAD", None)
+                if workload == "enumerate_failed":
+                    env["ALSA_FIXTURE_LAYOUT"] = "probe_error"
                 # One allowed CPU, with userspace cycles/instructions and scheduled CPU time.
                 cpu = min(os.sched_getaffinity(0))
                 command = ["perf", "stat", "-x", ";", "-e", "cycles:u,instructions:u,task-clock",
@@ -134,6 +163,7 @@ def compare(names, output, runs, workloads, fixture_stage):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build")
+    parser.add_argument("--debug", action="store_true", help="build/check a debug archive")
     parser.add_argument("--compare", nargs="+")
     parser.add_argument("--workloads", nargs="+", choices=list(WORKLOADS), default=list(WORKLOADS))
     parser.add_argument("--runs", type=int, default=7)
@@ -141,7 +171,7 @@ def main():
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.build:
-        build(args.build)
+        build(args.build, args.debug)
     if args.compare:
         if args.output is None or args.runs < 1:
             parser.error("--compare requires --output and positive --runs")
