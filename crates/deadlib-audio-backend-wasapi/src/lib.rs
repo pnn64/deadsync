@@ -951,7 +951,11 @@ fn guid_eq(a: &windows::core::GUID, b: &windows::core::GUID) -> bool {
 fn wide_null(s: &str) -> Vec<u16> {
     // UTF-16 uses at most one code unit per UTF-8 byte, plus the terminator.
     let mut wide = Vec::with_capacity(s.len() + 1);
-    wide.extend(s.encode_utf16());
+    if s.is_ascii() {
+        wide.extend(s.as_bytes().iter().map(|&byte| u16::from(byte)));
+    } else {
+        wide.extend(s.encode_utf16());
+    }
     wide.push(0);
     wide
 }
