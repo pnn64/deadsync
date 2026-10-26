@@ -31,6 +31,8 @@ pub(super) enum NativeKind {
     Match(strings::MatchIterator),
     Wrap(ThreadId),
     Lines { file: UserdataId, close: bool },
+    StandaloneMain,
+    StandaloneTraceback,
 }
 #[derive(Debug)]
 pub(super) struct NativeClosure {
@@ -130,12 +132,16 @@ impl Vm {
         self.gc_new_value(Value::Native(id));
         Ok(Value::Native(id))
     }
-    pub(super) fn is_wrapper(&self, id: u64) -> bool {
-        id >= strings::ITERATOR_FIRST
-            && self
-                .native_closures
-                .get(id)
-                .is_some_and(|c| matches!(c.kind, NativeKind::Wrap(_)))
+    pub(super) fn scheduled_native(&self, id: u64) -> u8 {
+        if id < strings::ITERATOR_FIRST {
+            return 0;
+        }
+        match self.native_closures.get(id).map(|c| &c.kind) {
+            Some(NativeKind::Wrap(_)) => 1,
+            Some(NativeKind::StandaloneMain) => 2,
+            Some(NativeKind::StandaloneTraceback) => 3,
+            _ => 0,
+        }
     }
     pub(super) fn native_environment(&self, id: u64) -> TableId {
         if id >= strings::ITERATOR_FIRST {
@@ -397,8 +403,10 @@ impl Vm {
                             | CONT_HANDLER
                             | CONT_GC
                             | CONT_HOOK
+                            | CONT_STANDALONE
                     )
-                ) || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
+                ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) >= 2))
+                    || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             })
             .count();
         usize::from(self.threads[slot_index(self.thread.0)].depth)

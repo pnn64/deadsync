@@ -151,7 +151,7 @@ impl Vm {
         // invocation. The ordinary global loadfile still delivers its hooks.
         let hooks = std::mem::take(&mut self.hooks);
         let result = self
-            .call_root(Value::Native(LOAD_FILE), argument.as_slice())
+            .call_unprotected(Value::Native(LOAD_FILE), argument.as_slice())
             .map(|_| ());
         self.hooks = hooks;
         result?;

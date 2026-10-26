@@ -131,6 +131,12 @@ fn main() {
     let concat128 = concat_kernel(128);
     for (name, source, expected, repeats) in [
         ("entry_args", "local a,b,c=...;return a+b+c", 6.0, 10_000),
+        (
+            "standalone_entry",
+            "local a,b,c=...;return a+b+c",
+            6.0,
+            10_000,
+        ),
         ("concat_chain_16", concat16.as_str(), 51_200.0, 10),
         ("concat_chain_128", concat128.as_str(), 409_600.0, 10),
         (
@@ -528,6 +534,9 @@ fn main() {
             program.register_count()
         );
         let mut vm = Vm::new();
+        if name == "standalone_entry" {
+            vm.begin_standalone().unwrap();
+        }
         let long_setup = name.starts_with("dump_long_").then(|| {
             let body = "x=x+1;".repeat(120_000);
             if name == "dump_long_skip" {
@@ -577,7 +586,7 @@ fn main() {
             vm.set_global(b"loadfile_path", path).unwrap();
             file
         });
-        let arguments: &[Value] = if name == "entry_args" {
+        let arguments: &[Value] = if matches!(name, "entry_args" | "standalone_entry") {
             &[Value::Number(1.), Value::Number(2.), Value::Number(3.)]
         } else {
             &[]
@@ -629,7 +638,7 @@ fn main() {
         .into_function()
         .unwrap();
         let call_reference = || {
-            if name == "entry_args" {
+            if matches!(name, "entry_args" | "standalone_entry") {
                 function.call::<f64>((1., 2., 3.))
             } else {
                 function.call::<f64>(())

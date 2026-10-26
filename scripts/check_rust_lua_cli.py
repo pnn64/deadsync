@@ -12,14 +12,16 @@ from build_lua_cli_reference import build
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--rust-binary',type=Path,help='Development-only prebuilt runner; its source provenance is not established by this audit')
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     sources=list((root/'crates/deadlib-lua').rglob('*.rs'))+[root/'crates/deadlib-lua/Cargo.toml',Path(__file__).resolve(),root/'scripts/build_lua_cli_reference.py']
     def hashes():return {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(sources)}
     before=hashes()
-    subprocess.run(['cargo','build','--release','-p','deadlib-lua','--bin','deadlua'],cwd=root,check=True)
+    if args.rust_binary is None:
+        subprocess.run(['cargo','build','--release','-p','deadlib-lua','--bin','deadlua'],cwd=root,check=True)
     reference,metadata=build(root)
-    binary=root/('target/release/deadlua.exe' if os.name=='nt' else 'target/release/deadlua')
+    binary=args.rust_binary.resolve() if args.rust_binary else root/('target/release/deadlua.exe' if os.name=='nt' else 'target/release/deadlua')
     with tempfile.TemporaryDirectory(prefix='lua-cli-chunk-') as temporary:
         source="local f=assert(io.open('fixture.bin','wb'));f:write(string.dump(function(a,...)print(a,select('#',...),...);print(_G.arg[0])end));f:close();local f=assert(io.open('fixture-error.bin','wb'));f:write(string.dump(function(a,...)print(a,select('#',...),...);print(arg[0])end));f:close()"
         subprocess.run(['lua','-e',source],executable=reference,cwd=temporary,check=True,capture_output=True)
@@ -63,6 +65,31 @@ def main() -> None:
     case('nonstring_error',['-e','error({})'])
     case('numeric_error',['-e','error(17)'])
     case('custom_traceback',['-e',"error('oops')"],env={'LUA_INIT':"debug.traceback=function(e,l)return 'handled:'..e..':'..l end"})
+    case('nil_error',['-e','error(nil)'])
+    case('empty_error_without_traceback',['-e',"error('',0)"],env={'LUA_INIT':'debug.traceback=nil'})
+    case('nil_handler_result',['-e',"error('bad')"],env={'LUA_INIT':'debug.traceback=function()end'})
+    case('object_handler_result',['-e',"error('bad')"],env={'LUA_INIT':'debug.traceback=function()return {} end'})
+    case('numeric_handler_result',['-e',"error('bad')"],env={'LUA_INIT':'debug.traceback=function()return 17 end'})
+    case('missing_debug',['-e',"error('bad')"],env={'LUA_INIT':'debug=nil'})
+    case('callable_handler_is_ignored',['-e',"error('bad')"],env={'LUA_INIT':"debug.traceback=setmetatable({},{__call=function()error('wrong')end})"})
+    case('traceback_lookup_callback',['-e',"error('bad')"],env={'LUA_INIT':"debug=setmetatable({},{__index=function(t,k)if k=='traceback' then return function(e,l)return e..':'..l end end end})"})
+    case('failing_handler',['-e',"error('bad')"],env={'LUA_INIT':"debug.traceback=function()error('handler failed')end"})
+    case('live_faulting_locals',['-e',"local function f()local x=7;error('bad')end;f()"],env={'LUA_INIT':"debug.traceback=function(e,l)local n,v=debug.getlocal(4,1);debug.setlocal(4,1,9);collectgarbage();return n..':'..v..':'..l end"})
+    reader="local f,e=load(function()error('reader',0)end);print(f,e)"
+    trace_identity="local old;debug.traceback=function(e,l)local f=debug.getinfo(2,'f').func;local same=old==f;old=f;return tostring(same)..':'..e end"
+    case('reader_inherits_handler_identity',['-e',reader+';'+reader],env={'LUA_INIT':trace_identity})
+    case('successive_entries_create_distinct_handlers',['-e',reader,'-e',reader],env={'LUA_INIT':trace_identity})
+    case('handler_environment_mutation',['-e',reader+';'+reader],env={'LUA_INIT':"debug.traceback=function()local caller=debug.getinfo(2,'f').func;debug.setfenv(caller,{debug={traceback=function()return 'replaced'end}});return 'first'end"})
+    case('handler_result_gc_root',['-e',"error('bad')"],env={'LUA_INIT':"local weak=setmetatable({},{__mode='v'});debug.traceback=function()local result={};weak[1]=result;local p=newproxy(true);getmetatable(p).__gc=function()print('gc',weak[1]~=nil)end;return result end"})
+    case('collection_after_error_can_replace_the_error',['-e',"local p=newproxy(true);getmetatable(p).__gc=function()error('gc failed')end;p=nil;error('original')"])
+    case('root_environment_does_not_retain_failed_call_locals',['-e',"local p=newproxy(true);getmetatable(p).__gc=function()error('gc failed')end;local env={p=p,error=error};p=nil;setfenv(1,env);error('original')"])
+    case('outer_main_debug_fields',['-e',"local d=debug.getinfo(2,'Suf');print(d.what,d.source,d.short_src,d.linedefined,d.lastlinedefined,d.nups,type(d.func),getfenv(d.func)==_G,debug.getinfo(3)==nil)"])
+    case('unprotected_argument_callback_error',['probe.lua'],env={'LUA_INIT':"setmetatable(_G,{__newindex=function(t,k,v)if k=='arg' then error('arg failed')end;rawset(t,k,v)end});debug.sethook(function(e)print('hook',e)end,'cr')"},files={'probe.lua':b"print('never')"})
+    case('error_binary_message',['-e',"error('a\\000b',0)"])
+    case('reader_handler_is_disabled_inside_lua_pcall',['-e',"local ok,a,b=pcall(function()return load(function()error('reader',0)end)end);print(ok,a,b)"],env={'LUA_INIT':"debug.traceback=function(e)return 'handled:'..e end"})
+    case('error_handler_call_and_return_hooks',['-e',"error('bad')"],env={'LUA_INIT':"debug.sethook(function(e)print('hook',e)end,'cr')"})
+    case('recursive_handler_depth',['-e',"error('bad')"],env={'LUA_INIT':"local n=0;holder=newproxy(true);getmetatable(holder).__gc=function()print('handlers',n)end;debug.traceback=function()n=n+1;error('again',0)end"})
+    case('lua_stack_overflow',['-e',"local function f()local x=f();return x end;f()"])
     case('arg_global_metamethod',['probe.lua'],env={'LUA_INIT':"setmetatable(_G,{__newindex=function(t,k,v)if k=='arg' then print('arg',v[0])end;rawset(t,k,v)end})"},files={'probe.lua':b'print(arg[0])'})
     case('replaced_arg_table_can_be_collected',['probe.lua','a'],files={'probe.lua':b"local w=setmetatable({arg},{__mode='v'});arg=nil;collectgarbage('collect');print(w[1]==nil,...)"})
     case('argument_roots_through_global_callback',['probe.lua','a','b'],env={'LUA_INIT':"setmetatable(_G,{__newindex=function(t,k,v)if k=='arg' then collectgarbage('collect');return end;rawset(t,k,v)end})"},files={'probe.lua':b"collectgarbage('collect');print(arg==nil,...)"})
@@ -92,7 +119,7 @@ def main() -> None:
             results.append(row)
             print(item['name'],'pass' if row['equal'] else 'FAIL',flush=True)
     if hashes()!=before:raise SystemExit('sources changed during CLI audit')
-    result=dict(source_hashes=before,reference=metadata,cases=results,passed=sum(r['equal'] for r in results),
+    result=dict(source_hashes=before,reference=metadata,rust_binary=dict(path=str(binary),sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),prebuilt=args.rust_binary is not None),cases=results,passed=sum(r['equal'] for r in results),
                 limitations='Fixed isolated CLI audit. ASCII Windows argv/path contract; full interactive, diagnostic and environment semantics remain required where mismatches are recorded.')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n')

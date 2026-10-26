@@ -806,6 +806,8 @@ impl Vm {
                                 threads::NativeKind::Lines { file, .. } => {
                                     work.push(Trace::Value(Value::Userdata(*file)))
                                 }
+                                threads::NativeKind::StandaloneMain
+                                | threads::NativeKind::StandaloneTraceback => {}
                             }
                         }
                     } else if id < 256 {
@@ -908,6 +910,9 @@ impl Vm {
                 .map(|t| Trace::Value(Value::Table(t))),
         );
         work.extend(self.roots.iter().copied().filter_map(edge));
+        if self.standalone != 0 {
+            work.push(Trace::Value(Value::Native(self.standalone)));
+        }
         // A live host Program retains its mutable per-VM entry binding. Internal
         // code ownership by escaped Lua closures does not pin unused entries.
         work.extend(

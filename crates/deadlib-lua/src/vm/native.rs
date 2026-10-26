@@ -89,7 +89,7 @@ impl Vm {
                         | threads::CO_RESUME
                         | threads::CO_YIELD
                 ) || package::contains(id)
-                    || self.is_wrapper(id)
+                    || self.scheduled_native(id) != 0
                     || (self.hooks.mask != 0 && self.hooks.allowed()) =>
             {
                 self.check_calls()?;
@@ -213,7 +213,10 @@ impl Vm {
         loop {
             let error = pending.as_ref().unwrap_or(original);
             let Some(index) = self.frames.iter().rposition(|f| {
-                (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
+                (matches!(
+                    f.function,
+                    FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE)
+                ) && matches!(f.pc, 1 | 3))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             }) else {
                 return Ok(false);
@@ -234,21 +237,37 @@ impl Vm {
             // though the loader subsequently returns nil plus that transformed value.
             let inherited = if loads::protected(frame.function) {
                 self.frames[..index].iter().rposition(|f| {
-                    (matches!(f.function, FrameKind::Native(PCALL | XPCALL))
-                        && matches!(f.pc, 1 | 3))
+                    (matches!(
+                        f.function,
+                        FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE)
+                    ) && matches!(f.pc, 1 | 3))
                         || (loads::protected(f.function) && f.pc == 3)
                 })
             } else {
                 None
             };
-            let handler_index = if matches!(frame.function, FrameKind::Native(XPCALL)) {
-                Some(index)
-            } else {
-                inherited.filter(|&i| matches!(self.frames[i].function, FrameKind::Native(XPCALL)))
-            };
+            let handler_index =
+                if matches!(frame.function, FrameKind::Native(XPCALL | CONT_STANDALONE)) {
+                    Some(index)
+                } else {
+                    inherited.filter(|&i| {
+                        matches!(
+                            self.frames[i].function,
+                            FrameKind::Native(XPCALL | CONT_STANDALONE)
+                        )
+                    })
+                };
             if let Some(handler_index) = handler_index {
                 self.frames[index].pc = 3;
-                let handler = self.registers[self.frames[handler_index].vararg_start + 1];
+                let handler_frame = self.frames[handler_index];
+                let handler = self.registers[if matches!(
+                    handler_frame.function,
+                    FrameKind::Native(CONT_STANDALONE)
+                ) {
+                    handler_frame.base
+                } else {
+                    handler_frame.vararg_start + 1
+                }];
                 if matches!(handler, Value::Function(_) | Value::Native(_)) {
                     Self::charge(budget)?;
                     // Preserve faulting frames until the error handler has returned.
@@ -279,7 +298,7 @@ impl Vm {
                 }
             }
             let value = if frame.pc() == 3
-                || matches!(frame.function, FrameKind::Native(XPCALL))
+                || matches!(frame.function, FrameKind::Native(XPCALL | CONT_STANDALONE))
                 || handler_index.is_some()
                 || inherited.is_some_and(|i| self.frames[i].pc == 3)
             {
@@ -294,7 +313,10 @@ impl Vm {
     pub(super) fn step_native(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let index = self.frames.len() - 1;
+        let scheduled = self.scheduled_native(id);
         match id {
+            CONT_STANDALONE => self.standalone_driver(frame),
+            _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),
             CONT_HOOK | CONT_TRACE | CONT_RETURN => self.hook_step(id, frame),
             debug::TRACEBACK => self.traceback_step(frame).map_err(|error| {
                 // lua_concat raises in the C traceback frame; it does not add
@@ -387,7 +409,7 @@ impl Vm {
             tables::TAB_FOREACH | tables::TAB_FOREACHI => self.foreach_step(id, frame),
             tables::TAB_SORT => self.sort_step(frame),
             threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
-            id if self.is_wrapper(id) => self.coroutine_step(id, frame),
+            _ if scheduled == 1 => self.coroutine_step(id, frame),
             _ => {
                 let actual = self.native(id, frame.result, frame.argc())?;
                 Ok(self.return_frame(frame, frame.result, actual))

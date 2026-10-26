@@ -194,3 +194,16 @@ fn host_global_writes_deliver_lua_newindex_and_recover_from_its_errors() {
         assert_eq!(vm.string_bytes(id).unwrap(), expected);
     }
 }
+
+#[test]
+fn loaded_functions_follow_lua_ownership_after_the_program_is_dropped() {
+    let mut vm = Vm::new();
+    let function = {
+        let program = compile(b"local p=newproxy(true);getmetatable(p).__gc=function()finalized=true end;setfenv(1,{p=p})").unwrap();
+        vm.load_program(&program)
+    };
+    vm.call(Value::Function(function), &[]).unwrap();
+    vm.collect_garbage().unwrap();
+    assert_eq!(vm.global(b"finalized"), Value::Boolean(true));
+    assert!(vm.call(Value::Function(function), &[]).is_err());
+}

@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 363 differential/adversarial integration tests, forty-three unit tests and
+crate, 370 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-cli.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-cli-traces.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -550,6 +550,21 @@ complete standalone compatibility remains a required gate. Two
 [measurement runs](performance/2026-10-26-rust-lua-cli.md) cover sixty-five runtime
 and twenty-two frontend workloads, including typed argument entry. The full
 engine, later dialects and integrations remain unfinished.
+
+The [standalone message-handler validation](testing/2026-10-26-rust-lua-cli-traces.md)
+keeps an observable parked C main frame across CLI actions and runs the current
+debug.traceback before unwinding failures. Managed native closures preserve
+main/handler identity, environments and GC ownership. Nil handler results stay
+silent; failed handlers, loader-reader errors and explicit post-error collection
+match the expanded reference probes. load_program lets the CLI release its host
+Program before calling, so failed chunk environments can be collected at the
+reference point. All 414 crate tests and 140 process probes pass. The direct CLI
+audit now matches sixty of sixty-six cases; usage text, project branding and
+interactive mode remain different, and its command still fails. The official
+file results remain seventeen of eighteen in both engines. Two
+[measurement runs](performance/2026-10-26-rust-lua-cli-traces.md) cover sixty-six
+runtime and twenty-two frontend workloads, including standalone entry overhead.
+Complete standalone compatibility and the full engine/integration goal remain open.
 
 ## Reference contract
 

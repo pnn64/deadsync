@@ -292,6 +292,11 @@ live functions, builtins and callable objects. Both reuse the existing call driv
 and validate handles. `new_table` and `raw_table_set` build host-owned data, while
 `set_global` honors the global table's `__newindex`. `Vm::load_file` uses the VM's
 file streams and verifier independently of a replaced Lua `loadfile` global.
+`load_program` creates a callable binding without running it; dropping the host
+Program before calling lets Lua ownership determine its environment's lifetime.
+`begin_standalone`/`end_standalone` add a parked C main frame and protected message
+handling for CLI-style entry. Default/custom tracebacks inspect live faulting
+frames, and uncaught runtime errors force collection after the handler returns.
 
 `Value::LightUserdata` carries an unmanaged opaque identity. It owns no storage,
 is never dereferenced, survives weak tables and has a metatable shared by light
@@ -309,7 +314,7 @@ scratch-stack behavior remain open. The API and bytecode
 are provisional. The CLI accepts scripts with positional arguments, stdin, chained
 `-e`/`-l` actions, `--`, `-` and `LUA_INIT` strings/files. Script values appear in
 `...` and the Lua 5.1 `arg` table, including negative option indices. Interactive
-mode and full standalone traceback/hook/usage behavior remain unfinished; the
+mode and full standalone usage/console behavior remain unfinished; the
 CLI audit retains their mismatches. The version banner identifies DeadLua.
 
 ```sh
@@ -332,5 +337,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-cli.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-cli-traces.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

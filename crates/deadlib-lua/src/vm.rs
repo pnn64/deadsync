@@ -19,6 +19,7 @@ mod meta;
 mod native;
 mod os;
 mod package;
+mod standalone;
 mod strings;
 mod tables;
 mod threads;
@@ -157,6 +158,7 @@ const CONT_TRACE: u64 = 263;
 const CONT_RETURN: u64 = 264;
 const CONT_FILE: u64 = 265;
 const CONT_CONCAT: u64 = 266;
+const CONT_STANDALONE: u64 = 267;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -292,6 +294,7 @@ pub struct Vm {
     io: io::Io,
     proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
+    standalone: u64,
 }
 
 impl Default for Vm {
@@ -349,6 +352,7 @@ impl Vm {
             io: io::Io::default(),
             proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
+            standalone: 0,
         };
         for (id, name) in [
             b"assert".as_slice(),
@@ -502,6 +506,9 @@ impl Vm {
         if self.metafield(target, Meta::NewIndex) == Value::Nil {
             return self.raw_set(self.globals, k, value);
         }
+        if self.standalone != 0 {
+            self.standalone_setter();
+        }
         let result = self.set_table(target, k, value).and_then(|()| {
             if self.frames.is_empty() {
                 Ok(0)
@@ -509,6 +516,9 @@ impl Vm {
                 self.drive()
             }
         });
+        if result.is_err() {
+            self.standalone = 0;
+        }
         self.finish_execution(result).map(|_| ())
     }
 
@@ -824,12 +834,30 @@ impl Vm {
         None
     }
 
+    /// Load a verified program as a function without executing it.
+    ///
+    /// The function is retained in the result registers until the next VM
+    /// mutation. Pin it when retaining it across other executions or collections.
+    /// A live Program also retains its entry binding; dropping the Program lets
+    /// Lua ownership alone determine the function/environment's lifetime.
+    pub fn load_program(&mut self, program: &Program) -> FunctionId {
+        let function = self.load(program);
+        self.registers.clear();
+        self.registers.push(Value::Function(function));
+        self.top = 1;
+        function
+    }
+
     /// Execute verified bytecode, retaining globals and reusing register storage.
     ///
     /// # Errors
     /// Returns Lua runtime errors or an instruction-limit error. Returned values
     /// borrow the register storage until the next mutation of the VM.
     pub fn execute(&mut self, program: &Program) -> Result<&[Value], Error> {
+        if self.standalone != 0 {
+            let function = self.load(program);
+            return self.call_root(Value::Function(function), &[]);
+        }
         let function = self.load(program);
         let closure = &self.functions[slot_index(function.0)];
         let entry = &self.programs[closure.program].data.prototypes[closure.prototype];
@@ -902,6 +930,9 @@ impl Vm {
     }
 
     fn call_root(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        if self.standalone != 0 {
+            return self.standalone_call(function, arguments, true);
+        }
         if arguments.len() > u32::MAX as usize {
             return Err(Error::new(ErrorKind::Limit, 0, "too many arguments"));
         }
@@ -920,6 +951,18 @@ impl Vm {
             Err(error) => Err(error),
         };
         self.finish_execution(result)
+    }
+
+    fn call_unprotected(
+        &mut self,
+        function: Value,
+        arguments: &[Value],
+    ) -> Result<&[Value], Error> {
+        if self.standalone != 0 {
+            self.standalone_call(function, arguments, false)
+        } else {
+            self.call_root(function, arguments)
+        }
     }
 
     fn finish_execution(&mut self, result: Result<usize, Error>) -> Result<&[Value], Error> {

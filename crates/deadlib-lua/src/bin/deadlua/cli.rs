@@ -72,38 +72,43 @@ fn options(args: &[Vec<u8>]) -> Option<Options<'_>> {
     Some(result)
 }
 
-fn error_bytes(vm: &Vm, error: &Error) -> Vec<u8> {
+fn error_bytes(vm: &Vm, error: &Error) -> Option<Vec<u8>> {
     match error.value() {
-        Some(Value::String(id)) => vm.string_bytes(id).unwrap().to_vec(),
-        Some(Value::Number(_)) | None => error.message_bytes().to_vec(),
-        _ => b"(error object is not a string)".to_vec(),
+        Some(Value::String(id)) => Some(vm.string_bytes(id).unwrap().to_vec()),
+        Some(Value::Number(_)) | None => Some(error.message_bytes().to_vec()),
+        Some(Value::Nil) => None,
+        _ => Some(b"(error object is not a string)".to_vec()),
     }
 }
 
-fn execute(vm: &mut Vm, source: &[u8], name: &[u8]) -> Result<(), Vec<u8>> {
+fn execute(vm: &mut Vm, source: &[u8], name: &[u8]) -> Result<(), Option<Vec<u8>>> {
     let program = compile_named(source, name).map_err(|error| {
-        if error.line() != 0 && matches!(error.kind(), ErrorKind::Syntax | ErrorKind::Limit) {
-            let mut message = name[1..].to_vec();
-            message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
-            message.extend_from_slice(error.message_bytes());
-            message
-        } else {
-            error.message_bytes().to_vec()
-        }
+        Some(
+            if error.line() != 0 && matches!(error.kind(), ErrorKind::Syntax | ErrorKind::Limit) {
+                let mut message = name[1..].to_vec();
+                message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
+                message.extend_from_slice(error.message_bytes());
+                message
+            } else {
+                error.message_bytes().to_vec()
+            },
+        )
     })?;
-    vm.execute(&program)
+    let function = vm.load_program(&program);
+    drop(program);
+    vm.call(Value::Function(function), &[])
         .map(|_| ())
         .map_err(|e| error_bytes(vm, &e))
 }
 
-fn file(vm: &mut Vm, path: Option<&[u8]>, arguments: &[Value]) -> Result<(), Vec<u8>> {
+fn file(vm: &mut Vm, path: Option<&[u8]>, arguments: &[Value]) -> Result<(), Option<Vec<u8>>> {
     let function = vm.load_file(path).map_err(|e| error_bytes(vm, &e))?;
     vm.call(Value::Function(function), arguments)
         .map(|_| ())
         .map_err(|e| error_bytes(vm, &e))
 }
 
-fn run(vm: &mut Vm, args: &[Vec<u8>]) -> Result<(), Vec<u8>> {
+fn run(vm: &mut Vm, args: &[Vec<u8>]) -> Result<(), Option<Vec<u8>>> {
     if let Some(init) = env::var_os("LUA_INIT") {
         let init = init.as_encoded_bytes();
         if let Some(path) = init.strip_prefix(b"@") {
@@ -113,7 +118,7 @@ fn run(vm: &mut Vm, args: &[Vec<u8>]) -> Result<(), Vec<u8>> {
         }
     }
     let Some(options) = options(args) else {
-        return Err(b"usage: deadlua [options] [script [args]].\nAvailable options are:\n  -e stat  execute string 'stat'\n  -l name  require library 'name'\n  -v       show version information\n  --       stop handling options\n  -        execute stdin and stop handling options".to_vec());
+        return Err(Some(b"usage: deadlua [options] [script [args]].\nAvailable options are:\n  -e stat  execute string 'stat'\n  -l name  require library 'name'\n  -v       show version information\n  --       stop handling options\n  -        execute stdin and stop handling options".to_vec()));
     };
     if options.version {
         stderr(format!("DeadLua {} (Lua 5.1)\n", env!("CARGO_PKG_VERSION")).as_bytes());
@@ -172,14 +177,26 @@ pub(super) fn main() -> ExitCode {
         .map(|a| a.as_encoded_bytes().to_vec())
         .collect();
     let mut vm = Vm::new();
-    match run(&mut vm, &args) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            stderr(args.first().map_or(b"deadlua", Vec::as_slice));
-            stderr(b": ");
-            stderr(&error);
-            stderr(b"\n");
-            ExitCode::FAILURE
-        }
+    vm.begin_standalone().expect("fresh standalone VM");
+    let result = run(&mut vm, &args);
+    if let Err(Some(error)) = &result {
+        stderr(args.first().map_or(b"deadlua", Vec::as_slice));
+        stderr(b": ");
+        stderr(error);
+        stderr(b"\n");
+    }
+    let finished = vm.end_standalone();
+    if let Err(error) = &finished
+        && let Some(error) = error_bytes(&vm, error)
+    {
+        stderr(args.first().map_or(b"deadlua", Vec::as_slice));
+        stderr(b": ");
+        stderr(&error);
+        stderr(b"\n");
+    }
+    if result.is_ok() && finished.is_ok() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
