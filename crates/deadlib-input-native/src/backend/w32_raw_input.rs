@@ -3,9 +3,9 @@ use super::{
 };
 use deadlib_platform::input::{PadCode, PadEvent, PadId, RawKeyboardEvent};
 use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 use std::collections::{HashMap, hash_map::Entry};
 use std::ffi::c_void;
-use std::fmt::Write as _;
 use std::mem::size_of;
 use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU8, Ordering};
@@ -406,20 +406,32 @@ fn read_device_serial(device_path: &str) -> Option<String> {
 /// (port-bound) interface path, which only stays stable across relaunches on
 /// the same port. Kept as a free function so the port-independence rule is unit
 /// testable without any HID hardware.
+#[inline(always)]
 fn rawinput_uuid(vendor: u16, product: u16, serial: Option<&str>, name: &str) -> [u8; 16] {
-    match serial {
-        Some(serial) => uuid_from_bytes(
-            format!("rawinput:serial:{vendor:04x}:{product:04x}:{serial}").as_bytes(),
-        ),
-        None => uuid_from_bytes(name.as_bytes()),
+    let Some(serial) = serial else {
+        return uuid_from_bytes(name.as_bytes());
+    };
+    // The 26-byte prefix leaves room for 38 inline serial bytes.
+    let mut identity = SmallVec::<[u8; 64]>::new();
+    identity.reserve_exact(26 + serial.len());
+    identity.extend_from_slice(b"rawinput:serial:");
+    for value in [vendor, product] {
+        for shift in [12, 8, 4, 0] {
+            identity.push(b"0123456789abcdef"[usize::from((value >> shift) & 15)]);
+        }
+        identity.push(b':');
     }
+    identity.extend_from_slice(serial.as_bytes());
+    uuid_from_bytes(&identity)
 }
 
 /// Lower-case hex of a 16-byte uuid, for diagnostic logging only.
 fn uuid_hex(uuid: &[u8; 16]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = String::with_capacity(32);
-    for b in uuid {
-        let _ = write!(out, "{b:02x}");
+    for &b in uuid {
+        out.push(char::from(HEX[usize::from(b >> 4)]));
+        out.push(char::from(HEX[usize::from(b & 15)]));
     }
     out
 }
@@ -800,18 +812,18 @@ fn emit_button_diff<F>(
     F: FnMut(PadEvent),
 {
     let prev = &dev.buttons_prev[..dev.buttons_prev_len];
-    // Compare equal prefixes eight usages at a time. Fixed-size array equality
-    // permits a vector comparison without rereading the prefix in the merge.
-    let common = if prev.len() < 8 {
+    // Compare equal prefixes four usages at a time. Fixed-size equality can
+    // compare each eight-byte block directly, including short held-button lists.
+    let common = if prev.len() < 4 {
         0
     } else {
-        prev.as_chunks::<8>()
+        prev.as_chunks::<4>()
             .0
             .iter()
-            .zip(now.as_chunks::<8>().0)
+            .zip(now.as_chunks::<4>().0)
             .take_while(|(a, b)| a == b)
             .count()
-            * 8
+            * 4
     };
     let mut a = common;
     let mut b = common;

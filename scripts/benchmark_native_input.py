@@ -67,7 +67,7 @@ def compare(stages, output, runs, group):
             counts = {label: dict(re.findall(r"(\w+): (\d+)", values))
                       for label, values in churn.findall(result.stdout)}
             measurements = timing.findall(result.stdout)
-            expected = dict(uuid=6, wgi=5, hid=20)[group]
+            expected = dict(uuid=6, wgi=5, hid=20, axes=12, hex=1, serial=6, dispatch=20)[group]
             if len(measurements) != expected or len(counts) != expected:
                 raise ValueError(f"Expected {expected} workloads: {stage}")
             for label, cycles, ns in measurements:
@@ -94,7 +94,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build")
     parser.add_argument("--compare", nargs="+")
-    parser.add_argument("--group", choices=["uuid", "wgi", "hid"])
+    parser.add_argument("--group", choices=["uuid", "wgi", "hid", "axes", "hex", "serial", "dispatch"])
     parser.add_argument("--runs", type=int, default=8)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
