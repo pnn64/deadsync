@@ -16,6 +16,7 @@ cargo +nightly fuzz run inflate_stream -- -runs=20000 -seed=782347 -max_len=6553
 cargo +nightly fuzz run encode_stream -- -runs=20000 -seed=782347 -max_len=256 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run profiles -- -runs=20000 -seed=782347 -max_len=4096 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run deflate_stream -- -runs=20000 -seed=782347 -max_len=131072 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
+cargo +nightly fuzz run huffman -- -runs=20000 -seed=782347 -max_len=64 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
 ```
 
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
@@ -78,6 +79,47 @@ filesystem. Campaign logs and exact tool versions are recorded in `reports/`.
 Smoke campaigns are a regression check, not exhaustive validation. Longer runs,
 additional structured generators, independent APNG compositing comparisons,
 and coverage review remain required.
+
+## Structured Huffman target
+
+`huffman` selects among 19,645 independently assembled RFC 1951 streams. Its
+64-byte input controls payload bit flips, truncation, suffixes, output limits and
+input/output fragmentation. The shared fixture generator includes malformed
+trees/counts/repeats/reserved symbols and valid long canonical codes, cross-table
+repeats, overlapping matches, all legal length/distance values and bit offsets.
+The seed generator emits 649 deterministic twelve-byte selectors spanning every
+family. It does not store the generated compressed streams in the fuzz input.
+
+Unmodified fixtures have independent exact-output/acceptance expectations.
+Mutated streams check buffered/fragmented acceptance, samples, prefix consumption,
+fused errors, progress, output tail guards and bounded inflater memory. Every
+native-accepted stream also checks flate2 output when that decoder accepts it.
+Default miniz/zlib reject unused HDIST 31/32 definitions permitted by the published
+RFC. The deterministic suite explicitly checks that policy, and a C compatibility
+build independently verifies all such positive fixtures. A reference rejection
+of an arbitrary mutation is therefore not treated as a native conformance verdict.
+See `../huffman-conformance.json` and `../tests/oracle/README.md` for the two C
+configurations and their different literal-count behavior. Longer campaigns,
+arbitrary symbol permutations and native-only coverage analysis remain open.
+
+The initial harness timed out after 697 executions because it reset and scanned
+4 KiB of sentinel space for every one-byte input fragment of a large valid
+stream. The stack resolved to the harness tail assertion. The corrected target
+resets only previously written bytes and checks both ends of the unused tail
+plus the byte beyond the supplied slice; deterministic tests still check every
+untouched byte. It also caps mutated output by the fixture's expected size or
+4 KiB. `reports/huffman-initial-timeout.log`, the exact thirteen-byte
+`huffman-timeout-input.bin`, the corrected replay log, and a reverse patch in
+`../experiments/huffman-harness-timeout.patch` preserve the diagnosis. The initial
+697 executions are not included in successful campaign totals. Fixture creation
+runs once per process and contributes to fixed-input replay time.
+
+The corrected fresh campaign passes 20,000 executions in 857 seconds with a
+394 MiB peak RSS, using a ten-second per-input timeout. Together with earlier
+successful campaigns this records 220,000 executions across eight targets.
+`reports/huffman-source.json` preserves options, source/binary hashes and the
+separate preliminary timeout. Native-only integration-test coverage is recorded
+under `../coverage-reports/`; it is not a native fuzz coverage measurement.
 
 The conformance follow-up used a fresh `fuzz/corpus/png_conformance_20261026`
 directory containing only the 175 checked-in PNGSuite files and independent

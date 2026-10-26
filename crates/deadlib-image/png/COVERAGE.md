@@ -11,7 +11,7 @@ evidence, application responsibilities and explicitly open items.
 | Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
-| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header suites | All 65,536 headers and 92 window fixtures pass; C zlib default/strict comparisons recorded; broader tree fixtures still pending |
+| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header / Huffman suites | All 65,536 headers, 92 window fixtures and 19,645 Huffman fixtures pass; C default/strict/compatibility policies recorded; arbitrary tree permutations and coverage review remain open |
 | Native compression | Stored/fixed Huffman LZ77, bounded 16-candidate chains and per-block coding choice; `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments, mixed coding and 32 KiB block/history boundaries pass |
 | PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
@@ -24,7 +24,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Seven targets; 200,000 recorded sanitizer executions across milestones, including 10,000 final-encoder runs; longer campaigns and native-only coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 220,000 recorded successful sanitizer executions across milestones, including 20,000 structured Huffman runs; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -389,8 +389,66 @@ source/binary hashes, reference features and pinned commits. Full release tests
 (70 passed, four optional C tests ignored), strict Clippy, both C configurations
 and an isolated offline package build pass. Production source is byte-for-byte
 unchanged from `5a6747e32`, so this milestone strengthens conformance evidence
-without changing the measured encoder/decoder implementation. Broader malformed
-Huffman and PNG/APNG grammar audits remain open.
+without changing the measured encoder/decoder implementation. The subsequent
+Huffman audit below extends malformed compression evidence; PNG/APNG grammar
+audits remain open.
+
+Huffman grammar milestone: `tests/support/huffman.rs` constructs 19,645 RFC 1951
+wire fixtures without importing a codec or the native table builder. There are
+3,091 valid streams and 16,554 malformed streams. Six normal tests check native
+buffered decoding, four IO fragment pairs, whole-input/one-byte-output prefix
+consumption, terminal errors and PNG buffered/reader wrappers. Valid fixtures
+also check flate2 and Rust png samples, except their explicitly asserted
+rejections of the 68 published-range distance-definition cases described below.
+
+The matrix includes all 16,384 dynamic count-field bit combinations with an
+invalid empty code-length alphabet, plus 1,024 otherwise valid bodies isolating
+literal/distance count bounds and 15 valid code-length alphabet counts. It covers
+all 1,525 complete code-length histograms with 2–19 leaves and width at most seven,
+89 empty/single/incomplete/oversubscribed tree cases, 187 repeat-boundary cases,
+74 reserved-symbol/definition cases and 347 canonical/range cases. Histogram
+coverage does not enumerate all symbol permutations. The 32 large fixed/dynamic
+fixtures test all distances 1–32,768 at length three and every length 3–258 at
+eight edge/overlap distances, at all eight starting bit offsets and both padding
+values. This is not the Cartesian product of all lengths/distances or every
+possible wire encoding of a value.
+
+Default C zlib and a strict-window compatibility build each check all 19,645
+records. Default zlib, flate2/miniz and Rust png reject 68 otherwise valid
+HDIST 31/32 definitions, even when the reserved symbols are unused. The published
+RFC permits those definitions; native decoding and the compatibility build
+accept them. Both still reject actual reserved distance symbols. The same C
+compatibility flag also accepts 64 otherwise valid streams with 287/288 literal
+definitions, exceeding the published limit. Native decoding and default C zlib
+reject them. Tests record both differences rather than treating every reference
+as an interchangeable positive/negative oracle. `huffman-conformance.log` and
+`huffman-conformance.json` retain exact commands, flags, source/binary hashes and
+the full release/isolated results: 76 passed and five optional C tests ignored.
+Strict Clippy also passes; production source remains unchanged from `5a6747e32`.
+
+The eighth sanitizer target, `huffman`, selects these independent streams and
+mutates compressed bits, truncation, suffixes, limits and IO fragments. A fresh
+649-file / 7,788-byte selector corpus passes 20,000 executions in 857 seconds,
+with a 394 MiB peak RSS. Its AddressSanitizer binary exports `__asan_init`.
+`fuzz/reports/huffman-source.json` binds source/harness/binary hashes to the
+complete log, toolchain and seed. An initial 697-execution harness timeout is
+retained separately: its stack identified a full 4 KiB sentinel scan per
+one-byte input fragment. Bounded tail guards fix that harness overhead, and the
+exact input replay and fresh campaign pass. No production codec change was
+needed. The failed preliminary run and fixed-input replay are excluded from the
+220,000 successful campaign executions across eight targets.
+
+Native-only LLVM coverage runs all 76 tests under Linux nightly branch
+instrumentation, then selects the ordinary library mapped by 20 integration
+executables. Unit-test binaries, embedded test functions, reference codecs,
+test harness source and the standard library are excluded from reported totals.
+The 20 native source files report 3,783/3,916 lines (96.60%), 4,562/4,941 regions
+(92.33%) and 1,077/1,286 instrumented branch outcomes (83.75%). These integration
+coverage results are separate from libFuzzer's counters and do not imply all
+paths, all inputs or complete conformance. The reviewed gaps concentrate in
+malformed APNG framing/encoder validation, PNG chunk/field boundaries, stream IO
+errors and public error formatting. `coverage-reports/README.md` records scope,
+commands, tool versions, uncovered annotations and the next targeted work.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
@@ -399,7 +457,7 @@ integration, preserving unrelated work and committing verified milestones:
    covered indexed-color recovery, text decoding and encoder field distinctions.
 2. Resolve the open rows in the Third Edition clause matrix, including ancillary
    semantic edge cases and the scope of BCP47 extension semantics,
-   all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
+   arbitrary Huffman symbol permutations, malformed APNG ordering, and unknown chunks.
 3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and
    coverage review beyond the current streaming and CRC-repaired smoke targets.

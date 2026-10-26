@@ -43,3 +43,10 @@ corpus iterations. All use logical CPU 0 on a shared host. Exploratory differenc
 near run-to-run variance did not justify selection; host frequency and other
 workloads remain uncontrolled. [BENCHMARKS.md](../BENCHMARKS.md) interprets the
 results and records the final implementation's remaining gaps.
+
+`huffman-harness-timeout.patch` is a separate reverse patch for the initial
+structured fuzz harness, relative to the repository root. It changes only
+`fuzz/fuzz_targets/huffman.rs`, restoring an unnecessarily expensive full-buffer
+sentinel scan and its larger mutation limit. The patch passes `git apply --check`
+against this milestone. The original timeout, exact input and corrected replay
+are retained under `fuzz/reports/`; no production codec fix was needed.

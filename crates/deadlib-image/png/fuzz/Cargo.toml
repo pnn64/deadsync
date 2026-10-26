@@ -65,3 +65,10 @@ path = "fuzz_targets/deflate_stream.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "huffman"
+path = "fuzz_targets/huffman.rs"
+test = false
+doc = false
+bench = false

@@ -1,5 +1,7 @@
 //! Extract independent PNGSuite zlib streams and PNG files for fuzz campaigns.
 //! An optional first argument creates a fresh corpus root instead of merging seeds.
+#[path = "../tests/support/huffman.rs"]
+mod huffman;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -23,6 +25,16 @@ fn main() -> std::io::Result<()> {
     let encode_stream = corpus.join("encode_stream");
     let profiles = corpus.join("profiles");
     let deflate_stream = corpus.join("deflate_stream");
+    let huffman_dir = corpus.join("huffman");
+    fs::create_dir_all(&huffman_dir)?;
+    let cases = huffman::all_cases();
+    let seeds = huffman::seed_indices(&cases);
+    for &index in &seeds {
+        let mut input = (index as u32).to_le_bytes().to_vec();
+        input.extend_from_slice(&[0, 2, 3, 0, 0, 0, 0, 0]);
+        fs::write(huffman_dir.join(format!("case-{index}")), input)?;
+    }
+    println!("Huffman: {} fixtures, {} seeds", cases.len(), seeds.len());
     fs::create_dir_all(&deflate_stream)?;
     for size in [32767, 32768, 32769, 65535, 65536, 131072] {
         let mut random = 0x7139_4a55u32;

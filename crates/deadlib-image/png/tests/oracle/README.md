@@ -74,3 +74,42 @@ The flate2/miniz reference accepts the 24 raw fixtures that refer before output
 exists. Native decoding and C zlib reject them; Rust png and libpng reject the
 PNG wrappers. Reference acceptance of malformed data is recorded as a policy
 difference and does not override the native rejection asserted by the tests.
+
+## Huffman grammar audit
+
+`tests/huffman.rs` checks 19,645 independently constructed compressed streams
+against native buffered/fragmented decoding and default C zlib. It explicitly
+records reference policy differences. RFC 1951 permits 1–32 dynamic distance
+definitions while reserving symbols 30/31 from actual compressed data. Default
+zlib rejects definitions beyond 30, including unused or zero-length entries.
+The [maintainer's explanation](https://github.com/madler/zlib/issues/82) identifies
+that deliberate restriction. Rust png and flate2/miniz reject the 68 positive
+fixtures with those definitions too; the tests verify those reference rejections.
+Native decoding accepts the unused definitions and rejects consumed reserved
+symbols, following the published field limits.
+
+A second C build enables zlib's existing `PKZIP_BUG_WORKAROUND` flag to verify
+these positives independently. This flag also disables the 286-literal limit:
+it accepts 64 otherwise valid fixtures with 287/288 literal definitions, which the native codec
+and default zlib reject. The compatibility build is therefore not their negative
+oracle. This distinction is asserted rather than silently skipping disagreement.
+
+```powershell
+$ref = (Resolve-Path target/deadlib-image-reference).Path
+cmake -S crates/deadlib-image/png/tests/oracle -B "$ref/oracle-pkzip-build" -DREFERENCE_ROOT="$ref" -DDEADLIB_ZLIB_STRICT_WINDOW=ON -DDEADLIB_ZLIB_PKZIP_WORKAROUND=ON
+cmake --build "$ref/oracle-pkzip-build" --config Release --target deadlib_png_oracle --parallel 4
+$env:DEADLIB_LIBPNG_ORACLE = "$ref/oracle-pkzip-build/Release/deadlib_png_oracle.exe"
+$env:DEADLIB_ZLIB_PKZIP_WORKAROUND = '1'
+cargo test -p deadlib-image-png --release --test huffman c_zlib_huffman_oracle -- --ignored --nocapture
+Remove-Item Env:DEADLIB_ZLIB_PKZIP_WORKAROUND
+$env:DEADLIB_LIBPNG_ORACLE = "$ref/oracle-build/Release/deadlib_png_oracle.exe"
+cargo test -p deadlib-image-png --release --test huffman c_zlib_huffman_oracle -- --ignored --nocapture
+```
+
+The two runs, exact commands and source/binary hashes are retained in
+`huffman-conformance.log` and `huffman-conformance.json` in the PNG package.
+The generated fixtures span every complete code-length histogram with 2–19
+leaves and maximum width seven; they do not enumerate all symbol permutations.
+All length values 3–258 and distances 1–32,768 are exercised in fixed/dynamic
+blocks at all eight bit offsets and both alignment-padding values. This is an
+equivalence-class audit, not enumeration of every possible compressed stream.
