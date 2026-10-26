@@ -263,7 +263,7 @@ fn append_background_lua_changes<'a>(
                 normalized_background_lua_color(fields.get(10).map(AsRef::as_ref)),
             ];
             let effect = key[0].clone();
-            let color1 = fields.get(9).and_then(|field| parse_bgchange_color(&field.replace('^', ",")));
+            let color1 = fields.get(9).and_then(|field| parse_background_lua_color(field));
             out.push((key, SerializableSongBackgroundLuaChange {
                 start_beat,
                 path: path.to_string_lossy().into_owned(),
@@ -280,10 +280,33 @@ fn append_background_lua_changes<'a>(
     uses_lua
 }
 
+fn parse_background_lua_color(field: &str) -> Option<[f32; 4]> {
+    // Both separators are accepted directly. Keep legacy normalized input for
+    // non-ASCII hex slice diagnostics.
+    if field.is_ascii() {
+        parse_bgchange_color(field)
+    } else {
+        parse_bgchange_color(&field.replace('^', ","))
+    }
+}
+
 fn normalized_background_lua_color(field: Option<&str>) -> String {
-    let Some(color) = field.and_then(|field| parse_bgchange_color(&field.replace('^', ","))) else { return String::new(); };
-    let [r,g,b,a] = color.map(|component| (component * 255.0).round_ties_even().clamp(0.0,255.0) as u8);
-    if a == 255 { format!("#{r:02X}{g:02X}{b:02X}") } else { format!("#{r:02X}{g:02X}{b:02X}{a:02X}") }
+    let Some(color) = field.and_then(parse_background_lua_color) else {
+        return String::new();
+    };
+    let [r, g, b, a] =
+        color.map(|component| (component * 255.0).round_ties_even().clamp(0.0, 255.0) as u8);
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut digits = [0; 8];
+    for (pair, byte) in digits.as_chunks_mut::<2>().0.iter_mut().zip([r, g, b, a]) {
+        pair[0] = HEX[usize::from(byte >> 4)];
+        pair[1] = HEX[usize::from(byte & 15)];
+    }
+    let len = if a == 255 { 6 } else { 8 };
+    let mut output = String::new();
+    output.push('#');
+    output.push_str(std::str::from_utf8(&digits[..len]).expect("hex digits are ASCII"));
+    output
 }
 
 fn cache_background_lua_owners(
@@ -665,6 +688,10 @@ fn sort_foreground_changes<T>(
     out.sort_by(|left, right| start_beat(left).partial_cmp(&start_beat(right))
         .expect("foreground beats are finite"));
 }
+
+#[cfg(test)]
+#[path = "changes/background_fields.rs"]
+mod background_fields;
 
 #[cfg(test)]
 mod tests {
