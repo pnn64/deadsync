@@ -1,5 +1,8 @@
 #![cfg(target_os = "linux")]
 
+#[cfg(test)]
+mod perf_tests;
+
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
 use deadlib_audio_core::{
@@ -84,32 +87,8 @@ pub struct AlsaOutputDevice {
     pub is_default: bool,
 }
 
-struct PhysicalOutputDevice {
-    card_index: u32,
-    card_name: String,
-    device_index: u32,
-    device_name: String,
-}
-
 pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
     let default_pcm_id = default_hw_pcm_id();
-    let mut devices = physical_output_devices()
-        .into_iter()
-        .map(|device| build_output_device(device, default_pcm_id.as_deref()))
-        .collect::<Vec<_>>();
-    if !devices.iter().any(|device| device.is_default)
-        && let Some(device) = devices.first_mut()
-    {
-        device.is_default = true;
-    }
-    devices
-}
-
-fn default_hw_pcm_id() -> Option<String> {
-    resolved_hw_pcm_id("default").or_else(|| resolved_hw_pcm_id("sysdefault"))
-}
-
-fn physical_output_devices() -> Vec<PhysicalOutputDevice> {
     let mut devices = Vec::new();
     for card in alsa::card::Iter::new().filter_map(Result::ok) {
         let card_index = card.get_index() as u32;
@@ -127,27 +106,31 @@ fn physical_output_devices() -> Vec<PhysicalOutputDevice> {
             else {
                 continue;
             };
-            let device_name = playback_info
-                .get_name()
-                .map(str::to_string)
-                .unwrap_or_else(|_| format!("Device {}", device_index));
-            devices.push(PhysicalOutputDevice {
-                card_index,
-                card_name: card_name.clone(),
-                device_index: device_index as u32,
-                device_name,
-            });
+            let pcm_id = format!("hw:CARD={card_index},DEV={}", device_index as u32);
+            let name = match playback_info.get_name() {
+                Ok(device_name) => format!("{card_name}, {device_name}"),
+                Err(_) => format!("{card_name}, Device {device_index}"),
+            };
+            devices.push(build_output_device(pcm_id, name, default_pcm_id.as_deref()));
         }
+    }
+    if !devices.iter().any(|device| device.is_default)
+        && let Some(device) = devices.first_mut()
+    {
+        device.is_default = true;
     }
     devices
 }
 
+fn default_hw_pcm_id() -> Option<String> {
+    resolved_hw_pcm_id("default").or_else(|| resolved_hw_pcm_id("sysdefault"))
+}
+
 fn build_output_device(
-    device: PhysicalOutputDevice,
+    pcm_id: String,
+    name: String,
     default_pcm_id: Option<&str>,
 ) -> AlsaOutputDevice {
-    let pcm_id = format!("hw:CARD={},DEV={}", device.card_index, device.device_index);
-    let name = format!("{}, {}", device.card_name, device.device_name);
     let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(&pcm_id) {
         Ok(probed) => probed,
         Err(err) => {
@@ -474,42 +457,27 @@ fn selected_pcm_id(
     device_name: &str,
     mode: AlsaAccessMode,
 ) -> Result<String, String> {
-    let pcm_id = pcm_id.unwrap_or_else(|| "default".to_string());
+    let mut pcm_id = pcm_id.unwrap_or_else(|| "default".to_string());
     match mode {
-        AlsaAccessMode::Shared => Ok(shared_pcm_id(&pcm_id)),
-        AlsaAccessMode::Exclusive => exclusive_pcm_id(&pcm_id).ok_or_else(|| {
-            format!(
-                "ALSA exclusive output for '{}' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{}'",
-                device_name, pcm_id
-            )
-        }),
+        AlsaAccessMode::Shared => {
+            if pcm_id.starts_with("hw:") {
+                pcm_id.insert_str(0, "plug");
+            }
+        }
+        AlsaAccessMode::Exclusive => {
+            if pcm_id.starts_with("plughw:") {
+                pcm_id.replace_range(..4, "");
+            } else if !pcm_id.starts_with("hw:") {
+                return resolved_hw_pcm_id(&pcm_id).ok_or_else(|| {
+                    format!(
+                        "ALSA exclusive output for '{}' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{}'",
+                        device_name, pcm_id
+                    )
+                });
+            }
+        }
     }
-}
-
-#[inline(always)]
-fn shared_pcm_id(pcm_id: &str) -> String {
-    if let Some(rest) = pcm_id.strip_prefix("hw:") {
-        return format!("plughw:{rest}");
-    }
-    pcm_id.to_string()
-}
-
-#[inline(always)]
-fn exclusive_pcm_id(pcm_id: &str) -> Option<String> {
-    if let Some(pcm_id) = direct_pcm_id(pcm_id) {
-        return Some(pcm_id);
-    }
-    resolved_hw_pcm_id(pcm_id)
-}
-
-#[inline(always)]
-fn direct_pcm_id(pcm_id: &str) -> Option<String> {
-    if pcm_id.starts_with("hw:") {
-        return Some(pcm_id.to_string());
-    }
-    pcm_id
-        .strip_prefix("plughw:")
-        .map(|rest| format!("hw:{rest}"))
+    Ok(pcm_id)
 }
 
 fn resolved_hw_pcm_id(pcm_id: &str) -> Option<String> {
@@ -709,9 +677,12 @@ fn playback_status_timing(
     clock_health: &mut AlsaClockHealth,
 ) -> PlaybackStatusTiming {
     let delay_frames_fallback = current_delay_frames_fallback(pcm);
-    let delay_ns_fallback = frames_to_nanos(sample_rate_hz, delay_frames_fallback);
     let Some(status) = pcm.status().ok() else {
-        return fallback_timing(delay_frames_fallback, delay_ns_fallback, clock_health);
+        return fallback_timing(
+            delay_frames_fallback,
+            frames_to_nanos(sample_rate_hz, delay_frames_fallback),
+            clock_health,
+        );
     };
     let delay_frames = status.get_delay().max(0) as u32;
     let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);
@@ -852,14 +823,33 @@ mod tests {
 
     #[test]
     fn pcm_id_policy_preserves_shared_and_exclusive_routes() {
-        assert_eq!(shared_pcm_id("hw:CARD=2,DEV=1"), "plughw:CARD=2,DEV=1");
-        assert_eq!(shared_pcm_id("default"), "default");
         assert_eq!(
-            direct_pcm_id("hw:CARD=2,DEV=1").as_deref(),
-            Some("hw:CARD=2,DEV=1")
+            selected_pcm_id(
+                Some("hw:CARD=2,DEV=1".into()),
+                "test device",
+                AlsaAccessMode::Shared
+            )
+            .as_deref(),
+            Ok("plughw:CARD=2,DEV=1")
         );
-        assert_eq!(direct_pcm_id("plughw:2,1").as_deref(), Some("hw:2,1"));
-        assert_eq!(direct_pcm_id("default"), None);
+        assert_eq!(
+            selected_pcm_id(
+                Some("default".into()),
+                "test device",
+                AlsaAccessMode::Shared
+            )
+            .as_deref(),
+            Ok("default")
+        );
+        assert_eq!(
+            selected_pcm_id(
+                Some("hw:CARD=2,DEV=1".into()),
+                "test device",
+                AlsaAccessMode::Exclusive
+            )
+            .as_deref(),
+            Ok("hw:CARD=2,DEV=1")
+        );
         assert_eq!(
             selected_pcm_id(
                 Some("plughw:CARD=2,DEV=1".to_string()),
