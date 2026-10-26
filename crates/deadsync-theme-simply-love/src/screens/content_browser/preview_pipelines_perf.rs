@@ -10,6 +10,7 @@ fn chart(difficulty: &str, doubles: bool) -> PreviewChart {
         meter: 12,
         lanes: if doubles { 8 } else { 4 },
         notes: Arc::from([]),
+        holds: Arc::from([]),
     }
 }
 

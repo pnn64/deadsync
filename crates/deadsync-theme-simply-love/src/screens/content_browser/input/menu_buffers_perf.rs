@@ -205,40 +205,35 @@ fn benchmark_menu_buffers_input() {
             },
         );
     }
-    for (label, code) in [
-        ("backspace", KeyCode::Backspace),
-        ("clear", KeyCode::Escape),
-    ] {
-        let query = "日本語 Pack";
-        let event = key(code);
-        let (mut a, mut b) = (browser(query, 0), browser(query, 0));
-        let (mut ea, mut eb) = (Vec::new(), Vec::new());
-        compare(
-            &format!("input/{label}"),
-            || {
-                a.query.clear();
-                a.query.push_str(black_box(query));
-                ea.clear();
-                black_box(original_handle_raw_key_event(
-                    black_box(&mut a),
-                    Some(&event),
-                    None,
-                    &mut ea,
-                ));
-                black_box(&a.query);
-            },
-            || {
-                b.query.clear();
-                b.query.push_str(black_box(query));
-                eb.clear();
-                black_box(handle_raw_key_event(
-                    black_box(&mut b),
-                    Some(&event),
-                    None,
-                    &mut eb,
-                ));
-                black_box(&b.query);
-            },
-        );
-    }
+    let query = "日本語 Pack";
+    let event = key(KeyCode::Backspace);
+    let (mut a, mut b) = (browser(query, 0), browser(query, 0));
+    let (mut ea, mut eb) = (Vec::new(), Vec::new());
+    compare(
+        "input/backspace",
+        || {
+            a.query.clear();
+            a.query.push_str(black_box(query));
+            ea.clear();
+            black_box(original_handle_raw_key_event(
+                black_box(&mut a),
+                Some(&event),
+                None,
+                &mut ea,
+            ));
+            black_box(&a.query);
+        },
+        || {
+            b.query.clear();
+            b.query.push_str(black_box(query));
+            eb.clear();
+            black_box(handle_raw_key_event(
+                black_box(&mut b),
+                Some(&event),
+                None,
+                &mut eb,
+            ));
+            black_box(&b.query);
+        },
+    );
 }
