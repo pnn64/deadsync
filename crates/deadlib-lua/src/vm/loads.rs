@@ -136,6 +136,43 @@ impl Loading {
 }
 
 impl Vm {
+    /// Load a file, or stdin when `path` is absent, through the native Lua loader.
+    ///
+    /// This uses the VM's file streams, header handling and source/binary verifier.
+    /// It does not consult the mutable global `loadfile` function. The returned
+    /// function is retained in the result registers until the next VM mutation;
+    /// pin it if retaining it across executions or collections.
+    ///
+    /// # Errors
+    /// Returns the loader's error object for file, syntax or bytecode errors.
+    pub fn load_file(&mut self, path: Option<&[u8]>) -> Result<FunctionId, Error> {
+        let argument = path.map(|p| self.intern(p));
+        // Host loading is a parser operation, not an observable Lua builtin
+        // invocation. The ordinary global loadfile still delivers its hooks.
+        let hooks = std::mem::take(&mut self.hooks);
+        let result = self
+            .call_root(Value::Native(LOAD_FILE), argument.as_slice())
+            .map(|_| ());
+        self.hooks = hooks;
+        result?;
+        match self.registers[0] {
+            Value::Function(function) => Ok(function),
+            Value::Nil => {
+                let value = self.registers[1];
+                let Value::String(id) = value else {
+                    unreachable!("file loader returns a string diagnostic")
+                };
+                Err(Error::from_bytes(
+                    ErrorKind::Runtime,
+                    0,
+                    self.string_bytes(id).unwrap().to_vec(),
+                )
+                .with_value(value))
+            }
+            _ => unreachable!("file loader returns a function or nil"),
+        }
+    }
+
     fn file_load_raise(&self, value: Value) -> Error {
         let message = if let Value::String(id) = value {
             String::from_utf8_lossy(&self.strings.bytes[slot_index(id.0)]).into_owned()

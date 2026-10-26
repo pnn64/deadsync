@@ -493,11 +493,34 @@ impl Vm {
     /// Set a global variable.
     ///
     /// # Errors
-    /// Returns an error for an invalid or collected object handle.
+    /// Honors the global table's `__newindex` metamethod.
+    /// Returns an error for invalid/collected handles, Lua errors or quotas.
     pub fn set_global(&mut self, name: &[u8], value: Value) -> Result<(), Error> {
         self.validate_value(value)?;
         let k = self.intern(name);
-        self.raw_set(self.globals, k, value)
+        let target = Value::Table(self.globals);
+        if self.metafield(target, Meta::NewIndex) == Value::Nil {
+            return self.raw_set(self.globals, k, value);
+        }
+        let result = self.set_table(target, k, value).and_then(|()| {
+            if self.frames.is_empty() {
+                Ok(0)
+            } else {
+                self.drive()
+            }
+        });
+        self.finish_execution(result).map(|_| ())
+    }
+
+    /// Set a table entry without invoking metamethods.
+    ///
+    /// # Errors
+    /// Returns an error for foreign/collected handles, nil keys or NaN keys.
+    pub fn raw_table_set(&mut self, table: TableId, key: Value, value: Value) -> Result<(), Error> {
+        self.validate_value(Value::Table(table))?;
+        self.validate_value(key)?;
+        self.validate_value(value)?;
+        self.raw_set(table, key, value)
     }
 
     fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
@@ -526,7 +549,10 @@ impl Vm {
         self.gc_note_control((self.frames.capacity() - before) * std::mem::size_of::<Frame>());
     }
 
-    fn new_table(&mut self) -> TableId {
+    /// Create an empty table owned by this VM.
+    ///
+    /// Store or pin the returned identity before executing Lua or collecting.
+    pub fn new_table(&mut self) -> TableId {
         let id = TableId(self.tables.insert(Table::default()));
         self.gc_new_value(Value::Table(id));
         id
@@ -833,6 +859,70 @@ impl Vm {
         });
         self.top = 0;
         let result = self.drive();
+        self.finish_execution(result)
+    }
+
+    /// Execute a verified chunk with positional arguments, retaining globals.
+    ///
+    /// Arguments must belong to this VM and remain live until this call.
+    /// Fixed parameters, varargs and Lua 5.1's compatibility `arg` use the same
+    /// entry path as ordinary Lua calls. Returned values borrow VM storage.
+    ///
+    /// # Errors
+    /// Returns an invalid-handle, Lua runtime or instruction-limit error.
+    pub fn execute_with_args(
+        &mut self,
+        program: &Program,
+        arguments: &[Value],
+    ) -> Result<&[Value], Error> {
+        if arguments.is_empty() {
+            return self.execute(program);
+        }
+        for &value in arguments {
+            self.validate_value(value)?;
+        }
+        let function = self.load(program);
+        self.call_root(Value::Function(function), arguments)
+    }
+
+    /// Call a live Lua function, builtin or callable object with positional values.
+    ///
+    /// This starts a top-level call and reuses this VM's globals and storage.
+    /// Object arguments must belong to this VM; pin values retained across other
+    /// executions or collections. Returned values borrow the register storage.
+    ///
+    /// # Errors
+    /// Returns an invalid-handle, Lua runtime or instruction-limit error.
+    pub fn call(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        self.validate_value(function)?;
+        for &value in arguments {
+            self.validate_value(value)?;
+        }
+        self.call_root(function, arguments)
+    }
+
+    fn call_root(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        if arguments.len() > u32::MAX as usize {
+            return Err(Error::new(ErrorKind::Limit, 0, "too many arguments"));
+        }
+        self.registers.clear();
+        self.registers.push(function);
+        self.registers.extend_from_slice(arguments);
+        self.frames.clear();
+        self.top = 0;
+        let result = match self.start_lua_call(0, arguments.len(), OPEN, false) {
+            Ok(Some(count)) => {
+                self.registers.truncate(count);
+                self.top = count;
+                Ok(count)
+            }
+            Ok(None) => self.drive(),
+            Err(error) => Err(error),
+        };
+        self.finish_execution(result)
+    }
+
+    fn finish_execution(&mut self, result: Result<usize, Error>) -> Result<&[Value], Error> {
         self.close_upvalues(0);
         self.discard_finalizers(0);
         self.frames.clear();

@@ -474,6 +474,7 @@ def main() -> None:
             script=directory/'probe.lua'
             script.write_bytes(source.encode('utf-8'))
             env=os.environ.copy()
+            env.pop('LUA_INIT',None)
             for key,value in env_changes.items():
                 if value is None:env.pop(key,None)
                 else:env[key]=value
@@ -487,7 +488,7 @@ def main() -> None:
                     (directory/filename).unlink(missing_ok=True)
                 started=time.monotonic()
                 if engine=='extra':invocation=[str(args.extra_rust_binary.resolve()),str(script)]
-                elif engine=='cli':invocation=[str(cli),str(script)]
+                elif engine=='cli':invocation=[str(cli),script.name]
                 else:invocation=[str(binary),engine,str(script)]
                 try:
                     run=subprocess.run(invocation,cwd=directory,env=env,capture_output=True,timeout=10)

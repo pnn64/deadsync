@@ -25,12 +25,12 @@ performance JSON keeps its recorded measurement provenance.
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
 | Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Windows/MSVC native locales connect numeric conversion/formatting, ctype, patterns, collation and calendar formatting. Native locales on other targets, remaining base functions, native C-library loading, broader debug and I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
-| Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
+| Native host calls | Builtins use numeric IDs and register argument ranges. Host calls into live Lua/builtin/callable values, chunk arguments, raw table construction and direct file loading share the VM driver and handle validation. Initial typed-entry overhead measurements exist. Public Rust callback registration, host objects and broader error/yield/overhead work remain open. |
 | Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference and Rust passes among sixteen probes, including `calls.lua`. `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. Lexical capture checks preserve upvalue-limit timing, owning functions and reader consumption, including unfinished source. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records seventeen reference and Rust passes among eighteen probes, including `attrib.lua` and `verybig.lua`. `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. A separate standalone CLI audit records remaining mismatches against a checksum-pinned official executable. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 354 differential/adversarial integration tests, forty-three unit tests and
+crate, 363 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-concat.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-cli.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -535,6 +535,21 @@ The official file results remain fifteen of sixteen in both engines. The
 baseline and two final runs over sixty-four runtime and twenty-two frontend
 workloads. Full standalone compatibility, broader resource/collector/debug
 coverage and later dialects remain unfinished.
+
+The [standalone entry validation](testing/2026-10-26-rust-lua-cli.md) adds host
+calls and argument-bearing chunk entry through the shared driver, raw table
+construction and direct protected file loading. The CLI supports chained command
+and module actions, startup code/files and Lua 5.1 script argument indexing.
+Argument roots survive initialization callbacks and loading without retaining a
+replaced argument table during script execution. All 407 crate tests and 140
+existing process probes pass. The official file corpus now includes unchanged
+`attrib.lua` and `verybig.lua`, bringing both engines to seventeen of eighteen.
+The new standalone CLI audit deliberately retains interactive, traceback,
+outer C-frame hook, banner and usage differences. It exits unsuccessfully;
+complete standalone compatibility remains a required gate. Two
+[measurement runs](performance/2026-10-26-rust-lua-cli.md) cover sixty-five runtime
+and twenty-two frontend workloads, including typed argument entry. The full
+engine, later dialects and integrations remain unfinished.
 
 ## Reference contract
 

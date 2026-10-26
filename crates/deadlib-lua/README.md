@@ -287,6 +287,12 @@ while escaped Lua closures retain their code independently. `Vm::heap_stats`
 reports object counts and capacity-based memory estimates, including reusable
 storage. These are not process RSS or exact allocator peaks.
 
+`Vm::execute_with_args` supplies chunk parameters and varargs; `Vm::call` invokes
+live functions, builtins and callable objects. Both reuse the existing call driver
+and validate handles. `new_table` and `raw_table_set` build host-owned data, while
+`set_global` honors the global table's `__newindex`. `Vm::load_file` uses the VM's
+file streams and verifier independently of a replaced Lua `loadfile` global.
+
 `Value::LightUserdata` carries an unmanaged opaque identity. It owns no storage,
 is never dereferenced, survives weak tables and has a metatable shared by light
 userdata within its VM. Its numeric identity may be shared across VMs; arena
@@ -300,7 +306,11 @@ limits also need broader compatibility work. Native locales require Windows/MSVC
 and patterns/table operations have
 work limits. Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
-are provisional. The CLI accepts a file, stdin or `-e source`.
+are provisional. The CLI accepts scripts with positional arguments, stdin, chained
+`-e`/`-l` actions, `--`, `-` and `LUA_INIT` strings/files. Script values appear in
+`...` and the Lua 5.1 `arg` table, including negative option indices. Interactive
+mode and full standalone traceback/hook/usage behavior remain unfinished; the
+CLI audit retains their mismatches. The version banner identifies DeadLua.
 
 ```sh
 cargo test -p deadlib-lua
@@ -316,11 +326,11 @@ as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
 provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: fifteen of sixteen reference and Rust probes pass. The Rust engine
+currently exits unsuccessfully: seventeen of eighteen reference and Rust probes pass. The Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`,
-`sort.lua`, `literals.lua`, `strings.lua` and `calls.lua`. The retained
+`sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-concat.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-cli.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

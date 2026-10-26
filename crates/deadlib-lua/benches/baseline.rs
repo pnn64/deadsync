@@ -130,6 +130,7 @@ fn main() {
     let concat16 = concat_kernel(16);
     let concat128 = concat_kernel(128);
     for (name, source, expected, repeats) in [
+        ("entry_args", "local a,b,c=...;return a+b+c", 6.0, 10_000),
         ("concat_chain_16", concat16.as_str(), 51_200.0, 10),
         ("concat_chain_128", concat128.as_str(), 409_600.0, 10),
         (
@@ -576,7 +577,15 @@ fn main() {
             vm.set_global(b"loadfile_path", path).unwrap();
             file
         });
-        assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(expected)]);
+        let arguments: &[Value] = if name == "entry_args" {
+            &[Value::Number(1.), Value::Number(2.), Value::Number(3.)]
+        } else {
+            &[]
+        };
+        assert_eq!(
+            vm.execute_with_args(&program, arguments).unwrap(),
+            &[Value::Number(expected)]
+        );
         let reference = if name.starts_with("debug_") {
             // SAFETY: only these fixed developer workloads need the debug library.
             unsafe {
@@ -619,7 +628,14 @@ fn main() {
         }
         .into_function()
         .unwrap();
-        assert_eq!(function.call::<f64>(()).unwrap(), expected);
+        let call_reference = || {
+            if name == "entry_args" {
+                function.call::<f64>((1., 2., 3.))
+            } else {
+                function.call::<f64>(())
+            }
+        };
+        assert_eq!(call_reference().unwrap(), expected);
         measure(
             || {
                 black_box(
@@ -661,7 +677,10 @@ fn main() {
             if sample % 2 == 0 {
                 measure(
                     || {
-                        black_box(vm.execute(black_box(&program)).unwrap());
+                        black_box(
+                            vm.execute_with_args(black_box(&program), arguments)
+                                .unwrap(),
+                        );
                     },
                     repeats,
                     "execute",
@@ -671,7 +690,7 @@ fn main() {
                 );
                 measure(
                     || {
-                        black_box(function.call::<f64>(()).unwrap());
+                        black_box(call_reference().unwrap());
                     },
                     repeats,
                     "execute",
@@ -682,7 +701,7 @@ fn main() {
             } else {
                 measure(
                     || {
-                        black_box(function.call::<f64>(()).unwrap());
+                        black_box(call_reference().unwrap());
                     },
                     repeats,
                     "execute",
@@ -692,7 +711,10 @@ fn main() {
                 );
                 measure(
                     || {
-                        black_box(vm.execute(black_box(&program)).unwrap());
+                        black_box(
+                            vm.execute_with_args(black_box(&program), arguments)
+                                .unwrap(),
+                        );
                     },
                     repeats,
                     "execute",
