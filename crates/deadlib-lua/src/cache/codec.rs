@@ -48,26 +48,50 @@ const OPS: [Op; 40] = [
     Op::ConcatRange,
 ];
 
-const fn crc_table() -> [u32; 256] {
-    let mut table = [0; 256];
+const fn crc_table() -> [[u32; 256]; 8] {
+    let mut table = [[0; 256]; 8];
     let mut i = 0;
-    while i < table.len() {
+    while i < 256 {
         let mut value = i as u32;
         let mut bit = 0;
         while bit < 8 {
             value = (value >> 1) ^ (0x82f63b78u32.wrapping_mul(value & 1));
             bit += 1;
         }
-        table[i] = value;
+        table[0][i] = value;
         i += 1;
+    }
+    let mut slice = 1;
+    while slice < 8 {
+        let mut i = 0;
+        while i < 256 {
+            let previous = table[slice - 1][i];
+            table[slice][i] = (previous >> 8) ^ table[0][previous as u8 as usize];
+            i += 1;
+        }
+        slice += 1;
     }
     table
 }
-const CRC: [u32; 256] = crc_table();
+static CRC: [[u32; 256]; 8] = crc_table();
 pub(super) fn checksum(bytes: &[u8]) -> u32 {
     let mut crc = u32::MAX;
-    for &byte in bytes {
-        crc = (crc >> 8) ^ CRC[((crc as u8) ^ byte) as usize];
+    let (words, tail) = bytes.as_chunks::<8>();
+    for word in words {
+        // Eight byte contributions have independent lookups. Only the next
+        // complete block depends on the previous CRC; loads are safe/unaligned.
+        let low = crc ^ u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+        crc = CRC[7][low as u8 as usize]
+            ^ CRC[6][(low >> 8) as u8 as usize]
+            ^ CRC[5][(low >> 16) as u8 as usize]
+            ^ CRC[4][(low >> 24) as usize]
+            ^ CRC[3][word[4] as usize]
+            ^ CRC[2][word[5] as usize]
+            ^ CRC[1][word[6] as usize]
+            ^ CRC[0][word[7] as usize];
+    }
+    for &byte in tail {
+        crc = (crc >> 8) ^ CRC[0][((crc as u8) ^ byte) as usize];
     }
     !crc
 }

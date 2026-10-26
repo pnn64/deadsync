@@ -336,7 +336,7 @@ Each VM still creates its own runtime objects and environments. Use a directory
 trusted to hold executable code. Default limits are 64 MiB per file and 256 MiB
 of decoded object/payload storage. Tiny programs and native chunks can be slower
 through disk caching; the API is opt-in. See the [format and API notes](../../docs/lua-cache.md)
-and [measurements](../../docs/performance/2026-10-26-rust-lua-program-cache.md).
+and [measurements](../../docs/performance/2026-10-26-rust-lua-cache-crc.md).
 
 `debug.debug` runs commands against the current thread while preserving the
 suspended caller stack for inspection and mutation. It uses original stdin,
@@ -388,5 +388,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-program-cache.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-cache-crc.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

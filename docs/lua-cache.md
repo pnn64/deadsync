@@ -74,6 +74,13 @@ collector liveness masks and indices, debug locals/upvalue names/calls/temporary
 ranges, and retained native words/debug offsets used by string.dump. It ends
 with a CRC32C over all preceding bytes. Trailing data is rejected.
 
+The checksum advances through eight-byte blocks using one compile-time 8 KiB
+lookup table and a scalar tail. Safe byte-array loads support unaligned input;
+no CPU-specific instructions or runtime table allocation are required. The
+polynomial, initial/final complements and stored CRC32C bytes remain those of
+schema version 1. [Paired measurements](performance/2026-10-26-rust-lua-cache-crc.md)
+record the speed/memory tradeoff against the earlier one-byte implementation.
+
 The reader checks wire lengths against remaining input and charges object and
 payload allocation sizes before reserving arrays or copying strings. It then
 runs Program::verify; native re-export ranges and tree edges receive additional
@@ -85,5 +92,5 @@ A cache produced by a trusted compiler is still executable code, not a sandbox.
 Cache reloads trade filesystem work, validation and decoding against parsing and
 compilation. They are useful for some large source programs; tiny programs and
 already compiled native chunks can reload more slowly. The
-[measurements](performance/2026-10-26-rust-lua-program-cache.md) include both
+[measurements](performance/2026-10-26-rust-lua-cache-crc.md) include both
 profitable and unprofitable cases, allocation counts and process CPU counters.

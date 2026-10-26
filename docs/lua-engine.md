@@ -40,7 +40,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 423 differential/adversarial integration tests, sixty unit tests and
+crate, 423 differential/adversarial integration tests, sixty-one unit tests and
 two runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-program-cache.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-cache-crc.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -675,6 +675,15 @@ reload in fresh processes and retain independent VM bindings. [Measurements](per
 compare compilation, stores and reloads with allocation/heap and process CPU
 counters; tiny programs and native chunks are not assumed to benefit. Cache
 eviction and package/CLI integration remain open alongside the full engine gates.
+
+The [cache checksum milestone](testing/2026-10-26-rust-lua-cache-crc.md) advances
+CRC32C through eight-byte blocks with safe unaligned loads and an 8 KiB static
+lookup table. An independent bitwise calculation covers binary inputs, tails
+and offsets. [Comparisons with the committed parent](performance/2026-10-26-rust-lua-cache-crc.md)
+measure checksum and full cache calls, allocation/heap footprints and process
+CPU; both engines also cross-read byte-identical artifacts under a shared
+benchmark-only build identity. Normal Cargo build invalidation remains in place.
+The full standalone-engine and integration gates remain open.
 
 ## Reference contract
 

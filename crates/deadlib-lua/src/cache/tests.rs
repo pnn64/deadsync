@@ -191,6 +191,54 @@ fn exact_source_name_build_and_lexical_context_are_required() {
 }
 
 #[test]
+fn checksum_matches_bitwise_crc_across_offsets_blocks_and_binary_inputs() {
+    fn bitwise(bytes: &[u8]) -> u32 {
+        let mut crc = u32::MAX;
+        for &byte in bytes {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                crc = if crc & 1 == 0 {
+                    crc >> 1
+                } else {
+                    (crc >> 1) ^ 0x82f63b78
+                };
+            }
+        }
+        !crc
+    }
+    let mut random = 0x123456789abcdef0u64;
+    let bytes: Vec<_> = (0..8192)
+        .map(|_| {
+            random ^= random << 13;
+            random ^= random >> 7;
+            random ^= random << 17;
+            random as u8
+        })
+        .collect();
+    for offset in 0..16 {
+        for len in 0..=512 {
+            let input = &bytes[offset..offset + len];
+            assert_eq!(
+                codec::checksum(input),
+                bitwise(input),
+                "offset {offset}, length {len}"
+            );
+        }
+        for len in [1023, 1024, 1025, 4095, 4096, 4097, 8192 - 16] {
+            let input = &bytes[offset..offset + len];
+            assert_eq!(codec::checksum(input), bitwise(input));
+        }
+    }
+    for byte in [0, 1, 127, 128, 255] {
+        let input = vec![byte; 4097];
+        assert_eq!(codec::checksum(&input), bitwise(&input));
+    }
+    for value in 0..=255u8 {
+        assert_eq!(codec::checksum(&[value]), bitwise(&[value]));
+    }
+}
+
+#[test]
 fn truncated_damaged_and_trailing_cache_bytes_are_rejected() {
     assert_eq!(codec::checksum(b"123456789"), 0xe3069283);
     let source = b"local t={1,2,3};return t[2]";
