@@ -219,10 +219,15 @@ impl FromStr for DefaultFailType {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "immediate" => Ok(Self::Immediate),
-            "immediatecontinue" | "immediate_continue" => Ok(Self::ImmediateContinue),
-            _ => Err(()),
+        let s = s.trim();
+        if s.eq_ignore_ascii_case("immediate") {
+            Ok(Self::Immediate)
+        } else if s.eq_ignore_ascii_case("immediatecontinue")
+            || s.eq_ignore_ascii_case("immediate_continue")
+        {
+            Ok(Self::ImmediateContinue)
+        } else {
+            Err(())
         }
     }
 }
@@ -2174,13 +2179,19 @@ impl FromStr for LogLevel {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "error" | "err" => Ok(Self::Error),
-            "warn" | "warning" => Ok(Self::Warn),
-            "info" => Ok(Self::Info),
-            "debug" => Ok(Self::Debug),
-            "trace" => Ok(Self::Trace),
-            _ => Err(()),
+        let s = s.trim();
+        if s.eq_ignore_ascii_case("error") || s.eq_ignore_ascii_case("err") {
+            Ok(Self::Error)
+        } else if s.eq_ignore_ascii_case("warn") || s.eq_ignore_ascii_case("warning") {
+            Ok(Self::Warn)
+        } else if s.eq_ignore_ascii_case("info") {
+            Ok(Self::Info)
+        } else if s.eq_ignore_ascii_case("debug") {
+            Ok(Self::Debug)
+        } else if s.eq_ignore_ascii_case("trace") {
+            Ok(Self::Trace)
+        } else {
+            Err(())
         }
     }
 }
