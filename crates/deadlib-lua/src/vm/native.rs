@@ -118,6 +118,17 @@ impl Vm {
                 self.check_calls()?;
                 let index = self.frames.len();
                 let base = self.registers.len();
+                // Calls that can fail after emitting results keep their actual
+                // arguments available to the error handler's stack inspector.
+                let separate = matches!(id, strings::STR_FIND | strings::STR_MATCH)
+                    || (io::FIRST..=io::LAST).contains(&id)
+                    || id >= strings::ITERATOR_FIRST;
+                if separate {
+                    self.resize_registers(base + count + 1);
+                    self.registers[base] = Value::Native(id);
+                    self.registers
+                        .copy_within(call + 1..call + count + 1, base + 1);
+                }
                 self.push_record(Frame {
                     function: FrameKind::Native(id),
                     pc: 0,
@@ -131,16 +142,23 @@ impl Vm {
                     tail_calls: 0,
                 });
                 let previous = self.active_native.replace(index);
-                let result = self.native(id, call, count).map(Some).map_err(|error| {
-                    if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                        let value = self.intern(error.message_bytes());
-                        let value = self.located_error(value, 1);
-                        error.with_value(value)
-                    } else {
-                        error
-                    }
-                });
+                let result = self
+                    .native(id, if separate { base } else { call }, count)
+                    .map(Some)
+                    .map_err(|error| {
+                        if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+                            let value = self.intern(error.message_bytes());
+                            let value = self.located_error(value, 1);
+                            error.with_value(value)
+                        } else {
+                            error
+                        }
+                    });
                 self.active_native = previous;
+                if separate && let Ok(Some(actual)) = result {
+                    self.registers.copy_within(base..base + actual, call);
+                    self.registers.truncate(base.max(call + actual));
+                }
                 if let Ok(Some(actual)) = result
                     && self.hooks.mask & hooks::RETURN != 0
                     && self.hooks.allowed()
@@ -387,7 +405,7 @@ impl Vm {
             TOSTRING => {
                 if frame.pc() == 0 {
                     if frame.argc() == 0 {
-                        return Err(Error::new(ErrorKind::Runtime, 0, "value expected"));
+                        return Err(self.argument_error(0, b"value expected"));
                     }
                     let value = self.registers[frame.vararg_start];
                     let handler = self.metafield(value, Meta::ToString);
@@ -401,6 +419,9 @@ impl Vm {
                         return Ok(None);
                     }
                     self.registers[base] = self.default_string(value);
+                    if matches!(value, Value::Number(_)) {
+                        self.registers[frame.vararg_start] = self.registers[base];
+                    }
                 }
                 Ok(self.return_frame(frame, base, 1))
             }
@@ -411,12 +432,18 @@ impl Vm {
             threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
             _ if scheduled == 1 => self.coroutine_step(id, frame),
             _ => {
-                let actual = self.native(id, frame.result, frame.argc())?;
-                Ok(self.return_frame(frame, frame.result, actual))
+                // Return hooks run before results replace the caller's slots.
+                self.registers[base] = Value::Native(id);
+                self.registers.copy_within(
+                    frame.vararg_start..frame.vararg_start + frame.argc(),
+                    base + 1,
+                );
+                let actual = self.native(id, base, frame.argc())?;
+                Ok(self.return_frame(frame, base, actual))
             }
         }
     }
-    fn default_string(&mut self, value: Value) -> Value {
+    pub(super) fn default_string(&mut self, value: Value) -> Value {
         match value {
             Value::String(_) => value,
             Value::Number(n) => self.intern(format_number(n).as_slice()),
@@ -871,14 +898,14 @@ impl Vm {
                 }
             }
             LOAD_STRING => {
-                let source = match arg(self, 0) {
-                    v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
-                    _ => return Err(self.argument_type_error(base, count, 0, "string")),
-                };
+                let source = self.string_argument(base, count, 0)?;
+                let source = self.strings.bytes[slot_index(source.0)].to_vec();
                 let name = match arg(self, 1) {
                     Value::Nil => source.clone(),
-                    v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
-                    _ => return Err(self.argument_type_error(base, count, 1, "string")),
+                    _ => {
+                        let id = self.string_argument(base, count, 1)?;
+                        self.strings.bytes[slot_index(id.0)].to_vec()
+                    }
                 };
                 let depth = self.native_depth(self.frames.len()) + 1;
                 let compiled = loads::compile(&source, &name, depth);

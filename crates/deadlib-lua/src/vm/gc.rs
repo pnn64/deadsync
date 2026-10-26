@@ -724,7 +724,7 @@ impl Vm {
         };
         frames_roots(self, registers, frames, top, cutoff, work);
         for job in subs {
-            work.extend(job.roots().into_iter().filter_map(edge));
+            work.extend(job.roots().filter_map(edge));
         }
         for job in sorts {
             work.extend(job.roots().into_iter().filter_map(edge));

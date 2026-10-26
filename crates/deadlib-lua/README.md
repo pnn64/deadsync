@@ -168,6 +168,12 @@ Replaced sort arguments stop acting as collector roots. Traversal keeps its
 iteration state separate from callable self arguments and discarded native results.
 Native operand errors retain their C-frame origin; Lua operations retain source
 locations, and protected-call argument diagnostics retain names and slot numbers.
+Native string checks coerce numeric arguments in place. Return hooks and partial
+pattern/I/O failures preserve the argument slots independently of result writes.
+`string.gsub` rereads its replacement after callbacks and releases replaced
+objects. Its native buffer stack exposes partial strings, preserves lazy numeric
+replacement conversion, and resumes Lua concatenation metamethods without a
+recursive Rust driver. Pending buffer actions remain rooted across collection.
 
 Coroutines provide `create`, `resume`, `running`, `status`, `wrap` and `yield`.
 Each thread owns its register/frame vectors and environment; threads share the
@@ -365,5 +371,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-debug-console.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-native-coercions.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

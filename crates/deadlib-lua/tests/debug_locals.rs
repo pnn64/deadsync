@@ -1,4 +1,4 @@
-use deadlib_lua::{Value, Vm, compile};
+use deadlib_lua::{ErrorKind, Value, Vm, compile};
 use lua_reference::{Lua, MultiValue, Value as Ref};
 #[derive(Debug, PartialEq)]
 enum Scalar {
@@ -6,6 +6,125 @@ enum Scalar {
     Boolean(bool),
     Number(u64),
     Bytes(Vec<u8>),
+}
+
+#[test]
+fn native_string_coercions_update_observable_argument_slots() {
+    for (name, arguments, count) in [
+        ("string.sub", "12345,2", 2),
+        ("string.format", "'%s:%q',17,19", 3),
+        ("tonumber", "1234,16", 2),
+        ("loadstring", "1234,17", 2),
+        ("tostring", "1234", 1),
+        ("os.getenv", "123456789", 1),
+    ] {
+        compare(format!("local seen={{}};local fn={name};debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==fn then for i=1,{count} do local n,v=debug.getlocal(2,i);seen[i]=type(v)..':'..tostring(v)end end end,'r');fn({arguments});debug.sethook();return table.concat(seen,'|')").as_bytes());
+    }
+}
+
+#[test]
+fn gsub_reloads_the_replacement_after_each_callback() {
+    compare(br#"local out={};local function second(s)out[#out+1]='new:'..s;return 'N'end;local result,n=string.gsub('abc','.',function(s)out[#out+1]='old:'..s;debug.setlocal(2,3,second);return 'O'end);return result,n,table.concat(out,'|')"#);
+}
+
+#[test]
+fn gsub_coerces_numeric_replacements_only_when_used() {
+    for (pattern, limit) in [("'a'", "1"), ("'z'", "1"), ("'a'", "0")] {
+        compare(format!("local kind;local fn=string.gsub;debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==fn then local n,v=debug.getlocal(2,3);kind=type(v)end end,'r');local s,n=fn('abc',{pattern},17,{limit});debug.sethook();return s,n,kind").as_bytes());
+    }
+}
+
+#[test]
+fn gsub_buffer_pieces_are_visible_and_rooted_between_callbacks() {
+    for width in [0, 1, 255, 256, 511, 512, 513, 1024, 8191, 8192, 8193, 40000] {
+        compare(format!("local out={{}};local n=0;local result,count=string.gsub(string.rep('a',12),'.',function(s)n=n+1;local row={{}};for i=1,20 do local name,v=debug.getlocal(2,i);if not name then break end;row[#row+1]=type(v)..':'..(type(v)=='string' and #v or '')end;out[#out+1]=table.concat(row,',');collectgarbage();return string.rep('x',{width})end);return #result,count,table.concat(out,'|')").as_bytes());
+    }
+}
+
+#[test]
+fn gsub_live_replacements_follow_native_stack_and_type_dispatch() {
+    for replacement in [
+        "'R'",
+        "17",
+        "{a='A',b='B',c='C'}",
+        "nil",
+        "false",
+        "true",
+        "newproxy()",
+        "coroutine.create(function()end)",
+    ] {
+        for extra in ["", ",3", ",3,'extra'"] {
+            compare(format!("local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function(x)n=n+1;debug.setlocal(2,3,{replacement});return 'O'end{extra})end);return ok,s,c,n").as_bytes());
+        }
+    }
+}
+
+#[test]
+fn gsub_releases_replaced_functions_and_tables() {
+    compare(br#"local weak=setmetatable({},{__mode='v'});local gone;local function second(s)collectgarbage();gone=weak[1]==nil;return 'N'end;local function first()local f=function(s)debug.setlocal(2,3,second);return 'O'end;weak[1]=f;return f end;local s,n=string.gsub('abc','.',first());return s,n,gone"#);
+    compare(br#"local weak=setmetatable({},{__mode='v'});local gone;local function second(s)collectgarbage();gone=weak[1]==nil;return 'N'end;local function first()local t=setmetatable({},{__index=function(t,s)debug.setlocal(2,3,second);return 'O'end});weak[1]=t;return t end;local s,n=string.gsub('abc','.',first());return s,n,gone"#);
+}
+
+#[test]
+fn native_multiple_results_preserve_arguments_for_return_hooks() {
+    for (name, arguments, count) in [
+        ("string.byte", "12345,2,4", 3),
+        ("math.modf", "1.25", 1),
+        ("math.frexp", "17", 1),
+        ("string.find", "12345,23", 2),
+        ("unpack", "{1,2,3,4,5,6}", 1),
+    ] {
+        compare(format!("local seen={{}};local fn={name};debug.sethook(function(e)if e=='return' and debug.getinfo(2,'f').func==fn then for i=1,{count} do local n,v=debug.getlocal(2,i);seen[#seen+1]=type(v)..':'..(type(v)=='number' and v or type(v)=='string' and v or '')end end end,'r');fn({arguments});debug.sethook();return table.concat(seen,'|')").as_bytes());
+    }
+}
+
+#[test]
+fn gsub_buffer_concatenations_resume_lua_metamethods() {
+    for width in [513, 1024, 8193, 20000] {
+        compare(format!("local out={{}};debug.setmetatable(false,{{__concat=function(a,b)out[#out+1]=type(a)..':'..type(b);collectgarbage();return 'C'end}});local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function()n=n+1;debug.setlocal(2,3,false);return string.rep('O',{width})end)end);return ok,s,c,n,table.concat(out,'|')").as_bytes());
+    }
+}
+
+#[test]
+fn native_partial_errors_preserve_coerced_arguments_for_handlers() {
+    compare(br#"local seen;local ok,e=xpcall(function()return string.find(123,'(')end,function(e)local n,v=debug.getlocal(2,1);seen=type(v)..':'..tostring(v);return e end);return ok,e,seen"#);
+    compare(br#"local f=assert(io.tmpfile());f:write('a\nb\n');f:seek('set');local seen;local ok,e=xpcall(function()return f:read('*l',false)end,function(e)local n,v=debug.getlocal(2,1);seen=type(v);return e end);f:close();return ok,e,seen"#);
+}
+
+#[test]
+fn generated_gsub_buffer_argument_changes_match_native_stack_effects() {
+    for width in [0, 511, 512, 513, 1024, 4096, 8192, 10000] {
+        for replacement in ["nil", "false", "true", "17"] {
+            for extra in ["", ",3", ",3,'extra'"] {
+                compare(format!("local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function(x)n=n+1;debug.setlocal(2,3,{replacement});return string.rep('O',{width})end{extra})end);return ok,s,c,n").as_bytes());
+            }
+        }
+    }
+}
+
+#[test]
+fn gsub_pending_buffer_calls_keep_errors_yield_rules_and_nested_jobs() {
+    for body in [
+        "error('stop',0)",
+        "return coroutine.yield('x')",
+        "return string.gsub('aaa','a','b')",
+        "debug.setlocal(2,3,17);return 'C'",
+    ] {
+        compare(format!("debug.setmetatable(false,{{__concat=function(a,b){body} end}});local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function()n=n+1;debug.setlocal(2,3,false);return string.rep('O',513)end)end);return ok,s,c,n").as_bytes());
+    }
+}
+
+#[test]
+fn aborting_a_pending_gsub_buffer_call_does_not_retain_its_job() {
+    let source=compile(b"debug.setmetatable(false,{__concat=function()started=true;local n=0;for i=1,1000000 do n=n+i end;return 'C'end});return string.gsub('abc','.',function()debug.setlocal(2,3,false);return string.rep('O',513)end)").unwrap();
+    let mut vm = Vm::new();
+    vm.set_instruction_limit(Some(1000));
+    assert_eq!(vm.execute(&source).unwrap_err().kind(), ErrorKind::Limit);
+    assert_eq!(vm.global(b"started"), Value::Boolean(true));
+    vm.set_instruction_limit(None);
+    vm.collect_garbage().unwrap();
+    let recovery = compile(b"local s,n=string.gsub('aa','a','b');return s=='bb' and n==2").unwrap();
+    assert_eq!(vm.execute(&recovery).unwrap(), &[Value::Boolean(true)]);
 }
 
 #[test]

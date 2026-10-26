@@ -140,6 +140,24 @@ fn main() {
     for (name, source, expected, repeats) in [
         ("entry_args", "local a,b,c=...;return a+b+c", 6.0, 10_000),
         (
+            "debug_gsub_args",
+            "local n=0;local function second(s)n=n+1;return s end;local function first(s)n=n+1;debug.setlocal(2,3,second);return s end;for i=1,100 do string.gsub('abc','.',first)end;return n",
+            300.0,
+            20,
+        ),
+        (
+            "gsub_callback_wide",
+            "local n=0;local chunk=string.rep('x',513);for i=1,100 do local s=string.gsub('abcdef','.',function()return chunk end);n=n+#s end;return n",
+            307800.0,
+            20,
+        ),
+        (
+            "string_numeric_args",
+            "local n=0;for i=1,1000 do n=n+#string.sub(12345,2,5)+tonumber(1234,16)end;return n",
+            4664000.0,
+            50,
+        ),
+        (
             "debug_sort_args",
             "local sort=table.sort;local n=0;local function second(a,b)n=n+1;return a<b end;local function first(a,b)n=n+1;debug.setlocal(2,2,second);return a<b end;for i=1,100 do sort({3,2,1},first)end;return n",
             300.0,
