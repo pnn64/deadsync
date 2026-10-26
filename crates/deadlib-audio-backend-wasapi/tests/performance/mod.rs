@@ -167,6 +167,16 @@ fn device_id_encoding_preserves_every_unicode_scalar_and_embedded_nulls() {
 }
 
 #[test]
+fn device_id_encoding_does_not_reallocate() {
+    for text in ["", "ASCII", "åäö 日本語 🎵😀", "a\0b"] {
+        let (encoded, counts) = perf::measure(|| wide_null(text));
+        assert_eq!(counts.allocs, 1);
+        assert_eq!(counts.reallocs, 0);
+        assert_eq!(encoded.last(), Some(&0));
+    }
+}
+
+#[test]
 fn com_task_free_accepts_null_and_owned_memory_without_rust_allocations() {
     // SAFETY: null is accepted by CoTaskMemFree, and each non-null pointer comes
     // from CoTaskMemAlloc and is freed exactly once.

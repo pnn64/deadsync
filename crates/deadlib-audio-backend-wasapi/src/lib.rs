@@ -842,7 +842,10 @@ fn device_mix_format(device: &Audio::IMMDevice) -> Result<(u32, usize), String> 
         let mix = audio_client
             .GetMixFormat()
             .map_err(|e| format!("failed to query WASAPI mix format: {e}"))?;
-        let result = ((*mix).nSamplesPerSec.max(1), (*mix).nChannels.max(1) as usize);
+        let result = (
+            (*mix).nSamplesPerSec.max(1),
+            (*mix).nChannels.max(1) as usize,
+        );
         free_com_task_mem(mix.cast());
         Ok(result)
     }
@@ -950,7 +953,11 @@ fn guid_eq(a: &windows::core::GUID, b: &windows::core::GUID) -> bool {
 }
 
 fn wide_null(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
+    // UTF-16 uses at most one code unit per UTF-8 byte, plus the terminator.
+    let mut wide = Vec::with_capacity(s.len() + 1);
+    wide.extend(s.encode_utf16());
+    wide.push(0);
+    wide
 }
 
 fn pwstr_to_string(value: PWSTR) -> Result<String, std::string::FromUtf16Error> {
