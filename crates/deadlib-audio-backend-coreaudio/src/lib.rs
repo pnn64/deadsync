@@ -235,6 +235,7 @@ pub fn start(
     let host_clock = CoreAudioHostClock::calibrate()?;
     let sample_rate_hz = prep.sample_rate_hz;
     let buffer_frames = prep.buffer_frames.max(1);
+    let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);
     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));
     let device_name = prep.device_name.clone();
 
@@ -259,13 +260,14 @@ pub fn start(
             let latency_frames = buffered_frames
                 .saturating_add(nanos_to_frames(sample_rate_hz, downstream_latency_ns));
             let period_ns = frames_to_nanos(sample_rate_hz, period_frames);
-            let latency_ns = frames_to_nanos(sample_rate_hz, buffered_frames)
+            let latency_ns = buffer_ns
+                .max(period_ns)
                 .saturating_add(downstream_latency_ns);
             publish_output_timing(
                 sample_rate_hz,
                 period_ns,
                 latency_ns,
-                buffer_frames.max(period_frames),
+                buffered_frames,
                 0,
                 latency_frames,
                 latency_ns,
@@ -301,7 +303,6 @@ pub fn start(
         sample_rate_hz,
         initial_downstream_latency_ns,
     ));
-    let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);
     let output_latency_ns = buffer_ns.saturating_add(initial_downstream_latency_ns);
     publish_output_timing(
         sample_rate_hz,
@@ -685,6 +686,9 @@ fn device_uid(device_id: AudioDeviceID) -> Result<String, String> {
 
 #[inline(always)]
 fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {
+    if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {
+        return nanos / u64::from(denom);
+    }
     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))
         as u64
 }
@@ -699,8 +703,11 @@ fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
 
 #[inline(always)]
 fn nanos_to_frames(sample_rate_hz: u32, nanos: u64) -> u32 {
-    ((u128::from(nanos) * u128::from(sample_rate_hz)) / 1_000_000_000).min(u128::from(u32::MAX))
-        as u32
+    match nanos.checked_mul(u64::from(sample_rate_hz)) {
+        Some(frames) => (frames / 1_000_000_000).min(u64::from(u32::MAX)) as u32,
+        // An overflowing product divided by 1e9 still exceeds u32::MAX.
+        None => u32::MAX,
+    }
 }
 
 #[cfg(test)]
