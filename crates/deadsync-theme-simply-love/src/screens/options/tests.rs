@@ -1607,6 +1607,47 @@ fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
 }
 
 #[test]
+fn enabling_golf_defaults_wheel_pars_on_and_disabling_keeps_the_choice() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config {
+        select_music_show_golf_pars: false,
+        ..Default::default()
+    });
+    let pars_row = SELECT_MUSIC_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ShowGolfPars)
+        .unwrap();
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        0
+    );
+
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::EnableGolf);
+    apply_submenu_choice_delta(&mut state, &assets, 1, NavWrap::Clamp).unwrap();
+    assert!(golf_features_enabled(&state));
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        1,
+        "enabling golf turns the wheel par badges on"
+    );
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].cursor_indices[pars_row],
+        1
+    );
+
+    // A player who then turns the badges off keeps that choice when golf is disabled.
+    state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row] = 0;
+    state.sub[SubmenuKind::SelectMusic].cursor_indices[pars_row] = 0;
+    apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(!golf_features_enabled(&state));
+    assert_eq!(
+        state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
+        0
+    );
+}
+
+#[test]
 fn arrowcloud_enable_persists_before_reinitializing_services() {
     let asset_manager = AssetManager::new();
     let mut state = init();

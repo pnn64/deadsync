@@ -17,7 +17,7 @@ thread_local! {
 
 pub(crate) const COLOR: [f32; 4] = [0.2, 0.8, 0.2, 1.0];
 
-fn format_par(par: Option<f64>) -> String {
+pub(crate) fn format_par(par: Option<f64>) -> String {
     par.map_or_else(
         || "-".to_owned(),
         |par| {

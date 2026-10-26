@@ -7123,7 +7123,10 @@ fn push_golf_results(
     let x = eval_panes::test_input_pane_origin_x(controller);
     let y = screen_center_y() + 35.0;
     let par_label = tr("Golf", "Par");
-    let par_text = si.golf_par.map_or_else(|| format!("{par_label}: -"), |par| format!("{par_label}: {par:.2}"));
+    let par_text = format!(
+        "{par_label}: {}",
+        crate::screens::components::gameplay::golf::format_par(si.golf_par)
+    );
     let delta = si.golf_par.map_or_else(
         || tr("Golf", "LowerIsBetter").to_string(),
         |par| format!("{:+.3}", score.displayed() - par),
