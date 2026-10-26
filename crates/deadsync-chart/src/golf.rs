@@ -1,10 +1,11 @@
 //! Pack-authored golf pars, loaded by the library scan, never by a renderer.
+use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 
 #[derive(Debug, Default)]
-pub struct GolfPars(HashMap<String, SongPars>);
+pub struct GolfPars(FxHashMap<String, SongPars>);
 
 #[derive(Debug, Default)]
 struct SongPars {
@@ -13,12 +14,9 @@ struct SongPars {
     present: u8,
 }
 
-const DIFFICULTIES: [&str; 6] = ["Beginner", "Easy", "Medium", "Hard", "Challenge", "Edit"];
-
 fn difficulty_index(difficulty: &str) -> Option<usize> {
-    DIFFICULTIES
-        .iter()
-        .position(|name| name.eq_ignore_ascii_case(difficulty))
+    crate::song::standard_difficulty_index(difficulty)
+        .or_else(|| difficulty.eq_ignore_ascii_case("Edit").then_some(5))
 }
 
 impl GolfPars {
@@ -56,6 +54,14 @@ impl GolfPars {
                 difficulty_index(difficulty).map(|index| (song, index + 1))
             });
             let (song, index) = chart.unwrap_or((name, 0));
+            // Overrides normally update an existing song; borrow its owned key.
+            if index != 0
+                && let Some(pars) = result.0.get_mut(song)
+            {
+                pars.values[index] = par;
+                pars.present |= 1 << index;
+                continue;
+            }
             let pars = result.0.entry(song.to_owned()).or_default();
             pars.values[index] = par;
             pars.present |= 1 << index;
@@ -66,13 +72,11 @@ impl GolfPars {
     #[must_use]
     pub fn get(&self, song_folder: &str, difficulty: &str) -> Option<f64> {
         let song = self.0.get(song_folder)?;
-        let mut overrides = song.present & !1;
-        while overrides != 0 {
-            let index = overrides.trailing_zeros() as usize;
-            if DIFFICULTIES[index - 1].eq_ignore_ascii_case(difficulty) {
-                return Some(song.values[index]);
-            }
-            overrides &= overrides - 1;
+        if song.present & !1 != 0
+            && let Some(index) = difficulty_index(difficulty)
+            && song.present & (1 << (index + 1)) != 0
+        {
+            return Some(song.values[index + 1]);
         }
         (song.present & 1 != 0).then_some(song.values[0])
     }
