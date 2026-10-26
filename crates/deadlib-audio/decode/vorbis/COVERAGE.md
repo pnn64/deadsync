@@ -179,6 +179,16 @@ Windows x86-64, rustc 1.99.1 evidence:
   and offline independent builds pass without tolerance changes. New peaks:
   raw/full libvorbis 7.152557373e-7; upstream 3.576278687e-7; corpus seeks
   6.854534149e-7. Resumed sanitizer campaigns add 16,816 clean executions.
+* Bounded two-to-eight-bit Huffman prefix lookup shares the tree buffer and uses
+  only the setup budget left after full grammar validation. Exact node limits,
+  zero-spare-budget fallback, every byte prefix/alignment, packet tails and
+  32-bit-deep paths preserve entries, consumed bits and sticky EOP. All scalar/VQ,
+  PCM, seek, upstream/historical, release/Clippy, allocation and offline gates
+  above pass without tolerance changes. Three resumed sanitizer targets add
+  141,962 clean executions. Interleaved native baseline/current builds show
+  1.51–1.77x scalar speedup and 1.08–1.19x full decode speedup on the two longer
+  songs, with about 6% higher startup time. Short clips regress 2–7% overall;
+  [PERFORMANCE.md](PERFORMANCE.md) records this tradeoff and all trial ranges.
 
 ## Numerical criteria
 

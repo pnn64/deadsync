@@ -85,6 +85,11 @@ a paired-spectrum N/4 FFT. Its isolated kernel is 3.2–3.8x faster, transform
 elements shrink 65%, and observed full-file times improve 1.35–1.67x on the two
 longer tracks, with the same PCM/count/seek gates. Reference timing drift and
 remaining throughput gaps are documented in the performance report.
+The bounded Huffman prefix lookup adds another observed 1.08–1.19x full-file
+speedup on the longer tracks in interleaved baseline/current trials, at about
+6% higher stream-startup time. Tables fit the existing tree buffer and remaining
+setup budget. Scalar, full PCM, seeking and sanitizer gates remain unchanged;
+the short-clip tradeoff is explicit in the report.
 
 ## Normative sources
 

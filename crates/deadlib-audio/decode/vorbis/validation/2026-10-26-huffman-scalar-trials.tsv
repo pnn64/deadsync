@@ -1,0 +1,106 @@
+path	engine	phase	iterations	elapsed_ns	samples	read_calls	bytes_read	ns_per_run	samples_per_run	msamples_per_second	trial
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	135590800	5941875	0	0	72315.09333333334	3169.0	43.82211034966974	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	128338700	3064423	0	0	132718.40744570838	3169.0	23.877622260471703	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	120544700	3612660	0	0	105740.9649122807	3169.0	29.969463609764677	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	125749300	3064423	0	0	130040.6411582213	3169.0	24.3693046402644	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	130969700	5941875	0	0	69850.50666666667	3169.0	45.368318015541	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	128751900	3612660	0	0	112940.26315789473	3169.0	28.059081069871592	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	136018600	5941875	0	0	72543.25333333333	3169.0	43.68428288484075	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	131502300	3612660	0	0	115352.8947368421	3169.0	27.47221911708008	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	130453500	3064423	0	0	134905.37745604964	3169.0	23.490538774352547	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	136506400	5941875	0	0	72803.41333333333	3169.0	43.52817889857179	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	130255200	3064423	0	0	134700.31023784901	3169.0	23.526300677439366	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	117811500	3612660	0	0	103343.42105263157	3169.0	30.66474834799659	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	116197100	5941875	0	0	61971.78666666667	3169.0	51.136172933747915	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	113724400	3612660	0	0	99758.24561403508	3169.0	31.766797626542765	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	116734800	3064423	0	0	120718.51085832472	3169.0	26.251152184267244	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	113999700	3064423	0	0	117890.07238883144	3169.0	26.880974248177846	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	119796200	5941875	0	0	63891.306666666664	3169.0	49.59986209913169	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	117082700	3612660	0	0	102704.12280701754	3169.0	30.855625980610288	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	huffman	1875	129113000	5941875	0	0	68860.26666666666	3169.0	46.020733775839766	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	huffman	967	128572100	3064423	0	0	132959.77249224405	3169.0	23.834276643221973	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native-baseline	huffman	1140	139859100	3612660	0	0	122683.42105263157	3169.0	25.830711051336667	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	127713700	3630795	0	0	111540.34934497817	3171.0	28.429174004041855	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	126471100	3399312	0	0	117976.7723880597	3171.0	26.878172167396347	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	125815900	5983677	0	0	66675.09273979862	3171.0	47.5589889672132	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	121466400	5983677	0	0	64370.111287758344	3171.0	49.26199344016123	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	120865500	3399312	0	0	112747.66791044777	3171.0	28.12475023890192	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	123305900	3630795	0	0	107690.7423580786	3171.0	29.445427996551665	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	127919500	3630795	0	0	111720.08733624454	3171.0	28.38343645808497	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	121338400	3399312	0	0	113188.80597014926	3171.0	28.015137829409323	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	115645900	5983677	0	0	61285.585585585584	3171.0	51.741367398238935	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	114887400	5983677	0	0	60883.62480127186	3171.0	52.08296993403977	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	121141600	3630795	0	0	105800.52401746725	3171.0	29.971496166469652	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	121798800	3399312	0	0	113618.28358208956	3171.0	27.90924048512793	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	113391600	5983677	0	0	60090.93799682035	3171.0	52.77002000148159	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	128123500	3399312	0	0	119518.19029850746	3171.0	26.531526222746024	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	121409300	3630795	0	0	106034.3231441048	3171.0	29.905410870501683	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	120496600	3399312	0	0	112403.54477611941	3171.0	28.210854082189872	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	117812700	5983677	0	0	62433.863275039745	3171.0	50.78974507841684	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	126454800	3630795	0	0	110440.87336244542	3171.0	28.712195978325852	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native-baseline	huffman	1145	128340100	3630795	0	0	112087.42358078602	3171.0	28.290417414354515	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	huffman	1887	126350300	5983677	0	0	66958.29358770535	3171.0	47.35783769409333	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	huffman	1072	137919700	3399312	0	0	128656.43656716419	3171.0	24.647037370295905	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	130032500	3223682	0	0	153521.25147579692	3806.0	24.791356007152057	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	148716300	5735642	0	0	98683.67617783677	3806.0	38.5676755002646	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	147127200	3531968	0	0	158542.24137931035	3806.0	24.006220467731325	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	118645000	3223682	0	0	140076.7414403778	3806.0	27.170820514981667	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	141880100	3531968	0	0	152888.03879310345	3806.0	24.89403376512985	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	147582400	5735642	0	0	97931.25414731255	3806.0	38.86399733301532	1
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	141275800	5735642	0	0	93746.38354346383	3806.0	40.598899457656586	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	150384900	3531968	0	0	162052.69396551725	3806.0	23.486187775501396	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	121290200	3223682	0	0	143199.76387249114	3806.0	26.57825611632267	2
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	132322300	5735642	0	0	87805.1094890511	3806.0	43.34599685767252	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	133994100	3531968	0	0	144390.19396551725	3806.0	26.35913073784592	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	119223700	3223682	0	0	140759.9763872491	3806.0	27.038936050466475	3
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	136294700	3531968	0	0	146869.28879310345	3806.0	25.91419915814775	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	123825700	3223682	0	0	146193.27036599763	3806.0	26.034030092299094	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	120410400	5735642	0	0	79900.7299270073	3806.0	47.63410801724768	4
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	147472200	3531968	0	0	158914.00862068965	3806.0	23.950059740073044	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	127529100	5735642	0	0	84624.48573324486	3806.0	44.97516253153202	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	108263300	3223682	0	0	127819.71664698937	3806.0	29.776313857050358	5
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native-baseline	huffman	847	113807600	3223682	0	0	134365.5253837072	3806.0	28.325718141846416	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	libvorbis	huffman	928	140889100	3531968	0	0	151820.15086206896	3806.0	25.069135937414604	6
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	native	huffman	1507	118432900	5735642	0	0	78588.5202388852	3806.0	48.42946512328922	6
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	131120900	3780161	0	0	154806.25737898465	4463.0	28.829583994618705	0
+assets/music/in_two (loop).ogg	native	huffman	602	50439500	2686726	0	0	83786.54485049834	4463.0	53.266309142636224	0
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	134343800	4195220	0	0	142918.93617021278	4463.0	31.2274924484792	0
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	133803900	3780161	0	0	157973.90791027155	4463.0	28.251500890482266	1
+assets/music/in_two (loop).ogg	native	huffman	602	46390000	2686726	0	0	77059.80066445183	4463.0	57.916059495580946	1
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	130926400	4195220	0	0	139283.40425531915	4463.0	32.04258270295372	1
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	142832300	3780161	0	0	168633.1759149941	4463.0	26.46572939034098	2
+assets/music/in_two (loop).ogg	native	huffman	602	48611500	2686726	0	0	80750.0	4463.0	55.26934984520124	2
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	131627500	4195220	0	0	140029.25531914894	4463.0	31.87191126474331	2
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	136087000	3780161	0	0	160669.4214876033	4463.0	27.77753201995782	3
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	125849100	4195220	0	0	133882.02127659574	4463.0	33.335319839394955	3
+assets/music/in_two (loop).ogg	native	huffman	602	46576400	2686726	0	0	77369.43521594684	4463.0	57.68427787463179	3
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	125096300	4195220	0	0	133081.17021276595	4463.0	33.53592392420879	4
+assets/music/in_two (loop).ogg	native	huffman	602	53232200	2686726	0	0	88425.58139534884	4463.0	50.47181968808353	4
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	142230400	3780161	0	0	167922.55017709563	4463.0	26.57772881184332	4
+assets/music/in_two (loop).ogg	native	huffman	602	51632800	2686726	0	0	85768.7707641196	4463.0	52.035256658558126	5
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	138721600	4195220	0	0	147576.17021276595	4463.0	30.24200989607963	5
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	129842000	3780161	0	0	153296.34002361275	4463.0	29.11354569399732	5
+assets/music/in_two (loop).ogg	native-baseline	huffman	940	128007900	4195220	0	0	136178.6170212766	4463.0	32.77313353316475	6
+assets/music/in_two (loop).ogg	libvorbis	huffman	847	127592500	3780161	0	0	150640.4958677686	4463.0	29.62682759566589	6
+assets/music/in_two (loop).ogg	native	huffman	602	48167200	2686726	0	0	80011.96013289037	4463.0	55.77916092278563	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	135760500	4488176	0	0	110195.21103896105	3643.0	33.05951289218882	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	134361500	7643014	0	0	64042.65967588179	3643.0	56.88395857444283	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	139862900	4200379	0	0	121303.46921075456	3643.0	30.032117166167726	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	145583500	4200379	0	0	126264.96097137901	3643.0	28.852026500255867	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	139602000	7643014	0	0	66540.51477597712	3643.0	54.74859959026375	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	137823600	4488176	0	0	111869.8051948052	3643.0	32.56464059856222	1
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	139203700	7643014	0	0	66350.66730219257	3643.0	54.90525036331649	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	151385300	4200379	0	0	131296.8777103209	3643.0	27.746280517328962	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	134956400	4488176	0	0	109542.53246753247	3643.0	33.25648876229656	2
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	142921800	4200379	0	0	123956.46140503035	3643.0	29.389351379565607	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	141385600	4488176	0	0	114761.03896103895	3643.0	31.744222891157232	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	151480700	7643014	0	0	72202.43088655862	3643.0	50.45536494088026	3
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	151503300	4200379	0	0	131399.21942758022	3643.0	27.724670023689253	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	139139700	7643014	0	0	66320.16205910391	3643.0	54.93050509667622	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	134518100	4488176	0	0	109186.76948051948	3643.0	33.36484829922516	4
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	161689800	4200379	0	0	140233.99826539462	3643.0	25.978008507648596	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	146430500	7643014	0	0	69795.28122020973	3643.0	52.195505717729574	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	132527800	4488176	0	0	107571.26623376623	3643.0	33.86592096148883	5
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	huffman	2098	136925300	7643014	0	0	65264.68064823642	3643.0	55.818858896055005	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	huffman	1153	144590600	4200379	0	0	125403.81613183001	3643.0	29.050152637861657	6
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native-baseline	huffman	1232	135681300	4488176	0	0	110130.92532467532	3643.0	33.078810418237445	6

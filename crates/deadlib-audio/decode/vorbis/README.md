@@ -19,6 +19,9 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
 * `codebook::{Codebook, Huffman}`: ordered/unordered/sparse entry lengths,
   entry-order Huffman assignment, scalar and VQ decode, lookup types 0/1/2,
   exact integer lattice sizes and the specification's single-entry erratum.
+  Optional, budget-bounded prefix lookup shares the tree allocation.
+  [HUFFMAN.md](HUFFMAN.md) documents exact tail/fallback behavior and the measured
+  throughput/startup tradeoff.
 * `Setup::parse`: codebooks, time placeholders, floor-zero/one configuration,
   all residue configurations, mapping-zero submaps/coupling, modes and framing.
   Index/range/tree validation precedes use. Floor-one neighbors and X ordering

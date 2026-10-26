@@ -145,6 +145,11 @@ impl Setup {
         if !bits.flag()? {
             return Err(Error::Invalid("setup framing bit"));
         }
+        // Optional lookup tables use only the budget left after the complete
+        // mandatory grammar, so acceleration cannot starve later setup fields.
+        for book in &mut codebooks {
+            book.accelerate(&mut budget)?;
+        }
         Ok(Self {
             channels: identification.channels,
             block_sizes: identification.block_sizes,

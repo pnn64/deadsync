@@ -199,6 +199,90 @@ another 300 seconds each, **16,816 executions**, without artifacts or failures;
 [initial corpus hashes](validation/2026-10-26-quarter-mdct-fuzz-initial.sha256.json)
 preserve this campaign. Corpus hashes from the original reports are unchanged.
 
+## Bounded Huffman lookup and interleaved baselines
+
+The next measured change appends an adaptive two-to-eight-bit prefix lookup to
+each eligible book's existing tree allocation. [HUFFMAN.md](HUFFMAN.md) describes
+the packing, exact tail behavior and optional memory policy. Table elements cost
+at most 1 KiB per book, use only the budget left after the complete setup grammar,
+and fall back to the tree if memory is unavailable. Decode/reset remain free of
+allocations. No floating-point synthesis code or PCM tolerance changed.
+
+The isolated workload uses libvorbis-encoded codewords from the five real setup
+headers, one occurrence of every active entry in entry order. It excludes
+construction and does **not** model actual encoder symbol frequencies. Both
+workers check every decoded entry and exact bit consumption before timing.
+
+To reduce drift between separate before/after runs, the runner can extract native
+production sources from a commit into an ignored workspace and build them with
+the current benchmark adapters. Seven shuffled trials interleave current native,
+native baseline `6c5c948ed`, and the references. Cargo artifact profiles and all
+17 registry dependency artifact IDs match between the Rust builds. Source,
+archive, input and binary hashes are retained. No branch or original source file
+is changed by baseline construction.
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark.py --huffman --baseline-revision 6c5c948ed --repeats 7
+python crates/deadlib-audio/decode/scripts/benchmark.py --baseline-revision 6c5c948ed --repeats 7
+```
+
+Paired scalar throughput, million **codewords** per second:
+
+| Setup source | Native tree | Native lookup | libvorbis |
+| --- | ---: | ---: | ---: |
+| Mono fixture | 29.969 | 45.368 | 23.878 |
+| Stereo fixture | 28.712 | 50.790 | 27.909 |
+| Eight-channel fixture | 27.039 | 43.346 | 24.894 |
+| `in_two (loop).ogg` | 32.043 | 55.269 | 28.252 |
+| `Goin' Under.ogg` | 33.079 | 54.905 | 28.852 |
+
+This is an observed **1.51–1.77x** scalar improvement. The original tree already
+outperformed libvorbis on this uniform-entry workload, so it did not demonstrate
+that Huffman decoding was the pipeline's dominant bottleneck. The paired
+whole-file trials assess the practical effect:
+
+| File / phase | Native tree (ms) | Native lookup (ms) | Symphonia (ms) | libvorbisfile (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| `in_two`, full | 462.118 | 387.280 | 218.046 | 365.306 |
+| `in_two`, 4 KiB reads | 451.332 | 378.270 | 215.398 | 337.640 |
+| `in_two`, startup | 0.810 | 0.858 | 1.933 | 0.745 |
+| `Goin' Under`, full | 362.770 | 336.442 | 191.966 | 246.633 |
+| `Goin' Under`, 4 KiB reads | 378.519 | 343.167 | 187.984 | 268.415 |
+| `Goin' Under`, startup | 1.251 | 1.326 | 2.366 | 0.777 |
+
+Median full-file throughput improves **1.19x / 1.08x**, and 4 KiB reads improve
+1.19x / 1.10x. First-PCM time increases about **6%** for both longer tracks.
+The three short fixtures' full decode times increase about **2–7%** because
+construction dominates their few output blocks. This is a throughput/startup
+tradeoff. Native `in_two` full-decode min/median/max is
+378.77/387.28/419.59 ms with lookup versus 439.30/462.12/486.94 ms for the tree.
+Goin' Under is 326.56/336.44/380.47 versus 343.25/362.77/400.38 ms, with overlapping
+trial ranges. Results remain from a shared, unlocked machine.
+
+Native full decoding still trails Symphonia by about 1.8x, and libvorbisfile by
+about 1.06–1.36x, on these two tracks. Faster scalar decoding is not an overall
+competitive-performance claim. The new benchmark mode's manifest unit is
+`codewords`; historical TSV count/rate column names retain `samples` spelling.
+
+The [paired scalar summary](validation/2026-10-26-huffman-scalar-summary.tsv),
+[trials](validation/2026-10-26-huffman-scalar-trials.tsv), and
+[manifest](validation/2026-10-26-huffman-scalar.json) include reference-generated
+codeword corpus hashes. The [paired pipeline summary](validation/2026-10-26-huffman-pipeline-summary.tsv),
+[trials](validation/2026-10-26-huffman-pipeline-trials.tsv), and
+[manifest](validation/2026-10-26-huffman-pipeline.json) retain all 420 whole-file
+trial rows. For that initial paired run, registry artifact equality was checked
+from the retained build logs after timing; subsequent runs enforce it beforehand.
+
+Validation: complete 1,611-book/155,478-entry reference codeword/VQ corpus, 38-file
+raw/full PCM, 1,900 corpus seeks, 528 upstream coded vectors, four historical/song
+files, all-prefix/alignment/tail/32-bit-tree tests, resource fallback tests,
+release/Clippy, zero-allocation and extracted offline checks pass. Resumed
+header/raw-packet/streaming sanitizer campaigns add **141,962 executions** with
+no artifacts/failures: [statistics](validation/2026-10-26-huffman-fuzz.tsv),
+[provenance](validation/2026-10-26-huffman-fuzz-provenance.json),
+[binary hashes/results](validation/2026-10-26-huffman-fuzz-results.json), and
+[initial corpus hashes](validation/2026-10-26-huffman-fuzz-initial.sha256.json).
+
 ## Remaining measurements and next optimization gate
 
 Allocation counts/requested-byte peaks, process memory, indexed construction,
@@ -206,7 +290,7 @@ arbitrary seeking, Ogg-only container throughput and cold startup still need
 comparative measurements. Existing zero-allocation tests cover specific warmed
 native decode/reset/seek paths; sanitizer RSS is not a production memory result.
 
-Add component/profile evidence for bit/Huffman decode and floor/residue
-synthesis to explain the remaining pipeline gap. Optimize a measured bottleneck,
+Add actual symbol-frequency/profile evidence and floor/residue component
+measurements to explain the remaining pipeline gap. Optimize a measured bottleneck,
 then rerun the same corpus/count/PCM gates and benchmark manifest. Broader files,
 platforms and controlled machines remain necessary before performance claims.

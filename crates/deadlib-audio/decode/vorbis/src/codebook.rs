@@ -8,22 +8,23 @@ use crate::{
 const LEAF: u32 = 1 << 31;
 const MISSING: u32 = u32::MAX;
 
-/// Flat decode tree. Single-entry books consume one bit (both values accepted),
-/// as required by the 2015 specification erratum.
+/// Flat decode tree with an optional bounded prefix table in the same buffer.
+/// Single-entry books consume one bit (both values accepted), as required by
+/// the 2015 specification erratum.
 pub struct Huffman {
     nodes: Vec<[u32; 2]>,
-    singleton: Option<u32>,
+    singleton: u32,
+    prefix_bits: u8,
 }
 impl Huffman {
     /// Zero lengths indicate unused entries. All other lengths are 1..=32.
     pub fn from_lengths(lengths: &[u8], max_nodes: usize) -> Result<Self, Error> {
-        Self::build(
-            lengths,
-            max_nodes,
-            &mut Budget {
-                remaining: usize::MAX,
-            },
-        )
+        let mut budget = Budget {
+            remaining: usize::MAX,
+        };
+        let mut tree = Self::build(lengths, max_nodes, &mut budget)?;
+        tree.accelerate(lengths, &mut budget)?;
+        Ok(tree)
     }
     fn build(lengths: &[u8], max_nodes: usize, budget: &mut Budget) -> Result<Self, Error> {
         if lengths.len() >= LEAF as usize {
@@ -40,7 +41,8 @@ impl Huffman {
             }
             return Ok(Self {
                 nodes: Vec::new(),
-                singleton: Some(entry as u32),
+                singleton: entry as u32,
+                prefix_bits: 0,
             });
         }
         let mut nodes = Vec::new();
@@ -95,16 +97,67 @@ impl Huffman {
         }
         Ok(Self {
             nodes,
-            singleton: None,
+            singleton: MISSING,
+            prefix_bits: 0,
         })
+    }
+    fn accelerate(&mut self, lengths: &[u8], budget: &mut Budget) -> Result<(), Error> {
+        // Four low tag bits hold a short leaf's consumed length; zero tags a
+        // continuation node. Large public from_lengths inputs keep the tree
+        // path rather than imposing an additional format/entry limit.
+        if self.singleton != MISSING
+            || self.prefix_bits != 0
+            || lengths.len() > 1 << 28
+            || self.nodes.len() > 1 << 28
+        {
+            return Ok(());
+        }
+        let maximum = lengths.iter().copied().max().unwrap_or(0);
+        if maximum <= 2 {
+            return Ok(());
+        }
+        let used = lengths.iter().filter(|&&length| length != 0).count();
+        let mut width = maximum.min(8).min(ilog(used as u32) as u8);
+        while width != 0 && (4usize << width) > budget.remaining {
+            width -= 1;
+        }
+        if width < 2 {
+            return Ok(());
+        }
+        let pairs = 1usize << (width - 1);
+        let start = self.nodes.len();
+        if self.nodes.try_reserve_exact(pairs).is_err() {
+            return Ok(());
+        }
+        budget.charge(pairs * 8)?;
+        self.nodes.resize(start + pairs, [MISSING; 2]);
+        fill_prefix(&mut self.nodes, 0, 0, 0, width, start);
+        self.prefix_bits = width;
+        Ok(())
     }
     #[inline]
     pub fn decode(&self, bits: &mut BitReader<'_>) -> Result<u32, Error> {
-        if let Some(entry) = self.singleton {
+        if self.singleton != MISSING {
             bits.read(1)?;
-            return Ok(entry);
+            return Ok(self.singleton);
         }
         let mut node = 0usize;
+        let width = self.prefix_bits as u32;
+        if width != 0
+            && let Some(word) = bits.peek(width)
+        {
+            let start = self.nodes.len() - (1usize << (width - 1));
+            let entry = self.nodes[start + word as usize / 2][word as usize & 1];
+            if entry != MISSING {
+                let consumed = entry & 15;
+                if consumed != 0 {
+                    bits.consume(consumed);
+                    return Ok(entry >> 4);
+                }
+                bits.consume(width);
+                node = (entry >> 4) as usize;
+            }
+        }
         loop {
             let next = self.nodes[node][bits.read(1)? as usize];
             if next == MISSING {
@@ -118,9 +171,43 @@ impl Huffman {
     }
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+            - if self.prefix_bits == 0 {
+                0
+            } else {
+                1usize << (self.prefix_bits - 1)
+            }
     }
     fn storage_bytes(&self) -> usize {
         self.nodes.capacity() * core::mem::size_of::<[u32; 2]>()
+    }
+}
+// Traverse only the first eight levels. Short leaves fill all suffix aliases;
+// each table slot is written once, without walking every prefix from the root.
+fn fill_prefix(
+    nodes: &mut [[u32; 2]],
+    node: usize,
+    depth: u8,
+    prefix: usize,
+    width: u8,
+    start: usize,
+) {
+    for branch in 0..2 {
+        let next = nodes[node][branch];
+        if next == MISSING {
+            continue;
+        }
+        let word = prefix | branch << depth;
+        let bits = depth + 1;
+        if next & LEAF != 0 {
+            let entry = ((next & !LEAF) << 4) | bits as u32;
+            for word in (word..1usize << width).step_by(1usize << bits) {
+                nodes[start + word / 2][word & 1] = entry;
+            }
+        } else if bits == width {
+            nodes[start + word / 2][word & 1] = next << 4;
+        } else {
+            fill_prefix(nodes, next as usize, bits, word, width, start);
+        }
     }
 }
 fn add_node(nodes: &mut Vec<[u32; 2]>, limit: usize, budget: &mut Budget) -> Result<u32, Error> {
@@ -161,7 +248,13 @@ impl Codebook {
         &self.huffman
     }
     pub fn read(bits: &mut BitReader<'_>, limits: &Limits) -> Result<Self, Error> {
-        Self::read_with_budget(bits, limits, &mut Budget::new(limits))
+        let mut budget = Budget::new(limits);
+        let mut book = Self::read_with_budget(bits, limits, &mut budget)?;
+        book.accelerate(&mut budget)?;
+        Ok(book)
+    }
+    pub(crate) fn accelerate(&mut self, budget: &mut Budget) -> Result<(), Error> {
+        self.huffman.accelerate(&self.lengths, budget)
     }
     pub(crate) fn read_with_budget(
         bits: &mut BitReader<'_>,
@@ -340,4 +433,72 @@ pub(crate) fn power_at_most(base: u32, exponent: u32, limit: u32) -> bool {
         }
     }
     true
+}
+
+#[cfg(test)]
+mod prefix_tests {
+    use super::*;
+    #[test]
+    fn lookup_matches_tree_at_every_prefix_alignment_and_packet_tail() {
+        let mut deep: Vec<_> = (1..=32).collect();
+        deep.push(32);
+        for lengths in [vec![2, 4, 4, 4, 4, 2, 3, 3], vec![8; 256], deep] {
+            let fast = Huffman::from_lengths(&lengths, 4096).unwrap();
+            let slow = Huffman::build(
+                &lengths,
+                4096,
+                &mut Budget {
+                    remaining: usize::MAX,
+                },
+            )
+            .unwrap();
+            assert!(fast.prefix_bits != 0);
+            assert_eq!(fast.node_count(), slow.node_count());
+            for first in 0..=255u8 {
+                for tail in [&[][..], &[0][..], &[255][..], &[255, 255, 255][..]] {
+                    let mut input = vec![first];
+                    input.extend_from_slice(tail);
+                    for offset in 0..8 {
+                        let mut a = BitReader::new(&input);
+                        let mut b = a.clone();
+                        a.read(offset).unwrap();
+                        b.read(offset).unwrap();
+                        for _ in 0..16 {
+                            let actual = fast.decode(&mut a);
+                            let expected = slow.decode(&mut b);
+                            assert_eq!(actual, expected);
+                            assert_eq!(
+                                (a.position(), a.remaining(), a.is_exhausted()),
+                                (b.position(), b.remaining(), b.is_exhausted())
+                            );
+                            if actual.is_err() {
+                                assert_eq!(a.read(0), b.read(0));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    fn prefix_memory_is_optional_and_logical_node_limits_are_unchanged() {
+        let lengths = [3; 8];
+        let mut budget = Budget { remaining: 7 * 8 };
+        let mut tree = Huffman::build(&lengths, 7, &mut budget).unwrap();
+        assert_eq!(budget.remaining, 0);
+        tree.accelerate(&lengths, &mut budget).unwrap();
+        assert_eq!(tree.prefix_bits, 0);
+        assert_eq!(tree.node_count(), 7);
+        let fast = Huffman::from_lengths(&lengths, 7).unwrap();
+        assert_eq!(fast.node_count(), 7);
+        assert!(fast.prefix_bits > 0);
+        assert!(matches!(
+            Huffman::from_lengths(&lengths, 6),
+            Err(Error::LimitExceeded("Huffman nodes"))
+        ));
+        for (tree, input) in [(&tree, [0xff]), (&fast, [0xff])] {
+            assert_eq!(tree.decode(&mut BitReader::new(&input)), Ok(7));
+        }
+    }
 }

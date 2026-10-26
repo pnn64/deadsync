@@ -1,4 +1,6 @@
 //! Resident-input timing worker. No PCM retention or file IO in timed regions.
+#[path = "support/huffman.rs"]
+mod huffman;
 use deadlib_audio_decode_vorbis::{Imdct, OggEvent, OggOptions, OggReader};
 use std::{
     hint::black_box,
@@ -176,12 +178,17 @@ fn main() {
     assert_eq!(
         args.len(),
         4,
-        "ENGINE PHASE ITERATIONS FILE_OR_BLOCK_SIZE (native|symphonia; full|stream4096|startup|imdct)"
+        "ENGINE PHASE ITERATIONS FILE_OR_BLOCK_SIZE (native|symphonia; full|stream4096|startup|imdct|huffman)"
     );
     let engine = &args[0];
     let phase = &args[1];
     let iterations: usize = args[2].parse().unwrap();
     assert!(iterations > 0);
+    if phase == "huffman" {
+        assert_eq!(engine, "native");
+        huffman::measure(&std::fs::read(&args[3]).unwrap(), iterations);
+        return;
+    }
     if phase == "imdct" {
         assert_eq!(engine, "native");
         let n: usize = args[3].parse().unwrap();

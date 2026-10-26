@@ -66,8 +66,7 @@ impl<'a> BitReader<'a> {
         }
         match self.peek(bits) {
             Some(value) => {
-                self.cache >>= bits;
-                self.available -= bits;
+                self.consume(bits);
                 Ok(value)
             }
             None => {
@@ -75,6 +74,13 @@ impl<'a> BitReader<'a> {
                 Err(Error::EndOfPacket)
             }
         }
+    }
+    /// Consume a successful lookahead without rechecking/refilling it.
+    #[inline]
+    pub(crate) fn consume(&mut self, bits: u32) {
+        debug_assert!(bits <= 32 && bits <= self.available && !self.exhausted);
+        self.cache >>= bits;
+        self.available -= bits;
     }
     pub fn flag(&mut self) -> Result<bool, Error> {
         Ok(self.read(1)? != 0)
