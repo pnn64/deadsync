@@ -1,10 +1,11 @@
 //! Frozen production reference from 6d1c4e5a1.
 use crate::bools::parse_u8_bool_or_default;
+use crate::coin::CoinMode;
 use crate::ini::SimpleIni;
 use crate::null_or_die::*;
 use crate::numbers::parse_auto_threads_u8;
 use crate::theme::SyncGraphMode;
-use null_or_die::{BiasKernel, KernelTarget};
+use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 use std::{
     fmt::{Display, Write as _},
     str::FromStr,
@@ -175,4 +176,29 @@ pub fn push_line(content: &mut String, key: &str, value: impl Display) {
 
 pub fn push_bool(content: &mut String, key: &str, enabled: bool) {
     push_line(content, key, if enabled { 1 } else { 0 });
+}
+
+pub fn parse_null_or_die_graph_orientation(raw: &str) -> Option<GraphOrientation> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "vertical" => Some(GraphOrientation::Vertical),
+        "horizontal" => Some(GraphOrientation::Horizontal),
+        _ => None,
+    }
+}
+
+pub fn parse_null_or_die_graph_origin(raw: &str) -> Option<GraphOrigin> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "bottom" => Some(GraphOrigin::Bottom),
+        "top" => Some(GraphOrigin::Top),
+        _ => None,
+    }
+}
+
+pub fn coin_mode_from_str(value: &str) -> Result<CoinMode, ()> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "pay" => Ok(CoinMode::Pay),
+        "free" => Ok(CoinMode::Free),
+        "home" => Ok(CoinMode::Home),
+        _ => Err(()),
+    }
 }

@@ -1,13 +1,95 @@
 use super::support as perf;
+use crate::coin::{CoinMode, CoinOptions, load_coin_options};
 use crate::ini::SimpleIni;
 use crate::null_or_die::*;
 use crate::writer::push_bool;
 use std::hint::black_box;
+use std::str::FromStr;
 
 #[path = "../../../tests/support/kernel_bench.rs"]
 mod bench;
 #[path = "text_codecs_original.rs"]
 mod original;
+
+#[test]
+fn graph_choices_preserve_ascii_case_whitespace_and_rejections() {
+    let check = |raw: &str| {
+        assert_eq!(
+            parse_null_or_die_graph_orientation(raw),
+            original::parse_null_or_die_graph_orientation(raw),
+            "orientation {raw:?}"
+        );
+        assert_eq!(
+            parse_null_or_die_graph_origin(raw),
+            original::parse_null_or_die_graph_origin(raw),
+            "origin {raw:?}"
+        );
+    };
+    check("");
+    for name in ["vertical", "horizontal", "bottom", "top"] {
+        for mask in 0..1 << name.len() {
+            let text: String = name
+                .bytes()
+                .enumerate()
+                .map(|(i, b)| char::from(if mask & (1 << i) == 0 { b } else { b - 32 }))
+                .collect();
+            check(&text);
+            check(&format!("\u{2003}{text}\r\n"));
+        }
+        for index in 0..=name.len() {
+            for byte in 0..=127 {
+                check(&format!(
+                    "{}{}{}",
+                    &name[..index],
+                    char::from(byte),
+                    &name[index..]
+                ));
+            }
+            for extra in ["\u{e9}", "\u{2003}", "\u{96ea}"] {
+                check(&format!("{}{extra}{}", &name[..index], &name[index..]));
+            }
+        }
+        check(&format!("{name}{}", "x".repeat(4096)));
+    }
+}
+
+#[test]
+fn coin_mode_preserves_case_trimming_and_invalid_values() {
+    for name in ["pay", "free", "home", "", "unknown"] {
+        for mask in 0..1 << name.len() {
+            let text: String = name
+                .bytes()
+                .enumerate()
+                .map(|(i, b)| char::from(if mask & (1 << i) == 0 { b } else { b - 32 }))
+                .collect();
+            for text in [text.clone(), format!("\u{2003}{text}\t")] {
+                assert_eq!(
+                    CoinMode::from_str(&text),
+                    original::coin_mode_from_str(&text),
+                    "{text:?}"
+                );
+            }
+        }
+        for index in 0..=name.len() {
+            for byte in 0..=127 {
+                let text = format!("{}{}{}", &name[..index], char::from(byte), &name[index..]);
+                assert_eq!(
+                    CoinMode::from_str(&text),
+                    original::coin_mode_from_str(&text),
+                    "{text:?}"
+                );
+            }
+            for extra in ["\u{e9}", "\u{2003}", "\u{96ea}"] {
+                let text = format!("{}{extra}{}", &name[..index], &name[index..]);
+                assert_eq!(
+                    CoinMode::from_str(&text),
+                    original::coin_mode_from_str(&text),
+                    "{text:?}"
+                );
+            }
+        }
+    }
+}
 
 fn check_alias(raw: &str) {
     assert_eq!(
@@ -209,6 +291,45 @@ fn benchmark_config_text() {
             }
         });
     }
+    let graph_pairs: Vec<_> = (0..512)
+        .map(|i| {
+            let (orientation, origin) = [
+                ("Vertical", "Bottom"),
+                ("horizontal", "top"),
+                ("\u{2003}vErTiCaL\t", "\u{2003}bOtToM\t"),
+                ("unknown", "unknown"),
+            ][i % 4];
+            (orientation.to_owned(), origin.to_owned())
+        })
+        .collect();
+    measure("parse/graph", 32, || {
+        for (orientation, origin) in black_box(&graph_pairs) {
+            black_box(parse_null_or_die_graph_orientation(black_box(orientation)));
+            black_box(parse_null_or_die_graph_origin(black_box(origin)));
+        }
+    });
+    let modes: Vec<_> = (0..512)
+        .map(|i| ["Pay", "Free", "Home", "\u{2003}pAy\t", "unknown"][i % 5].to_owned())
+        .collect();
+    measure("parse/coin", 32, || {
+        for mode in black_box(&modes) {
+            let _ = black_box(CoinMode::from_str(black_box(mode)));
+        }
+    });
+    let coin_inputs: Vec<_> = modes
+        .iter()
+        .take(32)
+        .map(|mode| {
+            let mut ini = SimpleIni::new();
+            ini.load_str(&format!("[Options]\nCoinMode={mode}\n"));
+            ini
+        })
+        .collect();
+    measure("load/coin_options", 32, || {
+        for ini in black_box(&coin_inputs) {
+            black_box(load_coin_options(black_box(ini), CoinOptions::default()));
+        }
+    });
     let keys: Vec<_> = (0..512).map(|i| format!("ConfigFlag{i}")).collect();
     let mut text = String::with_capacity(32768);
     measure("write/bools", 64, || {

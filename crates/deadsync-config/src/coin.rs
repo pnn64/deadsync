@@ -33,10 +33,10 @@ impl FromStr for CoinMode {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "pay" => Ok(Self::Pay),
-            "free" => Ok(Self::Free),
-            "home" => Ok(Self::Home),
+        match value.trim() {
+            value if value.eq_ignore_ascii_case("pay") => Ok(Self::Pay),
+            value if value.eq_ignore_ascii_case("free") => Ok(Self::Free),
+            value if value.eq_ignore_ascii_case("home") => Ok(Self::Home),
             _ => Err(()),
         }
     }

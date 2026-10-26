@@ -194,9 +194,9 @@ pub const fn null_or_die_graph_orientation_str(orientation: GraphOrientation) ->
 
 #[must_use]
 pub fn parse_null_or_die_graph_orientation(raw: &str) -> Option<GraphOrientation> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "vertical" => Some(GraphOrientation::Vertical),
-        "horizontal" => Some(GraphOrientation::Horizontal),
+    match raw.trim() {
+        value if value.eq_ignore_ascii_case("vertical") => Some(GraphOrientation::Vertical),
+        value if value.eq_ignore_ascii_case("horizontal") => Some(GraphOrientation::Horizontal),
         _ => None,
     }
 }
@@ -221,9 +221,9 @@ pub const fn null_or_die_graph_origin_str(origin: GraphOrigin) -> &'static str {
 
 #[must_use]
 pub fn parse_null_or_die_graph_origin(raw: &str) -> Option<GraphOrigin> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "bottom" => Some(GraphOrigin::Bottom),
-        "top" => Some(GraphOrigin::Top),
+    match raw.trim() {
+        value if value.eq_ignore_ascii_case("bottom") => Some(GraphOrigin::Bottom),
+        value if value.eq_ignore_ascii_case("top") => Some(GraphOrigin::Top),
         _ => None,
     }
 }
