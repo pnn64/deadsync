@@ -73,11 +73,10 @@ impl CenteredSingleSplitLayout {
 
     #[must_use]
     pub fn holds_mines_rolls_frame(self) -> StepStatsFramePlacement {
+        let row_height = 28.0 * 0.8 * self.pane.banner_data_zoom;
         StepStatsFramePlacement {
             center_x: 56.0f32.mul_add(self.pane.banner_data_zoom, self.left_panel_center_x),
-            center_y: 0.8f32
-                .mul_add(28.0, -10.0)
-                .mul_add(self.pane.banner_data_zoom, self.pane.pane_center_y),
+            center_y: self.judgment_bottom_y() + 28.0 + row_height,
             zoom: 0.8 * self.pane.banner_data_zoom,
         }
     }
@@ -99,6 +98,36 @@ impl CenteredSingleSplitLayout {
     #[must_use]
     pub fn time_base_x(self) -> f32 {
         (-6.0f32).mul_add(self.pane.banner_data_zoom, self.left_panel_center_x)
+    }
+
+    #[must_use]
+    pub fn time_base_y(self) -> f32 {
+        let hmr = self.holds_mines_rolls_frame();
+        hmr.center_y + 28.0 * hmr.zoom + 20.0
+    }
+
+    #[must_use]
+    pub fn live_timing_placement(
+        self,
+        base_y: f32,
+        number_zoom: f32,
+    ) -> StepStatsLiveTimingPlacement {
+        let panel_left = self.left_panel_center_x - self.panel_width * 0.5;
+        let panel_right = self.left_panel_center_x + self.panel_width * 0.5;
+        let padding = 12.0 * self.pane.banner_data_zoom;
+        let label_x = panel_left + padding;
+        let value_x = panel_right - padding;
+        StepStatsLiveTimingPlacement {
+            label_x,
+            value_x,
+            max_column_width: Some((value_x - label_x) * 0.48),
+            first_y: 42.0f32.mul_add(number_zoom, base_y),
+            row_height: 20.0 * number_zoom,
+        }
+    }
+
+    fn judgment_bottom_y(self) -> f32 {
+        self.pane.pane_center_y - 105.0 * 0.8 * self.pane.banner_data_zoom
     }
 }
 
@@ -150,6 +179,54 @@ pub struct StepStatsFramePlacement {
     pub center_x: f32,
     pub center_y: f32,
     pub zoom: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct StepStatsLiveTimingPlacement {
+    pub label_x: f32,
+    pub value_x: f32,
+    pub max_column_width: Option<f32>,
+    pub first_y: f32,
+    pub row_height: f32,
+}
+
+impl StepStatsLiveTimingPlacement {
+    #[must_use]
+    pub const fn unconstrained(
+        label_x: f32,
+        value_x: f32,
+        first_y: f32,
+        row_height: f32,
+    ) -> Self {
+        Self {
+            label_x,
+            value_x,
+            max_column_width: None,
+            first_y,
+            row_height,
+        }
+    }
+}
+
+#[must_use]
+pub fn live_timing_placement(
+    split_layout: Option<CenteredSingleSplitLayout>,
+    time_label_x: f32,
+    base_y: f32,
+    number_zoom: f32,
+) -> StepStatsLiveTimingPlacement {
+    split_layout.map_or_else(
+        || {
+            let label_x = 104.0f32.mul_add(number_zoom, time_label_x);
+            StepStatsLiveTimingPlacement::unconstrained(
+                label_x,
+                156.0f32.mul_add(number_zoom, label_x),
+                base_y,
+                20.0 * number_zoom,
+            )
+        },
+        |split| split.live_timing_placement(base_y, number_zoom),
+    )
 }
 
 #[must_use]
@@ -959,6 +1036,34 @@ mod tests {
             assert!((song_banner.y - banner_half_height - expected_banner_top).abs() < 0.001);
             assert!(layout.holds_mines_rolls_frame().center_x < right_panel_left);
             assert!(layout.scorebox_frame().center_x > right_panel_left);
+
+            let judgment_bottom =
+                layout.pane.pane_center_y - 105.0 * 0.8 * layout.pane.banner_data_zoom;
+            let hmr = layout.holds_mines_rolls_frame();
+            assert!((hmr.center_y - 28.0 * hmr.zoom - judgment_bottom - 28.0).abs() < 0.001);
+            assert!(
+                (layout.time_base_y() - hmr.center_y - 28.0 * hmr.zoom - 20.0).abs() < 0.001
+            );
+            let timing = live_timing_placement(
+                Some(layout),
+                0.0,
+                0.0,
+                layout.pane.banner_data_zoom,
+            );
+            let panel_left = layout.left_panel_center_x - layout.panel_width * 0.5;
+            let panel_right = layout.left_panel_center_x + layout.panel_width * 0.5;
+            assert!(timing.label_x > panel_left);
+            assert!(timing.value_x < panel_right);
+            assert!(timing.label_x < timing.value_x);
+            assert!(
+                timing.max_column_width.unwrap() * 2.0 < timing.value_x - timing.label_x
+            );
+            assert!(
+                (timing.first_y - 42.0 * layout.pane.banner_data_zoom).abs() < 0.001
+            );
+            assert!(
+                (timing.row_height - 20.0 * layout.pane.banner_data_zoom).abs() < 0.001
+            );
         }
 
         let six_five = centered_single_split_layout(
@@ -984,5 +1089,16 @@ mod tests {
                 .is_none()
             );
         }
+    }
+
+    #[test]
+    fn live_timing_default_placement_keeps_double_layout_offsets() {
+        let timing = live_timing_placement(None, 100.0, 240.0, 0.9);
+
+        assert!((timing.label_x - (100.0 + 104.0 * 0.9)).abs() < 0.001);
+        assert!((timing.value_x - (timing.label_x + 156.0 * 0.9)).abs() < 0.001);
+        assert_eq!(timing.first_y, 240.0);
+        assert!((timing.row_height - 20.0 * 0.9).abs() < 0.001);
+        assert_eq!(timing.max_column_width, None);
     }
 }

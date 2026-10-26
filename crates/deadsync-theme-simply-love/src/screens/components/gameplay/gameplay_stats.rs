@@ -1677,7 +1677,12 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         } else {
             -1.0
         };
-        let x = step_stats_theme::pane_anchor_x(layout, x_sign * 94.0 * layout.banner_data_zoom);
+        let centered_single_split =
+            centered_single_split_geometry(state, playfield_center_x, notefield_width(state));
+        let x = centered_single_split.map_or_else(
+            || step_stats_theme::pane_anchor_x(layout, x_sign * 94.0 * layout.banner_data_zoom),
+            |split| split.right_panel_center_x,
+        );
         let y = 37.0f32.mul_add(-layout.banner_data_zoom, layout.sidepane_center_y);
         let mut heart_rate_actors = Vec::with_capacity(2);
         heart_rate::push(
@@ -1695,6 +1700,25 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
             children: heart_rate_actors,
         });
     }
+}
+
+fn centered_single_split_geometry(
+    state: &State,
+    playfield_center_x: f32,
+    notefield_width: Option<f32>,
+) -> Option<step_stats_theme::CenteredSingleSplitLayout> {
+    if state.num_players() != 1 {
+        return None;
+    }
+    step_stats_theme::centered_single_split_layout(
+        screen_center_x(),
+        screen_center_y(),
+        screen_width(),
+        screen_height(),
+        playfield_center_x,
+        notefield_width?,
+        state.gameplay.density_graph_view().graph_w,
+    )
 }
 
 fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
@@ -2131,15 +2155,7 @@ fn push_split_step_stats(
     };
 
     let split_layout = if centered_single_split {
-        step_stats_theme::centered_single_split_layout(
-            screen_center_x(),
-            screen_center_y(),
-            screen_width(),
-            screen_height(),
-            playfield_center_x,
-            notefield_width,
-            state.gameplay.density_graph_view().graph_w,
-        )
+        centered_single_split_geometry(state, playfield_center_x, Some(notefield_width))
     } else {
         None
     };
@@ -2507,7 +2523,10 @@ fn push_split_step_stats(
             || (-notefield_width + 150.0).mul_add(banner_data_zoom, pane_cx),
             |split| split.time_base_x(),
         );
-        let base_y = 75.0f32.mul_add(banner_data_zoom, pane_cy);
+        let base_y = split_layout.map_or_else(
+            || 75.0f32.mul_add(banner_data_zoom, pane_cy),
+            |split| split.time_base_y(),
+        );
 
         let time_display = step_stats_time_display(state, 0);
         let total_display_seconds = time_display.total_seconds;
@@ -2569,18 +2588,9 @@ fn push_split_step_stats(
             z(71)
         ));
 
-        let timing_label_x = 104.0f32.mul_add(number_zoom, label_x);
-        push_live_timing_stats_at(
-            actors,
-            state,
-            0,
-            timing_label_x,
-            156.0f32.mul_add(number_zoom, timing_label_x),
-            base_y,
-            20.0 * number_zoom,
-            label_zoom,
-            71,
-        );
+        let timing =
+            step_stats_theme::live_timing_placement(split_layout, label_x, base_y, number_zoom);
+        push_live_timing_stats_at(actors, state, 0, timing, label_zoom, 71);
     }
 
     // DensityGraph.lua (double): graph ActorFrame xy(260, 40), with width
@@ -2614,7 +2624,7 @@ fn push_split_step_stats(
             double_graph,
             song_info_text_zoom(StepStatsPaneLayout {
                 sidepane_center_x: pane_cx,
-            sidepane_center_y: pane_cy,
+                sidepane_center_y: pane_cy,
                 sidepane_width,
                 note_field_is_centered,
                 is_ultrawide,
@@ -3069,10 +3079,7 @@ fn push_live_timing_stats_at(
     actors: &mut Vec<Actor>,
     state: &State,
     player_idx: usize,
-    label_x: f32,
-    value_x: f32,
-    first_y: f32,
-    row_h: f32,
+    timing: step_stats_theme::StepStatsLiveTimingPlacement,
     zoom: f32,
     z: i16,
 ) {
@@ -3096,11 +3103,14 @@ fn push_live_timing_stats_at(
     let row_h = if compact { row_h * 0.68 } else { row_h };
     let zoom = if compact { zoom * 0.82 } else { zoom };
     let first_y = if compact {
-        first_y - row_h * 0.12
+        timing.first_y - row_h * 0.12
     } else {
-        first_y
+        timing.first_y
     };
     let label_max_w = if compact { 150.0 } else { 170.0 } * zoom;
+    let label_max_w = timing
+        .max_column_width
+        .map_or(label_max_w, |width| label_max_w.min(width));
     let mut row = 0usize;
 
     for index in 0..LIVE_TIMING_LABELS.len() {
@@ -3114,15 +3124,23 @@ fn push_live_timing_stats_at(
         row += 1;
 
         actors.push(act!(text: font("miso"): settext(label):
-            align(0.0, 0.5): xy(label_x, y):
+            align(0.0, 0.5): xy(timing.label_x, y):
             zoom(zoom): maxwidth(label_max_w): horizalign(left):
             diffuse(1.0, 1.0, 1.0, 1.0): z(z)
         ));
-        actors.push(act!(text: font("miso"): settext(value):
-            align(1.0, 0.5): xy(value_x, y):
-            zoom(zoom): horizalign(right):
-            diffuse(1.0, 1.0, 1.0, 1.0): z(z)
-        ));
+        if let Some(max_width) = timing.max_column_width {
+            actors.push(act!(text: font("miso"): settext(value):
+                align(1.0, 0.5): xy(timing.value_x, y):
+                zoom(zoom): maxwidth(max_width): horizalign(right):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+            ));
+        } else {
+            actors.push(act!(text: font("miso"): settext(value):
+                align(1.0, 0.5): xy(timing.value_x, y):
+                zoom(zoom): horizalign(right):
+                diffuse(1.0, 1.0, 1.0, 1.0): z(z)
+            ));
+        }
     }
 }
 
@@ -3559,14 +3577,17 @@ fn build_side_pane(
             let half_scorebox_width = crate::scorebox::SCOREBOX_W * scorebox_frame.zoom * 0.5;
             let timing_label_anchor = scorebox_frame.center_x - half_scorebox_width;
             let timing_value_anchor = scorebox_frame.center_x + half_scorebox_width;
-            push_live_timing_stats_at(
-                actors,
-                state,
-                player_idx,
+            let timing = step_stats_theme::StepStatsLiveTimingPlacement::unconstrained(
                 timing_label_anchor,
                 timing_value_anchor,
                 y_pos_remaining,
                 20.0,
+            );
+            push_live_timing_stats_at(
+                actors,
+                state,
+                player_idx,
+                timing,
                 text_zoom,
                 71,
             );
