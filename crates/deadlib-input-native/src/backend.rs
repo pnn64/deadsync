@@ -273,24 +273,17 @@ impl Drop for InputThreadPolicy {
 #[inline(always)]
 #[must_use]
 pub fn uuid_from_bytes(bytes: &[u8]) -> [u8; 16] {
-    // Deterministic, fast, and tiny: two FNV-1a 64-bit passes with different offsets.
+    // Two independent FNV-1a hashes share one traversal of the identity bytes.
     const OFF0: u64 = 0xcbf2_9ce4_8422_2325;
     const OFF1: u64 = 0xaf63_dc4c_8601_ec8c;
     const PRIME: u64 = 0x0000_0100_0000_01b3;
 
-    #[inline(always)]
-    fn fnv64(mut h: u64, bytes: &[u8]) -> u64 {
-        let mut i = 0;
-        while i < bytes.len() {
-            h ^= u64::from(bytes[i]);
-            h = h.wrapping_mul(PRIME);
-            i += 1;
-        }
-        h
+    let (mut a, mut b) = (OFF0, OFF1);
+    for &byte in bytes {
+        let byte = u64::from(byte);
+        a = (a ^ byte).wrapping_mul(PRIME);
+        b = (b ^ byte).wrapping_mul(PRIME);
     }
-
-    let a = fnv64(OFF0, bytes);
-    let b = fnv64(OFF1, bytes);
     let mut out = [0u8; 16];
     out[..8].copy_from_slice(&a.to_le_bytes());
     out[8..].copy_from_slice(&b.to_le_bytes());

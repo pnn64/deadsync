@@ -800,8 +800,21 @@ fn emit_button_diff<F>(
     F: FnMut(PadEvent),
 {
     let prev = &dev.buttons_prev[..dev.buttons_prev_len];
-    let mut a = 0usize;
-    let mut b = 0usize;
+    // Compare equal prefixes eight usages at a time. Fixed-size array equality
+    // permits a vector comparison without rereading the prefix in the merge.
+    let common = if prev.len() < 8 {
+        0
+    } else {
+        prev.as_chunks::<8>()
+            .0
+            .iter()
+            .zip(now.as_chunks::<8>().0)
+            .take_while(|(a, b)| a == b)
+            .count()
+            * 8
+    };
+    let mut a = common;
+    let mut b = common;
     while a < prev.len() && b < now.len() {
         let pa = prev[a];
         let nb = now[b];

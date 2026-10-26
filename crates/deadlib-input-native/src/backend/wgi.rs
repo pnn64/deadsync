@@ -303,8 +303,10 @@ fn gamepad_button_edges(
     current: GamepadButtons,
     mut emit: impl FnMut(u32, bool),
 ) {
+    // Only menu/view, face, shoulder and thumbstick bits have raw button codes.
+    // D-pad edges are emitted separately by emit_dir_edges.
     let changed = previous.0 ^ current.0;
-    if changed == 0 {
+    if changed & 0x3c3f == 0 {
         return;
     }
     for (mask, code) in BTN_MAP {
