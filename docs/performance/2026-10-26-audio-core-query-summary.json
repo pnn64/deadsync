@@ -1,0 +1,50 @@
+[
+  {
+    "workload": "query/search/last/segments=1",
+    "before_cycles": 12.975000000000001,
+    "after_cycles": 9.645,
+    "cpu_throughput": 1.345256609642302
+  },
+  {
+    "workload": "query/search/last/segments=127",
+    "before_cycles": 1078.67,
+    "after_cycles": 9.67,
+    "cpu_throughput": 111.54808686659773
+  },
+  {
+    "workload": "query/search/last/segments=1023",
+    "before_cycles": 8431.650000000001,
+    "after_cycles": 11.23,
+    "cpu_throughput": 750.8147818343723
+  },
+  {
+    "workload": "query/inverse/last/segments=127",
+    "before_cycles": 1531.4650000000001,
+    "after_cycles": 9.684999999999999,
+    "cpu_throughput": 158.12751677852353
+  },
+  {
+    "workload": "query/inverse/last/segments=1023",
+    "before_cycles": 12416.689999999999,
+    "after_cycles": 11.23,
+    "cpu_throughput": 1105.6714158504005
+  },
+  {
+    "workload": "query/diagnostics/expired/events=64",
+    "before_cycles": 647.435,
+    "after_cycles": 322.625,
+    "cpu_throughput": 2.006772568771794
+  },
+  {
+    "workload": "query/diagnostics/stale/events=64",
+    "before_cycles": 591.4100000000001,
+    "after_cycles": 179.595,
+    "cpu_throughput": 3.2930204070269222
+  },
+  {
+    "workload": "query/diagnostics/live/events=64",
+    "before_cycles": 1126.255,
+    "after_cycles": 1116.09,
+    "cpu_throughput": 1.0091076884480643
+  }
+]

@@ -56,8 +56,8 @@ def build(stage, target):
 
 
 def compare(stages, output, runs, bench_filter):
-    timing = re.compile(r"((?:callback|pan)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
-    churn = re.compile(r"((?:callback|pan)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
+    timing = re.compile(r"((?:callback|pan|query)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
+    churn = re.compile(r"((?:callback|pan|query)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
     rows = []
     logs = ARCHIVES / "runs" / output.stem
     logs.mkdir(parents=True, exist_ok=True)
@@ -65,7 +65,7 @@ def compare(stages, output, runs, bench_filter):
         for stage in stages[run % len(stages):] + stages[:run % len(stages)]:
             manifest = json.loads((ARCHIVES / stage / "manifest.json").read_text())
             target = manifest.get("target", "callback_kernels")
-            benchmark = bench_filter or ("benchmark_panned_mix" if target == "panned_kernel" else "benchmark_callback_kernels")
+            benchmark = bench_filter or ("benchmark_query" if target == "query_kernels" else "benchmark_panned_mix" if target == "panned_kernel" else "benchmark_callback_kernels")
             result = subprocess.run([str(ARCHIVES / stage / "callback.exe"), benchmark,
                                      "--ignored", "--nocapture", "--test-threads=1"],
                                     capture_output=True, text=True, check=True)
@@ -73,9 +73,9 @@ def compare(stages, output, runs, bench_filter):
             counts = {label: dict(re.findall(r"(\w+): (\d+)", values))
                       for label, values in churn.findall(result.stdout)}
             measurements = timing.findall(result.stdout)
-            expected = (36,) if target == "panned_kernel" else (16, 32, 40)
+            expected = (66,) if target == "query_kernels" else (36,) if target == "panned_kernel" else (16, 32, 40)
             if bench_filter:
-                expected = (8 if "mode_parser" in bench_filter else 36 if "panned_mix" in bench_filter else 16,)
+                expected = (42 if "query_positions" in bench_filter else 24 if "query_diagnostics" in bench_filter else 8 if "mode_parser" in bench_filter else 36 if "panned_mix" in bench_filter else 16,)
             if len(measurements) not in expected or len(counts) != len(measurements):
                 raise ValueError(f"Expected {expected} workloads: {stage}")
             for label, cycles, ns in measurements:
@@ -104,11 +104,12 @@ def compare(stages, output, runs, bench_filter):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build")
-    parser.add_argument("--target", choices=["callback_kernels", "panned_kernel"], default="callback_kernels")
+    parser.add_argument("--target", choices=["callback_kernels", "panned_kernel", "query_kernels"], default="callback_kernels")
     parser.add_argument("--compare", nargs="+")
     parser.add_argument("--benchmark", choices=["render::kernels::benchmark_callback_kernels",
                         "quantization::benchmark_callback_kernels_quantization",
-                        "mode_parser::benchmark_callback_kernels_mode_parser", "benchmark_panned_mix"])
+                        "mode_parser::benchmark_callback_kernels_mode_parser", "benchmark_panned_mix",
+                        "position::probes::benchmark_query_positions", "telemetry::probes::benchmark_query_diagnostics"])
     parser.add_argument("--runs", type=int, default=4)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
