@@ -10,21 +10,24 @@ pub struct ParsedNote {
 
 #[must_use]
 pub fn step_type_lanes(step_type: &str) -> usize {
-    let step_type = step_type.trim();
-    if step_type.eq_ignore_ascii_case("pump-double")
-        || step_type.eq_ignore_ascii_case("pump_double")
-    {
-        10
-    } else if step_type.eq_ignore_ascii_case("dance-double")
-        || step_type.eq_ignore_ascii_case("dance_double")
-    {
-        8
-    } else if step_type.eq_ignore_ascii_case("pump-single")
-        || step_type.eq_ignore_ascii_case("pump_single")
-    {
-        5
-    } else {
-        4
+    let bytes = step_type.trim().as_bytes();
+    match bytes.len() {
+        11 if matches!(bytes[4], b'-' | b'_') && bytes[..4].eq_ignore_ascii_case(b"pump") => {
+            if bytes[5..].eq_ignore_ascii_case(b"double") {
+                10
+            } else if bytes[5..].eq_ignore_ascii_case(b"single") {
+                5
+            } else {
+                4
+            }
+        }
+        12 if matches!(bytes[5], b'-' | b'_')
+            && bytes[..5].eq_ignore_ascii_case(b"dance")
+            && bytes[6..].eq_ignore_ascii_case(b"double") =>
+        {
+            8
+        }
+        _ => 4,
     }
 }
 

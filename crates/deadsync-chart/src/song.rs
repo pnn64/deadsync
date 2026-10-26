@@ -333,8 +333,7 @@ impl SongData {
     #[inline(always)]
     fn is_video_path(path: &Path) -> bool {
         path.extension()
-            .and_then(|ext| ext.to_str())
-            .is_some_and(is_video_extension)
+            .is_some_and(|ext| is_video_extension(ext.as_encoded_bytes()))
     }
 
     #[inline(always)]
@@ -835,31 +834,27 @@ impl SongData {
 }
 
 #[inline(always)]
-fn is_video_extension(extension: &str) -> bool {
-    let bytes = extension.as_bytes();
-    if !(3..=4).contains(&bytes.len()) {
-        return false;
+fn is_video_extension(bytes: &[u8]) -> bool {
+    match bytes {
+        [a, b, c] => matches!(
+            &[
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+                c.to_ascii_lowercase()
+            ],
+            b"mp4" | b"avi" | b"f4v" | b"flv" | b"m4v" | b"mov" | b"ogv" | b"mkv" | b"mpg" | b"wmv"
+        ),
+        [a, b, c, d] => matches!(
+            &[
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+                c.to_ascii_lowercase(),
+                d.to_ascii_lowercase()
+            ],
+            b"webm" | b"mpeg"
+        ),
+        _ => false,
     }
-
-    let mut lowercase = [0_u8; 4];
-    for (target, source) in lowercase.iter_mut().zip(bytes) {
-        *target = source.to_ascii_lowercase();
-    }
-    matches!(
-        &lowercase[..bytes.len()],
-        b"mp4"
-            | b"avi"
-            | b"f4v"
-            | b"flv"
-            | b"m4v"
-            | b"mov"
-            | b"ogv"
-            | b"webm"
-            | b"mkv"
-            | b"mpg"
-            | b"mpeg"
-            | b"wmv"
-    )
 }
 
 #[cfg(test)]
@@ -1305,3 +1300,7 @@ mod metadata_perf;
 #[cfg(test)]
 #[path = "song_sort_shortcuts.rs"]
 mod song_sort_shortcuts;
+
+#[cfg(test)]
+#[path = "metadata_dispatch.rs"]
+mod metadata_dispatch;

@@ -1,6 +1,5 @@
 //! Pack-authored golf pars, loaded by the library scan, never by a renderer.
 use rustc_hash::FxHashMap;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 
@@ -82,8 +81,8 @@ impl GolfPars {
     }
 }
 
-static PARS: LazyLock<RwLock<HashMap<PathBuf, GolfPars>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static PARS: LazyLock<RwLock<FxHashMap<PathBuf, GolfPars>>> =
+    LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 /// Replace metadata on every scan/reload, including when Golf.ini was removed.
 pub fn replace_pack(pack_dir: &Path, data: GolfPars) {
