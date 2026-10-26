@@ -919,33 +919,33 @@ fn set_waveformat_sample_rate(bytes: &mut [u8], rate_hz: u32) {
 }
 
 fn sample_format_from_waveformat(bytes: &[u8]) -> Option<WasapiSampleFormat> {
-    let wave = waveformat(bytes);
-    match (u32::from(wave.wFormatTag), wave.wBitsPerSample) {
-        (Audio::WAVE_FORMAT_PCM, 16) => Some(WasapiSampleFormat::I16),
-        (Multimedia::WAVE_FORMAT_IEEE_FLOAT, 32) => Some(WasapiSampleFormat::F32),
-        (tag, bits) if tag == KernelStreaming::WAVE_FORMAT_EXTENSIBLE => {
-            // SAFETY: this branch is only taken for `WAVE_FORMAT_EXTENSIBLE`, so
-            // the buffer contains a `WAVEFORMATEXTENSIBLE` header after the shared
-            // `WAVEFORMATEX` prefix.
-            let ext = unsafe { &*(bytes.as_ptr() as *const Audio::WAVEFORMATEXTENSIBLE) };
-            // SAFETY: `SubFormat` may be only naturally aligned inside the byte
-            // buffer, so we read it with `read_unaligned`.
-            let sub = unsafe { std::ptr::addr_of!(ext.SubFormat).read_unaligned() };
-            if guid_eq(&sub, &KernelStreaming::KSDATAFORMAT_SUBTYPE_PCM) && bits == 16 {
-                Some(WasapiSampleFormat::I16)
-            } else if guid_eq(&sub, &Multimedia::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) && bits == 32 {
-                Some(WasapiSampleFormat::F32)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn guid_eq(a: &windows::core::GUID, b: &windows::core::GUID) -> bool {
-    (a.data1, a.data2, a.data3, a.data4) == (b.data1, b.data2, b.data3, b.data4)
+    // WAVEFORMATEX is packed: its tag starts at byte 0 and sample bits at byte 14.
+    let wave = bytes.get(..size_of::<Audio::WAVEFORMATEX>())?;
+    let tag = u32::from(u16::from_le_bytes([wave[0], wave[1]]));
+    let bits = u16::from_le_bytes([wave[14], wave[15]]);
+    let (format, expected) = match (tag, bits) {
+        (Audio::WAVE_FORMAT_PCM, 16) => return Some(WasapiSampleFormat::I16),
+        (Multimedia::WAVE_FORMAT_IEEE_FLOAT, 32) => return Some(WasapiSampleFormat::F32),
+        (KernelStreaming::WAVE_FORMAT_EXTENSIBLE, 16) => (
+            WasapiSampleFormat::I16,
+            KernelStreaming::KSDATAFORMAT_SUBTYPE_PCM,
+        ),
+        (KernelStreaming::WAVE_FORMAT_EXTENSIBLE, 32) => (
+            WasapiSampleFormat::F32,
+            Multimedia::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT,
+        ),
+        _ => return None,
+    };
+    let sub = bytes
+        .get(std::mem::offset_of!(Audio::WAVEFORMATEXTENSIBLE, SubFormat)..)?
+        .first_chunk::<16>()?;
+    let sub = windows::core::GUID::from_values(
+        u32::from_le_bytes([sub[0], sub[1], sub[2], sub[3]]),
+        u16::from_le_bytes([sub[4], sub[5]]),
+        u16::from_le_bytes([sub[6], sub[7]]),
+        sub[8..].try_into().ok()?,
+    );
+    (sub == expected).then_some(format)
 }
 
 fn wide_null(s: &str) -> Vec<u16> {

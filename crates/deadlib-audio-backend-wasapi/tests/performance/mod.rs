@@ -285,6 +285,64 @@ fn format_cases() -> [(u16, u16, u16, &'static str); 6] {
 }
 
 #[test]
+fn format_recognition_accepts_only_pcm16_and_float32() {
+    for bits in 0..=u16::MAX {
+        for (tag, subtype, expected) in [
+            (1, 1, (bits == 16).then_some(16)),
+            (3, 3, (bits == 32).then_some(32)),
+            (0xfffe, 1, (bits == 16).then_some(16)),
+            (0xfffe, 3, (bits == 32).then_some(32)),
+            (0xffff, 1, None),
+        ] {
+            let bytes = format_bytes(tag, bits, subtype);
+            let actual = sample_format_from_waveformat(&bytes).map(|format| match format {
+                WasapiSampleFormat::I16 => 16,
+                WasapiSampleFormat::F32 => 32,
+            });
+            assert_eq!(
+                actual, expected,
+                "tag {tag}, bits {bits}, subtype {subtype}"
+            );
+        }
+    }
+}
+
+#[test]
+fn format_recognition_checks_the_complete_guid_and_handles_short_buffers() {
+    for (bits, subtype) in [(16, 1), (32, 3)] {
+        let valid = format_bytes(0xfffe, bits, subtype);
+        let mut padded = vec![0xff];
+        padded.extend_from_slice(&valid);
+        padded.extend_from_slice(&[0xaa; 17]);
+        assert!(sample_format_from_waveformat(&padded[1..]).is_some());
+        for index in 24..40 {
+            for value in 0..=u8::MAX {
+                let mut bytes = valid.clone();
+                bytes[index] = value;
+                assert_eq!(
+                    sample_format_from_waveformat(&bytes).is_some(),
+                    value == valid[index],
+                    "GUID byte {index}, value {value}"
+                );
+            }
+        }
+        for len in 0..=40 {
+            assert_eq!(
+                sample_format_from_waveformat(&valid[..len]).is_some(),
+                len == 40
+            );
+        }
+        let plain = format_bytes(subtype, bits, subtype);
+        for len in 0..=40 {
+            assert_eq!(
+                sample_format_from_waveformat(&plain[..len]).is_some(),
+                len >= size_of::<Audio::WAVEFORMATEX>()
+            );
+        }
+    }
+}
+
+#[test]
 #[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
 fn benchmark_formats() {
     for (tag, bits, subtype, label) in format_cases() {
