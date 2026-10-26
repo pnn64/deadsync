@@ -66,6 +66,7 @@ pub(super) struct Thread {
     pub(super) resumer: Option<ThreadId>,
     pub(super) depth: u16,
     pub(super) line: u32,
+    pub(super) host_states: Vec<host::ThreadData>,
 }
 impl Thread {
     pub fn main(globals: TableId) -> Self {
@@ -87,6 +88,7 @@ impl Thread {
             resumer: None,
             depth: 0,
             line: 0,
+            host_states: Vec::new(),
         }
     }
     fn new(entry: FunctionId, globals: TableId) -> Self {

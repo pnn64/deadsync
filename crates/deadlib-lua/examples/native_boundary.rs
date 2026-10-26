@@ -1,13 +1,16 @@
 //! Development proof of a C-only error jump around the Rust host-call API.
-//! Not the production Lua C API: states are borrowed for one invocation and
+//! Not the production Lua C API: states follow Lua threads and
 //! this small fixture supports only the operations in tests/native-boundary.
 //! Temporary values use the VM-owned mutable native stack.
 #[cfg(windows)]
 mod windows {
-    use deadlib_lua::{Error, HostCall, NativeStack, Value, Vm, compile_named};
+    use deadlib_lua::{Error, HostCall, HostThreadState, NativeStack, Value, Vm, compile_named};
     use std::{
         ffi::{CString, c_char, c_int, c_void},
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     #[repr(C)]
@@ -20,14 +23,16 @@ mod windows {
     type Dispatch =
         unsafe extern "C" fn(*mut c_void, c_int, c_int, c_int, *mut BoundaryValue) -> c_int;
     type CFunction = unsafe extern "C" fn(*mut c_void) -> c_int;
-    type Invoke = unsafe extern "C" fn(*mut c_void, Dispatch, CFunction) -> c_int;
+    type Invoke = unsafe extern "C" fn(*mut c_void, *mut c_void, Dispatch, CFunction) -> c_int;
+    type NewState = unsafe extern "C" fn() -> *mut c_void;
+    type FreeState = unsafe extern "C" fn(*mut c_void) -> c_int;
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn LoadLibraryA(name: *const c_char) -> *mut c_void;
         fn GetProcAddress(module: *mut c_void, name: *const c_char) -> *mut c_void;
         fn FreeLibrary(module: *mut c_void) -> c_int;
     }
-    struct Library(*mut c_void);
+    struct Library(usize);
     impl Library {
         fn open(path: &str) -> Self {
             let path = CString::new(path).unwrap();
@@ -38,12 +43,12 @@ mod windows {
                 "load fixture: {}",
                 std::io::Error::last_os_error()
             );
-            Self(module)
+            Self(module as usize)
         }
         fn symbol(&self, name: &str) -> usize {
             let name = CString::new(name).unwrap();
             // SAFETY: the module is live and the symbol name is terminated.
-            let pointer = unsafe { GetProcAddress(self.0, name.as_ptr()) };
+            let pointer = unsafe { GetProcAddress(self.0 as *mut c_void, name.as_ptr()) };
             assert!(!pointer.is_null(), "missing fixture symbol {name:?}");
             pointer as usize
         }
@@ -52,11 +57,39 @@ mod windows {
         fn drop(&mut self) {
             // SAFETY: this owner holds exactly one LoadLibrary reference.
             unsafe {
-                FreeLibrary(self.0);
+                FreeLibrary(self.0 as *mut c_void);
             }
         }
     }
 
+    struct Bridge {
+        module: Library,
+        _library: Library,
+        invoke: Invoke,
+        new_state: NewState,
+        free_state: FreeState,
+        state_bytes: usize,
+    }
+    struct StateOwner {
+        state: usize,
+        bridge: Arc<Bridge>,
+    }
+    impl HostThreadState for StateOwner {
+        fn heap_bytes(&self) -> usize {
+            self.bridge.state_bytes
+        }
+    }
+    impl Drop for StateOwner {
+        fn drop(&mut self) {
+            // SAFETY: thread ownership outlives every active invocation; the Arc
+            // keeps the allocating DLL loaded until its matching free returns.
+            let freed = unsafe { (self.bridge.free_state)(self.state as *mut c_void) };
+            assert_eq!(freed, 1, "C state was still executing during destruction");
+            DESTROYED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    static CREATED: AtomicUsize = AtomicUsize::new(0);
+    static DESTROYED: AtomicUsize = AtomicUsize::new(0);
     static OPERATIONS: AtomicUsize = AtomicUsize::new(0);
     static DROPS: AtomicUsize = AtomicUsize::new(0);
     struct Returned;
@@ -121,6 +154,15 @@ mod windows {
                     self.stack.set(a as isize, value)?;
                     self.stack.set_top(self.stack.top() - 1)?;
                 }
+                12 => self
+                    .stack
+                    .push(Value::LightUserdata(value.bytes as usize as u64))?,
+                13 => {
+                    value.bytes = match self.stack.value(a as isize) {
+                        Some(Value::LightUserdata(pointer)) => pointer as usize as *const c_char,
+                        _ => std::ptr::null(),
+                    }
+                }
                 _ => return Err(self.stack.error(b"unknown boundary-probe operation")),
             }
             Ok(())
@@ -148,12 +190,32 @@ mod windows {
         }
     }
     fn native(call: &mut HostCall<'_>) -> Result<(), Error> {
-        let [Value::LightUserdata(function), Value::LightUserdata(invoke)] = call.captures()[..2]
+        let [Value::LightUserdata(function), Value::LightUserdata(bridge)] = call.captures()[..2]
         else {
             unreachable!()
         };
-        // SAFETY: this pointer is the typed boundary_invoke symbol from boundary.c.
-        let invoke: Invoke = unsafe { std::mem::transmute(invoke as usize) };
+        let pointer = bridge as usize as *const Bridge;
+        // SAFETY: run owns the Arc until after this VM and its callbacks drop.
+        // Thread state takes a separate strong owner, never a borrowed pointer.
+        let bridge = unsafe {
+            Arc::increment_strong_count(pointer);
+            Arc::from_raw(pointer)
+        };
+        if call.thread_state::<StateOwner>().is_none() {
+            // SAFETY: typed fixture constructor creates an idle, heap-owned state.
+            let state = unsafe { (bridge.new_state)() };
+            if state.is_null() {
+                return Err(call.error(b"cannot allocate boundary state"));
+            }
+            CREATED.fetch_add(1, Ordering::Relaxed);
+            call.initialize_thread_state(StateOwner {
+                state: state as usize,
+                bridge: bridge.clone(),
+            })?;
+        }
+        let owner = call.thread_state::<StateOwner>().unwrap();
+        assert!(Arc::ptr_eq(&owner.bridge, &bridge));
+        let state = owner.state as *mut c_void;
         // SAFETY: every registered symbol has lua_CFunction's C signature.
         let function: CFunction = unsafe { std::mem::transmute(function as usize) };
         let mut context = Context {
@@ -163,7 +225,8 @@ mod windows {
         // SAFETY: trusted C functions borrow the Context only until return.
         // setjmp/longjmp and every skipped frame are within the C DLLs.
         let count = unsafe {
-            invoke(
+            (bridge.invoke)(
+                state,
                 (&mut context as *mut Context<'_, '_>).cast(),
                 dispatch,
                 function,
@@ -181,9 +244,25 @@ mod windows {
         let [bridge, module, source] = args.as_slice() else {
             panic!("native_boundary bridge.dll module.dll source.lua")
         };
-        let bridge = Library::open(bridge);
+        let library = Library::open(bridge);
         let module = Library::open(module);
-        let invoke = bridge.symbol("boundary_invoke");
+        // SAFETY: all four fixture symbols match the signatures in api.h.
+        let bridge = unsafe {
+            Arc::new(Bridge {
+                invoke: std::mem::transmute::<usize, Invoke>(library.symbol("boundary_invoke")),
+                new_state: std::mem::transmute::<usize, NewState>(
+                    library.symbol("boundary_state_new"),
+                ),
+                free_state: std::mem::transmute::<usize, FreeState>(
+                    library.symbol("boundary_state_free"),
+                ),
+                state_bytes: std::mem::transmute::<usize, unsafe extern "C" fn() -> usize>(
+                    library.symbol("boundary_state_size"),
+                )(),
+                module,
+                _library: library,
+            })
+        };
         let mut vm = Vm::new();
         vm.set_instruction_limit(Some(10_000_000));
         let source = std::fs::read(source).unwrap();
@@ -195,15 +274,36 @@ mod windows {
             "boundary_call",
             "boundary_stack",
             "boundary_mutate",
+            "boundary_state",
+            "boundary_state_reenter",
+            "boundary_cached_top",
         ] {
             let mut captures = [Value::Nil; 2];
-            captures[0] = Value::LightUserdata(module.symbol(name) as u64);
-            captures[1] = Value::LightUserdata(invoke as u64);
+            captures[0] = Value::LightUserdata(bridge.module.symbol(name) as u64);
+            captures[1] = Value::LightUserdata(Arc::as_ptr(&bridge) as usize as u64);
             let function = vm.new_host_function(native, &captures).unwrap();
             vm.set_global(name.as_bytes(), function).unwrap();
         }
+        let state_function = vm.global(b"boundary_state");
+        let before = vm.call(state_function, &[]).unwrap()[0];
+        // Moving Vm and growing its thread arena must not move native states.
+        let mut vm = Box::new(vm);
+        assert_eq!(vm.call(state_function, &[]).unwrap()[0], before);
         vm.execute(&compile_named(&source, b"@boundary.lua").unwrap())
             .unwrap();
+        vm.collect_garbage().unwrap();
+        assert!(
+            DESTROYED.load(Ordering::Relaxed) > 0,
+            "unreachable coroutine states must be freed before VM close"
+        );
+        let collected = DESTROYED.load(Ordering::Relaxed);
+        drop(vm);
+        let created = CREATED.load(Ordering::Relaxed);
+        let destroyed = DESTROYED.load(Ordering::Relaxed);
+        assert_eq!(
+            created, destroyed,
+            "one native-state destruction per allocation"
+        );
         let operations = OPERATIONS.load(Ordering::Relaxed);
         let drops = DROPS.load(Ordering::Relaxed);
         assert_eq!(
@@ -214,7 +314,8 @@ mod windows {
             "BOUNDARY operations={operations} drops={drops} panic_abort={}",
             cfg!(panic = "abort")
         );
-        // VM destruction precedes unloading either DLL, including finalizers.
+        eprintln!("STATES created={created} collected={collected} destroyed={destroyed}");
+        // VM destruction and all states precede unloading either DLL.
     }
 }
 fn main() {

@@ -1,7 +1,7 @@
 """Development-only MSVC C API/error-boundary proof against official Lua 5.1.
 
 This does not enable production package.loadlib or provide a complete C API.
-It tests a borrowed C state, a small API subset and C-only error jumps while
+It tests persistent per-thread C states, a small API subset and C-only error jumps while
 the Rust engine uses panic=abort. No C Lua implementation executes Rust cases.
 """
 from __future__ import annotations
@@ -61,7 +61,7 @@ def main():
     compile_native('reference_module','reference',['/DREFERENCE','/I'+str(source),fixture/'module.c',directory/'reference/lua51.lib'])
     compile_native('boundary','rust',['/I'+str(fixture),fixture/'boundary.c'])
     compile_native('rust_module','rust',['/I'+str(fixture),fixture/'module.c',directory/'rust/boundary.lib'])
-    names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate']
+    names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate','boundary_state','boundary_state_reenter','boundary_cached_top']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     for engine in ['reference','rust']:
@@ -78,13 +78,14 @@ def main():
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')
-    match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
+    match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\nSTATES created=(\d+) collected=(\d+) destroyed=(\d+)\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
+    states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
     artifacts=[reference,runner,*directory.rglob('*.dll')]
-    result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,limitations=__doc__+' The probe uses the VM-owned native stack and seven fixture callbacks. State pointers are invocation-borrowed. Persistent states, complete C APIs, unprotected-call fault-stack semantics, library caching/unload integration, production package.loadlib and require integration remain unfinished.')
+    result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,persistent_state_lifetimes_balanced=states,limitations=__doc__+' The probe uses VM-owned native stacks and thread-owned persistent C states. Cross-thread/inactive-state API access, complete C APIs, unprotected-call fault-stack semantics, production library caching/unload, package.loadlib and require integration remain unfinished.')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
-    print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,flush=True)
-    if not matched or not returned:raise SystemExit(1)
+    print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
+    if not matched or not returned or not states:raise SystemExit(1)
 
 if __name__=='__main__':main()

@@ -46,7 +46,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 490 differential/adversarial integration tests, seventy-two unit tests and
+crate, 495 differential/adversarial integration tests, seventy-three unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -64,14 +64,24 @@ A [native-call boundary proof](testing/2026-10-26-rust-lua-native-boundary.md)
 now compares an unchanged C module against official Lua and Rust under the
 release `panic=abort` policy. A small development C shim returns Rust dispatch
 errors before jumping within C, preserving Rust stack cleanup and Lua error
-identity. Production native-module loading still requires stable per-thread
-C states, full C API stack/pseudo-index semantics, full C API coverage, and library ownership
-and loader integration. The proof does not close that compatibility gate.
+identity. Production native-module loading still requires full C API
+stack/pseudo-index semantics, inactive/cross-thread state access, full C API
+coverage, and production library ownership and loader integration. The proof
+does not close that compatibility gate.
 The [VM-owned native stack](testing/2026-10-26-rust-lua-native-stack.md) now
 replaces capture-based temporary roots with the native frame's register window.
 It supports mutable slots, an 8,000-slot bound, popping argument roots and
 in-place return-hook result mutation. Native calls still use the Rust host API's
 protected child-call boundary; full unprotected C API fault stacks remain open.
+The [persistent thread-state proof](testing/2026-10-26-rust-lua-thread-states.md)
+adds typed host resources owned by each Lua thread. Their immutable Lua roots
+participate in tracing and incremental barriers; suspension preserves state and
+unreachable thread cycles release it. Main-thread state survives shutdown Lua
+finalizers. The C fixture retains stable state pointers across callbacks,
+reentry, coroutine suspension and a VM move. It creates and destroys 68 states,
+collecting 67 before VM shutdown, while DLL owners outlive state destruction.
+Only the currently executing thread's C stack is accessible in this fixture;
+production native loading and the complete C API remain open.
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
 150 live locals, automatic concatenation/array pressure, stale host handles and

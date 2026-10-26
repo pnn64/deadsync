@@ -32,6 +32,34 @@ end,'r')
 local a,b=boundary_sum('17.5',25)
 debug.sethook();assert(inspected and a==99 and b==3)
 
+local main_state=boundary_state()
+assert(boundary_state()==main_state)
+assert(boundary_cached_top(1,2)==2)
+assert(boundary_call(function()return boundary_cached_top(1,2,3)end)==3)
+assert(boundary_state_reenter(function()
+  collectgarbage();return boundary_state()
+end))
+local function make_thread()
+  return coroutine.create(function()
+    local state=boundary_state()
+    assert(boundary_state_reenter(function()collectgarbage();return boundary_state()end))
+    coroutine.yield(state)
+    assert(boundary_state()==state)
+    return state
+  end)
+end
+local first,second=make_thread(),make_thread()
+local ok,a=coroutine.resume(first);assert(ok)
+local ok,b=coroutine.resume(second);assert(ok)
+assert(a~=b and a~=main_state and b~=main_state)
+local ok,value=coroutine.resume(first);assert(ok and value==a)
+local ok,value=coroutine.resume(second);assert(ok and value==b)
+first=nil;second=nil;collectgarbage()
+for i=1,64 do
+  local thread=coroutine.create(function()return boundary_state()end)
+  assert(coroutine.resume(thread));thread=nil;collectgarbage()
+end
+
 local values={false,17,'error\000bytes',payload,function()end,
   coroutine.create(function()end),newproxy(true)}
 for i=1,500 do
@@ -61,6 +89,7 @@ local ok,value=xpcall(function()boundary_raise(payload)end,function(e)
   collectgarbage();return e
 end)
 assert(not ok and value==payload)
+assert(boundary_cached_top(1,2,3,4)==4)
 
 local co=coroutine.create(function()
   return boundary_call(function()coroutine.yield()end)

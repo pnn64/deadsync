@@ -39,7 +39,7 @@ pub use error::{Error, ErrorKind};
 #[doc(inline)]
 pub use value::{FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
-pub use vm::{HeapStats, HostCall, HostFunction, NativeStack, Root, Vm};
+pub use vm::{HeapStats, HostCall, HostFunction, HostThreadState, NativeStack, Root, Vm};
 
 /// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.
 ///

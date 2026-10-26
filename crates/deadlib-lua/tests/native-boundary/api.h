@@ -16,7 +16,10 @@ typedef struct BoundaryValue {
   size_t length;
 } BoundaryValue;
 typedef int (*BoundaryDispatch)(void *, int, int, int, BoundaryValue *);
-API int boundary_invoke(void *, BoundaryDispatch, lua_CFunction);
+API lua_State *boundary_state_new(void);
+API int boundary_state_free(lua_State *);
+API size_t boundary_state_size(void);
+API int boundary_invoke(lua_State *, void *, BoundaryDispatch, lua_CFunction);
 API int lua_gettop(lua_State *);
 API void lua_pushnumber(lua_State *, double);
 API void lua_pushboolean(lua_State *, int);
@@ -29,4 +32,6 @@ API void lua_call(lua_State *, int, int);
 API int lua_checkstack(lua_State *, int);
 API void lua_settop(lua_State *, int);
 API void lua_replace(lua_State *, int);
+API void lua_pushlightuserdata(lua_State *, void *);
+API void *lua_touserdata(lua_State *, int);
 #endif

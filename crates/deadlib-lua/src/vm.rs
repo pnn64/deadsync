@@ -29,7 +29,7 @@ mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{HeapStats, Root};
-pub use host::{HostCall, HostFunction, NativeStack};
+pub use host::{HostCall, HostFunction, HostThreadState, NativeStack};
 use native::format_number;
 
 #[derive(Debug, Default)]

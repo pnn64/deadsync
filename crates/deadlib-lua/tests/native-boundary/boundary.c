@@ -2,24 +2,53 @@
 #define BOUNDARY_BUILD
 #include "api.h"
 #include <setjmp.h>
+#include <stdlib.h>
 
-struct lua_State {
+typedef struct BoundaryFrame {
   void *context;
   BoundaryDispatch dispatch;
   jmp_buf failure;
+  struct BoundaryFrame *previous;
+  lua_State *previous_active;
+} BoundaryFrame;
+struct lua_State {
+  BoundaryFrame *frame;
 };
+static __declspec(thread) lua_State *active_state;
 
 static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) {
   /* dispatch has returned, releasing every Rust borrow/local, before jumping. */
-  if (L->dispatch(L->context, op, a, b, value)) longjmp(L->failure, 1);
+  BoundaryFrame *frame = L->frame;
+  if (!frame || active_state != L) abort(); /* Other/inactive-thread API access remains work. */
+  if (frame->dispatch(frame->context, op, a, b, value)) longjmp(frame->failure, 1);
 }
 
-API int boundary_invoke(void *context, BoundaryDispatch dispatch, lua_CFunction f) {
-  lua_State state;
-  state.context = context;
-  state.dispatch = dispatch;
-  if (setjmp(state.failure)) return -1;
-  return f(&state);
+API lua_State *boundary_state_new(void) {
+  return (lua_State *)calloc(1, sizeof(lua_State));
+}
+API size_t boundary_state_size(void) { return sizeof(lua_State); }
+API int boundary_state_free(lua_State *state) {
+  if (!state || state->frame) return 0;
+  free(state); return 1;
+}
+API int boundary_invoke(lua_State *state, void *context, BoundaryDispatch dispatch, lua_CFunction f) {
+  BoundaryFrame frame;
+  int count;
+  frame.context = context;
+  frame.dispatch = dispatch;
+  frame.previous = state->frame;
+  frame.previous_active = active_state;
+  state->frame = &frame;
+  active_state = state;
+  if (setjmp(frame.failure)) {
+    state->frame = frame.previous;
+    active_state = frame.previous_active;
+    return -1;
+  }
+  count = f(state);
+  state->frame = frame.previous;
+  active_state = frame.previous_active;
+  return count;
 }
 
 API int lua_gettop(lua_State *L) {
@@ -65,4 +94,12 @@ API void lua_settop(lua_State *L, int top) {
 }
 API void lua_replace(lua_State *L, int index) {
   BoundaryValue value = {0}; operation(L, 11, index, 0, &value);
+}
+API void lua_pushlightuserdata(lua_State *L, void *pointer) {
+  BoundaryValue value = {0}; value.bytes = (const char *)pointer;
+  operation(L, 12, 0, 0, &value);
+}
+API void *lua_touserdata(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 13, index, 0, &value);
+  return (void *)value.bytes;
 }

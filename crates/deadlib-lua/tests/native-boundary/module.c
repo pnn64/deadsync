@@ -66,3 +66,18 @@ EXPORT int boundary_mutate(lua_State *L) {
   lua_pushnumber(L, luaL_checknumber(L, -1) * 2);
   return 5;
 }
+EXPORT int boundary_state(lua_State *L) {
+  lua_pushlightuserdata(L, L); return 1;
+}
+EXPORT int boundary_state_reenter(lua_State *L) {
+  lua_State *saved = L;
+  lua_pushvalue(L, 1); lua_call(L, 0, 1);
+  lua_pushboolean(L, lua_touserdata(L, -1) == saved);
+  return 1;
+}
+EXPORT int boundary_cached_top(lua_State *L) {
+  static lua_State *cached;
+  if (!cached) cached = L;
+  lua_pushnumber(L, lua_gettop(cached));
+  return 1;
+}

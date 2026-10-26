@@ -208,8 +208,19 @@ and selection of the last values as results. Its 8,000-slot bound is independent
 of closure captures. Popped arguments stop acting as roots, and return hooks can
 inspect and mutate selected result slots before copying them to the caller.
 The [native-stack validation](../../docs/testing/2026-10-26-rust-lua-native-stack.md)
-replaces the development bridge's capture-based temporary stack. Persistent C
-states and unprotected C API call semantics still require implementation.
+replaces the development bridge's capture-based temporary stack.
+
+`HostThreadState` attaches typed host resources to a Lua thread, including the
+main thread. `HostCall` exposes its thread identity and initializes each type
+once. State roots are validated, traced and protected by the incremental GC
+barrier; they must remain unchanged after initialization. Resources survive
+coroutine suspension and drop with a collected thread, or after shutdown Lua
+finalizers. Their reported allocation bytes contribute to heap accounting.
+The [persistent-state proof](../../docs/testing/2026-10-26-rust-lua-thread-states.md)
+keeps a C state pointer stable across calls, reentry, suspension and VM moves,
+and frees every state while keeping its DLLs loaded. It covers operations on
+the currently executing thread; inactive/cross-thread C API access, unprotected
+call fault stacks and production native-module loading remain unfinished.
 
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function

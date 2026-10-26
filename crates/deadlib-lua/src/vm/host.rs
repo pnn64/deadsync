@@ -1,7 +1,10 @@
 //! Direct Rust function pointers over the native register call boundary.
 use super::*;
 mod stack;
+mod thread;
 pub use stack::NativeStack;
+pub use thread::HostThreadState;
+pub(super) use thread::ThreadData;
 
 /// A synchronous Rust callback. Append results through [`HostCall::push`].
 ///

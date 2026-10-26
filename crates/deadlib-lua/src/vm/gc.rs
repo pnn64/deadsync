@@ -475,6 +475,11 @@ impl Vm {
                 + t.sorts.capacity() * std::mem::size_of::<tables::Sort>();
             control += loads::storage_bytes(&t.loads);
             control += t.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
+            control += t.host_states.capacity() * std::mem::size_of::<host::ThreadData>()
+                + t.host_states
+                    .iter()
+                    .map(host::ThreadData::heap_bytes)
+                    .sum::<usize>();
         }
         control += self.buffers.capacity() * std::mem::size_of::<Vec<u8>>()
             + self.buffers.iter().map(Vec::capacity).sum::<usize>()
@@ -734,6 +739,9 @@ impl Vm {
     }
     fn trace_thread(&mut self, id: ThreadId, work: &mut Vec<Trace>) {
         let t = &self.threads[slot_index(id.0)];
+        for state in &t.host_states {
+            work.extend(state.roots().iter().copied().filter_map(edge));
+        }
         if let Some(entry) = t.entry {
             work.push(Trace::Value(Value::Function(entry)));
         }
@@ -1297,6 +1305,33 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn newly_initialized_host_thread_roots_barrier_an_already_marked_thread() {
+        struct State(Value);
+        impl HostThreadState for State {
+            fn roots(&self) -> &[Value] {
+                std::slice::from_ref(&self.0)
+            }
+        }
+        let mut vm = Vm::new();
+        let table = vm.new_table();
+        vm.begin_gc_cycle();
+        while !vm.threads.marked(vm.thread.0) {
+            let mut work = std::mem::take(&mut vm.gc.work);
+            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            vm.gc.work = work;
+        }
+        assert!(!vm.tables.marked(table.0));
+        vm.initialize_thread_state(State(Value::Table(table)))
+            .unwrap();
+        assert!(
+            vm.tables.marked(table.0),
+            "new host-state edges need an immediate barrier"
+        );
+        finish_marked_cycle(&mut vm);
+        assert!(vm.validate_value(Value::Table(table)).is_ok());
+    }
 
     fn finish_marked_cycle(vm: &mut Vm) {
         vm.finish_gc_marking();
