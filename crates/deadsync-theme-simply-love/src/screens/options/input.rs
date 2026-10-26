@@ -1160,19 +1160,27 @@ pub(super) fn apply_submenu_choice_delta(
                 crate::SimplyLoveOnlineConfigRequest::EnableArrowCloud(enabled)
             }
             SubRowId::EnableGolf => {
-                if !enabled {
-                    let select_music = &mut state.sub[SubmenuKind::SelectMusic];
-                    for indices in [
-                        &mut select_music.choice_indices,
-                        &mut select_music.cursor_indices,
-                    ] {
+                let select_music = &mut state.sub[SubmenuKind::SelectMusic];
+                for indices in [
+                    &mut select_music.choice_indices,
+                    &mut select_music.cursor_indices,
+                ] {
+                    if enabled {
+                        // Mirror the shell: enabling golf defaults the wheel par
+                        // badges on, so the switch has a visible effect right away.
                         if let Some(index) = get_choice_by_id_mut(
                             indices,
                             SELECT_MUSIC_OPTIONS_ROWS,
-                            SubRowId::GsBoxLeaderboards,
+                            SubRowId::ShowGolfPars,
                         ) {
-                            *index = (*index).min(3);
+                            *index = 1;
                         }
+                    } else if let Some(index) = get_choice_by_id_mut(
+                        indices,
+                        SELECT_MUSIC_OPTIONS_ROWS,
+                        SubRowId::GsBoxLeaderboards,
+                    ) {
+                        *index = (*index).min(3);
                     }
                 }
                 crate::SimplyLoveOnlineConfigRequest::EnableGolf(enabled)
