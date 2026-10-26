@@ -77,6 +77,7 @@ impl Vm {
                         | DO_FILE
                         | CONT_FILE
                         | debug::TRACEBACK
+                        | debug::CONSOLE
                         | COLLECT_GARBAGE
                         | XPCALL
                         | TOSTRING
@@ -215,7 +216,7 @@ impl Vm {
             let Some(index) = self.frames.iter().rposition(|f| {
                 (matches!(
                     f.function,
-                    FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE)
+                    FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE | debug::CONSOLE)
                 ) && matches!(f.pc, 1 | 3 | 7))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             }) else {
@@ -239,7 +240,7 @@ impl Vm {
                 self.frames[..index].iter().rposition(|f| {
                     (matches!(
                         f.function,
-                        FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE)
+                        FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE | debug::CONSOLE)
                     ) && matches!(f.pc, 1 | 3 | 7))
                         || (loads::protected(f.function) && f.pc == 3)
                 })
@@ -314,6 +315,7 @@ impl Vm {
         let scheduled = self.scheduled_native(id);
         match id {
             CONT_STANDALONE => self.standalone_driver(frame),
+            debug::CONSOLE => self.debug_console_step(frame),
             _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),
             CONT_HOOK | CONT_TRACE | CONT_RETURN => self.hook_step(id, frame),
             debug::TRACEBACK => self.traceback_step(frame).map_err(|error| {
@@ -879,15 +881,7 @@ impl Vm {
                     _ => return Err(self.argument_type_error(base, count, 1, "string")),
                 };
                 let depth = self.native_depth(self.frames.len()) + 1;
-                let compiled = if source.first() == Some(&27) {
-                    crate::chunk51::compile(&source, &name, depth)
-                } else {
-                    crate::parser::Parser::with_native_depth(depth)
-                        .resume(&source, true)
-                        .and_then(|ast| {
-                            crate::compiler::compile(ast.expect("closed source"), &name)
-                        })
-                };
+                let compiled = loads::compile(&source, &name, depth);
                 match compiled {
                     Ok(program) => Value::Function(self.load(&program)),
                     Err(error) => {

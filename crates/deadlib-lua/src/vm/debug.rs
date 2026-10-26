@@ -8,6 +8,7 @@ pub(super) const GET_LOCAL: u64 = 115;
 pub(super) const SET_LOCAL: u64 = 116;
 pub(super) const TRACEBACK: u64 = 117;
 pub(super) const GET_REGISTRY: u64 = 120;
+pub(super) const CONSOLE: u64 = 122;
 
 #[derive(Clone, Copy)]
 pub(super) enum StackEntry {
@@ -400,7 +401,7 @@ impl Vm {
             }
             FrameKind::Native(id) => {
                 let current = thread == self.thread && index + 1 == frames.len();
-                if id == strings::STR_DUMP && n == frame.argc() {
+                if matches!(id, strings::STR_DUMP | CONSOLE) && n == frame.argc() {
                     let hook = frames[index + 1..].iter().find(|f| {
                         matches!(f.function, FrameKind::Native(CONT_HOOK))
                             && f.vararg_start == index

@@ -14,6 +14,22 @@ pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
     output::write(bytes)
 }
 pub(super) use output::flush as stdout_flush;
+pub(super) fn stderr_write(bytes: &[u8]) {
+    use std::io::Write;
+    let mut stderr = std::io::stderr().lock();
+    if cfg!(windows) {
+        for part in bytes.split_inclusive(|&b| b == b'\n') {
+            if let Some(line) = part.strip_suffix(b"\n") {
+                let _ = stderr.write_all(line);
+                let _ = stderr.write_all(b"\r\n");
+            } else {
+                let _ = stderr.write_all(part);
+            }
+        }
+    } else {
+        let _ = stderr.write_all(bytes);
+    }
+}
 pub(super) use stream::LINE_BUFFER;
 use stream::Resource;
 pub(super) use stream::Stream;

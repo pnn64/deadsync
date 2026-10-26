@@ -315,6 +315,14 @@ frames, and uncaught runtime errors force collection after the handler returns.
 `run_interactive` runs the Lua 5.1 console inside a standalone context, reporting
 recoverable diagnostics through a caller-provided function.
 
+`debug.debug` runs commands against the current thread while preserving the
+suspended caller stack for inspection and mutation. It uses original stdin,
+writes prompts and diagnostics to stderr, and resumes after syntax/runtime
+errors. Commands use 249-byte input fragments and return with exact `cont\n`
+input or EOF. Each completed command clears its native arguments and results.
+Non-string/non-number errors use `(null)`; the C reference's null-pointer output
+for those values is outside the byte-exact contract.
+
 `Value::LightUserdata` carries an unmanaged opaque identity. It owns no storage,
 is never dereferenced, survives weak tables and has a metatable shared by light
 userdata within its VM. Its numeric identity may be shared across VMs; arena
@@ -357,5 +365,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-native-args.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-debug-console.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

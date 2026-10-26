@@ -12,6 +12,79 @@ fn console_write(output: &mut Option<Vec<u8>>, bytes: &[u8]) {
 }
 
 impl Vm {
+    pub(super) fn debug_console_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+        let base = frame.base;
+        if frame.pc() == 2 {
+            match self.registers[base + 1] {
+                Value::String(id) => io::stderr_write(io::c_bytes(self.string_bytes(id).unwrap())),
+                Value::Number(n) => io::stderr_write(&format_number(n)),
+                // The C reference passes NULL to fputs for other error values.
+                _ => io::stderr_write(b"(null)"),
+            }
+            io::stderr_write(b"\n");
+        }
+        if frame.pc() != 0 {
+            self.debug_console_clear(frame);
+        }
+        io::stderr_write(b"lua_debug> ");
+        let mut buffer = [0; 249];
+        let len = self.console_read(&mut buffer);
+        if len == 0 || io::c_bytes(&buffer[..len]) == b"cont\n" {
+            return Ok(self.return_frame(frame, base, 0));
+        }
+        let source = io::c_bytes(&buffer[..len]);
+        let name = b"=(debug command)";
+        match loads::compile(source, name, self.native_depth(self.frames.len()) + 1) {
+            Ok(program) => {
+                let function = self.load(&program);
+                self.resize_registers(self.registers.len().max(base + 1));
+                self.registers[base] = Value::Function(function);
+                self.frames.last_mut().unwrap().pc = 1;
+                if let Some(actual) = self.start_call(base, 0, 0, false)? {
+                    self.finish_call(base, actual, 0);
+                }
+            }
+            Err(error) => {
+                io::stderr_write(io::c_bytes(&loads::message(
+                    name,
+                    &error,
+                    source.first() == Some(&27),
+                )));
+                io::stderr_write(b"\n");
+                self.debug_console_clear(frame);
+            }
+        }
+        Ok(None)
+    }
+
+    fn debug_console_clear(&mut self, frame: Frame) {
+        self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].fill(Value::Nil);
+        self.registers.truncate(frame.base);
+        let current = self.frames.last_mut().unwrap();
+        current.vararg_count = 0;
+        current.pc = 0;
+        self.top = frame.base;
+    }
+
+    fn console_read(&mut self, buffer: &mut [u8]) -> usize {
+        let Some(key) = self.io.stdin else {
+            return 0;
+        };
+        let stream = &mut self.io.files[slot_index(key.get())];
+        let mut len = 0;
+        while len < buffer.len() {
+            let Some(byte) = stream.get().ok().flatten() else {
+                break;
+            };
+            buffer[len] = byte;
+            len += 1;
+            if byte == b'\n' {
+                break;
+            }
+        }
+        len
+    }
+
     /// Run the Lua 5.1 interactive console using stdin and stdout.
     ///
     /// Requires an active [`Self::begin_standalone`] context. Completed chunks
@@ -131,24 +204,10 @@ impl Vm {
             Value::Number(number) => console_write(&mut self.output, &format_number(number)),
             _ => console_write(&mut self.output, if first { b"> " } else { b">> " }),
         }
-        let Some(key) = self.io.stdin else {
-            return Ok(false);
-        };
-        let stream = &mut self.io.files[slot_index(key.get())];
         // The default official console uses fgets(buffer, 512, stdin).
         // Consume its entire fragment even when strlen stops at an embedded NUL.
         let mut buffer = [0; 511];
-        let mut len = 0;
-        while len < buffer.len() {
-            let Some(byte) = stream.get().ok().flatten() else {
-                break;
-            };
-            buffer[len] = byte;
-            len += 1;
-            if byte == b'\n' {
-                break;
-            }
-        }
+        let mut len = self.console_read(&mut buffer);
         if len == 0 {
             return Ok(false);
         }

@@ -62,6 +62,10 @@ def main() -> None:
         ('console_100', ['-i'], b'=6*7\n' * 100, 100, 5),
         ('console_1000', ['-i'], b'=6*7\n' * 1000, 1000, 3),
         ('console_errors_100', ['-i'], b"error('bad',0)\n" * 100, 100, 5),
+        ('debug_console_1', ['-e', 'debug.debug();assert(n==42)'], b'n=42\ncont\n', 1, 10),
+        ('debug_console_100', ['-e', 'n=0;debug.debug();assert(n==4200)'], b'n=n+42\n' * 100 + b'cont\n', 100, 5),
+        ('debug_console_1000', ['-e', 'n=0;debug.debug();assert(n==42000)'], b'n=n+42\n' * 1000 + b'cont\n', 1000, 3),
+        ('debug_console_errors_100', ['-e', 'debug.debug()'], b"error('bad',0)\n" * 100 + b'cont\n', 100, 5),
     ]
     samples, observations = [], {}
     for name, arguments, stdin, chunks, repeats in fixtures:

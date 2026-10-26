@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 397 differential/adversarial integration tests, forty-three unit tests and
+crate, 405 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-native-args.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-debug-console.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -618,6 +618,18 @@ that leading banner is removed. Official files remain 17/18 in both engines.
 Two [measurement runs](performance/2026-10-26-rust-lua-native-args.md) cover 78 runtime
 and 22 frontend workloads. Full native/debug, resource, standalone and integration
 gates remain open.
+
+The [debug command console](testing/2026-10-26-rust-lua-debug-console.md) adds
+`debug.debug` through the existing native continuation driver. Commands inspect
+and change the suspended caller, share original stdin, use stderr prompts and
+diagnostics, and recover under a handler-free protected boundary. Fixed input
+fragments, exact exit input, argument/root cleanup, nested sessions,
+thread environments, hooks and coroutine restrictions have independent CLI
+probes. All 449 tests and 140 process probes pass. The CLI audit has 142/180 raw
+matches and 180/180 after only the known version banner is removed. Official
+files stay 17/18 in both engines. Two [pairs of measurements](performance/2026-10-26-rust-lua-debug-console.md)
+cover ten complete-process workloads and 78 runtime/22 frontend cases; VM
+metadata remains 4,432 B. Complete standalone compatibility remains open.
 
 ## Reference contract
 

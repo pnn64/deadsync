@@ -411,6 +411,7 @@ impl Vm {
             (hooks::GET_HOOK, b"gethook"),
             (hooks::SET_HOOK, b"sethook"),
             (debug::GET_REGISTRY, b"getregistry"),
+            (debug::CONSOLE, b"debug"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]

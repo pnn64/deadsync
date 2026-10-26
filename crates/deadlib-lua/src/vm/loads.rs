@@ -1,6 +1,16 @@
 //! Resumable source/binary validation through protected loading frames.
 use super::*;
 
+pub(super) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<Program, Error> {
+    if source.first() == Some(&27) {
+        crate::chunk51::compile(source, name, depth)
+    } else {
+        crate::parser::Parser::with_native_depth(depth)
+            .resume(source, true)
+            .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), name))
+    }
+}
+
 pub(super) fn protected(function: FrameKind) -> bool {
     matches!(
         function,

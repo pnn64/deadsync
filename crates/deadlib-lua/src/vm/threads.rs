@@ -386,6 +386,7 @@ impl Vm {
                     f.function,
                     FrameKind::Native(
                         PCALL
+                            | debug::CONSOLE
                             | XPCALL
                             | TOSTRING
                             | PRINT
