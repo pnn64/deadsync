@@ -15,12 +15,12 @@ performance. Milestones are committed only after their relevant checks pass.
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
-| Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
+| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field tests, PNGSuite | Typed wire roundtrips, UTF-8 BOM/replacement, BCP47 grammar, method distinctions, tRNS/bKGD masks and hIST usage checked; language registry and embedded ICC/Exif semantics still require audit |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 libpng cases including streaming encodings, format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Five sanitized targets pass 90,000 total executions; longer campaigns and coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Five sanitized targets pass 110,000 total executions; longer campaigns and coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -180,18 +180,47 @@ sample range, one-byte chunk/IO boundaries, borrowed row events and an independe
 Rust png fixture. The malformed-input suite still rejects illegal palette
 structure and uses explicit strict policy for index errors.
 
-Continue auditing UTF-8 handling against the Encoding Standard recommendation
-(13.7), and separate encoder field requirements from decoder-tolerated values.
-These gaps take priority over additional optimization. The official Third Edition
-errata currently corrects an mDCV example without changing conformance.
+Text/field conformance milestone: typed iTXt follows [WHATWG UTF-8 decode](https://encoding.spec.whatwg.org/#utf-8-decode),
+as recommended by [PNG 13.7](https://www.w3.org/TR/png-3/#13Text-chunk-processing).
+It consumes exactly one leading BOM, retains interior/additional BOMs and uses
+replacement characters for malformed maximal subparts. Thirteen known-answer
+inputs cover truncated sequences, overlong encodings, surrogates and the Unicode
+maximum, in compressed and uncompressed text and translated keywords. Raw chunks
+remain unchanged. Both encoders reject malformed UTF-8 and nonzero uncompressed
+methods; decoders ignore that method as required (all 256 values tested).
+Explicit typed reserialization can replace malformed text before reencoding.
+
+[RFC 5646](https://www.rfc-editor.org/rfc/rfc5646.html) language-tag grammar,
+case-insensitive variant/singleton uniqueness, grandfathered tags and private-use
+sequences are checked. Tests cover all 26 grandfathered tags, PNG and RFC examples,
+malformed subtags/order/duplicates and long private tags. This checks syntax;
+IANA registration, extlang prefixes and extension-specific semantics are not yet
+validated and remain a completion gate. The implementation does not perform
+network requests while processing images.
+
+Decoders mask unused tRNS/bKGD bits before use while retaining original wire
+values. Both encoders zero those unused bits; tests cover every legal nonindexed
+format and verify that 16-bit transparency compares both bytes before scaling.
+Encoders reject zero hIST frequencies for used indexed colors, including frame
+samples, while allowing zero frequencies for unused entries. Typed metadata
+access validates the public Image format before bit-depth-dependent operations.
+The official Third Edition errata corrects an mDCV example without changing
+conformance.
+
+The conformance follow-up passes a further 20,000 Linux AddressSanitizer runs of
+the CRC-repaired PNG row target with both palette policies. Its fresh 176-file
+initial corpus consists only of the checked-in PNGSuite and independent APNG;
+peak RSS was 396 MiB. The report records the full command, seed and diagnostics.
+Full release tests, strict Clippy, the 1,061-file C libpng oracle and isolated
+offline builds pass with these field changes.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
-1. Audit UTF-8 and encoder/decoder field distinctions, and validate normative
-   error behavior beyond the now-covered indexed-color recovery rule.
+1. Continue the clause-by-clause field and error-behavior audit beyond the now-
+   covered indexed-color recovery, text decoding and encoder field distinctions.
 2. Extend independent conformance evidence to the full Third Edition clause
-   matrix, including ancillary semantic edge cases, BCP47 language-tag grammar,
+   matrix, including ancillary semantic edge cases, BCP47 subtag registration,
    all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
 3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and

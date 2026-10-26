@@ -34,3 +34,11 @@ and replay logs are retained beside the passing campaign log. No codec defect
 was masked by this change; native samples, metadata values and independent
 reference checks remain asserted. Exact elapsed time and coverage are host-
 dependent, and no fuzz saturation claim is made.
+
+Conformance follow-up: palette recovery `365ab3a04` plus the text/field milestone
+containing this report. `png_stream` now selects both palette policies. A fresh
+176-file corpus (175 PNGSuite files plus `basic_f20.png`, 178,558 bytes) passed
+20,000 executions in 103 seconds, peak RSS 396 MiB, with the same seed, toolchain
+and limits. `png-conformance-linux.log` records the full run and corpus path.
+Buffered/streaming acceptance and every emitted native sample remained equal.
+This brings recorded campaigns to 110,000 executions across five targets.

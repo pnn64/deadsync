@@ -1,4 +1,5 @@
 use crate::codec::{Header, be16, be32};
+mod language;
 
 pub(crate) fn is_known(kind: &[u8; 4]) -> bool {
     matches!(
@@ -117,11 +118,37 @@ fn inflate(bytes: &[u8], remaining: &mut usize) -> Result<Vec<u8>, Error> {
     Ok(out)
 }
 
+// WHATWG UTF-8 decode consumes exactly one leading BOM and replaces malformed
+// sequences. Raw ancillary bytes remain available unchanged in Png::ancillary.
+fn utf8_decode(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes)).into_owned()
+}
+
+pub(crate) fn encoding_data<'a>(
+    c: &'a AncillaryChunk,
+    image: &crate::Image,
+) -> std::borrow::Cow<'a, [u8]> {
+    if &c.kind == b"bKGD" && image.color_type != ColorType::Indexed && image.bit_depth < 16 {
+        let mask = ((1u32 << image.bit_depth) - 1) as u16;
+        std::borrow::Cow::Owned(
+            c.data
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .flat_map(|&v| (u16::from_be_bytes(v) & mask).to_be_bytes())
+                .collect(),
+        )
+    } else {
+        std::borrow::Cow::Borrowed(&c.data)
+    }
+}
+
 fn parse(
     c: &AncillaryChunk,
     h: Header,
     palette: usize,
     remaining: &mut usize,
+    encoding: bool,
 ) -> Result<Metadata, Error> {
     let mut d = c.data.as_slice();
     let invalid = || Error::Invalid("metadata length or value");
@@ -291,14 +318,11 @@ fn parse(
             let key = nul(&mut d)?;
             keyword(key)?;
             let flags = take(&mut d, 2)?;
-            if flags[0] > 1 || (flags[0] == 1 && flags[1] != 0) {
+            if flags[0] > 1 || ((flags[0] == 1 || encoding) && flags[1] != 0) {
                 return Err(Error::Invalid("iTXt compression"));
             }
             let language = nul(&mut d)?;
-            if !language
-                .iter()
-                .all(|b| b.is_ascii_alphanumeric() || *b == b'-')
-            {
+            if !language::well_formed(language) {
                 return Err(Error::Invalid("iTXt language tag"));
             }
             let translated = nul(&mut d)?;
@@ -308,11 +332,16 @@ fn parse(
                 d.to_vec()
             };
             text_valid(&text)?;
+            if encoding
+                && (std::str::from_utf8(translated).is_err() || std::str::from_utf8(&text).is_err())
+            {
+                return Err(Error::Invalid("iTXt UTF-8"));
+            }
             Metadata::InternationalText {
                 keyword: key.to_vec(),
                 language: String::from_utf8_lossy(language).into_owned(),
-                translated_keyword: String::from_utf8_lossy(translated).into_owned(),
-                text: String::from_utf8_lossy(&text).into_owned(),
+                translated_keyword: utf8_decode(translated),
+                text: utf8_decode(&text),
                 compressed: flags[0] == 1,
             }
         }
@@ -332,7 +361,27 @@ pub(crate) fn validate(
     palette: usize,
     limits: Limits,
 ) -> Result<Vec<Metadata>, Error> {
+    validate_impl(chunks, h, palette, limits, false)
+}
+
+pub(crate) fn validate_encoding(
+    chunks: &[AncillaryChunk],
+    h: Header,
+    palette: usize,
+    limits: Limits,
+) -> Result<Vec<Metadata>, Error> {
+    validate_impl(chunks, h, palette, limits, true)
+}
+
+fn validate_impl(
+    chunks: &[AncillaryChunk],
+    h: Header,
+    palette: usize,
+    limits: Limits,
+    encoding: bool,
+) -> Result<Vec<Metadata>, Error> {
     let mut validator = Validator::new(limits.max_metadata_bytes);
+    validator.encoding = encoding;
     let mut out = Vec::new();
     for c in chunks {
         out.push(validator.check(c, h, palette)?);
@@ -345,6 +394,7 @@ pub(crate) struct Validator {
     unique: HashSet<[u8; 4]>,
     names: HashSet<Vec<u8>>,
     remaining: usize,
+    encoding: bool,
 }
 impl Validator {
     pub(crate) fn new(limit: usize) -> Self {
@@ -352,6 +402,7 @@ impl Validator {
             unique: HashSet::new(),
             names: HashSet::new(),
             remaining: limit,
+            encoding: false,
         }
     }
     pub(crate) fn remaining(&self) -> usize {
@@ -392,7 +443,7 @@ impl Validator {
         {
             return Err(Error::Invalid("duplicate ancillary chunk"));
         }
-        let value = parse(c, h, palette, &mut self.remaining)?;
+        let value = parse(c, h, palette, &mut self.remaining, self.encoding)?;
         if let Metadata::SuggestedPalette { name, .. } = &value
             && !self.names.insert(name.clone())
         {
@@ -410,6 +461,9 @@ impl Validator {
 
 impl Png {
     pub fn metadata(&self, limits: Limits) -> Result<Vec<Metadata>, Error> {
+        self.image
+            .validate()
+            .map_err(|_| Error::Invalid("image samples"))?;
         validate(
             &self.ancillary,
             Header {
@@ -574,6 +628,9 @@ impl Metadata {
             } => {
                 keyword(key)?;
                 text_valid(language.as_bytes())?;
+                if !language::well_formed(language.as_bytes()) {
+                    return Err(Error::Invalid("iTXt language tag"));
+                }
                 text_valid(translated_keyword.as_bytes())?;
                 text_valid(text.as_bytes())?;
                 data.extend_from_slice(key);

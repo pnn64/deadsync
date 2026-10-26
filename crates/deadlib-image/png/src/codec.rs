@@ -386,7 +386,7 @@ pub(crate) fn write_chunk(output: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) -> 
 fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Result<(), Error> {
     for c in png.ancillary.iter().filter(|c| c.position == position) {
         if ancillary_writable(c)? {
-            write_chunk(out, &c.kind, &c.data)?;
+            write_chunk(out, &c.kind, &crate::metadata::encoding_data(c, &png.image))?;
         }
     }
     Ok(())
@@ -432,7 +432,7 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
         depth: png.image.bit_depth,
         interlaced: options.interlaced,
     };
-    crate::metadata::validate(
+    let metadata = crate::metadata::validate_encoding(
         &png.ancillary,
         header,
         png.palette.len(),
@@ -441,6 +441,27 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
             ..Default::default()
         },
     )?;
+    if header.color == ColorType::Indexed {
+        for value in &metadata {
+            if let crate::Metadata::Histogram(frequencies) = value {
+                for image in core::iter::once(&png.image).chain(
+                    png.animation
+                        .iter()
+                        .flat_map(|a| a.frames.iter().filter_map(|f| f.image.as_ref())),
+                ) {
+                    if let Samples::U8(samples) = &image.samples
+                        && samples
+                            .iter()
+                            .any(|&v| frequencies.get(v as usize) == Some(&0))
+                    {
+                        return Err(Error::Invalid(
+                            "zero histogram frequency for used palette index",
+                        ));
+                    }
+                }
+            }
+        }
+    }
     crate::apng::validate(png, header, PalettePolicy::Strict)?;
     match &png.transparency {
         None => (),
@@ -457,9 +478,10 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
 }
 
 pub(crate) fn transparency_bytes(png: &Png) -> Option<Vec<u8>> {
+    let mask = ((1u32 << png.image.bit_depth) - 1) as u16;
     Some(match png.transparency.as_ref()? {
-        Transparency::Grayscale(v) => v.to_be_bytes().to_vec(),
-        Transparency::Rgb(v) => v.iter().flat_map(|v| v.to_be_bytes()).collect(),
+        Transparency::Grayscale(v) => (v & mask).to_be_bytes().to_vec(),
+        Transparency::Rgb(v) => v.iter().flat_map(|v| (v & mask).to_be_bytes()).collect(),
         Transparency::Palette(v) => v.clone(),
     })
 }

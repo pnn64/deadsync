@@ -35,6 +35,12 @@ is implemented. Bytes after IEND are rejected by this whole-datastream API.
 Typed metadata is available through `Png::metadata`; `Metadata::to_chunk` encodes
 values. ICC and Exif payloads remain opaque to this codec. No color management is
 applied implicitly. Color-description precedence is exposed separately.
+Typed iTXt follows WHATWG UTF-8 decoding, consuming one leading BOM and replacing
+malformed sequences; raw chunk bytes remain unchanged. Encoders require valid
+UTF-8 and method 0 even for uncompressed iTXt. BCP47 syntax and duplicate variants
+/ extensions are checked; IANA subtag registration remains a documented gap.
+Encoding zeroes unused tRNS/bKGD sample bits and rejects hIST zero frequencies
+for palette indices used by the default image or animation frames.
 
 See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. In particular,
 Broader conformance and competitive performance validation remain under development.

@@ -32,6 +32,7 @@ include the harness and reference codecs, not just the native implementation.
 `png_stream` repairs complete chunk CRCs to explore deeper grammar and DEFLATE
 paths. It compares whole-file acceptance with the buffered implementation and
 every emitted default-image / APNG-frame row sample, under varying input splits.
+It selects both opaque-black recovery and strict indexed-color policies.
 `inflate_stream` compares fragmented decoding, prefix byte counts and fused
 errors against buffered native zlib decoding. Independent reference parity is
 provided by the other targets and integration/oracle tests.
@@ -54,3 +55,10 @@ filesystem. Campaign logs and exact tool versions are recorded in `reports/`.
 Smoke campaigns are a regression check, not exhaustive validation. Longer runs,
 additional structured generators, independent APNG compositing comparisons,
 and coverage review remain required.
+
+The conformance follow-up used a fresh `fuzz/corpus/png_conformance_20261026`
+directory containing only the 175 checked-in PNGSuite files and independent
+`basic_f20.png` APNG. Pass that directory after `png_stream` in the command above
+to reproduce the initial seeds. The 20,000-run log is
+`reports/png-conformance-linux.log`; the corpus directory must be fresh because
+libFuzzer adds and reduces files during a campaign.

@@ -57,7 +57,11 @@ fn chunk(out: &mut impl Write, kind: &[u8; 4], parts: &[&[u8]]) -> Result<(), Er
 fn ancillary(out: &mut impl Write, png: &Png, position: ChunkPosition) -> Result<(), Error> {
     for c in png.ancillary.iter().filter(|c| c.position == position) {
         if ancillary_writable(c)? {
-            chunk(out, &c.kind, &[&c.data])?;
+            chunk(
+                out,
+                &c.kind,
+                &[&crate::metadata::encoding_data(c, &png.image)],
+            )?;
         }
     }
     Ok(())
