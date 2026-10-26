@@ -22,6 +22,9 @@ mod perf;
 #[cfg(test)]
 mod perf_fixture;
 
+#[cfg(test)]
+mod path_scan_perf;
+
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
@@ -91,13 +94,6 @@ impl TextureHints {
             mipmaps: self.mipmaps.unwrap_or(false),
         }
     }
-}
-
-#[inline(always)]
-fn has_ascii_case_insensitive_substr(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack
-        .windows(needle.len())
-        .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
 const HINT_16BPP: u16 = 1 << 0;
@@ -254,20 +250,19 @@ fn parse_res_dims(section: &[u8]) -> Option<(u32, u32)> {
 pub fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
     let bytes = raw.as_bytes();
     let mut i = 0usize;
-    while i < bytes.len() {
-        if bytes[i] != b'(' {
-            i += 1;
-            continue;
-        }
+    while let Some(offset) = if bytes.len() - i < 16 {
+        bytes[i..].iter().position(|&b| b == b'(')
+    } else {
+        memchr::memchr(b'(', &bytes[i..])
+    } {
+        i += offset;
         let end = skip_parenthetical(bytes, i);
-        if end <= i + 2 {
-            i = end.max(i + 1);
-            continue;
-        }
-        if let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1]) {
+        if end > i + 2
+            && let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1])
+        {
             return Some(dims);
         }
-        i = end.max(i + 1);
+        i = end;
     }
     None
 }
@@ -283,15 +278,6 @@ pub fn texture_source_dims_from_real(texture_key: &str, real_w: u32, real_h: u32
     (source_w, source_h)
 }
 
-#[inline(always)]
-const fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
-    idx + 4 <= bytes.len()
-        && bytes[idx] == b'('
-        && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
-        && bytes[idx + 2].eq_ignore_ascii_case(&b'e')
-        && bytes[idx + 3].eq_ignore_ascii_case(&b's')
-}
-
 #[must_use]
 pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     let bytes = filename.as_bytes();
@@ -299,7 +285,19 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     let mut i = 0usize;
 
     while i < bytes.len() {
-        if is_res_tag(bytes, i) {
+        if !matches!(bytes[i], b'(' | b'x' | b'X') {
+            let Some(offset) = (if bytes.len() - i < 16 {
+                bytes[i..]
+                    .iter()
+                    .position(|b| matches!(b, b'(' | b'x' | b'X'))
+            } else {
+                memchr::memchr3(b'(', b'x', b'X', &bytes[i..])
+            }) else {
+                break;
+            };
+            i += offset;
+        }
+        if bytes[i] == b'(' && hint_starts_with(bytes, i, b"(res") {
             i = skip_parenthetical(bytes, i);
             continue;
         }
@@ -316,8 +314,7 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
                 right += 1;
             }
 
-            if left < i
-                && i + 1 < right
+            if i + 1 < right
                 && is_sprite_sheet_left_boundary(bytes, left)
                 && is_sprite_sheet_right_boundary(bytes, right)
                 && let (Some(w), Some(h)) = (
@@ -611,7 +608,13 @@ pub fn texture_hint_is_default(raw: &str) -> bool {
 #[inline(always)]
 #[must_use]
 pub fn texture_hint_doubleres(raw: &str) -> bool {
-    has_ascii_case_insensitive_substr(raw.trim().as_bytes(), b"doubleres")
+    raw.as_bytes().windows(9).any(|window| {
+        // All target bytes are ASCII letters: setting bit 5 folds exactly
+        // each letter's uppercase pair, preserving every other byte mismatch.
+        let prefix = u64::from_le_bytes(*window.first_chunk::<8>().expect("nine-byte hint window"));
+        prefix | 0x2020_2020_2020_2020 == u64::from_le_bytes(*b"doublere")
+            && window[8] | 0x20 == b's'
+    })
 }
 
 pub fn canonical_texture_key_with_asset_roots<P>(

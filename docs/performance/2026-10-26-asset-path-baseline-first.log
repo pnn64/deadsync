@@ -1,0 +1,47 @@
+
+running 1 test
+test path_scan_perf::benchmark_metadata_scans ... paths/res/shipped: items 982; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/res/shipped: cycles/op 125608.87; ns/op 57275.78
+paths/sheet/shipped: items 982; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/sheet/shipped: cycles/op 250205.98; ns/op 114389.06
+paths/double/shipped: items 982; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/double/shipped: cycles/op 200314.32; ns/op 91445.31
+paths/combined/shipped: items 982; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/combined/shipped: cycles/op 1261910.65; ns/op 1084878.91
+paths/res/short: items 8; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/res/short: cycles/op 194.49; ns/op 88.62
+paths/sheet/short: items 8; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/sheet/short: cycles/op 192.46; ns/op 87.62
+paths/double/short: items 8; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/double/short: cycles/op 166.40; ns/op 76.20
+paths/combined/short: items 8; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/combined/short: cycles/op 1220.60; ns/op 556.36
+paths/res/long-absent: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/res/long-absent: cycles/op 401.82; ns/op 504.19
+paths/sheet/long-absent: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/sheet/long-absent: cycles/op 1071.39; ns/op 3010.22
+paths/double/long-absent: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/double/long-absent: cycles/op 656.54; ns/op 426.26
+paths/combined/long-absent: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/combined/long-absent: cycles/op 4583.95; ns/op 4002.07
+paths/res/long-present: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/res/long-present: cycles/op 516.21; ns/op 565.75
+paths/sheet/long-present: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/sheet/long-present: cycles/op 1182.52; ns/op 1190.41
+paths/double/long-present: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/double/long-present: cycles/op 693.39; ns/op 316.32
+paths/combined/long-present: items 1; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/combined/long-present: cycles/op 4654.75; ns/op 3821.07
+paths/res/dense: items 4; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/res/dense: cycles/op 237.53; ns/op 108.48
+paths/sheet/dense: items 4; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/sheet/dense: cycles/op 424.00; ns/op 193.45
+paths/double/dense: items 4; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/double/dense: cycles/op 247.75; ns/op 112.93
+paths/combined/dense: items 4; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/combined/dense: cycles/op 1811.86; ns/op 826.73
+paths/bind/shipped: items 982; allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+paths/bind/shipped: cycles/op 410358.68; ns/op 187210.16
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 112 filtered out; finished in 21.84s
