@@ -1,0 +1,153 @@
+run	stage	workload	cycles_per_op	ns_per_op	fingerprint	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	storage_allocs	storage_reallocs	storage_frees	storage_allocated_bytes	storage_freed_bytes	storage_peak_bytes
+0	sad-before	sola/append-6ch	163218.84	74596.88		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	sad-before	sola/append-8ch	218488.23	99857.81		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	sad-before	sola/append-16ch	468385.55	465166.41		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	sad-before	sola/crossfade-256	178.99	80.66		0	0	0	0	0	0						
+0	sad-before	sola/crossfade-1440	665.36	302.25		0	0	0	0	0	0						
+0	sad-before	sola/mono/360	90077.34	41112.5		0	0	0	0	0	0						
+0	sad-before	sola/stereo/360	182445.62	1086928.12		0	0	0	0	0	0						
+0	sad-before	sola/left-silent/360	96477.12	43940.62		0	0	0	0	0	0						
+0	sad-before	sola/right-silent/360	86222.34	39681.25		0	0	0	0	0	0						
+0	sad-before	sola/mono/720	361146.06	165831.25		0	0	0	0	0	0						
+0	sad-before	sola/stereo/720	746210.84	341728.12		0	0	0	0	0	0						
+0	sad-before	sola/left-silent/720	344683.62	1160393.75		0	0	0	0	0	0						
+0	sad-before	sola/right-silent/720	352777.66	161453.12		0	0	0	0	0	0						
+0	sad-before	sola/stream-1ch-noise-1.2	663219.5	16356100.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-noise-0.8	1734489.0	790400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-tone-1.2	194367.5	88150.0	5907aac396672cd5	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-left-silent-1.2	591881.5	269200.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-silence-1.2	108103.5	48800.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	sad-before	sola/stream-6ch-noise-1.2	2826282.0	1288400.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	append-fixed	sola/append-6ch	110182.13	50384.38		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	append-fixed	sola/append-8ch	148099.05	318252.34		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	append-fixed	sola/append-16ch	309400.7	141416.41		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	append-fixed	sola/crossfade-256	185.85	83.69		0	0	0	0	0	0						
+0	append-fixed	sola/crossfade-1440	668.15	303.42		0	0	0	0	0	0						
+0	append-fixed	sola/mono/360	90454.59	41165.62		0	0	0	0	0	0						
+0	append-fixed	sola/stereo/360	189188.44	86496.88		0	0	0	0	0	0						
+0	append-fixed	sola/left-silent/360	98027.31	45162.5		0	0	0	0	0	0						
+0	append-fixed	sola/right-silent/360	92683.88	42331.25		0	0	0	0	0	0						
+0	append-fixed	sola/mono/720	360192.62	164815.62		0	0	0	0	0	0						
+0	append-fixed	sola/stereo/720	713649.38	326306.25		0	0	0	0	0	0						
+0	append-fixed	sola/left-silent/720	377265.59	172896.88		0	0	0	0	0	0						
+0	append-fixed	sola/right-silent/720	354279.84	161793.75		0	0	0	0	0	0						
+0	append-fixed	sola/stream-1ch-noise-1.2	472693.0	219250.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	append-fixed	sola/stream-2ch-noise-0.8	1765328.5	16868400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	append-fixed	sola/stream-2ch-tone-1.2	196343.0	89050.0	5907aac396672cd5	0	0	0	0	0	0						
+0	append-fixed	sola/stream-2ch-left-silent-1.2	611746.5	280200.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	append-fixed	sola/stream-2ch-silence-1.2	90763.5	41000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	append-fixed	sola/stream-6ch-noise-1.2	2809490.0	1281100.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	append-fixed	sola/append-6ch	109810.02	50284.38		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	append-fixed	sola/append-8ch	151468.73	69200.78		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	append-fixed	sola/append-16ch	315678.74	144369.53		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	append-fixed	sola/crossfade-256	187.56	84.67		0	0	0	0	0	0						
+1	append-fixed	sola/crossfade-1440	677.15	307.62		0	0	0	0	0	0						
+1	append-fixed	sola/mono/360	88739.72	40453.12		0	0	0	0	0	0						
+1	append-fixed	sola/stereo/360	184544.62	84143.75		0	0	0	0	0	0						
+1	append-fixed	sola/left-silent/360	95948.94	43678.12		0	0	0	0	0	0						
+1	append-fixed	sola/right-silent/360	92642.75	42631.25		0	0	0	0	0	0						
+1	append-fixed	sola/mono/720	351686.97	160428.12		0	0	0	0	0	0						
+1	append-fixed	sola/stereo/720	698764.47	319265.62		0	0	0	0	0	0						
+1	append-fixed	sola/left-silent/720	349087.31	159618.75		0	0	0	0	0	0						
+1	append-fixed	sola/right-silent/720	352791.38	160909.38		0	0	0	0	0	0						
+1	append-fixed	sola/stream-1ch-noise-1.2	465779.0	211600.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	append-fixed	sola/stream-2ch-noise-0.8	1697613.0	774150.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	append-fixed	sola/stream-2ch-tone-1.2	196672.0	89200.0	5907aac396672cd5	0	0	0	0	0	0						
+1	append-fixed	sola/stream-2ch-left-silent-1.2	609441.5	276950.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	append-fixed	sola/stream-2ch-silence-1.2	108433.0	49000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	append-fixed	sola/stream-6ch-noise-1.2	2723116.5	1246800.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	sad-before	sola/append-6ch	162088.73	74023.44		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	sad-before	sola/append-8ch	226066.13	103246.88		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	sad-before	sola/append-16ch	466972.52	464590.62		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	sad-before	sola/crossfade-256	178.13	80.27		0	0	0	0	0	0						
+1	sad-before	sola/crossfade-1440	668.15	303.52		0	0	0	0	0	0						
+1	sad-before	sola/mono/360	90049.88	41043.75		0	0	0	0	0	0						
+1	sad-before	sola/stereo/360	191884.16	87487.5		0	0	0	0	0	0						
+1	sad-before	sola/left-silent/360	90825.0	41428.12		0	0	0	0	0	0						
+1	sad-before	sola/right-silent/360	96099.84	43837.5		0	0	0	0	0	0						
+1	sad-before	sola/mono/720	350267.12	160071.88		0	0	0	0	0	0						
+1	sad-before	sola/stereo/720	700801.81	1323187.5		0	0	0	0	0	0						
+1	sad-before	sola/left-silent/720	348572.88	159209.38		0	0	0	0	0	0						
+1	sad-before	sola/right-silent/720	354321.0	1165087.5		0	0	0	0	0	0						
+1	sad-before	sola/stream-1ch-noise-1.2	450853.0	204900.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-noise-0.8	1676541.0	764400.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-tone-1.2	194806.5	88350.0	5907aac396672cd5	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-left-silent-1.2	592759.5	269500.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-silence-1.2	108103.5	48800.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	sad-before	sola/stream-6ch-noise-1.2	2774809.0	1266100.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	sad-before	sola/append-6ch	160864.35	73631.25		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	sad-before	sola/append-8ch	220350.56	100721.09		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	sad-before	sola/append-16ch	478400.23	469588.28		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	sad-before	sola/crossfade-256	181.56	81.84		0	0	0	0	0	0						
+2	sad-before	sola/crossfade-1440	669.86	304.2		0	0	0	0	0	0						
+2	sad-before	sola/mono/360	92196.84	41956.25		0	0	0	0	0	0						
+2	sad-before	sola/stereo/360	186753.34	85500.0		0	0	0	0	0	0						
+2	sad-before	sola/left-silent/360	90790.69	41400.0		0	0	0	0	0	0						
+2	sad-before	sola/right-silent/360	89967.56	41059.38		0	0	0	0	0	0						
+2	sad-before	sola/mono/720	352709.06	1163350.0		0	0	0	0	0	0						
+2	sad-before	sola/stereo/720	695403.47	317678.12		0	0	0	0	0	0						
+2	sad-before	sola/left-silent/720	358971.69	164006.25		0	0	0	0	0	0						
+2	sad-before	sola/right-silent/720	343140.25	156671.88		0	0	0	0	0	0						
+2	sad-before	sola/stream-1ch-noise-1.2	440427.0	200200.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-noise-0.8	1634177.5	751850.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-tone-1.2	228719.0	103600.0	5907aac396672cd5	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-left-silent-1.2	636769.5	289150.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-silence-1.2	108213.5	48900.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	sad-before	sola/stream-6ch-noise-1.2	2765700.0	1270550.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	append-fixed	sola/append-6ch	109134.38	49797.66		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	append-fixed	sola/append-8ch	147126.74	67235.16		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	append-fixed	sola/append-16ch	317566.77	145569.53		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	append-fixed	sola/crossfade-256	290.45	131.25		0	0	0	0	0	0						
+2	append-fixed	sola/crossfade-1440	1150.02	522.17		0	0	0	0	0	0						
+2	append-fixed	sola/mono/360	146310.44	66743.75		0	0	0	0	0	0						
+2	append-fixed	sola/stereo/360	310688.53	142162.5		0	0	0	0	0	0						
+2	append-fixed	sola/left-silent/360	155625.53	71918.75		0	0	0	0	0	0						
+2	append-fixed	sola/right-silent/360	148704.38	68031.25		0	0	0	0	0	0						
+2	append-fixed	sola/mono/720	588575.53	269618.75		0	0	0	0	0	0						
+2	append-fixed	sola/stereo/720	1156655.25	529150.0		0	0	0	0	0	0						
+2	append-fixed	sola/left-silent/720	591730.84	270681.25		0	0	0	0	0	0						
+2	append-fixed	sola/right-silent/720	585036.12	267821.88		0	0	0	0	0	0						
+2	append-fixed	sola/stream-1ch-noise-1.2	745422.0	338800.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	append-fixed	sola/stream-2ch-noise-0.8	2727617.0	1253800.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	append-fixed	sola/stream-2ch-tone-1.2	299069.0	138250.0	5907aac396672cd5	0	0	0	0	0	0						
+2	append-fixed	sola/stream-2ch-left-silent-1.2	947033.0	433350.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	append-fixed	sola/stream-2ch-silence-1.2	126322.5	57000.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	append-fixed	sola/stream-6ch-noise-1.2	4218131.5	1944000.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	append-fixed	sola/append-6ch	115952.59	53100.78		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	append-fixed	sola/append-8ch	151806.53	69584.38		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	append-fixed	sola/append-16ch	305058.7	139596.88		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	append-fixed	sola/crossfade-256	186.06	83.89		0	0	0	0	0	0						
+3	append-fixed	sola/crossfade-1440	668.79	303.81		0	0	0	0	0	0						
+3	append-fixed	sola/mono/360	88568.25	40312.5		0	0	0	0	0	0						
+3	append-fixed	sola/stereo/360	177040.47	80737.5		0	0	0	0	0	0						
+3	append-fixed	sola/left-silent/360	88554.53	40428.12		0	0	0	0	0	0						
+3	append-fixed	sola/right-silent/360	88705.44	40375.0		0	0	0	0	0	0						
+3	append-fixed	sola/mono/720	345122.59	157325.0		0	0	0	0	0	0						
+3	append-fixed	sola/stereo/720	696699.88	318659.38		0	0	0	0	0	0						
+3	append-fixed	sola/left-silent/720	349334.25	159287.5		0	0	0	0	0	0						
+3	append-fixed	sola/right-silent/720	347722.31	159040.62		0	0	0	0	0	0						
+3	append-fixed	sola/stream-1ch-noise-1.2	447560.5	203150.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	append-fixed	sola/stream-2ch-noise-0.8	1728233.0	788350.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	append-fixed	sola/stream-2ch-tone-1.2	206769.0	93600.0	5907aac396672cd5	0	0	0	0	0	0						
+3	append-fixed	sola/stream-2ch-left-silent-1.2	835526.5	378200.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	append-fixed	sola/stream-2ch-silence-1.2	114689.0	51700.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	append-fixed	sola/stream-6ch-noise-1.2	3603970.0	1670000.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	sad-before	sola/append-6ch	222521.53	163008.59		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	sad-before	sola/append-8ch	233695.46	108057.81		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	sad-before	sola/append-16ch	586037.56	320915.62		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	sad-before	sola/crossfade-256	243.08	108.98		0	0	0	0	0	0						
+3	sad-before	sola/crossfade-1440	1135.23	514.84		0	0	0	0	0	0						
+3	sad-before	sola/mono/360	94412.44	43075.0		0	0	0	0	0	0						
+3	sad-before	sola/stereo/360	236744.47	110343.75		0	0	0	0	0	0						
+3	sad-before	sola/left-silent/360	139444.25	63600.0		0	0	0	0	0	0						
+3	sad-before	sola/right-silent/360	135115.94	62078.12		0	0	0	0	0	0						
+3	sad-before	sola/mono/720	525983.69	240487.5		0	0	0	0	0	0						
+3	sad-before	sola/stereo/720	692927.19	316728.12		0	0	0	0	0	0						
+3	sad-before	sola/left-silent/720	351158.84	160684.38		0	0	0	0	0	0						
+3	sad-before	sola/right-silent/720	354375.88	162087.5		0	0	0	0	0	0						
+3	sad-before	sola/stream-1ch-noise-1.2	464681.5	210900.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-noise-0.8	1728453.0	788650.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-tone-1.2	210061.5	95150.0	5907aac396672cd5	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-left-silent-1.2	591662.0	270550.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-silence-1.2	107994.0	48850.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	sad-before	sola/stream-6ch-noise-1.2	2844830.0	1297050.0	5d00c00f1cc77d00	0	0	0	0	0	0						
