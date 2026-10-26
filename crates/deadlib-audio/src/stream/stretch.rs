@@ -61,6 +61,26 @@ fn append_crossfade(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Ve
         out.extend_from_slice(current);
         return;
     }
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection includes CPU and OS support for FMA.
+        // The specialized function uses only safe slice/Vec operations.
+        unsafe { append_crossfade_fma(prev, current, weights, out) };
+        return;
+    }
+    append_crossfade_samples(prev, current, weights, out);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+/// # Safety
+/// The caller must establish CPU and OS support for FMA before entering.
+unsafe fn append_crossfade_fma(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
+    append_crossfade_samples(prev, current, weights, out);
+}
+
+#[inline(always)]
+fn append_crossfade_samples(prev: &[f32], current: &[f32], weights: &[f32], out: &mut Vec<f32>) {
     out.extend(
         prev.iter()
             .zip(current)
@@ -303,12 +323,22 @@ impl SolaStretcher {
                 append_stereo_i16(&mut left[0].data, &mut right[0].data, interleaved);
             }
             _ => {
+                let complete = &interleaved[..frames * self.channels];
                 for channel in &mut self.state {
                     channel.data.reserve(frames);
                 }
-                for frame in interleaved.chunks_exact(self.channels) {
-                    for (ch, sample) in self.state.iter_mut().zip(frame) {
-                        ch.data.push(f32::from(*sample) * I16_SCALE);
+                // 4096 i16 samples occupy 8 KiB, leaving L1 space for the
+                // contiguous f32 outputs even with wide source packets.
+                let block_samples = (4096 / self.channels).max(1) * self.channels;
+                for block in complete.chunks(block_samples) {
+                    for (index, channel) in self.state.iter_mut().enumerate() {
+                        channel.data.extend(
+                            block
+                                .iter()
+                                .skip(index)
+                                .step_by(self.channels)
+                                .map(|&sample| f32::from(sample) * I16_SCALE),
+                        );
                     }
                 }
             }
@@ -758,27 +788,35 @@ fn correlation_score_stereo(
 #[inline(always)]
 fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 {
     let mut score = 0.0f32;
-    let mut j = 0usize;
-    while j + 8 <= correlate.len() {
-        score += (frames[j] - correlate[j]).abs();
-        score += (frames[j + 1] - correlate[j + 1]).abs();
-        score += (frames[j + 2] - correlate[j + 2]).abs();
-        score += (frames[j + 3] - correlate[j + 3]).abs();
-        score += (frames[j + 4] - correlate[j + 4]).abs();
-        score += (frames[j + 5] - correlate[j + 5]).abs();
-        score += (frames[j + 6] - correlate[j + 6]).abs();
-        score += (frames[j + 7] - correlate[j + 7]).abs();
-        j += 8;
+    let (frames, frame_tail) = frames[..correlate.len()].as_chunks::<8>();
+    let (correlate, correlate_tail) = correlate.as_chunks::<8>();
+    for (frames, correlate) in frames.iter().zip(correlate) {
+        // Source samples are i16 / 32768, so every difference is an exact
+        // multiple of 2^-15 below 2. A f32 holds every such sum through 512.
+        // With a prefix <= 496, all eight additions fit in that exact range:
+        // grouping them exposes SIMD without changing any rounding. Larger
+        // prefixes keep the original scalar order, including early rejection.
+        if score <= 496.0 {
+            let d: [f32; 8] = std::array::from_fn(|i| (frames[i] - correlate[i]).abs());
+            score += ((d[0] + d[1]) + (d[2] + d[3])) + ((d[4] + d[5]) + (d[6] + d[7]));
+        } else {
+            for index in 0..8 {
+                score += (frames[index] - correlate[index]).abs();
+            }
+        }
         if score >= best_score {
             return score;
         }
     }
-    while j < correlate.len() {
-        score += (frames[j] - correlate[j]).abs();
-        j += 1;
+    for (&frame, &sample) in frame_tail.iter().zip(correlate_tail) {
+        score += (frame - sample).abs();
     }
     score
 }
+
+#[cfg(test)]
+#[path = "stretch/perf_tests.rs"]
+mod perf_tests;
 
 #[cfg(test)]
 mod tests {

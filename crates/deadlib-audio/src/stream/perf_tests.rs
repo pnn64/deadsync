@@ -2,7 +2,7 @@ use super::*;
 use std::hint::black_box;
 
 #[path = "../../../../tests/support/perf.rs"]
-mod allocations;
+pub(super) mod allocations;
 #[path = "../../../../tests/support/paired_bench.rs"]
 mod bench;
 #[path = "perf_original_processing.rs"]

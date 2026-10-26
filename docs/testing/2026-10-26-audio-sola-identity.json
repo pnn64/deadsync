@@ -1,0 +1,110 @@
+[
+  {
+    "stage": "before",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-before\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-before\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "acc391ff2fe816129b654c134b29d89f5e91755b07e2199a7ffa59842e43162d",
+      "binary_sha256": "755f3fb1549af218b9fca8a6969a68649c651eae3dee3565ebd966113d78736f"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.07s\n\n"
+  },
+  {
+    "stage": "unpack",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-unpack\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-unpack\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "00dc317d47e472398915b76d4d9599e3985a9aff01fa99b47b87ccac837320c2",
+      "binary_sha256": "f5c4c869d856ba59cf502fff6cbde25e33ce76c9331d90b142cf1a7a149a66a5"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.07s\n\n"
+  },
+  {
+    "stage": "crossfade",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-crossfade\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-crossfade\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "0af3cf8763df8768c1f15d66d1df0d945b2f6e84b9c0eb64149cb0cb440fad5a",
+      "binary_sha256": "9e0555df1746b08d148699a8d9863099e3b0e69d014ef240639c6a2edcd4c654"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.08s\n\n"
+  },
+  {
+    "stage": "retained",
+    "bytes": 6714176,
+    "sha256": "60b5056470be9ea45ebddce67fcda5a7fe492a2e17fd3c19a78d4c1cacc044b4",
+    "manifest": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\verify-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "358bc4092ae8b7ad4ed164bcfd08d5912dba566224aa4eb16f33976b7229a428",
+      "binary_sha256": "34affb1dd8d8d9efb5f6a82d62d71af32365e2bd8b86c2b8d1bc43214ae10095"
+    },
+    "capture_test": "\nrunning 1 test\ntest stretch::perf_tests::dump_sola_pcm ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.05s\n\n"
+  }
+]
