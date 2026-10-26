@@ -556,6 +556,19 @@ fn chart_for_difficulty<'a>(
     })
 }
 
+/// Which chart's par a wheel row shows, matching the theme's `Golf.ChooseSteps`:
+/// the chart at the player's current difficulty when the song has one, else the
+/// song's last playable chart. Golf holes normally carry a single chart, so a
+/// player browsing at any other difficulty still sees that hole's par.
+fn wheel_golf_par(song: &SongData, chart_type: &str, chart: Option<&ChartData>) -> Option<f64> {
+    let chart = chart.or_else(|| {
+        song.charts
+            .iter()
+            .rfind(|chart| chart.chart_type.eq_ignore_ascii_case(chart_type))
+    })?;
+    deadsync_chart::golf::par(&song.simfile_path, &chart.difficulty)
+}
+
 const NO_CHART_INDEX: usize = usize::MAX;
 const EDIT_DIFFICULTY_SLOT: usize = STANDARD_DIFFICULTY_COUNT;
 const WHEEL_DIFFICULTY_COUNT: usize = STANDARD_DIFFICULTY_COUNT + 1;
@@ -777,11 +790,7 @@ pub(crate) fn runtime_slot_requests<'a>(
                 });
                 MusicWheelSlotRuntimeRequest::Song {
                     song,
-                    golf_pars: charts.map(|chart| {
-                        chart.and_then(|c| {
-                            deadsync_chart::golf::par(&song.simfile_path, &c.difficulty)
-                        })
-                    }),
+                    golf_pars: charts.map(|chart| wheel_golf_par(song, target_chart_type, chart)),
                     chart_hashes,
                     lua_submit_allowed: chart_hashes.map(|chart_hash| {
                         chart_hash.is_some_and(score_data::lua_chart_submit_allowed)
@@ -1271,7 +1280,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             let label_side = if both { side as u8 + 1 } else { 0 };
                             let text = cached_text(&GOLF_PAR_TEXT, (par.to_bits(), label_side, crate::i18n::revision()), 512, || {
                                 let label = crate::i18n::tr("Golf", "Par").to_uppercase();
-                                if both { format!("P{} {label} {par:.2}", side + 1) } else { format!("{label} {par:.2}") }
+                                let par = crate::screens::components::gameplay::golf::format_par(Some(par));
+                                if both { format!("P{} {label} {par}", side + 1) } else { format!("{label} {par}") }
                             });
                             actors.push(act!(text: font("miso"): settext(text): align(1.0, 0.5):
                                 xy(highlight_left_world + golf_badge_right, y_center_item + if both { side as f32 * 12.0 - 6.0 } else { 0.0 }):
@@ -2161,6 +2171,91 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn golf_pars_fall_back_to_a_songs_only_chart_like_the_theme() {
+        fn slot_golf_pars(slots: &[MusicWheelSlotRuntimeRequest<'_>], slot: usize) -> [Option<f64>; 2] {
+            match slots[slot] {
+                MusicWheelSlotRuntimeRequest::Song { golf_pars, .. } => golf_pars,
+                _ => panic!("expected a song slot"),
+            }
+        }
+
+        let pack = std::path::Path::new("songs/Golf Fallback Pack");
+        deadsync_chart::golf::replace_pack(
+            pack,
+            deadsync_chart::golf::GolfPars::parse(
+                "[Hole 1]\nPar=7\n[Hole 2]\nPar=3\n[Hole 2:Challenge]\nPar=5\n",
+            ),
+        );
+
+        let mut selected = (*song_with_art(None, None)).clone();
+        selected.simfile_path = pack.join("Selected/selected.ssc");
+        selected.charts =
+            vec![chart_with_difficulty("dance-single", "Hard", "selected-hard", true)];
+        let selected = Arc::new(selected);
+
+        // A hole with a single Challenge chart, like every song in the beta golf packs.
+        let mut hole_1 = (*song_with_art(None, None)).clone();
+        hole_1.simfile_path = pack.join("Hole 1/hole.ssc");
+        hole_1.charts =
+            vec![chart_with_difficulty("dance-single", "Challenge", "hole-1-x", true)];
+        let hole_1 = Arc::new(hole_1);
+
+        // Two charts: Hard carries the song-wide par, Challenge its own override.
+        let mut hole_2 = (*song_with_art(None, None)).clone();
+        hole_2.simfile_path = pack.join("Hole 2/hole.ssc");
+        hole_2.charts = vec![
+            chart_with_difficulty("dance-single", "Hard", "hole-2-h", true),
+            chart_with_difficulty("dance-single", "Challenge", "hole-2-x", true),
+        ];
+        let hole_2 = Arc::new(hole_2);
+
+        let entries = vec![
+            MusicWheelEntry::Song(Arc::clone(&selected)),
+            MusicWheelEntry::Song(Arc::clone(&hole_1)),
+            MusicWheelEntry::Song(Arc::clone(&hole_2)),
+        ];
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+
+        // Browsing at Hard.
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [Some(&selected.charts[0]), Some(&selected.charts[0])],
+            [3, 3],
+            profile_data::PlayStyle::Single,
+            None,
+            None,
+        );
+        assert_eq!(
+            slot_golf_pars(&slots, center + 1),
+            [Some(7.0), Some(7.0)],
+            "a single-chart hole shows its par at any difficulty"
+        );
+        assert_eq!(
+            slot_golf_pars(&slots, center + 2),
+            [Some(3.0), Some(3.0)],
+            "the chart at the current difficulty wins when it exists"
+        );
+
+        // Browsing at Beginner, which neither hole has: fall back to the last chart.
+        let slots = runtime_slot_requests(
+            &entries,
+            0,
+            [None, None],
+            [0, 0],
+            profile_data::PlayStyle::Single,
+            None,
+            None,
+        );
+        assert_eq!(slot_golf_pars(&slots, center + 1), [Some(7.0), Some(7.0)]);
+        assert_eq!(
+            slot_golf_pars(&slots, center + 2),
+            [Some(5.0), Some(5.0)],
+            "the last chart's own override applies"
+        );
     }
 
     #[test]
