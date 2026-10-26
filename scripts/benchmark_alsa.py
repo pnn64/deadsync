@@ -25,7 +25,11 @@ WORKLOADS = {"shared_alias": 2_000_000, "shared_hw": 2_000_000,
              "frames_mixed": 40_000_000, "timing_48000": 1_000_000,
              "timing_44100": 1_000_000, "timing_96000": 1_000_000,
              "rate_capabilities": 200_000, "probe_null": 20_000,
-             "enumerate_failed": 100_000}
+             "enumerate_failed": 100_000, "clock_read_mono": 5_000_000,
+             "clock_read_raw": 5_000_000, "clock_map_recent": 40_000_000,
+             "clock_map_future": 40_000_000, "clock_map_edges": 40_000_000,
+             "timing_zero": 1_000_000, "timing_status_error": 1_000_000,
+             "timing_monotonic": 1_000_000}
 
 
 def digest(path):
@@ -62,12 +66,15 @@ def build(name, debug):
         fixture_logs.append(f"layout={layout}\n{result.stdout}{result.stderr}")
     for delay in ["-1", "0", "240", "4294967295"]:
         for failed in [False, True]:
-            env = {**fixture_env, "ALSA_FIXTURE_DELAY": delay}
-            if failed:
-                env["ALSA_FIXTURE_STATUS_ERROR"] = "1"
-            result = subprocess.run([str(binary), "fixture_timing", "--ignored", "--test-threads=1"],
-                                    env=env, capture_output=True, text=True, check=True)
-            fixture_logs.append(f"delay={delay} status_error={failed}\n{result.stdout}{result.stderr}")
+            for monotonic in [False, True]:
+                env = {**fixture_env, "ALSA_FIXTURE_DELAY": delay}
+                if failed:
+                    env["ALSA_FIXTURE_STATUS_ERROR"] = "1"
+                if monotonic:
+                    env["ALSA_FIXTURE_MONOTONIC"] = "1"
+                result = subprocess.run([str(binary), "fixture_timing", "--ignored", "--test-threads=1"],
+                                        env=env, capture_output=True, text=True, check=True)
+                fixture_logs.append(f"delay={delay} status_error={failed} monotonic={monotonic}\n{result.stdout}{result.stderr}")
     matrix = subprocess.run([str(binary), "fixture_rate_matrix", "--ignored", "--test-threads=1"],
                             env={**fixture_env, "ALSA_FIXTURE_RATE_MATRIX": "1"},
                             capture_output=True, text=True, check=True)
@@ -80,6 +87,13 @@ def build(name, debug):
                                          "ALSA_FIXTURE_RATE_MASK": mask},
                                     capture_output=True, text=True, check=True)
             fixture_logs.append(f"rate_edge={edge}/{mask}\n{result.stdout}{result.stderr}")
+    for monotonic in [False, True]:
+        env = {**fixture_env, "ALSA_FIXTURE_DELAY": "240"}
+        if monotonic:
+            env["ALSA_FIXTURE_MONOTONIC"] = "1"
+        result = subprocess.run([str(binary), "fixture_clock_health", "--ignored", "--test-threads=1"],
+                                env=env, capture_output=True, text=True, check=True)
+        fixture_logs.append(f"clock_health=9 extremes monotonic={monotonic}\n{result.stdout}{result.stderr}")
     (archive / "fixture.log").write_text("\n".join(fixture_logs))
     for source in [SOURCE / "lib.rs", SOURCE / "perf_tests.rs", ROOT / "scripts/alsa_fixture.c"]:
         shutil.copyfile(source, archive / source.name)
@@ -112,15 +126,23 @@ def compare(names, output, runs, workloads, fixture_stage):
                 archive = ARCHIVES / name
                 prefix = logdir / f"{run}-{workload}-{name}"
                 fixture = ARCHIVES / fixture_stage / "fixture.so" if fixture_stage else archive / "fixture.so"
+                aliases = {"enumerate_failed": "enumerate", "timing_zero": "timing_48000",
+                           "timing_status_error": "timing_48000", "timing_monotonic": "timing_48000"}
                 env = {**os.environ, "LC_ALL": "C", "LD_PRELOAD": str(fixture),
-                       "ALSA_PERF_WORKLOAD": "enumerate" if workload == "enumerate_failed" else workload,
+                       "ALSA_PERF_WORKLOAD": aliases.get(workload, workload),
                        "ALSA_PERF_ITERATIONS": str(WORKLOADS[workload])}
                 if workload.startswith("timing_"):
                     env["ALSA_FIXTURE_DELAY"] = "240"
-                if workload in ["rate_capabilities", "probe_null"]:
+                if workload in ["rate_capabilities", "probe_null"] or workload.startswith("clock_"):
                     env.pop("LD_PRELOAD", None)
                 if workload == "enumerate_failed":
                     env["ALSA_FIXTURE_LAYOUT"] = "probe_error"
+                if workload == "timing_zero":
+                    env["ALSA_FIXTURE_DELAY"] = "0"
+                if workload == "timing_status_error":
+                    env["ALSA_FIXTURE_STATUS_ERROR"] = "1"
+                if workload == "timing_monotonic":
+                    env["ALSA_FIXTURE_MONOTONIC"] = "1"
                 # One allowed CPU, with userspace cycles/instructions and scheduled CPU time.
                 cpu = min(os.sched_getaffinity(0))
                 command = ["perf", "stat", "-x", ";", "-e", "cycles:u,instructions:u,task-clock",

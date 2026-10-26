@@ -1,0 +1,212 @@
+{
+  "reference_commit": "02183e7c1",
+  "baseline_sha256": "a891a0934f2253ba26cc1e64c19de0e2a693ae6cada1181a0722e8fda13b6f38",
+  "baseline_adapter_patch": "--- 02183e7c1/lib.rs\n+++ baseline/lib.rs\n@@ -282,6 +282,8 @@\n \n struct AlsaParams {\n     sample_rate_hz: u32,\n+    sample_rate_reciprocal: u64,\n+    sample_rate_shift: u8,\n     channels: usize,\n     period_frames: u32,\n     buffer_frames: u32,\n@@ -386,8 +388,18 @@\n             prep.device_name\n         )\n     })?;\n-    let period_ns = frames_to_nanos(actual.sample_rate_hz, actual.period_frames);\n-    let buffer_ns = frames_to_nanos(actual.sample_rate_hz, actual.buffer_frames);\n+    let period_ns = frames_to_nanos(\n+        actual.sample_rate_hz,\n+        actual.period_frames,\n+        actual.sample_rate_reciprocal,\n+        actual.sample_rate_shift,\n+    );\n+    let buffer_ns = frames_to_nanos(\n+        actual.sample_rate_hz,\n+        actual.buffer_frames,\n+        actual.sample_rate_reciprocal,\n+        actual.sample_rate_shift,\n+    );\n     info!(\n         \"ALSA '{}' using {} output with {} timing.\",\n         prep.device_name,\n@@ -413,6 +425,8 @@\n         let timing_before = playback_status_timing(\n             &pcm,\n             actual.sample_rate_hz,\n+            actual.sample_rate_reciprocal,\n+            actual.sample_rate_shift,\n             actual.host_clock,\n             &mut clock_health,\n         );\n@@ -436,6 +450,8 @@\n         let timing_after = playback_status_timing(\n             &pcm,\n             actual.sample_rate_hz,\n+            actual.sample_rate_reciprocal,\n+            actual.sample_rate_shift,\n             actual.host_clock,\n             &mut clock_health,\n         );\n@@ -586,11 +602,15 @@\n         .map_err(|e| format!(\"ALSA period size query failed: {e}\"))?\n         .max(1) as u32;\n     let host_clock = apply_sw_params(&sw, pcm, period_frames, buffer_frames)?;\n+    let sample_rate_hz = hw_current\n+        .get_rate()\n+        .unwrap_or(actual_rate_hz.max(1))\n+        .max(1);\n+    let (sample_rate_reciprocal, sample_rate_shift) = sample_rate_scale(sample_rate_hz);\n     Ok(AlsaParams {\n-        sample_rate_hz: hw_current\n-            .get_rate()\n-            .unwrap_or(actual_rate_hz.max(1))\n-            .max(1),\n+        sample_rate_hz,\n+        sample_rate_reciprocal,\n+        sample_rate_shift,\n         channels: hw_current.get_channels().unwrap_or(channels as u32).max(1) as usize,\n         period_frames,\n         buffer_frames,\n@@ -678,6 +698,8 @@\n fn playback_status_timing(\n     pcm: &PCM,\n     sample_rate_hz: u32,\n+    sample_rate_reciprocal: u64,\n+    sample_rate_shift: u8,\n     host_clock: AlsaHostClock,\n     clock_health: &mut AlsaClockHealth,\n ) -> PlaybackStatusTiming {\n@@ -685,12 +707,22 @@\n     let Some(status) = pcm.status().ok() else {\n         return fallback_timing(\n             delay_frames_fallback,\n-            frames_to_nanos(sample_rate_hz, delay_frames_fallback),\n+            frames_to_nanos(\n+                sample_rate_hz,\n+                delay_frames_fallback,\n+                sample_rate_reciprocal,\n+                sample_rate_shift,\n+            ),\n             clock_health,\n         );\n     };\n     let delay_frames = status.get_delay().max(0) as u32;\n-    let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);\n+    let delay_ns = frames_to_nanos(\n+        sample_rate_hz,\n+        delay_frames,\n+        sample_rate_reciprocal,\n+        sample_rate_shift,\n+    );\n     let Some(sample) = sample_host_clock(host_clock) else {\n         return fallback_timing(delay_frames, delay_ns, clock_health);\n     };\n@@ -809,7 +841,18 @@\n }\n \n #[inline(always)]\n-fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {\n+fn sample_rate_scale(sample_rate_hz: u32) -> (u64, u8) {\n+    if sample_rate_hz > 1 {\n+        let shift = (sample_rate_hz.ilog2() - 1) as u8;\n+        let reciprocal = (1_u128 << (64 + u32::from(shift))).div_ceil(u128::from(sample_rate_hz));\n+        (reciprocal as u64, shift)\n+    } else {\n+        (0, 0)\n+    }\n+}\n+\n+#[inline(always)]\n+fn frames_to_nanos(sample_rate_hz: u32, frames: u32, _reciprocal: u64, _shift: u8) -> u64 {\n     if sample_rate_hz == 0 || frames == 0 {\n         return 0;\n     }\n@@ -872,9 +915,25 @@\n         assert_eq!(suggested_period_frames(48_000), 240);\n         assert_eq!(suggested_period_frames(192_000), 960);\n         assert_eq!(suggested_period_frames(384_000), 1024);\n-        assert_eq!(frames_to_nanos(48_000, 480), 10_000_000);\n-        assert_eq!(frames_to_nanos(44_100, 441), 10_000_000);\n-        assert_eq!(frames_to_nanos(0, 480), 0);\n+        assert_eq!(\n+            frames_to_nanos(\n+                48_000,\n+                480,\n+                sample_rate_scale(48_000).0,\n+                sample_rate_scale(48_000).1\n+            ),\n+            10_000_000\n+        );\n+        assert_eq!(\n+            frames_to_nanos(\n+                44_100,\n+                441,\n+                sample_rate_scale(44_100).0,\n+                sample_rate_scale(44_100).1\n+            ),\n+            10_000_000\n+        );\n+        assert_eq!(frames_to_nanos(0, 480, 0, 0), 0);\n         assert_eq!(timespec_nanos(2, 3), Some(2_000_000_003));\n         assert_eq!(timespec_nanos(-1, 0), None);\n         assert_eq!(timespec_nanos(0, -1), None);\n",
+  "test_source_sha256": "eea13be5d8e5ed13d7b34b3eec229ef7077f00d11d9fbe16b2025eb98431a3b3",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "--crate-name",
+    "deadlib_audio_backend_alsa",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=fat",
+    "-C",
+    "codegen-units=16",
+    "-L",
+    "dependency=/home/perfecttaste/deadsync-alsa-target/release/deps",
+    "--extern",
+    "alsa=/home/perfecttaste/deadsync-alsa-target/release/deps/libalsa-aaa298ecd2748cc4.rlib",
+    "--extern",
+    "deadlib_audio_core=/home/perfecttaste/deadsync-alsa-target/release/deps/libdeadlib_audio_core-97f6fda4d7a9fc54.rlib",
+    "--extern",
+    "deadlib_platform=/home/perfecttaste/deadsync-alsa-target/release/deps/libdeadlib_platform-a9d1af5f04a3c5bd.rlib",
+    "--extern",
+    "libc=/home/perfecttaste/deadsync-alsa-target/release/deps/liblibc-39b69de952e8fbe9.rlib",
+    "--extern",
+    "log=/home/perfecttaste/deadsync-alsa-target/release/deps/liblog-87b07b54fd4f4d37.rlib",
+    "/mnt/c/GitHub/deadsync/target/alsa-performance/scaled-rate-reference-verification/lib.rs",
+    "-o",
+    "/mnt/c/GitHub/deadsync/target/alsa-performance/scaled-rate-reference-verification/alsa-tests"
+  ],
+  "checks": [
+    {
+      "scenario": "unit",
+      "output": "\nrunning 13 tests\ntest perf_tests::benchmark_alsa ... ignored, performance workload; use scripts/benchmark_alsa.py\ntest perf_tests::clock_mapping_matches_wide_integer_reference ... ok\ntest perf_tests::fixture_clock_health_extremes_preserve_quality ... ignored, requires the deterministic ALSA timing fixture\ntest perf_tests::fixture_enumeration_preserves_devices ... ignored, requires the deterministic ALSA enumeration fixture\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ignored, requires the deterministic ALSA rate fixture\ntest perf_tests::fixture_rate_matrix_preserves_capabilities ... ignored, requires the deterministic ALSA rate fixture\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ignored, requires the deterministic ALSA timing fixture\ntest perf_tests::frame_conversion_matches_integer_division ... ok\ntest perf_tests::pcm_selection_preserves_text_and_errors ... ok\ntest tests::clock_health_holds_degraded_quality_after_fallback ... ok\ntest tests::null_pcm_preserves_requested_stream_shape ... ok\ntest tests::pcm_id_policy_preserves_shared_and_exclusive_routes ... ok\ntest tests::period_and_clock_math_remain_stable ... ok\n\ntest result: ok. 7 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.01s\n\nALSA lib pcm.c:2722:(snd_pcm_open_noupdate) [error.pcm] Unknown PCM deadsync_missing_pcm_benchmark_fixture\n"
+    },
+    {
+      "scenario": "regular",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "empty",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "unmatched_default",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "bad_name",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "probe_error",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "bad_card_info",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "bad_card_name",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "missing_card_name",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "long_names",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "empty_names",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=-1,error=False,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=-1,error=False,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=-1,error=True,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=-1,error=True,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=0,error=False,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=0,error=False,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=0,error=True,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=0,error=True,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=240,error=False,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=240,error=False,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=240,error=True,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=240,error=True,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=4294967295,error=False,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=4294967295,error=False,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=4294967295,error=True,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=4294967295,error=True,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "2048 rate masks",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_matrix_preserves_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.03s\n\n"
+    },
+    {
+      "scenario": "rate_edge=min_error/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=min_error/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=max_error/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=max_error/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=reject_min/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=reject_min/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=reject_edges/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=reject_edges/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=min_zero/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=min_zero/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=min_max_reversed/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=min_max_reversed/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=duplicate_bounds/0",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "rate_edge=duplicate_bounds/1",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_rate_edges_preserve_capabilities ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "9 clock-health states,monotonic=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_clock_health_extremes_preserve_quality ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "9 clock-health states,monotonic=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_clock_health_extremes_preserve_quality ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s\n\n"
+    }
+  ]
+}

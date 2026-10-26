@@ -17,6 +17,7 @@ static unsigned int rate_mask;
 static unsigned int rate_probe;
 static int rate_override;
 static const char *rate_edge;
+static int force_monotonic;
 __attribute__((constructor)) static void init_delay(void) {
     const char *delay = getenv("ALSA_FIXTURE_DELAY");
     override_delay = delay != NULL;
@@ -28,6 +29,13 @@ __attribute__((constructor)) static void init_delay(void) {
     const char *mask = getenv("ALSA_FIXTURE_RATE_MASK");
     rate_override = rate_matrix || rate_edge || mask;
     if (mask) rate_mask = strtoul(mask, NULL, 10);
+    force_monotonic = getenv("ALSA_FIXTURE_MONOTONIC") != NULL;
+}
+int snd_pcm_sw_params_set_tstamp_type(snd_pcm_t *pcm, snd_pcm_sw_params_t *params, snd_pcm_tstamp_type_t type) {
+    if (force_monotonic && type == SND_PCM_TSTAMP_TYPE_MONOTONIC_RAW) return -EINVAL;
+    static int (*real_set)(snd_pcm_t *, snd_pcm_sw_params_t *, snd_pcm_tstamp_type_t);
+    if (!real_set) real_set = dlsym(RTLD_NEXT, "snd_pcm_sw_params_set_tstamp_type");
+    return real_set(pcm, params, type);
 }
 int snd_pcm_status(snd_pcm_t *pcm, snd_pcm_status_t *status) {
     if (status_error) return -EIO;

@@ -50,6 +50,103 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 #[test]
+fn clock_mapping_matches_wide_integer_reference() {
+    let values = [
+        0,
+        1,
+        999_999,
+        1_000_000,
+        5_000_000,
+        50_000_000,
+        u64::MAX / 2,
+        u64::MAX - 1,
+        u64::MAX,
+    ];
+    for host in values {
+        for clock in values {
+            for target in values {
+                check_clock_mapping(host, clock, target);
+            }
+        }
+    }
+    let mut state = 0x8c1f_74ea_623b_d905_u64;
+    for _ in 0..100_000 {
+        let mut next = || {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            state
+        };
+        check_clock_mapping(next(), next(), next());
+    }
+}
+
+fn check_clock_mapping(host: u64, clock: u64, target: u64) {
+    let expected = (i128::from(host) + i128::from(target) - i128::from(clock))
+        .clamp(0, i128::from(u64::MAX)) as u64;
+    assert_eq!(
+        host_nanos_from_clock(
+            target,
+            ClockSample {
+                host_nanos: host,
+                clock_nanos: clock
+            }
+        ),
+        expected
+    );
+}
+
+#[test]
+fn frame_conversion_matches_integer_division() {
+    for rate in [
+        0,
+        1,
+        2,
+        3,
+        5,
+        7,
+        8_000,
+        44_100,
+        48_000,
+        96_000,
+        192_000,
+        384_000,
+        u32::MAX,
+    ] {
+        for frames in [0, 1, 2, 127, 240, 441, 480, u32::MAX - 1, u32::MAX] {
+            check_frame_conversion(rate, frames);
+        }
+    }
+    for rate in 0..=384_000 {
+        for frames in [0, 1, 480, u32::MAX] {
+            check_frame_conversion(rate, frames);
+        }
+    }
+    let mut state = 0xa53b_1cd9_u32;
+    let mut next = || {
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        state
+    };
+    for _ in 0..100_000 {
+        check_frame_conversion(next(), next());
+    }
+}
+
+fn check_frame_conversion(rate: u32, frames: u32) {
+    let expected = if rate == 0 {
+        0
+    } else {
+        u64::from(frames) * 1_000_000_000 / u64::from(rate)
+    };
+    let (reciprocal, shift) = sample_rate_scale(rate);
+    assert_eq!(
+        frames_to_nanos(rate, frames, reciprocal, shift),
+        expected,
+        "rate={rate} frames={frames}"
+    );
+}
+
+#[test]
 fn pcm_selection_preserves_text_and_errors() {
     for suffix in ["", "0", "CARD=2,DEV=1", "音楽", "x\0y"] {
         for (prefix, shared, exclusive) in
@@ -135,13 +232,26 @@ fn fixture_enumeration_preserves_devices() {
 fn fixture_timing_preserves_delay_and_fallback() {
     let pcm = open_pcm("null").unwrap();
     let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480)).unwrap();
+    let expected_clock = if std::env::var_os("ALSA_FIXTURE_MONOTONIC").is_some() {
+        OutputTelemetryClock::Monotonic
+    } else {
+        OutputTelemetryClock::MonotonicRaw
+    };
+    assert_eq!(actual.host_clock.telemetry_clock(), expected_clock);
     let delay: i64 = std::env::var("ALSA_FIXTURE_DELAY")
         .unwrap()
         .parse()
         .unwrap();
     let frames = delay.max(0) as u32;
     let mut health = AlsaClockHealth::new();
-    let timing = playback_status_timing(&pcm, 48_000, actual.host_clock, &mut health);
+    let timing = playback_status_timing(
+        &pcm,
+        48_000,
+        actual.sample_rate_reciprocal,
+        actual.sample_rate_shift,
+        actual.host_clock,
+        &mut health,
+    );
     assert_eq!(timing.delay_frames, frames);
     assert_eq!(
         timing.estimated_output_delay_ns,
@@ -163,6 +273,42 @@ fn fixture_timing_preserves_delay_and_fallback() {
                 .last_status_host_nanos
                 .saturating_add(timing.estimated_output_delay_ns)
         );
+    }
+}
+
+#[test]
+#[ignore = "requires the deterministic ALSA timing fixture"]
+fn fixture_clock_health_extremes_preserve_quality() {
+    let pcm = open_pcm("null").unwrap();
+    let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480)).unwrap();
+    for last_status in [0, 1, u64::MAX] {
+        for last_playback in [0, 1, u64::MAX] {
+            let mut health = AlsaClockHealth {
+                last_status_host_nanos: last_status,
+                last_playback_host_nanos: last_playback,
+                degraded_samples_remaining: 0,
+            };
+            let timing = playback_status_timing(
+                &pcm,
+                48_000,
+                actual.sample_rate_reciprocal,
+                actual.sample_rate_shift,
+                actual.host_clock,
+                &mut health,
+            );
+            if last_status == u64::MAX || last_playback == u64::MAX {
+                assert_eq!(timing.timing_quality, OutputTimingQuality::Fallback);
+                assert_eq!(health.last_status_host_nanos, last_status);
+                assert_eq!(health.last_playback_host_nanos, last_playback);
+                assert_eq!(
+                    health.degraded_samples_remaining,
+                    ALSA_DEGRADED_HOLD_SAMPLES
+                );
+            } else {
+                assert_eq!(timing.timing_quality, OutputTimingQuality::Trusted);
+                assert_eq!(health.last_playback_host_nanos, timing.playback_host_nanos);
+            }
+        }
     }
 }
 
@@ -253,6 +399,61 @@ fn benchmark_alsa() {
         "probe_null" => run_work(iterations, || {
             black_box(probe_output_device(black_box("null"))).unwrap();
         }),
+        "clock_read_mono" | "clock_read_raw" => {
+            let clock = if workload == "clock_read_mono" {
+                AlsaHostClock::Monotonic
+            } else {
+                AlsaHostClock::MonotonicRaw
+            };
+            run_work(iterations, || {
+                black_box(current_clock_nanos(black_box(clock))).unwrap();
+            });
+        }
+        "clock_map_recent" | "clock_map_future" | "clock_map_edges" => {
+            let mut counter = 0_u64;
+            let samples = [
+                (0, 0, u64::MAX),
+                (0, u64::MAX, 0),
+                (u64::MAX, 0, u64::MAX),
+                (u64::MAX, u64::MAX, 0),
+                (5_000, 2_000, 1_250),
+                (5_000, 2_000, 2_750),
+                (0, 0, 0),
+                (1, 1, 1),
+            ];
+            match workload.as_str() {
+                "clock_map_edges" => run_work(iterations, || {
+                    let (host, clock, target) = black_box(samples[counter as usize & 7]);
+                    counter = counter.wrapping_add(1);
+                    black_box(host_nanos_from_clock(
+                        target,
+                        ClockSample {
+                            host_nanos: host,
+                            clock_nanos: clock,
+                        },
+                    ));
+                }),
+                _ => {
+                    let future = workload == "clock_map_future";
+                    run_work(iterations, || {
+                        let offset = counter & 1023;
+                        let target = if future {
+                            1_000_000_000_000 + offset
+                        } else {
+                            1_000_000_000_000 - offset
+                        };
+                        counter = counter.wrapping_add(1);
+                        black_box(host_nanos_from_clock(
+                            black_box(target),
+                            black_box(ClockSample {
+                                host_nanos: 1_000_000_000,
+                                clock_nanos: 1_000_000_000_000,
+                            }),
+                        ));
+                    });
+                }
+            }
+        }
         "timing_48000" | "timing_44100" | "timing_96000" => {
             let rate = match workload.as_str() {
                 "timing_48000" => 48_000,
@@ -267,6 +468,8 @@ fn benchmark_alsa() {
                 black_box(playback_status_timing(
                     &pcm,
                     black_box(rate),
+                    actual.sample_rate_reciprocal,
+                    actual.sample_rate_shift,
                     actual.host_clock,
                     &mut health,
                 ));
@@ -278,18 +481,32 @@ fn benchmark_alsa() {
                 "frames_44100" => 44_100,
                 _ => 96_000,
             };
+            let (reciprocal, shift) = sample_rate_scale(rate);
             let mut frame = 0u32;
             run_work(iterations, || {
                 frame = frame.wrapping_add(239);
-                black_box(frames_to_nanos(black_box(rate), black_box(frame)));
+                black_box(frames_to_nanos(
+                    black_box(rate),
+                    black_box(frame),
+                    black_box(reciprocal),
+                    black_box(shift),
+                ));
             });
         }
         "frames_mixed" => {
             let mut frame = 0u32;
+            let rates = [48_000, 44_100, 96_000, 192_000];
+            let scales = rates.map(sample_rate_scale);
             run_work(iterations, || {
-                let rate = [48_000, 44_100, 96_000, 192_000][frame as usize & 3];
+                let index = frame as usize & 3;
+                let rate = rates[index];
                 frame = frame.wrapping_add(239);
-                black_box(frames_to_nanos(black_box(rate), black_box(frame)));
+                black_box(frames_to_nanos(
+                    black_box(rate),
+                    black_box(frame),
+                    black_box(scales[index].0),
+                    black_box(scales[index].1),
+                ));
             });
         }
         _ => panic!("unknown workload {workload}"),
