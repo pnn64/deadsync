@@ -11,6 +11,7 @@ use crate::{
 };
 use std::collections::HashMap;
 
+mod constants;
 mod expressions;
 mod statements;
 mod tasks;
@@ -50,7 +51,7 @@ struct Function<'a> {
     live: [u64; 4],
     debug_hidden: [u64; 4],
     debug_named: [u64; 4],
-    constants: Vec<Constant>,
+    constants: constants::Constants,
     locals: Vec<Local<'a>>,
     upvalues: Vec<(&'a [u8], Upvalue)>,
     loops: Vec<(u16, Vec<usize>)>,
@@ -159,7 +160,7 @@ impl<'a> Compiler<'a> {
             lines: f.lines.into_boxed_slice(),
             gc_live: f.gc_live.into_boxed_slice(),
             gc_maps: f.gc_maps.into_boxed_slice(),
-            constants: f.constants.into_boxed_slice(),
+            constants: f.constants.finish(),
             registers: f.max.max(2),
             params: f.params,
             vararg: f.vararg,
@@ -358,20 +359,21 @@ impl<'a> Compiler<'a> {
         {
             *number = if negative { -0.0 } else { 0.0 };
         }
-        // PUC 5.1 pools numbers by numeric equality, including +0 and -0.
-        if let Some(i) = self.function.constants.iter().position(|v| match (v, &k) {
-            (Constant::Nil, Constant::Nil) => true,
-            (Constant::Boolean(a), Constant::Boolean(b)) => a == b,
-            (Constant::Number(a), Constant::Number(b)) => a == b,
-            (Constant::String(a), Constant::String(b)) => a == b,
-            _ => false,
-        }) {
-            return Ok(i as u32);
-        }
-        let i = u32::try_from(self.function.constants.len())
-            .map_err(|_| self.error(ErrorKind::Limit, "too many constants"))?;
-        self.function.constants.push(k);
-        Ok(i)
+        self.function
+            .constants
+            .intern(k)
+            .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"))
+    }
+    fn string_constant(&mut self, bytes: &[u8]) -> Result<u32, Error> {
+        self.function
+            .constants
+            .string(bytes)
+            .ok_or_else(|| self.error(ErrorKind::Limit, "too many constants"))
+    }
+    fn load_string(&mut self, dst: u8, bytes: &[u8]) -> Result<(), Error> {
+        let id = self.string_constant(bytes)?;
+        self.emit(Op::Load, dst, 0, id)?;
+        Ok(())
     }
     fn load(&mut self, dst: u8, k: Constant) -> Result<(), Error> {
         let initial_nil = matches!(k, Constant::Nil)

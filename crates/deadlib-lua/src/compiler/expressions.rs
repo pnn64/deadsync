@@ -19,14 +19,14 @@ impl<'a> Compiler<'a> {
             Expr::Nil => self.load(dst, Constant::Nil)?,
             Expr::Boolean(b) => self.load(dst, Constant::Boolean(*b))?,
             Expr::Number(n) => self.load(dst, Constant::Number(*n))?,
-            Expr::String(s) => self.load(dst, Constant::String(s.clone()))?,
+            Expr::String(s) => self.load_string(dst, s)?,
             Expr::Name(name) => {
                 if let Some(src) = self.local(name) {
                     self.emit(Op::Move, dst, u16::from(src), 0)?;
                 } else if let Some(up) = self.upvalue(name)? {
                     self.emit(Op::GetUpvalue, dst, 0, u32::from(up))?;
                 } else {
-                    let k = self.constant(Constant::String(name.clone()))?;
+                    let k = self.string_constant(name)?;
                     self.emit(Op::GetGlobal, dst, 0, k)?;
                 }
             }
@@ -390,7 +390,7 @@ impl<'a> Compiler<'a> {
                 let Expr::String(bytes) = &self.ast.exprs[source].0 else {
                     unreachable!("constant key literal")
                 };
-                Constant::String(bytes.clone())
+                return self.string_constant(bytes).map(Some);
             }
         };
         self.constant(constant).map(Some)

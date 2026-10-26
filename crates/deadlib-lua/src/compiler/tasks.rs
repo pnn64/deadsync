@@ -525,7 +525,7 @@ impl<'a> Compiler<'a> {
                         debug_assert_eq!(u16::from(receiver), u16::from(state.base) + 1);
                         self.emit(Op::Move, receiver, u16::from(state.base), 0)?;
                         let key = self.alloc(1)?;
-                        self.load(key, Constant::String(method.into()))?;
+                        self.load_string(key, method)?;
                         self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
                         self.emit(
                             Op::GetTable,

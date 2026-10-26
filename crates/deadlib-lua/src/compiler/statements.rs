@@ -117,7 +117,7 @@ impl<'a> Compiler<'a> {
                     } else if let Some(up) = self.upvalue(name)? {
                         Target::Upvalue(up)
                     } else {
-                        Target::Global(self.constant(Constant::String(name.clone()))?)
+                        Target::Global(self.string_constant(name)?)
                     }
                 }
                 Expr::Index(table, _) => {

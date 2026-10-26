@@ -33,6 +33,15 @@ Code generation also uses flat continuations for blocks, expressions, argument
 lists and nested functions. Ancestor capture propagation is iterative. Compilation
 does not consume host stack in proportion to source nesting or expression-tree
 depth; the frontend's Lua syntax limits still apply.
+
+Function constants retain first-use order. Small pools use linear lookup; once
+a pool holds 64 constants, subsequent lookups use a temporary flat u32 index.
+Hash collisions compare complete typed values. Numeric equality merges both
+zero signs while NaNs remain distinct. String lookups borrow bytes and allocate
+an owned copy only for a new constant. The index is released when the function
+is finalized, leaving the existing immutable program layout intact. See the
+[compiler measurements](../../docs/performance/2026-10-26-rust-lua-constant-pool.md).
+
 Arithmetic and index chains reuse anonymous result registers and defer right
 operand storage. Named destinations retain their old values through callbacks
 and metamethods. This keeps long left-associated chains within bounded scratch
@@ -336,7 +345,7 @@ Each VM still creates its own runtime objects and environments. Use a directory
 trusted to hold executable code. Default limits are 64 MiB per file and 256 MiB
 of decoded object/payload storage. Tiny programs and native chunks can be slower
 through disk caching; the API is opt-in. See the [format and API notes](../../docs/lua-cache.md)
-and [measurements](../../docs/performance/2026-10-26-rust-lua-cache-crc.md).
+and [measurements](../../docs/performance/2026-10-26-rust-lua-constant-pool.md).
 
 `debug.debug` runs commands against the current thread while preserving the
 suspended caller stack for inspection and mutation. It uses original stdin,
@@ -388,5 +397,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-cache-crc.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-constant-pool.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

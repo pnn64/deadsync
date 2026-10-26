@@ -40,7 +40,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 423 differential/adversarial integration tests, sixty-one unit tests and
+crate, 426 differential/adversarial integration tests, sixty-four unit tests and
 two runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-cache-crc.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-constant-pool.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -684,6 +684,16 @@ measure checksum and full cache calls, allocation/heap footprints and process
 CPU; both engines also cross-read byte-identical artifacts under a shared
 benchmark-only build identity. Normal Cargo build invalidation remains in place.
 The full standalone-engine and integration gates remain open.
+
+The [compiler constant-pool milestone](testing/2026-10-26-rust-lua-constant-pool.md)
+adds a temporary flat index once a function reaches 64 constants. Borrowed
+string lookups copy only new values. Append order, full-byte equality, numeric
+zero pooling and distinct NaNs preserve the existing compiler output. The index
+is dropped at function finalization. [Paired measurements](performance/2026-10-26-rust-lua-constant-pool.md)
+cover scaling, allocations, tracked live layout sizes and process CPU. Complete
+compiled artifacts remain byte-identical to the parent under the benchmark's
+shared build ID. Runtime layouts and the full standalone-engine gates remain
+unchanged.
 
 ## Reference contract
 

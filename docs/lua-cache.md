@@ -92,5 +92,5 @@ A cache produced by a trusted compiler is still executable code, not a sandbox.
 Cache reloads trade filesystem work, validation and decoding against parsing and
 compilation. They are useful for some large source programs; tiny programs and
 already compiled native chunks can reload more slowly. The
-[measurements](performance/2026-10-26-rust-lua-cache-crc.md) include both
+[measurements](performance/2026-10-26-rust-lua-constant-pool.md) include both
 profitable and unprofitable cases, allocation counts and process CPU counters.
