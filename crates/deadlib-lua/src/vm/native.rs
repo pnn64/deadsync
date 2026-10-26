@@ -228,23 +228,30 @@ impl Vm {
         self.trim_hooks();
         self.top = frame.base + 2;
     }
-    pub(super) fn catch_error(
+    pub(super) fn catch_error(&mut self, original: &Error) -> Result<bool, Error> {
+        self.catch_error_from(original, 0)
+    }
+
+    pub(super) fn catch_error_from(
         &mut self,
         original: &Error,
-        budget: &mut Option<u64>,
+        floor: usize,
     ) -> Result<bool, Error> {
         let mut pending = None;
         loop {
             let error = pending.as_ref().unwrap_or(original);
-            let Some(index) = self.frames.iter().rposition(|f| {
+            let Some(relative) = self.frames[floor..].iter().rposition(|f| {
                 (matches!(
                     f.function,
-                    FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE | debug::CONSOLE)
+                    FrameKind::Native(
+                        PCALL | XPCALL | CONT_STANDALONE | CONT_HOST_CALL | debug::CONSOLE
+                    )
                 ) && matches!(f.pc, 1 | 3 | 7))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             }) else {
                 return Ok(false);
             };
+            let index = floor + relative;
             let frame = self.frames[index];
             let value = if let Some(value) = error.value() {
                 value
@@ -260,13 +267,18 @@ impl Vm {
             // function. An enclosing xpcall transforms reader runtime errors even
             // though the loader subsequently returns nil plus that transformed value.
             let inherited = if loads::protected(frame.function) {
-                self.frames[..index].iter().rposition(|f| {
-                    (matches!(
-                        f.function,
-                        FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE | debug::CONSOLE)
-                    ) && matches!(f.pc, 1 | 3 | 7))
-                        || (loads::protected(f.function) && f.pc == 3)
-                })
+                self.frames[floor..index]
+                    .iter()
+                    .rposition(|f| {
+                        (matches!(
+                            f.function,
+                            FrameKind::Native(
+                                PCALL | XPCALL | CONT_STANDALONE | CONT_HOST_CALL | debug::CONSOLE
+                            )
+                        ) && matches!(f.pc, 1 | 3 | 7))
+                            || (loads::protected(f.function) && f.pc == 3)
+                    })
+                    .map(|i| floor + i)
             } else {
                 None
             };
@@ -291,7 +303,7 @@ impl Vm {
                     handler_frame.vararg_start + 1
                 }];
                 if matches!(handler, Value::Function(_) | Value::Native(_)) {
-                    Self::charge(budget)?;
+                    self.charge()?;
                     // Preserve faulting frames until the error handler has returned.
                     let base = self.registers.len();
                     self.registers.extend_from_slice(&[handler, value]);
@@ -337,6 +349,7 @@ impl Vm {
         let index = self.frames.len() - 1;
         let scheduled = self.scheduled_native(id);
         match id {
+            CONT_HOST_CALL => self.host_return(frame),
             CONT_STANDALONE => self.standalone_driver(frame),
             debug::CONSOLE => self.debug_console_step(frame),
             _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),

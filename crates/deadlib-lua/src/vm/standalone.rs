@@ -48,6 +48,7 @@ impl Vm {
     /// Returns hook errors or instruction-limit errors. A context that aborted
     /// outside protected entry has already unwound and delivers no return hook.
     pub fn end_standalone(&mut self) -> Result<(), Error> {
+        self.reset_budget();
         let id = std::mem::take(&mut self.standalone);
         if id == 0 {
             return Ok(());
@@ -95,6 +96,7 @@ impl Vm {
         arguments: &[Value],
         mode: EntryMode,
     ) -> Result<&[Value], Error> {
+        self.reset_budget();
         if arguments.len() > u32::MAX as usize {
             return Err(Error::new(ErrorKind::Limit, 0, "too many arguments"));
         }

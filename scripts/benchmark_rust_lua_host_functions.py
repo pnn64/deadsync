@@ -30,7 +30,7 @@ def main() -> None:
     binaries=[Path(row['executable'])for row in artifacts if row.get('reason')=='compiler-artifact'and row['target']['name']=='host_functions'and row.get('executable')]
     assert len(binaries)==1,binaries
     binary=binaries[0];binary_hash=hashlib.sha256(binary.read_bytes()).hexdigest()
-    env=os.environ.copy();env.pop('DEADLIB_LUA_HOST_CPU',None)
+    env=os.environ.copy();env.pop('DEADLIB_LUA_HOST_CPU',None);env.pop('DEADLIB_LUA_HOST_CPU_FIXTURE',None)
     run=subprocess.run([str(binary)],cwd=root,env=env,capture_output=True,text=True,check=True,timeout=180)
     assert not run.stderr,run.stderr
     output.with_suffix('.tsv').write_text(run.stdout,encoding='utf-8')
@@ -42,20 +42,21 @@ def main() -> None:
         get_times=kernel32.GetProcessTimes;get_times.argtypes=[wintypes.HANDLE]+[ctypes.POINTER(wintypes.FILETIME)]*4;get_times.restype=wintypes.BOOL
         get_cycles=kernel32.QueryProcessCycleTime;get_cycles.argtypes=[wintypes.HANDLE,ctypes.POINTER(ctypes.c_ulonglong)];get_cycles.restype=wintypes.BOOL
         def ticks(value):return(value.dwHighDateTime<<32)|value.dwLowDateTime
-        for sample in range(5):
-            for engine in (('rust','reference')if sample%2==0 else('reference','rust')):
-                child_env=env.copy();child_env['DEADLIB_LUA_HOST_CPU']=engine;begin=time.perf_counter_ns()
-                child=subprocess.Popen([str(binary)],cwd=root,env=child_env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,creationflags=subprocess.CREATE_NO_WINDOW)
-                try:stdout,stderr=child.communicate(timeout=120)
-                except subprocess.TimeoutExpired:child.kill();child.communicate();raise
-                wall=time.perf_counter_ns()-begin
-                assert child.returncode==0 and not stdout and not stderr,(engine,child.returncode,stdout,stderr)
-                created,exited,kernel,user=[wintypes.FILETIME()for _ in range(4)]
-                if not get_times(wintypes.HANDLE(int(child._handle)),ctypes.byref(created),ctypes.byref(exited),ctypes.byref(kernel),ctypes.byref(user)):raise ctypes.WinError(ctypes.get_last_error())
-                cycles=ctypes.c_ulonglong()
-                if not get_cycles(wintypes.HANDLE(int(child._handle)),ctypes.byref(cycles)):raise ctypes.WinError(ctypes.get_last_error())
-                cpu_samples.append(dict(engine=engine,sample=sample,fixture='add_lua_loop',executions=400,callbacks=2_000_000,warmup_callbacks=5000,wall_ns=wall,
-                    kernel_100ns=ticks(kernel),user_100ns=ticks(user),cpu_ns=(ticks(kernel)+ticks(user))*100,cpu_cycles=cycles.value))
+        for fixture in ('add_lua_loop','reenter_add_lua_loop'):
+            for sample in range(5):
+                for engine in (('rust','reference')if sample%2==0 else('reference','rust')):
+                    child_env=env.copy();child_env['DEADLIB_LUA_HOST_CPU']=engine;child_env['DEADLIB_LUA_HOST_CPU_FIXTURE']=fixture;begin=time.perf_counter_ns()
+                    child=subprocess.Popen([str(binary)],cwd=root,env=child_env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,creationflags=subprocess.CREATE_NO_WINDOW)
+                    try:stdout,stderr=child.communicate(timeout=120)
+                    except subprocess.TimeoutExpired:child.kill();child.communicate();raise
+                    wall=time.perf_counter_ns()-begin
+                    assert child.returncode==0 and not stdout and not stderr,(engine,child.returncode,stdout,stderr)
+                    created,exited,kernel,user=[wintypes.FILETIME()for _ in range(4)]
+                    if not get_times(wintypes.HANDLE(int(child._handle)),ctypes.byref(created),ctypes.byref(exited),ctypes.byref(kernel),ctypes.byref(user)):raise ctypes.WinError(ctypes.get_last_error())
+                    cycles=ctypes.c_ulonglong()
+                    if not get_cycles(wintypes.HANDLE(int(child._handle)),ctypes.byref(cycles)):raise ctypes.WinError(ctypes.get_last_error())
+                    cpu_samples.append(dict(engine=engine,sample=sample,fixture=fixture,executions=400,callbacks=2_000_000,warmup_callbacks=5000,wall_ns=wall,
+                        kernel_100ns=ticks(kernel),user_100ns=ticks(user),cpu_ns=(ticks(kernel)+ticks(user))*100,cpu_cycles=cycles.value))
     assert hashes(sources)==before and hashes(reference)==oracle
     samples=[];layouts={};heaps={};metadata={}
     for line in run.stdout.splitlines():
@@ -77,14 +78,14 @@ def main() -> None:
         assert all(set(rows)==set(range(9))for rows in pairs.values())
         assert all(pairs['rust'][i]['repeats']==pairs['reference'][i]['repeats']and pairs['rust'][i]['callbacks_per_iteration']==pairs['reference'][i]['callbacks_per_iteration']for i in range(9))
         ratios[name]=statistics.median(pairs['rust'][i]['ns_per_iteration']/pairs['reference'][i]['ns_per_iteration']for i in range(9))
-    assert len(samples)==72 and len(layouts)==len(heaps)==3
+    assert len(samples)==108 and len(layouts)==len(heaps)==5
     assert all(x['allocations_total']==x['reallocations_total']==x['requested_bytes_total']==0 for x in samples if x['engine']=='rust')
     result=dict(command=command,binary=str(binary),binary_sha256=binary_hash,source_hashes=before,reference_source_hashes=oracle,
         utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),build_and_run_seconds=time.time()-started,platform=platform.platform(),processor=os.environ.get('PROCESSOR_IDENTIFIER',platform.processor()),
         rustc=subprocess.check_output(['rustc','-vV'],text=True),git_revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),
-        protocol='Nine alternating pairs for three 5000-callback Lua loops and one direct Rust entry. Timed Rust callbacks use borrowed arguments, existing result registers and function-pointer dispatch; reference callbacks use the development mlua bridge to official C Lua 5.1.5. Loop timings include interpreter execution and both callback boundaries, not an isolated function-pointer cost. Typed reference callbacks perform equivalent arithmetic/results; reference captured state is a Rust closure rather than Lua upvalues. Three warmups, setup, correctness, layouts and heap observations are outside timing. All warmed Rust paths assert zero Rust System allocations/reallocations/requests. Reference counters cover Rust bridge allocations only, excluding native C allocation calls. CPU children include VM/setup/startup/cleanup, 5000 warmup callbacks and 2000000 workload callbacks; counter increments are disabled but the forwarding allocator remains.',
+        protocol='Nine alternating pairs for five 5000-callback Lua loops and one direct Rust entry. Two loops enter a Rust callback which makes a protected nested Lua call, returning one or four values. Their C comparison uses a raw lua_CFunction copying the same three original arguments and lua_pcall(LUA_MULTRET), preserving the native argument slots. The other reference callbacks use typed development mlua bridges. Loop timings include interpreter execution and both callback boundaries, not isolated function-pointer cost. Reference captured state is a Rust closure rather than Lua upvalues. Direct Rust entry returns borrowed Values; the C binding decodes f64. Child functions are bound once before timing. Three warmups, setup, correctness, layouts and heap observations are outside timing. All warmed Rust paths assert zero System allocations/reallocations/requests. Reference counters exclude native C allocation calls. Five alternating CPU pairs for each of add_lua_loop and reenter_add_lua_loop include VM/setup/startup/cleanup, 5000 warmup callbacks and 2000000 workload callbacks per child; counter increments are disabled but the forwarding allocator remains.',
         metadata=metadata,samples=samples,program_layouts=layouts,heap_estimates=heaps,median_paired_rust_over_reference=ratios,cpu_samples=cpu_samples,
-        missing_metrics=['exact allocator live/peak heap','process peak RSS','native C allocation counts','sampled CPU call stacks','registration time','reentrant or yielding host callbacks'])
+        missing_metrics=['exact allocator live/peak heap','process peak RSS','native C allocation counts','sampled CPU call stacks','registration time','yielding host callbacks'])
     output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8');print(json.dumps(ratios,indent=2))
 
 

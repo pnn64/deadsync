@@ -349,12 +349,18 @@ environment. Callback errors use `error` for a message or `raise` for an exact
 Lua error value, including nil and object identities.
 
 Callbacks run synchronously and can allocate strings, tables and userdata or
-perform raw table access. This interface does not invoke Lua or suspend from
-inside Rust. Panics follow the Rust build strategy; after an unwind, discard
+perform raw table access. `HostCall::call` invokes a callable through a protected
+nested Lua boundary; `call_and_return` appends its results without an intermediate
+vector. Nested calls share the outer instruction quota. Rust may handle runtime
+errors, while resource limits still abort the outer entry. Returned objects and
+error values remain rooted until a later call or result write reuses their
+storage; retain them in captures or results before then. Child coroutines may
+resume and yield, but execution cannot suspend the Rust callback's stack.
+Panics follow the Rust build strategy; after an unwind, discard
 the VM. Dropping that interrupted VM skips Lua finalizers. Raw object identities
 can coincide across VMs, so values and captures must remain in their originating
-VM. [Callback measurements](../../docs/performance/2026-10-26-rust-lua-host-functions.md)
-cover direct host entry, Lua loops, allocations, heaps and process CPU.
+VM. [Callback measurements](../../docs/performance/2026-10-26-rust-lua-host-reentry.md)
+cover direct host entry, nested Lua calls, Lua loops, allocations, heaps and process CPU.
 
 `ProgramCache` loads or saves immutable compiled programs in a caller-selected
 directory. It compares full source/name bytes, compiler build and lexer locale
@@ -382,7 +388,7 @@ object handles retain their ownership restrictions. Package loading uses this
 value type for its observable sentinel.
 
 Other standard libraries, native C-library loading, complete diagnostic text and
-debug behavior, cache eviction/package integration, host callback registration and
+debug behavior, cache eviction/package integration, richer Rust host objects and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. Native locales require Windows/MSVC,
 and broader native resource bounds need validation.
@@ -417,5 +423,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-host-functions.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-host-reentry.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

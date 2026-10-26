@@ -67,6 +67,28 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
     let result = call.number(0)? * scale;
     call.push(Value::Number(result))
 }
+fn reenter(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let function = call.arguments()[0];
+    let arguments = [call.arguments()[1], call.arguments()[2]];
+    call.call_and_return(function, &arguments)
+}
+// SAFETY: these fixed fixtures always pass a Lua function and two scalars.
+// Copies fit the reserved C stack. lua_pcall contains all Lua failures; no
+// longjmp crosses a Rust destructor. An unexpected fixture error aborts.
+unsafe extern "C-unwind" fn reference_reenter(
+    state: *mut lua_reference::ffi::lua_State,
+) -> std::ffi::c_int {
+    use lua_reference::ffi;
+    unsafe {
+        for index in 1..=3 {
+            ffi::lua_pushvalue(state, index);
+        }
+        if ffi::lua_pcall(state, 2, ffi::LUA_MULTRET, 0) != ffi::LUA_OK {
+            std::process::abort();
+        }
+        ffi::lua_gettop(state) - 3
+    }
+}
 fn measure(
     name: &str,
     engine: &str,
@@ -100,14 +122,26 @@ fn measure(
     );
 }
 const ADD: &[u8] = b"local f=host;local s=0;for i=1,5000 do s=s+f(i,3)end;return s";
+const REENTER_ADD: &[u8] =
+    b"local f=host;local child=child;local s=0;for i=1,5000 do s=s+f(child,i,3)end;return s";
+const CHILD_ADD: &[u8] = b"function child(a,b)return a+b end";
+const CHILD_ECHO: &[u8] = b"function child(a,b)return a,nil,b,false end";
 fn main() {
     if let Ok(engine) = std::env::var("DEADLIB_LUA_HOST_CPU") {
+        let reentry =
+            std::env::var("DEADLIB_LUA_HOST_CPU_FIXTURE").as_deref() == Ok("reenter_add_lua_loop");
+        let source = if reentry { REENTER_ADD } else { ADD };
         match engine.as_str() {
             "rust" => {
                 let mut vm = Vm::new();
-                let function = vm.new_host_function(add, &[]).unwrap();
+                let function = vm
+                    .new_host_function(if reentry { reenter } else { add }, &[])
+                    .unwrap();
                 vm.set_global(b"host", function).unwrap();
-                let program = compile(ADD).unwrap();
+                if reentry {
+                    vm.execute(&compile(CHILD_ADD).unwrap()).unwrap();
+                }
+                let program = compile(source).unwrap();
                 assert_eq!(vm.execute(&program).unwrap(), [Value::Number(12_517_500.)]);
                 for _ in 0..400 {
                     black_box(vm.execute(black_box(&program)).unwrap());
@@ -115,11 +149,18 @@ fn main() {
             }
             "reference" => {
                 let lua = lua_reference::Lua::new();
-                let host = lua
-                    .create_function(|_, (a, b): (f64, f64)| Ok(a + b))
-                    .unwrap();
+                let host = if reentry {
+                    // SAFETY: only the fixed protected-call fixture invokes it.
+                    unsafe { lua.create_c_function(reference_reenter) }.unwrap()
+                } else {
+                    lua.create_function(|_, (a, b): (f64, f64)| Ok(a + b))
+                        .unwrap()
+                };
                 lua.globals().set("host", host).unwrap();
-                let function = lua.load(ADD).into_function().unwrap();
+                if reentry {
+                    lua.load(CHILD_ADD).exec().unwrap();
+                }
+                let function = lua.load(source).into_function().unwrap();
                 assert_eq!(function.call::<f64>(()).unwrap(), 12_517_500.);
                 for _ in 0..400 {
                     black_box(function.call::<f64>(()).unwrap());
@@ -136,6 +177,8 @@ fn main() {
         ("add_lua_loop",ADD,add as deadlib_lua::HostFunction,12_517_500.),
         ("echo_lua_loop",b"local f=host;local s=0;for i=1,5000 do local a,b,c,d=f(i,i+1);s=s+a+c;if b~=nil or d~=false then error('arity')end end;return s".as_slice(),echo,25_010_000.),
         ("capture_lua_loop",b"local f=host;local s=0;for i=1,5000 do s=s+f(i)end;return s".as_slice(),capture,37_507_500.),
+        ("reenter_add_lua_loop",REENTER_ADD,reenter,12_517_500.),
+        ("reenter_echo_lua_loop",b"local f=host;local child=child;local s=0;for i=1,5000 do local a,b,c,d=f(child,i,i+1);s=s+a+c;if b~=nil or d~=false then error('arity')end end;return s".as_slice(),reenter,25_010_000.),
     ]{
         let mut vm=Vm::new();let captures=if name=="capture_lua_loop"{[Value::Number(3.)].as_slice()}else{&[]};
         let host=vm.new_host_function(callback,captures).unwrap();vm.set_global(b"host",host).unwrap();let program=compile(source).unwrap();
@@ -143,9 +186,18 @@ fn main() {
         let host=match name{
             "add_lua_loop"=>lua.create_function(|_,(a,b):(f64,f64)|Ok(a+b)).unwrap(),
             "echo_lua_loop"=>lua.create_function(|_,(a,b):(f64,f64)|Ok((a,lua_reference::Value::Nil,b,false))).unwrap(),
+            "reenter_add_lua_loop"|"reenter_echo_lua_loop"=>{
+                // SAFETY: only fixed protected-call fixtures invoke it.
+                unsafe { lua.create_c_function(reference_reenter) }.unwrap()
+            },
             _=>{let scale=black_box(3.);lua.create_function(move|_,a:f64|Ok(a*scale)).unwrap()},
         };
         lua.globals().set("host",host).unwrap();let function=lua.load(source).into_function().unwrap();
+        if name.starts_with("reenter_") {
+            let child = if name=="reenter_add_lua_loop" {CHILD_ADD} else {CHILD_ECHO};
+            vm.execute(&compile(child).unwrap()).unwrap();
+            lua.load(child).exec().unwrap();
+        }
         for _ in 0..3{assert_eq!(vm.execute(&program).unwrap(),[Value::Number(expected)]);assert_eq!(function.call::<f64>(()).unwrap(),expected);}
         println!("layout\t{name}\t{}\t{}",program.instruction_count(),program.register_count());
         let h=vm.heap_stats();println!("heap\t{name}\t{}\t{}\t{}\t{}",h.live_bytes,h.reserved_bytes,h.native_closures,lua.used_memory());

@@ -209,6 +209,7 @@ const CONT_RETURN: u64 = 264;
 const CONT_FILE: u64 = 265;
 const CONT_CONCAT: u64 = 266;
 const CONT_STANDALONE: u64 = 267;
+const CONT_HOST_CALL: u64 = 268;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -317,6 +318,7 @@ pub struct Vm {
     registry: TableId,
     top: usize,
     budget: Option<u64>,
+    remaining: u64,
     type_metatables: [Option<TableId>; 9],
     meta_names: [StringId; 19],
     output: Option<Vec<u8>>,
@@ -375,6 +377,7 @@ impl Vm {
             registry,
             top: 0,
             budget: None,
+            remaining: 0,
             type_metatables: [None; 9],
             meta_names: [StringId(0); 19],
             output: None,
@@ -554,6 +557,7 @@ impl Vm {
     /// # Errors
     /// Returns lookup errors or instruction-limit errors.
     pub fn get_global(&mut self, name: &[u8]) -> Result<Value, Error> {
+        self.reset_budget();
         let key = self.intern(name);
         let target = Value::Table(self.globals);
         let value = self.tables[slot_index(self.globals.0)].get(key);
@@ -595,6 +599,7 @@ impl Vm {
     /// Honors the global table's `__newindex` metamethod.
     /// Returns an error for invalid/collected handles, Lua errors or quotas.
     pub fn set_global(&mut self, name: &[u8], value: Value) -> Result<(), Error> {
+        self.reset_budget();
         self.validate_value(value)?;
         let k = self.intern(name);
         let target = Value::Table(self.globals);
@@ -952,6 +957,7 @@ impl Vm {
     /// Returns Lua runtime errors or an instruction-limit error. Returned values
     /// borrow the register storage until the next mutation of the VM.
     pub fn execute(&mut self, program: &Program) -> Result<&[Value], Error> {
+        self.reset_budget();
         if self.standalone != 0 {
             let function = self.load(program);
             return self.call_root(Value::Function(function), &[]);
@@ -1028,6 +1034,7 @@ impl Vm {
     }
 
     fn call_root(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        self.reset_budget();
         if self.standalone != 0 {
             return self.standalone_call(function, arguments, standalone::EntryMode::Message);
         }
@@ -1089,12 +1096,11 @@ impl Vm {
     // Shared entry driver for source execution and host-requested finalization.
     fn drive(&mut self) -> Result<usize, Error> {
         let mut error_line = 0;
-        let mut budget = self.budget;
         let result = loop {
-            let result = self.run(&mut budget, &mut error_line);
+            let result = self.run(&mut error_line);
             match result {
                 Err(error) if error.kind() == ErrorKind::Runtime => {
-                    match self.catch_error(&error, &mut budget) {
+                    match self.catch_error(&error) {
                         Ok(true) => continue,
                         Ok(false) if self.thread != self.main => {
                             self.fail_thread(&error, &mut error_line);
@@ -1117,21 +1123,26 @@ impl Vm {
     }
 
     #[inline]
-    fn charge(budget: &mut Option<u64>) -> Result<(), Error> {
-        if let Some(n) = budget {
-            if *n == 0 {
+    fn reset_budget(&mut self) {
+        self.remaining = self.budget.unwrap_or(0);
+    }
+
+    #[inline]
+    fn charge(&mut self) -> Result<(), Error> {
+        if self.budget.is_some() {
+            if self.remaining == 0 {
                 return Err(Error::new(
                     ErrorKind::Limit,
                     0,
                     "instruction limit exceeded",
                 ));
             }
-            *n -= 1;
+            self.remaining -= 1;
         }
         Ok(())
     }
 
-    fn run(&mut self, budget: &mut Option<u64>, error_line: &mut u32) -> Result<usize, Error> {
+    fn run(&mut self, error_line: &mut u32) -> Result<usize, Error> {
         'frames: loop {
             self.maybe_gc();
             let frame_index = self.frames.len() - 1;
@@ -1145,7 +1156,7 @@ impl Vm {
             let frame = self.frames[frame_index];
             let function = match frame.function {
                 FrameKind::Native(id) => {
-                    Self::charge(budget)?;
+                    self.charge()?;
                     let previous = self.active_native.replace(frame_index);
                     let result = self.step_native(id, frame).map_err(|error| {
                         if error.kind() == ErrorKind::Runtime && error.value().is_none() {
@@ -1180,7 +1191,7 @@ impl Vm {
                 {
                     continue 'frames;
                 }
-                Self::charge(budget)?;
+                self.charge()?;
                 let i = prototype.code[pc];
                 *error_line = prototype.lines[pc];
                 pc += 1;

@@ -295,8 +295,11 @@ impl Vm {
         self.finish_thread(source, 1, true, false, line);
     }
     pub(super) fn abort_threads(&mut self, line: &mut u32) {
+        self.abort_threads_to(self.main, line);
+    }
+    pub(super) fn abort_threads_to(&mut self, target: ThreadId, line: &mut u32) {
         self.transition = None;
-        while self.thread != self.main {
+        while self.thread != target {
             let id = self.thread;
             let parent = self.threads[slot_index(id.0)]
                 .resumer
@@ -316,7 +319,7 @@ impl Vm {
             self.threads[slot_index(id.0)].status = Status::Dead;
             self.switch_thread(parent, line);
         }
-        self.threads[0].status = Status::Running;
+        self.threads[slot_index(target.0)].status = Status::Running;
     }
     pub(super) fn coroutine_native(
         &mut self,
@@ -408,6 +411,7 @@ impl Vm {
                             | CONT_STANDALONE
                     )
                 ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) >= 2))
+                    || (matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             })
             .count();

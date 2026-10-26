@@ -4,7 +4,8 @@ use super::*;
 /// A synchronous Rust callback. Append results through [`HostCall::push`].
 ///
 /// Arguments and captures borrow VM storage. Callbacks may allocate Lua values
-/// and return Lua errors, but this interface does not reenter Lua or suspend.
+/// and return Lua errors. [`HostCall::call`] invokes Lua through a protected
+/// nested boundary. A callback cannot suspend its Rust stack.
 /// Rust panics follow the build's panic strategy. After unwinding, discard the
 /// VM; its Lua finalizers are skipped because execution was interrupted.
 pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
@@ -27,6 +28,7 @@ pub struct HostCall<'vm> {
     count: usize,
     output: usize,
     results: usize,
+    abort: Option<Error>,
 }
 
 impl Vm {
@@ -100,23 +102,224 @@ impl Vm {
             count,
             output: base,
             results: 0,
+            abort: None,
         };
         let outcome =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&mut context)));
-        match outcome {
-            Ok(result) => result?,
+        let result = match outcome {
+            Ok(result) => result,
             Err(payload) => {
                 // A Rust panic bypasses the Lua driver. Reuse the shutdown
                 // state to prevent Drop from executing interrupted Lua frames.
                 context.vm.gc.closing = true;
                 std::panic::resume_unwind(payload);
             }
+        };
+        if let Some(error) = context.abort.take() {
+            return Err(error);
         }
+        result?;
         Ok(context.results)
+    }
+
+    fn host_error(&self, value: Value) -> Error {
+        let bytes = match value {
+            Value::String(id) => self.string_bytes(id).unwrap().to_vec(),
+            Value::Number(n) => format_number(n),
+            _ => b"Lua error".to_vec(),
+        };
+        Error::from_bytes(ErrorKind::Runtime, 0, bytes).with_value(value)
+    }
+
+    pub(super) fn host_return(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+        self.frames.pop();
+        if frame.pc == 2 {
+            Err(self.host_error(self.registers[frame.base + 1]))
+        } else {
+            Ok(Some(self.top - frame.base))
+        }
+    }
+
+    fn drive_host(
+        &mut self,
+        owner: ThreadId,
+        depth: usize,
+        start: Result<Option<usize>, Error>,
+    ) -> Result<usize, Error> {
+        let mut line = 0;
+        let mut pending = match start {
+            Ok(Some(count)) => {
+                let base = self.frames[depth].base;
+                self.finish_call(base, count, OPEN);
+                None
+            }
+            Ok(None) => None,
+            Err(error) => Some(Err(error)),
+        };
+        loop {
+            let result = pending.take().unwrap_or_else(|| self.run(&mut line));
+            match result {
+                Ok(count) if self.thread == owner && self.frames.len() == depth => {
+                    return Ok(count);
+                }
+                Ok(count) if self.thread != owner => {
+                    self.finish_thread(0, count, false, false, &mut line)
+                }
+                Err(error) if self.thread == owner && self.frames.len() == depth => {
+                    return Err(error.at_line(line));
+                }
+                Err(error) if error.kind() == ErrorKind::Runtime => {
+                    let floor = if self.thread == owner { depth } else { 0 };
+                    match self.catch_error_from(&error, floor) {
+                        Ok(true) => {}
+                        Ok(false) if self.thread != owner => self.fail_thread(&error, &mut line),
+                        Ok(false) => return Err(error.at_line(line)),
+                        Err(error) => return Err(error.at_line(line)),
+                    }
+                }
+                Err(error) => return Err(error.at_line(line)),
+                Ok(_) => {
+                    return Err(Error::new(
+                        ErrorKind::Runtime,
+                        0,
+                        "invalid host call boundary",
+                    ));
+                }
+            }
+        }
     }
 }
 
 impl HostCall<'_> {
+    /// Invoke a Lua/native function or callable value without leaving this callback.
+    ///
+    /// Results borrow register storage and remain rooted until another call or
+    /// result write reuses it. Retain objects in captures/results before then.
+    /// The call shares the outer instruction quota and cannot yield across this
+    /// native boundary; child coroutines may resume/yield normally.
+    ///
+    /// ```
+    /// use deadlib_lua::{Error, HostCall, Value, Vm, compile};
+    /// fn invoke(call: &mut HostCall<'_>) -> Result<(), Error> {
+    ///     let function = call.arguments()[0];
+    ///     call.call_and_return(function, &[Value::Number(42.)])
+    /// }
+    /// let mut vm = Vm::new();
+    /// let host = vm.new_host_function(invoke, &[])?;
+    /// vm.set_global(b"host", host)?;
+    /// let program = compile(b"return host(function(x) return x, nil, false end)")?;
+    /// assert_eq!(vm.execute(&program)?, &[Value::Number(42.), Value::Nil, Value::Boolean(false)]);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns child Lua errors with their original error value. Runtime errors
+    /// can be handled in Rust. Instruction/resource limits remain fatal to the
+    /// outer entry even if this callback ignores the returned error.
+    pub fn call(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        let range = self.call_range(function, arguments)?;
+        Ok(&self.vm.registers[range])
+    }
+
+    /// Invoke a callable and append all of its results without an intermediate vector.
+    ///
+    /// # Errors
+    /// Returns the errors from [`Self::call`] or the native result-count limit.
+    pub fn call_and_return(&mut self, function: Value, arguments: &[Value]) -> Result<(), Error> {
+        let range = self.call_range(function, arguments)?;
+        let count = range.len();
+        if count > limits::MAX_CSTACK.saturating_sub(self.count + self.results) {
+            return Err(self.error(b"too many host function results"));
+        }
+        self.results += count;
+        Ok(())
+    }
+
+    fn call_range(
+        &mut self,
+        function: Value,
+        arguments: &[Value],
+    ) -> Result<std::ops::Range<usize>, Error> {
+        if let Some(error) = &self.abort {
+            return Err(error.clone());
+        }
+        self.vm.validate_value(function)?;
+        for &value in arguments {
+            self.vm.validate_value(value)?;
+        }
+        if arguments.len() > u32::MAX as usize {
+            let error = Error::new(ErrorKind::Limit, 0, "too many host call arguments");
+            self.abort = Some(error.clone());
+            return Err(error);
+        }
+        let owner = self.vm.thread;
+        let depth = self.vm.frames.len();
+        let top = self.vm.top;
+        let active = self.vm.active_native;
+        let base = self.output + self.results;
+        self.vm.registers.truncate(base);
+        self.vm.resize_registers(base + 1 + arguments.len());
+        self.vm.registers[base] = function;
+        self.vm.registers[base + 1..].copy_from_slice(arguments);
+        self.vm.push_record(Frame {
+            function: FrameKind::Native(CONT_HOST_CALL),
+            pc: 1,
+            base,
+            stack_start: base,
+            result: base,
+            wanted: FRAME_OPEN,
+            barriers: self.vm.frames.last().unwrap().barriers,
+            vararg_start: base + 1,
+            vararg_count: arguments.len() as u32,
+            tail_calls: 0,
+        });
+        let start = self
+            .vm
+            .start_call(base, arguments.len(), OPEN, false)
+            .map_err(|error| {
+                // There is no Lua call-site location for failure to enter a value
+                // supplied by Rust. Preserve the native-boundary diagnostic.
+                if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+                    let value = self.vm.intern(error.message_bytes());
+                    error.with_value(value)
+                } else {
+                    error
+                }
+            });
+        let result = self.vm.drive_host(owner, depth, start);
+        let mut line = 0;
+        self.vm.abort_threads_to(owner, &mut line);
+        self.vm.close_upvalues(base);
+        self.vm.discard_finalizers(depth);
+        self.vm.frames.truncate(depth);
+        self.vm.restore_calls();
+        self.vm.trim_substitutions();
+        self.vm.trim_sorts();
+        self.vm.trim_loads();
+        self.vm.trim_tracebacks();
+        if result.is_err() {
+            self.vm.trim_hooks();
+        }
+        self.vm.active_native = active;
+        self.vm.top = top;
+        match result {
+            Ok(count) => {
+                self.vm.registers.truncate(base + count);
+                Ok(base..base + count)
+            }
+            Err(error) => {
+                self.vm.registers.truncate(base);
+                if let Some(value) = error.value() {
+                    self.vm.registers.push(value);
+                }
+                if error.kind() == ErrorKind::Limit {
+                    self.abort = Some(error.clone());
+                }
+                Err(error)
+            }
+        }
+    }
+
     /// Borrow the positional arguments, including explicit nil values.
     pub fn arguments(&self) -> &[Value] {
         &self.vm.registers[self.arguments..self.arguments + self.count]
@@ -256,11 +459,6 @@ impl HostCall<'_> {
         if let Err(error) = self.vm.validate_value(value) {
             return error;
         }
-        let bytes = match value {
-            Value::String(id) => self.vm.string_bytes(id).unwrap().to_vec(),
-            Value::Number(n) => format_number(n),
-            _ => b"Lua error".to_vec(),
-        };
-        Error::from_bytes(ErrorKind::Runtime, 0, bytes).with_value(value)
+        self.vm.host_error(value)
     }
 }

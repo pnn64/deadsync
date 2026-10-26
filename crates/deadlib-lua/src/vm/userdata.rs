@@ -116,6 +116,7 @@ impl Vm {
     }
 
     fn run_host_finalizers(&mut self) -> Result<(), Error> {
+        self.reset_budget();
         let len = self.registers.len();
         let top = self.top;
         if self.standalone != 0 && self.frames.is_empty() {
