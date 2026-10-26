@@ -37,7 +37,7 @@ impl AlsaAccessMode {
 }
 
 pub struct AlsaOutputPrep {
-    pcm_id: String,
+    pcm_id: CString,
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
@@ -180,11 +180,16 @@ fn build_output_device(pcm_id: &CStr, name: String, is_default: bool) -> AlsaOut
     let pcm_name = pcm_id.to_str().expect("generated PCM ID must be UTF-8");
     let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(pcm_id) {
         Ok(probed) => probed,
-        Err(err) => {
-            warn!(
-                "Failed to probe ALSA playback device '{}' ({}): {err}. Listing it with fallback defaults.",
-                name, pcm_name
-            );
+        Err((reason, source)) => {
+            if let Some(source) = source {
+                warn!(
+                    "Failed to probe ALSA playback device '{name}' ({pcm_name}): {reason} '{pcm_name}': {source}. Listing it with fallback defaults."
+                );
+            } else {
+                warn!(
+                    "Failed to probe ALSA playback device '{name}' ({pcm_name}): {reason} '{pcm_name}'. Listing it with fallback defaults."
+                );
+            }
             (Vec::new(), 48_000, 2)
         }
     };
@@ -198,26 +203,24 @@ fn build_output_device(pcm_id: &CStr, name: String, is_default: bool) -> AlsaOut
     }
 }
 
-fn probe_output_device(pcm_id: &CStr) -> Result<(Vec<u32>, u32, usize), String> {
-    let pcm = PCM::open(pcm_id, Direction::Playback, false).map_err(|e| {
-        format!(
-            "failed to open ALSA PCM '{}': {e}",
-            pcm_id.to_string_lossy()
-        )
-    })?;
-    let pcm_id = pcm_id.to_str().expect("generated PCM ID must be UTF-8");
-    let hw = HwParams::any(&pcm)
-        .map_err(|e| format!("failed to create ALSA hw params for '{pcm_id}': {e}"))?;
+type DeviceProbeError = (&'static str, Option<alsa::Error>);
+
+fn probe_output_device(pcm_id: &CStr) -> Result<(Vec<u32>, u32, usize), DeviceProbeError> {
+    let pcm = PCM::open(pcm_id, Direction::Playback, false)
+        .map_err(|e| ("failed to open ALSA PCM", Some(e)))?;
+    let hw = HwParams::any(&pcm).map_err(|e| ("failed to create ALSA hw params for", Some(e)))?;
     hw.test_access(Access::RWInterleaved)
-        .map_err(|e| format!("missing RW interleaved access for '{pcm_id}': {e}"))?;
+        .map_err(|e| ("missing RW interleaved access for", Some(e)))?;
     hw.test_format(Format::s16())
-        .map_err(|e| format!("missing signed 16-bit format for '{pcm_id}': {e}"))?;
-    let channels = preferred_channels(&hw).ok_or_else(|| {
-        format!("failed to determine a usable channel count for ALSA PCM '{pcm_id}'")
-    })?;
-    let (sample_rates_hz, default_rate_hz) = sample_rate_capabilities(&hw).ok_or_else(|| {
-        format!("failed to determine a usable sample rate for ALSA PCM '{pcm_id}'")
-    })?;
+        .map_err(|e| ("missing signed 16-bit format for", Some(e)))?;
+    let channels = preferred_channels(&hw).ok_or((
+        "failed to determine a usable channel count for ALSA PCM",
+        None,
+    ))?;
+    let (sample_rates_hz, default_rate_hz) = sample_rate_capabilities(&hw).ok_or((
+        "failed to determine a usable sample rate for ALSA PCM",
+        None,
+    ))?;
     Ok((sample_rates_hz, default_rate_hz, channels))
 }
 
@@ -255,21 +258,32 @@ fn sample_rate_capabilities(hw: &HwParams<'_>) -> Option<(Vec<u32>, u32)> {
             max_rate_hz
         }
     };
-    let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES.len() + 3);
-    sample_rates_hz.push(default_rate_hz);
+    let mut rates = [0; COMMON_SAMPLE_RATES.len() + 3];
+    rates[0] = default_rate_hz;
+    let mut len = usize::from(supported == 0);
     while supported != 0 {
-        sample_rates_hz.push(COMMON_SAMPLE_RATES[supported.trailing_zeros() as usize]);
+        rates[len] = COMMON_SAMPLE_RATES[supported.trailing_zeros() as usize];
+        len += 1;
         supported &= supported - 1;
     }
     if let Ok(min_rate_hz) = hw.get_rate_min() {
-        sample_rates_hz.push(min_rate_hz);
+        rates[len] = min_rate_hz;
+        len += 1;
     }
     if let Ok(max_rate_hz) = hw.get_rate_max() {
-        sample_rates_hz.push(max_rate_hz);
+        rates[len] = max_rate_hz;
+        len += 1;
     }
-    sample_rates_hz.sort_unstable();
-    sample_rates_hz.dedup();
-    Some((sample_rates_hz, default_rate_hz))
+    let rates = &mut rates[..len];
+    rates.sort_unstable();
+    let mut unique = 1;
+    for index in 1..len {
+        if rates[index] != rates[unique - 1] {
+            rates[unique] = rates[index];
+            unique += 1;
+        }
+    }
+    Some((rates[..unique].to_vec(), default_rate_hz))
 }
 
 pub fn prepare(
@@ -280,6 +294,7 @@ pub fn prepare(
     mode: AlsaAccessMode,
 ) -> Result<AlsaOutputPrep, String> {
     let pcm_id = selected_pcm_id(pcm_id, &device_name, mode)?;
+    let pcm_id = CString::new(pcm_id).unwrap();
     let pcm = open_pcm(&pcm_id)?;
     let actual = configure_probe(&pcm, sample_rate_hz, channels.max(1), mode)?;
     Ok(AlsaOutputPrep {
@@ -553,9 +568,13 @@ fn resolved_hw_pcm_address(pcm_id: &CStr) -> Option<(u32, u32)> {
 }
 
 #[inline(always)]
-fn open_pcm(pcm_id: &str) -> Result<PCM, String> {
-    PCM::new(pcm_id, Direction::Playback, false)
-        .map_err(|e| format!("failed to open ALSA PCM '{pcm_id}': {e}"))
+fn open_pcm(pcm_id: &CStr) -> Result<PCM, String> {
+    PCM::open(pcm_id, Direction::Playback, false).map_err(|e| {
+        format!(
+            "failed to open ALSA PCM '{}': {e}",
+            pcm_id.to_string_lossy()
+        )
+    })
 }
 
 fn configure_probe(
@@ -1019,7 +1038,8 @@ mod tests {
 
     #[test]
     fn null_pcm_preserves_requested_stream_shape() {
-        let pcm = open_pcm("null").expect("ALSA null PCM should be available for regression tests");
+        let pcm =
+            open_pcm(c"null").expect("ALSA null PCM should be available for regression tests");
         let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480))
             .expect("ALSA null PCM should accept the standard stereo stream shape");
 

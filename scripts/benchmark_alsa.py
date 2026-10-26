@@ -31,7 +31,9 @@ WORKLOADS = {"shared_alias": 2_000_000, "shared_hw": 2_000_000,
              "timing_zero": 1_000_000, "timing_status_error": 1_000_000,
              "timing_monotonic": 1_000_000, "prepare_null": 10_000,
              "prepare_reopen": 10_000, "reopen_prepared": 30_000,
-             "enumerate_empty": 100_000, "enumerate_large": 15_000}
+             "enumerate_empty": 100_000, "enumerate_large": 15_000,
+             "rates_full": 200_000, "rates_sparse": 200_000, "rates_bounds": 200_000,
+             "enumerate_warn": 30_000}
 
 
 def digest(path):
@@ -45,14 +47,16 @@ def build(name, debug, frozen_deps):
         raise FileExistsError(f"Archive already exists; use a fresh stage name: {archive}")
     dependency_hashes = {}
     if frozen_deps:
-        if debug:
-            raise ValueError("Use a Cargo build for debug validation")
         dependency_hashes = json.loads((frozen_deps / "manifest.json").read_text())
         for filename, expected in dependency_hashes.items():
             assert digest(frozen_deps / filename) == expected
         command = ["rustc", "--test", "--edition=2024", "--crate-name", "deadlib_audio_backend_alsa",
-                   "-C", "opt-level=3", "-C", "lto=fat", "-C", "codegen-units=16",
-                   "-C", "overflow-checks=off", "-C", "debug-assertions=off", "-C", "strip=debuginfo",
+                   "-C", "opt-level=0" if debug else "opt-level=3",
+                   "-C", "lto=off" if debug else "lto=fat",
+                   "-C", "codegen-units=256" if debug else "codegen-units=16",
+                   "-C", "overflow-checks=on" if debug else "overflow-checks=off",
+                   "-C", "debug-assertions=on" if debug else "debug-assertions=off",
+                   "-C", "debuginfo=2" if debug else "strip=debuginfo",
                    "-L", f"dependency={frozen_deps}"]
         for dependency in ["alsa", "deadlib_audio_core", "deadlib_platform", "libc", "log"]:
             paths = list(frozen_deps.glob(f"lib{dependency}-*.rlib"))
@@ -115,6 +119,12 @@ def build(name, debug, frozen_deps):
         result = subprocess.run([str(binary), "fixture_clock_health", "--ignored", "--test-threads=1"],
                                 env=env, capture_output=True, text=True, check=True)
         fixture_logs.append(f"clock_health=9 extremes monotonic={monotonic}\n{result.stdout}{result.stderr}")
+    for phase in ["open", "hw", "access", "format", "channels", "rates"]:
+        result = subprocess.run([str(binary), "fixture_probe_warnings", "--ignored", "--test-threads=1"],
+                                env={**fixture_env, "ALSA_FIXTURE_PROBE_FAILURE": phase,
+                                     "ALSA_FIXTURE_CLOSE_LOG": str(archive / f"probe-close-{phase}.log")},
+                                capture_output=True, text=True, check=True)
+        fixture_logs.append(f"probe_failure={phase}\n{result.stdout}{result.stderr}")
     (archive / "fixture.log").write_text("\n".join(fixture_logs))
     for source in [SOURCE / "lib.rs", SOURCE / "perf_tests.rs", ROOT / "scripts/alsa_fixture.c"]:
         shutil.copyfile(source, archive / source.name)
@@ -139,6 +149,8 @@ def compare(names, output, runs, workloads, fixture_stage):
         archive = ARCHIVES / name
         manifest = json.loads((archive / "manifest.json").read_text())
         assert digest(archive / "alsa-tests") == manifest["binary_sha256"]
+        if "enumerate_warn" in workloads and "ALSA_PERF_WARN" not in (archive / "perf_tests.rs").read_text():
+            raise ValueError(f"Archive lacks the warning-enabled workload: {name}")
         profiles.add(manifest.get("profile", "release" if "--release" in manifest["command"]
                                   or "opt-level=3" in manifest["command"] else "debug"))
     if len(profiles) != 1:
@@ -151,7 +163,9 @@ def compare(names, output, runs, workloads, fixture_stage):
                 fixture = ARCHIVES / fixture_stage / "fixture.so" if fixture_stage else archive / "fixture.so"
                 aliases = {"enumerate_failed": "enumerate", "timing_zero": "timing_48000",
                            "timing_status_error": "timing_48000", "timing_monotonic": "timing_48000",
-                           "enumerate_empty": "enumerate", "enumerate_large": "enumerate"}
+                           "enumerate_empty": "enumerate", "enumerate_large": "enumerate",
+                           "rates_full": "rate_capabilities", "rates_sparse": "rate_capabilities",
+                           "rates_bounds": "rate_capabilities", "enumerate_warn": "enumerate"}
                 env = {**os.environ, "LC_ALL": "C", "LD_PRELOAD": str(fixture),
                        "ALSA_PERF_WORKLOAD": aliases.get(workload, workload),
                        "ALSA_PERF_ITERATIONS": str(WORKLOADS[workload])}
@@ -159,12 +173,17 @@ def compare(names, output, runs, workloads, fixture_stage):
                     env["ALSA_FIXTURE_DELAY"] = "240"
                 if workload in ["rate_capabilities", "probe_null", "prepare_null", "prepare_reopen", "reopen_prepared"] or workload.startswith("clock_"):
                     env.pop("LD_PRELOAD", None)
-                if workload == "enumerate_failed":
+                if workload in ["enumerate_failed", "enumerate_warn"]:
                     env["ALSA_FIXTURE_LAYOUT"] = "probe_error"
+                if workload == "enumerate_warn":
+                    env["ALSA_PERF_WARN"] = "1"
                 if workload == "enumerate_empty":
                     env["ALSA_FIXTURE_LAYOUT"] = "empty"
                 if workload == "enumerate_large":
                     env["ALSA_FIXTURE_LAYOUT"] = "large_ids"
+                if workload.startswith("rates_"):
+                    env["ALSA_FIXTURE_RATE_MASK"] = {"rates_full": "2047", "rates_sparse": "1",
+                                                     "rates_bounds": "0"}[workload]
                 if workload == "timing_zero":
                     env["ALSA_FIXTURE_DELAY"] = "0"
                 if workload == "timing_status_error":

@@ -361,9 +361,107 @@ fn fixture_enumeration_preserves_devices() {
 }
 
 #[test]
+#[ignore = "requires the deterministic ALSA probe-failure fixture"]
+fn fixture_probe_warnings_preserve_messages() {
+    struct Capture;
+    static MESSAGES: std::sync::Mutex<Vec<(String, usize)>> = std::sync::Mutex::new(Vec::new());
+    static LOGGER: Capture = Capture;
+    impl log::Log for Capture {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.level() <= log::Level::Warn
+        }
+        fn log(&self, record: &log::Record<'_>) {
+            if self.enabled(record.metadata()) {
+                let closed =
+                    std::fs::read_to_string(std::env::var_os("ALSA_FIXTURE_CLOSE_LOG").unwrap())
+                        .unwrap()
+                        .lines()
+                        .count();
+                MESSAGES
+                    .lock()
+                    .unwrap()
+                    .push((record.args().to_string(), closed));
+            }
+        }
+        fn flush(&self) {}
+    }
+    log::set_logger(&LOGGER).unwrap();
+    log::set_max_level(log::LevelFilter::Warn);
+    std::fs::write(std::env::var_os("ALSA_FIXTURE_CLOSE_LOG").unwrap(), "").unwrap();
+    let devices = enumerate_output_devices();
+    assert_eq!(devices.len(), 8);
+    let messages = MESSAGES.lock().unwrap();
+    assert_eq!(messages.len(), devices.len());
+    let phase = std::env::var("ALSA_FIXTURE_PROBE_FAILURE").unwrap();
+    for (index, (device, (message, closed))) in devices.iter().zip(messages.iter()).enumerate() {
+        assert_eq!(*closed, if phase == "open" { 1 } else { index + 2 });
+        let id = format!("hw:CARD={},DEV={}", index / 4, index % 4);
+        let error = match phase.as_str() {
+            "open" => format!(
+                "failed to open ALSA PCM '{id}': {}",
+                alsa::Error::new("snd_pcm_open", libc::ENODEV)
+            ),
+            "hw" => format!(
+                "failed to create ALSA hw params for '{id}': {}",
+                alsa::Error::new("snd_pcm_hw_params_any", libc::EIO)
+            ),
+            "access" => format!(
+                "missing RW interleaved access for '{id}': {}",
+                alsa::Error::new("snd_pcm_hw_params_test_access", libc::EINVAL)
+            ),
+            "format" => format!(
+                "missing signed 16-bit format for '{id}': {}",
+                alsa::Error::new("snd_pcm_hw_params_test_format", libc::EINVAL)
+            ),
+            "channels" => format!("failed to determine a usable channel count for ALSA PCM '{id}'"),
+            "rates" => format!("failed to determine a usable sample rate for ALSA PCM '{id}'"),
+            _ => panic!("unknown failure phase {phase}"),
+        };
+        assert_eq!(
+            message,
+            &format!(
+                "Failed to probe ALSA playback device 'Fixture card 音楽, Fixture playback' ({id}): {error}. Listing it with fallback defaults."
+            )
+        );
+        assert_eq!(device.pcm_id, id);
+        assert_eq!(device.name, "Fixture card 音楽, Fixture playback");
+        assert!(device.sample_rates_hz.is_empty());
+        assert_eq!(device.default_rate_hz, 48_000);
+        assert_eq!(device.channels, 2);
+        assert_eq!(device.is_default, index == 5);
+    }
+}
+
+struct FingerprintLogger;
+static LOG_FINGERPRINT: AtomicU64 = AtomicU64::new(0);
+impl log::Log for FingerprintLogger {
+    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+        metadata.level() <= log::Level::Warn
+    }
+    fn log(&self, record: &log::Record<'_>) {
+        if self.enabled(record.metadata()) {
+            struct Writer(u64);
+            impl std::fmt::Write for Writer {
+                fn write_str(&mut self, text: &str) -> std::fmt::Result {
+                    for byte in text.bytes() {
+                        self.0 = self.0.wrapping_mul(31).wrapping_add(u64::from(byte));
+                    }
+                    Ok(())
+                }
+            }
+            use std::fmt::Write;
+            let mut writer = Writer(0);
+            writer.write_fmt(*record.args()).unwrap();
+            LOG_FINGERPRINT.store(writer.0, Ordering::Relaxed);
+        }
+    }
+    fn flush(&self) {}
+}
+
+#[test]
 #[ignore = "requires the deterministic ALSA timing fixture"]
 fn fixture_timing_preserves_delay_and_fallback() {
-    let pcm = open_pcm("null").unwrap();
+    let pcm = open_pcm(c"null").unwrap();
     let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480)).unwrap();
     let expected_clock = if std::env::var_os("ALSA_FIXTURE_MONOTONIC").is_some() {
         OutputTelemetryClock::Monotonic
@@ -412,7 +510,7 @@ fn fixture_timing_preserves_delay_and_fallback() {
 #[test]
 #[ignore = "requires the deterministic ALSA timing fixture"]
 fn fixture_clock_health_extremes_preserve_quality() {
-    let pcm = open_pcm("null").unwrap();
+    let pcm = open_pcm(c"null").unwrap();
     let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480)).unwrap();
     for last_status in [0, 1, u64::MAX] {
         for last_playback in [0, 1, u64::MAX] {
@@ -452,7 +550,7 @@ fn fixture_rate_matrix_preserves_capabilities() {
         48_000, 44_100, 96_000, 88_200, 192_000, 176_400, 32_000, 22_050, 16_000, 11_025, 384_000,
     ];
     for mask in 0..2048_u16 {
-        let pcm = open_pcm("null").unwrap();
+        let pcm = open_pcm(c"null").unwrap();
         let hw = HwParams::any(&pcm).unwrap();
         let (rates, default) = sample_rate_capabilities(&hw).unwrap();
         let mut expected = vec![8_000, 500_000];
@@ -489,7 +587,7 @@ fn fixture_rate_edges_preserve_capabilities() {
         ("duplicate_bounds", 1) => Some((vec![48_000], 48_000)),
         _ => panic!("unknown rate fixture {edge}/{mask}"),
     };
-    let pcm = open_pcm("null").unwrap();
+    let pcm = open_pcm(c"null").unwrap();
     let hw = HwParams::any(&pcm).unwrap();
     assert_eq!(sample_rate_capabilities(&hw), expected);
 }
@@ -497,6 +595,11 @@ fn fixture_rate_edges_preserve_capabilities() {
 #[test]
 #[ignore = "performance workload; use scripts/benchmark_alsa.py"]
 fn benchmark_alsa() {
+    if std::env::var_os("ALSA_PERF_WARN").is_some() {
+        static LOGGER: FingerprintLogger = FingerprintLogger;
+        log::set_logger(&LOGGER).unwrap();
+        log::set_max_level(log::LevelFilter::Warn);
+    }
     let workload = std::env::var("ALSA_PERF_WORKLOAD").unwrap();
     let iterations: usize = std::env::var("ALSA_PERF_ITERATIONS")
         .unwrap()
@@ -523,7 +626,7 @@ fn benchmark_alsa() {
             black_box(enumerate_output_devices());
         }),
         "rate_capabilities" => {
-            let pcm = open_pcm("null").unwrap();
+            let pcm = open_pcm(c"null").unwrap();
             let hw = HwParams::any(&pcm).unwrap();
             run_work(iterations, || {
                 black_box(sample_rate_capabilities(black_box(&hw))).unwrap();
@@ -620,7 +723,7 @@ fn benchmark_alsa() {
                 "timing_44100" => 44_100,
                 _ => 96_000,
             };
-            let pcm = open_pcm("null").unwrap();
+            let pcm = open_pcm(c"null").unwrap();
             let actual =
                 configure_pcm(&pcm, rate, 2, AlsaAccessMode::Shared, 240, Some(480)).unwrap();
             let mut health = AlsaClockHealth::new();
