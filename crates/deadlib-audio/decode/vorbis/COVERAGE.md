@@ -136,6 +136,15 @@ Windows x86-64, rustc 1.99.1 evidence:
   allocate zero times after warming transport capacity for mono/stereo/surround.
   Raw positioned reset also allocates zero times. Index construction, codec
   switching and growth of transport/spanning-packet buffers are excluded.
+* Pinned Xiph libvorbis upstream coded test grid: **528 files**, 1..=8 channels,
+  six rates from 16 to 96 kHz, eleven quality settings, **4,866,048 channel
+  samples**. Native strict PCM/counts match libvorbisfile with peak/RMS error
+  **4.172325134e-7 / 5.142492184e-8**. All 2,640 native seeks and 17-byte streaming
+  runs match sequential native output exactly. Upstream's own encode/decode
+  checks pass. The reproduction script regenerated all 528 files byte-identically
+  on this Windows build. See `validation/2026-10-26-upstream.tsv` and
+  `validation/2026-10-26-upstream.sha256`. This is upstream coded test material,
+  not exhaustive conformance certification.
 
 ## Numerical criteria
 
@@ -189,6 +198,16 @@ counts match without discarding comparison samples.
   in the generated stream with broadcast offset +900. A named external regression
   records this discrepancy. Native seeking preserves frame 1 / granule 901 and
   matches sequential PCM; the Symphonia pre-roll comparison also covers this case.
+* The pinned ITGmania shipped song `Mecha-Tribe Assault.ogg` (libVorbis 20040629)
+  has final granule 4,630,500 after a preceding page at 4,692,672. Strict decoding
+  rejects this decreasing granule. `Goin' Under.ogg` (libVorbis 20070622) passes
+  strict PCM/count comparison against libvorbisfile and Symphonia: 10,886,400
+  channel samples, peak errors 7.152557373e-7 / 4.768371582e-7. Sources/hashes and
+  paired SSC charts are pinned in `validation/corpus.json`. Compatibility for
+  the malformed final granule remains open; no silent length repair is applied.
+* FFmpeg's `Lumme-Badloop.ogg` (libVorbis 20020713) passes strict container/mapping
+  decoding with 17,862,912 frames per channel. Its name alone is not treated as
+  evidence of a required compatibility exception.
 
 ## Remaining required work
 
@@ -196,9 +215,9 @@ counts match without discarding comparison samples.
   indexed reader eagerly scans the full container and all audio mode prefixes;
   it does not decode every audio payload during construction. Broader malformed
   packet concealment differential validation remains necessary.
-* Official conformance material, unusual/legacy encoders, malformed/fuzz corpora,
-  real ITGmania/StepMania song packs. Repository assets are only initial coverage.
-  No nonstandard legacy compatibility policy has been added.
+* Broader conformance material, unusual/legacy encoders, malformed/fuzz corpora,
+  and wider real ITGmania/StepMania song-pack coverage beyond the pinned shipped
+  songs. No nonstandard legacy compatibility policy has been added yet.
 * Native encoding, independently decoded lossy validation, measured pipeline
   optimization and reproducible throughput/startup/memory/allocation/seek
   comparisons with libvorbis and Symphonia. No SIMD or performance claims yet.

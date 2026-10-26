@@ -34,6 +34,14 @@ pub fn decoder(packets: &[Vec<u8>]) -> PacketDecoder {
     PacketDecoder::new(setup).unwrap()
 }
 pub fn oracle(mode: &str, packets: &[&[u8]]) -> Vec<u8> {
+    let mut input = Vec::new();
+    for packet in packets {
+        input.extend((packet.len() as u64).to_le_bytes());
+        input.extend(*packet);
+    }
+    file_oracle(mode, &input)
+}
+pub fn file_oracle(mode: &str, input: &[u8]) -> Vec<u8> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let executable =
         std::env::var_os("DEADLIB_LIBVORBIS_ORACLE").expect("set DEADLIB_LIBVORBIS_ORACLE");
@@ -42,11 +50,6 @@ pub fn oracle(mode: &str, packets: &[&[u8]]) -> Vec<u8> {
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
-    let mut input = Vec::new();
-    for packet in packets {
-        input.extend((packet.len() as u64).to_le_bytes());
-        input.extend(*packet);
-    }
     fs::write(&file, input).unwrap();
     let output = Command::new(executable)
         .arg(mode)

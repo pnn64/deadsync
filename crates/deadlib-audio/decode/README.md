@@ -56,6 +56,11 @@ strict packet capture after seeks, including continuation and multiplexing.
 Vorbis now provides prefix-based indexing and sample-accurate retained-frame
 seeking with overlap pre-roll, initial/final trimming and repeated stream selection.
 All 1,900 corpus seeks match libvorbisfile positions/counts and PCM criteria.
+The pinned upstream coded test grid adds 528 rate/channel/quality combinations,
+with exact counts, reference PCM parity, 17-byte streaming and 2,640 native seeks.
+External historical/song media is hash-pinned and downloaded only to ignored
+scratch storage. Strict decoding exposes malformed granules in one shipped
+ITGmania song and a historical setup page; compatibility remains explicit work.
 **This is not the completed goal:** encoding, broader conformance/legacy/fuzzing,
 index-free codec seeking and comparative performance work remain. The next work
 is broader conformance and explicit legacy compatibility before measured pipeline

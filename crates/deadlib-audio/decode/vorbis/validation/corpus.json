@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "floor0/vorbis_floor_type_0.ogg",
+      "group": "floor0",
+      "url": "https://samples.ffmpeg.org/A-codecs/vorbis/floor_type_0/vorbis_floor_type_0.ogg",
+      "bytes": 3735193,
+      "sha256": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+      "notes": "Historical floor-zero stream; unfinished setup page at byte 4310 incorrectly has granule zero."
+    },
+    {
+      "path": "legacy/Lumme-Badloop.ogg",
+      "group": "legacy",
+      "url": "https://samples.ffmpeg.org/A-codecs/vorbis/Lumme-Badloop.ogg",
+      "bytes": 5856908,
+      "sha256": "ebecc57582463db3346625c1da4a51c594b6a3ec2dbebf9d94c2b9b5f1e72f44",
+      "notes": "Xiph.Org libVorbis I 20020713; strict validation target."
+    },
+    {
+      "path": "itgmania/goin-under.ogg",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/Goin%27%20Under/Goin%27%20Under.ogg",
+      "bytes": 2350139,
+      "sha256": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483",
+      "notes": "NegaRen - Goin' Under; shipped song audio paired with the pinned SSC chart."
+    },
+    {
+      "path": "itgmania/goin-under.ssc",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/Goin%27%20Under/Goin%27%20Under.ssc",
+      "bytes": 46482,
+      "sha256": "bc995e4cf36dd6074e85299ed7cfc82400e884f9bb70c164f5e622c6383c17f5"
+    },
+    {
+      "path": "itgmania/mecha-tribe-assault.ogg",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/MechaTribe%20Assault/Mecha-Tribe%20Assault.ogg",
+      "bytes": 2126581,
+      "sha256": "6eb052cf8081ebb01d4b30e8db34e9eeca692635e2c1ed3ba7f7bd131c1b65c3",
+      "notes": "Kommisar - Mecha-Tribe Assault; shipped song audio paired with the pinned SSC chart."
+    },
+    {
+      "path": "itgmania/mecha-tribe-assault.ssc",
+      "group": "itgmania",
+      "url": "https://raw.githubusercontent.com/itgmania/itgmania/8a3bf8884acdcb69363f7f0ea592138e398c71e4/Songs/StepMania%205/MechaTribe%20Assault/Mecha-Tribe%20Assault.ssc",
+      "bytes": 54720,
+      "sha256": "ce6662cb58e3bce72f551e6c7c6a6ae7b3a7f3da85c87cbdc5e4d36a2a4b7831"
+    }
+  ]
+}

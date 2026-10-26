@@ -18,3 +18,18 @@ add_subdirectory("${REFERENCE_ROOT}/vorbis" vorbis)
 add_executable(deadlib_vorbis_oracle oracle.c)
 target_include_directories(deadlib_vorbis_oracle PRIVATE "${REFERENCE_ROOT}/vorbis/lib")
 target_link_libraries(deadlib_vorbis_oracle PRIVATE vorbis vorbisfile)
+
+# Run the pinned upstream coded test grid verbatim, retaining its successful
+# outputs for native differential validation instead of deleting each fixture.
+add_executable(deadlib_vorbis_upstream_vectors
+    "${REFERENCE_ROOT}/vorbis/test/test.c"
+    "${REFERENCE_ROOT}/vorbis/test/util.c"
+    "${REFERENCE_ROOT}/vorbis/test/write_read.c"
+    retain_vectors.c)
+target_compile_definitions(deadlib_vorbis_upstream_vectors PRIVATE _USE_MATH_DEFINES)
+if(MSVC)
+    target_compile_options(deadlib_vorbis_upstream_vectors PRIVATE /FI"${CMAKE_CURRENT_SOURCE_DIR}/retain_vectors.h")
+else()
+    target_compile_options(deadlib_vorbis_upstream_vectors PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/retain_vectors.h")
+endif()
+target_link_libraries(deadlib_vorbis_upstream_vectors PRIVATE vorbisenc vorbis vorbisfile)

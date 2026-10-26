@@ -75,3 +75,46 @@ without relaxing the native container's strict validation. See COVERAGE.md for
 the separate floor-zero numerical criteria and unresolved legacy container work.
 The seek test repacketizes unchanged floor-zero codec packets with strict native
 granules; it validates floor-zero pre-roll without accepting the legacy container.
+
+## Pinned upstream coded test grid
+
+The `deadlib_vorbis_upstream_vectors` target compiles the pinned upstream
+`test/test.c`, `test/util.c`, and `test/write_read.c` unchanged. A force-included
+test shim replaces only successful-fixture removal, retaining the generated
+files. Upstream's own encode/decode amplitude checks still run. This is upstream
+coded test material, not a claim of an exhaustive formal conformance suite.
+
+```powershell
+crates/deadlib-audio/decode/scripts/generate_upstream_vectors.ps1
+# Set this to the fresh directory printed by that command:
+$env:DEADLIB_VORBIS_UPSTREAM_CORPUS = 'target/deadlib-audio-reference/corpus/upstream-<id>'
+$env:DEADLIB_VORBIS_UPSTREAM_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/upstream.tsv"
+cargo test -p deadlib-audio-decode-vorbis --release --test upstream -- --ignored --nocapture
+```
+
+The script verifies both reference commits and unmodified tracked sources,
+builds the target, requires 528 outputs, and retains `generation.log`,
+`assets.sha256`, and `provenance.json`. Each run uses a new directory. The grid
+covers 1..=8 channels, six rates (16/22.05/32/44.1/48/96 kHz), and eleven quality
+settings from -0.5 through 9.5. Every file has 2,048 source frames. Native tests
+compare full-file PCM/counts to libvorbisfile, five exact native seeks per file,
+metadata, and 17-byte incremental input. The checked-in evidence records this
+Windows build's hashes; floating-point encoders on other platforms may produce
+different valid bitstreams and must be validated by the numerical tests.
+
+External historical and ITGmania song files have a separate hash/size-pinned
+manifest in `validation/corpus.json`. Fetch/verify them with Python 3.11+:
+
+```powershell
+python crates/deadlib-audio/decode/scripts/fetch_corpus.py
+# Or select only a group: --group itgmania / --group floor0 / --group legacy
+```
+
+Media stays under ignored `target/deadlib-audio-reference/corpus`; it is never
+redistributed in the crate. The manifest pins the upstream ITGmania Git commit
+and paired SSC charts, distinguishing shipped songs from theme sounds. The
+native diagnostic example reports parameters, counts and strict failures:
+
+```powershell
+cargo run -p deadlib-audio-decode-vorbis --release --example inspect -- path/to/song.ogg
+```
