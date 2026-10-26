@@ -148,6 +148,14 @@ fn mix_probe_preserves_rates_channels_extensions_and_errors() {
 }
 
 #[test]
+fn mix_probe_needs_no_rust_heap_allocation() {
+    let device = mix_device(48_000, 2, 22, None);
+    perf::assert_no_churn(|| {
+        assert_eq!(device_mix_format(&device).unwrap(), (48_000, 2));
+    });
+}
+
+#[test]
 fn device_id_encoding_preserves_every_unicode_scalar_and_embedded_nulls() {
     for text in ["", "ASCII", "åäö 日本語", "🎵😀", "a\0b"] {
         let expected: Vec<u16> = text.encode_utf16().chain([0]).collect();

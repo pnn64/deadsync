@@ -836,9 +836,16 @@ fn device_friendly_name(device: &Audio::IMMDevice) -> Result<String, String> {
 
 fn device_mix_format(device: &Audio::IMMDevice) -> Result<(u32, usize), String> {
     let audio_client = build_audio_client(device)?;
-    let mix_format = get_mix_format_bytes(&audio_client)?;
-    let wave = waveformat(&mix_format);
-    Ok((wave.nSamplesPerSec.max(1), wave.nChannels.max(1) as usize))
+    // SAFETY: GetMixFormat returns a live COM-task allocation containing a
+    // WAVEFORMATEX. Copy only the two scalars needed here, then free it once.
+    unsafe {
+        let mix = audio_client
+            .GetMixFormat()
+            .map_err(|e| format!("failed to query WASAPI mix format: {e}"))?;
+        let result = ((*mix).nSamplesPerSec.max(1), (*mix).nChannels.max(1) as usize);
+        free_com_task_mem(mix.cast());
+        Ok(result)
+    }
 }
 
 fn build_audio_client(device: &Audio::IMMDevice) -> Result<Audio::IAudioClient, String> {
