@@ -1,4 +1,4 @@
-"""Compare current/committed-parent unary execution with the pinned Lua CLI."""
+"""Compare current/committed-parent expression execution with the pinned Lua CLI."""
 from __future__ import annotations
 import argparse
 import ctypes
@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument('--parent-audit',required=True,type=Path)
     parser.add_argument('--parent-revision',required=True)
     parser.add_argument('--current-audit',required=True,type=Path)
+    parser.add_argument('--family',choices=('unary','logical'),default='unary')
     args=parser.parse_args()
     if os.name!='nt':raise SystemExit('Windows process counters are required')
     root=Path(__file__).resolve().parents[1]
@@ -47,6 +48,14 @@ def main() -> None:
         'not_comparison':(f"local n=0;for i=1,{count} do local value=not(i<2500001);if value then n=n+1 end end;io.write(n)",b'2500000'),
         'not_constant':(f"local n=0;for i=1,{count} do local value=not false;if value then n=n+1 end end;io.write(n)",b'5000000'),
     }
+    if args.family=='logical':
+        fixtures={
+            'or_shortcut_true':(f"local a,b=true,false;local n=0;for i=1,{count} do local value=not not(a or b);if value then n=n+1 end end;io.write(n)",b'5000000'),
+            'or_rhs_false':(f"local a,b=false,false;local n=0;for i=1,{count} do local value=not not(a or b);if value then n=n+1 end end;io.write(n)",b'0'),
+            'and_shortcut_false':(f"local a,b=false,true;local n=0;for i=1,{count} do local value=not not(a and b);if value then n=n+1 end end;io.write(n)",b'0'),
+            'nested_mixed':(f"local a,b,c=false,true,false;local n=0;for i=1,{count} do local value=not not((a and b)or c);if value then n=n+1 end end;io.write(n)",b'0'),
+            'comparison_rhs':(f"local a,b,c=false,2,3;local n=0;for i=1,{count} do local value=not(a or(b<c));if value then n=n+1 end end;io.write(n)",b'0'),
+        }
     kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     get_times=kernel32.GetProcessTimes;get_times.argtypes=[wintypes.HANDLE]+[ctypes.POINTER(wintypes.FILETIME)]*4;get_times.restype=wintypes.BOOL
     get_cycles=kernel32.QueryProcessCycleTime;get_cycles.argtypes=[wintypes.HANDLE,ctypes.POINTER(ctypes.c_ulonglong)];get_cycles.restype=wintypes.BOOL
@@ -93,7 +102,7 @@ def main() -> None:
         source_hashes=before,reference_source_hashes=current['reference']['source_hashes'],
         protocol='Five fixed Lua sources, 5,000,000 loop iterations per fresh CLI process; nine rotated/reversed triples per fixture, plus one untimed checksum-validated warmup per engine/fixture. Exact stdout, empty stderr and exit status are checked in every child. Wall, GetProcessTimes user/kernel CPU and QueryProcessCycleTime include process launch, compile, startup, execution and cleanup. This compares the ordinary current release CLI with a byte-identical preserved parent CLI pinned by its committed audit and the official C reference pinned by the current audit. No allocator instrumentation or isolated opcode timings; shared host, warm filesystem caches and timer quantization limit small differences.',
         fixtures={name:dict(source=source,source_sha256=hashlib.sha256(source.encode()).hexdigest(),expected_stdout_hex=expected.hex())for name,(source,expected)in fixtures.items()},
-        samples=samples,median_paired_ratios=ratios,
+        family=args.family,samples=samples,median_paired_ratios=ratios,
         missing_metrics=['allocation counts for these focused CLI fixtures','sampled CPU stacks','physical live/peak allocator heap','peak RSS'])
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')

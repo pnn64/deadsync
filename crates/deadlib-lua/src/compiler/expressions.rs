@@ -41,6 +41,21 @@ impl<'a> Compiler<'a> {
                     self.load(dst, Constant::Boolean(!truth))?;
                     return Ok(());
                 }
+                let mut root = self.unparen(*inner);
+                while let Expr::Unary(Kind::Not, inner) = self.ast.exprs[root].0 {
+                    root = self.unparen(inner);
+                }
+                if *op == Kind::Not
+                    && matches!(
+                        self.ast.exprs[root].0,
+                        Expr::Binary(Kind::And | Kind::Or, ..)
+                    )
+                {
+                    let work = self.work_register(dst)?;
+                    self.tasks.push(Task::BooleanFinish(id, dst));
+                    self.tasks.push(Task::BooleanNode(id, work));
+                    return Ok(());
+                }
                 // Unary instructions can read a live local directly. Copying it
                 // first adds an observable hook event and snapshots its value
                 // before the unary instruction's own callback can mutate it.
@@ -191,7 +206,7 @@ impl<'a> Compiler<'a> {
         self.tasks.push(Task::OperandEnd(reference, dst));
         self.tasks.push(Task::Expr(id, dst));
     }
-    fn unparen(&self, mut id: ExprId) -> ExprId {
+    pub(super) fn unparen(&self, mut id: ExprId) -> ExprId {
         while let Expr::Paren(inner) = self.ast.exprs[id].0 {
             id = inner;
         }
@@ -204,7 +219,7 @@ impl<'a> Compiler<'a> {
             None
         }
     }
-    fn constant_truth(&self, mut id: ExprId) -> Option<bool> {
+    pub(super) fn constant_truth(&self, mut id: ExprId) -> Option<bool> {
         let mut invert = false;
         loop {
             id = self.unparen(id);

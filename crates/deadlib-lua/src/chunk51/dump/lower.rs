@@ -2,7 +2,9 @@
 use super::fail;
 use crate::{
     Error,
-    bytecode::{OPEN, OPEN_ARGS, Op, ProgramData, Prototype, Upvalue},
+    bytecode::{
+        BOOLEAN_SKIP, COMPARE_BRANCH, OPEN, OPEN_ARGS, Op, ProgramData, Prototype, Upvalue,
+    },
 };
 use std::collections::HashMap;
 
@@ -91,6 +93,13 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 skip[pc - 1] = true;
             }
             methods[pc] = Some(if key.c < 256 { key.c | 256 } else { get.c });
+        }
+    }
+    for (pc, i) in p.code.iter().enumerate() {
+        if matches!(i.op, Op::JumpFalse | Op::JumpTrue) && i.b == COMPARE_BRANCH
+            || i.op == Op::Jump && i.b == BOOLEAN_SKIP
+        {
+            skip[pc] = true;
         }
     }
     // Recognize the compiler's iterator-call sequence. Native TFORLOOP owns
@@ -187,7 +196,14 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             Op::Load => {
                 if i.b == 0 {
                     out.reg(a)?;
-                    out.abx(1, a, i.c)?;
+                    if p.code
+                        .get(pc + 1)
+                        .is_some_and(|next| next.op == Op::Jump && next.b == BOOLEAN_SKIP)
+                    {
+                        out.abc(2, a, 0, 1)?;
+                    } else {
+                        out.abx(1, a, i.c)?;
+                    }
                 }
             }
             Op::Move | Op::Bool => {
@@ -260,13 +276,18 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 out.abc(21, a, b, u32::from(c))?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
+                let branch = p.code.get(pc + 1).filter(|next| {
+                    matches!(next.op, Op::JumpFalse | Op::JumpTrue) && next.b == COMPARE_BRANCH
+                });
                 let (dest, invert) =
                     if let Some(next) = p.code.get(pc + 1).filter(|n| n.op == Op::Bool) {
                         (mapped(u16::from(next.a)), next.c as u16)
                     } else {
                         (a, 0)
                     };
-                out.reg(dest)?;
+                if branch.is_none() {
+                    out.reg(dest)?;
+                }
                 out.reg(b)?;
                 out.reg(c)?;
                 let (op, left, right) = match i.op {
@@ -276,7 +297,16 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                     Op::Gt => (24, c, b),
                     _ => (25, c, b),
                 };
-                out.abc(op, u16::from(i.op != Op::Ne), left, u32::from(right))?;
+                let condition = if let Some(branch) = branch {
+                    (i.op != Op::Ne) == (branch.op == Op::JumpTrue)
+                } else {
+                    i.op != Op::Ne
+                };
+                out.abc(op, u16::from(condition), left, u32::from(right))?;
+                if let Some(branch) = branch {
+                    out.jump(22, 0, branch.c as usize)?;
+                    continue;
+                }
                 out.abx(22, 0, 131072)?;
                 out.abc(2, dest, invert, 1)?;
                 out.abc(2, dest, invert ^ 1, 0)?;

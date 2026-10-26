@@ -150,6 +150,11 @@ logical negation folds without a temporary load; negated comparisons retain the
 original predicate/metamethod and invert its later boolean materialization.
 [Unary validation](../../docs/testing/2026-10-26-rust-lua-unary-hooks.md) covers
 hook mutation, NaNs, native exports and persistent reloads.
+Negated logical values retain separate short-circuit tests and final boolean
+loads, including repeated negation and callback-visible named destinations.
+Pending branches use flat compiler jobs and linked instruction slots.
+[Boolean validation](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md)
+covers both paths, long chains, native export and fresh-process cache reloads.
 
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
@@ -429,5 +434,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-unary-hooks.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

@@ -3,14 +3,15 @@
 use crate::{
     Error, ErrorKind,
     bytecode::{
-        Constant, DebugCall, DebugInfo, DebugLocal, Instruction, NameKind, OPEN, OPEN_ARGS, Op,
-        Program, Prototype, Upvalue,
+        BOOLEAN_SKIP, COMPARE_BRANCH, Constant, DebugCall, DebugInfo, DebugLocal, Instruction,
+        NameKind, OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue,
     },
     lexer::Kind,
     parser::{Ast, Expr, ExprId, Stmt, StmtId},
 };
 use std::collections::HashMap;
 
+mod boolean;
 mod constants;
 mod expressions;
 mod statements;
@@ -78,6 +79,7 @@ struct Compiler<'a> {
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'a>>,
     result: u8,
+    boolean: boolean::Boolean,
     line: u32,
 }
 
@@ -94,6 +96,7 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
         folded: crate::optimizer::literals(&ast),
         tasks: vec![Task::Block(&ast.body)],
         result: 0,
+        boolean: boolean::Boolean::default(),
         line: 1,
     };
     c.run()?;

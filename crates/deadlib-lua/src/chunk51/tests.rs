@@ -550,6 +550,45 @@ local a=f(2,3);local b=f(0/0,3);debug.sethook();return a,b,table.concat(out,'|')
 }
 
 #[test]
+fn source_dump_boolean_short_circuits_preserve_results_and_hook_traces() {
+    for expression in [
+        "a and b",
+        "a or b",
+        "(a and b)or c",
+        "(a or b)and c",
+        "a and(b or c)",
+        "a or(b and c)",
+        "not a or b",
+        "a and not b",
+        "false and a",
+        "true or a",
+        "a<b or c",
+        "a or(b<c)",
+    ] {
+        for negations in 1..=3 {
+            let prefix = "not ".repeat(negations);
+            let inputs = if expression.contains('<') {
+                "f(2,3,4),f(3,2,1),f(0/0,1,2)"
+            } else {
+                "f(false,nil,true),f(nil,false,false),f(2,3,4)"
+            };
+            let source = format!(
+                r#"local function f(a,b,c)
+local result={prefix}({expression})
+return result
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local a,b,c={inputs};debug.sethook();return a,b,c,table.concat(out,'|')"#
+            );
+            let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+            let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+            compare_execution(&bytes);
+            compare_execution_against(&bytes, source.as_bytes());
+        }
+    }
+}
+
+#[test]
 fn official_native_dumps_reexport_like_the_c_writer() {
     let lua = Lua::new();
     let cases: &[&[u8]]=&[

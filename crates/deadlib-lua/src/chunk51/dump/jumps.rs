@@ -72,6 +72,11 @@ pub(super) fn relax(
         if (matches!(op, 28 | 29) && (word >> 14) & 511 == 0) || (op == 37 && word >> 23 == 0) {
             safe[pc + 1] = false;
         }
+        // LOADBOOL's skip flag advances by one physical word, so its following
+        // boolean load must remain adjacent when a relay is inserted.
+        if op == 2 && (word >> 14) & 511 != 0 {
+            safe[pc + 1] = false;
+        }
         if matches!(op, 22 | 31 | 32) {
             let target = if patches.get(patch).is_some_and(|&(site, _)| site == pc) {
                 let target = *pcs.get(patches[patch].1).ok_or_else(fail)? as usize;
@@ -294,4 +299,37 @@ fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Vec<LocalRange>
     }
     ranges.sort_unstable_by_key(|r| (r.start, r.index));
     ranges
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn long_branch_relays_preserve_a_boolean_skip_pair_at_the_relay_cut() {
+        let program = crate::compile(b"return 1").unwrap();
+        let mut prototype = program.data.prototypes[program.data.entry as usize].clone();
+        let count = 200_000;
+        let mut code = vec![0; count];
+        code[0] = JMP;
+        let false_word = 2 | (1 << 14);
+        let true_word = 2 | (1 << 23);
+        code[STEP - 1] = false_word;
+        code[STEP] = true_word;
+        code[count - 1] = 30 | (2 << 23);
+        let mut lines = vec![1; count];
+        prototype.lines = lines.clone().into_boxed_slice();
+        let mut pcs = (0..=count as u32).collect::<Vec<_>>();
+        relax(
+            &mut code,
+            &mut lines,
+            &mut pcs,
+            &[(0, count - 1)],
+            &prototype,
+        )
+        .unwrap();
+        assert!(code.len() > count);
+        let start = pcs[STEP - 1] as usize;
+        assert_eq!(&code[start..start + 2], &[false_word, true_word]);
+        assert_eq!(lines.len(), code.len());
+    }
 }

@@ -19,10 +19,14 @@ def main() -> None:
     sources=list((root/'crates/deadlib-lua').rglob('*.rs'))+[root/'crates/deadlib-lua/Cargo.toml',Path(__file__).resolve(),root/'scripts/build_lua_cli_reference.py']
     def hashes():return {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(sources)}
     before=hashes()
+    target=Path(os.environ.get('CARGO_TARGET_DIR',str(root/'target')))
+    if not target.is_absolute():target=root/target
+    target=target.resolve()
     if args.rust_binary is None:
         subprocess.run(['cargo','build','--release','-p','deadlib-lua','--bin','deadlua'],cwd=root,check=True)
     reference,metadata=build(root)
-    binary=args.rust_binary.resolve() if args.rust_binary else root/('target/release/deadlua.exe' if os.name=='nt' else 'target/release/deadlua')
+    metadata['binary_path']=str(reference)
+    binary=args.rust_binary.resolve() if args.rust_binary else target/'release'/('deadlua.exe' if os.name=='nt' else 'deadlua')
     with tempfile.TemporaryDirectory(prefix='lua-cli-chunk-') as temporary:
         source="local f=assert(io.open('fixture.bin','wb'));f:write(string.dump(function(a,...)print(a,select('#',...),...);print(_G.arg[0])end));f:close();local f=assert(io.open('fixture-error.bin','wb'));f:write(string.dump(function(a,...)print(a,select('#',...),...);print(arg[0])end));f:close()"
         subprocess.run(['lua','-e',source],executable=reference,cwd=temporary,check=True,capture_output=True)
@@ -77,6 +81,9 @@ def main() -> None:
     case('unary_local_hook_events',['-e',"for _,body in ipairs{'local result=-value;return result,value','local result=not value;return result,value','local result=#value;return result,value'}do local f=assert(loadstring('return function(value)'..body..' end'))();local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local ok,a,b=pcall(f,body:find('#',1,true) and 'bytes' or 2);debug.sethook();print(ok,a,b,visits)end"])
     case('negated_comparison_hook_events',['-e',"local function f(a,b)local value=not(a<b);return value end;local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local value=f(2,3);debug.sethook();print(value,visits)"])
     case('constant_not_hook_events',['-e',"local function f()local value=not false;return value end;local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local value=f();debug.sethook();print(value,visits)"])
+    case('logical_shortcut_hook_events',['-e',"local function f(a,b)local value=not not(a or b);return value end;for _,a in ipairs{true,false}do local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local value=f(a,false);debug.sethook();print(value,visits)end"])
+    case('logical_comparison_hook_events',['-e',"local function f(a,b,c)local value=not not(a or(b<c));return value end;for _,a in ipairs{true,false}do local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local value=f(a,2,3);debug.sethook();print(value,visits)end"])
+    case('logical_condition_mutation',['-e',"local function f(a,b,c)local value=not not(a or(b and c));return value end;local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==2 then debug.setlocal(2,2,false);collectgarbage()end end end,'',1);local value=f(false,true,true);debug.sethook();print(value,visits)"])
     case('format_nul_option',['-e',"string.format('%\\000tail',17)"])
     case('format_terminal_specifier',['-e',"string.format('prefix%0',17)"])
     case('format_binary_protected',['-e',"local ok,e=pcall(string.format,'%\\000tail',17);collectgarbage();print(ok,#e,string.find(e,'\\000',1,true),e);print(string.format('%s:%q','alive',19))"])

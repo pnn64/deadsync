@@ -58,6 +58,12 @@ pub(super) enum Task<'a> {
     OperandEnd(ExprId, u8),
     Paren(ExprId, u32),
     Unary(ExprId, u8, u8),
+    BooleanNode(ExprId, u8),
+    BooleanLeaf(ExprId, u8),
+    BooleanNot(ExprId, u8),
+    BooleanLeft(ExprId, u8),
+    BooleanRight(Kind, boolean::List),
+    BooleanFinish(ExprId, u8),
     LogicalLeft(ExprId, u8),
     LogicalEnd(ExprId, u32, usize),
     BinaryLeft(ExprId, u8, u8),
@@ -395,6 +401,12 @@ impl<'a> Compiler<'a> {
                 }
                 Task::Paren(inner, line) => self.discharge_line(inner, line, LineUse::Copy),
                 Task::Unary(id, dst, work) => self.unary(id, dst, work)?,
+                Task::BooleanNode(id, work) => self.boolean_node(id, work),
+                Task::BooleanLeaf(id, work) => self.boolean_leaf(id, work),
+                Task::BooleanNot(id, work) => self.boolean_not(id, work)?,
+                Task::BooleanLeft(id, work) => self.boolean_left(id, work)?,
+                Task::BooleanRight(op, list) => self.boolean_right(op, list),
+                Task::BooleanFinish(id, dst) => self.boolean_finish(id, dst)?,
                 Task::LogicalLeft(id, dst) => self.logical_left(id, dst)?,
                 Task::LogicalEnd(right, line, done) => {
                     self.discharge_line(right, line, LineUse::Copy);

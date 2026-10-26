@@ -40,7 +40,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 459 differential/adversarial integration tests, sixty-five unit tests and
+crate, 463 differential/adversarial integration tests, sixty-eight unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-unary-hooks.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-boolean-hooks.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -736,6 +736,18 @@ parent and pass against the official reference. [Measurements](performance/2026-
 compare current, parent and C CLIs with process CPU counters, alongside the
 broader runtime, frontend, callback and cache harnesses. Complete hook parity and
 the other standalone gates remain open.
+
+The [boolean value milestone](testing/2026-10-26-rust-lua-boolean-hooks.md)
+preserves short-circuit hook events under repeated logical negation. A compact
+compiler descriptor carries the final operand and pending true/false edges;
+flat jobs append/join edge chains in instruction slots and patch them once.
+Local conditions read after their callbacks, and final boolean writes preserve
+named destinations. Verified comparison branches fuse when instruction hooks
+are disabled. Native export preserves comparison/JMP and boolean skip adjacency,
+including long-branch relay insertion. Expanded source/native/cache probes and
+[parent/current/C process measurements](performance/2026-10-26-rust-lua-boolean-hooks.md)
+cover both branches, local mutation, GC, metamethods and long chains. Complete
+hook parity and the broader standalone-engine gates remain unfinished.
 
 ## Reference contract
 

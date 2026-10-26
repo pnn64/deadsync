@@ -407,6 +407,19 @@ fn compound_expressions_preserve_reference_instruction_events() {
         "(a<b)==(b<c)",
         "not(a<b)",
         "not not(a<b)",
+        "not(a and b)",
+        "not(a or b)",
+        "not((a<b)and c)",
+        "not((a>b)or c)",
+        "not(a and b or c)",
+        "not not(a and b)",
+        "not not(a or b)",
+        "not((a<b)and(b<c))",
+        "not((a>b)or(b<c))",
+        "not(false and a)",
+        "not(true and a)",
+        "not(false or a)",
+        "not(true or a)",
         "a and b",
         "a or b",
         "false and a",
@@ -455,6 +468,127 @@ return result,value
 end
 local visits=0;debug.sethook(function(event)local d=debug.getinfo(2,'f');if d.func==f then visits=visits+1;if visits==1 then assert(debug.setlocal(2,1,{replacement})=='value');collectgarbage()end end end,'',1)
 local result,value=f({initial});debug.sethook();return result,value,visits"#
+        );
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn negated_short_circuits_keep_both_paths_and_nested_boolean_events() {
+    for expression in [
+        "a and b",
+        "a or b",
+        "(a and b)or c",
+        "(a or b)and c",
+        "a and(b or c)",
+        "a or(b and c)",
+        "(a and b)or(c and a)",
+        "(a or b)and(c or a)",
+        "not a and b",
+        "not a or b",
+        "a and not b",
+        "a or not b",
+        "false and a",
+        "true or a",
+        "true and a",
+        "false or a",
+        "(a and a)or a",
+        "(a or a)and a",
+        "'bytes' or a",
+        "0 or a",
+        "nil and a",
+        "not nil and a",
+        "a and false",
+        "a or true",
+    ] {
+        for arguments in [
+            "false,false,false",
+            "true,true,true",
+            "nil,3,false",
+            "3,nil,true",
+            "false,'',0",
+            "'',false,nil",
+        ] {
+            for negations in 1..=4 {
+                let prefix = "not ".repeat(negations);
+                let source = format!(
+                    r#"local function f(a,b,c)
+local value={prefix}({expression})
+return value
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local value=f({arguments});debug.sethook();return value,table.concat(out,'|')"#
+                );
+                compare(source.as_bytes());
+            }
+        }
+    }
+}
+
+#[test]
+fn boolean_conditions_read_hook_mutations_and_preserve_named_destinations() {
+    for expression in [
+        "a or b",
+        "a and b",
+        "(a and b)or c",
+        "(a or b)and c",
+        "a and(b or c)",
+        "a or(b and c)",
+    ] {
+        for visit in 1..=5 {
+            for index in 1..=3 {
+                let source = format!(
+                    r#"local function f(a,b,c)
+local result='old'
+result=not not({expression})
+return result,a,b,c
+end
+local out={{}};local visits=0;debug.sethook(function(event)local d=debug.getinfo(2,'fl');if d.func==f and d.currentline==3 then visits=visits+1;local name,value=debug.getlocal(2,4);out[#out+1]=name..':'..tostring(value);if visits=={visit} then assert(debug.setlocal(2,{index},false));collectgarbage()end end end,'',1)
+local result,a,b,c=f(true,true,true);debug.sethook();return result,a,b,c,visits,table.concat(out,'|')"#
+                );
+                compare(source.as_bytes());
+            }
+        }
+    }
+}
+
+#[test]
+fn short_circuit_boolean_lines_and_callback_order_follow_the_reference() {
+    for expression in [
+        "not(\n a or b\n)",
+        "not not(\n a\n or b)",
+        "not(a\n and(b\n or c))",
+        "not((a\n <b)\n or c)",
+        "not(a\n or(b\n <c))",
+    ] {
+        for arguments in ["2,3,4", "3,2,1"] {
+            let source = format!(
+                r#"local function f(a,b,c)
+return {expression}
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local value=f({arguments});debug.sethook();return value,table.concat(out,'|')"#
+            );
+            compare(source.as_bytes());
+        }
+    }
+    compare(br#"local old={};local result=old;local trace={};local a,b=false,true;local function right()trace[#trace+1]=result==old;collectgarbage();b=false;return b end;result=not(a or right()or b);return result,trace[1],#trace"#);
+    compare(br#"local trace={};local b=true;local env=setmetatable({},{__index=function(_,k)trace[#trace+1]=k;b=false;collectgarbage();return false end});local function f()setfenv(1,env);return not not(left or b)end;return f(),table.concat(trace,'|')"#);
+    compare(br#"local weak=setmetatable({},{__mode='v'});local function f(a,b)a=not not(a or b);b=nil;collectgarbage();return a,weak[1]==nil end;local p={};weak[1]=p;p=nil;return f(false,weak[1])"#);
+    for expression in ["(a<b)or c", "c or(a<b)", "(a<b)and c", "c and(a<b)"] {
+        let source = format!(
+            r#"local trace={{}};local mt={{__lt=function(a,b)trace[#trace+1]=a.n..':'..b.n;collectgarbage();return {{}}end}};local a,b=setmetatable({{n=2}},mt),setmetatable({{n=3}},mt);local function f(a,b,c)return not not({expression})end;local out={{}};debug.sethook(function(event)if debug.getinfo(2,'f').func==f then out[#out+1]=event end end,'',1);local x=f(a,b,false);local y=f(a,b,true);debug.sethook();return x,y,table.concat(trace,'|'),table.concat(out,'|')"#
+        );
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn long_boolean_chains_compile_flat_and_patch_both_outcomes() {
+    for count in [64, 1024, 8192] {
+        let expression = vec!["a"; count].join(" or ");
+        let source = format!(
+            r#"local function f(a)return not not({expression})end;local hits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then hits=hits+1 end end,'',1);local a=f(true);local b=f(false);debug.sethook();return a,b,hits"#
         );
         compare(source.as_bytes());
     }

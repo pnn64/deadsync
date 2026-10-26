@@ -5,6 +5,8 @@ use std::sync::Arc;
 
 pub(crate) const OPEN: u32 = u32::MAX;
 pub(crate) const OPEN_ARGS: u16 = u16::MAX;
+pub(crate) const COMPARE_BRANCH: u16 = 1;
+pub(crate) const BOOLEAN_SKIP: u16 = 2;
 
 pub(crate) fn chunk_id(name: &[u8]) -> Vec<u8> {
     chunk_id_limit(name, 60)
@@ -500,8 +502,43 @@ impl Prototype {
                         return Err(fail(pc, "invalid concatenation range"));
                     }
                 }
-                Op::JumpFalse | Op::JumpTrue => reg(u32::from(i.a))?,
-                Op::Jump => {}
+                Op::JumpFalse | Op::JumpTrue => {
+                    reg(u32::from(i.a))?;
+                    if i.b > COMPARE_BRANCH
+                        || (i.b == COMPARE_BRANCH
+                            && (pc == 0
+                                || !matches!(
+                                    self.code[pc - 1].op,
+                                    Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge
+                                )
+                                || self.code[pc - 1].a != i.a))
+                    {
+                        return Err(fail(pc, "invalid comparison branch"));
+                    }
+                }
+                Op::Jump => {
+                    if i.b != 0
+                        && (i.b != BOOLEAN_SKIP
+                            || pc == 0
+                            || i.c as usize != pc + 2
+                            || !self.code.get(pc + 1).is_some_and(|next| {
+                                let previous = self.code[pc - 1];
+                                previous.op == Op::Load
+                                    && next.op == Op::Load
+                                    && previous.a == next.a
+                                    && matches!(
+                                        self.constants.get(previous.c as usize),
+                                        Some(Constant::Boolean(false))
+                                    )
+                                    && matches!(
+                                        self.constants.get(next.c as usize),
+                                        Some(Constant::Boolean(true))
+                                    )
+                            }))
+                    {
+                        return Err(fail(pc, "invalid boolean skip"));
+                    }
+                }
                 Op::Call | Op::TailCall | Op::CallIter => {
                     reg(u32::from(i.a))?;
                     if i.b != OPEN_ARGS {
@@ -529,7 +566,19 @@ impl Prototype {
             if matches!(
                 i.op,
                 Op::Jump | Op::JumpFalse | Op::JumpTrue | Op::ForPrep | Op::ForLoop
-            ) && self.code[i.c as usize].op == Op::Bool
+            ) && (self.code[i.c as usize].op == Op::Bool
+                || matches!(
+                    self.code[i.c as usize],
+                    Instruction {
+                        op: Op::JumpFalse | Op::JumpTrue,
+                        b: COMPARE_BRANCH,
+                        ..
+                    } | Instruction {
+                        op: Op::Jump,
+                        b: BOOLEAN_SKIP,
+                        ..
+                    }
+                ))
             {
                 return Err(fail(pc, "jump into comparison materialization"));
             }
@@ -600,6 +649,41 @@ mod tests {
                 c: 0,
             };
             assert!(p.verify().is_err());
+        }
+    }
+
+    #[test]
+    fn verifier_rejects_broken_boolean_branch_and_skip_boundaries() {
+        let good = crate::compile(b"local a,b,c=2,3,false;return not((a<b)or c)").unwrap();
+        for corrupt in 0..7 {
+            let mut p = good.clone();
+            let data = Arc::make_mut(&mut p.data);
+            let proto = &mut data.prototypes[data.entry as usize];
+            let branch = proto
+                .code
+                .iter()
+                .position(|i| matches!(i.op, Op::JumpFalse | Op::JumpTrue) && i.b == 1)
+                .unwrap();
+            let skip = proto
+                .code
+                .iter()
+                .position(|i| i.op == Op::Jump && i.b == 2)
+                .unwrap();
+            let jump = proto
+                .code
+                .iter()
+                .position(|i| i.op == Op::Jump && i.b == 0)
+                .unwrap();
+            match corrupt {
+                0 => proto.code[branch].b = 2,
+                1 => proto.code[branch].a = (proto.code[branch].a + 1) % proto.registers as u8,
+                2 => proto.code[skip].b = 1,
+                3 => proto.code[skip].c -= 1,
+                4 => proto.code[skip - 1].c = 0,
+                5 => proto.code[jump].c = branch as u32,
+                _ => proto.code[jump].c = skip as u32,
+            }
+            assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }
     }
 

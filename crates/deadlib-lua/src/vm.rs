@@ -2,7 +2,7 @@
 
 use crate::{
     Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, UserdataId, Value,
-    bytecode::{Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
+    bytecode::{COMPARE_BRANCH, Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
     locale::parse_number,
     table::Table,
 };
@@ -1365,14 +1365,25 @@ impl Vm {
                         if self.frames.len() == frame_index + 1
                             && self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0
                             && let Some(next) = prototype.code.get(pc)
-                            && next.op == Op::Bool
                         {
-                            self.registers[base + usize::from(next.a)] = if next.c == 0 {
-                                self.registers[a]
-                            } else {
-                                Value::Boolean(!self.registers[a].is_truthy())
-                            };
-                            pc += 1;
+                            match next.op {
+                                Op::Bool => {
+                                    self.registers[base + usize::from(next.a)] = if next.c == 0 {
+                                        self.registers[a]
+                                    } else {
+                                        Value::Boolean(!self.registers[a].is_truthy())
+                                    };
+                                    pc += 1;
+                                }
+                                Op::JumpFalse | Op::JumpTrue if next.b == COMPARE_BRANCH => {
+                                    if self.registers[a].is_truthy() == (next.op == Op::JumpTrue) {
+                                        pc = next.c as usize;
+                                    } else {
+                                        pc += 1;
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
                     }
                     Op::Concat => {
