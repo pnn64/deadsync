@@ -29,7 +29,12 @@ fn panning_matches_fused_reference_bits_and_voice_progress() {
     for pan in [SfxPan::Left, SfxPan::Right, SfxPan::Center] {
         let gains = [0.0, -0.0, 1.0, 0.375, f32::MIN_POSITIVE, f32::MAX]
             .into_iter()
-            .chain((1..255).map(|exponent| f32::from_bits(exponent << 23)));
+            .chain((1..255).map(|exponent| f32::from_bits(exponent << 23)))
+            .chain((0..256).map(|fraction| f32::from_bits((127 << 23) | (fraction << 15))))
+            .chain([1, 15, 16, 254].into_iter().flat_map(|exponent| {
+                [1, 3, 127, 255].map(|fraction| f32::from_bits((exponent << 23) | (fraction << 15)))
+            }))
+            .chain([0x07ff_ffff, 0x0800_0001, 0x3ec0_0001].map(f32::from_bits));
         for gain in gains {
             controls.set_bus_gain(MixBus::new(0), gain);
             for initial in [

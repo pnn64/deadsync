@@ -112,18 +112,13 @@ fn convert_music_chunk(
 ) {
     if *current_gain == target_gain {
         let scale = music_vol * target_gain;
-        if scale == 0.0 {
-            // Multiplication by signed zero preserves the exact sign bit that
-            // the general `(sample / 32768) * scale` path produced, while
-            // skipping its division for muted output.
+        if (scale.abs() >= f32::MIN_POSITIVE * 32768.0 && scale.is_finite()) || scale == 0.0 {
+            // Dividing the gain by 32768 is exact above this bound. Fold PCM
+            // normalization into it once; keep the original order near underflow.
+            // Signed zero must still multiply each sample to preserve its sign.
+            let pcm_scale = scale / 32768.0;
             for (dst, &src) in dst.iter_mut().zip(src) {
-                *dst = f32::from(src) * scale;
-            }
-            return;
-        }
-        if scale == 1.0 {
-            for (dst, &src) in dst.iter_mut().zip(src) {
-                *dst = i16_to_f32(src);
+                *dst = f32::from(src) * pcm_scale;
             }
             return;
         }

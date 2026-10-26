@@ -266,11 +266,21 @@ fn mix_sfx_panned_stereo(src: &[i16], dst: &mut [f32], gain: f32, pan: SfxPan) {
     let channel = usize::from(pan == SfxPan::Right);
     // RageSoundUtil::Pan at -1/+1 routes the source's right channel entirely
     // to the owning side. The prepared mine OGG is mono expanded to stereo.
-    if gain == 0.0 || (gain.is_normal() && gain.to_bits() & 0x007f_ffff == 0) {
-        // A normal power of two scales every i16 exactly, even at the smallest
-        // normal gain. Zero still adds its sign for signed zeros and NaNs.
+    if gain == 0.0
+        || (gain.is_normal()
+            && (gain.to_bits() & 0x007f_ffff == 0
+                || (gain >= f32::MIN_POSITIVE * 32768.0 && gain.to_bits() & 0x7fff == 0)))
+    {
+        // A gain with at most nine significant bits multiplies every i16
+        // exactly when normalization stays normal. Powers of two are also
+        // exact below that bound. Zero preserves signed zeros and NaNs.
         let scale = gain / 32768.0;
-        for (source, target) in src.as_chunks::<2>().0.iter().zip(dst.as_chunks_mut::<2>().0) {
+        for (source, target) in src
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(dst.as_chunks_mut::<2>().0)
+        {
             target[channel] += f32::from(source[1]) * scale;
         }
         return;
@@ -282,9 +292,13 @@ fn mix_sfx_panned_stereo(src: &[i16], dst: &mut [f32], gain: f32, pan: SfxPan) {
 
 #[inline]
 fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
-    if gain == 0.0 || (gain.is_normal() && gain.to_bits() & 0x007f_ffff == 0) {
-        // Power-of-two scaling is exact for the 16-bit source, so its product
-        // needs no fused rounding. This also covers the unit and zero gains.
+    if gain == 0.0
+        || (gain.is_normal()
+            && (gain.to_bits() & 0x007f_ffff == 0
+                || (gain >= f32::MIN_POSITIVE * 32768.0 && gain.to_bits() & 0x7fff == 0)))
+    {
+        // A nine-bit gain significand times any i16 is representable in f32,
+        // so the product needs no fused rounding.
         let scale = gain / 32768.0;
         for (dst, &src) in dst.iter_mut().zip(src) {
             *dst += f32::from(src) * scale;
