@@ -262,6 +262,25 @@ fn complete_common_rates_keep_extra_endpoints_and_missing_rate_tolerance() {
     }
 }
 
+#[test]
+fn nominal_only_and_empty_ranges_keep_original_results() {
+    for default in [0, 1, 11_025, 44_100, 48_000, 1_234_567, u32::MAX] {
+        let rate = f64::from(default);
+        for count in [0, 1, 8, 32] {
+            let mut ranges = vec![(rate, rate); count];
+            for changed_max in [None, Some(rate + 0.5), Some(rate + 1.0)] {
+                if let (Some(first), Some(max)) = (ranges.first_mut(), changed_max) {
+                    first.1 = max;
+                }
+                set_ranges(&ranges, false);
+                let expected = RANGES.with_borrow(|ranges| reference_rates(ranges, default));
+                assert_eq!(supported_sample_rates_hz(7, default), expected);
+                assert_eq!(QUERY_CALLS.get(), 1);
+            }
+        }
+    }
+}
+
 fn prep(name: &str) -> Prep {
     Prep {
         device_name: name.to_owned(),
@@ -369,6 +388,15 @@ fn benchmark_coreaudio_setup() {
         ),
         ("rates_error_default", vec![], 48000, true),
         ("rates_error_empty", vec![], 0, true),
+        ("rates_empty_default", vec![], 48000, false),
+        ("rates_empty_no_default", vec![], 0, false),
+        ("rates_nominal_only", vec![(48000.0, 48000.0)], 48000, false),
+        (
+            "rates_nominal_repeated",
+            vec![(48000.0, 48000.0); 32],
+            48000,
+            false,
+        ),
     ] {
         set_ranges(&ranges, failed);
         LOG_ENABLED.set(false);

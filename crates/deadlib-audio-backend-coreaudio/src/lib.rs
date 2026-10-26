@@ -145,7 +145,8 @@ pub fn enumerate_output_devices() -> Vec<CoreAudioOutputDevice> {
 struct CoreAudioHostClock {
     numer: u32,
     denom: u32,
-    offset_nanos: i128,
+    offset_nanos: u64,
+    mach_ahead: bool,
 }
 
 impl CoreAudioHostClock {
@@ -171,7 +172,8 @@ impl CoreAudioHostClock {
         Ok(Self {
             numer: info.numer,
             denom: info.denom,
-            offset_nanos: i128::from(mach_nanos) - i128::from(host_mid),
+            offset_nanos: mach_nanos.abs_diff(host_mid),
+            mach_ahead: mach_nanos >= host_mid,
         })
     }
 
@@ -182,9 +184,12 @@ impl CoreAudioHostClock {
             return (now_nanos(), OutputTimingQuality::Fallback);
         }
         let mach_nanos = scale_mach_time(mach_time, self.numer, self.denom);
-        let host_nanos = i128::from(mach_nanos) - self.offset_nanos;
-        let clamped = host_nanos.clamp(0, i128::from(u64::MAX)) as u64;
-        (clamped, OutputTimingQuality::Trusted)
+        let host_nanos = if self.mach_ahead {
+            mach_nanos.saturating_sub(self.offset_nanos)
+        } else {
+            mach_nanos.saturating_add(self.offset_nanos)
+        };
+        (host_nanos, OutputTimingQuality::Trusted)
     }
 }
 
@@ -258,7 +263,11 @@ pub fn start(
             let buffered_frames = buffer_frames.max(period_frames);
             let latency_frames = buffered_frames
                 .saturating_add(nanos_to_frames(sample_rate_hz, downstream_latency_ns));
-            let period_ns = frames_to_nanos(sample_rate_hz, period_frames);
+            let period_ns = if period_frames == buffer_frames {
+                buffer_ns
+            } else {
+                frames_to_nanos(sample_rate_hz, period_frames)
+            };
             let latency_ns = buffer_ns
                 .max(period_ns)
                 .saturating_add(downstream_latency_ns);
@@ -567,13 +576,16 @@ fn supported_sample_rates_hz(device_id: AudioDeviceID, default_rate_hz: u32) -> 
         Ok(ranges) => ranges,
         Err(err) => {
             warn!("failed to query CoreAudio sample rates for device {device_id}: {err}");
-            return if default_rate_hz > 0 {
-                vec![default_rate_hz]
-            } else {
-                Vec::new()
-            };
+            Vec::new()
         }
     };
+    if ranges.is_empty() {
+        return if default_rate_hz > 0 {
+            vec![default_rate_hz]
+        } else {
+            Vec::new()
+        };
+    }
     let mut sample_rates_hz =
         Vec::with_capacity(ranges.len() * 2 + COMMON_SAMPLE_RATES_HZ.len() + 1);
     if default_rate_hz > 0 {

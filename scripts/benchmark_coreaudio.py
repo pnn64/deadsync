@@ -32,6 +32,7 @@ def main():
     parser.add_argument("--archive", required=True, type=Path)
     parser.add_argument("--source", type=Path, default=SOURCE)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--host-clock", action="store_true")
     args = parser.parse_args()
     destination = args.archive.resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -53,6 +54,18 @@ fn callback_timing(sample_rate_hz: u32, buffer_frames: u32, buffer_ns: u64,
               "checks.rs": ROOT / "scripts/coreaudio_timing_tests.rs",
               "perf.rs": ROOT / "tests/support/perf.rs",
               "kernel_bench.rs": ROOT / "tests/support/kernel_bench.rs"}
+    if args.host_clock:
+        struct_start = source.index("#[derive(Clone, Copy)]\nstruct CoreAudioHostClock")
+        struct_end = source.index("impl CoreAudioHostClock", struct_start)
+        constructor = source[source.index("        Ok(Self {", struct_end):]
+        constructor = constructor[:constructor.index("\n        })")]
+        constructor = constructor.removeprefix("        Ok(").replace("Self {", "CoreAudioHostClock {", 1)
+        generated += '\ninclude!("host_clock.rs");\n'
+        generated += source[struct_start:struct_end]
+        generated += "\nimpl CoreAudioHostClock {\n" + function(source, "callback_nanos") + "\n}\n"
+        generated += "\nfn clock_from_calibration(mach_nanos: u64, host_mid: u64, info: Timebase) -> CoreAudioHostClock {\n"
+        generated += constructor + "\n    }\n}\n"
+        inputs["host_clock.rs"] = ROOT / "scripts/coreaudio_host_clock_tests.rs"
     hashes = {}
     for name, path in inputs.items():
         data = path.read_bytes()
