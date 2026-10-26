@@ -1,0 +1,41 @@
+{
+  "argv": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=fat",
+    "-C",
+    "codegen-units=1",
+    "-C",
+    "target-feature=+crt-static",
+    "C:\\GitHub\\deadsync\\target\\asset-palette-upload\\cache.rs",
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\asset-palette-upload\\cache.exe",
+    "--extern",
+    "memchr=C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+    "-L",
+    "dependency=C:\\GitHub\\deadsync\\target\\release\\deps",
+    "--extern",
+    "twox_hash=C:\\GitHub\\deadsync\\target\\release\\deps\\libtwox_hash-119180674b661aa0.rlib",
+    "-L",
+    "dependency=C:\\GitHub\\deadsync\\target\\release\\deps"
+  ],
+  "source_sha256": {
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\dynamic.rs": "ad6359bfe1c0c6f9e9846ed239820049b8bd3fe4cd7b99438bd7aae6802c5bef",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\cache_filename_perf.rs": "c543e514dd294b0ec17b7300f18ca42b1fa7c0e11d059d3885a6efa182b2f359",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\cache_filename_original.rs": "19796bd68b2a9ca762d0f3329110d23994115a9e2dd045e44722756fddaa01c1",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\perf_fixture.rs": "8fa29e2ceb52b9eb65d64ca0230f3885a1877bcde244c1e08d04a6d05c78f8be",
+    "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+    "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+  },
+  "extracted_body_sha256": {
+    "banner_cache_opthash": "e9aa44586f7d04e5ea1f228632c090699dfee5f3d4ae53fa51a13f4cd727b42c",
+    "banner_path_hash": "182d489fac52dd4c0f2ed0a46bfeed35762624df794e8ed2a599de7541dd581f",
+    "dynamic_image_cache_path_for": "9f31a447cd061b1a5f569716d560883218b746437b6d3b8cbfac474d99e40a62"
+  },
+  "binary_sha256": "db67fc45046923d7bc9d2d4bf23ea926372477069756f483594877f7f405f769",
+  "dependencies_file": "2026-10-26-asset-palette-dependencies.json"
+}

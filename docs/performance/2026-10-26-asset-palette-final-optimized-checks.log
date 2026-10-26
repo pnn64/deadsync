@@ -1,0 +1,6 @@
+
+running 2 tests
+test decode::palette_perf::palette_decoders_match_frozen_pixels_and_truncation_errors ... ok
+test upload::upload_perf::prepared_and_ordinary_replacements_match_frozen_queue_state ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 50.90s

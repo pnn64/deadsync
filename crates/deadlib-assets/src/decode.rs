@@ -272,32 +272,32 @@ fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     let mut reader = gif_reader(path)?;
     let canvas = [u32::from(reader.width()), u32::from(reader.height())];
     check_image_alloc(canvas)?;
-    let global = reader.global_palette().map(<[u8]>::to_vec);
     let frame = reader
         .next_frame_info()
         .map_err(gif_error)?
         .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
     let size = [u32::from(frame.width), u32::from(frame.height)];
     let origin = [u32::from(frame.left), u32::from(frame.top)];
-    if size.contains(&0) || canvas.contains(&0)
-        || origin[0] + size[0] > canvas[0] || origin[1] + size[1] > canvas[1] {
+    if size.contains(&0)
+        || canvas.contains(&0)
+        || origin[0] + size[0] > canvas[0]
+        || origin[1] + size[1] > canvas[1]
+    {
         return Err(image_limit());
     }
     check_image_alloc(size)?;
     // The primary stb loader starts with a transparent logical canvas and
     // leaves transparent first-frame pixels unwritten.
     let mut colors = [[0; 4]; 256];
-    for (color, rgb) in colors.iter_mut().zip(
-        frame
-            .palette
-            .as_deref()
-            .or(global.as_deref())
-            .unwrap_or_default()
-            .chunks_exact(3),
-    ) {
+    let transparent = frame.transparent;
+    let palette = match frame.palette.as_deref() {
+        Some(palette) => palette,
+        None => reader.global_palette().unwrap_or_default(),
+    };
+    for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
         *color = [rgb[0], rgb[1], rgb[2], 255];
     }
-    if let Some(index) = frame.transparent {
+    if let Some(index) = transparent {
         colors[index as usize] = [0; 4];
     }
     let mut indices = vec![0; size[0] as usize * size[1] as usize];
@@ -362,7 +362,13 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
         )
     } else {
         let height = le32(22) as i32;
-        ([le32(18), height.unsigned_abs()], height < 0, le16(26), le16(28), le32(30))
+        (
+            [le32(18), height.unsigned_abs()],
+            height < 0,
+            le16(26),
+            le16(28),
+            le32(30),
+        )
     };
     if !matches!(bits, 1 | 4 | 8) || compression != 0 {
         return Ok(None);
@@ -375,7 +381,8 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
     // biClrUsed. Preserve safe palette handling for minimal OS/2 files too;
     // the primary decoder's negative-size palette path has undefined pixels.
     let entry_size = if header_size == 12 { 3 } else { 4 };
-    let color_count = data_offset.checked_sub(14 + header_size)
+    let color_count = data_offset
+        .checked_sub(14 + header_size)
         .ok_or_else(|| decode_error(image::ImageFormat::Bmp, "invalid bitmap pixel offset"))?
         / entry_size;
     if planes != 1 || color_count == 0 || color_count > 256 {
@@ -385,32 +392,50 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
         ));
     }
     let mut colors = [[0; 4]; 256];
-    for color in &mut colors[..color_count as usize] {
-        let mut entry = [0; 4];
-        input.read_exact(&mut entry[..if header_size == 12 { 3 } else { 4 }])?;
+    // A palette has at most 256 four-byte entries. Reuse those bytes for rows.
+    let mut scratch = [0; 1024];
+    let palette = &mut scratch[..color_count as usize * entry_size as usize];
+    input.read_exact(palette)?;
+    for (color, entry) in colors
+        .iter_mut()
+        .zip(palette.chunks_exact(entry_size as usize))
+    {
         *color = [entry[2], entry[1], entry[0], 255];
     }
     let pitch = usize::try_from((u64::from(size[0]) * u64::from(bits)).div_ceil(32) * 4)
         .map_err(|_| image_limit())?;
-    let mut row = vec![0; pitch];
+    let mut heap;
+    let row = if pitch <= scratch.len() {
+        &mut scratch[..pitch]
+    } else {
+        heap = vec![0; pitch];
+        heap.as_mut_slice()
+    };
     input.seek(SeekFrom::Start(u64::from(data_offset)))?;
     let mut image = RgbaImage::new(size[0], size[1]);
     let stride = size[0] as usize * 4;
     for row_index in 0..size[1] {
-        let y = if top_down { row_index } else { size[1] - 1 - row_index };
-        input.read_exact(&mut row)?;
+        let y = if top_down {
+            row_index
+        } else {
+            size[1] - 1 - row_index
+        };
+        input.read_exact(row)?;
         let pixels = image.as_mut()[y as usize * stride..][..stride]
             .as_chunks_mut::<4>()
             .0;
         match bits {
-            1 => unpack_palette::<8>(&row, pixels, &colors),
-            4 => unpack_palette::<2>(&row, pixels, &colors),
-            _ => unpack_palette::<1>(&row, pixels, &colors),
+            1 => unpack_palette::<8>(row, pixels, &colors),
+            4 => unpack_palette::<2>(row, pixels, &colors),
+            _ => unpack_palette::<1>(row, pixels, &colors),
         }
         // Valid BMP palette entries have alpha 255; missing entries retain 0.
         // A complete palette needs no validation, and padding is never decoded.
         if color_count < (1 << bits) && pixels.iter().any(|pixel| pixel[3] == 0) {
-            return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
+            return Err(decode_error(
+                image::ImageFormat::Bmp,
+                "bitmap palette index out of range",
+            ));
         }
     }
     if color_key {
@@ -1002,3 +1027,6 @@ mod resize_kernel;
 
 #[cfg(test)]
 mod key_kernel;
+
+#[cfg(test)]
+mod palette_perf;

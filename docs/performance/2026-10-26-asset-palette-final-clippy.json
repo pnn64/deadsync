@@ -1,0 +1,1 @@
+{"argv": ["cargo", "clippy", "-p", "deadlib-assets", "--locked", "--lib", "--tests", "--no-deps"], "exit_code": 0}

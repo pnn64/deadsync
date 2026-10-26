@@ -1,0 +1,55 @@
+--- a/crates/deadlib-assets/src/decode.rs
++++ b/crates/deadlib-assets/src/decode.rs
+@@ -281,2 +281,5 @@
+-    if size.contains(&0) || canvas.contains(&0)
+-        || origin[0] + size[0] > canvas[0] || origin[1] + size[1] > canvas[1] {
++    if size.contains(&0)
++        || canvas.contains(&0)
++        || origin[0] + size[0] > canvas[0]
++        || origin[1] + size[1] > canvas[1]
++    {
+@@ -362 +365,7 @@
+-        ([le32(18), height.unsigned_abs()], height < 0, le16(26), le16(28), le32(30))
++        (
++            [le32(18), height.unsigned_abs()],
++            height < 0,
++            le16(26),
++            le16(28),
++            le32(30),
++        )
+@@ -375 +384,2 @@
+-    let color_count = data_offset.checked_sub(14 + header_size)
++    let color_count = data_offset
++        .checked_sub(14 + header_size)
+@@ -384,0 +395 @@
++    // A palette has at most 256 four-byte entries. Reuse those bytes for rows.
+@@ -388 +399,4 @@
+-    for (color, entry) in colors.iter_mut().zip(palette.chunks_exact(entry_size as usize)) {
++    for (color, entry) in colors
++        .iter_mut()
++        .zip(palette.chunks_exact(entry_size as usize))
++    {
+@@ -404 +418,5 @@
+-        let y = if top_down { row_index } else { size[1] - 1 - row_index };
++        let y = if top_down {
++            row_index
++        } else {
++            size[1] - 1 - row_index
++        };
+@@ -410,3 +428,3 @@
+-            1 => unpack_palette::<8>(&row, pixels, &colors),
+-            4 => unpack_palette::<2>(&row, pixels, &colors),
+-            _ => unpack_palette::<1>(&row, pixels, &colors),
++            1 => unpack_palette::<8>(row, pixels, &colors),
++            4 => unpack_palette::<2>(row, pixels, &colors),
++            _ => unpack_palette::<1>(row, pixels, &colors),
+@@ -417 +435,4 @@
+-            return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
++            return Err(decode_error(
++                image::ImageFormat::Bmp,
++                "bitmap palette index out of range",
++            ));
+@@ -1008,0 +1030,3 @@
++
++#[cfg(test)]
++mod palette_perf;

@@ -1,0 +1,72 @@
+
+running 2 tests
+test decode::palette_perf::benchmark_palette_decoders ... palette/gif/global/1: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 47225, freed_bytes: 47225, peak_bytes: 47009 }
+palette/gif/global/1: cycles/op 191827.58; ns/op 87714.06
+palette/gif/global/16: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 48800, freed_bytes: 48800, peak_bytes: 48584 }
+palette/gif/global/16: cycles/op 196095.81; ns/op 89559.38
+palette/gif/global/256: allocation Churn { allocs: 12, reallocs: 0, frees: 12, allocated_bytes: 380000, freed_bytes: 380000, peak_bytes: 379784 }
+palette/gif/global/256: cycles/op 766535.12; ns/op 349850.00
+palette/gif/local/1: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 46469, freed_bytes: 46469, peak_bytes: 46253 }
+palette/gif/local/1: cycles/op 175838.36; ns/op 80290.62
+palette/gif/local/16: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 48044, freed_bytes: 48044, peak_bytes: 47828 }
+palette/gif/local/16: cycles/op 192372.88; ns/op 87868.75
+palette/gif/local/256: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 379244, freed_bytes: 379244, peak_bytes: 379028 }
+palette/gif/local/256: cycles/op 931132.69; ns/op 424906.25
+palette/gif/both/1: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 47993, freed_bytes: 47993, peak_bytes: 47777 }
+palette/gif/both/1: cycles/op 176992.45; ns/op 80828.91
+palette/gif/both/16: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 49568, freed_bytes: 49568, peak_bytes: 49352 }
+palette/gif/both/16: cycles/op 197287.62; ns/op 90044.53
+palette/gif/both/256: allocation Churn { allocs: 13, reallocs: 0, frees: 13, allocated_bytes: 380768, freed_bytes: 380768, peak_bytes: 380552 }
+palette/gif/both/256: cycles/op 925892.19; ns/op 422762.50
+palette/bmp/1/os2=false/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8416, freed_bytes: 8416, peak_bytes: 8200 }
+palette/bmp/1/os2=false/1: cycles/op 196236.43; ns/op 340489.06
+palette/bmp/1/os2=false/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9436, freed_bytes: 9436, peak_bytes: 9220 }
+palette/bmp/1/os2=false/16: cycles/op 203461.05; ns/op 93080.47
+palette/bmp/1/os2=false/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270584, freed_bytes: 270584, peak_bytes: 270368 }
+palette/bmp/1/os2=false/256: cycles/op 314941.31; ns/op 2150043.75
+palette/bmp/1/os2=true/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8416, freed_bytes: 8416, peak_bytes: 8200 }
+palette/bmp/1/os2=true/1: cycles/op 199235.69; ns/op 91148.44
+palette/bmp/1/os2=true/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9436, freed_bytes: 9436, peak_bytes: 9220 }
+palette/bmp/1/os2=true/16: cycles/op 196805.77; ns/op 340717.19
+palette/bmp/1/os2=true/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270584, freed_bytes: 270584, peak_bytes: 270368 }
+palette/bmp/1/os2=true/256: cycles/op 311196.12; ns/op 141937.50
+palette/bmp/4/os2=false/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8416, freed_bytes: 8416, peak_bytes: 8200 }
+palette/bmp/4/os2=false/1: cycles/op 195620.80; ns/op 89332.03
+palette/bmp/4/os2=false/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9440, freed_bytes: 9440, peak_bytes: 9224 }
+palette/bmp/4/os2=false/16: cycles/op 196917.22; ns/op 340981.25
+palette/bmp/4/os2=false/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270680, freed_bytes: 270680, peak_bytes: 270464 }
+palette/bmp/4/os2=false/256: cycles/op 377814.38; ns/op 2177768.75
+palette/bmp/4/os2=true/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8416, freed_bytes: 8416, peak_bytes: 8200 }
+palette/bmp/4/os2=true/1: cycles/op 205410.84; ns/op 93807.81
+palette/bmp/4/os2=true/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9440, freed_bytes: 9440, peak_bytes: 9224 }
+palette/bmp/4/os2=true/16: cycles/op 194603.89; ns/op 88787.50
+palette/bmp/4/os2=true/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270680, freed_bytes: 270680, peak_bytes: 270464 }
+palette/bmp/4/os2=true/256: cycles/op 376126.94; ns/op 171525.00
+palette/bmp/8/os2=false/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8416, freed_bytes: 8416, peak_bytes: 8200 }
+palette/bmp/8/os2=false/1: cycles/op 199281.98; ns/op 91281.25
+palette/bmp/8/os2=false/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9448, freed_bytes: 9448, peak_bytes: 9232 }
+palette/bmp/8/os2=false/16: cycles/op 199837.60; ns/op 91248.44
+palette/bmp/8/os2=false/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270808, freed_bytes: 270808, peak_bytes: 270592 }
+palette/bmp/8/os2=false/256: cycles/op 402178.94; ns/op 183612.50
+palette/bmp/8/os2=true/1: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 8416, freed_bytes: 8416, peak_bytes: 8200 }
+palette/bmp/8/os2=true/1: cycles/op 199012.77; ns/op 90877.34
+palette/bmp/8/os2=true/16: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 9448, freed_bytes: 9448, peak_bytes: 9232 }
+palette/bmp/8/os2=true/16: cycles/op 198613.20; ns/op 90725.00
+palette/bmp/8/os2=true/256: allocation Churn { allocs: 4, reallocs: 0, frees: 4, allocated_bytes: 270808, freed_bytes: 270808, peak_bytes: 270592 }
+palette/bmp/8/os2=true/256: cycles/op 394084.81; ns/op 179693.75
+ok
+test upload::upload_perf::benchmark_upload_insertions ... uploads/prepared=false/1: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+uploads/prepared=false/1: cycles/op 85.95; ns/op 39.22
+uploads/prepared=true/1: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+uploads/prepared=true/1: cycles/op 89.64; ns/op 40.90
+uploads/prepared=false/64: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+uploads/prepared=false/64: cycles/op 99.35; ns/op 45.32
+uploads/prepared=true/64: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+uploads/prepared=true/64: cycles/op 100.34; ns/op 45.73
+uploads/prepared=false/1024: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+uploads/prepared=false/1024: cycles/op 90.41; ns/op 41.22
+uploads/prepared=true/1024: allocation Churn { allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0 }
+uploads/prepared=true/1024: cycles/op 95.15; ns/op 43.38
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 5.11s

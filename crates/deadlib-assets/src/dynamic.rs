@@ -20,6 +20,10 @@ use twox_hash::XxHash64;
 
 static BANNER_CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+#[cfg(test)]
+#[path = "cache_filename_perf.rs"]
+mod cache_filename_perf;
+
 #[derive(Clone, Copy, Debug)]
 pub struct BannerCacheOptions {
     pub enabled: bool,
@@ -45,12 +49,19 @@ pub fn dynamic_image_cache_path_for(
     let path_hash = banner_path_hash(&canonical.to_string_lossy());
     let path_hex = format!("{path_hash:016x}");
     let opt_hash = banner_cache_opthash(opts);
-    let shard2 = &path_hex[..2];
-    let sep = std::path::MAIN_SEPARATOR;
-    Some((
-        cache_dir.join(format!("{shard2}{sep}{path_hex}-{opt_hash:016x}.rgba")),
-        path_hex,
-    ))
+    let mut filename = *b"0000000000000000-0000000000000000.rgba";
+    filename[..16].copy_from_slice(path_hex.as_bytes());
+    let hex = b"0123456789abcdef";
+    for (i, byte) in opt_hash.to_be_bytes().into_iter().enumerate() {
+        filename[17 + i * 2] = hex[usize::from(byte >> 4)];
+        filename[18 + i * 2] = hex[usize::from(byte & 15)];
+    }
+    // Reserve both separators, the two-character shard, and the fixed filename.
+    let mut cache_path = PathBuf::with_capacity(cache_dir.as_os_str().len() + filename.len() + 4);
+    cache_path.push(cache_dir);
+    cache_path.push(&path_hex[..2]);
+    cache_path.push(std::str::from_utf8(&filename).expect("cache filename is ASCII hex"));
+    Some((cache_path, path_hex))
 }
 
 fn banner_path_hash(path: &str) -> u64 {
