@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "+nightly",
+    "miri",
+    "test",
+    "--manifest-path",
+    "target/audio-sola/miri/Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "grouped_pcm_scores_preserve_rounding_and_rejection",
+    "--",
+    "--nocapture"
+  ],
+  "environment": {
+    "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\miri-target",
+    "MIRIFLAGS": "-Zmiri-tree-borrows"
+  },
+  "exit_code": 4294967295,
+  "stdout": "\nrunning 1 test\ntest stretch::perf_tests::grouped_pcm_scores_preserve_rounding_and_rejection ... ",
+  "stderr": "    Blocking waiting for file lock on package cache\n   Compiling sola-safety v0.0.0 (C:\\GitHub\\deadsync\\target\\audio-sola\\miri)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s\n     Running unittests harness.rs (target\\audio-sola\\miri-target\\miri\\x86_64-unknown-linux-gnu\\debug\\build\\sola-safety/2f208f412bb806eb\\out\\sola_safety-2f208f412bb806eb)\nerror: test failed, to rerun pass `--lib`\n\nCaused by:\n  process didn't exit successfully: `C:\\Users\\PerfectTaste\\.rustup\\toolchains\\nightly-x86_64-pc-windows-msvc\\bin\\cargo-miri.exe runner C:\\GitHub\\deadsync\\target\\audio-sola\\miri-target\\miri\\x86_64-unknown-linux-gnu\\debug\\build\\sola-safety/2f208f412bb806eb\\out\\sola_safety-2f208f412bb806eb grouped_pcm_scores_preserve_rounding_and_rejection --nocapture` (exit code: 0xffffffff)\n",
+  "elapsed_seconds": 1054.0744107000064,
+  "source_sha256": {
+    "crates/deadlib-audio/src/stream/stretch.rs": "229b4826d200e143114c86b7366d04163377e0f2b544d47e70597e37e814ac9a",
+    "crates/deadlib-audio/src/stream/stretch/perf_tests.rs": "45184913c96a0fff97d09b7e2b63ce67afca4401a282a12bf144b1828d8e2f6c"
+  },
+  "status": "cancelled",
+  "reason": "Intentionally stopped the oversized interpreted stress matrix after the compact transition/rejection/tail matrix passed Miri. The full stress matrix passes native debug and release tests.",
+  "replacement": "2026-10-26-audio-integer-score-miri-targeted.json"
+}

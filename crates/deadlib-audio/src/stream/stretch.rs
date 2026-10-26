@@ -676,26 +676,35 @@ fn find_closest_match_stereo(
 
 #[inline(always)]
 fn correlation_score(frames: &[i16], correlate: &[i16], best_score: f32) -> f32 {
-    let mut score = 0.0f32;
     let (frames, frame_tail) = frames[..correlate.len()].as_chunks::<8>();
     let (correlate, correlate_tail) = correlate.as_chunks::<8>();
-    for (frames, correlate) in frames.iter().zip(correlate) {
-        // Eight u16 differences fit in u32 and convert to f32 exactly. In
-        // normalized units each difference is a multiple of 2^-15 below 2.
-        // With a prefix <= 496, the combined score remains below 512, where
-        // every such sum is exact. Larger prefixes retain scalar addition
-        // order, including the eight-sample early-rejection boundary.
-        if score <= 496.0 {
-            let differences: [u16; 8] = std::array::from_fn(|i| frames[i].abs_diff(correlate[i]));
-            let sum: u32 = differences
-                .iter()
-                .map(|&difference| u32::from(difference))
-                .sum();
-            score += sum as f32 * I16_SCALE;
-        } else {
-            for index in 0..8 {
-                score += f32::from(frames[index].abs_diff(correlate[index])) * I16_SCALE;
+    let mut chunks = frames.iter().zip(correlate);
+    let mut pcm_score = 0u32;
+    // Caller thresholds are sums of normalized PCM differences, hence integer
+    // multiples of 2^-15 (or infinity). Compare in PCM units while every sum
+    // is exact. At a prefix <= 496, even eight full-scale differences keep
+    // the sum below 512, where each PCM quantum still fits in f32.
+    let best_pcm_score = (best_score * 32768.0) as u32;
+    let stop_at = best_pcm_score.min(496 * 32768 + 1);
+    for (frames, correlate) in chunks.by_ref() {
+        let differences: [u16; 8] = std::array::from_fn(|i| frames[i].abs_diff(correlate[i]));
+        pcm_score += differences
+            .iter()
+            .map(|&difference| u32::from(difference))
+            .sum::<u32>();
+        if pcm_score >= stop_at {
+            if pcm_score >= best_pcm_score {
+                return pcm_score as f32 * I16_SCALE;
             }
+            break;
+        }
+    }
+    // Above the exact range, preserve the original per-sample float rounding
+    // and its eight-sample rejection boundary, including any final tail.
+    let mut score = pcm_score as f32 * I16_SCALE;
+    for (frames, correlate) in chunks {
+        for index in 0..8 {
+            score += f32::from(frames[index].abs_diff(correlate[index])) * I16_SCALE;
         }
         if score >= best_score {
             return score;

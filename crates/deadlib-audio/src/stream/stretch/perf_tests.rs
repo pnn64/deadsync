@@ -87,8 +87,10 @@ fn correlation_matches_scalar_oracle() {
 
 #[test]
 fn grouped_pcm_scores_preserve_rounding_and_rejection() {
-    for len in [1, 7, 8, 9, 31, 360, 720, 1440] {
-        for seed in 0..16 {
+    for len in [
+        0, 1, 7, 8, 9, 31, 255, 256, 257, 263, 264, 265, 271, 272, 273, 360, 720, 1440, 4097,
+    ] {
+        for seed in 0..18 {
             let mut frames = noise(len, seed);
             let mut pattern = noise(len, seed + 7);
             if seed == 0 {
@@ -99,7 +101,34 @@ fn grouped_pcm_scores_preserve_rounding_and_rejection() {
                 frames.fill(1);
                 pattern.fill(i16::MIN);
             }
-            for best in [0.0, 1.0, 8.0, 128.0, 496.0, 512.0, 1000.0, f32::INFINITY] {
+            if seed == 16 {
+                // Exactly 496 normalized units after 256 samples, followed
+                // by ordinary PCM that crosses into scalar float rounding.
+                frames[..len.min(256)].fill(30_720);
+                pattern[..len.min(256)].fill(i16::MIN);
+            }
+            if seed == 17 {
+                frames.iter_mut().for_each(|v| *v /= 8192);
+                pattern.iter_mut().for_each(|v| *v /= 8192);
+            }
+            for best in [
+                0.0,
+                I16_SCALE,
+                7.0 * I16_SCALE,
+                8.0 * I16_SCALE,
+                1.0,
+                8.0,
+                128.0,
+                496.0 - I16_SCALE,
+                496.0,
+                496.0 + I16_SCALE,
+                512.0 - I16_SCALE,
+                512.0,
+                512.0 + 2.0 * I16_SCALE,
+                1000.0,
+                f32::MAX,
+                f32::INFINITY,
+            ] {
                 let mut expected = 0.0f32;
                 for (index, (&a, &b)) in frames.iter().zip(&pattern).enumerate() {
                     expected += (f32::from(a) * I16_SCALE - f32::from(b) * I16_SCALE).abs();

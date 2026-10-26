@@ -31,12 +31,23 @@ def build(name, source, test_source=None):
             test_source = SOURCE.parent / "stretch/perf_tests.rs"
     tests = test_source.read_bytes()
     (archive / "perf_tests-source.rs").write_bytes(tests)
-    rate_source = SOURCE.parent / "stretch/rate_bench.rs"
+    rate_source = source.parent / "rate_bench.rs"
+    if not rate_source.exists():
+        rate_source = SOURCE.parent / "stretch/rate_bench.rs"
     rate_tests = rate_source.read_bytes()
     (archive / "rate_bench.rs").write_bytes(rate_tests)
+    support_sources = {}
+    for filename, live in [
+        ("kernel_bench.rs", ROOT / "tests/support/kernel_bench.rs"),
+        ("allocations-source.rs", ROOT / "tests/support/perf.rs"),
+    ]:
+        frozen = source.parent / filename
+        data = (frozen if frozen.exists() else live).read_bytes()
+        (archive / filename).write_bytes(data)
+        support_sources[filename] = hashlib.sha256(data).hexdigest()
     relocated_tests = tests.decode("utf-8").replace(
         '#[path = "../../../../../tests/support/kernel_bench.rs"]',
-        f'#[path = {json.dumps((ROOT / "tests/support/kernel_bench.rs").as_posix())}]',
+        f'#[path = {json.dumps((archive / "kernel_bench.rs").as_posix())}]',
     )
     relocated_tests = relocated_tests.replace(
         '#[path = "rate_bench.rs"]',
@@ -53,7 +64,7 @@ def build(name, source, test_source=None):
                       f'{json.dumps((archive / "compiled-tests.rs").as_posix())}]\n'
                       'mod perf_tests;\n')
     (archive / "compiled.rs").write_text(relocated, encoding="utf-8", newline="\n")
-    support = ROOT / "tests/support/perf.rs"
+    support = archive / "allocations-source.rs"
     harness.write_text(
         '#![allow(dead_code)]\n'
         f'#[path = {json.dumps((archive / "compiled.rs").as_posix())}] mod stretch;\n'
@@ -71,12 +82,18 @@ def build(name, source, test_source=None):
                     source_sha256=hashlib.sha256(snapshot).hexdigest(),
                     test_source_sha256=hashlib.sha256(tests).hexdigest(),
                     rate_source_sha256=hashlib.sha256(rate_tests).hexdigest(),
+                    support_sha256=support_sources,
                     binary_sha256=hashlib.sha256((archive / "sola.exe").read_bytes()).hexdigest())
     (archive / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(result.stdout, flush=True)
 
 
 def compare(names, output, runs, benchmark):
+    manifests = {name: json.loads((ARCHIVES / name / "manifest.json").read_text())
+                 for name in names}
+    support = [manifest.get("support_sha256") for manifest in manifests.values()]
+    if not all(support) or any(value != support[0] for value in support):
+        raise ValueError("Rebuild all stages with identical frozen benchmark support files")
     timing = re.compile(r"(sola/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
     churn = re.compile(r"(sola/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
     storage = re.compile(r"(sola/[^:\r\n]+): storage Churn \{ ([^}]+) \}")
@@ -119,8 +136,7 @@ def compare(names, output, runs, benchmark):
         writer.writeheader()
         writer.writerows(rows)
     metadata = dict(platform=platform.platform(), processor=os.environ.get("PROCESSOR_IDENTIFIER"),
-                    stages={name: json.loads((ARCHIVES / name / "manifest.json").read_text())
-                            for name in names})
+                    stages=manifests)
     output.with_suffix(".manifest.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     for label in sorted({row["workload"] for row in rows}):
         values = [statistics.median(row["cycles_per_op"] for row in rows
