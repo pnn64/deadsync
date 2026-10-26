@@ -135,6 +135,10 @@ until end validation. Wrap unbuffered file sources in `BufReader`.
 Vorbis index elements, setup/synthesis memory, and packet resources. Indexing is
 eager and requires two container passes; sparse/index-free codec seeking and
 comparative startup/seek optimization remain performance work.
+The initial [performance baseline](PERFORMANCE.md) compares resident full decode,
+4 KiB fragmented reads and time to first PCM against libvorbisfile and Symphonia.
+It records a substantial native throughput gap; allocation/memory/seek
+comparisons and measured optimization remain open.
 
 Legacy handling is explicit and disabled by default.
 `OggOptions::allow_zero_span_granules` and the same `SeekOptions` flag ignore

@@ -164,6 +164,12 @@ Windows x86-64, rustc 1.99.1 evidence:
   source/binary/seed hashes, caps and feedback counter limitations. Longer
   campaigns, additional grammar/malformed inputs and independent differential
   fuzz oracles remain required.
+* Initial five-file comparative performance baseline: 225 trial rows across
+  native/libvorbisfile/Symphonia, resident full decode, capped 4 KiB reads and
+  warm-process stream startup. All complete decode counts agree. Native full
+  decode is 3.2–3.5x slower than Symphonia and 2.0–2.7x slower than libvorbisfile
+  on the two longer stereo tracks. See [PERFORMANCE.md](PERFORMANCE.md) for
+  settings, raw evidence, variability, startup results and remaining metrics.
 
 ## Numerical criteria
 
@@ -245,8 +251,10 @@ counts match without discarding comparison samples.
   songs. The two documented compatibility policies do not conceal packet holes
   or repair arbitrary malformed containers.
 * Native encoding, independently decoded lossy validation, measured pipeline
-  optimization and reproducible throughput/startup/memory/allocation/seek
-  comparisons with libvorbis and Symphonia. No SIMD or performance claims yet.
+  optimization and broader throughput/startup plus memory/allocation/seek
+  comparisons with libvorbis and Symphonia. The initial throughput/startup
+  baseline above is not a complete benchmark suite. No SIMD or competitive
+  performance claims yet.
 
 Raw packet and full-container comparisons are separate: raw PCM tests assign
 unknown granules and omit EOS trimming; `ogg_mapping` tests independently use

@@ -75,6 +75,12 @@ generated multiplexing/chains and spanning packets. Its Windows runner retains
 replayable corpora, hashes, logs and statistics without changing production
 dependencies or the application workspace.
 
+The initial [Vorbis performance baseline](vorbis/PERFORMANCE.md) measures full
+decode, 4 KiB fragmented reads and warm-process startup against libvorbisfile and
+Symphonia with exact decoded counts. It exposes a substantial native throughput
+gap. Component profiling, memory/allocation/seek measurements, optimization and
+native encoding remain required.
+
 ## Normative sources
 
 * [RFC 3533](https://www.rfc-editor.org/rfc/rfc3533.txt).
