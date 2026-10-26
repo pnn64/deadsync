@@ -5,6 +5,8 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <stdint.h>
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -18,6 +20,8 @@ static unsigned int rate_probe;
 static int rate_override;
 static const char *rate_edge;
 static int force_monotonic;
+static int last_card;
+static int last_device;
 __attribute__((constructor)) static void init_delay(void) {
     const char *delay = getenv("ALSA_FIXTURE_DELAY");
     override_delay = delay != NULL;
@@ -58,11 +62,18 @@ snd_pcm_sframes_t snd_pcm_status_get_delay(const snd_pcm_status_t *status) {
 
 int snd_card_next(int *card) {
     if (fixture_layout && strcmp(fixture_layout, "empty") == 0) { *card = -1; return 0; }
-    *card = *card < 1 ? *card + 1 : -1;
+    if (fixture_layout && (strcmp(fixture_layout, "large_ids") == 0 || strcmp(fixture_layout, "large_default") == 0))
+        *card = *card < 0 ? 0 : *card == 0 ? 10 : *card == 10 ? INT_MAX : -1;
+    else
+        *card = *card < 1 ? *card + 1 : -1;
+    last_card = *card;
     return 0;
 }
 int snd_ctl_open(snd_ctl_t **ctl, const char *name, int mode) {
     (void)mode;
+    char expected[32];
+    snprintf(expected, sizeof(expected), "hw:%u", (unsigned int)last_card);
+    if (strcmp(name, expected) != 0) return -EINVAL;
     *ctl = (snd_ctl_t *)(uintptr_t)(strcmp(name, "hw:0") == 0 ? 1 : 2);
     return 0;
 }
@@ -87,7 +98,13 @@ int snd_card_get_name(int card, char **name) {
     return *name ? 0 : -ENOMEM;
 }
 int snd_ctl_pcm_next_device(snd_ctl_t *ctl, int *device) {
-    (void)ctl; *device = *device < 3 ? *device + 1 : -1; return 0;
+    (void)ctl;
+    if (fixture_layout && (strcmp(fixture_layout, "large_ids") == 0 || strcmp(fixture_layout, "large_default") == 0))
+        *device = *device < 0 ? 0 : *device == 0 ? 10 : *device == 10 ? INT_MAX : -1;
+    else
+        *device = *device < 3 ? *device + 1 : -1;
+    last_device = *device;
+    return 0;
 }
 int snd_ctl_pcm_info(snd_ctl_t *ctl, snd_pcm_info_t *info) {
     (void)ctl; (void)info; return 0;
@@ -102,7 +119,14 @@ const char *snd_pcm_info_get_name(const snd_pcm_info_t *info) {
 int snd_pcm_open(snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream, int mode) {
     int (*real_open)(snd_pcm_t **, const char *, snd_pcm_stream_t, int) =
         dlsym(RTLD_NEXT, "snd_pcm_open");
+    if (fixture_layout && strcmp(fixture_layout, "unresolvable_default") == 0 &&
+        (strcmp(name, "default") == 0 || strcmp(name, "sysdefault") == 0)) return -ENOENT;
     if (rate_matrix) rate_mask = rate_probe++;
+    if (strncmp(name, "hw:CARD=", 8) == 0) {
+        char expected[64];
+        snprintf(expected, sizeof(expected), "hw:CARD=%u,DEV=%u", (unsigned int)last_card, (unsigned int)last_device);
+        if (strcmp(name, expected) != 0) return -ENODEV;
+    }
     if (fixture_layout && strcmp(fixture_layout, "probe_error") == 0 && strncmp(name, "hw:", 3) == 0)
         return -ENODEV;
     if (strncmp(name, "hw:", 3) == 0 || strcmp(name, "default") == 0 || strcmp(name, "sysdefault") == 0)
@@ -111,9 +135,14 @@ int snd_pcm_open(snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream, int
 }
 int snd_pcm_info_get_card(const snd_pcm_info_t *info) {
     (void)info;
+    if (fixture_layout && strcmp(fixture_layout, "unbacked_default") == 0) return -1;
+    if (fixture_layout && strcmp(fixture_layout, "large_default") == 0) return INT_MAX;
     return fixture_layout && strcmp(fixture_layout, "unmatched_default") == 0 ? 2 : 1;
 }
-unsigned int snd_pcm_info_get_device(const snd_pcm_info_t *info) { (void)info; return 1; }
+unsigned int snd_pcm_info_get_device(const snd_pcm_info_t *info) {
+    (void)info;
+    return fixture_layout && strcmp(fixture_layout, "large_default") == 0 ? INT_MAX : 1;
+}
 int snd_pcm_hw_params_test_rate(snd_pcm_t *pcm, snd_pcm_hw_params_t *params, unsigned int rate, int dir) {
     (void)pcm; (void)params; (void)dir;
     if (rate_override) {

@@ -50,6 +50,122 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 #[test]
+fn pcm_name_buffers_match_decimal_formatting() {
+    let mut control = [0xff; 14];
+    let mut device = [0xff; 34];
+    let mut check = |card, index| {
+        assert_eq!(
+            control_pcm_name(card, &mut control).to_bytes(),
+            format!("hw:{card}").as_bytes()
+        );
+        assert_eq!(
+            device_pcm_name(card, index, &mut device).to_bytes(),
+            format!("hw:CARD={card},DEV={index}").as_bytes()
+        );
+    };
+    for card in [0, 1, 9, 10, 99, 100, 999, 1000, i32::MAX as u32, u32::MAX] {
+        for index in [0, 9, 10, 100, i32::MAX as u32, u32::MAX] {
+            check(card, index);
+        }
+    }
+    let mut state = 0x7d1e_6c49_u32;
+    for _ in 0..10_000 {
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        check(state, state.rotate_left(13));
+    }
+}
+
+#[test]
+fn nul_pcm_ids_preserve_library_panic_payloads() {
+    let panic_message = |action: &dyn Fn()| {
+        let payload = std::panic::catch_unwind(std::panic::AssertUnwindSafe(action)).unwrap_err();
+        payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| {
+                payload
+                    .downcast_ref::<&str>()
+                    .map(|value| (*value).to_owned())
+            })
+            .unwrap()
+    };
+    for (input, mode, normalized) in [
+        ("hw:0\0suffix", AlsaAccessMode::Shared, "plughw:0\0suffix"),
+        (
+            "plughw:0\0suffix",
+            AlsaAccessMode::Exclusive,
+            "hw:0\0suffix",
+        ),
+        ("bad\0alias", AlsaAccessMode::Shared, "bad\0alias"),
+        ("bad\0alias", AlsaAccessMode::Exclusive, "bad\0alias"),
+    ] {
+        let expected = panic_message(&|| {
+            let _ = PCM::new(normalized, Direction::Playback, false);
+        });
+        let actual = panic_message(&|| {
+            let _ = prepare(Some(input.to_owned()), "fixture".into(), 48_000, 2, mode);
+        });
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn missing_pcm_preserves_open_error_text() {
+    for name in [
+        "deadsync_missing_pcm_benchmark_fixture",
+        "deadsync_missing_音楽",
+    ] {
+        let expected = PCM::new(name, Direction::Playback, false).unwrap_err();
+        let actual = prepare(
+            Some(name.to_owned()),
+            "fixture".into(),
+            48_000,
+            2,
+            AlsaAccessMode::Shared,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(
+            actual,
+            format!("failed to open ALSA PCM '{name}': {expected}")
+        );
+    }
+}
+
+#[test]
+fn prepared_null_preserves_ready_and_reopen_shape() {
+    let prep = prepare(
+        Some("null".to_owned()),
+        "Fixture 音楽".into(),
+        48_000,
+        2,
+        AlsaAccessMode::Shared,
+    )
+    .unwrap();
+    let ready = prep.ready();
+    assert_eq!(ready.device_sample_rate, 48_000);
+    assert_eq!(ready.device_channels, 2);
+    assert_eq!(ready.device_name, "Fixture 音楽");
+    assert_eq!(ready.backend_name, "alsa-shared");
+    assert_eq!(ready.requested_output_mode, AudioOutputMode::Shared);
+    assert!(!ready.fallback_from_native);
+    let pcm = open_pcm(&prep.pcm_id).unwrap();
+    let actual = configure_run(
+        &pcm,
+        prep.sample_rate_hz,
+        prep.channels,
+        prep.period_frames,
+        prep.buffer_frames,
+        prep.mode,
+    )
+    .unwrap();
+    assert_eq!(actual.sample_rate_hz, prep.sample_rate_hz);
+    assert_eq!(actual.channels, prep.channels);
+    assert_eq!(actual.period_frames, prep.period_frames);
+    assert_eq!(actual.buffer_frames, prep.buffer_frames);
+}
+
+#[test]
 fn clock_mapping_matches_wide_integer_reference() {
     let values = [
         0,
@@ -192,12 +308,21 @@ fn fixture_enumeration_preserves_devices() {
         assert!(devices.is_empty());
         return;
     }
-    assert_eq!(devices.len(), 8);
+    let cards: &[u32] = if layout == "large_ids" || layout == "large_default" {
+        &[0, 10, i32::MAX as u32]
+    } else {
+        &[0, 1]
+    };
+    let indices: &[u32] = if layout == "large_ids" || layout == "large_default" {
+        &[0, 10, i32::MAX as u32]
+    } else {
+        &[0, 1, 2, 3]
+    };
+    assert_eq!(devices.len(), cards.len() * indices.len());
     for (index, device) in devices.iter().enumerate() {
-        assert_eq!(
-            device.pcm_id,
-            format!("hw:CARD={},DEV={}", index / 4, index % 4)
-        );
+        let card = cards[index / indices.len()];
+        let device_index = indices[index % indices.len()];
+        assert_eq!(device.pcm_id, format!("hw:CARD={card},DEV={device_index}"));
         let name = match layout.as_str() {
             "bad_name" => format!("Fixture card 音楽, Device {}", index % 4),
             "bad_card_info" | "bad_card_name" => "Fallback card 音楽, Fixture playback".to_owned(),
@@ -222,7 +347,15 @@ fn fixture_enumeration_preserves_devices() {
         assert_eq!(device.channels, 2);
         assert_eq!(
             device.is_default,
-            index == if layout == "unmatched_default" { 0 } else { 5 }
+            index
+                == match layout.as_str() {
+                    "unmatched_default"
+                    | "large_ids"
+                    | "unresolvable_default"
+                    | "unbacked_default" => 0,
+                    "large_default" => 8,
+                    _ => 5,
+                }
         );
     }
 }
@@ -397,8 +530,35 @@ fn benchmark_alsa() {
             });
         }
         "probe_null" => run_work(iterations, || {
-            black_box(probe_output_device(black_box("null"))).unwrap();
+            black_box(probe_output_device(black_box(c"null"))).unwrap();
         }),
+        "prepare_null" | "prepare_reopen" => run_work(iterations, || {
+            let prep = prepare(
+                Some("null".to_owned()),
+                "fixture".to_owned(),
+                black_box(48_000),
+                2,
+                AlsaAccessMode::Shared,
+            )
+            .unwrap();
+            if workload == "prepare_reopen" {
+                black_box(open_pcm(&prep.pcm_id)).unwrap();
+            }
+            black_box(prep);
+        }),
+        "reopen_prepared" => {
+            let prep = prepare(
+                Some("null".to_owned()),
+                "fixture".to_owned(),
+                48_000,
+                2,
+                AlsaAccessMode::Shared,
+            )
+            .unwrap();
+            run_work(iterations, || {
+                black_box(open_pcm(&prep.pcm_id)).unwrap();
+            });
+        }
         "clock_read_mono" | "clock_read_raw" => {
             let clock = if workload == "clock_read_mono" {
                 AlsaHostClock::Monotonic

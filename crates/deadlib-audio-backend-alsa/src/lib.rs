@@ -14,6 +14,7 @@ use deadlib_audio_core::{
 use deadlib_platform::host_time::now_nanos;
 use libc::timespec;
 use log::{info, warn};
+use std::ffi::{CStr, CString};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
@@ -87,12 +88,48 @@ pub struct AlsaOutputDevice {
     pub is_default: bool,
 }
 
+// "hw:" + ten u32 decimal digits + NUL.
+fn control_pcm_name(card: u32, buffer: &mut [u8; 14]) -> &CStr {
+    let end = buffer.len() - 1;
+    buffer[end] = 0;
+    let digits = write_decimal_suffix(card, &mut buffer[..end]);
+    let start = digits - b"hw:".len();
+    buffer[start..digits].copy_from_slice(b"hw:");
+    CStr::from_bytes_with_nul(&buffer[start..]).unwrap()
+}
+
+fn write_decimal_suffix(mut value: u32, buffer: &mut [u8]) -> usize {
+    let mut start = buffer.len();
+    while value >= 10 {
+        start -= 1;
+        buffer[start] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    start -= 1;
+    buffer[start] = b'0' + value as u8;
+    start
+}
+
+// "hw:CARD=" + ten digits + ",DEV=" + ten digits + NUL.
+fn device_pcm_name(card: u32, device: u32, buffer: &mut [u8; 34]) -> &CStr {
+    let end = buffer.len() - 1;
+    buffer[end] = 0;
+    let device_start = write_decimal_suffix(device, &mut buffer[..end]);
+    let separator = device_start - b",DEV=".len();
+    buffer[separator..device_start].copy_from_slice(b",DEV=");
+    let card_start = write_decimal_suffix(card, &mut buffer[..separator]);
+    let start = card_start - b"hw:CARD=".len();
+    buffer[start..card_start].copy_from_slice(b"hw:CARD=");
+    CStr::from_bytes_with_nul(&buffer[start..]).unwrap()
+}
+
 pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
-    let default_pcm_id = default_hw_pcm_id();
+    let default_address = default_hw_pcm_address();
     let mut devices = Vec::new();
     for card in alsa::card::Iter::new().filter_map(Result::ok) {
         let card_index = card.get_index() as u32;
-        let Ok(ctl) = Ctl::new(&format!("hw:{card_index}"), false) else {
+        let mut control_name = [0; 14];
+        let Ok(ctl) = Ctl::open(control_pcm_name(card_index, &mut control_name), false) else {
             continue;
         };
         let card_info = ctl.card_info().ok();
@@ -111,7 +148,8 @@ pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
             else {
                 continue;
             };
-            let pcm_id = format!("hw:CARD={card_index},DEV={}", device_index as u32);
+            let mut pcm_name = [0; 34];
+            let pcm_id = device_pcm_name(card_index, device_index as u32, &mut pcm_name);
             let name = match playback_info.get_name() {
                 Ok(device_name) => {
                     let mut name = String::with_capacity(card_name.len() + 2 + device_name.len());
@@ -122,7 +160,8 @@ pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
                 }
                 Err(_) => format!("{card_name}, Device {device_index}"),
             };
-            devices.push(build_output_device(pcm_id, name, default_pcm_id.as_deref()));
+            let is_default = default_address == Some((card_index, device_index as u32));
+            devices.push(build_output_device(pcm_id, name, is_default));
         }
     }
     if !devices.iter().any(|device| device.is_default)
@@ -133,37 +172,40 @@ pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
     devices
 }
 
-fn default_hw_pcm_id() -> Option<String> {
-    resolved_hw_pcm_id("default").or_else(|| resolved_hw_pcm_id("sysdefault"))
+fn default_hw_pcm_address() -> Option<(u32, u32)> {
+    resolved_hw_pcm_address(c"default").or_else(|| resolved_hw_pcm_address(c"sysdefault"))
 }
 
-fn build_output_device(
-    pcm_id: String,
-    name: String,
-    default_pcm_id: Option<&str>,
-) -> AlsaOutputDevice {
-    let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(&pcm_id) {
+fn build_output_device(pcm_id: &CStr, name: String, is_default: bool) -> AlsaOutputDevice {
+    let pcm_name = pcm_id.to_str().expect("generated PCM ID must be UTF-8");
+    let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(pcm_id) {
         Ok(probed) => probed,
         Err(err) => {
             warn!(
                 "Failed to probe ALSA playback device '{}' ({}): {err}. Listing it with fallback defaults.",
-                name, pcm_id
+                name, pcm_name
             );
             (Vec::new(), 48_000, 2)
         }
     };
     AlsaOutputDevice {
-        is_default: default_pcm_id == Some(pcm_id.as_str()),
+        is_default,
         name,
-        pcm_id,
+        pcm_id: pcm_name.to_owned(),
         sample_rates_hz,
         default_rate_hz,
         channels,
     }
 }
 
-fn probe_output_device(pcm_id: &str) -> Result<(Vec<u32>, u32, usize), String> {
-    let pcm = open_pcm(pcm_id)?;
+fn probe_output_device(pcm_id: &CStr) -> Result<(Vec<u32>, u32, usize), String> {
+    let pcm = PCM::open(pcm_id, Direction::Playback, false).map_err(|e| {
+        format!(
+            "failed to open ALSA PCM '{}': {e}",
+            pcm_id.to_string_lossy()
+        )
+    })?;
+    let pcm_id = pcm_id.to_str().expect("generated PCM ID must be UTF-8");
     let hw = HwParams::any(&pcm)
         .map_err(|e| format!("failed to create ALSA hw params for '{pcm_id}': {e}"))?;
     hw.test_access(Access::RWInterleaved)
@@ -489,7 +531,9 @@ fn selected_pcm_id(
             if pcm_id.starts_with("plughw:") {
                 pcm_id.replace_range(..4, "");
             } else if !pcm_id.starts_with("hw:") {
-                return resolved_hw_pcm_id(&pcm_id).ok_or_else(|| {
+                return resolved_hw_pcm_address(&CString::new(pcm_id.as_str()).unwrap())
+                    .map(|(card, device)| format!("hw:CARD={card},DEV={device}"))
+                    .ok_or_else(|| {
                     format!(
                         "ALSA exclusive output for '{}' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{}'",
                         device_name, pcm_id
@@ -501,11 +545,11 @@ fn selected_pcm_id(
     Ok(pcm_id)
 }
 
-fn resolved_hw_pcm_id(pcm_id: &str) -> Option<String> {
-    let pcm = open_pcm(pcm_id).ok()?;
+fn resolved_hw_pcm_address(pcm_id: &CStr) -> Option<(u32, u32)> {
+    let pcm = PCM::open(pcm_id, Direction::Playback, false).ok()?;
     let info = pcm.info().ok()?;
     let card = info.get_card();
-    (card >= 0).then(|| format!("hw:CARD={card},DEV={}", info.get_device()))
+    (card >= 0).then(|| (card as u32, info.get_device()))
 }
 
 #[inline(always)]

@@ -1,0 +1,7 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	native-address-baseline	enumerate	20000	252606.7519	446445.42515	144984.0	147194.57165	27	1	1954
+0	native-address-baseline	enumerate_failed	100000	40022.52568	79712.80327	20734.8	20925.32148	27	9	2850
+1	native-address-baseline	enumerate	20000	256462.50185	446445.3908	147979.5	150003.9538	27	1	1954
+1	native-address-baseline	enumerate_failed	100000	40073.16732	79712.78942	20956.399999999998	21165.90755	27	9	2850
+2	native-address-baseline	enumerate	20000	254730.18355	446445.4673	145197.0	147347.5393	27	1	1954
+2	native-address-baseline	enumerate_failed	100000	39039.45716	79712.79088	20443.4	20646.53229	27	9	2850
