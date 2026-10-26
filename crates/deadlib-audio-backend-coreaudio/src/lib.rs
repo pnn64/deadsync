@@ -237,7 +237,6 @@ pub fn start(
     let buffer_frames = prep.buffer_frames.max(1);
     let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);
     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));
-    let device_name = prep.device_name.clone();
 
     type Args = render_callback::Args<data::Interleaved<f32>>;
     let callback_downstream_latency_ns = Arc::clone(&downstream_latency_ns);
@@ -316,7 +315,7 @@ pub fn start(
     publish_output_timing_quality(OutputTimingQuality::Trusted);
     info!(
         "CoreAudio '{}' using native shared output at {} Hz, {} ch (buffer={} frames, downstream latency={} frames at {} Hz, total={:.1} ms).",
-        device_name,
+        prep.device_name,
         sample_rate_hz,
         prep.channels,
         buffer_frames,
@@ -394,11 +393,14 @@ impl OutputChangeListener {
         }
         let event = (device_id != previous_device_id)
             .then(|| get_device_name(device_id).ok())
-            .flatten()
-            .map_or_else(
-                || "CoreAudio latency compensation".to_owned(),
-                |name| format!("CoreAudio output changed to '{name}'; latency compensation"),
-            );
+            .flatten();
+        let event = std::fmt::from_fn(|f| match event.as_deref() {
+            Some(name) => write!(
+                f,
+                "CoreAudio output changed to '{name}'; latency compensation"
+            ),
+            None => f.write_str("CoreAudio latency compensation"),
+        });
         warn!(
             "{event} changed: {:.1} ms ({previous_frames} frames at {previous_rate_hz} Hz) -> {:.1} ms ({} frames at {} Hz).",
             nanos_to_ms(previous_ns),
@@ -561,19 +563,22 @@ fn device_nominal_sample_rate_hz(device_id: AudioDeviceID) -> Result<u32, String
 }
 
 fn supported_sample_rates_hz(device_id: AudioDeviceID, default_rate_hz: u32) -> Vec<u32> {
-    let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES_HZ.len() + 3);
-    if default_rate_hz > 0 {
-        sample_rates_hz.push(default_rate_hz);
-    }
     let ranges = match get_available_sample_rates(device_id) {
         Ok(ranges) => ranges,
         Err(err) => {
             warn!("failed to query CoreAudio sample rates for device {device_id}: {err}");
-            sample_rates_hz.sort_unstable();
-            sample_rates_hz.dedup();
-            return sample_rates_hz;
+            return if default_rate_hz > 0 {
+                vec![default_rate_hz]
+            } else {
+                Vec::new()
+            };
         }
     };
+    let mut sample_rates_hz =
+        Vec::with_capacity(ranges.len() * 2 + COMMON_SAMPLE_RATES_HZ.len() + 1);
+    if default_rate_hz > 0 {
+        sample_rates_hz.push(default_rate_hz);
+    }
     let supported_ranges: Vec<_> = ranges
         .into_iter()
         .map(|range| (range.mMinimum, range.mMaximum))
