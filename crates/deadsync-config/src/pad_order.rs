@@ -83,20 +83,30 @@ fn serialize_uuid_list(list: &[[u8; 16]]) -> String {
 #[inline]
 fn append_uuid_hex(out: &mut String, uuid: &[u8; 16]) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    for &byte in uuid {
-        out.push(char::from(HEX[usize::from(byte >> 4)]));
-        out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    let mut text = [0; 32];
+    for (pair, &byte) in text.as_chunks_mut::<2>().0.iter_mut().zip(uuid) {
+        pair[0] = HEX[usize::from(byte >> 4)];
+        pair[1] = HEX[usize::from(byte & 0x0f)];
     }
+    out.push_str(std::str::from_utf8(&text).expect("hex digits are ASCII"));
 }
 
 fn uuid_from_hex(s: &str) -> Option<[u8; 16]> {
-    let s = s.trim();
-    if s.len() != 32 || !s.bytes().all(|b| b.is_ascii_hexdigit()) {
+    let bytes = s.trim().as_bytes();
+    if bytes.len() != 32 {
         return None;
     }
+    let digit = |byte: u8| {
+        let number = byte.wrapping_sub(b'0');
+        if number < 10 {
+            return Some(number);
+        }
+        let letter = (byte | 0x20).wrapping_sub(b'a');
+        if letter < 6 { Some(letter + 10) } else { None }
+    };
     let mut out = [0u8; 16];
-    for (i, byte) in out.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    for (byte, pair) in out.iter_mut().zip(bytes.as_chunks::<2>().0) {
+        *byte = (digit(pair[0])? << 4) | digit(pair[1])?;
     }
     Some(out)
 }

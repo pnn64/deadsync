@@ -11,6 +11,10 @@ pub(crate) struct Spec {
     pub space: bool,
     pub alternate: bool,
     pub zero: bool,
+    // UCRT printf emits an unrecognized high-byte digit and the following
+    // format suffix literally. Lua's scanner still recognizes it as a digit.
+    literal: [u8; 6],
+    literal_len: u8,
 }
 
 impl Spec {
@@ -32,7 +36,7 @@ impl Spec {
             return Err(fail("invalid format (repeated flags)"));
         }
         for _ in 0..2 {
-            if let Some(c @ b'0'..=b'9') = bytes.get(*pos) {
+            if let Some(c) = bytes.get(*pos).filter(|&&c| crate::locale::is_digit(c)) {
                 s.width = s.width * 10 + usize::from(*c - b'0');
                 *pos += 1;
             } else {
@@ -43,7 +47,7 @@ impl Spec {
             *pos += 1;
             let mut n = 0;
             for _ in 0..2 {
-                if let Some(c @ b'0'..=b'9') = bytes.get(*pos) {
+                if let Some(c) = bytes.get(*pos).filter(|&&c| crate::locale::is_digit(c)) {
                     n = n * 10 + usize::from(*c - b'0');
                     *pos += 1;
                 } else {
@@ -52,12 +56,32 @@ impl Spec {
             }
             s.precision = Some(n);
         }
-        if bytes.get(*pos).is_some_and(u8::is_ascii_digit) {
+        if bytes.get(*pos).is_some_and(|&c| crate::locale::is_digit(c)) {
             return Err(fail("invalid format (width or precision too long)"));
         }
         s.conversion = bytes.get(*pos).copied().unwrap_or(0);
         *pos += 1;
+        if let Some(first) = bytes[start..(*pos).min(bytes.len())]
+            .iter()
+            .position(|&b| b >= 128)
+        {
+            let suffix = &bytes[start + first..(*pos).min(bytes.len())];
+            s.literal[..suffix.len()].copy_from_slice(suffix);
+            s.literal_len = suffix.len() as u8;
+        }
         Ok(s)
+    }
+    fn literal(&self, integer: bool) -> Vec<u8> {
+        let bytes = &self.literal[..usize::from(self.literal_len)];
+        if integer {
+            let mut value = Vec::with_capacity(bytes.len() + 1);
+            value.extend_from_slice(&bytes[..bytes.len() - 1]);
+            value.push(b'l');
+            value.push(self.conversion);
+            value
+        } else {
+            bytes.to_vec()
+        }
     }
     fn pad(&self, mut bytes: Vec<u8>, prefix: usize, zero: bool) -> Vec<u8> {
         let extra = self.width.saturating_sub(bytes.len());
@@ -83,6 +107,9 @@ impl Spec {
         if self.precision.is_none() && bytes.len() >= 100 {
             return bytes.to_vec();
         }
+        if self.literal_len != 0 {
+            return self.literal(false);
+        }
         let len = bytes
             .iter()
             .position(|&b| b == 0)
@@ -91,11 +118,17 @@ impl Spec {
         self.pad(bytes[..len].to_vec(), 0, false)
     }
     pub fn character(&self, n: f64) -> Vec<u8> {
+        if self.literal_len != 0 {
+            return self.literal(false);
+        }
         let bytes = self.pad(vec![cast_i32(n) as u8], 0, false);
         let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
         bytes[..len].to_vec()
     }
     pub fn integer(&self, n: f64) -> Vec<u8> {
+        if self.literal_len != 0 {
+            return self.literal(true);
+        }
         // Stock 5.1 uses C long here: 32 bits on Windows, 64 on LP64 systems.
         let signed = matches!(self.conversion, b'd' | b'i');
         let (magnitude, negative) = if signed {
@@ -152,6 +185,9 @@ impl Spec {
         self.pad(bytes, prefix, self.zero && self.precision.is_none())
     }
     pub fn float(&self, n: f64) -> Vec<u8> {
+        if self.literal_len != 0 {
+            return self.literal(false);
+        }
         let negative = n.is_sign_negative();
         let value = n.abs();
         let precision = self.precision.unwrap_or(6);
@@ -223,6 +259,7 @@ impl Spec {
         }
         let prefix = bytes.len();
         bytes.extend_from_slice(body.as_bytes());
+        crate::locale::localize(&mut bytes);
         self.pad(bytes, prefix, self.zero && value.is_finite())
     }
 }

@@ -32,7 +32,10 @@ const QUANTIZATION_BY_ROW: [u8; 48] = build_quantization_table();
 #[inline(always)]
 #[must_use]
 pub fn quantization_index_from_beat(beat: f32) -> u8 {
-    let row = (beat * 48.0).round() as i32;
+    // Widen the f32 product so the half bias cannot cross a rounding boundary.
+    // The integer cast supplies truncation, saturation and NaN-to-zero behavior.
+    let scaled = f64::from(beat * 48.0);
+    let row = (scaled + 0.5f64.copysign(scaled)) as i32;
     QUANTIZATION_BY_ROW[row.rem_euclid(48) as usize]
 }
 

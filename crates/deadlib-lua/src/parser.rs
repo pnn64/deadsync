@@ -61,7 +61,14 @@ pub(crate) struct SourceSpan {
     pub start: u32,
     pub end: u32,
     pub discharge: u32,
+    /// Conservative scalar-tree size, 1..=32; zero excludes eager grouping.
+    pub scalar_cost: u8,
 }
+
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(
+    size_of::<SourceSpan>() == 16 && size_of::<(Expr, SourceSpan)>() == size_of::<Expr>() + 16
+);
 
 #[derive(Debug, Default)]
 pub(crate) struct Ast {
@@ -69,9 +76,23 @@ pub(crate) struct Ast {
     pub stmts: Vec<(Stmt, u32)>,
     pub body: Block,
     pub end_line: u32,
+    pub constant_operands: Vec<(ExprId, ConstantOperand)>,
+    pub zero_signs: Vec<(ExprId, bool)>,
+    pub root_zero_sign: Option<bool>,
+}
+
+/// Reference constant operands for deferred loads. String indices borrow
+/// existing AST literals, including folded logical expressions.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ConstantOperand {
+    Nil,
+    Boolean(bool),
+    Number(f64),
+    String(ExprId),
 }
 
 mod bindings;
+mod resources;
 mod resume;
 pub(crate) use resume::Parser;
 

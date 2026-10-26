@@ -31,17 +31,18 @@ impl Vm {
     }
     pub(super) fn metatable(&self, value: Value) -> Option<TableId> {
         match value {
-            Value::Table(id) => self.tables.get(id.0).and_then(|t| t.metatable),
+            Value::Table(id) => self.tables.get(id.0).and_then(|t| t.metatable()),
             Value::Userdata(id) => self.userdata.get(id.0).and_then(|u| u.metatable),
             _ => self.type_metatables[Self::type_slot(value)],
         }
     }
     pub(super) fn set_metatable(&mut self, value: Value, table: Option<TableId>) {
         match value {
-            Value::Table(id) => self.tables[slot_index(id.0)].metatable = table,
+            Value::Table(id) => self.tables[slot_index(id.0)].set_metatable(table),
             Value::Userdata(id) => self.userdata[slot_index(id.0)].metatable = table,
             _ => self.type_metatables[Self::type_slot(value)] = table,
         }
+        self.gc_metatable_write(value, table);
     }
     pub(super) fn metafield(&self, value: Value, event: Meta) -> Value {
         self.metatable(value).map_or(Value::Nil, |mt| {
@@ -103,7 +104,8 @@ impl Vm {
             }
             target = handler;
         }
-        Err(Error::new(ErrorKind::Runtime, 0, "loop in gettable"))
+        let error = Error::new(ErrorKind::Runtime, 0, "loop in gettable");
+        Err(self.operand_error(error))
     }
     pub(super) fn set_table(
         &mut self,
@@ -143,7 +145,8 @@ impl Vm {
             }
             target = handler;
         }
-        Err(Error::new(ErrorKind::Runtime, 0, "loop in settable"))
+        let error = Error::new(ErrorKind::Runtime, 0, "loop in settable");
+        Err(self.operand_error(error))
     }
     pub(super) fn arithmetic(
         &mut self,
@@ -176,6 +179,97 @@ impl Vm {
             "perform arithmetic on",
             self.error_register(right_is_bad),
         ))
+    }
+    fn concat_string(&mut self, register: usize) -> Option<StringId> {
+        match self.registers[register] {
+            Value::String(id) => Some(id),
+            Value::Number(n) => {
+                let value = self.intern(&format_number(n));
+                self.registers[register] = value;
+                let Value::String(id) = value else {
+                    unreachable!()
+                };
+                Some(id)
+            }
+            _ => None,
+        }
+    }
+    pub(super) fn concat_range(
+        &mut self,
+        result: usize,
+        first: usize,
+        mut last: usize,
+    ) -> Result<(), Error> {
+        while last > first {
+            // Coercions modify their original slots, in the native VM's order.
+            let left_ok = matches!(
+                self.registers[last - 1],
+                Value::String(_) | Value::Number(_)
+            );
+            let right = if left_ok {
+                self.concat_string(last)
+            } else {
+                None
+            };
+            if let Some(right) = right {
+                let right_len = self.strings.bytes[slot_index(right.0)].len();
+                if right_len == 0 {
+                    self.concat_string(last - 1);
+                    last -= 1;
+                    continue;
+                }
+                let mut start = last;
+                let mut size = right_len;
+                while start > first {
+                    let Some(id) = self.concat_string(start - 1) else {
+                        break;
+                    };
+                    size = size
+                        .checked_add(self.strings.bytes[slot_index(id.0)].len())
+                        .ok_or_else(|| {
+                            Error::new(ErrorKind::Runtime, 0, "string length overflow")
+                        })?;
+                    start -= 1;
+                }
+                let mut bytes = self.take_buffer(size);
+                for r in start..=last {
+                    let Value::String(id) = self.registers[r] else {
+                        unreachable!()
+                    };
+                    bytes.extend_from_slice(&self.strings.bytes[slot_index(id.0)]);
+                }
+                self.registers[start] = self.finish_buffer(bytes);
+                last = start;
+            } else {
+                let left = self.registers[last - 1];
+                let right = self.registers[last];
+                let handler = self.binary_handler(left, right, Meta::Concat);
+                if handler == Value::Nil {
+                    let r = if matches!(left, Value::String(_) | Value::Number(_)) {
+                        last
+                    } else {
+                        last - 1
+                    };
+                    return Err(self.type_error(self.registers[r], "concatenate", Some(r)));
+                }
+                let base = self.registers.len();
+                self.push_record(Frame {
+                    function: FrameKind::Native(CONT_CONCAT),
+                    pc: self.top as u32,
+                    base,
+                    stack_start: base,
+                    result,
+                    wanted: 0,
+                    barriers: self.frames.last().map_or(0, |f| f.barriers),
+                    vararg_start: first,
+                    vararg_count: (last - first) as u32,
+                    tail_calls: 0,
+                });
+                return self.meta_call(handler, &[left, right], last - 1, CONT_RAW);
+            }
+        }
+        self.registers[result] = self.registers[first];
+        Ok(())
     }
     pub(super) fn concatenate(
         &mut self,
@@ -250,9 +344,10 @@ impl Vm {
         let equal = matches!(op, Op::Le | Op::Ge);
         let order = match (left, right) {
             (Value::Number(x), Value::Number(y)) => Some(x.partial_cmp(&y)),
-            (Value::String(x), Value::String(y)) => {
-                Some(self.string_bytes(x).partial_cmp(&self.string_bytes(y)))
-            }
+            (Value::String(x), Value::String(y)) => Some(Some(crate::locale::compare(
+                self.string_bytes(x).unwrap(),
+                self.string_bytes(y).unwrap(),
+            ))),
             _ => None,
         };
         if let Some(order) = order {
@@ -278,7 +373,7 @@ impl Vm {
                 }
             }
         }
-        Err(Error::new(
+        let error = Error::new(
             ErrorKind::Runtime,
             0,
             if left.type_name().as_bytes()[2] == right.type_name().as_bytes()[2] {
@@ -290,6 +385,7 @@ impl Vm {
                     right.type_name()
                 )
             },
-        ))
+        );
+        Err(self.operand_error(error))
     }
 }

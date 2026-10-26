@@ -65,6 +65,15 @@ impl Vm {
 
     pub(super) fn finalizer_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
+        let owner = self.frames.len() - 1;
+        if frame.pc != 0 {
+            // Native Lua restores controls only after a successful tag method.
+            // Error unwinding skips this continuation and retains its changes.
+            self.leave_gc_finalizer(owner, frame);
+        }
+        // A tag method can start another cycle with an explicit step. Finish
+        // its sweep before dispatching the newly separated tag methods.
+        self.prepare_gc_finalizers();
         while let Some(id) = self.gc.finalizers.pop_front() {
             let value = Value::Userdata(id);
             let finalizer = self.metafield(value, Meta::Gc);
@@ -73,11 +82,13 @@ impl Vm {
             }
             self.registers[base] = finalizer;
             self.registers[base + 1] = value;
+            self.enter_gc_finalizer(owner);
             if let Some(actual) = self.start_call(base, 1, 0, false)? {
                 self.finish_call(base, actual, 0);
             }
             return Ok(None);
         }
+        self.finish_gc_cycle();
         self.frames.pop();
         self.registers.truncate(frame.stack_start);
         self.top = frame.result;
@@ -94,10 +105,9 @@ impl Vm {
                 frame.vararg_start..frame.vararg_start + frame.argc(),
                 frame.base + 1,
             );
-            let before = self.gc.collections;
-            self.gc_native(COLLECT_GARBAGE, frame.base, frame.argc())?;
+            let dispatch = self.gc_native(COLLECT_GARBAGE, frame.base, frame.argc())?;
             self.frames[index].pc = 1;
-            if self.gc.collections != before && !self.gc.finalizers.is_empty() {
+            if dispatch && !self.gc.finalizers.is_empty() {
                 self.push_finalizers(false);
             }
             return Ok(None);
@@ -108,6 +118,9 @@ impl Vm {
     fn run_host_finalizers(&mut self) -> Result<(), Error> {
         let len = self.registers.len();
         let top = self.top;
+        if self.standalone != 0 && self.frames.is_empty() {
+            self.standalone_main(self.standalone, 0);
+        }
         self.push_finalizers(true);
         let result = self.drive();
         self.close_upvalues(len);
@@ -125,13 +138,15 @@ impl Vm {
     }
 
     /// Complete a tracing cycle and run pending Lua userdata finalizers.
-    /// Host values that must survive need a root. Cycles run atomically.
+    /// Host values that must survive need a root. Full collection is synchronous;
+    /// automatic and explicit-step sweeping can run in slices.
     ///
     /// # Errors
     /// Returns a finalizer's Lua error or an instruction-limit error. Remaining
     /// finalizers stay pending for a later collection or VM destruction.
     pub fn collect_garbage(&mut self) -> Result<HeapStats, Error> {
         self.collect_cycle();
+        self.finish_gc_cycle();
         if !self.gc.finalizers.is_empty() {
             self.run_host_finalizers()?;
         }
@@ -153,14 +168,16 @@ impl Vm {
             .checked_add(1)
             .expect("userdata creation order exhausted");
         self.userdata.note_alloc(size);
-        UserdataId(self.userdata.insert(Userdata {
+        let id = UserdataId(self.userdata.insert(Userdata {
             file: None,
             env,
             metatable: None,
             bytes: vec![0; size].into_boxed_slice(),
             finalized: false,
             order: self.userdata_order,
-        }))
+        }));
+        self.gc_new_value(Value::Userdata(id));
+        id
     }
 
     /// Allocate zero-initialized userdata in this thread's environment.
@@ -196,7 +213,7 @@ impl Vm {
                     .ok_or_else(|| self.argument_error(0, b"boolean or proxy expected"))?,
             )
         };
-        self.userdata[slot_index(id.0)].metatable = metatable;
+        self.set_metatable(Value::Userdata(id), metatable);
         self.registers[base] = Value::Userdata(id);
         Ok(1)
     }
@@ -205,5 +222,6 @@ impl Vm {
 impl Drop for Vm {
     fn drop(&mut self) {
         self.finalize_on_close();
+        let _ = io::stdout_flush();
     }
 }

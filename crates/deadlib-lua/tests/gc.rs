@@ -109,6 +109,273 @@ fn collector_controls_and_memory_relationships() {
     );
 }
 
+const PRESSURE_HELPER: &str = r#"
+  local weak=setmetatable({},{__mode='v'});local keep={}
+  for i=1,1000 do local t={};weak[i]=t;keep[i]=t end
+  function pressure()
+    keep=nil
+    for i=1,10000 do local t={}end
+    return next(weak)==nil
+  end
+"#;
+fn control_compare(body: &str) {
+    compare(format!("collectgarbage('restart');collectgarbage('setpause',200);collectgarbage();collectgarbage('stop');{PRESSURE_HELPER}{body}").as_bytes());
+}
+
+#[test]
+fn explicit_collections_and_steps_resume_automatic_collection() {
+    for operation in [
+        "",
+        "collectgarbage()",
+        "collectgarbage(nil)",
+        "collectgarbage('collect\\0ignored')",
+        "collectgarbage('step',0)",
+        "collectgarbage('step',1)",
+        "collectgarbage('step',1000000)",
+        "collectgarbage('step',-1)",
+        "collectgarbage('setstepmul',0);assert(collectgarbage('step',0))",
+        "collectgarbage('restart')",
+        "collectgarbage('collect');collectgarbage('stop')",
+        "collectgarbage('step',0);collectgarbage('stop')",
+    ] {
+        control_compare(&format!("{operation};return pressure()"));
+    }
+}
+
+#[test]
+fn pause_changes_wait_for_a_cycle_and_restart_discards_the_old_threshold() {
+    for operation in [
+        "collectgarbage();collectgarbage('setpause',2000000000)",
+        "collectgarbage('setpause',2000000000);collectgarbage();collectgarbage('stop');collectgarbage('restart')",
+        "collectgarbage('setpause',2000000000);collectgarbage('stop')",
+    ] {
+        control_compare(&format!("{operation};return pressure()"));
+    }
+}
+
+#[test]
+fn successful_finalizers_restore_controls_and_errors_preserve_the_last_change() {
+    for operation in [
+        "",
+        "collectgarbage('stop')",
+        "collectgarbage('restart')",
+        "collectgarbage('stop');collectgarbage();collectgarbage('stop')",
+        "collectgarbage('setpause',2000000000)",
+        "local q=newproxy(true);getmetatable(q).__gc=function()collectgarbage('stop');error(tag,0)end;q=nil;local ok,e=pcall(collectgarbage);assert(not ok and e==tag)",
+        "error(tag,0)",
+        "collectgarbage('stop');error(tag,0)",
+        "collectgarbage('restart');error(tag,0)",
+        "collectgarbage('step',0);error(tag,0)",
+        "collectgarbage('setpause',2000000000);error(tag,0)",
+    ] {
+        control_compare(&format!(
+            r#"
+          local tag={{}};local hit=false;local p=newproxy(true)
+          getmetatable(p).__gc=function()hit=true;{operation} end
+          p=nil;local ok,e=pcall(collectgarbage)
+          return hit,ok,e==tag,pressure()
+        "#
+        ));
+    }
+}
+
+#[test]
+fn successful_automatic_finalizers_do_not_leave_collection_stopped() {
+    control_compare(
+        r#"
+      local hit=false;local p=newproxy(true)
+      getmetatable(p).__gc=function()hit=true;collectgarbage('stop')end
+      p=nil;collectgarbage('restart')
+      for i=1,20000 do local t={};if hit then break end end
+      return hit,pressure()
+    "#,
+    );
+}
+
+#[test]
+fn explicit_steps_resume_pending_finalizers_and_queries_leave_them_pending() {
+    control_compare(
+        r#"
+      local tag={};local log={};local p=newproxy(true);debug.setfenv(p,{id=0})
+      getmetatable(p).__gc=function(o)
+        local id=debug.getfenv(o).id;log[#log+1]=id;if id==3 then error(tag,0)end
+      end
+      for i=1,3 do local q=newproxy(p);debug.setfenv(q,{id=i})end
+      p=nil;local ok,e=pcall(collectgarbage);local first=table.concat(log,',')
+      collectgarbage('stop');collectgarbage('count');local second=table.concat(log,',')
+      local complete=collectgarbage('step',1000000)
+      return ok,e==tag,first,second,complete,table.concat(log,',')
+    "#,
+    );
+}
+
+#[test]
+fn nested_steps_finish_sweeping_before_running_new_finalizers() {
+    control_compare(
+        r#"
+      local log={};local p=newproxy(true)
+      getmetatable(p).__gc=function()
+        log[#log+1]='outer';local q=newproxy(true)
+        getmetatable(q).__gc=function()log[#log+1]='inner'end;q=nil
+        collectgarbage('step',1000000);collectgarbage('step',0)
+        after_step={value=17}
+      end
+      p=nil;collectgarbage()
+      return table.concat(log,','),after_step.value,pressure()
+    "#,
+    );
+}
+
+#[test]
+fn finalizer_control_checkpoints_survive_child_coroutine_suspension() {
+    control_compare(
+        r#"
+      local co;local p=newproxy(true)
+      getmetatable(p).__gc=function()
+        co=coroutine.create(function()
+          collectgarbage('stop');coroutine.yield(7)
+          collectgarbage('restart');return 11
+        end)
+        local ok,n=coroutine.resume(co);assert(ok and n==7)
+      end
+      p=nil;collectgarbage();local automatic=pressure()
+      local ok,n=coroutine.resume(co)
+      return automatic,ok,n,coroutine.status(co)
+    "#,
+    );
+    control_compare(
+        r#"
+      local tag={};local p=newproxy(true)
+      getmetatable(p).__gc=function()error(tag,0)end;p=nil
+      local ok,e=xpcall(collectgarbage,function(e)collectgarbage('stop');return e end)
+      return ok,e==tag,pressure()
+    "#,
+    );
+}
+
+#[test]
+fn collection_hook_controls_run_before_and_after_the_native_cycle() {
+    for event in ["call", "return"] {
+        control_compare(&format!(
+            r#"
+          local hit=0
+          debug.sethook(function(event)
+            if event=='{event}' and debug.getinfo(2,'f').func==collectgarbage then
+              hit=hit+1;collectgarbage('stop')
+            end
+          end,'cr')
+          collectgarbage();debug.sethook()
+          return hit,pressure()
+        "#
+        ));
+    }
+}
+
+#[test]
+fn generated_collector_control_sequences_match_reference_reachability() {
+    let controls = [
+        "collectgarbage('stop')",
+        "collectgarbage('restart')",
+        "collectgarbage('collect')",
+        "collectgarbage('step',0)",
+        "collectgarbage('step',1000000)",
+        "collectgarbage('count')",
+        "collectgarbage('setpause',100)",
+        "collectgarbage('setpause',400)",
+    ];
+    let mut state = 527u32;
+    for _ in 0..64 {
+        let mut body = String::new();
+        for _ in 0..5 {
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            body.push_str(controls[(state >> 16) as usize % controls.len()]);
+            body.push(';');
+        }
+        body.push_str("return pressure()");
+        control_compare(&body);
+    }
+}
+
+#[test]
+fn incremental_mutation_preserves_closures_environments_threads_and_finalizers() {
+    compare(
+        br#"
+      collectgarbage('stop');local step=collectgarbage;local final=0
+      local tree={};local weak=setmetatable({},{__mode='v'})
+      for i=1,512 do weak[i]={value=i}end
+      for i=1,64 do
+        step('step',0)
+        local state=weak[i] or {value=i};local obj={state=state}
+        obj.call=function()return state end;obj.env=function()return number end
+        setfenv(obj.env,{number=i})
+        obj.co=coroutine.create(function()coroutine.yield(state);return state end)
+        local ok,v=coroutine.resume(obj.co);assert(ok and v==state)
+        obj.guard=newproxy(true);getmetatable(obj.guard).__gc=function()final=final+1 end
+        debug.setfenv(obj.guard,{number=i})
+        setmetatable(obj,{__index={number=i}});tree[i]=obj
+        step('step',0)
+      end
+      step('collect');local sum=0
+      for i,obj in ipairs(tree)do
+        local ok,v=coroutine.resume(obj.co)
+        assert(ok and v==obj.state and obj.call()==v)
+        assert(obj.env()==i and obj.number==i and debug.getfenv(obj.guard).number==i)
+        sum=sum+v.value
+      end
+      local before=final;tree=nil;step('collect')
+      return sum,before,final
+    "#,
+    );
+}
+
+#[test]
+fn invalid_collector_arguments_do_not_resume_a_stopped_collector() {
+    for operation in [
+        "false",
+        "'bad'",
+        "'collect',{}",
+        "'restart',{}",
+        "'step',{}",
+        "'count',false",
+    ] {
+        control_compare(&format!(
+            "local ok,e=pcall(collectgarbage,{operation});return ok,type(e),pressure()"
+        ));
+    }
+}
+
+#[test]
+fn host_full_collection_uses_the_reference_restart_and_finalizer_controls() {
+    for operation in [
+        None,
+        Some(""),
+        Some("collectgarbage('stop')"),
+        Some("error('tag',0)"),
+        Some("collectgarbage('stop');error('tag',0)"),
+    ] {
+        let mut setup = "collectgarbage('stop');".to_owned() + PRESSURE_HELPER;
+        if let Some(operation) = operation {
+            setup.push_str(&format!(
+                "local p=newproxy(true);getmetatable(p).__gc=function(){operation} end;p=nil"
+            ));
+        }
+        let mut vm = Vm::new();
+        vm.execute(&compile(setup.as_bytes()).unwrap()).unwrap();
+        let actual_error = vm.collect_garbage().is_err();
+        let lua = Lua::new();
+        lua.load(setup.as_bytes()).exec().unwrap();
+        let reference_error = lua.gc_collect().is_err();
+        assert_eq!(actual_error, reference_error, "{setup}");
+        let source = b"return pressure()";
+        let expected: bool = lua.load(source.as_slice()).eval().unwrap();
+        assert_eq!(
+            vm.execute(&compile(source).unwrap()).unwrap(),
+            &[Value::Boolean(expected)],
+            "{setup}"
+        );
+    }
+}
+
 #[test]
 fn roots_reject_release_and_foreign_vm_and_keep_values_alive() {
     let mut vm = Vm::new();

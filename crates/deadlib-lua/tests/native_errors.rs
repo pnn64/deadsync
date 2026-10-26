@@ -5,6 +5,21 @@ struct Oracle {
     vm: Vm,
     lua: Lua,
 }
+
+#[test]
+fn protected_calls_validate_the_required_native_slots() {
+    Oracle::new().cases(&[
+        "pcall()",
+        "xpcall()",
+        "xpcall(nil)",
+        "xpcall(false)",
+        "local t={call=xpcall};t:call()",
+        "local f=pcall;f()",
+        "tostring()",
+        "local t={f=tostring};t:f()",
+        "local f=tostring;f()",
+    ]);
+}
 impl Oracle {
     fn new() -> Self {
         // SAFETY: fixed developer cases use only the official standard libraries.
@@ -149,6 +164,8 @@ fn validation_order_options_and_argument_domains_match_reference() {
         "table.sort({},false)",
         "table.foreach({},false)",
         "table.foreachi({},false)",
+        "string.gsub('a','.',nil,false)",
+        "string.gsub('a','.',false,{})",
         "debug.getinfo(false,'?')",
         "debug.getinfo(1,'?')",
         "debug.getupvalue(false,false)",

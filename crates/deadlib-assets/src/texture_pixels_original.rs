@@ -132,8 +132,8 @@ fn zoom_image_original(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             let ratio = (size[axis] as f32 / current as f32).clamp(0.5, 2.0);
             (current as f32 * ratio).round_ties_even() as u32
         });
-        let xs = zoom_axis(image.width(), next[0]);
-        let ys = zoom_axis(image.height(), next[1]);
+        let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
+        let ys: Vec<_> = zoom_axis(image.height(), next[1]).collect();
         let mut output = RgbaImage::new(next[0], next[1]);
         for (y, &(top, bottom, wy)) in ys.iter().enumerate() {
             for (x, &(left, right, wx)) in xs.iter().enumerate() {

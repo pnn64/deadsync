@@ -77,10 +77,12 @@ impl Vm {
                         | DO_FILE
                         | CONT_FILE
                         | debug::TRACEBACK
+                        | debug::CONSOLE
                         | COLLECT_GARBAGE
                         | XPCALL
                         | TOSTRING
                         | PRINT
+                        | os::TIME
                         | strings::STR_GSUB
                         | tables::TAB_FOREACH
                         | tables::TAB_FOREACHI
@@ -88,7 +90,7 @@ impl Vm {
                         | threads::CO_RESUME
                         | threads::CO_YIELD
                 ) || package::contains(id)
-                    || self.is_wrapper(id)
+                    || self.scheduled_native(id) != 0
                     || (self.hooks.mask != 0 && self.hooks.allowed()) =>
             {
                 self.check_calls()?;
@@ -116,6 +118,17 @@ impl Vm {
                 self.check_calls()?;
                 let index = self.frames.len();
                 let base = self.registers.len();
+                // Calls that can fail after emitting results keep their actual
+                // arguments available to the error handler's stack inspector.
+                let separate = matches!(id, strings::STR_FIND | strings::STR_MATCH)
+                    || (io::FIRST..=io::LAST).contains(&id)
+                    || id >= strings::ITERATOR_FIRST;
+                if separate {
+                    self.resize_registers(base + count + 1);
+                    self.registers[base] = Value::Native(id);
+                    self.registers
+                        .copy_within(call + 1..call + count + 1, base + 1);
+                }
                 self.push_record(Frame {
                     function: FrameKind::Native(id),
                     pc: 0,
@@ -129,16 +142,23 @@ impl Vm {
                     tail_calls: 0,
                 });
                 let previous = self.active_native.replace(index);
-                let result = self.native(id, call, count).map(Some).map_err(|error| {
-                    if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                        let value = self.intern(error.message_bytes());
-                        let value = self.located_error(value, 1);
-                        error.with_value(value)
-                    } else {
-                        error
-                    }
-                });
+                let result = self
+                    .native(id, if separate { base } else { call }, count)
+                    .map(Some)
+                    .map_err(|error| {
+                        if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+                            let value = self.intern(error.message_bytes());
+                            let value = self.located_error(value, 1);
+                            error.with_value(value)
+                        } else {
+                            error
+                        }
+                    });
                 self.active_native = previous;
+                if separate && let Ok(Some(actual)) = result {
+                    self.registers.copy_within(base..base + actual, call);
+                    self.registers.truncate(base.max(call + actual));
+                }
                 if let Ok(Some(actual)) = result
                     && self.hooks.mask & hooks::RETURN != 0
                     && self.hooks.allowed()
@@ -212,7 +232,10 @@ impl Vm {
         loop {
             let error = pending.as_ref().unwrap_or(original);
             let Some(index) = self.frames.iter().rposition(|f| {
-                (matches!(f.function, FrameKind::Native(PCALL | XPCALL)) && matches!(f.pc, 1 | 3))
+                (matches!(
+                    f.function,
+                    FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE | debug::CONSOLE)
+                ) && matches!(f.pc, 1 | 3 | 7))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             }) else {
                 return Ok(false);
@@ -233,21 +256,35 @@ impl Vm {
             // though the loader subsequently returns nil plus that transformed value.
             let inherited = if loads::protected(frame.function) {
                 self.frames[..index].iter().rposition(|f| {
-                    (matches!(f.function, FrameKind::Native(PCALL | XPCALL))
-                        && matches!(f.pc, 1 | 3))
+                    (matches!(
+                        f.function,
+                        FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE | debug::CONSOLE)
+                    ) && matches!(f.pc, 1 | 3 | 7))
                         || (loads::protected(f.function) && f.pc == 3)
                 })
             } else {
                 None
             };
-            let handler_index = if matches!(frame.function, FrameKind::Native(XPCALL)) {
+            let has_handler = |f: Frame| {
+                matches!(f.function, FrameKind::Native(XPCALL))
+                    || (matches!(f.function, FrameKind::Native(CONT_STANDALONE)) && f.pc != 7)
+            };
+            let handler_index = if has_handler(frame) {
                 Some(index)
             } else {
-                inherited.filter(|&i| matches!(self.frames[i].function, FrameKind::Native(XPCALL)))
+                inherited.filter(|&i| has_handler(self.frames[i]))
             };
             if let Some(handler_index) = handler_index {
                 self.frames[index].pc = 3;
-                let handler = self.registers[self.frames[handler_index].vararg_start + 1];
+                let handler_frame = self.frames[handler_index];
+                let handler = self.registers[if matches!(
+                    handler_frame.function,
+                    FrameKind::Native(CONT_STANDALONE)
+                ) {
+                    handler_frame.base
+                } else {
+                    handler_frame.vararg_start + 1
+                }];
                 if matches!(handler, Value::Function(_) | Value::Native(_)) {
                     Self::charge(budget)?;
                     // Preserve faulting frames until the error handler has returned.
@@ -278,7 +315,7 @@ impl Vm {
                 }
             }
             let value = if frame.pc() == 3
-                || matches!(frame.function, FrameKind::Native(XPCALL))
+                || has_handler(frame)
                 || handler_index.is_some()
                 || inherited.is_some_and(|i| self.frames[i].pc == 3)
             {
@@ -293,7 +330,11 @@ impl Vm {
     pub(super) fn step_native(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let index = self.frames.len() - 1;
+        let scheduled = self.scheduled_native(id);
         match id {
+            CONT_STANDALONE => self.standalone_driver(frame),
+            debug::CONSOLE => self.debug_console_step(frame),
+            _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),
             CONT_HOOK | CONT_TRACE | CONT_RETURN => self.hook_step(id, frame),
             debug::TRACEBACK => self.traceback_step(frame).map_err(|error| {
                 // lua_concat raises in the C traceback frame; it does not add
@@ -306,11 +347,25 @@ impl Vm {
                 }
             }),
             LOAD_READER => self.load_step(frame),
+            strings::STR_DUMP => self.dump_step(frame),
+            os::TIME => self.time_step(frame),
             LOAD_FILE | DO_FILE => self.file_load_step(id, frame),
             CONT_FILE => self.file_load_step(LOAD_FILE, frame),
             id if package::contains(id) => self.package_step(id, frame),
             COLLECT_GARBAGE => self.collect_step(frame),
             CONT_GC => self.finalizer_step(frame),
+            CONT_CONCAT => {
+                self.frames.pop();
+                self.registers.truncate(frame.base);
+                self.top = frame.pc();
+                self.concat_range(
+                    frame.result,
+                    frame.vararg_start,
+                    frame.vararg_start + frame.argc() - 1,
+                )?;
+                self.maybe_gc();
+                Ok(None)
+            }
             CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE => {
                 if matches!(id, CONT_BOOL | CONT_NOT) {
                     self.registers[base] =
@@ -327,7 +382,7 @@ impl Vm {
                 if frame.pc() == 0 {
                     let minimum = if id == XPCALL { 2 } else { 1 };
                     if frame.argc() < minimum {
-                        return Err(Error::new(ErrorKind::Runtime, 0, "value expected"));
+                        return Err(self.argument_error(minimum - 1, b"value expected"));
                     }
                     let count = if id == XPCALL { 0 } else { frame.argc() - 1 };
                     self.registers
@@ -350,7 +405,7 @@ impl Vm {
             TOSTRING => {
                 if frame.pc() == 0 {
                     if frame.argc() == 0 {
-                        return Err(Error::new(ErrorKind::Runtime, 0, "value expected"));
+                        return Err(self.argument_error(0, b"value expected"));
                     }
                     let value = self.registers[frame.vararg_start];
                     let handler = self.metafield(value, Meta::ToString);
@@ -364,6 +419,9 @@ impl Vm {
                         return Ok(None);
                     }
                     self.registers[base] = self.default_string(value);
+                    if matches!(value, Value::Number(_)) {
+                        self.registers[frame.vararg_start] = self.registers[base];
+                    }
                 }
                 Ok(self.return_frame(frame, base, 1))
             }
@@ -372,17 +430,23 @@ impl Vm {
             tables::TAB_FOREACH | tables::TAB_FOREACHI => self.foreach_step(id, frame),
             tables::TAB_SORT => self.sort_step(frame),
             threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
-            id if self.is_wrapper(id) => self.coroutine_step(id, frame),
+            _ if scheduled == 1 => self.coroutine_step(id, frame),
             _ => {
-                let actual = self.native(id, frame.result, frame.argc())?;
-                Ok(self.return_frame(frame, frame.result, actual))
+                // Return hooks run before results replace the caller's slots.
+                self.registers[base] = Value::Native(id);
+                self.registers.copy_within(
+                    frame.vararg_start..frame.vararg_start + frame.argc(),
+                    base + 1,
+                );
+                let actual = self.native(id, base, frame.argc())?;
+                Ok(self.return_frame(frame, base, actual))
             }
         }
     }
-    fn default_string(&mut self, value: Value) -> Value {
+    pub(super) fn default_string(&mut self, value: Value) -> Value {
         match value {
             Value::String(_) => value,
-            Value::Number(n) => self.intern(format_number(n).as_bytes()),
+            Value::Number(n) => self.intern(format_number(n).as_slice()),
             Value::Nil => self.intern(b"nil"),
             Value::Boolean(b) => self.intern(if b { b"true" } else { b"false" }),
             Value::Table(id) => self.intern(format!("table: 0x{:x}", id.0).as_bytes()),
@@ -521,8 +585,9 @@ impl Vm {
         let closure = &self.functions[slot_index(function.0)];
         let program = &self.programs[closure.program].data;
         let prototype = &program.prototypes[closure.prototype];
-        let line = prototype.lines[frame.pc().saturating_sub(1).min(prototype.lines.len() - 1)];
-        let mut bytes = crate::bytecode::chunk_id(&program.name);
+        let line =
+            prototype.debug_line(frame.pc().saturating_sub(1).min(prototype.lines.len() - 1));
+        let mut bytes = crate::bytecode::chunk_id(program.source(prototype));
         bytes.extend_from_slice(format!(":{line}: ").as_bytes());
         bytes.extend_from_slice(
             &self
@@ -541,6 +606,9 @@ impl Vm {
         if (io::FIRST..=io::LAST).contains(&id) {
             return self.io_native(id, base, count);
         }
+        if (os::FIRST..=os::LAST).contains(&id) {
+            return self.os_native(id, base, count);
+        }
         if matches!(id, hooks::GET_HOOK | hooks::SET_HOOK) {
             return self.hook_native(id, base, count);
         }
@@ -551,7 +619,7 @@ impl Vm {
             return self.proxy_native(base, count);
         }
         if matches!(id, COLLECT_GARBAGE | GC_INFO) {
-            return self.gc_native(id, base, count);
+            return self.gc_native(id, base, count).map(|_| 1);
         }
         if (threads::CO_CREATE..=threads::CO_YIELD).contains(&id) {
             return self.coroutine_native(id, base, count);
@@ -662,12 +730,13 @@ impl Vm {
                     self.registers[base] = Value::Number(count.saturating_sub(1) as f64);
                     return Ok(1);
                 }
-                let n = self
-                    .number(arg(self, 0))
-                    .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?
-                    as isize;
+                let n = self.integer_argument(base, count, 0, None)? as i32;
                 let available = count.saturating_sub(1);
-                let start = if n < 0 { available as isize + n } else { n - 1 };
+                let start = if n < 0 {
+                    available as i64 + i64::from(n)
+                } else {
+                    i64::from(n) - 1
+                };
                 if start < 0 {
                     return Err(self.argument_error(0, b"index out of range"));
                 }
@@ -677,42 +746,37 @@ impl Vm {
                 return Ok(available - start);
             }
             8 => {
-                let t = arg(self, 0);
                 let id = self.table_argument(base, count)?;
-                let table = &self.tables[slot_index(id.0)];
-                let start = if count < 2 || arg(self, 1) == Value::Nil {
-                    1.0
-                } else {
-                    self.number(arg(self, 1))
-                        .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?
-                        .trunc()
-                };
+                let start = self.integer_argument(base, count, 1, Some(1))? as i32;
                 let end = if count < 3 || arg(self, 2) == Value::Nil {
-                    table.len() as f64
+                    self.tables[slot_index(id.0)].len() as i32
                 } else {
-                    self.number(arg(self, 2))
-                        .ok_or_else(|| self.argument_type_error(base, count, 2, "number"))?
-                        .trunc()
+                    self.integer_argument(base, count, 2, None)? as i32
                 };
-                let results = (end - start + 1.0).max(0.0);
-                if !results.is_finite() || results > 1_000_000.0 {
+                if start > end {
+                    return Ok(0);
+                }
+                let results = (i64::from(end) - i64::from(start) + 1) as usize;
+                if results > limits::MAX_CSTACK.saturating_sub(count) {
                     return Err(Error::new(
-                        ErrorKind::Limit,
+                        ErrorKind::Runtime,
                         0,
                         "too many results to unpack",
                     ));
                 }
-                let results = results as usize;
                 self.resize_registers(self.registers.len().max(base + results));
+                let table = &self.tables[slot_index(id.0)];
                 for i in 0..results {
-                    let v = self.table(t)?.get(Value::Number(start + i as f64));
+                    let v = table.get(Value::Number((i64::from(start) + i as i64) as f64));
                     self.registers[base + i] = v;
                 }
                 return Ok(results);
             }
             NEXT | PAIRS_NEXT => {
                 let table = self.table_argument(base, count)?;
-                let next = self.tables[slot_index(table.0)].next(arg(self, 1))?;
+                let next = self.tables[slot_index(table.0)]
+                    .next(arg(self, 1))
+                    .map_err(|error| self.operand_error(error))?;
                 if let Some((key, value)) = next {
                     self.resize_registers(self.registers.len().max(base + 2));
                     self.registers[base] = key;
@@ -780,6 +844,7 @@ impl Vm {
                             ));
                         }
                     }
+                    self.gc_barrier(target, Value::Table(env));
                     target
                 }
             }
@@ -804,7 +869,7 @@ impl Vm {
                             let Value::Table(env) = arg(self, 1) else {
                                 unreachable!("environment type checked");
                             };
-                            self.globals = env;
+                            self.set_thread_environment(self.thread, env);
                             return Ok(0);
                         }
                         self.stack_kind(level as usize)?
@@ -820,6 +885,7 @@ impl Vm {
                             unreachable!("environment type checked");
                         };
                         self.functions[slot_index(id.0)].env = env;
+                        self.gc_barrier(Value::Function(id), Value::Table(env));
                         Value::Function(id)
                     }
                     _ => {
@@ -832,26 +898,21 @@ impl Vm {
                 }
             }
             LOAD_STRING => {
-                let source = match arg(self, 0) {
-                    v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
-                    _ => return Err(self.argument_type_error(base, count, 0, "string")),
-                };
+                let source = self.string_argument(base, count, 0)?;
+                let source = self.strings.bytes[slot_index(source.0)].to_vec();
                 let name = match arg(self, 1) {
                     Value::Nil => source.clone(),
-                    v @ Value::String(_) | v @ Value::Number(_) => self.concat_bytes(v)?,
-                    _ => return Err(self.argument_type_error(base, count, 1, "string")),
+                    _ => {
+                        let id = self.string_argument(base, count, 1)?;
+                        self.strings.bytes[slot_index(id.0)].to_vec()
+                    }
                 };
-                let compiled = crate::parser::Parser::with_native_depth(
-                    self.native_depth(self.frames.len()) + 1,
-                )
-                .resume(&source, true)
-                .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), &name));
+                let depth = self.native_depth(self.frames.len()) + 1;
+                let compiled = loads::compile(&source, &name, depth);
                 match compiled {
                     Ok(program) => Value::Function(self.load(&program)),
                     Err(error) => {
-                        let mut message = crate::bytecode::chunk_id_limit(&name, 80);
-                        message.extend_from_slice(format!(":{}: ", error.line()).as_bytes());
-                        message.extend_from_slice(error.message_bytes());
+                        let message = loads::message(&name, &error, source.first() == Some(&27));
                         let value = self.intern(&message);
                         self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Nil;
@@ -912,8 +973,13 @@ impl Vm {
     }
 }
 
-// Lua 5.1's default formatting uses C's %.14g in the C locale.
-pub(super) fn format_number(n: f64) -> String {
+// Locale punctuation is applied after the pure Rust %.14g conversion.
+pub(super) fn format_number(n: f64) -> Vec<u8> {
+    let mut bytes = format_number_c(n).into_bytes();
+    crate::locale::localize(&mut bytes);
+    bytes
+}
+fn format_number_c(n: f64) -> String {
     if !n.is_finite() {
         return if n.is_nan() {
             format!(

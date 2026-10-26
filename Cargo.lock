@@ -1406,6 +1406,7 @@ dependencies = [
  "glam",
  "image",
  "log",
+ "memchr",
  "rustc-hash 2.1.3",
  "smallvec",
 ]
@@ -1623,8 +1624,10 @@ dependencies = [
 name = "deadsync-chart"
 version = "0.1.0"
 dependencies = [
+ "crc32fast",
  "deadsync-core",
  "deadsync-rules",
+ "memchr",
  "rustc-hash 2.1.3",
  "smallvec",
 ]

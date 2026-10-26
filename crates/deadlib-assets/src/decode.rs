@@ -399,17 +399,18 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
     for row_index in 0..size[1] {
         let y = if top_down { row_index } else { size[1] - 1 - row_index };
         input.read_exact(&mut row)?;
-        let destination = &mut image.as_mut()[y as usize * stride..][..stride];
-        for (x, pixel) in destination.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-            let index = match bits {
-                1 => (row[x / 8] >> (7 - x % 8)) & 1,
-                4 => (row[x / 2] >> (4 * (1 - x % 2))) & 15,
-                _ => row[x],
-            };
-            if u32::from(index) >= color_count {
-                return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
-            }
-            *pixel = colors[index as usize];
+        let pixels = image.as_mut()[y as usize * stride..][..stride]
+            .as_chunks_mut::<4>()
+            .0;
+        match bits {
+            1 => unpack_palette::<8>(&row, pixels, &colors),
+            4 => unpack_palette::<2>(&row, pixels, &colors),
+            _ => unpack_palette::<1>(&row, pixels, &colors),
+        }
+        // Valid BMP palette entries have alpha 255; missing entries retain 0.
+        // A complete palette needs no validation, and padding is never decoded.
+        if color_count < (1 << bits) && pixels.iter().any(|pixel| pixel[3] == 0) {
+            return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
         }
     }
     if color_key {
@@ -422,6 +423,22 @@ fn key_palette(colors: &mut [[u8; 4]; 256]) {
     for pink in [[248, 0, 248, 255], [255, 0, 255, 255]] {
         if let Some(color) = colors.iter_mut().find(|color| **color == pink) {
             color[3] = 0;
+        }
+    }
+}
+
+// A byte holds N palette indices, most-significant first. The final chunk
+// can be short: unused low bits in a padded scanline must not produce pixels.
+fn unpack_palette<const N: usize>(row: &[u8], pixels: &mut [[u8; 4]], colors: &[[u8; 4]; 256]) {
+    let index = |byte: u8, i| (byte >> (8 - (i + 1) * (8 / N))) & (u8::MAX >> (8 - 8 / N));
+    let (groups, tail) = pixels.as_chunks_mut::<N>();
+    for (pixels, &byte) in groups.iter_mut().zip(row) {
+        *pixels = std::array::from_fn(|i| colors[index(byte, i) as usize]);
+    }
+    if !tail.is_empty() {
+        let byte = row[groups.len()];
+        for (i, pixel) in tail.iter_mut().enumerate() {
+            *pixel = colors[index(byte, i) as usize];
         }
     }
 }
@@ -450,8 +467,6 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
             },
     );
     let mut reader = decoder.read_info().map_err(png_error)?;
-    let palette = reader.info().palette.clone();
-    let alpha = reader.info().trns.clone();
     let mut bytes = vec![0; reader.output_buffer_size().ok_or_else(image_limit)?];
     let info = reader.next_frame(&mut bytes).map_err(png_error)?;
     if info.color_type == png::ColorType::Rgba {
@@ -466,9 +481,11 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     }
     let mut image = RgbaImage::new(info.width, info.height);
     if indexed {
+        // Indexed palettes are fixed before IDAT; borrow the decoder's storage.
+        let palette = reader.info().palette.as_deref();
+        let alpha = reader.info().trns.as_deref();
         let mut colors = [[0, 0, 0, 255]; 256];
         for (i, rgb) in palette
-            .as_deref()
             .unwrap_or_default()
             .chunks_exact(3)
             .enumerate()
@@ -478,7 +495,6 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
                 rgb[1],
                 rgb[2],
                 alpha
-                    .as_deref()
                     .and_then(|a| a.get(i))
                     .copied()
                     .unwrap_or(255),
@@ -494,32 +510,39 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
                 *pixel = colors[index as usize];
             }
         } else {
-            let mask = ((1u16 << bits) - 1) as u8;
             for (pixels, row) in pixels
                 .chunks_exact_mut(info.width as usize)
                 .zip(bytes.chunks_exact(info.line_size))
             {
-                for (x, pixel) in pixels.iter_mut().enumerate() {
-                    let bit = x * bits;
-                    let index = (row[bit / 8] >> (8 - bits - bit % 8)) & mask;
-                    *pixel = colors[index as usize];
+                match bits {
+                    1 => unpack_palette::<8>(row, pixels, &colors),
+                    2 => unpack_palette::<4>(row, pixels, &colors),
+                    _ => unpack_palette::<2>(row, pixels, &colors),
                 }
             }
         }
     } else {
-        let channels = info.color_type.samples();
-        for (pixel, source) in image
-            .pixels_mut()
-            .zip(bytes[..info.buffer_size()].chunks_exact(channels))
-        {
-            pixel.0 = match info.color_type {
-                png::ColorType::Rgb => [source[0], source[1], source[2], 255],
-                png::ColorType::Grayscale => [source[0], source[0], source[0], 255],
-                png::ColorType::GrayscaleAlpha => [source[0], source[0], source[0], source[1]],
-                png::ColorType::Rgba | png::ColorType::Indexed => {
-                    unreachable!("RGBA and indexed branches handled above")
+        let pixels = image.as_mut().as_chunks_mut::<4>().0;
+        let bytes = &bytes[..info.buffer_size()];
+        match info.color_type {
+            png::ColorType::Rgb => {
+                for (pixel, rgb) in pixels.iter_mut().zip(bytes.as_chunks::<3>().0) {
+                    *pixel = [rgb[0], rgb[1], rgb[2], 255];
                 }
-            };
+            }
+            png::ColorType::Grayscale => {
+                for (pixel, &gray) in pixels.iter_mut().zip(bytes) {
+                    *pixel = [gray, gray, gray, 255];
+                }
+            }
+            png::ColorType::GrayscaleAlpha => {
+                for (pixel, ga) in pixels.iter_mut().zip(bytes.as_chunks::<2>().0) {
+                    *pixel = [ga[0], ga[0], ga[0], ga[1]];
+                }
+            }
+            png::ColorType::Rgba | png::ColorType::Indexed => {
+                unreachable!("RGBA and indexed branches handled above")
+            }
         }
         if color_key {
             key_rgba(&mut image);
@@ -543,20 +566,10 @@ fn key_rgba(image: &mut RgbaImage) {
     };
     let key = u32::from_ne_bytes(key);
     let length = image.width() as usize * image.height() as usize * 4;
-    // Scan 16 RGBA pixels per block, avoiding writes to blocks without the key.
-    for block in image.as_mut()[..length].chunks_mut(64) {
-        let pixels = block.as_chunks_mut::<4>().0;
-        let mut has_key = false;
-        for pixel in &*pixels {
-            has_key |= u32::from_ne_bytes(*pixel) == key;
-        }
-        if has_key {
-            for pixel in pixels {
-                let value = u32::from_ne_bytes(*pixel);
-                let keep = u32::from(value != key).wrapping_neg();
-                *pixel = (value & keep).to_ne_bytes();
-            }
-        }
+    for pixel in image.as_mut()[..length].as_chunks_mut::<4>().0 {
+        let value = u32::from_ne_bytes(*pixel);
+        let keep = u32::from(value != key).wrapping_neg();
+        *pixel = (value & keep).to_ne_bytes();
     }
 }
 
@@ -586,31 +599,57 @@ fn key_rgba(image: &mut RgbaImage) {
  */
 // RageSurfaceUtils_Zoom uses float coordinates and 24-bit fixed-point weights;
 // it floors horizontal interpolation and rounds the final vertical blend.
-fn zoom_axis(source: u32, destination: u32) -> Vec<(u32, u32, u32)> {
+fn zoom_axis(source: u32, destination: u32) -> impl Iterator<Item = (u32, u32, u32)> {
     let ratio = source as f32 / destination as f32;
-    (0..destination)
-        .map(|x| {
-            if source >= destination {
-                let center = ratio * x as f32 + ratio / 2.0;
-                let left = (center - ratio / 4.0) as u32;
-                let right = (center + ratio / 4.0) as u32;
-                let weight = if left == right {
-                    1 << 24
-                } else {
-                    ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0)
-                        as u32
-                };
-                (left, right, weight)
+    (0..destination).map(move |x| {
+        if source >= destination {
+            let center = ratio * x as f32 + ratio / 2.0;
+            let left = (center - ratio / 4.0) as u32;
+            let right = (center + ratio / 4.0) as u32;
+            let weight = if left == right {
+                1 << 24
             } else {
-                let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
-                (
-                    (center as u32).min(source - 1),
-                    ((center + 1.0) as u32).min(source - 1),
-                    ((1.0 - (center - center.floor())) * 16777216.0) as u32,
-                )
-            }
-        })
-        .collect()
+                ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0) as u32
+            };
+            (left, right, weight)
+        } else {
+            let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
+            (
+                (center as u32).min(source - 1),
+                ((center + 1.0) as u32).min(source - 1),
+                ((1.0 - (center - center.floor())) * 16777216.0) as u32,
+            )
+        }
+    })
+}
+
+// At exactly 2:1 both fixed-point weights are 1/2. Average all four
+// byte lanes together: horizontal blends floor, then the vertical blend rounds.
+#[inline(never)]
+fn zoom_half(image: &RgbaImage, size: [u32; 2]) -> RgbaImage {
+    let mut output = RgbaImage::new(size[0], size[1]);
+    let source = image.as_raw().as_chunks::<4>().0;
+    for (rows, row) in source.chunks_exact(image.width() as usize * 2).zip(
+        output
+            .as_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .chunks_exact_mut(size[0] as usize),
+    ) {
+        let (top, bottom) = rows.split_at(image.width() as usize);
+        for ((pixel, top), bottom) in row
+            .iter_mut()
+            .zip(top.as_chunks::<2>().0)
+            .zip(bottom.as_chunks::<2>().0)
+        {
+            let [a, b] = top.map(u32::from_le_bytes);
+            let [c, d] = bottom.map(u32::from_le_bytes);
+            let upper = (a & b) + (((a ^ b) & 0xfefe_fefe) >> 1);
+            let lower = (c & d) + (((c ^ d) & 0xfefe_fefe) >> 1);
+            *pixel = ((upper | lower) - (((upper ^ lower) & 0xfefe_fefe) >> 1)).to_le_bytes();
+        }
+    }
+    output
 }
 
 fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
@@ -620,31 +659,47 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             let ratio = (size[axis] as f32 / current as f32).clamp(0.5, 2.0);
             (current as f32 * ratio).round_ties_even() as u32
         });
-        let xs = zoom_axis(image.width(), next[0]);
+        // Beyond 2^23, f32 coordinates no longer preserve half-pixel steps.
+        if image.width().max(image.height()) <= 1 << 23
+            && [next[0] * 2, next[1] * 2] == [image.width(), image.height()]
+        {
+            image = zoom_half(&image, next);
+            continue;
+        }
+        let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
         let ys = zoom_axis(image.height(), next[1]);
         let mut output = RgbaImage::new(next[0], next[1]);
         let width = image.width() as usize;
         let source = image.as_raw().as_chunks::<4>().0;
-        for (row, &(top, bottom, wy)) in output
+        for (row, (top, bottom, wy)) in output
             .as_mut()
             .as_chunks_mut::<4>()
             .0
             .chunks_exact_mut(next[0] as usize)
-            .zip(&ys)
+            .zip(ys)
         {
             let upper_row = &source[top as usize * width..(top as usize + 1) * width];
             let lower_row = &source[bottom as usize * width..(bottom as usize + 1) * width];
             for (pixel, &(left, right, wx)) in row.iter_mut().zip(&xs) {
-                let c00 = upper_row[left as usize];
-                let c01 = upper_row[right as usize];
-                let c10 = lower_row[left as usize];
-                let c11 = lower_row[right as usize];
-                for c in 0..4 {
-                    let upper =
-                        (u32::from(c00[c]) * wx + u32::from(c01[c]) * (16777216 - wx)) >> 24;
-                    let lower =
-                        (u32::from(c10[c]) * wx + u32::from(c11[c]) * (16777216 - wx)) >> 24;
-                    pixel[c] = ((upper * wy + lower * (16777216 - wy) + 8388608) >> 24) as u8;
+                // Two 32-bit lanes hold independent 8-bit channels and their
+                // 24-bit products. Complementary weights cannot carry between lanes.
+                let spread = |p: [u8; 4]| [
+                    u64::from(p[0]) | (u64::from(p[2]) << 32),
+                    u64::from(p[1]) | (u64::from(p[3]) << 32),
+                ];
+                let c00 = spread(upper_row[left as usize]);
+                let c01 = spread(upper_row[right as usize]);
+                let c10 = spread(lower_row[left as usize]);
+                let c11 = spread(lower_row[right as usize]);
+                for c in 0..2 {
+                    let upper = ((c00[c] * u64::from(wx) + c01[c] * u64::from(16777216 - wx)) >> 24)
+                        & 0x0000_00ff_0000_00ff;
+                    let lower = ((c10[c] * u64::from(wx) + c11[c] * u64::from(16777216 - wx)) >> 24)
+                        & 0x0000_00ff_0000_00ff;
+                    let pair = (upper * u64::from(wy) + lower * u64::from(16777216 - wy)
+                        + 0x0080_0000_0080_0000) >> 24;
+                    pixel[c] = pair as u8;
+                    pixel[c + 2] = (pair >> 32) as u8;
                 }
             }
         }
@@ -935,3 +990,15 @@ mod texture_pixels_perf;
 #[cfg(test)]
 #[path = "indexed_pixels_perf.rs"]
 mod indexed_pixels_perf;
+
+#[cfg(test)]
+mod preparation_perf;
+
+#[cfg(test)]
+mod direct_media_perf;
+
+#[cfg(test)]
+mod resize_kernel;
+
+#[cfg(test)]
+mod key_kernel;

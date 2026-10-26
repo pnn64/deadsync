@@ -117,34 +117,34 @@ pub fn song_search_bpm_tiers(song: &SongData) -> Option<(i32, i32)> {
 fn parse_song_search_filter(input: &str) -> SongSearchFilter {
     let mut filter = SongSearchFilter::default();
     let mut stripped = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-    while let Some(ch) = chars.next() {
-        let ch = ch.to_ascii_lowercase();
-        if ch == '[' {
-            let mut tail = chars.clone();
-            let mut value: u32 = 0;
-            let mut has_digit = false;
-            while let Some(ch) = tail.peek() {
-                let Some(d) = ch.to_digit(10) else {
-                    break;
-                };
-                has_digit = true;
-                value = value.saturating_mul(10).saturating_add(d);
-                tail.next();
+    let bytes = input.as_bytes();
+    let mut scan = 0;
+    let mut start = 0;
+    while let Some(relative) = memchr::memchr(b'[', &bytes[scan..]) {
+        let open = scan + relative;
+        let tail = &bytes[open + 1..];
+        let digits = tail
+            .iter()
+            .position(|byte| !byte.is_ascii_digit())
+            .unwrap_or(tail.len());
+        let end = open + 1 + digits;
+        if digits != 0 && bytes.get(end) == Some(&b']') {
+            // A nonempty ASCII digit span can fail only by overflowing.
+            let value = input[open + 1..end].parse::<u32>().unwrap_or(u32::MAX);
+            if value <= 35 {
+                filter.difficulty = Some(value as u8);
+            } else {
+                filter.bpm_tier = Some(song_search_bpm_tier(f64::from(value)));
             }
-            if has_digit && tail.next_if_eq(&']').is_some() {
-                if value <= 35 {
-                    filter.difficulty = Some(value as u8);
-                } else {
-                    filter.bpm_tier = Some(song_search_bpm_tier(f64::from(value)));
-                }
-                chars = tail;
-                continue;
-            }
+            stripped.push_str(&input[start..open]);
+            start = end + 1;
+            scan = start;
+        } else {
+            scan = open + 1;
         }
-        stripped.push(ch);
     }
-
+    stripped.push_str(&input[start..]);
+    stripped.make_ascii_lowercase();
     let term_start = stripped.len() - stripped.trim_start().len();
     let term_end = stripped.trim_end().len();
     if term_start < term_end {
@@ -241,11 +241,47 @@ pub fn song_passes_search_filters(
 #[inline]
 fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
     let needle = needle.as_bytes();
-    needle.is_empty()
-        || haystack
+    if needle.is_empty() {
+        return true;
+    }
+    if haystack.len() < 32 {
+        return haystack
             .as_bytes()
             .windows(needle.len())
-            .any(|window| window.eq_ignore_ascii_case(needle))
+            .any(|window| window.eq_ignore_ascii_case(needle));
+    }
+    let Some(prefix) = haystack.as_bytes().get(..needle.len()) else {
+        return false;
+    };
+    if prefix.eq_ignore_ascii_case(needle) {
+        return true;
+    }
+    contains_ignore_ascii_case_long(haystack.as_bytes(), needle)
+}
+// Sparse candidates use vectorized byte searches. Dense candidates retain
+// the scalar scan after four misses; keep this loop out of small callers.
+#[inline(never)]
+fn contains_ignore_ascii_case_long(haystack: &[u8], needle: &[u8]) -> bool {
+    let last_start = haystack.len() - needle.len();
+    let lower = needle[0].to_ascii_lowercase();
+    let upper = needle[0].to_ascii_uppercase();
+    let mut start = 1;
+    for _ in 0..4 {
+        if start > last_start {
+            return false;
+        }
+        let Some(offset) = memchr::memchr2(lower, upper, &haystack[start..=last_start]) else {
+            return false;
+        };
+        start += offset;
+        if haystack[start + 1..start + needle.len()].eq_ignore_ascii_case(&needle[1..]) {
+            return true;
+        }
+        start += 1;
+    }
+    haystack[start..]
+        .windows(needle.len())
+        .any(|window| window.eq_ignore_ascii_case(needle))
 }
 
 #[inline]
@@ -469,6 +505,7 @@ pub fn build_song_search_candidates<'a>(
 #[cfg(test)]
 mod tests {
     include!("song_search_selection_perf.rs");
+    include!("song_text_perf.rs");
 
     #[test]
     fn title_search_preserves_partial_and_whitespace_transliteration_fallbacks() {

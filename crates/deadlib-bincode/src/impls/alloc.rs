@@ -7,6 +7,10 @@ use crate::{
 };
 use std::{boxed::Box, string::String, vec::Vec};
 
+#[cfg(test)]
+#[path = "../bulk_kernels.rs"]
+mod bulk_kernels;
+
 /// Return the number of bytes required to encode a value.
 pub fn encoded_size<E: Encode, C: Config>(val: E, config: C) -> Result<usize, EncodeError> {
     let mut encoder = enc::EncoderImpl::<_, C>::new(SizeWriter::default(), config);
@@ -158,10 +162,7 @@ fn decode_bool_vec_into<T, D: Decoder>(
         return None;
     }
     let source = &source[..len];
-    let invalid = source
-        .iter()
-        .position(|byte| *byte > 1)
-        .map(|index| (index, source[index]));
+    let invalid = crate::utils::invalid_bool(source).map(|index| (index, source[index]));
     let valid_len = invalid.map_or(len, |(index, _)| index);
 
     values.reserve(valid_len);
@@ -182,7 +183,6 @@ fn decode_bool_vec_into<T, D: Decoder>(
     }
 }
 
-#[inline(never)]
 fn decode_endian_vec_into<T, D: Decoder>(
     decoder: &mut D,
     len: usize,

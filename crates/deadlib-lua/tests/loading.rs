@@ -69,6 +69,124 @@ fn compare(source: &[u8]) {
 }
 
 #[test]
+fn binary_headers_and_names_report_native_load_errors() {
+    compare(
+        br#"
+      local header='\27Lua'..string.char(81,0,1,4,8,4,8,0)
+      local values={'\27',header:sub(1,11),header:sub(1,4)..'Z'..header:sub(6),
+        header..string.rep('\0',8)..string.rep('\255',4)}
+      local out={}
+      for _,bytes in ipairs(values)do
+        for _,name in ipairs({'=probe','@a.lua','plain','a\0ignored',''})do
+          local f,e=loadstring(bytes,name);out[#out+1]=f==nil;out[#out+1]=e
+        end
+        local f,e=loadstring(bytes);out[#out+1]=f==nil;out[#out+1]=e
+      end
+      return unpack(out)
+    "#,
+    );
+}
+
+#[test]
+fn dumps_round_trip_closures_varargs_scopes_and_thread_environments() {
+    compare(br#"
+      local a,b=20,30
+      local original=function(x,...)
+        if x=='set' then a=10+b;b=b+1 else return a,... end
+      end
+      local bytes=string.dump(original,true,newproxy())
+      assert(bytes==string.dump(original,false))
+      local f=assert(loadstring(bytes,'=ignored'));local out={f()==nil}
+      out[#out+1]=debug.setupvalue(f,1,'hi');out[#out+1]=f()
+      out[#out+1]=debug.setupvalue(f,2,13);f('set');out[#out+1]=f();f('set');out[#out+1]=f()
+      local once=false;local g=assert(load(function()if not once then once=true;return bytes end end))
+      out[#out+1]=g()==nil;out[#out+1]=a;out[#out+1]=b
+      local global=_G;local env=setmetatable({x=17},{__index=global})
+      local h=loadstring('return x');setfenv(h,{x=3});local encoded=string.dump(h)
+      setfenv(0,env);local k=assert(loadstring(encoded));out[#out+1]=k();out[#out+1]=getfenv(k)==env
+      return unpack(out)
+    "#);
+    compare(
+        br#"
+      local function f(a,...)return a,arg.n,arg[1],arg[2]end
+      local g=assert(loadstring(string.dump(f)));return g(1,2,3)
+    "#,
+    );
+}
+
+#[test]
+fn dump_argument_errors_keep_native_messages_and_return_arity() {
+    compare(br#"
+      local out={}
+      for _,args in ipairs({{},{false},{true},{3},{'abc'},{{}},{print},{string.dump}})do
+        local ok,e=pcall(string.dump,unpack(args));out[#out+1]=ok;out[#out+1]=e
+      end
+      local function f()return 7 end
+      out[#out+1]=select('#',string.dump(f));out[#out+1]=type(string.dump(f));out[#out+1]=assert(loadstring(string.dump(f)))()
+      return unpack(out)
+    "#);
+}
+
+#[test]
+fn dump_return_hooks_see_the_retained_function_and_result_slots() {
+    compare(
+        br#"
+      local out={};local function f()return 9 end
+      debug.sethook(function(e)
+        if e=='return' and debug.getinfo(2,'f').func==string.dump then
+          for i=1,4 do local n,v=debug.getlocal(2,i);out[#out+1]=tostring(n)..':'..type(v)end
+          collectgarbage()
+        end
+      end,'r')
+      local bytes=string.dump(f,newproxy(),newproxy());debug.sethook()
+      return assert(loadstring(bytes))(),table.concat(out,'|')
+    "#,
+    );
+}
+
+#[test]
+fn long_dump_relays_retain_the_branch_scope_and_source_line() {
+    compare(br#"
+      local body='local x=0\nif x==1 then\nlocal hidden=9\n'..string.rep('x=x+1\n',80000)..'end\nreturn x'
+      local original=assert(loadstring(body,'=relay scope'))
+      local f=assert(loadstring(string.dump(original)))
+      local valid=true;local visits=0
+      debug.sethook(function()
+        local d=debug.getinfo(2,'fl')
+        if d.func==f then
+          visits=visits+1;local name=debug.getlocal(2,2)
+          if name=='hidden' or (d.currentline>2 and d.currentline<80004) then valid=false end
+        end
+      end,'',1)
+      local result=f();debug.sethook()
+      return result,valid,visits>0
+    "#);
+}
+
+#[test]
+fn binary_readers_stop_at_errors_and_preserve_the_initial_probe() {
+    compare(br#"
+      local header='\27Lua'..string.char(81,0,1,4,8,4,8,0)
+      local bad=header..string.rep('\0',8)..string.rep('\255',4)..'unused'
+      local out={}
+      for _,empty in ipairs({false,true})do for size=1,4 do
+        local at,calls=0,0
+        local f,e=load(function()
+          calls=calls+1;collectgarbage()
+          if empty and calls==1 then return ''end
+          local s=bad:sub(at+1,at+size);at=at+#s;return s
+        end,'=reader')
+        out[#out+1]=f==nil;out[#out+1]=e;out[#out+1]=calls;out[#out+1]=at
+      end end
+      local marker={};local calls=0
+      local ok,f,e=pcall(load,function()calls=calls+1;if calls==1 then return '\27Lua'else error(marker,0)end end)
+      assert(ok)
+      out[#out+1]=f==nil;out[#out+1]=e==marker;out[#out+1]=calls
+      return unpack(out)
+    "#);
+}
+
+#[test]
 fn reader_load_preserves_chunks_eof_coercions_and_result_counts() {
     for source in [
         "local n=0;local f,e=load(function(...)assert(select('#',...)==0);n=n+1;if n==1 then return 'return ' elseif n==2 then return 17 end end);return type(f),e,f(),n",

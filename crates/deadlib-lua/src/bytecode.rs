@@ -80,6 +80,8 @@ pub(crate) enum Op {
     Vararg,
     SetList,
     TailCall,
+    CallIter,
+    ConcatRange,
 }
 
 /// Eight-byte instructions keep full-width constant and jump indices.
@@ -104,6 +106,21 @@ pub(crate) enum Constant {
 pub(crate) enum Upvalue {
     Local(u8),
     Outer(u16),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ClosureBinding {
+    pub prototype: u32,
+    pub upvalues: Box<[Upvalue]>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct NativeDebug {
+    // Zero selects the program name; other indices select its source pool.
+    pub source: u32,
+    pub stack: u16,
+    pub has_lines: bool,
+    pub wire: crate::chunk51::Wire,
 }
 
 #[derive(Clone, Debug)]
@@ -146,6 +163,7 @@ pub(crate) struct DebugCall {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct DebugInfo {
+    pub native: Option<Box<NativeDebug>>,
     pub defined: [u32; 2],
     pub upvalues: Box<[Box<[u8]>]>,
     pub locals: Box<[DebugLocal]>,
@@ -156,7 +174,9 @@ pub(crate) struct DebugInfo {
 }
 impl DebugInfo {
     pub fn heap_bytes(&self) -> usize {
-        std::mem::size_of_val(self.upvalues.as_ref())
+        self.native.as_ref().map_or(0, |n| {
+            std::mem::size_of_val(n.as_ref()) + n.wire.heap_bytes()
+        }) + std::mem::size_of_val(self.upvalues.as_ref())
             + std::mem::size_of_val(self.active_lines.as_ref())
             + std::mem::size_of_val(self.hook_lines.as_ref())
             + self.upvalues.iter().map(|n| n.len()).sum::<usize>()
@@ -180,6 +200,7 @@ pub(crate) struct Prototype {
     pub vararg: bool,
     pub compat_arg: bool,
     pub upvalues: Box<[Upvalue]>,
+    pub bindings: Box<[ClosureBinding]>,
     pub debug: DebugInfo,
 }
 
@@ -188,6 +209,16 @@ pub(crate) struct ProgramData {
     pub prototypes: Box<[Prototype]>,
     pub entry: u32,
     pub name: Box<[u8]>,
+    pub sources: Box<[Box<[u8]>]>,
+}
+
+impl ProgramData {
+    pub fn source(&self, prototype: &Prototype) -> &[u8] {
+        match prototype.debug.native.as_ref().map_or(0, |n| n.source) {
+            0 => &self.name,
+            n => &self.sources[n as usize - 1],
+        }
+    }
 }
 
 /// Verified bytecode and immutable constants, independent of any runtime heap.
@@ -220,6 +251,7 @@ impl Program {
                 prototypes: prototypes.into_boxed_slice(),
                 entry,
                 name: name.into(),
+                sources: Box::default(),
             }),
         }
     }
@@ -233,7 +265,7 @@ impl Program {
             .data
             .prototypes
             .get(self.data.entry as usize)
-            .is_none_or(|p| !p.upvalues.is_empty())
+            .is_none_or(|p| !p.upvalues.is_empty() && p.debug.native.is_none())
         {
             return Err(Error::new(
                 ErrorKind::Bytecode,
@@ -242,6 +274,14 @@ impl Program {
             ));
         }
         for prototype in &self.data.prototypes {
+            if prototype
+                .debug
+                .native
+                .as_ref()
+                .is_some_and(|n| n.source as usize > self.data.sources.len())
+            {
+                return Err(Error::new(ErrorKind::Bytecode, 0, "invalid source index"));
+            }
             prototype.verify(&self.data.prototypes)?;
         }
         Ok(())
@@ -249,6 +289,23 @@ impl Program {
 }
 
 impl Prototype {
+    pub fn debug_line(&self, pc: usize) -> i64 {
+        if self.debug.native.as_ref().is_some_and(|n| !n.has_lines) {
+            0
+        } else {
+            i64::from(self.lines[pc] as i32)
+        }
+    }
+
+    pub fn debug_registers(&self) -> usize {
+        usize::from(
+            self.debug
+                .native
+                .as_ref()
+                .map_or(self.registers, |n| n.stack),
+        )
+    }
+
     fn verify(&self, prototypes: &[Prototype]) -> Result<(), Error> {
         let fail = |pc: usize, message: &str| {
             Error::new(
@@ -260,7 +317,12 @@ impl Prototype {
         if self.registers > 256
             || self.registers == 0
             || self.params > self.registers
-            || self.upvalues.len() > 60
+            || self.upvalues.len() > if self.debug.native.is_some() { 255 } else { 60 }
+            || self
+                .debug
+                .native
+                .as_ref()
+                .is_some_and(|n| n.stack == 0 || n.stack > self.registers)
             || self.lines.len() != self.code.len()
             || self.debug.hook_lines.len() != self.code.len()
             || self.gc_live.len() != self.code.len()
@@ -284,7 +346,7 @@ impl Prototype {
                 let Some(i) = self.code.get(c.pc as usize) else {
                     return true;
                 };
-                !matches!(i.op, Op::Call | Op::TailCall)
+                !matches!(i.op, Op::Call | Op::TailCall | Op::CallIter)
                     || c.temporaries.start > c.temporaries.end
                     || c.temporaries.end as usize > self.debug.temporaries.len()
                     || self.debug.temporaries
@@ -350,10 +412,25 @@ impl Prototype {
                 }
                 Op::Closure => {
                     reg(u32::from(i.a))?;
+                    let (target, captures) = match i.b {
+                        0 => (i.c, None),
+                        1 => {
+                            let binding = self
+                                .bindings
+                                .get(i.c as usize)
+                                .ok_or_else(|| fail(pc, "closure binding out of bounds"))?;
+                            (binding.prototype, Some(binding.upvalues.as_ref()))
+                        }
+                        _ => return Err(fail(pc, "invalid closure binding mode")),
+                    };
                     let child = prototypes
-                        .get(i.c as usize)
+                        .get(target as usize)
                         .ok_or_else(|| fail(pc, "prototype out of bounds"))?;
-                    for capture in &child.upvalues {
+                    let captures = captures.unwrap_or(&child.upvalues);
+                    if captures.len() != child.upvalues.len() {
+                        return Err(fail(pc, "invalid capture count"));
+                    }
+                    for capture in captures {
                         match capture {
                             Upvalue::Local(r) => reg(u32::from(*r))?,
                             Upvalue::Outer(u) if usize::from(*u) < self.upvalues.len() => {}
@@ -415,14 +492,22 @@ impl Prototype {
                 Op::ForPrep | Op::ForLoop => {
                     range(u32::from(i.a), 4)?;
                 }
+                Op::ConcatRange => {
+                    reg(u32::from(i.a))?;
+                    reg(u32::from(i.b))?;
+                    reg(i.c)?;
+                    if u32::from(i.b) >= i.c {
+                        return Err(fail(pc, "invalid concatenation range"));
+                    }
+                }
                 Op::JumpFalse | Op::JumpTrue => reg(u32::from(i.a))?,
                 Op::Jump => {}
-                Op::Call | Op::TailCall => {
+                Op::Call | Op::TailCall | Op::CallIter => {
                     reg(u32::from(i.a))?;
                     if i.b != OPEN_ARGS {
                         range(u32::from(i.a) + 1, u32::from(i.b))?;
                     }
-                    if i.op == Op::Call && i.c != OPEN {
+                    if i.op != Op::TailCall && i.c != OPEN {
                         range(u32::from(i.a), i.c)?;
                     }
                 }
@@ -561,11 +646,16 @@ mod tests {
                 8 => proto.debug.calls[0].temporaries = 0..u32::MAX,
                 _ => {
                     proto.debug.temporaries =
-                        Box::new([proto.code[proto.debug.calls[0].pc as usize].a - 1]);
+                        Box::new([proto.code[proto.debug.calls[0].pc as usize].a]);
                     proto.debug.calls[0].temporaries = 0..1;
                 }
             }
-            assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+            assert_eq!(
+                p.verify()
+                    .expect_err(&format!("corrupt debug case {corrupt}"))
+                    .kind(),
+                ErrorKind::Bytecode
+            );
         }
     }
 }

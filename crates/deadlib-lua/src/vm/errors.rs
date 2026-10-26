@@ -25,7 +25,7 @@ fn definition(proto: &Prototype, end: usize, register: u8) -> Option<(usize, Ins
             | Op::Close
             | Op::Jump
             | Op::Return => false,
-            Op::Call | Op::TailCall | Op::Vararg => register >= a,
+            Op::Call | Op::CallIter | Op::TailCall | Op::Vararg => register >= a,
             Op::Move if instruction.c == OPEN => register >= a,
             Op::ForPrep | Op::ForLoop => (a..=a + 3).contains(&register),
             Op::JumpFalse | Op::JumpTrue if test_only => false,
@@ -165,9 +165,16 @@ impl Vm {
         let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
         let instruction = proto.code[frame.pc().checked_sub(1)?];
         let register = match instruction.op {
-            Op::Call | Op::TailCall | Op::SetTable => usize::from(instruction.a),
+            Op::Call | Op::CallIter | Op::TailCall | Op::SetTable => usize::from(instruction.a),
             Op::GetTable | Op::Neg | Op::Len => usize::from(instruction.b),
-            Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow | Op::Concat => {
+            Op::Add
+            | Op::Sub
+            | Op::Mul
+            | Op::Div
+            | Op::Mod
+            | Op::Pow
+            | Op::Concat
+            | Op::ConcatRange => {
                 if right {
                     instruction.c as usize
                 } else {
@@ -181,7 +188,7 @@ impl Vm {
 
     #[cold]
     pub(super) fn type_error(
-        &self,
+        &mut self,
         value: Value,
         operation: &str,
         register: Option<usize>,
@@ -199,7 +206,7 @@ impl Vm {
             }
             let pc = frame.pc().checked_sub(1)?;
             let instruction = proto.code[pc];
-            if matches!(instruction.op, Op::Call | Op::TailCall)
+            if matches!(instruction.op, Op::Call | Op::CallIter | Op::TailCall)
                 && register == usize::from(instruction.a)
                 && let Ok(index) = proto
                     .debug
@@ -224,6 +231,25 @@ impl Vm {
         } else {
             message.extend_from_slice(format!("a {} value", value.type_name()).as_bytes());
         }
-        Error::from_bytes(ErrorKind::Runtime, 0, message)
+        let error = Error::from_bytes(ErrorKind::Runtime, 0, message);
+        self.operand_error(error)
+    }
+
+    #[cold]
+    pub(super) fn operand_error(&mut self, error: Error) -> Error {
+        // VM/API operand errors originate in the current visible call frame.
+        // luaL_error argument/domain diagnostics separately skip their C frame.
+        if self
+            .frames
+            .iter()
+            .rev()
+            .find(|f| f.is_call())
+            .is_some_and(|f| matches!(f.function, FrameKind::Native(_)))
+        {
+            let value = self.intern(error.message_bytes());
+            error.with_value(value)
+        } else {
+            error
+        }
     }
 }

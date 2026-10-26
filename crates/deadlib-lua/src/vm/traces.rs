@@ -41,9 +41,9 @@ impl Vm {
                 let proto = &program.prototypes[closure.prototype];
                 let pc = frame.pc().saturating_sub(1).min(proto.lines.len() - 1);
                 (
-                    crate::bytecode::chunk_id(&program.name),
+                    crate::bytecode::chunk_id(program.source(proto)),
                     Some(proto.debug.defined[0]),
-                    Some(proto.lines[pc]),
+                    Some(proto.debug_line(pc)),
                 )
             } else {
                 (b"[C]".to_vec(), None, None)
@@ -157,7 +157,7 @@ impl Vm {
                     for pos in first..=last {
                         let value = self.registers[pos];
                         let value = if let Value::Number(n) = value {
-                            self.intern(format_number(n).as_bytes())
+                            self.intern(format_number(n).as_slice())
                         } else {
                             value
                         };

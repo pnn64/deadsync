@@ -13,10 +13,13 @@
 //! * **Dance pads only.** Singles and doubles; a pump or a keyboard chart
 //!   would draw as nonsense on four or eight lanes.
 //! * **One row per note row in the sample window**, timed from the window's
-//!   start. Taps, hold and roll heads, lifts and mines; never a tail, never a
-//!   body. Fakes are dropped -- `F` notes and every row under `#FAKES` -- and
-//!   so are rows inside a warp: the game never judges them, and in a window
-//!   keyed by time they would all pile onto the warp's one instant.
+//!   start. Taps, hold and roll heads, lifts and mines. Fakes are dropped --
+//!   `F` notes and every row under `#FAKES` -- and so are rows inside a warp:
+//!   the game never judges them, and in a window keyed by time they would all
+//!   pile onto the warp's one instant.
+//! * **Every hold and roll that reaches into the window**, head to tail: one
+//!   whose head is in it, and one struck before it that is still held when it
+//!   opens, so a body hanging from the receptors at the start is drawn too.
 //! * **The chart's own clock and nothing else**: its `#OFFSET`, BPMs, stops,
 //!   delays and warps, but neither the player's global offset nor ITG's 9 ms.
 //!   The window is timed against the audio file, not against a machine.
@@ -45,6 +48,9 @@ const MAX_SIMFILE_BYTES: usize = 16 * 1024 * 1024;
 /// hundred rows; this is a bound on what a pathological one can cost to draw,
 /// and the relay's own.
 const MAX_ROWS_PER_CHART: usize = 900;
+/// Holds and rolls kept per chart, for the same reason: a window of a real
+/// chart has a few dozen.
+const MAX_HOLDS_PER_CHART: usize = MAX_ROWS_PER_CHART;
 /// A song that never declared a sample still gets one: a little way in, which
 /// is where a song has usually started doing something. The original's rule.
 const FALLBACK_SAMPLE_START: f32 = 20.0;
@@ -70,7 +76,25 @@ pub(crate) struct NoteRow {
     pub lifts: u8,
     /// Which of `cols` are mines.
     pub mines: u8,
+    /// Which of `cols` are hold and roll heads, whose bodies are in the
+    /// chart's `holds`.
+    pub holds: u8,
     /// 0=4th 1=8th 2=12th 3=16th 4=24th 5=32nd 6=48th 7=64th 8=finer
+    pub quant: u8,
+}
+
+/// One hold or roll that reaches into the sample window.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct HoldSpan {
+    /// seconds from the sample start that the head is struck: before the
+    /// window -- below zero -- for one already held when it opens
+    pub start: f32,
+    /// seconds from the sample start that the tail lets go, after `start`;
+    /// may be past the window's end
+    pub end: f32,
+    pub lane: u8,
+    pub roll: bool,
+    /// the head's, as `NoteRow::quant`
     pub quant: u8,
 }
 
@@ -86,6 +110,8 @@ pub(crate) struct ChartPreview {
     pub lanes: u8,
     /// Time-ordered, at most `MAX_ROWS_PER_CHART` of them.
     pub notes: Vec<NoteRow>,
+    /// Ordered by head, at most `MAX_HOLDS_PER_CHART` of them.
+    pub holds: Vec<HoldSpan>,
 }
 
 /// Everything the preview needs from one simfile.
@@ -165,12 +191,14 @@ pub(crate) fn preview_from_simfile(
             },
             0.0,
         );
+        let (notes, holds) = window_notes(&gameplay, lanes, sample_start, sample_length);
         let preview = ChartPreview {
             doubles,
             difficulty: chart.difficulty,
             meter: chart.meter,
             lanes,
-            notes: window_rows(&gameplay, lanes, sample_start, sample_length),
+            notes,
+            holds,
         };
         charts.push((preview, tempo_at(&gameplay.timing, sample_start)));
     }
@@ -252,13 +280,20 @@ fn find_tag(bytes: &[u8], tag: &[u8]) -> Option<usize> {
     })
 }
 
-/// The chart's rows that land in the sample window, timed from its start.
+/// The chart's rows that land in the sample window, timed from its start, and
+/// the holds and rolls that reach into it.
 ///
 /// Notes arrive from the parser grouped by row, rows in order, so one pass
 /// folds each row's notes into one `NoteRow` and times each row once. A row is
 /// timed by the chart's `TimingData` exactly as gameplay times it, through
-/// the same row-time cursor when the chart's BPM map allows one.
-fn window_rows(chart: &GameplayChartData, lanes: u8, start: f32, length: f32) -> Vec<NoteRow> {
+/// the same row-time cursor when the chart's BPM map allows one. A tail is
+/// timed off the cursor: it lies ahead of the rows the cursor is walking.
+fn window_notes(
+    chart: &GameplayChartData,
+    lanes: u8,
+    start: f32,
+    length: f32,
+) -> (Vec<NoteRow>, Vec<HoldSpan>) {
     let timing = &chart.timing;
     // The parser emits rows in order and this relies on it. Should that ever
     // change, sorting a copy keeps the fold right rather than splitting rows.
@@ -275,7 +310,8 @@ fn window_rows(chart: &GameplayChartData, lanes: u8, start: f32, length: f32) ->
         (notes.len() >= 16 && timing.supports_row_time_cache()).then(|| BeatTimeCache::new(timing));
     let start = f64::from(start);
     let length = f64::from(length);
-    let mut row_in_window = |row_index: usize| -> Option<NoteRow> {
+    // A row's time from the window's start, and its beat.
+    let mut row_time = |row_index: usize| -> Option<(f64, f32)> {
         let beat = timing.get_beat_for_row(row_index)?;
         // Fake segments, and warps: never judged, and timed to one instant.
         if !timing.is_judgable_at_beat(beat) {
@@ -285,22 +321,21 @@ fn window_rows(chart: &GameplayChartData, lanes: u8, start: f32, length: f32) ->
             Some(cursor) => timing.get_time_for_beat_ns_cached(beat, cursor),
             None => timing.get_time_for_beat_ns(beat),
         };
-        let time = time_ns as f64 * 1e-9 - start;
-        (-EDGE_SLACK_SECONDS..=length + EDGE_SLACK_SECONDS)
-            .contains(&time)
-            .then(|| NoteRow {
-                time: time.clamp(0.0, length) as f32,
-                cols: 0,
-                lifts: 0,
-                mines: 0,
-                quant: quantization_index_from_beat(beat),
-            })
+        Some((time_ns as f64 * 1e-9 - start, beat))
     };
+    let tail_time = |row_index: usize| -> Option<f64> {
+        let beat = timing.get_beat_for_row(row_index)?;
+        Some(timing.get_time_for_beat_ns(beat) as f64 * 1e-9 - start)
+    };
+    let in_window = |time: f64| (-EDGE_SLACK_SECONDS..=length + EDGE_SLACK_SECONDS).contains(&time);
 
     let lanes = usize::from(lanes);
     let mut rows = Vec::new();
+    let mut holds = Vec::new();
     let mut current_row = None;
-    // The row being filled, when it is one the window draws.
+    // The row being read, when the game judges it...
+    let mut timed: Option<(f64, f32)> = None;
+    // ...and the row being filled, when it is one the window draws.
     let mut open: Option<NoteRow> = None;
     for note in notes.iter() {
         if note.note_type == NoteType::Fake || note.column >= lanes {
@@ -312,10 +347,41 @@ fn window_rows(chart: &GameplayChartData, lanes: u8, start: f32, length: f32) ->
                 break;
             }
             current_row = Some(note.row_index);
-            open = row_in_window(note.row_index);
+            timed = row_time(note.row_index);
+            open = timed
+                .filter(|&(time, _)| in_window(time))
+                .map(|(time, beat)| NoteRow {
+                    time: time.clamp(0.0, length) as f32,
+                    cols: 0,
+                    lifts: 0,
+                    mines: 0,
+                    holds: 0,
+                    quant: quantization_index_from_beat(beat),
+                });
+        }
+        let bit = 1u8 << note.column;
+        // A hold reaches into the window from a head in it, or from one before
+        // it that is still held when the window opens. Its head's row marks
+        // it only once it is kept, so a hold past the cap draws as a tap.
+        if matches!(note.note_type, NoteType::Hold | NoteType::Roll)
+            && holds.len() < MAX_HOLDS_PER_CHART
+            && let Some((head, beat)) = timed
+            && let Some(tail) = note.tail_row_index.and_then(tail_time)
+            && tail > head
+            && (open.is_some() || (head < 0.0 && tail > 0.0))
+        {
+            holds.push(HoldSpan {
+                start: open.map_or(head as f32, |row| row.time),
+                end: tail as f32,
+                lane: note.column as u8,
+                roll: note.note_type == NoteType::Roll,
+                quant: quantization_index_from_beat(beat),
+            });
+            if let Some(row) = open.as_mut() {
+                row.holds |= bit;
+            }
         }
         if let Some(row) = open.as_mut() {
-            let bit = 1u8 << note.column;
             row.cols |= bit;
             match note.note_type {
                 NoteType::Mine => row.mines |= bit,
@@ -332,7 +398,10 @@ fn window_rows(chart: &GameplayChartData, lanes: u8, start: f32, length: f32) ->
     if !rows.is_sorted_by(|a, b| a.time <= b.time) {
         rows.sort_by(|a, b| a.time.total_cmp(&b.time));
     }
-    rows
+    if !holds.is_sorted_by(|a, b| a.start <= b.start) {
+        holds.sort_by(|a, b| a.start.total_cmp(&b.start));
+    }
+    (rows, holds)
 }
 
 /// The BPM in force `seconds` into the file, on this chart's clock.
@@ -367,7 +436,55 @@ mod tests {
             cols,
             lifts: 0,
             mines: 0,
+            holds: 0,
             quant,
+        }
+    }
+
+    /// A row of hold or roll heads.
+    fn head(time: f32, cols: u8, quant: u8) -> NoteRow {
+        NoteRow {
+            holds: cols,
+            ..row(time, cols, quant)
+        }
+    }
+
+    fn hold(start: f32, end: f32, lane: u8, quant: u8) -> HoldSpan {
+        HoldSpan {
+            start,
+            end,
+            lane,
+            roll: false,
+            quant,
+        }
+    }
+
+    fn roll(start: f32, end: f32, lane: u8, quant: u8) -> HoldSpan {
+        HoldSpan {
+            roll: true,
+            ..hold(start, end, lane, quant)
+        }
+    }
+
+    /// Times to a thousandth of a second; everything else exactly.
+    #[track_caller]
+    fn assert_holds(actual: &[HoldSpan], expected: &[HoldSpan]) {
+        assert_eq!(
+            actual.len(),
+            expected.len(),
+            "\nactual:   {actual:?}\nexpected: {expected:?}"
+        );
+        for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+            assert!(
+                (actual.start - expected.start).abs() < 1e-3
+                    && (actual.end - expected.end).abs() < 1e-3,
+                "hold {index}: times {actual:?} vs {expected:?}"
+            );
+            assert_eq!(
+                (actual.lane, actual.roll, actual.quant),
+                (expected.lane, expected.roll, expected.quant),
+                "hold {index}: {actual:?} vs {expected:?}"
+            );
         }
     }
 
@@ -399,11 +516,18 @@ mod tests {
                 "row {index}: time {actual:?} vs {expected:?}"
             );
             assert_eq!(
-                (actual.cols, actual.lifts, actual.mines, actual.quant),
+                (
+                    actual.cols,
+                    actual.lifts,
+                    actual.mines,
+                    actual.holds,
+                    actual.quant
+                ),
                 (
                     expected.cols,
                     expected.lifts,
                     expected.mines,
+                    expected.holds,
                     expected.quant
                 ),
                 "row {index}: {actual:?} vs {expected:?}"
@@ -549,10 +673,10 @@ mod tests {
                 row(0.0, 0b1001, 0),
                 // the 8ths of measure two, a half-second stop later
                 mine(0.75, 0b0010, 1),
-                // a hold head is a tap; its tail at beat 6 is not sent
-                row(1.0, 0b0001, 0),
+                // a hold head; its tail at beat 6 is no row of its own
+                head(1.0, 0b0001, 0),
                 // a roll head
-                row(1.5, 0b0100, 0),
+                head(1.5, 0b0100, 0),
                 lift(1.75, 0b1000, 1),
                 // beat 7 holds only the roll's tail: no row
                 // the 12ths, at 240 BPM
@@ -565,6 +689,11 @@ mod tests {
                 row(4.0, 0b1000, 0),
             ],
         );
+        // and their bodies: the hold lets go at beat 6, the roll at beat 7
+        assert_holds(
+            &preview.charts[0].holds,
+            &[hold(1.0, 1.5, 0, 0), roll(1.5, 2.0, 2, 0)],
+        );
         assert_rows(
             &preview.charts[1].notes,
             &[
@@ -573,6 +702,25 @@ mod tests {
                 mine(1.5, 0b1000_0000, 0),
             ],
         );
+        assert!(preview.charts[1].holds.is_empty());
+    }
+
+    /// 120 BPM from the top, a window from 1 s to 3 s: beats 2 to 6.
+    #[test]
+    fn a_hold_reaching_into_the_window_is_kept_head_to_tail() {
+        let simfile = "#BPMS:0=120;#SAMPLESTART:1;#SAMPLELENGTH:2;\n\
+                       #NOTES:dance-single::Hard:9:0,0,0,0,0:\n\
+                       2200\n0300\n0000\n0000\n,\n\
+                       3000\n0000\n0040\n0000\n,\n\
+                       0000\n0000\n0030\n0000\n;";
+        let preview = preview_from_simfile(simfile.as_bytes(), "sm").expect("parse");
+        let chart = &preview.charts[0];
+        // lane 0 was struck at 0 s, before the window, and is still held when
+        // it opens: no head row, but its body is there until beat 4. Lane 1
+        // let go at beat 1, before the window, and is not. The roll struck on
+        // the window's last instant runs on past it, to beat 10.
+        assert_rows(&chart.notes, &[head(2.0, 0b0100, 0)]);
+        assert_holds(&chart.holds, &[hold(-1.0, 1.0, 0, 0), roll(2.0, 4.0, 2, 0)]);
     }
 
     /// The single has a clock of its own: beat 0 a second in, a warp over

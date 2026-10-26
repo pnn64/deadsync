@@ -45,10 +45,7 @@ impl<'a> Compiler<'a> {
                         return Ok(());
                     }
                 }
-                let base = self.alloc(
-                    u16::try_from(values.len().max(1))
-                        .map_err(|_| self.error(ErrorKind::Limit, "too many return values"))?,
-                )?;
+                let base = self.alloc(1)?;
                 self.tasks
                     .push(Task::ReturnNext(id, base, 0, values.len() as u32));
             }
@@ -124,9 +121,13 @@ impl<'a> Compiler<'a> {
                     }
                 }
                 Expr::Index(table, _) => {
-                    let regs = self.alloc(2)?;
-                    self.tasks.push(Task::AssignKey(id, index, locations, regs));
-                    self.tasks.push(Task::Operand(*table, regs));
+                    if let Some(table) = self.local_operand(*table) {
+                        self.assign_key(id, index, locations, table)?;
+                    } else {
+                        let reg = self.alloc(1)?;
+                        self.tasks.push(Task::AssignKey(id, index, locations));
+                        self.tasks.push(Task::Operand(*table, reg));
+                    }
                     return Ok(());
                 }
                 _ => return Err(self.error(ErrorKind::Syntax, "invalid assignment target")),
@@ -134,7 +135,7 @@ impl<'a> Compiler<'a> {
             if let Target::Local(reg) = target
                 && locations
                     .iter()
-                    .any(|t| matches!(t, Target::Index(table, key) if *table == reg || *key == reg))
+                    .any(|t| matches!(t, Target::Index(table, key) if *table == reg || matches!(key, TargetKey::Register(key) if *key == reg)))
             {
                 let saved = self.alloc(1)?;
                 self.emit(Op::Move, saved, u16::from(reg), 0)?;
@@ -143,8 +144,8 @@ impl<'a> Compiler<'a> {
                         if *table == reg {
                             *table = saved;
                         }
-                        if *key == reg {
-                            *key = saved;
+                        if matches!(key, TargetKey::Register(key) if *key == reg) {
+                            *key = TargetKey::Register(saved);
                         }
                     }
                 }
@@ -167,6 +168,33 @@ impl<'a> Compiler<'a> {
         }
         self.tasks.push(Task::AssignEnd(id, locations));
         self.tasks.push(Task::Values(values, targets.len()));
+        Ok(())
+    }
+
+    pub(super) fn assign_key(
+        &mut self,
+        id: StmtId,
+        index: usize,
+        mut locations: Vec<Target>,
+        table: u8,
+    ) -> Result<(), Error> {
+        let (targets, _) = self.assignment(id);
+        let Expr::Index(_, key) = self.ast.exprs[targets[index]].0 else {
+            unreachable!("indexed assignment key")
+        };
+        let key = if let Some(constant) = self.constant_operand(key)? {
+            TargetKey::Constant(constant)
+        } else if let Some(reg) = self.local_operand(key) {
+            TargetKey::Register(reg)
+        } else {
+            let reg = self.alloc(1)?;
+            self.tasks
+                .push(Task::AssignIndex(id, index, locations, table));
+            self.tasks.push(Task::Operand(key, reg));
+            return Ok(());
+        };
+        locations.push(Target::Index(table, key));
+        self.tasks.push(Task::AssignNext(id, index + 1, locations));
         Ok(())
     }
 
@@ -201,7 +229,7 @@ impl<'a> Compiler<'a> {
             kind: NameKind::Local,
             temporaries: 0..0,
         });
-        self.emit(Op::Call, results, 2, names.len() as u32)?;
+        self.emit(Op::CallIter, results, 2, names.len() as u32)?;
         self.load(test, Constant::Nil)?;
         self.emit(Op::Eq, test, u16::from(results), u32::from(test))?;
         self.function.debug_hidden[usize::from(test) / 64] |= 1u64 << (test % 64);

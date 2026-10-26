@@ -246,14 +246,23 @@ fn parse_format_chunk(
     if chunk_size < 16 {
         return Err(format!("WAV fmt chunk is too small ({chunk_size} bytes)").into());
     }
-    let mut fmt = vec![0u8; chunk_size as usize];
-    reader.read_exact(&mut fmt)?;
+    // PCM/float headers fit in 16 bytes, extensible headers in 40. Keep the
+    // original complete read for larger chunks and for truncation errors.
+    let mut fixed = [0u8; 40];
+    let mut extended;
+    let fmt: &mut [u8] = if chunk_size as usize <= fixed.len() {
+        &mut fixed[..chunk_size as usize]
+    } else {
+        extended = vec![0u8; chunk_size as usize];
+        &mut extended
+    };
+    reader.read_exact(fmt)?;
 
-    let format_tag = le_u16(&fmt, 0)?;
-    let channels = le_u16(&fmt, 2)? as usize;
-    let sample_rate_hz = le_u32(&fmt, 4)?;
-    let block_align = le_u16(&fmt, 12)? as usize;
-    let bits_per_sample = le_u16(&fmt, 14)?;
+    let format_tag = le_u16(fmt, 0)?;
+    let channels = le_u16(fmt, 2)? as usize;
+    let sample_rate_hz = le_u32(fmt, 4)?;
+    let block_align = le_u16(fmt, 12)? as usize;
+    let bits_per_sample = le_u16(fmt, 14)?;
     let bytes_per_sample = block_align
         .checked_div(channels.max(1))
         .ok_or("WAV block alignment is invalid")?;
@@ -265,7 +274,7 @@ fn parse_format_chunk(
         WAVE_FORMAT_PCM => parse_pcm_format(bytes_per_sample)?,
         WAVE_FORMAT_IEEE_FLOAT => parse_float_format(bytes_per_sample)?,
         WAVE_FORMAT_EXTENSIBLE => {
-            parse_extensible_encoding(&fmt, bytes_per_sample, bits_per_sample)?
+            parse_extensible_encoding(fmt, bytes_per_sample, bits_per_sample)?
         }
         _ => return Err(format!("unsupported WAV format tag 0x{format_tag:04x}").into()),
     };
@@ -356,7 +365,7 @@ fn decode_packet_into(
                 .as_chunks::<4>()
                 .0
                 .iter()
-                .map(|sample| float_to_i16(f64::from(f32::from_le_bytes(*sample)))),
+                .map(|sample| float32_to_i16(f32::from_le_bytes(*sample))),
         ),
         Encoding::Float64 => out.extend(
             bytes
@@ -382,12 +391,24 @@ const fn pcm24_to_i16(sample: &[u8; 3]) -> i16 {
 
 #[inline(always)]
 fn float_to_i16(value: f64) -> i16 {
+    let scaled = value * 32767.0;
+    if !value.is_finite() || scaled.abs() < 0.5 {
+        return 0;
+    }
+    // Below one half, adding a half could round up to one. Above that guard,
+    // the bias cannot round across an integer boundary in the i16 range.
+    (scaled + 0.5f64.copysign(value)) as i16
+}
+
+#[inline(always)]
+fn float32_to_i16(value: f32) -> i16 {
     if !value.is_finite() {
         return 0;
     }
-    // The cast saturates overflow after scaling, including finite input whose
-    // product overflows to infinity. Nonfinite source samples stay silent.
-    (value * 32767.0).round() as i16
+    let value = f64::from(value);
+    // The 24-bit input times a 15-bit integer is exact in f64. Near the
+    // i16 range, adding a signed half cannot cross a rounding boundary.
+    (value * 32767.0 + 0.5f64.copysign(value)) as i16
 }
 
 fn le_u16(data: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error + Send + Sync>> {

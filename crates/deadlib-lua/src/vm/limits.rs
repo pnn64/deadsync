@@ -2,6 +2,7 @@
 use super::*;
 
 const MAX_CALLS: u16 = 20_000;
+pub(super) const MAX_CSTACK: usize = 8_000;
 
 fn depth(frames: &[Frame]) -> usize {
     frames.iter().filter(|frame| frame.is_call()).count()
@@ -44,6 +45,17 @@ impl Vm {
     #[cold]
     pub(super) fn check_c_call(&mut self) -> Result<(), Error> {
         let depth = self.native_depth(self.frames.len());
+        self.check_c_depth(depth)
+    }
+
+    pub(super) fn check_iterator_call(&mut self) -> Result<(), Error> {
+        // Unlike a scheduled native continuation, an iterator boundary has
+        // not been installed when its call is checked.
+        let depth = self.native_depth(self.frames.len()) + 1;
+        self.check_c_depth(depth)
+    }
+
+    fn check_c_depth(&mut self, depth: usize) -> Result<(), Error> {
         if depth >= 224 {
             let value = self.intern(b"error in error handling");
             return Err(Error::handling(value));

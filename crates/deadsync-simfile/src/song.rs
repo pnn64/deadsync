@@ -238,16 +238,22 @@ fn note_analysis_bytes<'a>(
     data: &'a [u8],
     entries: &[rssp::parse::ParsedChartEntry<'a>],
 ) -> Cow<'a, [u8]> {
-    let mut indices = Vec::new();
+    // extract_sections yields disjoint note blocks in source order. Copy the
+    // retained bytes as annotations are found, without collecting/sorting gaps.
+    let mut notes = Vec::new();
+    let mut copied = 0;
     for entry in entries {
         let Some(lanes) = rssp::supported_stepstype_lanes_bytes(entry.fields[0]) else { continue };
-        if !entry.note_data.contains(&b'[') { continue; }
-        // ParsedChartEntry borrows each note block directly from these bytes.
-        let offset = entry.note_data.as_ptr() as usize - data.as_ptr() as usize;
-        let mut line_start = 0;
-        for line in entry.note_data.split_inclusive(|byte| matches!(byte, b'\n' | b',')) {
-            let mut end = line.iter().position(|byte| matches!(byte, b'\n' | b','))
-                .unwrap_or(line.len());
+        let mut search = 0;
+        while let Some(bracket) = memchr::memchr(b'[', &entry.note_data[search..]) {
+            let bracket = search + bracket;
+            let line_start = memchr::memrchr2(b'\n', b',', &entry.note_data[..bracket])
+                .map_or(0, |index| index + 1);
+            let line_end = memchr::memchr2(b'\n', b',', &entry.note_data[bracket..])
+                .map_or(entry.note_data.len(), |index| bracket + index);
+            let line = &entry.note_data[line_start..line_end];
+            search = (line_end + 1).min(entry.note_data.len());
+            let mut end = line.len();
             if let Some(comment) = line[..end].windows(2).position(|bytes| bytes == b"//") {
                 end = comment;
             }
@@ -265,21 +271,17 @@ fn note_analysis_bytes<'a>(
                     cursor += 1;
                     while cursor < end && line[cursor] != b']' { cursor += 1; }
                     if cursor < end { cursor += 1; }
-                    indices.push(offset + line_start + start..offset + line_start + cursor);
+                    // Nonempty note blocks borrow directly from the source.
+                    let offset = entry.note_data.as_ptr() as usize - data.as_ptr() as usize;
+                    if notes.capacity() == 0 { notes.reserve_exact(data.len()); }
+                    notes.extend_from_slice(&data[copied..offset + line_start + start]);
+                    copied = offset + line_start + cursor;
                 }
             }
-            line_start += line.len();
         }
     }
-    if indices.is_empty() { return Cow::Borrowed(data); }
-    indices.sort_unstable_by_key(|range| range.start);
-    let mut notes = Vec::with_capacity(data.len());
-    let mut cursor = 0;
-    for index in indices {
-        notes.extend_from_slice(&data[cursor..index.start]);
-        cursor = index.end;
-    }
-    notes.extend_from_slice(&data[cursor..]);
+    if copied == 0 { return Cow::Borrowed(data); }
+    notes.extend_from_slice(&data[copied..]);
     Cow::Owned(notes)
 }
 
@@ -455,9 +457,9 @@ fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, exten
     let own_timing_allowed = steps_timing_allowed(version, format);
     let mut bounds: Option<[f32; 2]> = None;
     for entry in &parsed.notes_list {
+        if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() { continue; }
         let Ok(kind) = std::str::from_utf8(entry.fields[0]) else { continue; };
         let kind = kind.trim().to_ascii_lowercase();
-        if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() { continue; }
         // GameManager.cpp's native StepsTypeInfo table. Lights never contribute.
         let Some(lanes) = native_unplayed_step_lanes(&kind) else { continue; };
         if parsed.notes_list.len() > 1 && entry.fields[2].eq_ignore_ascii_case(b"Edit") { continue; }
@@ -468,11 +470,12 @@ fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, exten
             entry.chart_scrolls.as_deref(), entry.chart_fakes.as_deref(), entry.chart_offset.as_deref(),
             entry.chart_time_signatures.as_deref(), entry.chart_labels.as_deref(),
             entry.chart_tickcounts.as_deref(), entry.chart_combos.as_deref()].iter().any(Option::is_some);
-        let text = |value: Option<&[u8]>| value.map(|value| String::from_utf8_lossy(value).into_owned());
         let tags = [(entry.chart_bpms.as_deref(), parsed.bpms), (entry.chart_stops.as_deref(), parsed.stops),
             (entry.chart_delays.as_deref(), parsed.delays), (entry.chart_warps.as_deref(), parsed.warps)];
-        let tags = tags.map(|(chart, global)| (text(if own_timing_allowed { chart } else { None }),
-            text(if own { None } else { global }).unwrap_or_default()));
+        let tags = tags.map(|(chart, global)| (
+            (if own_timing_allowed { chart } else { None }).map(String::from_utf8_lossy),
+            String::from_utf8_lossy(if own { b"" } else { global.unwrap_or_default() }),
+        ));
         let segments = compute_timing_segments(tags[0].0.as_deref(), &tags[0].1,
             tags[1].0.as_deref(), &tags[1].1, tags[2].0.as_deref(), &tags[2].1,
             tags[3].0.as_deref(), &tags[3].1, None, "", None, "", None, "", format, false);
@@ -1643,5 +1646,9 @@ mod tests {
 
     mod library_perf {
         include!("song_library_perf.rs");
+    }
+
+    mod projection_perf {
+        include!("song_projection_perf.rs");
     }
 }

@@ -28,14 +28,17 @@ impl Resource {
     }
 }
 
-pub(super) fn errno(error: std::io::Error) -> i32 {
+pub(in crate::vm) fn errno(error: std::io::Error) -> i32 {
     #[cfg(windows)]
     {
         match error.raw_os_error() {
-            Some(2 | 3) => 2,
+            Some(2 | 3 | 15 | 53 | 67 | 161 | 206) => 2,
             Some(5 | 19 | 32 | 33) => 13,
             Some(6) => 9,
             Some(80 | 183) => 17,
+            Some(17) => 18,
+            Some(145) => 41,
+            Some(188..=202) => 8,
             Some(109 | 232) => 32,
             Some(112) => 28,
             Some(4) => 24,
@@ -275,6 +278,9 @@ impl Stream {
             return Err(9);
         }
         self.reconcile()?;
+        if matches!(self.resource, Some(Resource::Output)) {
+            return super::stdout_write(bytes).map_err(errno);
+        }
         if cfg!(windows) && self.text {
             for &byte in bytes {
                 if byte == b'\n' {
@@ -307,6 +313,9 @@ impl Stream {
         Ok(())
     }
     pub fn flush(&mut self) -> Result<(), i32> {
+        if matches!(self.resource, Some(Resource::Output)) {
+            return super::stdout_flush().map_err(errno);
+        }
         if !self.write.is_empty() {
             match self.resource.as_mut() {
                 Some(Resource::File(f)) => f.write_all(&self.write),
@@ -326,6 +335,15 @@ impl Stream {
             _ => Ok(()),
         }
         .map_err(errno)
+    }
+    pub fn set_buffering(&mut self, mode: u8, size: usize) -> Result<(), i32> {
+        self.flush()?;
+        if matches!(self.resource, Some(Resource::Output)) {
+            super::output::configure(mode, size).map_err(errno)?;
+        }
+        self.buffering = mode;
+        self.size = size;
+        Ok(())
     }
     pub fn seek(&mut self, mode: usize, offset: i64) -> Result<u64, i32> {
         self.flush()?;
@@ -361,7 +379,8 @@ impl Stream {
 }
 impl Drop for Stream {
     fn drop(&mut self) {
-        if self.resource.is_some() {
+        // Standard stdout remains a process resource when its Lua userdata dies.
+        if self.resource.is_some() && !matches!(self.resource, Some(Resource::Output)) {
             let _ = self.close();
         }
     }

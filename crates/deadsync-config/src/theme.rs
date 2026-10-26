@@ -219,10 +219,15 @@ impl FromStr for DefaultFailType {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "immediate" => Ok(Self::Immediate),
-            "immediatecontinue" | "immediate_continue" => Ok(Self::ImmediateContinue),
-            _ => Err(()),
+        let s = s.trim();
+        if s.eq_ignore_ascii_case("immediate") {
+            Ok(Self::Immediate)
+        } else if s.eq_ignore_ascii_case("immediatecontinue")
+            || s.eq_ignore_ascii_case("immediate_continue")
+        {
+            Ok(Self::ImmediateContinue)
+        } else {
+            Err(())
         }
     }
 }
@@ -960,27 +965,42 @@ pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
     if mask == 0 {
         return "Off".to_string();
     }
-    let mut capacity = 0usize;
-    let mut selected = 0usize;
-    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
-        if (mask & auto_screenshot_bit(idx)) != 0 {
-            capacity += name.len();
-            selected += 1;
-        }
-    }
-    capacity += selected.saturating_sub(1);
-
-    let mut out = String::with_capacity(capacity);
-    for (idx, name) in AUTO_SS_FLAG_NAMES.iter().enumerate() {
-        if (mask & auto_screenshot_bit(idx)) == 0 {
-            continue;
-        }
-        if !out.is_empty() {
-            out.push('|');
-        }
-        out.push_str(name);
-    }
-    out
+    // All combinations of the five flags, in bit order.
+    const TEXT: [&str; 32] = [
+        "",
+        "PBs",
+        "Fails",
+        "PBs|Fails",
+        "Clears",
+        "PBs|Clears",
+        "Fails|Clears",
+        "PBs|Fails|Clears",
+        "Quads",
+        "PBs|Quads",
+        "Fails|Quads",
+        "PBs|Fails|Quads",
+        "Clears|Quads",
+        "PBs|Clears|Quads",
+        "Fails|Clears|Quads",
+        "PBs|Fails|Clears|Quads",
+        "Quints",
+        "PBs|Quints",
+        "Fails|Quints",
+        "PBs|Fails|Quints",
+        "Clears|Quints",
+        "PBs|Clears|Quints",
+        "Fails|Clears|Quints",
+        "PBs|Fails|Clears|Quints",
+        "Quads|Quints",
+        "PBs|Quads|Quints",
+        "Fails|Quads|Quints",
+        "PBs|Fails|Quads|Quints",
+        "Clears|Quads|Quints",
+        "PBs|Clears|Quads|Quints",
+        "Fails|Clears|Quads|Quints",
+        "PBs|Fails|Clears|Quads|Quints",
+    ];
+    TEXT[usize::from(mask & 0x1f)].to_owned()
 }
 
 #[must_use]
@@ -2174,13 +2194,19 @@ impl FromStr for LogLevel {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "error" | "err" => Ok(Self::Error),
-            "warn" | "warning" => Ok(Self::Warn),
-            "info" => Ok(Self::Info),
-            "debug" => Ok(Self::Debug),
-            "trace" => Ok(Self::Trace),
-            _ => Err(()),
+        let s = s.trim();
+        if s.eq_ignore_ascii_case("error") || s.eq_ignore_ascii_case("err") {
+            Ok(Self::Error)
+        } else if s.eq_ignore_ascii_case("warn") || s.eq_ignore_ascii_case("warning") {
+            Ok(Self::Warn)
+        } else if s.eq_ignore_ascii_case("info") {
+            Ok(Self::Info)
+        } else if s.eq_ignore_ascii_case("debug") {
+            Ok(Self::Debug)
+        } else if s.eq_ignore_ascii_case("trace") {
+            Ok(Self::Trace)
+        } else {
+            Err(())
         }
     }
 }

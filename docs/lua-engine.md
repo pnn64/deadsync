@@ -18,29 +18,29 @@ performance JSON keeps its recorded measurement provenance.
 | Requirement | Evidence and remaining work |
 | --- | --- |
 | Preserve legacy and ongoing changes | Move and references updated. Full legacy feature tests pass; song Lua: 843 passed, 41 ignored; noteskin: 298 passed, 10 ignored; theme check and 3 integer-width regressions pass. Original runtime/test/example source contents were compared across the move. |
-| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Complete reference-suite coverage remains open. |
+| Independent compiler/interpreter | Resumable scanner/parser, flat AST arenas and grammar continuations, continuation-based register compiler, verifier, literal folding, VM and CLI exist. Compiler nesting uses flat task/function vectors and iterative ancestor captures. Fixed-source, reader-based and file-backed text loading share the frontend without replaying prefixes. File loads preserve stdin lookahead, source names, initial executable headers and thread environments. Native Lua 5.1 chunks are decoded, checked and translated into the shared VM with per-site captures and native debug/hook metadata. Lua 5.1 function dumps lower to native chunks, while imported functions retain native words for re-export. Broader export/resource limits and complete reference-suite coverage remain open. |
 | Exact language semantics | Differential cases cover scalar bits, strings, assignments, loops, closures, varargs, methods, tail calls, multiple results, metatables, protected calls, arbitrary error identity, named locations, environments and coroutine transitions. Local operand references preserve Lua 5.1 reads after right-hand callbacks; indexed assignment captures only conflicting local addresses. Verified metadata supports function/stack/local/upvalue inspection and mutation. Source diagnostics retain raw bytes, token context, opening lines and tested local/assignment bounds. Full runtime/compiler diagnostics, debug behavior and broader numeric/resource edge cases remain open. |
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
-| Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Cycles complete atomically; `step` budgets whole cycles. Incremental pauses and broader resource tests remain open. |
+| Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking advances a persistent frontier; mutator barriers and final stack/open-cell/metatable refreshes preserve new references. Table propagation advances in 64-slot physical slices, restarting after compaction, hash-to-array moves and metatable changes. Sweeping advances in bounded arena-slot batches. Other object scans, final root/metatable/weak processing, cache rebuilding and callback batches still contain atomic work; fully bounded pauses and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
-| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. Remaining base/OS functions, native C-library loading, debug, binary dumps, broader I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
+| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Windows/MSVC native locales connect numeric conversion/formatting, ctype, patterns, collation and calendar formatting. Native locales on other targets, remaining base functions, native C-library loading, broader debug and I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Unimplemented. Requires bounded decoding, bytecode verification, format/dialect/platform identity and collision-safe source checks. |
-| Native host calls | Builtins use numeric IDs and register argument ranges. Public callback registration, host objects, error/yield handling and overhead measurements remain open. |
+| Native host calls | Builtins use numeric IDs and register argument ranges. Host calls into live Lua/builtin/callable values, chunk arguments, raw table construction and direct file loading share the VM driver and handle validation. Initial typed-entry overhead measurements exist. Public Rust callback registration, host objects and broader error/yield/overhead work remain open. |
 | Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
 | Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records fifteen reference passes among sixteen probes and eleven Rust passes (`constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`, `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`). `files.lua` is retained with a reference failure at Windows open-file rename line 59; Rust reaches missing `os.tmpname` line 19. Calls reach binary dumps, literals/strings reach locales and sort reaches `os.clock`. Lexical capture checks preserve upvalue-limit timing, owning functions and reader consumption, including unfinished source. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records seventeen reference and Rust passes among eighteen probes, including `attrib.lua` and `verybig.lua`. `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. A separate standalone CLI audit records remaining mismatches against a checksum-pinned official executable. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
 Next work should finish the standalone engine: register allocation/resource limits, incremental collection,
-remaining standard libraries, complete diagnostics/debug behavior, binary loading and
+remaining standard libraries, complete diagnostics/debug behavior, native export/resource edges and
 caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 260 differential/adversarial integration tests, thirteen parser/scanner/arena/verifier tests and
+crate, 421 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-25-rust-lua-flat-codegen.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-table-slices.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -242,6 +242,91 @@ and long-expression frontend cases, bringing the harness to 35 execution and
 twelve frontend workloads. Exact register allocation/resource limits and broader
 diagnostics remain required compiler work.
 
+The [register-reuse validation](testing/2026-10-25-rust-lua-register-reuse.md)
+adds seven groups with 92 paired execution/error observations. Arithmetic and
+index expressions reuse anonymous result slots and allocate right-hand scratch
+storage after the left finishes. Named destinations remain unchanged during
+callbacks and metamethods, including unary assignment. Ten-thousand-term
+arithmetic and index chains now compile with bounded entry register counts;
+190-term right-associated concatenation also fits. Tests preserve number bits,
+late local reads, captured intermediates, GC roots and complete diagnostics.
+The [measurements](performance/2026-10-25-rust-lua-register-reuse.md) add an operand
+workload and two long-chain frontend cases, bringing the harness to 36 execution
+and fourteen frontend workloads. The reports also retain instruction counts and
+entry register counts. Exact compiler resource limits and other expression
+layouts still require work. This milestone exposed excess temporary use in deep
+constructors and chained calls, addressed by the following change.
+
+The [call/constructor validation](testing/2026-10-25-rust-lua-call-table-slots.md)
+adds seven groups with 182 paired observations. Top anonymous result slots are
+reused; arguments reserve storage after the callee, one at a time. Methods retain
+their receiver before lookup/arguments. Compact literal record keys retain pool
+insertion order but materialize after field values. List/record/key constructors
+reach 190 levels, and ordinary/method chains reach 10,000 calls. Tests cover
+open results, snapshots, GC roots, errors, large constant pools and fifty-item
+list flushing. The earlier 190-constructor and 300-call failure probes now load.
+The [measurements](performance/2026-10-25-rust-lua-call-table-slots.md) expand to
+37 execution and seventeen frontend workloads. Exact reference register budgets,
+remaining resource diagnostics and broader scratch/debug parity remain open. A
+249-argument `print` loader probe was still accepted here and rejected by C;
+both accepted 248. The following milestone closes that logical-budget gap.
+
+The [register-budget validation](testing/2026-10-25-rust-lua-register-budget.md)
+adds eight groups with 3,624 protected loader observations and five executed
+programs. Flat 16-byte descriptors track Lua 5.1 logical register use while
+parsing, independently of physical bytecode storage. Constant identities, list
+flushes, open arguments, conditionals and assignment conflicts preserve the
+reference's error token and reader consumption. A request reaching 250 logical
+slots fails during parsing. Physical result slots grow as expressions finish,
+allowing 199-result assignments with 247 call arguments and deep first results.
+The [measurements](performance/2026-10-25-rust-lua-register-budget.md) cover
+37 runtime and eighteen frontend workloads, with parent comparison and explicit
+accounting costs. Full physical allocation parity remains open: 150 literal-key
+indexed assignment targets still exhaust Rust storage in a reference-valid
+program. Broader resource/debug/scratch behavior remains unfinished.
+
+The [indexed-target validation](testing/2026-10-25-rust-lua-index-targets.md)
+adds three groups with 155 paired programs. Local table/key references reserve
+no unused slots; compact literal keys retain pool insertion order and materialize
+in one scratch slot immediately before each reverse-ordered store. Tests cover
+up to 200 targets, snapshots/conflicts, pending objects during GC, coroutine
+returns, mixed generated targets, large pools and multiline error locations.
+The original 150-target probe now executes. A prefixed variant whose backend
+constant pool no longer has compact keys still exhausts physical storage, so
+complete allocation parity remains open. The
+[measurements](performance/2026-10-25-rust-lua-index-targets.md) cover
+38 runtime and nineteen frontend workloads.
+
+The [reference-constant validation](testing/2026-10-25-rust-lua-reference-constants.md)
+adds four groups with 159 executed programs and 360 loader observations. Sparse
+AST metadata carries reference constant operands for deferred assignment and
+constructor keys, including folded logical/boolean keys, without copying string
+bytes. Read-only index chains retain no key metadata. Per-function zero signs
+prevent extra backend constants from changing reference signed-zero pooling.
+Logical pool accounting now includes equal-length local assignment stores. The
+prefixed 150-target failure now executes in both engines. A source with 100
+locals and 190 right-associated literal powers remains reference-valid and
+exhausts backend storage. The
+[measurements](performance/2026-10-25-rust-lua-reference-constants.md) cover
+38 execution and twenty frontend workloads, including metadata overhead.
+
+The [deferred-operand validation](testing/2026-10-25-rust-lua-deferred-operands.md)
+adds six groups with 421 executed programs and 512 loader observations. Numeric
+arithmetic left operands and reference compact constants for arithmetic and
+comparisons materialize after the right result. Constant-pool insertion remains
+before right-hand code generation, preserving backend pool ordering and the
+existing reference zero-sign metadata. Named destinations retain their old
+values through callbacks; dynamic/noncompact operands retain ordinary evaluation.
+Small numeric/variable trees retain grouped loads when a cached 32-node bound
+fits the remaining register file, avoiding interleaved-load overhead. The hint
+uses existing AST span padding on 64-bit targets.
+The 190-power numeric and string probes now execute, and numeric chains fit with
+200 active locals. Generated pressure cases compare acceptance and diagnostics
+with large pools and mixed expression forms. The
+[measurements](performance/2026-10-25-rust-lua-deferred-operands.md) cover
+39 execution and twenty-two frontend workloads. Complete resource/debug/scratch
+parity and broader standalone compatibility remain open.
+
 Pattern programs use compact instructions and class bitmaps. Backtracking,
 replacement callbacks and sort comparisons resume through explicit VM state.
 Scratch buffers and bounded sort partitions avoid per-match/partition allocation.
@@ -277,8 +362,309 @@ The host must pin retained values. A live host `Program` keeps its per-VM mutabl
 entry binding; a separate weak lifetime token lets dynamically loaded chunks and
 unused entries die while escaped Lua closures retain their immutable code.
 Generation exhaustion retires an arena slot rather than reusing an old identity.
-All engine code remains safe Rust with no normal/build dependencies. Commit each
+Compiler/VM storage uses safe Rust; OS operations have scoped Windows and POSIX
+clock/calendar system-API bridges. There are no normal/build dependencies. Commit each
 verified milestone while keeping unrelated edits separate.
+
+The [OS validation](testing/2026-10-25-rust-lua-os-basics.md) covers
+`difftime`, `getenv`, `remove` and `tmpname`. The partial library shares the rooted
+builtin-module registry and existing native error/environment machinery.
+Windows time differences retain integer conversion, second-argument-first
+validation and negative-time rejection. I/O and OS paths share borrowed path
+conversion. Windows environment/path checks currently cover ASCII; broader
+calendar/time-zone, locale, rename and further process behavior remain open. The
+[measurements](performance/2026-10-25-rust-lua-os-basics.md) add two workloads
+and retain 41 runtime and twenty-two frontend measurements.
+
+The [process validation](testing/2026-10-25-rust-lua-process.md) adds Lua 5.1
+shell execution and process exit. Seventy-four isolated cases compare process
+statuses, output bytes and generated files across the reference, Rust runner and
+CLI. Shared stdout buffering preserves ordering around child execution.
+The [measurements](performance/2026-10-25-rust-lua-process.md) retain the safe
+standard-library process baseline, the Windows bridge and 43 runtime workloads.
+Remaining OS, encoding, terminal and host-process resource behavior stays open.
+
+The [clock/rename validation](testing/2026-10-25-rust-lua-clock-rename.md)
+retains native clock epoch/units, bracketed readings and Windows rename behavior
+that preserves existing destinations. Native path conversion uses initialized
+stack storage for common names and complete spill storage for longer ones.
+The official sort probe now passes. Nine new regression groups, 128 controlled
+rename/create races and 76 isolated process cases pass; other target builds are
+compile checks. The [measurements](performance/2026-10-25-rust-lua-clock-rename.md)
+retain 45 runtime and twenty-two frontend workloads.
+
+The [calendar validation](testing/2026-10-25-rust-lua-calendar.md) adds `os.time`
+and `os.date`, ordered metamethod field reads, native normalization without input
+table changes, local/UTC output, native format handling and DST process probes.
+Thirteen regression groups include field-value finalization, callback C-call
+limits and 512 generated calendars. All 340 tests and 93 isolated process probes
+pass; the official result remains twelve of sixteen because locale support and
+binary dumps still stop the remaining files. `os.setlocale` is the missing OS
+function. Windows calendar calls have runtime comparisons; six additional target
+builds are compile checks only. The [measurements](performance/2026-10-25-rust-lua-calendar.md)
+retain 48 runtime and twenty-two frontend workloads. Broader locale,
+OS/device/encoding behavior and the remaining engine gates stay open.
+
+The [calendar table validation](testing/2026-10-25-rust-lua-calendar-records.md)
+adds exact record capacity with initial GC accounting and a mutation/traversal
+regression. All 341 tests and 93 process probes pass. In two
+[paired comparisons](performance/2026-10-25-rust-lua-calendar-records.md),
+ordinary date-table construction takes 27–31% less time than the committed parent,
+eliminates three reallocations per table and reduces requested bytes by 64.5%.
+Adding a field still improves in the measured fixture but uses more retained
+entry capacity. The official result remains twelve of sixteen; standalone
+compatibility and incremental collection remain unfinished.
+
+The [GC control validation](testing/2026-10-25-rust-lua-gc-controls.md) fixes
+explicit collection/step resumption, restart thresholds, deferred pause changes
+and finalizer control restoration across successful returns and errors. Nine new
+regression groups include 64 generated control sequences, coroutine suspension,
+hooks and the Rust host API. All 350 tests and 105 process probes pass. The
+retained parent fails eight of twelve new process cases; current Rust matches
+all twelve. The [measurements](performance/2026-10-25-rust-lua-gc-controls.md)
+retain 49 runtime and twenty-two frontend workloads. The phase gap discovered
+here is covered by the following sweep milestone. Official-suite results remain
+twelve Rust passes and fifteen reference passes among sixteen files.
+
+The [GC sweep validation](testing/2026-10-25-rust-lua-gc-sweep.md) introduces
+explicit pause/sweep/finalize phases, bounded arena-slot reclamation, protection
+for new allocations and string resurrection, and cluster repair during string
+removal. The finalizer-error phase regression and zero/negative step-budget
+cases now match the reference. Six new test groups cover budget bounds, slot
+reuse, wrapped hash clusters, mutable graphs, builtin pins and nested finalizers.
+All 356 tests and 109 process cases pass; the retained parent fails three new
+process cases. The [measurements](performance/2026-10-25-rust-lua-gc-sweep.md)
+retain 50 runtime and twenty-two frontend workloads. Marking, weak processing,
+cache compaction and callback batches still need incremental work. The complete
+standalone engine and integration gates remain open.
+
+The [incremental marking validation](testing/2026-10-25-rust-lua-gc-mark.md)
+adds a persistent marking frontier and barriers for table edges, environments,
+metatables, closures and shared cells. Final root, stack, open-cell and metatable
+refreshes preserve mutations before weak processing. Full collection restarts
+partial marking so floating garbage can be reclaimed. Seven new unit groups
+exercise the same active cycle; a differential group combines mutation with
+coroutines and finalizers. All 364 tests and 111 process probes pass. The
+[measurements](performance/2026-10-25-rust-lua-gc-mark.md) retain 51 runtime and
+twenty-two frontend workloads. Individual object scans, final root/weak work,
+cache rebuilding and callback batches still contain atomic work. Exact PUC work
+units and fully bounded pauses remain open, as do the complete standalone
+engine and integration gates.
+
+The [locale validation](testing/2026-10-25-rust-lua-locale.md) supplies the last
+missing Lua 5.1 OS function on Windows/MSVC and connects numeric conversion,
+formatting, stream scanning, character classes, casing, identifiers, patterns
+and collation. Native locale storage is copied under the CRT locale lock;
+ordinary byte work and number formatting retain Rust fast paths. Pattern caches
+track shared ctype changes, including callbacks and existing iterators. Two new
+integration groups and fifteen isolated locale process cases pass, bringing
+the totals to 366 tests and 126 process probes. Unchanged `literals.lua` and
+`strings.lua` now pass, making fourteen of sixteen official Rust probes; the
+reference retains fifteen. Both fail the Windows file rename assertion at line
+59, and Rust still lacks binary dumps. The [measurements](performance/2026-10-25-rust-lua-locale.md)
+retain 53 runtime and twenty-two frontend workloads. Non-Windows native locales,
+broader encodings, external host locale synchronization, binary chunks/modules
+and the remaining engine/integration gates are unfinished.
+
+The [binary codec validation](testing/2026-10-25-rust-lua-chunk-codec.md) adds
+resumable native Lua 5.1 decoding and structural checking to fixed-buffer,
+reader and file loading. Flat prototype/continuation vectors avoid recursive
+decoding and input replay. Counts do not reserve untrusted declared sizes;
+SETLIST payload discovery is linear. Official dumps cover all 38 native opcodes
+and round-trip their bytes; split/truncated/corrupt input, reader stopping points
+and binary file reopening are tested. All 375 tests and 129 process probes pass.
+The [measurements](performance/2026-10-25-rust-lua-chunk-codec.md) retain 54 runtime
+and twenty-two frontend workloads. Valid native chunks still report unsupported
+execution: instruction translation and dump emission remain required. Official
+suite results stay fourteen Rust passes and fifteen reference passes among
+sixteen files. This is a decoding/verification stage, not binary execution,
+native-module loading or the persistent compiled cache.
+
+The [native execution validation](testing/2026-10-25-rust-lua-chunk-exec.md)
+adds translation of all 38 native opcodes to the existing VM. Closures use
+per-site bindings; imported functions retain native source names, local ranges,
+upvalues, lines and dispatch hook counts. Range concatenation preserves numeric
+coercions and callback order. Generic-for calls retain native yield and C-depth
+boundaries for imported chunks and ordinary source loops. Collector maps exclude dead translation scratch slots and stale
+caller argument copies. Fixed buffers, Lua loaders, binary files and the CLI
+share execution. Four additional unit groups include 256 generated programs,
+stripped chunks, native metadata and a 25,551-element constructor. A source
+regression checks iterator yield/depth boundaries in both thread contexts. The
+[measurements](performance/2026-10-25-rust-lua-chunk-exec.md) add three imported
+chunk workloads. This remains incremental coverage; dump emission, broader
+binary diagnostics/collector edges and the full standalone-engine gates remain
+open. Production consumers still use the legacy crate.
+
+The [function dump validation](testing/2026-10-25-rust-lua-chunk-dump.md)
+adds native Lua 5.1 export for source-compiled functions and retains original
+native words/debug offsets for imported-function re-export. A flat traversal
+emits prototype trees without recursive Rust calls. Lowering reconstructs native
+comparison/method/iterator forms, capture bindings and compacted iterator scopes.
+Dumped roots omit captured values and environments. Extra arguments are ignored;
+return hooks see the function, result and live registry hook table. That table
+now backs hook lookup/delivery and accepts observable mutation through debug.
+All 388 tests and 136 process probes pass. Unchanged `calls.lua` now passes,
+giving fifteen of sixteen Rust and reference probes; both retain the Windows
+open-input rename failure. The [measurements](performance/2026-10-25-rust-lua-chunk-dump.md)
+retain sixty runtime and twenty-two frontend workloads, adding source dumping,
+native re-export and dump/load execution. Native encoding limits, broader debug,
+collector/resource cases and the remaining standalone/integration gates remain open.
+
+The [long-branch export validation](testing/2026-10-25-rust-lua-chunk-jumps.md)
+adds guarded native jump relays after source lowering expands branches beyond
+Lua 5.1's signed encoding range. Batched relocation keeps closure bindings,
+extended SETLIST payloads, skip pairs and open-result consumers intact. Relays
+reserve no registers; their debug lines and named locals describe the originating
+branch. Export also omits CLOSE operations without a live captured local.
+All 393 tests and 138 process probes pass. The sixteen unchanged official files
+retain fifteen passes in each engine and the shared Windows rename failure.
+Two [measurement runs](performance/2026-10-25-rust-lua-chunk-jumps.md) cover
+sixty-two runtime and twenty-two frontend workloads. Register/operand limits,
+broader debug/collector cases and the full standalone-engine gates remain open.
+
+The [source concatenation validation](testing/2026-10-26-rust-lua-concat.md)
+extends eligible right-associated chains into the shared native-style range
+operation. Buffered string groups avoid repeated pairwise intermediate copies;
+metamethods preserve operand order and callback roots. Parenthesized left groups
+and logical paths retain their evaluation boundaries. Copied operands report
+their operator's source line, and known conditional edges bypass an opposite
+test of the same register. All 398 tests and 140 process probes pass, including
+256 generated concatenation/logical contexts and exact line/count hook probes.
+The official file results remain fifteen of sixteen in both engines. The
+[measurements](performance/2026-10-26-rust-lua-concat.md) retain a compiler
+baseline and two final runs over sixty-four runtime and twenty-two frontend
+workloads. Full standalone compatibility, broader resource/collector/debug
+coverage and later dialects remain unfinished.
+
+The [standalone entry validation](testing/2026-10-26-rust-lua-cli.md) adds host
+calls and argument-bearing chunk entry through the shared driver, raw table
+construction and direct protected file loading. The CLI supports chained command
+and module actions, startup code/files and Lua 5.1 script argument indexing.
+Argument roots survive initialization callbacks and loading without retaining a
+replaced argument table during script execution. All 407 crate tests and 140
+existing process probes pass. The official file corpus now includes unchanged
+`attrib.lua` and `verybig.lua`, bringing both engines to seventeen of eighteen.
+The new standalone CLI audit deliberately retains interactive, traceback,
+outer C-frame hook, banner and usage differences. It exits unsuccessfully;
+complete standalone compatibility remains a required gate. Two
+[measurement runs](performance/2026-10-26-rust-lua-cli.md) cover sixty-five runtime
+and twenty-two frontend workloads, including typed argument entry. The full
+engine, later dialects and integrations remain unfinished.
+
+The [standalone message-handler validation](testing/2026-10-26-rust-lua-cli-traces.md)
+keeps an observable parked C main frame across CLI actions and runs the current
+debug.traceback before unwinding failures. Managed native closures preserve
+main/handler identity, environments and GC ownership. Nil handler results stay
+silent; failed handlers, loader-reader errors and explicit post-error collection
+match the expanded reference probes. load_program lets the CLI release its host
+Program before calling, so failed chunk environments can be collected at the
+reference point. All 414 crate tests and 140 process probes pass. The direct CLI
+audit now matches sixty of sixty-six cases; usage text, project branding and
+interactive mode remain different, and its command still fails. The official
+file results remain seventeen of eighteen in both engines. Two
+[measurement runs](performance/2026-10-26-rust-lua-cli-traces.md) cover sixty-six
+runtime and twenty-two frontend workloads, including standalone entry overhead.
+Complete standalone compatibility and the full engine/integration goal remain open.
+
+The [console validation](testing/2026-10-26-rust-lua-console.md) adds `-i` and
+automatic terminal entry, expression results, continued chunks, prompt callbacks,
+shared stdin and recovery after chunk/print failures. Host global lookup honors
+`__index`; previous console results remain rooted during print lookup callbacks.
+The message-handler-free print call reuses the protected entry driver. Usage
+diagnostics match the reference. All 415 crate tests and 140 process probes pass;
+both engines still pass seventeen of eighteen official files. The expanded CLI
+audit retains 72/110 raw matches and 110/110 after removing one exact leading
+version banner; all thirty-eight raw differences are project branding. This is
+not full terminal/signal or standalone compatibility. Complete process timing
+and two [engine measurement runs](performance/2026-10-26-rust-lua-console.md)
+retain source hashes, outputs and remaining limitations. The full goal stays open.
+
+The [native integer/result validation](testing/2026-10-26-rust-lua-native-bounds.md)
+narrows select/unpack/character/repetition arguments through the reference's
+64-bit Lua integer and 32-bit native int conversions. Unpack and byte results
+honor the 8,000-slot native limit, counting unused arguments and preserving
+catchable errors. Seven groups cover numeric strings, non-finite/platform edge
+values, 126 generated arguments across four functions, result boundaries,
+error precedence and collection with 7,999 unpacked objects. All 422 tests and
+140 process probes pass. The direct CLI audit retains 88/126 raw matches;
+all thirty-eight differences are the project banner, and all 126 match after
+only that leading banner is removed. Both engines still pass seventeen of
+eighteen official files. Two [measurement runs](performance/2026-10-26-rust-lua-native-bounds.md)
+cover 72 runtime and 22 frontend workloads, including result-width scaling and
+failure paths. Complete standalone compatibility and the full goal remain open.
+
+The [native work validation](testing/2026-10-26-rust-lua-work-limits.md) removes
+synthetic ten-million-step limits from pattern searches and table concat/insert.
+Finite backtracking and late malformed-pattern errors remain reachable. Sort now
+checks its 40-slot native reserve, normalizes the comparator slot and releases
+unused argument roots before comparison; host-entry padding stays separate from
+scratch storage. All 430 tests and 140 process probes pass. The CLI audit retains
+112/150 raw matches; all thirty-eight differences are the project banner, with
+150/150 after only its leading banner is removed. Official isolated files remain
+17/18 in both engines. Two [measurement runs](performance/2026-10-26-rust-lua-work-limits.md)
+cover 76 runtime and 22 frontend workloads. The measured x64 VM struct shrinks
+from 4,440 to 4,432 bytes. Native loops still run between execution-budget checks;
+full resource, standalone and integration gates remain open.
+
+The [live native argument validation](testing/2026-10-26-rust-lua-native-args.md)
+reloads sort table/comparator slots after callbacks and removes their stale job
+roots. Traversal returns before rechecking unused mutated arguments and keeps
+iteration state below callable/wide-result callback storage. Native operand
+errors preserve C-frame origin; Lua errors keep source locations. Missing
+protected-call slots retain reference argument diagnostics. All 441 tests and
+140 process probes pass. The CLI audit retains 124/162 raw matches, with all
+thirty-eight differences limited to the version banner; 162/162 match after only
+that leading banner is removed. Official files remain 17/18 in both engines.
+Two [measurement runs](performance/2026-10-26-rust-lua-native-args.md) cover 78 runtime
+and 22 frontend workloads. Full native/debug, resource, standalone and integration
+gates remain open.
+
+The [debug command console](testing/2026-10-26-rust-lua-debug-console.md) adds
+`debug.debug` through the existing native continuation driver. Commands inspect
+and change the suspended caller, share original stdin, use stderr prompts and
+diagnostics, and recover under a handler-free protected boundary. Fixed input
+fragments, exact exit input, argument/root cleanup, nested sessions,
+thread environments, hooks and coroutine restrictions have independent CLI
+probes. All 449 tests and 140 process probes pass. The CLI audit has 142/180 raw
+matches and 180/180 after only the known version banner is removed. Official
+files stay 17/18 in both engines. Two [pairs of measurements](performance/2026-10-26-rust-lua-debug-console.md)
+cover ten complete-process workloads and 78 runtime/22 frontend cases; VM
+metadata remains 4,432 B. Complete standalone compatibility remains open.
+
+The [native conversion and substitution milestone](testing/2026-10-26-rust-lua-native-coercions.md)
+coerces numeric string arguments in place and separates inspected arguments from
+native result writes. Gsub observes changed replacement slots, releases obsolete
+roots and models its partial-buffer stack. Buffer concatenations can suspend
+through Lua metamethods using flat pending actions, including nested calls,
+collection, errors and instruction aborts. All 461 tests and 140 process probes
+pass. The CLI audit retains 154/192 raw matches and 192/192 after only the known
+version banner is removed; official files remain 17/18 in both engines. Two
+[measurement runs](performance/2026-10-26-rust-lua-native-coercions.md) cover 81
+runtime and 22 frontend workloads. VM metadata stays at 4,432 B; complete
+compatibility and the full engine/integration gates remain open.
+
+The [interning hash milestone](testing/2026-10-26-rust-lua-intern-hash.md) processes
+long strings through four independent word lanes with safe loads. Every byte
+participates and full byte equality resolves collisions. No string/VM field is
+added. New regressions cover binary identity, unaligned slices, table growth,
+sweeping and reused object slots. All 465 tests pass. Paired comparisons against
+the committed parent and [reference measurements](performance/2026-10-26-rust-lua-intern-hash.md)
+record about 2.2 times faster wide callback execution and 13 times faster 4 KiB
+intern hits, with identical measured allocation/heap footprints. All 140 process
+probes pass. The CLI audit has 158/196 raw matches and 196/196 after only its
+known banner is removed; official files remain 17/18 in both engines. The full
+standalone engine and integration gates remain open.
+
+The [table propagation milestone](testing/2026-10-26-rust-lua-table-slices.md)
+limits each table work item to 64 physical array/hash slots, including holes and
+tombstones. Continuations resume after child edges. Compaction, hash-to-array
+moves and metatable changes restart active scans; final metatable refreshes
+observe weak-mode changes. The table header remains 88 B, VM 4,432 B and Value
+16 B. [Paired measurements](performance/2026-10-26-rust-lua-table-slices.md)
+report step latency, complete-cycle cost, retained frontier capacity, allocation
+events and process CPU counters. Final root/metatable/weak work and other object
+scans still contain atomic work, so collector pauses are not fully bounded.
+The full standalone-engine and integration gates remain open.
 
 ## Reference contract
 

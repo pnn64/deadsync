@@ -7,6 +7,7 @@ pub(super) const CALL: u8 = 1;
 pub(super) const RETURN: u8 = 2;
 pub(super) const LINE: u8 = 4;
 pub(super) const COUNT: u8 = 8;
+const REGISTRY_KEY: Value = Value::LightUserdata(u64::MAX - 1);
 
 #[derive(Debug, Default)]
 pub(super) struct Hooks {
@@ -48,6 +49,14 @@ fn visible(frame: Frame) -> bool {
 }
 
 impl Vm {
+    fn hook_table(&mut self) -> Result<TableId, Error> {
+        if let Value::Table(table) = self.tables[slot_index(self.registry.0)].get(REGISTRY_KEY) {
+            return Ok(table);
+        }
+        let table = self.new_table();
+        self.raw_set(self.registry, REGISTRY_KEY, Value::Table(table))?;
+        Ok(table)
+    }
     pub(super) fn trim_hooks(&mut self) {
         if self.hooks.running.is_some_and(|i| {
             !self
@@ -109,16 +118,8 @@ impl Vm {
                     mask |= COUNT;
                 }
             }
-            let capacity = self.hook_functions.capacity();
-            if value == Value::Nil {
-                self.hook_functions.remove(&thread);
-            } else {
-                self.hook_functions.insert(thread, value);
-            }
-            self.gc_note_control(
-                (self.hook_functions.capacity() - capacity)
-                    * (std::mem::size_of::<(ThreadId, Value)>() + 1),
-            );
+            let table = self.hook_table()?;
+            self.raw_set(table, Value::LightUserdata(thread.0), value)?;
             let state = if thread == self.thread {
                 &mut self.hooks
             } else {
@@ -145,11 +146,8 @@ impl Vm {
             }
         }
         self.resize_registers(self.registers.len().max(base + 3));
-        self.registers[base] = self
-            .hook_functions
-            .get(&thread)
-            .copied()
-            .unwrap_or(Value::Nil);
+        let table = self.hook_table()?;
+        self.registers[base] = self.tables[slot_index(table.0)].get(Value::LightUserdata(thread.0));
         self.registers[base + 1] = self.intern(&text[..len]);
         self.registers[base + 2] = Value::Number(f64::from(count));
         Ok(3)
@@ -169,13 +167,18 @@ impl Vm {
         if !self.hooks.allowed() {
             return Ok(());
         }
-        let Some(&function) = self.hook_functions.get(&self.thread) else {
+        let Value::Table(table) = self.tables[slot_index(self.registry.0)].get(REGISTRY_KEY) else {
             return Ok(());
         };
+        let function = self.tables[slot_index(table.0)].get(Value::LightUserdata(self.thread.0));
+        if !matches!(function, Value::Function(_) | Value::Native(_)) {
+            return Ok(());
+        }
         let base = self.registers.len();
         let top = self.top;
         let event = self.intern(event);
         self.registers.extend_from_slice(&[
+            Value::Table(table),
             function,
             event,
             line.map_or(Value::Nil, |n| Value::Number(f64::from(n))),
@@ -193,8 +196,8 @@ impl Vm {
             tail_calls: 0,
         });
         self.hooks.running = Some((self.frames.len() - 1) as u16);
-        if let Some(actual) = self.start_call(base, 2, 0, false)? {
-            self.finish_call(base, actual, 0);
+        if let Some(actual) = self.start_call(base + 1, 2, 0, false)? {
+            self.finish_call(base + 1, actual, 0);
         }
         Ok(())
     }
@@ -357,11 +360,12 @@ impl Vm {
                             unreachable!();
                         };
                         let c = &self.functions[slot_index(id.0)];
-                        Some(
-                            self.programs[c.program].data.prototypes[c.prototype]
-                                .debug
-                                .hook_lines[frame.argc()],
-                        )
+                        let proto = &self.programs[c.program].data.prototypes[c.prototype];
+                        Some(if proto.debug.native.is_some() {
+                            proto.lines[frame.argc()]
+                        } else {
+                            proto.debug.hook_lines[frame.argc()]
+                        })
                     };
                     self.hook_callback(
                         if count { b"count" } else { b"line" },

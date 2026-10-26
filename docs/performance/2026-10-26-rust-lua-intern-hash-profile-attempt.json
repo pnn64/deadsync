@@ -1,0 +1,13 @@
+{
+  "tool": "Windows Performance Recorder",
+  "command": [
+    "wpr",
+    "-start",
+    "CPU",
+    "-filemode"
+  ],
+  "status": "sampling unavailable",
+  "returncode": 3310899217,
+  "diagnostic": "\n\tFailed to enable the policy to profile system performance.\n\n\n\tProfile Id: CPU.Verbose.File\n\t\n\tError code: 0xc5585011\n\t\n\tFailed to enable the policy to profile system performance.\n\n\t\n\t\n",
+  "samples_collected": false
+}

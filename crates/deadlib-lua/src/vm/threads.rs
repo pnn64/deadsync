@@ -31,6 +31,8 @@ pub(super) enum NativeKind {
     Match(strings::MatchIterator),
     Wrap(ThreadId),
     Lines { file: UserdataId, close: bool },
+    StandaloneMain,
+    StandaloneTraceback,
 }
 #[derive(Debug)]
 pub(super) struct NativeClosure {
@@ -127,14 +129,19 @@ impl Vm {
                 FrameKind::Native(id) => self.native_environment(id),
             });
         let id = self.native_closures.insert(NativeClosure { env, kind });
+        self.gc_new_value(Value::Native(id));
         Ok(Value::Native(id))
     }
-    pub(super) fn is_wrapper(&self, id: u64) -> bool {
-        id >= strings::ITERATOR_FIRST
-            && self
-                .native_closures
-                .get(id)
-                .is_some_and(|c| matches!(c.kind, NativeKind::Wrap(_)))
+    pub(super) fn scheduled_native(&self, id: u64) -> u8 {
+        if id < strings::ITERATOR_FIRST {
+            return 0;
+        }
+        match self.native_closures.get(id).map(|c| &c.kind) {
+            Some(NativeKind::Wrap(_)) => 1,
+            Some(NativeKind::StandaloneMain) => 2,
+            Some(NativeKind::StandaloneTraceback) => 3,
+            _ => 0,
+        }
     }
     pub(super) fn native_environment(&self, id: u64) -> TableId {
         if id >= strings::ITERATOR_FIRST {
@@ -152,6 +159,7 @@ impl Vm {
         } else {
             self.native_envs.insert(id, env);
         }
+        self.gc_barrier(Value::Native(id), Value::Table(env));
     }
     pub(super) fn thread_environment(&self, id: ThreadId) -> TableId {
         if id == self.thread {
@@ -166,6 +174,7 @@ impl Vm {
         } else {
             self.threads[slot_index(id.0)].globals = env;
         }
+        self.gc_barrier(Value::Thread(id), Value::Table(env));
     }
     pub(super) fn cell_value(&self, id: usize) -> Value {
         match self.upvalues[id] {
@@ -190,6 +199,7 @@ impl Vm {
                 }
             }
         }
+        self.gc_cell_barrier(id, value);
     }
     // Active vectors stay directly in Vm for ordinary dispatch. Switching swaps
     // ownership with the inactive thread slots; it never copies stack contents.
@@ -320,6 +330,7 @@ impl Vm {
                 };
                 let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
                 self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
+                self.gc_new_value(Value::Thread(thread));
                 if id == CO_WRAP {
                     self.new_native(NativeKind::Wrap(thread))?
                 } else {
@@ -350,6 +361,24 @@ impl Vm {
         Ok(1)
     }
     pub(super) fn native_depth(&self, end: usize) -> usize {
+        let iterators = self.frames[..end]
+            .windows(2)
+            .filter(|pair| {
+                if pair[1].barriers <= pair[0].barriers {
+                    return false;
+                }
+                let FrameKind::Lua(id) = pair[0].function else {
+                    return false;
+                };
+                let closure = &self.functions[slot_index(id.0)];
+                let prototype = &self.programs[closure.program].data.prototypes[closure.prototype];
+                pair[0]
+                    .pc
+                    .checked_sub(1)
+                    .and_then(|pc| prototype.code.get(pc as usize))
+                    .is_some_and(|i| i.op == Op::CallIter)
+            })
+            .count();
         let boundaries = self.frames[..end]
             .iter()
             .filter(|f| {
@@ -357,6 +386,7 @@ impl Vm {
                     f.function,
                     FrameKind::Native(
                         PCALL
+                            | debug::CONSOLE
                             | XPCALL
                             | TOSTRING
                             | PRINT
@@ -374,12 +404,15 @@ impl Vm {
                             | CONT_HANDLER
                             | CONT_GC
                             | CONT_HOOK
+                            | CONT_STANDALONE
                     )
-                ) || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
+                ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) >= 2))
+                    || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             })
             .count();
         usize::from(self.threads[slot_index(self.thread.0)].depth)
             + boundaries
+            + iterators
             + self.parser_nesting(end)
     }
     pub(super) fn coroutine_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {

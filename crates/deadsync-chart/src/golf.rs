@@ -1,15 +1,21 @@
 //! Pack-authored golf pars, loaded by the library scan, never by a renderer.
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 
 #[derive(Debug, Default)]
-pub struct GolfPars(HashMap<String, SongPars>);
+pub struct GolfPars(FxHashMap<String, SongPars>);
 
 #[derive(Debug, Default)]
 struct SongPars {
-    default: Option<f64>,
-    difficulties: HashMap<String, f64>,
+    // Slot zero is the default; slots 1..=6 are difficulty overrides.
+    values: [f64; 7],
+    present: u8,
+}
+
+fn difficulty_index(difficulty: &str) -> Option<usize> {
+    crate::song::standard_difficulty_index(difficulty)
+        .or_else(|| difficulty.eq_ignore_ascii_case("Edit").then_some(5))
 }
 
 impl GolfPars {
@@ -23,7 +29,7 @@ impl GolfPars {
                 continue;
             }
             if let Some(name) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                section = Some(name.to_owned());
+                section = Some(name);
                 continue;
             }
             let Some((key, value)) = line.split_once('=') else {
@@ -32,7 +38,7 @@ impl GolfPars {
             if !key.trim().eq_ignore_ascii_case("Par") {
                 continue;
             }
-            let Some(name) = &section else {
+            let Some(name) = section else {
                 continue;
             };
             let Some(par) = value
@@ -43,21 +49,21 @@ impl GolfPars {
             else {
                 continue;
             };
-            let chart = name.rsplit_once(':').filter(|(_, diff)| {
-                ["Beginner", "Easy", "Medium", "Hard", "Challenge", "Edit"]
-                    .iter()
-                    .any(|d| d.eq_ignore_ascii_case(diff))
+            let chart = name.rsplit_once(':').and_then(|(song, difficulty)| {
+                difficulty_index(difficulty).map(|index| (song, index + 1))
             });
-            if let Some((song, difficulty)) = chart {
-                result
-                    .0
-                    .entry(song.to_owned())
-                    .or_default()
-                    .difficulties
-                    .insert(difficulty.to_ascii_lowercase(), par);
-            } else {
-                result.0.entry(name.clone()).or_default().default = Some(par);
+            let (song, index) = chart.unwrap_or((name, 0));
+            // Overrides normally update an existing song; borrow its owned key.
+            if index != 0
+                && let Some(pars) = result.0.get_mut(song)
+            {
+                pars.values[index] = par;
+                pars.present |= 1 << index;
+                continue;
             }
+            let pars = result.0.entry(song.to_owned()).or_default();
+            pars.values[index] = par;
+            pars.present |= 1 << index;
         }
         result
     }
@@ -65,16 +71,18 @@ impl GolfPars {
     #[must_use]
     pub fn get(&self, song_folder: &str, difficulty: &str) -> Option<f64> {
         let song = self.0.get(song_folder)?;
-        song.difficulties
-            .iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(difficulty))
-            .map(|(_, par)| *par)
-            .or(song.default)
+        if song.present & !1 != 0
+            && let Some(index) = difficulty_index(difficulty)
+            && song.present & (1 << (index + 1)) != 0
+        {
+            return Some(song.values[index + 1]);
+        }
+        (song.present & 1 != 0).then_some(song.values[0])
     }
 }
 
-static PARS: LazyLock<RwLock<HashMap<PathBuf, GolfPars>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
+static PARS: LazyLock<RwLock<FxHashMap<PathBuf, GolfPars>>> =
+    LazyLock::new(|| RwLock::new(FxHashMap::default()));
 
 /// Replace metadata on every scan/reload, including when Golf.ini was removed.
 pub fn replace_pack(pack_dir: &Path, data: GolfPars) {

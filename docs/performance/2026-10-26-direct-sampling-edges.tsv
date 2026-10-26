@@ -1,0 +1,85 @@
+run	version	workload	cycles_per_op	ns_per_op	allocations	sha256
+0	before	sampling/Clamp	414951.6	189594.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	before	wrap/Clamp	28403.3	12956.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	before	sampling/Repeat	445883.51	204058.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	before	wrap/Repeat	176609.69	80703.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	before	bounds	88713.12	40572.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	before	edges	90859.84	41436.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	before	sampling/small	506037.47	231296.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+0	after	sampling/Clamp	365581.64	167183.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+0	after	wrap/Clamp	24522.54	11181.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+0	after	sampling/Repeat	427594.77	195582.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+0	after	wrap/Repeat	167008.78	76422.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+0	after	bounds	83374.88	38023.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+0	after	edges	43322.72	19856.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+0	after	sampling/small	446028.4	203852.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	sampling/Clamp	333060.52	152533.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	wrap/Clamp	24783.74	11428.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	sampling/Repeat	460910.5	211135.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	wrap/Repeat	185637.75	84822.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	bounds	92106.59	42067.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	edges	49769.44	22688.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	after	sampling/small	456928.76	208964.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+1	before	sampling/Clamp	358884.69	164130.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+1	before	wrap/Clamp	22586.56	10308.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+1	before	sampling/Repeat	408039.55	186407.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+1	before	wrap/Repeat	187356.42	85438.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+1	before	bounds	97903.58	44798.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+1	before	edges	103863.01	47454.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+1	before	sampling/small	534453.99	245080.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	sampling/Clamp	346704.63	158444.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	wrap/Clamp	20455.21	9336.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	sampling/Repeat	406641.29	186513.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	wrap/Repeat	184990.21	84538.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	bounds	98436.96	44887.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	edges	100910.73	46135.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	before	sampling/small	502652.8	230210.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+2	after	sampling/Clamp	372550.77	170136.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+2	after	wrap/Clamp	23800.39	10829.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+2	after	sampling/Repeat	419007.93	192174.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+2	after	wrap/Repeat	174515.67	79714.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+2	after	bounds	95313.49	43474.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+2	after	edges	47174.94	21521.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+2	after	sampling/small	466329.93	213248.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	sampling/Clamp	347771.42	159104.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	wrap/Clamp	21820.49	9928.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	sampling/Repeat	418656.73	191234.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	wrap/Repeat	165849.8	75750.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	bounds	88467.28	40417.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	edges	44830.68	20455.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	after	sampling/small	442992.69	203439.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+3	before	sampling/Clamp	356281.41	162791.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+3	before	wrap/Clamp	19559.64	8905.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+3	before	sampling/Repeat	417539.49	190673.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+3	before	wrap/Repeat	165123.27	75308.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+3	before	bounds	81621.08	37190.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+3	before	edges	94885.46	43268.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+3	before	sampling/small	479150.95	218943.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	sampling/Clamp	350530.52	160290.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	wrap/Clamp	19570.62	8909.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	sampling/Repeat	449779.66	205573.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	wrap/Repeat	178060.59	81394.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	bounds	90653.49	41350.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	edges	94694.5	43326.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	before	sampling/small	481822.26	221036.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+4	after	sampling/Clamp	347134.86	158728.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+4	after	wrap/Clamp	20806.4	9495.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+4	after	sampling/Repeat	421314.89	192639.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+4	after	wrap/Repeat	176063.15	80484.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+4	after	bounds	86068.14	39330.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+4	after	edges	42804.69	19624.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+4	after	sampling/small	505023.38	230918.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	sampling/Clamp	369787.28	169343.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	wrap/Clamp	23732.34	10912.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	sampling/Repeat	425740.01	194779.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	wrap/Repeat	169469.36	77429.0		9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	bounds	87611.23	39958.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	edges	43166.87	19864.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	after	sampling/small	444768.48	203772.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9f7629dc0efbb2c6c8db3cff4803d91064f9c13f55a95fb574a09119fc735c02
+5	before	sampling/Clamp	353594.74	161922.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+5	before	wrap/Clamp	25086.65	11417.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+5	before	sampling/Repeat	420397.37	192106.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+5	before	wrap/Repeat	166233.96	75958.0		9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+5	before	bounds	83589.98	38634.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+5	before	edges	90087.19	41086.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e
+5	before	sampling/small	502819.62	229743.0	allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0	9a09bce98480869e10f749be2888f1cc3ab9ef2351ae7a9cdcb64179a9f6f51e

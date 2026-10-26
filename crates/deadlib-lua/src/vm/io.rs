@@ -7,28 +7,33 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 mod number;
+mod output;
 mod stream;
 use number::read_number;
 pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
+    output::write(bytes)
+}
+pub(super) use output::flush as stdout_flush;
+pub(super) fn stderr_write(bytes: &[u8]) {
     use std::io::Write;
-    let mut stdout = std::io::stdout().lock();
+    let mut stderr = std::io::stderr().lock();
     if cfg!(windows) {
-        let mut start = 0;
-        for (at, &byte) in bytes.iter().enumerate() {
-            if byte == b'\n' {
-                stdout.write_all(&bytes[start..at])?;
-                stdout.write_all(b"\r\n")?;
-                start = at + 1;
+        for part in bytes.split_inclusive(|&b| b == b'\n') {
+            if let Some(line) = part.strip_suffix(b"\n") {
+                let _ = stderr.write_all(line);
+                let _ = stderr.write_all(b"\r\n");
+            } else {
+                let _ = stderr.write_all(part);
             }
         }
-        stdout.write_all(&bytes[start..])
     } else {
-        stdout.write_all(bytes)
+        let _ = stderr.write_all(bytes);
     }
 }
 pub(super) use stream::LINE_BUFFER;
 use stream::Resource;
 pub(super) use stream::Stream;
+pub(super) use stream::errno;
 
 pub(super) const FIRST: u64 = 128;
 const CLOSE: u64 = 128;
@@ -72,27 +77,50 @@ impl Io {
 pub(super) fn c_bytes(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
-fn integer(n: f64) -> i64 {
+pub(super) fn integer(n: f64) -> i64 {
     if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&n) {
         i64::MIN
     } else {
         n as i64
     }
 }
+pub(super) fn set_errno(code: i32) {
+    ERRNO.set(code);
+}
+pub(super) fn path(bytes: &[u8]) -> std::borrow::Cow<'_, std::path::Path> {
+    let bytes = c_bytes(bytes);
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        std::borrow::Cow::Borrowed(std::path::Path::new(std::ffi::OsStr::from_bytes(bytes)))
+    }
+    #[cfg(not(unix))]
+    {
+        match String::from_utf8_lossy(bytes) {
+            std::borrow::Cow::Borrowed(text) => {
+                std::borrow::Cow::Borrowed(std::path::Path::new(text))
+            }
+            std::borrow::Cow::Owned(text) => std::borrow::Cow::Owned(text.into()),
+        }
+    }
+}
 pub(super) fn message(code: i32) -> &'static [u8] {
     match code {
         0 => b"No error",
         2 => b"No such file or directory",
+        8 => b"Exec format error",
         9 => b"Bad file descriptor",
         12 => b"Not enough space",
         13 => b"Permission denied",
         17 => b"File exists",
+        18 => b"Improper link",
         22 => b"Invalid argument",
         24 => b"Too many open files",
         28 => b"No space left on device",
         29 => b"Illegal seek",
         32 => b"Broken pipe",
         34 => b"Result too large",
+        41 => b"Directory not empty",
         _ => b"Input/output error",
     }
 }
@@ -122,14 +150,7 @@ pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
         use std::os::windows::fs::OpenOptionsExt;
         options.share_mode(3);
     }
-    #[cfg(unix)]
-    let path = {
-        use std::os::unix::ffi::OsStrExt;
-        std::path::PathBuf::from(std::ffi::OsStr::from_bytes(c_bytes(path)))
-    };
-    #[cfg(not(unix))]
-    let path = std::path::PathBuf::from(String::from_utf8_lossy(c_bytes(path)).as_ref());
-    let file = options.open(path).map_err(stream::errno)?;
+    let file = options.open(self::path(path)).map_err(stream::errno)?;
     #[cfg(windows)]
     let file = {
         use std::io::{Read, Seek, SeekFrom};
@@ -300,6 +321,9 @@ impl Vm {
         let user = &mut self.userdata[slot_index(id.0)];
         user.file = NonZeroU64::new(file);
         user.metatable = metatable;
+        if let Some(table) = metatable {
+            self.gc_barrier(Value::Userdata(id), Value::Table(table));
+        }
         Value::Userdata(id)
     }
     fn file_key(&self, value: Value, check_meta: bool) -> Option<u64> {
@@ -360,8 +384,8 @@ impl Vm {
         }
         Ok(value)
     }
-    fn io_failure(&mut self, base: usize, code: i32, path: Option<&[u8]>) -> usize {
-        ERRNO.set(code);
+    pub(super) fn io_failure(&mut self, base: usize, code: i32, path: Option<&[u8]>) -> usize {
+        set_errno(code);
         let mut bytes = self.take_buffer(64);
         if let Some(path) = path {
             bytes.extend_from_slice(c_bytes(path));
@@ -650,11 +674,7 @@ impl Vm {
                 if mode != 0 && !(2..=i32::MAX as usize).contains(&size) {
                     return Ok(self.io_failure(base, 22, None));
                 }
-                let result = self.io.files[slot].flush();
-                if result.is_ok() {
-                    self.io.files[slot].buffering = mode;
-                    self.io.files[slot].size = size;
-                }
+                let result = self.io.files[slot].set_buffering(mode, size);
                 Ok(self.io_result(base, result))
             }
             WRITE | FWRITE => {
@@ -662,7 +682,7 @@ impl Vm {
                 for index in first..count {
                     let value = self.argument(base, count, index);
                     let s = match value {
-                        Value::Number(n) => self.intern(native::format_number(n).as_bytes()),
+                        Value::Number(n) => self.intern(native::format_number(n).as_slice()),
                         _ => Value::String(self.string_argument(base, count, index)?),
                     };
                     let Value::String(s) = s else { unreachable!() };

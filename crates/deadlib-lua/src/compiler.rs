@@ -26,7 +26,11 @@ enum Target {
     Local(u8),
     Upvalue(u16),
     Global(u32),
-    Index(u8, u8),
+    Index(u8, TargetKey),
+}
+enum TargetKey {
+    Register(u8),
+    Constant(u32),
 }
 
 #[derive(Clone, Copy)]
@@ -62,6 +66,7 @@ struct Function<'a> {
     debug_lines: Vec<u32>,
     hook_lines: Vec<u32>,
     hook_visible: usize,
+    zero_sign: Option<bool>,
 }
 
 struct Compiler<'a> {
@@ -80,6 +85,7 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
         ast: &ast,
         function: Function {
             vararg: true,
+            zero_sign: ast.root_zero_sign,
             ..Function::default()
         },
         parents: Vec::new(),
@@ -101,7 +107,20 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 impl<'a> Compiler<'a> {
     fn finish(&mut self) -> u32 {
         let mut f = std::mem::take(&mut self.function);
-        for (pc, i) in f.code.iter().enumerate() {
+        for pc in 0..f.code.len() {
+            let i = f.code[pc];
+            if matches!(i.op, Op::JumpFalse | Op::JumpTrue)
+                && i.c as usize > pc
+                && f.code.get(i.c as usize).is_some_and(|next| {
+                    matches!(next.op, Op::JumpFalse | Op::JumpTrue)
+                        && next.op != i.op
+                        && next.a == i.a
+                })
+            {
+                // On this edge the opposite test cannot jump. Logical chains
+                // go straight to its right operand, as in native codegen.
+                f.code[pc].c += 1;
+            }
             let consumed_branch = matches!(i.op, Op::JumpFalse | Op::JumpTrue)
                 && f.code[..pc]
                     .iter()
@@ -146,7 +165,9 @@ impl<'a> Compiler<'a> {
             vararg: f.vararg,
             compat_arg: f.compat_arg,
             upvalues: upvalues.into_boxed_slice(),
+            bindings: Box::default(),
             debug: DebugInfo {
+                native: None,
                 defined: f.defined,
                 upvalues: names.into_boxed_slice(),
                 locals: f.debug_locals.into_boxed_slice(),
@@ -266,13 +287,14 @@ impl<'a> Compiler<'a> {
             | Op::Not
             | Op::Len
             | Op::Concat
+            | Op::ConcatRange
             | Op::Eq
             | Op::Ne
             | Op::Lt
             | Op::Le
             | Op::Gt
             | Op::Ge => self.live_register(u16::from(a)),
-            Op::Call | Op::TailCall | Op::Vararg => {
+            Op::Call | Op::CallIter | Op::TailCall | Op::Vararg => {
                 let saved = self.function.next;
                 self.reset(u16::from(a));
                 self.function.next = saved;
@@ -329,7 +351,13 @@ impl<'a> Compiler<'a> {
             .last_mut()
             .expect("emitted hook line") = line;
     }
-    fn constant(&mut self, k: Constant) -> Result<u32, Error> {
+    fn constant(&mut self, mut k: Constant) -> Result<u32, Error> {
+        if let Constant::Number(number) = &mut k
+            && *number == 0.0
+            && let Some(negative) = self.function.zero_sign
+        {
+            *number = if negative { -0.0 } else { 0.0 };
+        }
         // PUC 5.1 pools numbers by numeric equality, including +0 and -0.
         if let Some(i) = self.function.constants.iter().position(|v| match (v, &k) {
             (Constant::Nil, Constant::Nil) => true,

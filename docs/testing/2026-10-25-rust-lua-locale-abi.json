@@ -1,0 +1,26 @@
+{
+  "platform": "Windows x86-64 MSVC, static UCRT",
+  "sdk_version": "10.0.26100.0",
+  "files": {
+    "C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt/locale.h": "877aa49e1f22814dd5634e785d305210d3c7ac0a1274e8552ce4f687a91ac4cb",
+    "C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt/ctype.h": "6a10e9f0505b896d356d986d671c939b7fb0602012e463314ff7bfd0182a861f",
+    "C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt/corecrt_wctype.h": "b622b24cbda842a1736987f38c9deb5076e51af018630842a127bebd9104076e",
+    "C:/Program Files (x86)/Windows Kits/10/Source/10.0.26100.0/ucrt/internal/locks.cpp": "1623c1fe8eeea737b47980bac7b45ab42bd698aaccc80c9d7ab0d015738e1eff",
+    "C:/Program Files (x86)/Windows Kits/10/Source/10.0.26100.0/ucrt/locale/setlocale.cpp": "e81c5a3ada20a7857d8e1a49935a4d30483d1cacbc9fe230f15f36bb51a1c779",
+    "C:/Program Files (x86)/Windows Kits/10/Source/10.0.26100.0/ucrt/locale/localeconv.cpp": "018f027babb42627537d9ee5afe0c5aca9ce40d20643e0f51781454e42591238"
+  },
+  "reviewed_invariants": [
+    "Lua category order maps to SDK constants 0..=5",
+    "lconv decimal_point is its first pointer field",
+    "_lock_locales eagerly initializes locale APIs, then enters the CRT locale critical section",
+    "The Windows critical section is recursive; setlocale uses this same locale lock",
+    "Returned setlocale/lconv storage is copied while holding that lock",
+    "ctype inputs are restricted to unsigned bytes 0..=255",
+    "No Lua values or VM pointers cross the ABI"
+  ],
+  "references": [
+    "https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setlocale-wsetlocale",
+    "https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-entercriticalsection"
+  ],
+  "limitations": "Verified Windows/MSVC declarations only. Miri cannot execute these Windows CRT calls. Other native-locale platforms, external CRT locale changes and host per-thread locale modes are not covered."
+}

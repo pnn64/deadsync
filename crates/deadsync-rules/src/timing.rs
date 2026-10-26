@@ -154,49 +154,25 @@ pub fn classify_offset_ns_with_disabled_windows(
     profile: &TimingProfileNs,
     disabled_windows: &[bool; 5],
 ) -> Option<(JudgeGrade, TimingWindow)> {
-    let abs = i128::from(offset_ns).abs();
+    let abs = offset_ns.unsigned_abs();
     if !disabled_windows[0]
         && let Some(w0) = profile.fa_plus_window_ns
-        && abs <= i128::from(w0)
+        && w0 >= 0
+        && abs <= w0 as u64
     {
         return Some((JudgeGrade::Fantastic, TimingWindow::W0));
     }
 
-    let checks = [
-        (
-            disabled_windows[0],
-            profile.windows_ns[0],
-            JudgeGrade::Fantastic,
-            TimingWindow::W1,
-        ),
-        (
-            disabled_windows[1],
-            profile.windows_ns[1],
-            JudgeGrade::Excellent,
-            TimingWindow::W2,
-        ),
-        (
-            disabled_windows[2],
-            profile.windows_ns[2],
-            JudgeGrade::Great,
-            TimingWindow::W3,
-        ),
-        (
-            disabled_windows[3],
-            profile.windows_ns[3],
-            JudgeGrade::Decent,
-            TimingWindow::W4,
-        ),
-        (
-            disabled_windows[4],
-            profile.windows_ns[4],
-            JudgeGrade::WayOff,
-            TimingWindow::W5,
-        ),
+    const RESULTS: [(JudgeGrade, TimingWindow); 5] = [
+        (JudgeGrade::Fantastic, TimingWindow::W1),
+        (JudgeGrade::Excellent, TimingWindow::W2),
+        (JudgeGrade::Great, TimingWindow::W3),
+        (JudgeGrade::Decent, TimingWindow::W4),
+        (JudgeGrade::WayOff, TimingWindow::W5),
     ];
-    for (disabled, window_ns, grade, window) in checks {
-        if !disabled && abs <= i128::from(window_ns) {
-            return Some((grade, window));
+    for (index, &window_ns) in profile.windows_ns.iter().enumerate() {
+        if !disabled_windows[index] && window_ns >= 0 && abs <= window_ns as u64 {
+            return Some(RESULTS[index]);
         }
     }
     None
@@ -665,20 +641,6 @@ fn sorted_timing_table<T: Clone>(values: &[T], beat: impl Fn(&T) -> f32) -> Arc<
     output
 }
 
-fn exact_arc<T: Copy>(len: usize, mut value_at: impl FnMut(usize) -> T) -> Arc<[T]> {
-    if len == 0 {
-        return Arc::default();
-    }
-    let mut output = Arc::<[T]>::new_uninit_slice(len);
-    let slots = Arc::get_mut(&mut output).expect("new Arc slice must be uniquely owned");
-    for (index, slot) in slots.iter_mut().enumerate() {
-        slot.write(value_at(index));
-    }
-    // SAFETY: the loop writes every one of the `len` slots exactly once before
-    // conversion. `T: Copy` also means an initializer panic cannot leak drops.
-    unsafe { output.assume_init() }
-}
-
 fn bpm_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BpmPoint]>, f32, TimingNs) {
     let bpms = if bpms.is_empty() {
         &[(0.0, 60.0)]
@@ -686,13 +648,15 @@ fn bpm_points(bpms: &[(f32, f32)], song_offset_ns: TimingNs) -> (Arc<[BpmPoint]>
         bpms
     };
     let mut max_bpm = 0.0;
-    let mut points = exact_arc(bpms.len(), |index| {
-        let (beat, bpm) = bpms[index];
-        if bpm.is_finite() && bpm > max_bpm {
-            max_bpm = bpm;
-        }
-        BpmPoint { beat, bpm }
-    });
+    let mut points: Arc<[BpmPoint]> = bpms
+        .iter()
+        .map(|&(beat, bpm)| {
+            if bpm.is_finite() && bpm > max_bpm {
+                max_bpm = bpm;
+            }
+            BpmPoint { beat, bpm }
+        })
+        .collect();
     if !bpms.windows(2).all(|pair| pair[0].0 <= pair[1].0) {
         Arc::get_mut(&mut points)
             .expect("new BPM table must be uniquely owned")
@@ -803,19 +767,22 @@ impl TimingData {
             let mut cum_displayed = 0.0_f32;
             let mut last_real_beat = 0.0_f32;
             let mut last_ratio = 1.0_f32;
-            timing_with_stops.scroll_prefix = exact_arc(timing_with_stops.scrolls.len(), |index| {
-                let seg = timing_with_stops.scrolls[index];
-                // TimingData::GetDisplayedBeat rounds the product before adding.
-                cum_displayed += (seg.beat - last_real_beat) * last_ratio;
-                let prefix = ScrollPrefix {
-                    beat: seg.beat,
-                    cum_displayed,
-                    ratio: seg.ratio,
-                };
-                last_real_beat = seg.beat;
-                last_ratio = seg.ratio;
-                prefix
-            });
+            timing_with_stops.scroll_prefix = timing_with_stops
+                .scrolls
+                .iter()
+                .map(|seg| {
+                    // TimingData::GetDisplayedBeat rounds the product before adding.
+                    cum_displayed += (seg.beat - last_real_beat) * last_ratio;
+                    let prefix = ScrollPrefix {
+                        beat: seg.beat,
+                        cum_displayed,
+                        ratio: seg.ratio,
+                    };
+                    last_real_beat = seg.beat;
+                    last_ratio = seg.ratio;
+                    prefix
+                })
+                .collect();
         }
 
         debug!("TimingData processed {} note rows.", row_to_beat.len());
@@ -1410,35 +1377,37 @@ impl TimingData {
         let mut prev_ratio = 1.0_f32;
         let mut start_cache = BeatTimeCache::new(self);
         let mut end_cache = BeatTimeCache::new(self);
-        let runtime = exact_arc(self.speeds.len(), |index| {
-            let seg = self.speeds[index];
-            // GetDisplayedSpeedPercent uses float endpoints before a delay.
-            // Bake them separately from the integer gameplay timeline.
-            let start_time = self.speed_start_time(seg.beat);
-            let end_time = if seg.unit == SpeedUnit::Seconds {
-                start_time + seg.delay
-            } else {
-                self.speed_start_time(seg.beat + seg.delay)
-            };
-            let start_time_ns = self.get_time_for_beat_ns_cached(seg.beat, &mut start_cache);
-            let end_time_ns = if seg.delay <= 0.0 {
-                start_time_ns
-            } else if seg.unit == SpeedUnit::Seconds {
-                timing_ns_add_seconds(start_time_ns, seg.delay)
-            } else {
-                self.get_time_for_beat_ns_cached(seg.beat + seg.delay, &mut end_cache)
-            };
-            let value = SpeedRuntime {
-                start_time_ns,
-                end_time_ns,
-                start_time,
-                end_time,
-                prev_ratio,
-            };
-            prev_ratio = seg.ratio;
-            value
-        });
-        self.speed_runtime = runtime;
+        self.speed_runtime = self
+            .speeds
+            .iter()
+            .map(|seg| {
+                // GetDisplayedSpeedPercent uses float endpoints before a delay.
+                // Bake them separately from the integer gameplay timeline.
+                let start_time = self.speed_start_time(seg.beat);
+                let end_time = if seg.unit == SpeedUnit::Seconds {
+                    start_time + seg.delay
+                } else {
+                    self.speed_start_time(seg.beat + seg.delay)
+                };
+                let start_time_ns = self.get_time_for_beat_ns_cached(seg.beat, &mut start_cache);
+                let end_time_ns = if seg.delay <= 0.0 {
+                    start_time_ns
+                } else if seg.unit == SpeedUnit::Seconds {
+                    timing_ns_add_seconds(start_time_ns, seg.delay)
+                } else {
+                    self.get_time_for_beat_ns_cached(seg.beat + seg.delay, &mut end_cache)
+                };
+                let value = SpeedRuntime {
+                    start_time_ns,
+                    end_time_ns,
+                    start_time,
+                    end_time,
+                    prev_ratio,
+                };
+                prev_ratio = seg.ratio;
+                value
+            })
+            .collect();
     }
 
     /// ITGmania's row-rounded float beat-to-song clock. Foreground activation
@@ -4790,3 +4759,7 @@ mod tests {
 #[cfg(test)]
 #[path = "timing_lookup_perf.rs"]
 mod lookup_perf;
+
+#[cfg(test)]
+#[path = "timing_creation_kernel.rs"]
+mod creation_kernel;

@@ -69,7 +69,7 @@ pub(super) fn original(
             let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
                 let image = texture.texels();
                 if sampler.filter == SamplerFilter::Linear {
-                    sample_tex_linear::<false>(
+                    sample_tex_linear::<false, 4>(
                         image,
                         image.width,
                         image.height,
@@ -78,7 +78,7 @@ pub(super) fn original(
                         sampler,
                     )
                 } else {
-                    sample_tex_nearest::<false>(
+                    sample_tex_nearest::<false, 4>(
                         image,
                         image.width,
                         image.height,
@@ -219,7 +219,7 @@ pub(super) fn hoisted_only(
             let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
                 let image = texture.texels();
                 if sampler.filter == SamplerFilter::Linear {
-                    sample_tex_linear::<false>(
+                    sample_tex_linear::<false, 4>(
                         image,
                         image.width,
                         image.height,
@@ -228,7 +228,7 @@ pub(super) fn hoisted_only(
                         sampler,
                     )
                 } else {
-                    sample_tex_nearest::<false>(
+                    sample_tex_nearest::<false, 4>(
                         image,
                         image.width,
                         image.height,

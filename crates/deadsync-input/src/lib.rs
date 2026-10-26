@@ -127,9 +127,11 @@ fn write_gamepad_code_binding_token(s: &mut String, binding: GamepadCodeBinding)
         let _ = write!(s, "@{device}");
     }
     if let Some(uuid) = binding.uuid {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
         s.push('#');
-        for b in &uuid {
-            let _ = write!(s, "{b:02X}");
+        for &byte in &uuid {
+            s.push(char::from(HEX[usize::from(byte >> 4)]));
+            s.push(char::from(HEX[usize::from(byte & 15)]));
         }
     }
 }
@@ -167,20 +169,16 @@ pub fn parse_gamepad_code_binding(t: &str) -> Option<GamepadCodeBinding> {
             let hex_len = rest.bytes().take_while(u8::is_ascii_hexdigit).count();
             if hex_len == 32 {
                 let mut bytes = [0u8; 16];
-                let mut ok = true;
-                for (i, byte) in bytes.iter_mut().enumerate() {
-                    let start = i * 2;
-                    let end = start + 2;
-                    if let Ok(parsed) = u8::from_str_radix(&rest[start..end], 16) {
-                        *byte = parsed;
-                    } else {
-                        ok = false;
-                        break;
-                    }
+                // The scan validated all 32 ASCII hex digits. Their low nibble
+                // plus nine for a letter is the hex value, in either case.
+                let digit = |byte: u8| (byte & 15) + 9 * (byte >> 6);
+                for (byte, pair) in bytes
+                    .iter_mut()
+                    .zip(rest.as_bytes()[..32].as_chunks::<2>().0)
+                {
+                    *byte = (digit(pair[0]) << 4) | digit(pair[1]);
                 }
-                if ok {
-                    uuid = Some(bytes);
-                }
+                uuid = Some(bytes);
             }
             tail = &rest[hex_len..];
             continue;

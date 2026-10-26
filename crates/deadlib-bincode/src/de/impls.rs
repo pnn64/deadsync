@@ -65,7 +65,7 @@ fn decode_bool_array<T, D: Decoder, const N: usize>(
         return None;
     }
     let source = &source[..N];
-    if let Some(index) = source.iter().position(|byte| *byte > 1) {
+    if let Some(index) = crate::utils::invalid_bool(source) {
         let value = source[index];
         decoder.reader().consume(index + 1);
         return Some(Err(DecodeError::InvalidBooleanValue(value)));

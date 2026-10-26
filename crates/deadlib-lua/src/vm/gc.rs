@@ -1,5 +1,6 @@
 //! Iterative tracing, weak tables, host roots and reusable object generations.
 use super::*;
+use crate::table::TableTrace;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static VM_ID: AtomicU64 = AtomicU64::new(1);
@@ -54,6 +55,11 @@ pub struct HeapStats {
 #[derive(Debug)]
 pub(super) enum Trace {
     Value(Value),
+    MarkedValue(Value),
+    ThreadAgain(ThreadId),
+    TableAgain(TableId),
+    TableSlice(TableId, usize),
+    CellAgain(usize),
     Program(usize),
     Cell(usize),
     File(u64),
@@ -66,18 +72,21 @@ fn edge(value: Value) -> Option<Trace> {
 }
 #[derive(Debug)]
 pub(super) struct Collector {
+    phase: Phase,
+    sweep_arena: u8,
+    sweep_cursor: usize,
     stopped: bool,
     pause: i32,
     stepmul: i32,
     last_live: usize,
     threshold: usize,
-    credit: usize,
     pub(super) collections: u64,
     reclaimed: u64,
     peak: usize,
     work: Vec<Trace>,
     erase: Vec<(usize, Value)>,
     natives: [u64; 4],
+    natives_previous: [u64; 4],
     control_allocated: usize,
     pub(super) pending: bool,
     pub(super) finalizers: std::collections::VecDeque<UserdataId>,
@@ -88,18 +97,21 @@ pub(super) struct Collector {
 impl Default for Collector {
     fn default() -> Self {
         Self {
+            phase: Phase::Pause,
+            sweep_arena: 0,
+            sweep_cursor: 0,
             stopped: false,
             pause: 200,
             stepmul: 200,
             last_live: 0,
             threshold: 64 * 1024,
-            credit: 0,
             collections: 0,
             reclaimed: 0,
             peak: 0,
             work: Vec::new(),
             erase: Vec::new(),
             natives: [0; 4],
+            natives_previous: [0; 4],
             control_allocated: 0,
             pending: false,
             finalizers: std::collections::VecDeque::new(),
@@ -110,7 +122,51 @@ impl Default for Collector {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Phase {
+    Pause,
+    Propagate,
+    Sweep,
+    Finalize,
+}
+
 impl Strings {
+    fn remove(&mut self, key: u64) {
+        let index = slot_index(key);
+        let mask = self.buckets.len() - 1;
+        let mut hole = Self::hash(&self.bytes[index]) & mask;
+        while self.buckets[hole] != index as u32 + 1 {
+            debug_assert_ne!(self.buckets[hole], 0);
+            hole = (hole + 1) & mask;
+        }
+        let mut cursor = (hole + 1) & mask;
+        while self.buckets[cursor] != 0 {
+            // Backshift the cluster before freeing/reusing its arena slot.
+            let entry = self.buckets[cursor];
+            let home = Self::hash(&self.bytes[entry as usize - 1]) & mask;
+            if (cursor.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
+                self.buckets[hole] = entry;
+                hole = cursor;
+            }
+            cursor = (cursor + 1) & mask;
+        }
+        self.buckets[hole] = 0;
+        self.bytes.remove(key);
+    }
+    fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+        let end = cursor.saturating_sub(budget);
+        let mut reclaimed = 0;
+        for index in (end..*cursor).rev() {
+            if let Some(key) = self.bytes.key(index)
+                && !self.bytes.marked(key)
+            {
+                self.remove(key);
+                reclaimed += 1;
+            }
+        }
+        *cursor = end;
+        reclaimed
+    }
     fn rebuild(&mut self) {
         let size = (self.bytes.live_len().saturating_mul(2))
             .max(16)
@@ -126,18 +182,6 @@ impl Strings {
         }
     }
 }
-fn sweep<T>(arena: &mut Arena<T>) -> u64 {
-    let mut count = 0;
-    for i in (0..arena.len()).rev() {
-        if let Some(key) = arena.key(i)
-            && !arena.marked(key)
-        {
-            arena.remove(key);
-            count += 1;
-        }
-    }
-    count
-}
 fn jobs_bytes(substitutions: &[strings::Substitution]) -> usize {
     substitutions
         .iter()
@@ -151,6 +195,8 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             .map(|k| k.len() * std::mem::size_of::<Value>())
             .sum::<usize>();
     bytes += p.data.name.len()
+        + std::mem::size_of_val(p.data.sources.as_ref())
+        + p.data.sources.iter().map(|s| s.len()).sum::<usize>()
         + p.data.prototypes.len() * std::mem::size_of::<crate::bytecode::Prototype>();
     for f in &p.data.prototypes {
         bytes += f.code.len() * 8
@@ -159,6 +205,11 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             + f.gc_live.len() * 4
             + f.gc_maps.len() * 32
             + f.upvalues.len() * std::mem::size_of::<Upvalue>()
+            + std::mem::size_of_val(f.bindings.as_ref())
+            + f.bindings
+                .iter()
+                .map(|b| std::mem::size_of_val(b.upvalues.as_ref()))
+                .sum::<usize>()
             + f.constants.len() * std::mem::size_of::<Constant>()
             + f.constants
                 .iter()
@@ -195,7 +246,7 @@ fn frames_roots(
                     .get(i + 1)
                     .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
                 {
-                    let end = (frame.base + usize::from(proto.registers))
+                    let end = (frame.base + proto.debug_registers())
                         .min(registers.len())
                         .min(cutoff);
                     work.extend(
@@ -299,13 +350,22 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|io::FIRST..=io::LAST)
+                (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|debug::CONSOLE|io::FIRST..=io::LAST|os::FIRST..=os::LAST)
                     || package::contains(id))
-                    && (self.gc.collections == 0 || self.marked_value(value))
+                    && (self.gc.collections == 0
+                        || self.marked_value(value)
+                        || (self.gc.phase == Phase::Propagate
+                            && self.gc.natives_previous[id as usize / 64] & (1u64 << (id % 64))
+                                != 0))
             }
             _ => true,
         };
-        if valid {
+        let live_during_sweep = self.gc.phase != Phase::Sweep
+            || match value {
+                Value::String(id) => self.strings.bytes.marked(id.0),
+                _ => self.marked_value(value),
+            };
+        if valid && live_during_sweep {
             Ok(())
         } else {
             Err(Error::new(
@@ -322,6 +382,7 @@ impl Vm {
     /// Returns an error if the object handle is invalid or has been collected.
     pub fn pin(&mut self, value: Value) -> Result<Root, Error> {
         self.validate_value(value)?;
+        self.gc_new_value(value);
         Ok(Root {
             vm: self.identity,
             key: self.roots.insert(value),
@@ -390,7 +451,6 @@ impl Vm {
             + self.patterns.capacity() * (std::mem::size_of::<((StringId, bool), crate::pattern::Pattern)>() + 1)
             + self.native_envs.capacity() * (std::mem::size_of::<(u64, TableId)>() + 1);
         control += self.proxy_metatables.capacity() * (std::mem::size_of::<TableId>() + 1);
-        control += self.hook_functions.capacity() * (std::mem::size_of::<(ThreadId, Value)>() + 1);
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
             + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<Box<[u8]>>()
@@ -446,12 +506,42 @@ impl Vm {
         self.gc.control_allocated = 0;
         self.gc.pending = false;
         self.gc.last_live = self.heap_stats().live_bytes;
+        self.set_gc_threshold();
+    }
+    fn set_gc_threshold(&mut self) {
         self.gc.threshold = self
             .gc
             .last_live
             .saturating_mul(self.gc.pause.max(1) as usize)
             .saturating_div(100)
             .max(64 * 1024);
+    }
+    pub(super) fn finish_gc_cycle(&mut self) {
+        self.gc.stopped = false;
+        self.set_gc_threshold();
+        if self.gc.finalizers.is_empty() {
+            self.gc.phase = Phase::Pause;
+            self.protect_new_allocations(false);
+        }
+    }
+    pub(super) fn enter_gc_finalizer(&mut self, owner: usize) {
+        // CONT_GC has no arguments. Its unused argument start saves the native
+        // threshold; pc records the callback phase and previous stop state.
+        debug_assert_eq!(self.frames[owner].argc(), 0);
+        self.frames[owner].vararg_start = self.gc.threshold;
+        self.frames[owner].pc = 1 | (u32::from(self.gc.stopped) << 1);
+        self.gc.threshold = self
+            .gc
+            .last_live
+            .saturating_add(self.gc_debt())
+            .saturating_mul(2);
+        self.gc.stopped = false;
+    }
+    pub(super) fn leave_gc_finalizer(&mut self, owner: usize, frame: Frame) {
+        self.gc.threshold = frame.vararg_start;
+        self.gc.stopped = frame.pc & 2 != 0;
+        self.frames[owner].pc = 0;
+        self.frames[owner].vararg_start = 0;
     }
     fn gc_debt(&self) -> usize {
         self.strings
@@ -467,6 +557,99 @@ impl Vm {
             .saturating_add(self.io.files.allocated)
             .saturating_add(self.gc.control_allocated)
     }
+    fn mark_barrier_value(&mut self, value: Value, work: &mut Vec<Trace>) {
+        let fresh = match value {
+            Value::String(id) => {
+                self.strings.bytes.mark(id.0);
+                false
+            }
+            Value::Table(id) => {
+                let fresh = self.tables.mark(id.0);
+                if fresh {
+                    self.tables[slot_index(id.0)].trace = TableTrace::Restart;
+                }
+                fresh
+            }
+            Value::Function(id) => self.functions.mark(id.0),
+            Value::Thread(id) => self.threads.mark(id.0),
+            Value::Userdata(id) => self.userdata.mark(id.0),
+            Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.mark(id),
+            Value::Native(id) if id < 256 => {
+                let word = id as usize / 64;
+                let bit = 1u64 << (id % 64);
+                let fresh = self.gc.natives[word] & bit == 0;
+                self.gc.natives[word] |= bit;
+                fresh
+            }
+            _ => false,
+        };
+        if fresh {
+            work.push(Trace::MarkedValue(value));
+        }
+    }
+    pub(super) fn gc_new_value(&mut self, value: Value) {
+        if self.gc.phase == Phase::Propagate {
+            let mut work = std::mem::take(&mut self.gc.work);
+            self.mark_barrier_value(value, &mut work);
+            self.gc.work = work;
+        }
+    }
+    pub(super) fn gc_barrier(&mut self, owner: Value, value: Value) {
+        if self.gc.phase == Phase::Propagate && self.marked_value(owner) {
+            self.gc_new_value(value);
+        }
+    }
+    pub(super) fn gc_cell_barrier(&mut self, cell: usize, value: Value) {
+        if self.gc.phase == Phase::Propagate
+            && self
+                .upvalues
+                .key(cell)
+                .is_some_and(|key| self.upvalues.marked(key))
+        {
+            self.gc_new_value(value);
+        }
+    }
+    pub(super) fn gc_new_cell(&mut self, cell: usize) {
+        if self.gc.phase == Phase::Propagate
+            && let Some(key) = self.upvalues.key(cell)
+            && self.upvalues.mark(key)
+        {
+            self.gc.work.push(Trace::CellAgain(cell));
+        }
+    }
+    pub(super) fn gc_table_write(&mut self, id: TableId, key: Value, value: Value) {
+        if self.gc.phase == Phase::Propagate && self.tables.marked(id.0) {
+            let (weak_keys, weak_values) = self.table_mode(&self.tables[slot_index(id.0)]);
+            let mut work = std::mem::take(&mut self.gc.work);
+            if !weak_keys || matches!(key, Value::String(_)) {
+                self.mark_barrier_value(key, &mut work);
+            }
+            if !weak_values || matches!(value, Value::String(_)) {
+                self.mark_barrier_value(value, &mut work);
+            }
+            self.gc.work = work;
+        }
+    }
+    pub(super) fn gc_metatable_write(&mut self, owner: Value, table: Option<TableId>) {
+        if self.gc.phase != Phase::Propagate {
+            return;
+        }
+        if let Value::Table(id) = owner {
+            if self.tables.marked(id.0) {
+                let table = &mut self.tables[slot_index(id.0)];
+                if table.trace == TableTrace::Idle {
+                    self.gc.work.push(Trace::TableSlice(id, 0));
+                }
+                table.trace = TableTrace::Restart;
+            }
+        } else if let Some(table) = table {
+            if matches!(owner, Value::Userdata(_)) {
+                self.gc_barrier(owner, Value::Table(table));
+            } else {
+                self.gc_new_value(Value::Table(table));
+            }
+        }
+    }
     pub(super) fn maybe_gc(&mut self) {
         self.gc.pending = false;
         if !self.gc.stopped
@@ -474,14 +657,19 @@ impl Vm {
             && !self.gc.closing
             && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
         {
-            self.collect_cycle();
-            if !self.gc.finalizers.is_empty() {
-                self.push_finalizers(false);
+            if self.advance_gc_some(self.gc_step_budget(0)) {
+                if self.gc.finalizers.is_empty() {
+                    self.finish_gc_cycle();
+                } else {
+                    self.push_finalizers(false);
+                }
+            } else {
+                self.defer_gc_until_allocation();
             }
         }
     }
     fn table_mode(&self, table: &Table) -> (bool, bool) {
-        let Some(mt) = table.metatable else {
+        let Some(mt) = table.metatable() else {
             return (false, false);
         };
         let Value::String(mode) =
@@ -548,7 +736,7 @@ impl Vm {
         };
         frames_roots(self, registers, frames, top, cutoff, work);
         for job in subs {
-            work.extend(job.roots().into_iter().filter_map(edge));
+            work.extend(job.roots().filter_map(edge));
         }
         for job in sorts {
             work.extend(job.roots().into_iter().filter_map(edge));
@@ -570,31 +758,28 @@ impl Vm {
             && (key
                 || !matches!(value, Value::Userdata(id) if self.userdata[slot_index(id.0)].finalized))
     }
-    fn trace_graph(&mut self, work: &mut Vec<Trace>) {
-        while let Some(item) = work.pop() {
+    fn trace_some(&mut self, work: &mut Vec<Trace>, budget: usize) -> usize {
+        let mut visited = 0;
+        while visited < budget {
+            let Some(item) = work.pop() else {
+                break;
+            };
+            visited += 1;
+            let (item, forced) = match item {
+                Trace::MarkedValue(value) => (Trace::Value(value), true),
+                item => (item, false),
+            };
             match item {
                 Trace::Value(Value::String(id)) => {
                     self.strings.bytes.mark(id.0);
                 }
                 Trace::Value(Value::Table(id)) => {
-                    if self.tables.mark(id.0) {
-                        let table = &self.tables[slot_index(id.0)];
-                        if let Some(mt) = table.metatable {
-                            work.push(Trace::Value(Value::Table(mt)));
-                        }
-                        let (weak_keys, weak_values) = self.table_mode(table);
-                        for (k, v) in table.pairs() {
-                            if !weak_keys || matches!(k, Value::String(_)) {
-                                work.extend(edge(k));
-                            }
-                            if !weak_values || matches!(v, Value::String(_)) {
-                                work.extend(edge(v));
-                            }
-                        }
+                    if self.tables.mark(id.0) || forced {
+                        self.trace_table(id, work);
                     }
                 }
                 Trace::Value(Value::Function(id)) => {
-                    if self.functions.mark(id.0) {
+                    if self.functions.mark(id.0) || forced {
                         let f = &self.functions[slot_index(id.0)];
                         work.push(Trace::Value(Value::Table(f.env)));
                         work.push(Trace::Program(f.program));
@@ -602,7 +787,7 @@ impl Vm {
                     }
                 }
                 Trace::Value(Value::Userdata(id)) => {
-                    if self.userdata.mark(id.0) {
+                    if self.userdata.mark(id.0) || forced {
                         let u = &self.userdata[slot_index(id.0)];
                         if let Some(file) = u.file {
                             self.io.files.mark(file.get());
@@ -614,13 +799,13 @@ impl Vm {
                     }
                 }
                 Trace::Value(Value::Thread(id)) => {
-                    if self.threads.mark(id.0) {
+                    if self.threads.mark(id.0) || forced {
                         self.trace_thread(id, work);
                     }
                 }
                 Trace::Value(Value::Native(id)) => {
                     if id >= strings::ITERATOR_FIRST {
-                        if self.native_closures.mark(id) {
+                        if self.native_closures.mark(id) || forced {
                             let f = &self.native_closures[slot_index(id)];
                             work.push(Trace::Value(Value::Table(f.env)));
                             match &f.kind {
@@ -633,17 +818,23 @@ impl Vm {
                                 threads::NativeKind::Lines { file, .. } => {
                                     work.push(Trace::Value(Value::Userdata(*file)))
                                 }
+                                threads::NativeKind::StandaloneMain
+                                | threads::NativeKind::StandaloneTraceback => {}
                             }
                         }
                     } else if id < 256 {
                         let word = id as usize / 64;
                         let bit = 1u64 << (id % 64);
-                        if self.gc.natives[word] & bit == 0 {
+                        if self.gc.natives[word] & bit == 0 || forced {
                             self.gc.natives[word] |= bit;
                             work.push(Trace::Value(Value::Table(self.native_environment(id))));
                         }
                     }
                 }
+                Trace::ThreadAgain(id) => self.trace_thread(id, work),
+                Trace::TableAgain(id) => self.trace_table(id, work),
+                Trace::TableSlice(id, cursor) => self.trace_table_slice(id, cursor, work),
+                Trace::CellAgain(i) => work.extend(edge(self.cell_value(i))),
                 Trace::Program(i) => {
                     if let Some(key) = self.programs.key(i)
                         && self.programs.mark(key)
@@ -666,9 +857,56 @@ impl Vm {
                 _ => {}
             }
         }
+        visited
     }
-    pub(super) fn collect_cycle(&mut self) -> HeapStats {
+    fn trace_graph(&mut self, work: &mut Vec<Trace>) {
+        self.trace_some(work, usize::MAX);
+    }
+    fn trace_table(&mut self, id: TableId, work: &mut Vec<Trace>) {
+        // Fresh marks also discard scan state left by an interrupted cycle.
+        self.tables[slot_index(id.0)].trace = TableTrace::Restart;
+        self.trace_table_slice(id, 0, work);
+    }
+    fn trace_table_slice(&mut self, id: TableId, cursor: usize, work: &mut Vec<Trace>) {
+        let table = &self.tables[slot_index(id.0)];
+        // Read __mode once per scan. The atomic metatable refresh observes mode
+        // mutations before weak cleanup, just as for an unsliced table scan.
+        let (cursor, weak_keys, weak_values) = match table.trace {
+            TableTrace::Pending(wk, wv) => (cursor, wk, wv),
+            TableTrace::Idle | TableTrace::Restart => {
+                let (wk, wv) = self.table_mode(table);
+                (0, wk, wv)
+            }
+        };
+        self.tables[slot_index(id.0)].trace = TableTrace::Pending(weak_keys, weak_values);
+        let table = &self.tables[slot_index(id.0)];
+        let (next, pairs) = table.trace_slice(cursor, 64);
+        // Resume after children: a wide table needs only one pending slice and
+        // the current slice's edges rather than a frontier for its entire width.
+        if let Some(next) = next {
+            work.push(Trace::TableSlice(id, next));
+        }
+        if cursor == 0
+            && let Some(mt) = table.metatable()
+        {
+            work.push(Trace::Value(Value::Table(mt)));
+        }
+        for (key, value) in pairs {
+            if !weak_keys || matches!(key, Value::String(_)) {
+                work.extend(edge(key));
+            }
+            if !weak_values || matches!(value, Value::String(_)) {
+                work.extend(edge(value));
+            }
+        }
+        if next.is_none() {
+            self.tables[slot_index(id.0)].trace = TableTrace::Idle;
+        }
+    }
+    fn begin_gc_cycle(&mut self) {
         self.heap_stats();
+        self.gc.phase = Phase::Propagate;
+        self.protect_new_allocations(false);
         self.strings.bytes.clear_marks();
         self.tables.clear_marks();
         self.functions.clear_marks();
@@ -681,9 +919,16 @@ impl Vm {
         if let Some(key) = self.io.stdin {
             self.io.files.mark(key.get());
         }
+        self.strings.bytes.protect_new(true);
+        self.io.files.protect_new(true);
+        self.gc.natives_previous = self.gc.natives;
         self.gc.natives.fill(0);
         let mut work = std::mem::take(&mut self.gc.work);
         work.clear();
+        self.seed_gc_roots(&mut work);
+        self.gc.work = work;
+    }
+    fn seed_gc_roots(&self, work: &mut Vec<Trace>) {
         work.push(Trace::Value(Value::Thread(self.main)));
         work.push(Trace::Value(Value::Table(self.registry)));
         if let Some(tag) = self.io.file_tag {
@@ -704,7 +949,9 @@ impl Vm {
                 .map(|t| Trace::Value(Value::Table(t))),
         );
         work.extend(self.roots.iter().copied().filter_map(edge));
-        work.extend(self.hook_functions.values().copied().filter_map(edge));
+        if self.standalone != 0 {
+            work.push(Trace::Value(Value::Native(self.standalone)));
+        }
         // A live host Program retains its mutable per-VM entry binding. Internal
         // code ownership by escaped Lua closures does not pin unused entries.
         work.extend(
@@ -713,16 +960,41 @@ impl Vm {
                 .filter(|p| p.owner.strong_count() != 0)
                 .map(|p| Trace::Value(Value::Function(p.entry))),
         );
+    }
+    fn finish_gc_marking(&mut self) {
+        let mut work = std::mem::take(&mut self.gc.work);
         self.trace_graph(&mut work);
-        // Lua 5.1 revisits initially reachable threads in its gray-again pass.
-        // Threads reached only through finalizer preservation are visited once.
+        // Snapshot the already reached containers before refreshing roots;
+        // newly reached threads/cells still receive their ordinary first scan.
         for index in 0..self.threads.len() {
             if let Some(key) = self.threads.key(index)
                 && self.threads.marked(key)
             {
-                self.shrink_thread_calls(ThreadId(key));
+                work.push(Trace::ThreadAgain(ThreadId(key)));
             }
         }
+        for (index, table) in self.tables.entries() {
+            if table.metatable().is_some()
+                && self
+                    .tables
+                    .key(index)
+                    .is_some_and(|key| self.tables.marked(key))
+            {
+                work.push(Trace::TableAgain(TableId(self.tables.key(index).unwrap())));
+            }
+        }
+        for (index, cell) in self.upvalues.entries() {
+            if matches!(cell, Cell::Open(..))
+                && self
+                    .upvalues
+                    .key(index)
+                    .is_some_and(|key| self.upvalues.marked(key))
+            {
+                work.push(Trace::CellAgain(index));
+            }
+        }
+        self.seed_gc_roots(&mut work);
+        self.trace_graph(&mut work);
         // Pending callbacks preserve their graphs only after discovering newly
         // finalizable userdata, including graphs attached after a callback error.
         self.separate_userdata(false);
@@ -763,15 +1035,64 @@ impl Vm {
                 }
             }
         }
-        let reclaimed = sweep(&mut self.tables)
-            + sweep(&mut self.functions)
-            + sweep(&mut self.upvalues)
-            + sweep(&mut self.threads)
-            + sweep(&mut self.native_closures)
-            + sweep(&mut self.programs)
-            + sweep(&mut self.strings.bytes);
-        let reclaimed = reclaimed + sweep(&mut self.userdata);
-        let reclaimed = reclaimed + sweep(&mut self.io.files);
+        self.gc.work = work;
+        self.protect_new_allocations(true);
+        self.gc.phase = Phase::Sweep;
+        self.gc.sweep_arena = 0;
+        self.gc.sweep_cursor = self.tables.len();
+    }
+    fn protect_new_allocations(&mut self, enabled: bool) {
+        self.tables.protect_new(enabled);
+        self.functions.protect_new(enabled);
+        self.upvalues.protect_new(enabled);
+        self.threads.protect_new(enabled);
+        self.native_closures.protect_new(enabled);
+        self.programs.protect_new(enabled);
+        self.strings.bytes.protect_new(enabled);
+        self.userdata.protect_new(enabled);
+        self.io.files.protect_new(enabled);
+    }
+    fn sweep_arena_len(&self, arena: u8) -> usize {
+        match arena {
+            0 => self.tables.len(),
+            1 => self.functions.len(),
+            2 => self.upvalues.len(),
+            3 => self.threads.len(),
+            4 => self.native_closures.len(),
+            5 => self.programs.len(),
+            6 => self.strings.bytes.len(),
+            7 => self.userdata.len(),
+            8 => self.io.files.len(),
+            _ => 0,
+        }
+    }
+    fn sweep_gc_some(&mut self, mut budget: usize) {
+        while budget != 0 && self.gc.sweep_arena < 9 {
+            let mut cursor = self.gc.sweep_cursor;
+            let before = cursor;
+            let count = match self.gc.sweep_arena {
+                0 => self.tables.sweep_some(&mut cursor, budget),
+                1 => self.functions.sweep_some(&mut cursor, budget),
+                2 => self.upvalues.sweep_some(&mut cursor, budget),
+                3 => self.threads.sweep_some(&mut cursor, budget),
+                4 => self.native_closures.sweep_some(&mut cursor, budget),
+                5 => self.programs.sweep_some(&mut cursor, budget),
+                6 => self.strings.sweep_some(&mut cursor, budget),
+                7 => self.userdata.sweep_some(&mut cursor, budget),
+                8 => self.io.files.sweep_some(&mut cursor, budget),
+                _ => unreachable!(),
+            };
+            self.gc.reclaimed += count;
+            budget -= before - cursor;
+            if cursor == 0 {
+                self.gc.sweep_arena += 1;
+                cursor = self.sweep_arena_len(self.gc.sweep_arena);
+            }
+            self.gc.sweep_cursor = cursor;
+        }
+        if self.gc.sweep_arena != 9 {
+            return;
+        }
         self.proxy_metatables
             .retain(|id| self.tables.contains(id.0));
         self.strings.rebuild();
@@ -780,17 +1101,69 @@ impl Vm {
         self.native_envs.retain(|id, _| {
             *id < 256 && self.gc.natives[*id as usize / 64] & (1u64 << (*id % 64)) != 0
         });
-        self.gc.work = work;
+        self.gc.phase = Phase::Finalize;
         self.gc.collections += 1;
-        self.gc.reclaimed += reclaimed;
-        self.gc.credit = 0;
         self.reset_gc_debt();
+        self.heap_stats();
+    }
+    fn advance_gc_some(&mut self, mut budget: usize) -> bool {
+        if self.gc.phase == Phase::Pause {
+            self.begin_gc_cycle();
+        }
+        if self.gc.phase == Phase::Propagate {
+            let mut work = std::mem::take(&mut self.gc.work);
+            budget -= self.trace_some(&mut work, budget);
+            self.gc.work = work;
+            if self.gc.work.is_empty() {
+                self.finish_gc_marking();
+            }
+        }
+        if self.gc.phase == Phase::Sweep {
+            self.sweep_gc_some(budget);
+        }
+        self.gc.phase == Phase::Finalize
+    }
+    fn gc_step_budget(&self, extra: i32) -> usize {
+        if self.gc.stepmul == 0 {
+            return usize::MAX;
+        }
+        (extra as usize)
+            .wrapping_shl(10)
+            .max(1024)
+            .saturating_mul(self.gc.stepmul.max(1) as usize)
+            .saturating_div(100)
+            .saturating_div(16)
+            .max(1)
+    }
+    fn defer_gc_until_allocation(&mut self) {
+        self.gc.threshold = self
+            .gc
+            .last_live
+            .saturating_add(self.gc_debt())
+            .saturating_add(1);
+    }
+    pub(super) fn finish_pending_sweep(&mut self) {
+        if self.gc.phase == Phase::Sweep {
+            self.sweep_gc_some(usize::MAX);
+        }
+    }
+    pub(super) fn prepare_gc_finalizers(&mut self) {
+        if self.gc.phase == Phase::Propagate {
+            self.finish_gc_marking();
+        }
+        self.finish_pending_sweep();
+    }
+    pub(super) fn collect_cycle(&mut self) -> HeapStats {
+        self.finish_pending_sweep();
+        self.begin_gc_cycle();
+        self.finish_gc_marking();
+        self.sweep_gc_some(usize::MAX);
         self.heap_stats()
     }
-    pub(super) fn gc_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+    pub(super) fn gc_native(&mut self, id: u64, base: usize, count: usize) -> Result<bool, Error> {
         if id == GC_INFO {
             self.registers[base] = Value::Number((self.heap_stats().live_bytes / 1024) as f64);
-            return Ok(1);
+            return Ok(false);
         }
         let option = if self.argument(base, count, 0) == Value::Nil {
             None
@@ -816,6 +1189,7 @@ impl Vm {
             .ok_or_else(|| self.argument_option_error(0, option))?;
         let extra = self.integer_argument(base, count, 1, Some(0))? as i32;
         let option = choices[choice];
+        let mut dispatch = false;
         let value = match option {
             b"stop" => {
                 self.gc.stopped = true;
@@ -823,17 +1197,20 @@ impl Vm {
             }
             b"restart" => {
                 self.gc.stopped = false;
+                // Frame-boundary checks must wait for the next allocation.
+                self.defer_gc_until_allocation();
                 Value::Number(0.0)
             }
             b"collect" => {
                 self.collect_cycle();
+                self.finish_gc_cycle();
+                dispatch = true;
                 Value::Number(0.0)
             }
             b"count" => Value::Number(self.heap_stats().live_bytes as f64 / 1024.0),
             b"setpause" => {
                 let old = self.gc.pause;
                 self.gc.pause = extra;
-                self.gc.threshold = self.gc.last_live.saturating_mul(extra.max(1) as usize) / 100;
                 Value::Number(f64::from(old))
             }
             b"setstepmul" => {
@@ -842,20 +1219,592 @@ impl Vm {
                 Value::Number(f64::from(old))
             }
             b"step" => {
-                let bytes = (extra.max(1) as usize)
-                    .saturating_mul(1024)
-                    .saturating_mul(self.gc.stepmul.max(1) as usize)
-                    / 100;
-                self.gc.credit = self.gc.credit.saturating_add(bytes.max(1));
-                let complete = self.gc.credit >= self.heap_stats().live_bytes;
+                self.gc.stopped = false;
+                let complete = self.advance_gc_some(self.gc_step_budget(extra));
                 if complete {
-                    self.collect_cycle();
+                    self.finish_gc_cycle();
+                    dispatch = true;
+                } else {
+                    self.defer_gc_until_allocation();
                 }
                 Value::Boolean(complete)
             }
             _ => unreachable!("validated collector option"),
         };
         self.registers[base] = value;
-        Ok(1)
+        Ok(dispatch)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn finish_marked_cycle(vm: &mut Vm) {
+        vm.finish_gc_marking();
+        vm.sweep_gc_some(usize::MAX);
+        vm.finish_gc_cycle();
+    }
+
+    fn value_table(value: Value) -> TableId {
+        let Value::Table(id) = value else {
+            panic!("table expected")
+        };
+        id
+    }
+
+    fn trace_until(vm: &mut Vm, mut ready: impl FnMut(&Vm) -> bool) {
+        for _ in 0..100000 {
+            if ready(vm) {
+                return;
+            }
+            let mut work = std::mem::take(&mut vm.gc.work);
+            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            vm.gc.work = work;
+            assert_eq!(vm.gc.phase, Phase::Propagate);
+        }
+        panic!("mark frontier did not reach the requested objects");
+    }
+
+    #[test]
+    fn wide_table_frontiers_stay_bounded_and_preserve_every_child() {
+        for shape in 0..3 {
+            let mut vm = Vm::new();
+            let table = vm.new_table();
+            let root = vm.pin(Value::Table(table)).unwrap();
+            let mut children = Vec::new();
+            for i in 1..=4096 {
+                let value = Value::Table(vm.new_table());
+                let key = if shape == 1 || (shape == 2 && i % 2 == 0) {
+                    let key = Value::Table(vm.new_table());
+                    children.push(key);
+                    key
+                } else {
+                    Value::Number(f64::from(if shape == 2 { (i + 1) / 2 } else { i }))
+                };
+                vm.raw_set(table, key, value).unwrap();
+                children.push(value);
+            }
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(Value::Table(table))];
+            let mut peak = 0;
+            while !work.is_empty() {
+                assert_eq!(vm.trace_some(&mut work, 1), 1);
+                peak = peak.max(work.len());
+            }
+            assert!(peak <= 129, "wide table frontier grew to {peak}");
+            assert!(children.iter().all(|&value| vm.marked_value(value)));
+            finish_marked_cycle(&mut vm);
+            assert!(
+                children
+                    .iter()
+                    .all(|&value| vm.validate_value(value).is_ok())
+            );
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn sparse_table_slices_count_holes_and_tombstones() {
+        for hash in [false, true] {
+            let mut vm = Vm::new();
+            let table = vm.new_table();
+            let root = vm.pin(Value::Table(table)).unwrap();
+            let child = Value::Table(vm.new_table());
+            for i in 1..=16384 {
+                let key = Value::Number(if hash { -f64::from(i) } else { f64::from(i) });
+                vm.raw_set(table, key, child).unwrap();
+            }
+            for i in 1..16384 {
+                let key = Value::Number(if hash { -f64::from(i) } else { f64::from(i) });
+                vm.raw_set(table, key, Value::Nil).unwrap();
+            }
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(Value::Table(table))];
+            for _ in 0..200 {
+                assert_eq!(vm.trace_some(&mut work, 1), 1);
+                assert_eq!(work.len(), 1);
+                assert!(!vm.marked_value(child));
+            }
+            vm.trace_graph(&mut work);
+            assert!(vm.marked_value(child));
+            finish_marked_cycle(&mut vm);
+            assert!(vm.validate_value(child).is_ok());
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn hash_compaction_restarts_an_active_scan_before_shifted_entries() {
+        let mut vm = Vm::new();
+        let table = vm.new_record_table(128);
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let mut children = Vec::new();
+        for i in 1..=191 {
+            let child = Value::Table(vm.new_table());
+            vm.raw_set(table, Value::Number(-f64::from(i)), child)
+                .unwrap();
+            children.push(child);
+        }
+        for i in 1..=128 {
+            vm.raw_set(table, Value::Number(-f64::from(i)), Value::Nil)
+                .unwrap();
+        }
+        vm.begin_gc_cycle();
+        let mut work = vec![Trace::Value(Value::Table(table))];
+        assert_eq!(vm.trace_some(&mut work, 1), 1);
+        assert!(matches!(work.as_slice(), [Trace::TableSlice(_, 129)]));
+        vm.gc.work.extend(work);
+        vm.raw_set(table, Value::Number(-1000.0), Value::Boolean(true))
+            .unwrap();
+        assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Restart);
+        finish_marked_cycle(&mut vm);
+        assert!(
+            children[..128]
+                .iter()
+                .all(|&v| vm.validate_value(v).is_err())
+        );
+        assert!(
+            children[128..]
+                .iter()
+                .all(|&v| vm.validate_value(v).is_ok())
+        );
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn hash_to_array_moves_restart_an_active_hash_scan() {
+        let mut vm = Vm::new();
+        let table = vm.new_table();
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let mut children = Vec::new();
+        for i in 2..=256 {
+            let child = Value::Table(vm.new_table());
+            vm.raw_set(table, Value::Number(f64::from(i)), child)
+                .unwrap();
+            children.push(child);
+        }
+        vm.begin_gc_cycle();
+        let mut work = vec![Trace::Value(Value::Table(table))];
+        assert_eq!(vm.trace_some(&mut work, 2), 2);
+        assert!(children[64..].iter().all(|&v| !vm.marked_value(v)));
+        vm.gc.work.extend(work);
+        vm.raw_set(table, Value::Number(1.0), Value::Boolean(true))
+            .unwrap();
+        assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Restart);
+        finish_marked_cycle(&mut vm);
+        assert!(children.iter().all(|&v| vm.validate_value(v).is_ok()));
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn metatable_writes_keep_one_pending_table_scan() {
+        let mut vm = Vm::new();
+        vm.begin_gc_cycle();
+        let table = vm.new_table();
+        let root = vm.pin(Value::Table(table)).unwrap();
+        // A freshly allocated table is marked but its MarkedValue is still queued.
+        let before = vm.gc.work.len();
+        vm.set_metatable(Value::Table(table), Some(vm.registry));
+        vm.set_metatable(Value::Table(table), None);
+        assert_eq!(vm.gc.work.len(), before);
+        finish_marked_cycle(&mut vm);
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| {
+            vm.tables.marked(table.0) && vm.tables[slot_index(table.0)].trace == TableTrace::Idle
+        });
+        let before = vm.gc.work.len();
+        vm.set_metatable(Value::Table(table), Some(vm.registry));
+        vm.set_metatable(Value::Table(table), None);
+        assert_eq!(vm.gc.work.len(), before + 1);
+        finish_marked_cycle(&mut vm);
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn partial_weak_scans_refresh_changed_modes_and_removed_metatables() {
+        for remove in [false, true] {
+            let mut vm = Vm::new();
+            let table = vm.new_table();
+            let mt = vm.new_table();
+            let mode = vm.intern(b"__mode");
+            let weak = vm.intern(b"v");
+            let strong = vm.intern(b"");
+            vm.raw_set(mt, mode, weak).unwrap();
+            vm.set_metatable(Value::Table(table), Some(mt));
+            let root = vm.pin(Value::Table(table)).unwrap();
+            let mut children = Vec::new();
+            for i in 1..=1024 {
+                let child = Value::Table(vm.new_table());
+                vm.raw_set(table, Value::Number(f64::from(i)), child)
+                    .unwrap();
+                children.push(child);
+            }
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(Value::Table(table))];
+            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            assert!(children.iter().all(|&v| !vm.marked_value(v)));
+            vm.gc.work.extend(work);
+            if remove {
+                vm.set_metatable(Value::Table(table), None);
+            } else {
+                vm.raw_set(mt, mode, strong).unwrap();
+            }
+            finish_marked_cycle(&mut vm);
+            assert!(children.iter().all(|&v| vm.validate_value(v).is_ok()));
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn restarting_a_cycle_discards_stale_table_cursors() {
+        let mut vm = Vm::new();
+        let table = vm.new_table();
+        let root = vm.pin(Value::Table(table)).unwrap();
+        let mut children = Vec::new();
+        for i in 1..=1000 {
+            let child = Value::Table(vm.new_table());
+            vm.raw_set(table, Value::Number(f64::from(i)), child)
+                .unwrap();
+            children.push(child);
+        }
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| vm.tables.marked(table.0));
+        assert_eq!(
+            vm.tables[slot_index(table.0)].trace,
+            TableTrace::Pending(false, false)
+        );
+        vm.collect_garbage().unwrap();
+        assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Idle);
+        assert!(children.iter().all(|&v| vm.validate_value(v).is_ok()));
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn marking_budget_and_table_barriers_preserve_white_keys_and_values() {
+        let mut vm = Vm::new();
+        vm.execute(&crate::compile(b"collectgarbage('stop');holder={};weak=setmetatable({{value=77},{value=88},{value=99}},{__mode='v'});anchor={};for i=1,1000 do anchor[i]={i}end").unwrap()).unwrap();
+        let holder = value_table(vm.global(b"holder"));
+        let weak = value_table(vm.global(b"weak"));
+        let values: Vec<_> = (1..=3)
+            .map(|i| vm.tables[slot_index(weak.0)].get(Value::Number(f64::from(i))))
+            .collect();
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| {
+            vm.tables.marked(holder.0) && vm.tables.marked(weak.0)
+        });
+        assert!(values.iter().all(|&v| !vm.marked_value(v)));
+        let key = vm.intern(b"saved");
+        vm.raw_set(holder, key, values[0]).unwrap();
+        vm.raw_set(holder, values[1], Value::Number(12.0)).unwrap();
+        vm.raw_set(weak, Value::Number(4.0), values[2]).unwrap();
+        assert!(vm.marked_value(values[0]) && vm.marked_value(values[1]));
+        assert!(!vm.marked_value(values[2]));
+        finish_marked_cycle(&mut vm);
+        assert_eq!(vm.tables[slot_index(holder.0)].get(key), values[0]);
+        assert_eq!(
+            vm.tables[slot_index(holder.0)].get(values[1]),
+            Value::Number(12.0)
+        );
+        assert!(vm.validate_value(values[0]).is_ok() && vm.validate_value(values[1]).is_ok());
+        assert!(vm.validate_value(values[2]).is_err());
+    }
+
+    #[test]
+    fn metatable_changes_and_weak_mode_upgrades_revisit_strong_edges() {
+        let mut vm = Vm::new();
+        vm.execute(&crate::compile(b"collectgarbage('stop');mt={__mode='v'};a=setmetatable({{value=17}},mt);b=setmetatable({{value=19}},{__mode='v'})").unwrap()).unwrap();
+        let a = value_table(vm.global(b"a"));
+        let b = value_table(vm.global(b"b"));
+        let mt = value_table(vm.global(b"mt"));
+        let va = vm.tables[slot_index(a.0)].get(Value::Number(1.0));
+        let vb = vm.tables[slot_index(b.0)].get(Value::Number(1.0));
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| {
+            vm.tables.marked(a.0) && vm.tables.marked(b.0) && vm.tables.marked(mt.0)
+        });
+        assert!(!vm.marked_value(va) && !vm.marked_value(vb));
+        let mode = vm.intern(b"__mode");
+        let strong = vm.intern(b"");
+        vm.raw_set(mt, mode, strong).unwrap();
+        vm.set_metatable(Value::Table(b), None);
+        finish_marked_cycle(&mut vm);
+        assert!(vm.validate_value(va).is_ok() && vm.validate_value(vb).is_ok());
+        assert_eq!(vm.tables[slot_index(a.0)].get(Value::Number(1.0)), va);
+        assert_eq!(vm.tables[slot_index(b.0)].get(Value::Number(1.0)), vb);
+    }
+
+    #[test]
+    fn environment_and_userdata_barriers_retain_old_white_graphs() {
+        let mut vm = Vm::new();
+        vm.execute(&crate::compile(b"collectgarbage('stop');f=function()return field end;u=newproxy();n=string.gmatch('x','.');weak=setmetatable({{field=17},{mark=18},{mark=19},{__index={flag=99}}},{__mode='v'})").unwrap()).unwrap();
+        let f = vm.global(b"f");
+        let u = vm.global(b"u");
+        let n = vm.global(b"n");
+        let weak = value_table(vm.global(b"weak"));
+        let values: Vec<_> = (1..=4)
+            .map(|i| vm.tables[slot_index(weak.0)].get(Value::Number(f64::from(i))))
+            .collect();
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| {
+            vm.marked_value(f) && vm.marked_value(u) && vm.marked_value(n)
+        });
+        assert!(values.iter().all(|&v| !vm.marked_value(v)));
+        vm.execute(&crate::compile(b"debug.setfenv(f,weak[1]);debug.setfenv(u,weak[2]);debug.setfenv(n,weak[3]);debug.setmetatable(u,weak[4])").unwrap()).unwrap();
+        assert!(values.iter().all(|&v| vm.marked_value(v)));
+        finish_marked_cycle(&mut vm);
+        assert_eq!(
+            vm.execute(
+                &crate::compile(b"return f(),debug.getfenv(u).mark,debug.getfenv(n).mark,u.flag")
+                    .unwrap()
+            )
+            .unwrap(),
+            &[
+                Value::Number(17.0),
+                Value::Number(18.0),
+                Value::Number(19.0),
+                Value::Number(99.0)
+            ]
+        );
+    }
+
+    #[test]
+    fn atomic_open_cell_refresh_closes_an_unreachable_suspended_thread() {
+        let mut vm = Vm::new();
+        vm.execute(&crate::compile(b"collectgarbage('stop');weak=setmetatable({{value=8}},{__mode='v'});local co=coroutine.create(function()local y={value=2};get=function()return y end;coroutine.yield()end);coroutine.resume(co)").unwrap()).unwrap();
+        let Value::Function(get) = vm.global(b"get") else {
+            panic!("closure expected")
+        };
+        let cell = vm.functions[slot_index(get.0)].upvalues[0] as usize;
+        let Cell::Open(thread, register) = vm.upvalues[cell] else {
+            panic!("open cell expected")
+        };
+        let weak = value_table(vm.global(b"weak"));
+        let value = vm.tables[slot_index(weak.0)].get(Value::Number(1.0));
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| {
+            vm.upvalues
+                .key(cell)
+                .is_some_and(|key| vm.upvalues.marked(key))
+        });
+        assert!(!vm.threads.marked(thread.0) && !vm.marked_value(value));
+        vm.threads[slot_index(thread.0)].registers[register] = value;
+        finish_marked_cycle(&mut vm);
+        assert!(!vm.threads.contains(thread.0));
+        assert!(matches!(vm.upvalues[cell],Cell::Closed(v)if v==value));
+        assert_eq!(
+            vm.execute(&crate::compile(b"return get().value").unwrap())
+                .unwrap(),
+            &[Value::Number(8.0)]
+        );
+    }
+
+    #[test]
+    fn partial_marking_keeps_valid_native_handles_and_rejects_retired_ones() {
+        let mut vm = Vm::new();
+        let retired = vm.global(b"assert");
+        vm.execute(&crate::compile(b"debug.setfenv(assert,{});assert=nil").unwrap())
+            .unwrap();
+        vm.collect_garbage().unwrap();
+        let live = vm
+            .execute(&crate::compile(b"return os.date").unwrap())
+            .unwrap()[0];
+        let metatable = vm.new_table();
+        vm.begin_gc_cycle();
+        assert!(!vm.marked_value(live));
+        vm.set_metatable(live, Some(metatable));
+        assert!(vm.tables.marked(metatable.0));
+        assert!(vm.pin(retired).is_err());
+        let root = vm.pin(live).unwrap();
+        finish_marked_cycle(&mut vm);
+        assert_eq!(vm.rooted(root).unwrap(), live);
+        assert!(vm.tables.contains(metatable.0));
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
+    fn closed_cell_writes_and_closing_coroutines_mark_new_references() {
+        for coroutine in [false, true] {
+            let mut vm = Vm::new();
+            let setup = if coroutine {
+                "collectgarbage('stop');weak=setmetatable({{value=7}},{__mode='v'});co=coroutine.create(function()local x={value=1};get=function()return x end;coroutine.yield();x=weak[1]end);coroutine.resume(co)"
+            } else {
+                "collectgarbage('stop');weak=setmetatable({{value=7}},{__mode='v'});local x={value=1};get=function()return x end;put=function(v)x=v end"
+            };
+            vm.execute(&crate::compile(setup.as_bytes()).unwrap())
+                .unwrap();
+            let Value::Function(get) = vm.global(b"get") else {
+                panic!("closure expected")
+            };
+            let cell = vm.functions[slot_index(get.0)].upvalues[0] as usize;
+            let weak = value_table(vm.global(b"weak"));
+            let child = vm.tables[slot_index(weak.0)].get(Value::Number(1.0));
+            vm.begin_gc_cycle();
+            trace_until(&mut vm, |vm| {
+                vm.upvalues
+                    .key(cell)
+                    .is_some_and(|key| vm.upvalues.marked(key))
+            });
+            assert!(!vm.marked_value(child));
+            let body = if coroutine {
+                b"coroutine.resume(co);weak[1]=nil".as_slice()
+            } else {
+                b"put(weak[1]);weak[1]=nil"
+            };
+            vm.execute(&crate::compile(body).unwrap()).unwrap();
+            assert!(matches!(vm.upvalues[cell],Cell::Closed(v)if v==child));
+            assert!(vm.marked_value(child));
+            finish_marked_cycle(&mut vm);
+            assert_eq!(
+                vm.execute(&crate::compile(b"return get().value").unwrap())
+                    .unwrap(),
+                &[Value::Number(7.0)]
+            );
+        }
+    }
+
+    #[test]
+    fn full_collection_restarts_a_partial_mark_and_reclaims_floating_garbage() {
+        let mut vm = Vm::new();
+        vm.execute(
+            &crate::compile(
+                b"collectgarbage('stop');holder={};weak=setmetatable({{}},{__mode='v'})",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let holder = value_table(vm.global(b"holder"));
+        let weak = value_table(vm.global(b"weak"));
+        let child = vm.tables[slot_index(weak.0)].get(Value::Number(1.0));
+        vm.begin_gc_cycle();
+        trace_until(&mut vm, |vm| vm.tables.marked(holder.0));
+        let key = vm.intern(b"temporary");
+        vm.raw_set(holder, key, child).unwrap();
+        vm.raw_set(holder, key, Value::Nil).unwrap();
+        assert!(vm.marked_value(child));
+        vm.collect_garbage().unwrap();
+        assert!(vm.validate_value(child).is_err());
+        assert_eq!(
+            vm.tables[slot_index(weak.0)].get(Value::Number(1.0)),
+            Value::Nil
+        );
+    }
+
+    #[test]
+    fn string_sweeping_repairs_wrapped_clusters_and_preserves_reinterned_values() {
+        let mut pool = Strings::default();
+        let texts: Vec<_> = (0..)
+            .map(|n| format!("collision-{n}").into_bytes())
+            .filter(|s| Strings::hash(s) & 15 == 14)
+            .take(6)
+            .collect();
+        let ids: Vec<_> = texts.iter().map(|s| pool.intern(s)).collect();
+        pool.bytes.mark(ids[0].0);
+        pool.bytes.mark(ids[3].0);
+        pool.bytes.protect_new(true);
+        let mut cursor = pool.bytes.len();
+        assert_eq!(pool.sweep_some(&mut cursor, 2), 2);
+        assert_eq!(pool.intern(&texts[2]), ids[2]);
+        let fresh = pool.intern(b"new-after-sweep");
+        while cursor != 0 {
+            pool.sweep_some(&mut cursor, 2);
+        }
+        for index in [0, 2, 3] {
+            assert_eq!(pool.find(&texts[index]), Some(ids[index]));
+        }
+        for index in [1, 4, 5] {
+            assert_eq!(pool.find(&texts[index]), None);
+            assert!(!pool.bytes.contains(ids[index].0));
+        }
+        assert_eq!(pool.find(b"new-after-sweep"), Some(fresh));
+        pool.bytes.protect_new(false);
+        pool.bytes.clear_marks();
+        let mut cursor = pool.bytes.len();
+        pool.sweep_some(&mut cursor, usize::MAX);
+        assert_eq!(pool.find(b"new-after-sweep"), None);
+        assert_eq!(pool.bytes.live_len(), 0);
+    }
+
+    #[test]
+    fn sweep_slices_keep_new_mutable_graphs_and_reject_logically_dead_handles() {
+        let mut vm = Vm::new();
+        vm.execute(
+            &crate::compile(b"collectgarbage('stop');holder={};for i=1,1000 do local t={}end")
+                .unwrap(),
+        )
+        .unwrap();
+        let stale = Value::Table(vm.new_table());
+        let old_string = vm.intern(b"revived-during-sweep");
+        vm.begin_gc_cycle();
+        vm.finish_gc_marking();
+        assert_eq!(vm.gc.phase, Phase::Sweep);
+        assert!(vm.pin(stale).is_err());
+        assert!(vm.pin(old_string).is_err());
+        assert_eq!(vm.intern(b"revived-during-sweep"), old_string);
+        let string_root = vm.pin(old_string).unwrap();
+        let mutate = crate::compile(
+            br#"
+          fresh=fresh or {};local obj={text='new'..#fresh};fresh[#fresh+1]=obj
+          holder.value=obj;local state=obj;getter=function()return state end
+          co=coroutine.create(function()coroutine.yield(state);return state end)
+          local ok,v=coroutine.resume(co);assert(ok and v==obj)
+          guard=newproxy(true);getmetatable(guard).__gc=function()finalized=(finalized or 0)+1 end
+          obj.guard=guard
+        "#,
+        )
+        .unwrap();
+        let mut appends = 0;
+        for step in 0..10000 {
+            if step % 31 == 0 {
+                vm.execute(&mutate).unwrap();
+                appends += 1;
+            }
+            let before = vm.gc.reclaimed;
+            vm.sweep_gc_some(1);
+            assert!(vm.gc.reclaimed - before <= 1);
+            if vm.gc.phase == Phase::Finalize {
+                break;
+            }
+        }
+        assert_eq!(vm.gc.phase, Phase::Finalize);
+        vm.finish_gc_cycle();
+        assert_eq!(vm.rooted(string_root).unwrap(), old_string);
+        let check=crate::compile(b"local ok,v=coroutine.resume(co);return ok and v==holder.value and getter()==v,#fresh,finalized or 0").unwrap();
+        assert_eq!(
+            vm.execute(&check).unwrap(),
+            &[
+                Value::Boolean(true),
+                Value::Number(f64::from(appends)),
+                Value::Number(0.0)
+            ]
+        );
+        vm.collect_garbage().unwrap();
+        vm.execute(&crate::compile(b"fresh=nil;holder=nil;getter=nil;co=nil;guard=nil").unwrap())
+            .unwrap();
+        vm.collect_garbage().unwrap();
+        assert_eq!(vm.global(b"finalized"), Value::Number(f64::from(appends)));
+        vm.unpin(string_root).unwrap();
+    }
+
+    #[test]
+    fn all_registered_builtins_can_be_pinned_across_sweeping() {
+        let mut vm = Vm::new();
+        let code=crate::compile(b"local out={};for _,lib in ipairs{_G,math,string,table,coroutine,debug,io,os,package}do for _,v in pairs(lib)do if type(v)=='function'then out[#out+1]=v end end end;return unpack(out)").unwrap();
+        let values = vm.execute(&code).unwrap().to_vec();
+        let roots: Vec<_> = values
+            .iter()
+            .map(|&value| vm.pin(value).unwrap_or_else(|e| panic!("{value:?}: {e}")))
+            .collect();
+        vm.begin_gc_cycle();
+        vm.finish_gc_marking();
+        for (&value, &root) in values.iter().zip(&roots) {
+            assert_eq!(vm.rooted(root).unwrap(), value);
+        }
+        vm.sweep_gc_some(usize::MAX);
+        vm.finish_gc_cycle();
+        for (&value, &root) in values.iter().zip(&roots) {
+            assert_eq!(vm.rooted(root).unwrap(), value);
+            vm.unpin(root).unwrap();
+        }
     }
 }

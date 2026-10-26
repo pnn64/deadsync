@@ -648,14 +648,15 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
         return;
     }
 
-    for pixel in image.pixels_mut() {
-        let [r, g, b, a] = pixel.0;
-        let lum = ((u16::from(r) * 30 + u16::from(g) * 59 + u16::from(b) * 11) / 100) as u8;
-        if hints.alphamap {
-            pixel.0 = [255, 255, 255, lum];
+    for pixel in image.as_mut().as_chunks_mut::<4>().0 {
+        let word = u32::from_le_bytes(*pixel);
+        let lum = ((word & 255) * 30 + ((word >> 8) & 255) * 59 + ((word >> 16) & 255) * 11) / 100;
+        let output = if hints.alphamap {
+            0x00ff_ffff | (lum << 24)
         } else {
-            pixel.0 = [lum, lum, lum, a];
-        }
+            (word & 0xff00_0000) | (lum * 0x0001_0101)
+        };
+        *pixel = output.to_le_bytes();
     }
 }
 
@@ -668,8 +669,11 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .0
         .iter()
         .find(|pixel| pixel[3] != 0)
-        .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-        .unwrap_or([0; 3]);
+        .map(|pixel| [pixel[0], pixel[1], pixel[2]]);
+    let Some(first) = first else {
+        image.as_mut().as_chunks_mut::<4>().0.fill([0; 4]);
+        return;
+    };
     let last = image
         .as_raw()
         .as_chunks::<4>()
@@ -680,12 +684,13 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
         .unwrap_or([0; 3]);
     let [r, g, b] = if first == last { first } else { [0, 0, 0] };
+    let hidden = u32::from_le_bytes([r, g, b, 0]);
     for pixel in image.as_mut().as_chunks_mut::<4>().0 {
-        if pixel[3] == 0 {
-            pixel[0] = r;
-            pixel[1] = g;
-            pixel[2] = b;
-        }
+        let word = u32::from_le_bytes(*pixel);
+        // Compare packed lanes so LLVM can vectorize the selection. Byte
+        // extraction followed by a boolean-to-word mask inhibits that here.
+        let visible = 0u32.wrapping_sub(u32::from(word & 0xff00_0000 != 0));
+        *pixel = ((word & visible) | (hidden & !visible)).to_le_bytes();
     }
 }
 

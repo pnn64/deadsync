@@ -43,6 +43,14 @@ fn empty_skin() -> Noteskin {
     skin.receptor_overlays.clear();
     skin.tap_explosions = Default::default();
     skin.tap_explosions_by_col.clear();
+    skin.hold_columns.clear();
+    skin.roll_columns.clear();
+    for visuals in [&mut skin.hold, &mut skin.roll] {
+        (visuals.head_inactive, visuals.head_active) = (None, None);
+        (visuals.head_inactive_layers, visuals.head_active_layers) = (None, None);
+        (visuals.body_inactive, visuals.body_active) = (None, None);
+        (visuals.bottomcap_inactive, visuals.bottomcap_active) = (None, None);
+    }
     skin
 }
 

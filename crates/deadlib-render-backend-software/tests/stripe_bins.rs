@@ -7,6 +7,21 @@ mod perf;
 mod backend {
     include!("../src/lib.rs");
 
+    #[test]
+    fn opacity_scan_has_no_allocation_churn() {
+        let mut image = RgbaImage::from_pixel(512, 512, image::Rgba([17, 31, 43, 255]));
+        for pixel in [0, 1, 131_072, 262_143] {
+            crate::perf::assert_no_churn(|| {
+                assert!(texture_is_opaque(std::hint::black_box(&image)));
+            });
+            image.as_mut()[pixel * 4 + 3] = 254;
+            crate::perf::assert_no_churn(|| {
+                assert!(!texture_is_opaque(std::hint::black_box(&image)));
+            });
+            image.as_mut()[pixel * 4 + 3] = 255;
+        }
+    }
+
     mod stripe_bins {
         use super::*;
         use crate::perf;

@@ -555,7 +555,7 @@ pub fn debounce_input_edge_in_store_mut(
 
     let (edges, prune, new_due_at) = {
         let slot_state = &mut states.slots[slot];
-        let mut state = slot_state.state.unwrap_or_else(|| DebounceState {
+        let state = slot_state.state.get_or_insert_with(|| DebounceState {
             action_mask,
             source,
             held_raw: false,
@@ -566,7 +566,7 @@ pub fn debounce_input_edge_in_store_mut(
             last_report_time: now.checked_sub(windows.prune_window()).unwrap_or(now),
         });
         let edges = debounce_step(
-            &mut state,
+            state,
             action_mask,
             source,
             pressed,
@@ -576,13 +576,12 @@ pub fn debounce_input_edge_in_store_mut(
             input_slot,
             windows,
         );
-        let prune = should_prune_debounce_state(state, now, windows);
+        let prune = should_prune_debounce_state(*state, now, windows);
         let new_due_at = if prune {
             slot_state.state = None;
             None
         } else {
-            slot_state.state = Some(state);
-            debounce_due_at(state, windows)
+            debounce_due_at(*state, windows)
         };
         (edges, prune, new_due_at)
     };
@@ -669,6 +668,10 @@ pub(crate) fn next_due_edge(
     }
     None
 }
+
+#[cfg(test)]
+#[path = "debounce_moves_perf.rs"]
+mod moves_perf;
 
 #[cfg(test)]
 mod tests {

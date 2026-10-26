@@ -582,7 +582,6 @@ fn deterministic_expression_differential_fuzz() {
 fn adversarial_input_has_bounded_nesting() {
     let sources = [
         format!("return {}1{}", "(".repeat(1000), ")".repeat(1000)),
-        format!("return {}1", "x+".repeat(10000)),
         format!("{}{}", "do ".repeat(1000), "end ".repeat(1000)),
     ];
     for source in sources {
@@ -591,6 +590,12 @@ fn adversarial_input_has_bounded_nesting() {
             ErrorKind::Limit
         );
     }
+    let chain = format!("local x=1;return {}1", "x+".repeat(10000));
+    assert_eq!(
+        rust(&mut Vm::new(), chain.as_bytes()),
+        official(&Lua::new(), chain.as_bytes())
+    );
+    assert!(compile(chain.as_bytes()).unwrap().register_count() <= 4);
     let folded = format!("return {}1", "1+".repeat(10000));
     assert_eq!(
         Vm::new()

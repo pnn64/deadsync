@@ -3,10 +3,11 @@
 use crate::{
     Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, UserdataId, Value,
     bytecode::{Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
-    lexer::parse_number,
+    locale::parse_number,
     table::Table,
 };
 use std::{collections::HashMap, sync::Arc};
+mod console;
 mod debug;
 mod errors;
 mod gc;
@@ -17,7 +18,9 @@ mod loads;
 mod math;
 mod meta;
 mod native;
+mod os;
 mod package;
+mod standalone;
 mod strings;
 mod tables;
 mod threads;
@@ -35,14 +38,61 @@ struct Strings {
 
 impl Strings {
     fn hash(bytes: &[u8]) -> usize {
-        // FNV-1a with a final avalanche; this table is internal and has no stored pointers.
-        let mut h = 0xcbf29ce484222325u64;
-        for &b in bytes {
-            h = (h ^ u64::from(b)).wrapping_mul(0x100000001b3);
+        const A: u64 = 0x9e3779b185ebca87;
+        const B: u64 = 0xc2b2ae3d27d4eb4f;
+        fn word(bytes: &[u8]) -> u64 {
+            u64::from_le_bytes(bytes[..8].try_into().unwrap())
         }
-        h ^= h >> 32;
-        h = h.wrapping_mul(0xd6e8feb86659fd93);
-        (h ^ (h >> 32)) as usize
+        fn tail(bytes: &[u8]) -> u64 {
+            let n = bytes.len();
+            if n >= 4 {
+                u64::from(u32::from_le_bytes(bytes[..4].try_into().unwrap()))
+                    | (u64::from(u32::from_le_bytes(bytes[n - 4..].try_into().unwrap())) << 32)
+            } else if n != 0 {
+                u64::from(bytes[0])
+                    | (u64::from(bytes[n / 2]) << 8)
+                    | (u64::from(bytes[n - 1]) << 16)
+            } else {
+                0
+            }
+        }
+        let mut h = (bytes.len() as u64).wrapping_mul(A) ^ B;
+        if bytes.len() <= 16 {
+            h ^= if bytes.len() >= 8 {
+                word(bytes).wrapping_mul(A)
+                    ^ word(&bytes[bytes.len() - 8..])
+                        .rotate_left(27)
+                        .wrapping_mul(B)
+            } else {
+                tail(bytes).wrapping_mul(B)
+            };
+        } else {
+            // Four independent lanes consume every byte; equality still checks
+            // the complete slice. Loads copy bytes safely, including unaligned input.
+            let mut lanes = [A, B, !A, !B];
+            let (blocks, rest) = bytes.as_chunks::<32>();
+            for block in blocks {
+                for (lane, bytes) in lanes.iter_mut().zip(block.as_chunks::<8>().0) {
+                    *lane = (*lane ^ u64::from_le_bytes(*bytes))
+                        .rotate_left(29)
+                        .wrapping_mul(A);
+                }
+            }
+            h ^= lanes[0].wrapping_add(lanes[1].rotate_left(13))
+                ^ lanes[2]
+                    .rotate_left(31)
+                    .wrapping_add(lanes[3].rotate_left(47));
+            let (words, rest) = rest.as_chunks::<8>();
+            for bytes in words {
+                h = (h ^ u64::from_le_bytes(*bytes))
+                    .rotate_left(27)
+                    .wrapping_mul(B);
+            }
+            h ^= tail(rest).wrapping_mul(A);
+        }
+        h ^= h >> 29;
+        h = h.wrapping_mul(0x165667b19e3779f9);
+        (h ^ (h >> 31)) as usize
     }
     fn find(&self, bytes: &[u8]) -> Option<StringId> {
         if self.buckets.is_empty() {
@@ -80,11 +130,17 @@ impl Strings {
         StringId(id)
     }
     fn intern(&mut self, bytes: &[u8]) -> StringId {
-        self.find(bytes).unwrap_or_else(|| self.add(bytes.into()))
+        if let Some(id) = self.find(bytes) {
+            self.bytes.preserve_new_reference(id.0);
+            id
+        } else {
+            self.add(bytes.into())
+        }
     }
     fn substring(&mut self, id: StringId, range: std::ops::Range<usize>) -> StringId {
         let bytes = &self.bytes[slot_index(id.0)][range];
         if let Some(id) = self.find(bytes) {
+            self.bytes.preserve_new_reference(id.0);
             return id;
         }
         let owned = bytes.into();
@@ -149,6 +205,8 @@ const CONT_HOOK: u64 = 262;
 const CONT_TRACE: u64 = 263;
 const CONT_RETURN: u64 = 264;
 const CONT_FILE: u64 = 265;
+const CONT_CONCAT: u64 = 266;
+const CONT_STANDALONE: u64 = 267;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -263,6 +321,7 @@ pub struct Vm {
     active_native: Option<usize>,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
     pattern_work: crate::pattern::Work,
+    pattern_locale: u64,
     native_closures: Arena<threads::NativeClosure>,
     native_envs: HashMap<u64, TableId>,
     substitutions: Vec<strings::Substitution>,
@@ -279,11 +338,11 @@ pub struct Vm {
     loads: Vec<loads::Loading>,
     tracebacks: Vec<traces::Traceback>,
     hooks: hooks::Hooks,
-    hook_functions: HashMap<ThreadId, Value>,
     userdata: Arena<userdata::Userdata>,
     io: io::Io,
     proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
+    standalone: u64,
 }
 
 impl Default for Vm {
@@ -320,6 +379,7 @@ impl Vm {
             active_native: None,
             patterns: HashMap::new(),
             pattern_work: crate::pattern::Work::default(),
+            pattern_locale: crate::locale::revision(),
             native_closures: Arena::default(),
             native_envs: HashMap::new(),
             substitutions: Vec::new(),
@@ -336,11 +396,11 @@ impl Vm {
             loads: Vec::new(),
             tracebacks: Vec::new(),
             hooks: hooks::Hooks::default(),
-            hook_functions: HashMap::new(),
             userdata: Arena::default(),
             io: io::Io::default(),
             proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
+            standalone: 0,
         };
         for (id, name) in [
             b"assert".as_slice(),
@@ -398,6 +458,7 @@ impl Vm {
             (hooks::GET_HOOK, b"gethook"),
             (hooks::SET_HOOK, b"sethook"),
             (debug::GET_REGISTRY, b"getregistry"),
+            (debug::CONSOLE, b"debug"),
         ] {
             let key = vm.intern(name);
             vm.tables[slot_index(debug.0)]
@@ -416,6 +477,7 @@ impl Vm {
         vm.open_tables();
         vm.open_threads();
         vm.open_io();
+        vm.open_os();
         let loaded = vm.new_table();
         let key = vm.intern(b"_LOADED");
         vm.raw_set(registry, key, Value::Table(loaded)).unwrap();
@@ -427,6 +489,7 @@ impl Vm {
             b"debug",
             b"coroutine",
             b"io",
+            b"os",
         ] {
             let value = vm.global(name);
             let name = vm.intern(name);
@@ -480,25 +543,101 @@ impl Vm {
         self.tables[slot_index(self.globals.0)].get(k)
     }
 
+    /// Read a global variable, honoring the global table's `__index` metamethod.
+    ///
+    /// The result is retained until the next VM mutation; pin it for longer use.
+    /// Unlike [`Self::global`], this can execute Lua. In a standalone context,
+    /// lookup runs in the outer main frame without a message handler.
+    ///
+    /// # Errors
+    /// Returns lookup errors or instruction-limit errors.
+    pub fn get_global(&mut self, name: &[u8]) -> Result<Value, Error> {
+        let key = self.intern(name);
+        let target = Value::Table(self.globals);
+        let value = self.tables[slot_index(self.globals.0)].get(key);
+        if value != Value::Nil || self.metafield(target, Meta::Index) == Value::Nil {
+            self.registers.clear();
+            self.registers.push(value);
+            self.top = 1;
+            return Ok(value);
+        }
+        // Keep previous results rooted while a lookup callback runs. The
+        // console looks up print with its arguments still on the Lua stack.
+        let contextual = self.standalone != 0;
+        if contextual {
+            self.standalone_main(self.standalone, 0);
+        }
+        let result_slot = self.registers.len();
+        self.resize_registers(result_slot + 1);
+        let result = self.get_table(target, key, result_slot).and_then(|()| {
+            let slot = if self.frames.is_empty() {
+                result_slot
+            } else {
+                self.drive()?;
+                if contextual { result_slot } else { 0 }
+            };
+            self.registers[0] = self.registers[slot];
+            self.registers.truncate(1);
+            self.top = 1;
+            Ok(1)
+        });
+        if result.is_err() {
+            self.standalone = 0;
+        }
+        self.finish_execution(result).map(|values| values[0])
+    }
+
     /// Set a global variable.
     ///
     /// # Errors
-    /// Returns an error for an invalid or collected object handle.
+    /// Honors the global table's `__newindex` metamethod.
+    /// Returns an error for invalid/collected handles, Lua errors or quotas.
     pub fn set_global(&mut self, name: &[u8], value: Value) -> Result<(), Error> {
         self.validate_value(value)?;
         let k = self.intern(name);
-        self.raw_set(self.globals, k, value)
+        let target = Value::Table(self.globals);
+        if self.metafield(target, Meta::NewIndex) == Value::Nil {
+            return self.raw_set(self.globals, k, value);
+        }
+        if self.standalone != 0 {
+            self.standalone_setter();
+        }
+        let result = self.set_table(target, k, value).and_then(|()| {
+            if self.frames.is_empty() {
+                Ok(0)
+            } else {
+                self.drive()
+            }
+        });
+        if result.is_err() {
+            self.standalone = 0;
+        }
+        self.finish_execution(result).map(|_| ())
+    }
+
+    /// Set a table entry without invoking metamethods.
+    ///
+    /// # Errors
+    /// Returns an error for foreign/collected handles, nil keys or NaN keys.
+    pub fn raw_table_set(&mut self, table: TableId, key: Value, value: Value) -> Result<(), Error> {
+        self.validate_value(Value::Table(table))?;
+        self.validate_value(key)?;
+        self.validate_value(value)?;
+        self.raw_set(table, key, value)
     }
 
     fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();
-        table.set(key, value)?;
+        if let Err(error) = table.set(key, value) {
+            return Err(self.operand_error(error));
+        }
         let growth = table.heap_bytes().saturating_sub(before);
         if growth != 0 {
             self.tables.note_alloc(growth);
             self.gc.pending = true;
         }
+        self.gc_table_write(id, key, value);
         Ok(())
     }
     fn resize_registers(&mut self, len: usize) {
@@ -515,8 +654,21 @@ impl Vm {
         self.gc_note_control((self.frames.capacity() - before) * std::mem::size_of::<Frame>());
     }
 
-    fn new_table(&mut self) -> TableId {
-        TableId(self.tables.insert(Table::default()))
+    /// Create an empty table owned by this VM.
+    ///
+    /// Store or pin the returned identity before executing Lua or collecting.
+    pub fn new_table(&mut self) -> TableId {
+        let id = TableId(self.tables.insert(Table::default()));
+        self.gc_new_value(Value::Table(id));
+        id
+    }
+    fn new_record_table(&mut self, capacity: usize) -> TableId {
+        let table = Table::with_record_capacity(capacity);
+        self.tables.note_alloc(table.heap_bytes());
+        self.gc.pending = true;
+        let id = TableId(self.tables.insert(table));
+        self.gc_new_value(Value::Table(id));
+        id
     }
     fn number(&self, value: Value) -> Option<f64> {
         match value {
@@ -546,15 +698,18 @@ impl Vm {
             .map(|(index, p)| (index, p.entry));
         if let Some((index, old_entry)) = cached {
             if self.functions.contains(old_entry.0) {
+                self.gc_new_value(Value::Function(old_entry));
                 return old_entry;
             }
+            let upvalues = self.entry_upvalues(program);
             let entry = FunctionId(self.functions.insert(Closure {
                 program: index,
                 prototype: program.data.entry as usize,
-                upvalues: Box::default(),
+                upvalues,
                 env: self.globals,
             }));
             self.programs[index].entry = entry;
+            self.gc_new_value(Value::Function(entry));
             return entry;
         }
         let mut constants = Vec::with_capacity(program.data.prototypes.len());
@@ -578,14 +733,30 @@ impl Vm {
         }));
         let bytes = gc::program_bytes(&self.programs[index]);
         self.programs.note_alloc(bytes);
+        let upvalues = self.entry_upvalues(program);
         let entry = FunctionId(self.functions.insert(Closure {
             program: index,
             prototype: program.data.entry as usize,
-            upvalues: Box::default(),
+            upvalues,
             env: self.globals,
         }));
         self.programs[index].entry = entry;
+        self.gc_new_value(Value::Function(entry));
         entry
+    }
+
+    fn entry_upvalues(&mut self, program: &Program) -> Box<[u32]> {
+        let count = program.data.prototypes[program.data.entry as usize]
+            .upvalues
+            .len();
+        let mut upvalues = Vec::with_capacity(count);
+        for _ in 0..count {
+            let id = slot_index(self.upvalues.insert(Cell::Closed(Value::Nil))) as u32;
+            self.gc_new_cell(id as usize);
+            upvalues.push(id);
+        }
+        self.functions.note_alloc(count * 4);
+        upvalues.into_boxed_slice()
     }
 
     fn capture_register(&mut self, register: usize) -> u32 {
@@ -598,6 +769,7 @@ impl Vm {
         }
         let id = slot_index(self.upvalues.insert(Cell::Open(self.thread, register))) as u32;
         self.open_upvalues.push(id);
+        self.gc_new_cell(id as usize);
         id
     }
 
@@ -609,6 +781,7 @@ impl Vm {
                 && r >= base
             {
                 self.upvalues[id] = Cell::Closed(self.registers[r]);
+                self.gc_cell_barrier(id, self.registers[r]);
                 self.open_upvalues.swap_remove(i);
                 continue;
             }
@@ -756,17 +929,44 @@ impl Vm {
         None
     }
 
+    /// Load a verified program as a function without executing it.
+    ///
+    /// The function is retained in the result registers until the next VM
+    /// mutation. Pin it when retaining it across other executions or collections.
+    /// A live Program also retains its entry binding; dropping the Program lets
+    /// Lua ownership alone determine the function/environment's lifetime.
+    pub fn load_program(&mut self, program: &Program) -> FunctionId {
+        let function = self.load(program);
+        self.registers.clear();
+        self.registers.push(Value::Function(function));
+        self.top = 1;
+        function
+    }
+
     /// Execute verified bytecode, retaining globals and reusing register storage.
     ///
     /// # Errors
     /// Returns Lua runtime errors or an instruction-limit error. Returned values
     /// borrow the register storage until the next mutation of the VM.
     pub fn execute(&mut self, program: &Program) -> Result<&[Value], Error> {
+        if self.standalone != 0 {
+            let function = self.load(program);
+            return self.call_root(Value::Function(function), &[]);
+        }
         let function = self.load(program);
         let closure = &self.functions[slot_index(function.0)];
         let entry = &self.programs[closure.program].data.prototypes[closure.prototype];
+        let compat_arg = entry.compat_arg;
+        let params = usize::from(entry.params);
+        let registers = usize::from(entry.registers);
         self.registers.clear();
-        self.resize_registers(usize::from(entry.registers));
+        self.resize_registers(registers);
+        if compat_arg {
+            let arg = self.new_table();
+            let n = self.intern(b"n");
+            self.raw_set(arg, n, Value::Number(0.0))?;
+            self.registers[params] = Value::Table(arg);
+        }
         self.frames.clear();
         self.push_record(Frame {
             function: FrameKind::Lua(function),
@@ -782,6 +982,85 @@ impl Vm {
         });
         self.top = 0;
         let result = self.drive();
+        self.finish_execution(result)
+    }
+
+    /// Execute a verified chunk with positional arguments, retaining globals.
+    ///
+    /// Arguments must belong to this VM and remain live until this call.
+    /// Fixed parameters, varargs and Lua 5.1's compatibility `arg` use the same
+    /// entry path as ordinary Lua calls. Returned values borrow VM storage.
+    ///
+    /// # Errors
+    /// Returns an invalid-handle, Lua runtime or instruction-limit error.
+    pub fn execute_with_args(
+        &mut self,
+        program: &Program,
+        arguments: &[Value],
+    ) -> Result<&[Value], Error> {
+        if arguments.is_empty() {
+            return self.execute(program);
+        }
+        for &value in arguments {
+            self.validate_value(value)?;
+        }
+        let function = self.load(program);
+        self.call_root(Value::Function(function), arguments)
+    }
+
+    /// Call a live Lua function, builtin or callable object with positional values.
+    ///
+    /// This starts a top-level call and reuses this VM's globals and storage.
+    /// Object arguments must belong to this VM; pin values retained across other
+    /// executions or collections. Returned values borrow the register storage.
+    ///
+    /// # Errors
+    /// Returns an invalid-handle, Lua runtime or instruction-limit error.
+    pub fn call(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        self.validate_value(function)?;
+        for &value in arguments {
+            self.validate_value(value)?;
+        }
+        self.call_root(function, arguments)
+    }
+
+    fn call_root(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
+        if self.standalone != 0 {
+            return self.standalone_call(function, arguments, standalone::EntryMode::Message);
+        }
+        if arguments.len() > u32::MAX as usize {
+            return Err(Error::new(ErrorKind::Limit, 0, "too many arguments"));
+        }
+        self.registers.clear();
+        self.registers.push(function);
+        self.registers.extend_from_slice(arguments);
+        self.frames.clear();
+        self.top = 0;
+        let result = match self.start_lua_call(0, arguments.len(), OPEN, false) {
+            Ok(Some(count)) => {
+                self.registers.truncate(count);
+                self.top = count;
+                Ok(count)
+            }
+            Ok(None) => self.drive(),
+            Err(error) => Err(error),
+        };
+        self.finish_execution(result)
+    }
+
+    fn call_unprotected(
+        &mut self,
+        function: Value,
+        arguments: &[Value],
+    ) -> Result<&[Value], Error> {
+        if self.standalone != 0 {
+            self.standalone_call(function, arguments, standalone::EntryMode::Unprotected)
+        } else {
+            self.call_root(function, arguments)
+        }
+    }
+
+    fn finish_execution(&mut self, result: Result<usize, Error>) -> Result<&[Value], Error> {
         self.close_upvalues(0);
         self.discard_finalizers(0);
         self.frames.clear();
@@ -959,13 +1238,24 @@ impl Vm {
                         }
                     }
                     Op::Closure => {
-                        let len = self.programs[program_index].data.prototypes[c]
+                        let target = if i.b == 0 {
+                            c
+                        } else {
+                            self.programs[program_index].data.prototypes[proto_index].bindings[c]
+                                .prototype as usize
+                        };
+                        let len = self.programs[program_index].data.prototypes[target]
                             .upvalues
                             .len();
                         let mut upvalues = Vec::with_capacity(len);
                         for index in 0..len {
-                            let capture =
-                                self.programs[program_index].data.prototypes[c].upvalues[index];
+                            let capture = if i.b == 0 {
+                                self.programs[program_index].data.prototypes[target].upvalues[index]
+                            } else {
+                                self.programs[program_index].data.prototypes[proto_index].bindings
+                                    [c]
+                                    .upvalues[index]
+                            };
                             upvalues.push(match capture {
                                 Upvalue::Local(r) => self.capture_register(base + usize::from(r)),
                                 Upvalue::Outer(u) => {
@@ -976,11 +1266,12 @@ impl Vm {
                         self.functions.note_alloc(upvalues.len() * 4);
                         let id = FunctionId(self.functions.insert(Closure {
                             program: program_index,
-                            prototype: c,
+                            prototype: target,
                             upvalues: upvalues.into_boxed_slice(),
                             env,
                         }));
                         self.registers[a] = Value::Function(id);
+                        self.gc_new_value(Value::Function(id));
                         self.maybe_gc();
                     }
                     Op::GetUpvalue => {
@@ -1005,7 +1296,7 @@ impl Vm {
                         let target = self.registers[b];
                         let key = self.registers[base + c];
                         if let Value::Table(id) = target
-                            && self.tables[slot_index(id.0)].metatable.is_none()
+                            && self.tables[slot_index(id.0)].metatable().is_none()
                         {
                             self.registers[a] = self.tables[slot_index(id.0)].get(key);
                         } else {
@@ -1017,7 +1308,7 @@ impl Vm {
                         let key = self.registers[b];
                         let value = self.registers[base + c];
                         if let Value::Table(id) = target
-                            && self.tables[slot_index(id.0)].metatable.is_none()
+                            && self.tables[slot_index(id.0)].metatable().is_none()
                         {
                             self.raw_set(id, key, value)?;
                         } else {
@@ -1061,6 +1352,12 @@ impl Vm {
                     }
                     Op::Concat => {
                         self.concatenate(self.registers[b], self.registers[base + c], a)?;
+                        if self.frames.len() == frame_index + 1 {
+                            self.maybe_gc();
+                        }
+                    }
+                    Op::ConcatRange => {
+                        self.concat_range(a, b, base + c)?;
                         if self.frames.len() == frame_index + 1 {
                             self.maybe_gc();
                         }
@@ -1127,7 +1424,7 @@ impl Vm {
                             pc = c;
                         }
                     }
-                    Op::Call | Op::TailCall => {
+                    Op::Call | Op::TailCall | Op::CallIter => {
                         let count = if i.b == OPEN_ARGS {
                             self.top.checked_sub(a + 1).ok_or_else(|| {
                                 Error::new(ErrorKind::Runtime, 0, "invalid open argument range")
@@ -1136,13 +1433,24 @@ impl Vm {
                             usize::from(i.b)
                         };
                         self.frames[frame_index].pc = pc as u32;
-                        let Some(actual) = self.start_lua_call(
+                        if i.op == Op::CallIter
+                            && (usize::from(frame.barriers)
+                                + usize::from(self.threads[slot_index(self.thread.0)].depth)
+                                >= 197
+                                || !self.loads.is_empty())
+                        {
+                            self.check_iterator_call()?;
+                        }
+                        let actual = self.start_lua_call(
                             a,
                             count,
                             if i.op == Op::TailCall { OPEN } else { i.c },
                             i.op == Op::TailCall,
-                        )?
-                        else {
+                        )?;
+                        let Some(actual) = actual else {
+                            if i.op == Op::CallIter {
+                                self.frames.last_mut().expect("scheduled iterator").barriers += 1;
+                            }
                             continue 'frames;
                         };
                         if i.op == Op::TailCall {
@@ -1179,7 +1487,7 @@ impl Vm {
     fn concat_bytes(&self, value: Value) -> Result<Vec<u8>, Error> {
         match value {
             Value::String(id) => Ok(self.string_bytes(id).unwrap_or_default().to_vec()),
-            Value::Number(n) => Ok(format_number(n).into_bytes()),
+            Value::Number(n) => Ok(format_number(n)),
             _ => Err(Error::new(
                 ErrorKind::Runtime,
                 0,

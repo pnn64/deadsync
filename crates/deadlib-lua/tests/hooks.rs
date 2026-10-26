@@ -10,6 +10,25 @@ enum Scalar {
 }
 
 #[test]
+fn native_dump_hooks_expose_the_live_registry_hook_table() {
+    compare(br#"
+      local seen,key;local hits=0;local function f()return 1 end
+      local function first(e)
+        if e=='return' and debug.getinfo(2,'f').func==string.dump then
+          local n,t=debug.getlocal(2,3);seen=t
+          for k,v in pairs(t)do if v==first then key=k end end
+        end
+      end
+      debug.sethook(first,'r');string.dump(f)
+      local function second(e)if e=='return' and debug.getinfo(2,'f').func==math.abs then hits=hits+1;collectgarbage()end end
+      seen[key]=second;local same=debug.gethook()==second;math.abs(-3)
+      debug.sethook();local count=0;for k in pairs(seen)do count=count+1 end
+      local registered=false;for k,v in pairs(debug.getregistry())do if v==seen and type(k)=='userdata' then registered=true end end
+      return hits,same,registered,type(key),count
+    "#);
+}
+
+#[test]
 fn controls_keep_function_identity_masks_counts_and_thread_independence() {
     compare(
         br#"
@@ -417,6 +436,30 @@ fn finalizer_callbacks_suppress_hooks_without_losing_pending_function_entries() 
     "#,
     );
 }
+#[test]
+fn source_concatenation_ranges_keep_reference_line_and_count_hook_events() {
+    for body in [
+        "return a\n ..b\n ..c",
+        "return a..(b\n ..c)",
+        "return (a\n ..b)..c",
+        "return a..(false and b..c or b)..c",
+    ] {
+        let function = format!("return function(a,b,c)\n{body}\nend");
+        let source = format!(
+            r#"
+          local f=assert(loadstring({function:?}))();local trace={{}}
+          debug.sethook(function(event,line)
+            local d=debug.getinfo(2,'fl')
+            if d.func==f then trace[#trace+1]=event..':'..tostring(line)..':'..d.currentline end
+          end,'l',1)
+          local result=f('a',1,2);debug.sethook()
+          return result,table.concat(trace,'|')
+        "#
+        );
+        compare(source.as_bytes());
+    }
+}
+
 fn compare(source: &[u8]) {
     let mut vm = Vm::new();
     vm.set_instruction_limit(Some(10_000_000));
