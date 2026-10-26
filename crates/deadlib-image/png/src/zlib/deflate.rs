@@ -1,5 +1,6 @@
 use super::{
-    Compression, DIST_BASE, DIST_EXTRA, LENGTH_BASE, LENGTH_EXTRA, StreamStatus, Writer, hash3,
+    Compression, DIST_BASE, DIST_EXTRA, LENGTH_BASE, LENGTH_EXTRA, StreamStatus, Writer,
+    distance_code, length_code, matcher,
 };
 use crate::{Error, checksum::Adler32, reserve};
 
@@ -24,7 +25,7 @@ pub struct Deflater {
     pending: usize,
     block: Vec<u8>,
     history: Vec<u8>,
-    heads: Vec<usize>,
+    matcher: Option<matcher::Matcher>,
     encoded: usize,
     total_in: usize,
     total_out: usize,
@@ -41,12 +42,11 @@ impl Deflater {
         let mut block = Vec::new();
         reserve(&mut block, BLOCK)?;
         let mut history = Vec::new();
-        let mut heads = Vec::new();
+        let mut matcher = None;
         if mode == Compression::Fast {
             reserve(&mut history, BLOCK)?;
             history.resize(BLOCK, 0);
-            reserve(&mut heads, 65536)?;
-            heads.resize(65536, usize::MAX);
+            matcher = Some(matcher::Matcher::new()?);
         }
         Ok(Self {
             mode,
@@ -58,7 +58,7 @@ impl Deflater {
             pending: 0,
             block,
             history,
-            heads,
+            matcher,
             encoded: 0,
             total_in: 0,
             total_out: 0,
@@ -82,7 +82,7 @@ impl Deflater {
             + self.writer.bytes.capacity()
             + self.block.capacity()
             + self.history.capacity()
-            + self.heads.capacity() * core::mem::size_of::<usize>()
+            + self.matcher.as_ref().map_or(0, matcher::Matcher::memory)
     }
     pub fn process(
         &mut self,
@@ -161,84 +161,135 @@ impl Deflater {
     }
     fn encode_block(&mut self, final_block: bool) {
         if self.mode == Compression::Stored {
-            self.writer.write(u32::from(final_block), 3);
-            self.writer.bytes.push(self.writer.word as u8);
-            self.writer.word = 0;
-            self.writer.count = 0;
-            let len = self.block.len() as u16;
-            self.writer.bytes.extend_from_slice(&len.to_le_bytes());
-            self.writer.bytes.extend_from_slice(&(!len).to_le_bytes());
-            self.writer.bytes.extend_from_slice(&self.block);
+            self.writer.stored(&self.block, final_block);
         } else {
-            self.writer.write(u32::from(final_block) | 2, 3);
-            // Hash the previous block's two trailing positions once their
+            let checkpoint = self.writer.start_fixed(final_block);
+            // Hash the previous block's three trailing positions once their
             // lookahead is available. Absolute positions retain full history.
-            for back in (1..=2).rev() {
-                if self.encoded >= back && self.block.len() >= 3 - back {
+            for back in (1..=3).rev() {
+                if self.encoded >= back && self.block.len() >= 4 - back {
                     let index = self.encoded - back;
                     let bytes = [
                         self.value(index),
                         self.value(index + 1),
                         self.value(index + 2),
+                        self.value(index + 3),
                     ];
-                    self.heads[hash3(&bytes)] = index;
+                    self.matcher.as_mut().unwrap().insert(&bytes, index);
                 }
             }
             let mut pos = 0;
+            let mut misses = 0usize;
             while pos < self.block.len() {
                 let global = self.encoded + pos;
                 let mut length = 0;
                 let mut distance = 0;
-                if pos + 2 < self.block.len() {
-                    let hash = hash3(&self.block[pos..]);
-                    let previous = self.heads[hash];
-                    self.heads[hash] = global;
-                    if previous != usize::MAX && previous < global && global - previous <= BLOCK {
+                if pos + 3 < self.block.len() {
+                    let mut candidate = self
+                        .matcher
+                        .as_mut()
+                        .unwrap()
+                        .insert(&self.block[pos..], global);
+                    let bits = (self.writer.bytes.len() - checkpoint.bytes) * 8
+                        + self.writer.count as usize
+                        - checkpoint.count as usize;
+                    let searches = matcher::searches(bits, pos);
+                    for attempt in 0..searches {
+                        let Some(previous) = candidate else {
+                            break;
+                        };
                         let max = (self.block.len() - pos).min(258);
-                        while length < max
+                        if length < max
                             && self.value(previous + length) == self.block[pos + length]
+                            && self.value(previous) == self.block[pos]
                         {
-                            length += 1;
+                            let matched = self.match_length(previous, pos, max);
+                            if matched > length {
+                                length = matched;
+                                distance = global - previous;
+                            }
+                            if length == max {
+                                break;
+                            }
                         }
-                        distance = global - previous;
+                        if attempt + 1 == searches {
+                            break;
+                        }
+                        candidate = self.matcher.as_ref().unwrap().next(previous, global);
                     }
                 }
                 let count = if length >= 3 {
-                    let index = LENGTH_BASE.iter().rposition(|&n| n <= length).unwrap();
+                    misses = 0;
+                    let index = length_code(length);
                     self.writer.literal(257 + index);
                     self.writer
                         .write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
-                    let index = DIST_BASE.iter().rposition(|&n| n <= distance).unwrap();
+                    let index = distance_code(distance);
                     self.writer.write((index as u32).reverse_bits() >> 27, 5);
                     self.writer
                         .write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
                     length
                 } else {
-                    self.writer.literal(self.block[pos] as usize);
-                    1
-                };
-                for next in pos..pos + count {
-                    if next != pos && next + 2 < self.block.len() {
-                        self.heads[hash3(&self.block[next..])] = self.encoded + next;
+                    let count = (1 + (misses >> 8)).min(16).min(self.block.len() - pos);
+                    for &byte in &self.block[pos..pos + count] {
+                        self.writer.literal(byte as usize);
                     }
-                    self.history[(self.encoded + next) & (BLOCK - 1)] = self.block[next];
+                    misses += count;
+                    count
+                };
+                if length >= 3 {
+                    for next in matcher::positions(pos, count) {
+                        if next + 3 < self.block.len() {
+                            self.matcher
+                                .as_mut()
+                                .unwrap()
+                                .insert(&self.block[next..], self.encoded + next);
+                        }
+                    }
                 }
                 pos += count;
             }
-            self.writer.literal(256);
+            // Current-block references read from `block`; keep the previous
+            // block intact until all matches have been selected.
+            let at = self.encoded & (BLOCK - 1);
+            let first = self.block.len().min(BLOCK - at);
+            self.history[at..at + first].copy_from_slice(&self.block[..first]);
+            self.history[..self.block.len() - first].copy_from_slice(&self.block[first..]);
+            self.writer
+                .finish_fixed(checkpoint, &self.block, final_block);
         }
         self.encoded += self.block.len();
         self.block.clear();
         if final_block {
-            if self.writer.count != 0 {
-                self.writer.bytes.push(self.writer.word as u8);
-                self.writer.word = 0;
-                self.writer.count = 0;
-            }
+            self.writer.align();
             self.writer
                 .bytes
                 .extend_from_slice(&self.checksum.finish().to_be_bytes());
             self.finishing = true;
         }
+    }
+    #[inline(always)]
+    fn match_length(&self, previous: usize, pos: usize, max: usize) -> usize {
+        let mut length = 0;
+        while length < max {
+            let source = previous + length;
+            let bytes = if source >= self.encoded {
+                &self.block[source - self.encoded..]
+            } else {
+                let ring = source & (BLOCK - 1);
+                let count = (self.encoded - source).min(BLOCK - ring);
+                &self.history[ring..ring + count]
+            };
+            let count = bytes.len().min(max - length);
+            let equal = matcher::prefix(
+                &bytes[..count],
+                &self.block[pos + length..pos + length + count],
+            );
+            length += equal;
+            if equal != count {
+                break;
+            }
+        }
+        length
     }
 }

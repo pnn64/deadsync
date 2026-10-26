@@ -15,12 +15,23 @@ cargo +nightly fuzz run png_stream -- -runs=20000 -seed=782347 -max_len=65536 -t
 cargo +nightly fuzz run inflate_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run encode_stream -- -runs=20000 -seed=782347 -max_len=256 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run profiles -- -runs=20000 -seed=782347 -max_len=4096 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
+cargo +nightly fuzz run deflate_stream -- -runs=20000 -seed=782347 -max_len=131072 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 ```
 
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
 extracts their IDAT zlib streams. Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.
+An optional argument to `seed_fuzz` creates a fresh corpus root and refuses an
+existing destination. For example, from the repository root:
+
+```sh
+cargo run -p deadlib-image-png --release --example seed_fuzz -- target/png-fuzz-fresh
+```
+
+Pass the desired subdirectory, such as `target/png-fuzz-fresh/deflate_stream`,
+after the target name in `cargo fuzz run` (using a path relative to its working
+directory). This keeps each campaign's initial corpus separate from mutations.
 
 `decode` checks for native parser failures and compares every native sample when
 the independent Rust png decoder also accepts the image. Reference ancillary
@@ -77,3 +88,19 @@ libFuzzer adds and reduces files during a campaign.
 The IANA follow-up uses the same fresh initial files in
 `fuzz/corpus/png_registry_20261026`, with diagnostics in
 `reports/png-registry-linux.log`.
+
+## Raw streaming compression target
+
+`deflate_stream` treats the complete fuzz input as raw data, up to 128 KiB. It
+compares buffered and fragmented Fast/Stored encodings with independent flate2,
+native whole-stream decoding and a separately fragmented native inflater. Input
+and output sizes, empty output calls and separate finish calls vary; encoder
+capacity must remain constant. This reaches arbitrary byte patterns and multiple
+32 KiB history wraps beyond the structured image generator.
+
+`seed_fuzz` prepares 185 initial raw files: 161 valid PNGSuite IDAT inflations
+(capped at 128 KiB) plus 24 zero/noise/mixed/repeated patterns around 32 KiB,
+64 KiB and 128 KiB boundaries. Start from a fresh corpus when reproducing a run;
+libFuzzer mutates and reduces it. The matcher follow-up also reruns
+`encode_stream` with a fresh `fuzz/corpus/encode_lz_20261026` copy of its 1,080
+deterministic 12-byte seeds. Exact commands are in the retained campaign logs.

@@ -12,7 +12,7 @@ evidence, application responsibilities and explicitly open items.
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
 | Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history and output limits; `tests/compression.rs` | Bidirectional flate2 differential tests pass; exhaustive tree fixtures still pending |
-| Native compression | Stored/fixed Huffman LZ77; bounded `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments and 32 KiB block/history boundaries pass |
+| Native compression | Stored/fixed Huffman LZ77, bounded 16-candidate chains and per-block coding choice; `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments, mixed coding and 32 KiB block/history boundaries pass |
 | PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
@@ -24,7 +24,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Six sanitized targets pass 150,000 total executions; longer campaigns and coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Seven targets; 200,000 recorded sanitizer executions across milestones, including 10,000 final-encoder runs; longer campaigns and native-only coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -75,7 +75,7 @@ sequence numbers, rectangles, methods, frame counts and aggregate output limits
 are rejected.
 
 The C libpng oracle was built with MSVC 19.44.35229 on Windows x86-64 and passed
-`cargo test -p deadlib-image-png --release --test libpng -- --ignored` on
+`cargo test -p deadlib-image-png --release --test libpng libpng_native_sample_conformance -- --ignored` on
 2026-10-26. It compares every sample without transforming channel layout or
 precision: 161 valid PNGSuite images plus 450 new encodings (15 legal formats,
 three geometries, five filters, both interlace modes). Setup and pinned source
@@ -96,7 +96,7 @@ DEFLATE copies, contiguous row copies and slicing-by-eight CRC. Additional
 independent bitstream fixtures cover 400 fixed/stored/fixed block boundaries and
 65 dynamic literal-only/single-symbol/empty-distance streams. CRC bulk/tail and
 split-boundary checks use an independent bitwise reference. Decode throughput
-improved locally by about 1.8–2.3x; see the benchmark document for limits.
+improved locally by about 1.8â€“2.3x; see the benchmark document for limits.
 
 PNG editor behavior is explicit: decoded unknown chunks remain accessible,
 while reencoding omits unrecognized chunks whose safe-to-copy bit is unset.
@@ -142,8 +142,8 @@ inputs (389 MiB peak RSS) and 20,000 PNG inputs with repaired CRCs (396 MiB).
 The latter compares buffered acceptance and every native default/APNG-frame row
 sample; the existing buffered differential campaigns supply independent codec
 comparisons. Full logs and deterministic seed generation are checked in.
-The local streaming benchmark reports 248–413 MiB/s for collected images and
-288–519 MiB/s for row consumption, with approximately 40–49 KiB of image-pipeline
+The local streaming benchmark reports 248â€“413 MiB/s for collected images and
+288â€“519 MiB/s for row consumption, with approximately 40â€“49 KiB of image-pipeline
 storage for the 512-pixel RGBA fixtures. See `BENCHMARKS.md` for measurement limits.
 
 Streaming milestone 4c: `zlib::Deflater` preserves bit state, a single 32 KiB input
@@ -300,7 +300,7 @@ DEFLATE header/tree equivalence classes and APNG error-recovery policy. This is
 not a declaration of complete conformance or competitive performance.
 
 cICP audit milestone: [H.273 (07/2024)](https://www.itu.int/rec/T-REC-H.273-202407-I/en)
-assigns primaries 1, 2, 4–12, 22 and transfers 1, 2, 4–18. Code 2 means unspecified;
+assigns primaries 1, 2, 4â€“12, 22 and transfers 1, 2, 4â€“18. Code 2 means unspecified;
 it remains supported. Reserved primaries/transfer values decode as unknown raw
 ancillary metadata, so supported lower-precedence descriptions can be selected.
 Both encoders and typed serialization reject reserved fields. PNG's matrix-0 and
@@ -310,6 +310,54 @@ field, every individual reserved code through buffered/reader/one-byte events,
 and all 408 assigned combinations through both writers and readers.
 The full release suite passes 61 tests (two optional C tests ignored), and strict
 Clippy passes. No production dependencies or application integration changed.
+
+Compression matcher milestone: both compression APIs use four-byte flat hash
+heads, a 32 KiB backward-link ring, at most 16 adaptive candidate searches,
+portable eight-byte prefix comparisons, sparse insertion and incompressible-input
+backoff. Fixed blocks have a bit/byte checkpoint and are replaced with stored
+coding when cheaper, before output is drained. Streaming history is copied once
+per block; current-block references read the input block. Constant-time integer
+length/distance mappings replace linear searches. All 33,024 legal code inputs
+are checked against the RFC tables. No unsafe code, SIMD or production codec
+dependencies were added.
+
+Tests cover mixed coding, full-window reuse, every prefix mismatch position,
+wrapped u32 heads, one-byte fragments, constant capacity and a 16-bit gradient
+size regression through independent readers. The full release suite passes 66
+tests, with three optional C tests run separately. Strict Clippy, the isolated
+offline build, 1,061 native-sample C cases, 480 exact profile cases and 216
+external-corpus C cases pass. The latter use 24 original RGB8 images and both
+writers / compression modes / interlace settings. Only URL/hash manifests are
+committed; those downloaded images remain in ignored build storage.
+
+Three warmed, single-CPU synthetic repetitions measure writer throughput at
+36?58 MiB/s versus 22?46 before. The 16-bit gradient shrinks from 501,030 to
+40,287 PNG bytes, while measured image-pipeline capacity falls by 196,584 bytes
+at width 512, independent of height. Raw artifacts, failed performance trials,
+source/binary hashes and methodological limits are in `BENCHMARKS.md` and
+`experiments/`. Token planning helped synthetic noise but regressed the photo
+corpus, so the selected version uses direct emission and deferred history copies.
+The host is shared; neither these synthetic results nor the 24-image RGB8 corpus
+establish general competitive performance. Dynamic-Huffman encoding remains absent.
+
+The earlier token prototype's new raw-data `deflate_stream` sanitizer target
+passes 20,000 executions in 994 seconds (406 MiB peak RSS), starting with 185
+files / 1,878,670 bytes and a 128 KiB input cap. Its fresh 1,080-seed structured
+`encode_stream` follow-up passes 20,000 in 469 seconds (404 MiB). Both use the
+same pinned Linux nightly/AddressSanitizer toolchain and seed as earlier runs;
+their instrumented binaries exported `__asan_init`. Complete logs preserve these
+40,000 prototype executions, bringing historical smoke campaigns to 190,000
+across seven targets. Reference code contributes to counters; native-only coverage
+and saturation are not claimed.
+
+The selected direct-emission encoder then passes 5,000 raw streaming executions
+in 231 seconds (389 MiB) and 5,000 structured image executions in 140 seconds
+(393 MiB), using fresh 185-file / 1,080-file seed directories. The source, harness
+and binary hashes, options and exact logs are recorded in
+`fuzz/reports/final-source.json`. Both selected binaries export `__asan_init`.
+These 10,000 runs bring recorded sanitizer history to 200,000 executions across
+seven targets. The retained prototype counts remain separate from final-code
+evidence; no saturation or complete conformance claim follows from these totals.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:

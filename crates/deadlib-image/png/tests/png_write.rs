@@ -3,6 +3,46 @@ use deadlib_image_png::{
     decode_reader, encode_writer, zlib::Compression,
 };
 use std::io::{self, Write};
+
+#[test]
+fn sixteen_bit_gradient_compression_regression() {
+    let width = 512usize;
+    let height = 64usize;
+    let samples: Vec<_> = (0..width * height * 4)
+        .map(|n| ((n % 4) * 8192 + (n / 4 / width) * 137 + (n / 4 % width) * 71) as u16)
+        .collect();
+    let png = Png::new(Image {
+        width: width as u32,
+        height: height as u32,
+        color_type: ColorType::Rgba,
+        bit_depth: 16,
+        samples: Samples::U16(samples.clone()),
+    });
+    let buffered = deadlib_image_png::encode(&png, &Default::default()).unwrap();
+    let mut streamed = Vec::new();
+    encode_writer(&png, &Default::default(), &mut streamed).unwrap();
+    for bytes in [buffered, streamed] {
+        assert!(
+            bytes.len() < samples.len() * 2 / 8,
+            "default compression must preserve repeated 16-bit gradient structure"
+        );
+        assert_eq!(decode(&bytes).unwrap().image, png.image);
+        let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+            .read_info()
+            .unwrap();
+        let mut native = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut native).unwrap();
+        assert_eq!(info.bit_depth, png::BitDepth::Sixteen);
+        assert_eq!(info.color_type, png::ColorType::Rgba);
+        assert_eq!(
+            &native[..info.buffer_size()],
+            samples
+                .iter()
+                .flat_map(|v| v.to_be_bytes())
+                .collect::<Vec<_>>()
+        );
+    }
+}
 struct Fragmented {
     bytes: Vec<u8>,
     size: usize,

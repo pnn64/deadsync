@@ -58,3 +58,10 @@ path = "fuzz_targets/profiles.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "deflate_stream"
+path = "fuzz_targets/deflate_stream.rs"
+test = false
+doc = false
+bench = false

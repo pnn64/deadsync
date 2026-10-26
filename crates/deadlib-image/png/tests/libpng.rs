@@ -152,3 +152,52 @@ fn libpng_native_sample_conformance() {
     fs::remove_file(scratch).unwrap();
     assert_eq!(count, 1061);
 }
+
+#[test]
+#[ignore = "set DEADLIB_LIBPNG_ORACLE and DEADLIB_PNG_CORPUS; fetch inputs with scripts/fetch_corpus.py"]
+fn libpng_external_corpus() {
+    let oracle =
+        std::env::var_os("DEADLIB_LIBPNG_ORACLE").expect("DEADLIB_LIBPNG_ORACLE is required");
+    let root = std::env::var_os("DEADLIB_PNG_CORPUS").expect("DEADLIB_PNG_CORPUS is required");
+    let scratch = std::env::temp_dir().join(format!(
+        "deadlib-png-corpus-oracle-{}.png",
+        std::process::id()
+    ));
+    let mut files = 0;
+    let mut checks = 0;
+    for entry in fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|ext| ext != "png") {
+            continue;
+        }
+        verify(Path::new(&oracle), &path);
+        let original = decode(&fs::read(path).unwrap()).unwrap();
+        let png = Png::new(original.image);
+        checks += 1;
+        for interlaced in [false, true] {
+            for compression in [
+                deadlib_image_png::zlib::Compression::Stored,
+                deadlib_image_png::zlib::Compression::Fast,
+            ] {
+                let options = EncodeOptions {
+                    interlaced,
+                    compression,
+                    ..Default::default()
+                };
+                let mut streamed = Vec::new();
+                deadlib_image_png::encode_writer(&png, &options, &mut streamed).unwrap();
+                for encoded in [encode(&png, &options).unwrap(), streamed] {
+                    assert_eq!(decode(&encoded).unwrap().image, png.image);
+                    fs::write(&scratch, encoded).unwrap();
+                    verify(Path::new(&oracle), &scratch);
+                    checks += 1;
+                }
+            }
+        }
+        files += 1;
+    }
+    assert!(files != 0, "corpus contains no PNG files");
+    fs::remove_file(scratch).unwrap();
+    assert_eq!(checks, files * 9);
+    println!("Verified {files} corpus files, {checks} native-sample libpng comparisons");
+}

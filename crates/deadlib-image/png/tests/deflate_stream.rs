@@ -76,6 +76,52 @@ fn input_output_fragments_and_block_boundaries() {
 }
 
 #[test]
+fn mixed_compressibility_block_transitions_and_full_window_reuse() {
+    let block = 32768;
+    let mut random = 0x8fa1_32b7u32;
+    let noise: Vec<_> = (0..block)
+        .map(|_| {
+            random ^= random << 13;
+            random ^= random >> 17;
+            random ^= random << 5;
+            random as u8
+        })
+        .collect();
+    let compressed = zlib::compress(&noise, Compression::Fast).unwrap();
+    assert!(
+        compressed.len() <= noise.len() + 11,
+        "incompressible data must not expand beyond a stored block"
+    );
+    let repeated = [noise.as_slice(), noise.as_slice()].concat();
+    let compressed = encode(&repeated, Compression::Fast, 31, 7);
+    assert!(
+        compressed.len() < block + 4096,
+        "full-window reuse must save most of the repeated block"
+    );
+    for prefix in 0..8 {
+        let mut first = vec![b'a'; block];
+        for (n, byte) in first[..prefix].iter_mut().enumerate() {
+            *byte = n as u8;
+        }
+        let raw = [
+            first.as_slice(),
+            noise.as_slice(),
+            first.as_slice(),
+            noise.as_slice(),
+        ]
+        .concat();
+        for (input, output) in [(raw.len(), raw.len() + 64), (1, 7), (29, 1)] {
+            let compressed = encode(&raw, Compression::Fast, input, output);
+            assert!(compressed.len() <= raw.len() + 6 * raw.len().div_ceil(block) + 6);
+            assert_eq!(
+                support::inflate(&compressed, 1, 7, raw.len()).unwrap().0,
+                raw
+            );
+        }
+    }
+}
+
+#[test]
 fn cross_block_history_and_separate_finish() {
     let mut raw: Vec<_> = (0..32768).map(|n| ((n * 71) ^ (n / 39)) as u8).collect();
     raw.extend_from_within(..32768);

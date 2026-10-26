@@ -92,6 +92,15 @@ statistics; the caller controls flushing. Compressed chunks are capped at
 64 KiB while honoring smaller `idat_chunk_size` values. Encoding retains the
 caller's images and metadata without whole filtered/compressed output buffers.
 
+Fast compression uses an adaptive LZ77 search of at most 16 candidates and
+portable eight-byte prefix comparisons. Each 32 KiB block chooses fixed Huffman
+or stored coding before draining output; incompressible data avoids fixed-code
+expansion. Search backoff and sparse insertion bound work, trading some
+compression ratio for throughput. Both
+compression APIs preserve exact input bytes; compressed output is not stable
+across implementation versions. [BENCHMARKS.md](BENCHMARKS.md) records repeated
+pipeline and identical-input compression measurements, including rejected trials.
+
 `scripts/verify_independent.ps1` copies only the two packages into a separate
 temporary workspace and runs offline package tests plus the production dependency
 tree. `independent-build.log` records the latest verified run.

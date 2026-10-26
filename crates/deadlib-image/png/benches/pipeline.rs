@@ -1,7 +1,7 @@
 use deadlib_image_png::{ColorType, EncodeOptions, Image, Png, Samples, decode, encode};
 use std::{
     hint::black_box,
-    io::{Cursor, Read},
+    io::{Cursor, Read, Write},
     time::Instant,
 };
 
@@ -104,6 +104,28 @@ fn writer_encode(png: &Png) -> (Vec<u8>, deadlib_image_png::EncodeStats) {
         deadlib_image_png::encode_writer(png, &EncodeOptions::default(), &mut output).unwrap();
     (output, stats)
 }
+fn filtered(bytes: &[u8]) -> Vec<u8> {
+    let mut idat = Vec::new();
+    let mut pos = 8;
+    while pos < bytes.len() {
+        let n = u32::from_be_bytes(bytes[pos..pos + 4].try_into().unwrap()) as usize;
+        if &bytes[pos + 4..pos + 8] == b"IDAT" {
+            idat.extend_from_slice(&bytes[pos + 8..pos + 8 + n]);
+        }
+        pos += n + 12;
+    }
+    let mut out = Vec::new();
+    flate2::read::ZlibDecoder::new(idat.as_slice())
+        .read_to_end(&mut out)
+        .unwrap();
+    out
+}
+fn reference_deflate(bytes: &[u8], level: u32) -> Vec<u8> {
+    let mut compressor =
+        flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(level));
+    compressor.write_all(bytes).unwrap();
+    compressor.finish().unwrap()
+}
 fn main() {
     let iterations = std::env::var("DEADLIB_PNG_BENCH_ITERS")
         .ok()
@@ -145,6 +167,41 @@ fn main() {
         assert_eq!(reference_decode(&native), png.image.samples);
         let (streamed, encode_stats) = writer_encode(&png);
         assert_eq!(reference_decode(&streamed), png.image.samples);
+        if std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref() == Ok("deflate") {
+            for (source, filtered) in [
+                ("native-filtered", filtered(&native)),
+                ("reference-filtered", filtered(&bytes)),
+            ] {
+                for (codec, level) in [
+                    ("deadlib-image-png", None),
+                    ("flate2-level1", Some(1)),
+                    ("flate2-level6", Some(6)),
+                ] {
+                    let compress = || match level {
+                        Some(level) => reference_deflate(black_box(&filtered), level),
+                        None => deadlib_image_png::zlib::compress(
+                            black_box(&filtered),
+                            Default::default(),
+                        )
+                        .unwrap(),
+                    };
+                    let compressed = compress();
+                    let mut checked = Vec::new();
+                    flate2::read::ZlibDecoder::new(compressed.as_slice())
+                        .read_to_end(&mut checked)
+                        .unwrap();
+                    assert_eq!(checked, filtered);
+                    let ns = time(compress, iterations);
+                    println!(
+                        "{name}-{source}\t{codec}\tdeflate\t{iterations}\t{}\t{}\t{ns}\t{:.3}\t0",
+                        compressed.len(),
+                        filtered.len(),
+                        filtered.len() as f64 * 1e9 / ns as f64 / (1024. * 1024.)
+                    );
+                }
+            }
+            continue;
+        }
         for (codec, operation, size, ns) in [
             (
                 "deadlib-image-png",

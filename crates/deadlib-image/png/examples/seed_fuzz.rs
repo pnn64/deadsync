@@ -1,13 +1,54 @@
 //! Extract independent PNGSuite zlib streams and PNG files for fuzz campaigns.
-use std::{fs, path::Path};
+//! An optional first argument creates a fresh corpus root instead of merging seeds.
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 fn main() -> std::io::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let png = root.join("fuzz/corpus/decode");
-    let zlib = root.join("fuzz/corpus/zlib");
-    let png_stream = root.join("fuzz/corpus/png_stream");
-    let inflate_stream = root.join("fuzz/corpus/inflate_stream");
-    let encode_stream = root.join("fuzz/corpus/encode_stream");
-    let profiles = root.join("fuzz/corpus/profiles");
+    let corpus = if let Some(destination) = std::env::args_os().nth(1) {
+        let path = PathBuf::from(destination);
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)?;
+        }
+        fs::create_dir(&path)?;
+        path
+    } else {
+        root.join("fuzz/corpus")
+    };
+    let png = corpus.join("decode");
+    let zlib = corpus.join("zlib");
+    let png_stream = corpus.join("png_stream");
+    let inflate_stream = corpus.join("inflate_stream");
+    let encode_stream = corpus.join("encode_stream");
+    let profiles = corpus.join("profiles");
+    let deflate_stream = corpus.join("deflate_stream");
+    fs::create_dir_all(&deflate_stream)?;
+    for size in [32767, 32768, 32769, 65535, 65536, 131072] {
+        let mut random = 0x7139_4a55u32;
+        for style in 0..4 {
+            let raw: Vec<_> = (0..size)
+                .map(|n| match style {
+                    0 => 0,
+                    1 => {
+                        random ^= random << 13;
+                        random ^= random >> 17;
+                        random ^= random << 5;
+                        random as u8
+                    }
+                    2 => {
+                        if n / 32768 % 2 == 0 {
+                            (n % 7) as u8
+                        } else {
+                            (n * 71 + n / 13) as u8
+                        }
+                    }
+                    _ => ((n % 32768) * 71 + (n % 32768) / 31) as u8,
+                })
+                .collect();
+            fs::write(deflate_stream.join(format!("block-{size}-{style}")), raw)?;
+        }
+    }
     fs::create_dir_all(&profiles)?;
     for format in 0..15 {
         for profile in 0..8 {
@@ -56,7 +97,11 @@ fn main() -> std::io::Result<()> {
             pos += len + 12;
         }
         fs::write(zlib.join(name), &compressed)?;
-        fs::write(inflate_stream.join(name), compressed)?;
+        fs::write(inflate_stream.join(name), &compressed)?;
+        let (mut raw, _) = deadlib_image_png::zlib::decompress_prefix(&compressed, 1 << 20)
+            .map_err(std::io::Error::other)?;
+        raw.truncate(131072);
+        fs::write(deflate_stream.join(name), raw)?;
     }
     fs::copy(
         root.join("tests/fixtures/apng/basic_f20.png"),

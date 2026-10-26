@@ -3,6 +3,7 @@ use crate::{Error, checksum::adler32, reserve};
 
 mod deflate;
 mod inflate;
+mod matcher;
 pub use deflate::{DeflateProgress, Deflater};
 pub use inflate::{InflateProgress, Inflater, StreamStatus};
 
@@ -336,6 +337,12 @@ struct Writer {
     word: u64,
     count: u8,
 }
+#[derive(Clone, Copy)]
+struct Checkpoint {
+    bytes: usize,
+    word: u64,
+    count: u8,
+}
 impl Writer {
     fn write(&mut self, value: u32, n: u8) {
         self.word |= u64::from(value) << self.count;
@@ -354,6 +361,72 @@ impl Writer {
             _ => (0xc0 + symbol - 280, 8),
         };
         self.write((code as u32).reverse_bits() >> (32 - n), n);
+    }
+    fn align(&mut self) {
+        if self.count != 0 {
+            self.bytes.push(self.word as u8);
+        }
+        self.word = 0;
+        self.count = 0;
+    }
+    fn stored(&mut self, input: &[u8], final_block: bool) {
+        self.write(u32::from(final_block), 3);
+        self.align();
+        let len = input.len() as u16;
+        self.bytes.extend_from_slice(&len.to_le_bytes());
+        self.bytes.extend_from_slice(&(!len).to_le_bytes());
+        self.bytes.extend_from_slice(input);
+    }
+    fn start_fixed(&mut self, final_block: bool) -> Checkpoint {
+        let checkpoint = Checkpoint {
+            bytes: self.bytes.len(),
+            word: self.word,
+            count: self.count,
+        };
+        self.write(u32::from(final_block) | 2, 3);
+        checkpoint
+    }
+    fn finish_fixed(&mut self, checkpoint: Checkpoint, input: &[u8], final_block: bool) {
+        self.literal(256);
+        let fixed = (self.bytes.len() - checkpoint.bytes) * 8 + self.count as usize
+            - checkpoint.count as usize;
+        let fixed_padding = if final_block {
+            (8 - self.count as usize % 8) % 8
+        } else {
+            0
+        };
+        let stored = 3 + (8 - (checkpoint.count as usize + 3) % 8) % 8 + 32 + input.len() * 8;
+        if stored < fixed + fixed_padding {
+            self.bytes.truncate(checkpoint.bytes);
+            self.word = checkpoint.word;
+            self.count = checkpoint.count;
+            self.stored(input, final_block);
+        }
+    }
+}
+
+#[inline(always)]
+fn length_code(length: usize) -> usize {
+    debug_assert!((3..=258).contains(&length));
+    if length <= 10 {
+        length - 3
+    } else if length == 258 {
+        28
+    } else {
+        let value = length - 3;
+        let high = value.ilog2() as usize;
+        (high - 1) * 4 + ((value >> (high - 2)) & 3)
+    }
+}
+#[inline(always)]
+fn distance_code(distance: usize) -> usize {
+    debug_assert!((1..=32768).contains(&distance));
+    let value = distance - 1;
+    if value < 4 {
+        value
+    } else {
+        let high = value.ilog2() as usize;
+        high * 2 + ((value >> (high - 1)) & 1)
     }
 }
 
@@ -386,53 +459,107 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
             word: 0,
             count: 0,
         };
-        w.write(3, 3); // BFINAL=1, BTYPE=01.
-        let mut heads = vec![usize::MAX; 65536];
-        let mut pos = 0;
-        while pos < input.len() {
-            let mut length = 0;
-            let mut distance = 0;
-            if pos + 2 < input.len() {
-                let hash = hash3(&input[pos..]);
-                let previous = heads[hash];
-                heads[hash] = pos;
-                if previous != usize::MAX && pos - previous <= 32768 {
-                    let max = (input.len() - pos).min(258);
-                    while length < max && input[previous + length] == input[pos + length] {
-                        length += 1;
+        let mut matcher = matcher::Matcher::new()?;
+        for block_start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
+            let end = input.len().min(block_start + matcher::WINDOW);
+            let final_block = end == input.len();
+            let checkpoint = w.start_fixed(final_block);
+            let mut pos = block_start;
+            let mut misses = 0usize;
+            while pos < end {
+                let mut length = 0;
+                let mut distance = 0;
+                if pos + 3 < input.len() {
+                    let mut candidate = matcher.insert(&input[pos..], pos);
+                    let max = (end - pos).min(258);
+                    let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
+                        - checkpoint.count as usize;
+                    let searches = matcher::searches(bits, pos - block_start);
+                    for attempt in 0..searches {
+                        let Some(previous) = candidate else {
+                            break;
+                        };
+                        if length < max
+                            && input[previous + length] == input[pos + length]
+                            && input[previous] == input[pos]
+                        {
+                            let matched = matcher::prefix(
+                                &input[previous..previous + max],
+                                &input[pos..pos + max],
+                            );
+                            if matched > length {
+                                length = matched;
+                                distance = pos - previous;
+                            }
+                            if length == max {
+                                break;
+                            }
+                        }
+                        if attempt + 1 == searches {
+                            break;
+                        }
+                        candidate = matcher.next(previous, pos);
                     }
-                    distance = pos - previous;
+                }
+                if length >= 3 {
+                    misses = 0;
+                    let index = length_code(length);
+                    w.literal(257 + index);
+                    w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+                    let index = distance_code(distance);
+                    w.write((index as u32).reverse_bits() >> 27, 5);
+                    w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+                    for next in matcher::positions(pos, length) {
+                        if next + 3 < input.len() {
+                            matcher.insert(&input[next..], next);
+                        }
+                    }
+                    pos += length;
+                } else {
+                    // Bound work on sustained incompressible input. Search
+                    // resumes within at most 15 literal bytes of new structure.
+                    let count = (1 + (misses >> 8)).min(16).min(end - pos);
+                    for &byte in &input[pos..pos + count] {
+                        w.literal(byte as usize);
+                    }
+                    misses += count;
+                    pos += count;
                 }
             }
-            if length >= 3 {
-                let index = LENGTH_BASE.iter().rposition(|&n| n <= length).unwrap();
-                w.literal(257 + index);
-                w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
-                let index = DIST_BASE.iter().rposition(|&n| n <= distance).unwrap();
-                w.write((index as u32).reverse_bits() >> 27, 5);
-                w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
-                for next in pos + 1..pos + length {
-                    if next + 2 < input.len() {
-                        heads[hash3(&input[next..])] = next;
-                    }
-                }
-                pos += length;
-            } else {
-                w.literal(input[pos] as usize);
-                pos += 1;
-            }
+            w.finish_fixed(checkpoint, &input[block_start..end], final_block);
         }
-        w.literal(256);
-        if w.count != 0 {
-            w.bytes.push(w.word as u8);
-        }
+        w.align();
         bytes = w.bytes;
     }
     bytes.extend_from_slice(&adler32(input).to_be_bytes());
     Ok(bytes)
 }
 
-fn hash3(bytes: &[u8]) -> usize {
-    let word = u32::from(bytes[0]) | (u32::from(bytes[1]) << 8) | (u32::from(bytes[2]) << 16);
-    (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_length_and_distance_code_matches_rfc1951_tables() {
+        for length in 3..=258 {
+            assert_eq!(
+                length_code(length),
+                LENGTH_BASE
+                    .iter()
+                    .rposition(|&base| base <= length)
+                    .unwrap(),
+                "length={length}"
+            );
+        }
+        for distance in 1..=32768 {
+            assert_eq!(
+                distance_code(distance),
+                DIST_BASE
+                    .iter()
+                    .rposition(|&base| base <= distance)
+                    .unwrap(),
+                "distance={distance}"
+            );
+        }
+    }
 }

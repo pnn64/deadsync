@@ -1,6 +1,10 @@
 *.tsv text eol=lf
+*.rs text eol=lf
+*.json text eol=lf
 independent-build.log text eol=lf
 tests/fixtures/language/* text eol=lf
 src/metadata/language/registry.rs text eol=lf
 # Keep raw tool diagnostics, including libFuzzer's intentional trailing spaces.
 fuzz/reports/*.log -whitespace
+# Checkpoint diffs preserve raw line endings as well as context whitespace.
+experiments/*.patch -text -whitespace

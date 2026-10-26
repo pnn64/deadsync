@@ -13,7 +13,7 @@ $referenceRoot = (Resolve-Path target/deadlib-image-reference).Path
 cmake -S crates/deadlib-image/png/tests/oracle -B target/deadlib-image-reference/oracle-build "-DREFERENCE_ROOT=$referenceRoot" -A x64
 cmake --build target/deadlib-image-reference/oracle-build --config Release --target deadlib_png_oracle --parallel 4
 $env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-build/Release/deadlib_png_oracle.exe).Path
-cargo test -p deadlib-image-png --release --test libpng -- --ignored
+cargo test -p deadlib-image-png --release --test libpng libpng_native_sample_conformance -- --ignored
 cargo test -p deadlib-image-png --release --test profiles -- --ignored
 ```
 
@@ -29,3 +29,10 @@ The profiles test checks 480 encodings across eight pinned independent ICC v2/v4
 profiles, all 15 native PNG formats, both interlace settings, both native writers
 and both Exif byte orders. This supplements the existing 1,061 native-sample
 comparisons; it does not introduce any C linkage into the production library.
+
+`libpng_external_corpus` is a separate ignored test requiring
+`DEADLIB_PNG_CORPUS` as well as the C executable. The hash-pinned external RGB8
+inputs are fetched into ignored build storage; acquisition and commands are in
+[BENCHMARKS.md](../../BENCHMARKS.md#external-rgb8-corpus). Its 24 original images
+and eight reencodings each add 216 exact native-sample comparisons, covering
+both writers, Stored/Fast compression and plain/Adam7 output.

@@ -1,0 +1,200 @@
+[
+  {
+    "trial": "chain16",
+    "patch": "lz-chain16-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "766123c99ff6ac9ef1a56674c00278eade372a808c1b6ab6b7bb92fd9edda6de"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "a40e14e759358b3cda6a857336874bb7d5d8342fcbe34464c033e37c14618c3a"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "a06215f27c97718e4fa6db9186c35a3bbb308ee7c0d1c167da47ebdb05e5d20c"
+      }
+    ]
+  },
+  {
+    "trial": "skip",
+    "patch": "lz-skip-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "a98e2ab5d70c4efe6b123fb4d576e0628dccf947617d0d9c1306aa45dc7db844"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "e49b05f0facfdf6af84071b0f5a586309c23790729fc52ca667d30ce3317b984"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "e6273bab70e23964dbe4f24632b2c079e44f752958b6ae70e5d353e984bca03d"
+      }
+    ]
+  },
+  {
+    "trial": "tokens16",
+    "patch": "lz-tokens16-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "c5e8fbca1c2fe796c469ecad4891760e56f57cd4e7ccb310a4942845a0566976"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "fc3dcdb73f87281bb91e3cb6cce5d1b208c0e9dc5ce7dc03eea95f7612510257"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "66a54864edc166b9bf6a405a7410c553ff87e96be69db35235a9cac667038884"
+      }
+    ]
+  },
+  {
+    "trial": "search1",
+    "patch": "lz-search1-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "c5e8fbca1c2fe796c469ecad4891760e56f57cd4e7ccb310a4942845a0566976"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "fc3dcdb73f87281bb91e3cb6cce5d1b208c0e9dc5ce7dc03eea95f7612510257"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "f5581409e25b1f0fb42bd7d7289367733b018148458483ac3495b79c369f760a"
+      }
+    ]
+  },
+  {
+    "trial": "adaptive",
+    "patch": "lz-adaptive-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "999688f82e8e47f5689cbf81c3bca7cbdb0f9aeefda8eccffa463c8d94c684a9"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "76a9b546dd088814c05c6798085263483323b82ae5dede52dd67aa59e3267474"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "2dbcf9245563d26b5014dcf6bc3f30c2457427954f70dbf883896769d51bdcde"
+      }
+    ]
+  },
+  {
+    "trial": "adaptive-packed",
+    "patch": "lz-adaptive-packed-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "bb114192977880d58cd7d9142c05de7392789b8cf3cffa034ce648827d33b819"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "76a9b546dd088814c05c6798085263483323b82ae5dede52dd67aa59e3267474"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "2dbcf9245563d26b5014dcf6bc3f30c2457427954f70dbf883896769d51bdcde"
+      }
+    ]
+  },
+  {
+    "trial": "hash3-packed",
+    "patch": "lz-hash3-packed-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "bb114192977880d58cd7d9142c05de7392789b8cf3cffa034ce648827d33b819"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "76a9b546dd088814c05c6798085263483323b82ae5dede52dd67aa59e3267474"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "ee0421ee57d7a4bb9c819c58c3d3e7d1475c5a9879632803ff07680731a113a7"
+      }
+    ]
+  },
+  {
+    "trial": "fastpaths",
+    "patch": "lz-fastpaths-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "5c83bd038f2b2881de9d9c516981486f69f9077dd45ea708122d54c731398133"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "e01c5226f0d654830742f6df7dcf5ddc8ab737eabb085b6440744a58ba8a4533"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "130f15fc039047dfa5dcad33354669bf5db3e6b075451cb1249a48fe99b6b5c0"
+      }
+    ]
+  },
+  {
+    "trial": "direct",
+    "patch": "lz-direct-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "531ad9bf53733bc3357a98e03cc5a80beedcdec1a57507b6addbdd4f4181dfad"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "6d294ee1c099ad8ee2bd00d9c6dfc974310ac77e6b92c13b2df1e45d144ba557"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "130f15fc039047dfa5dcad33354669bf5db3e6b075451cb1249a48fe99b6b5c0"
+      }
+    ]
+  },
+  {
+    "trial": "codes",
+    "patch": "lz-codes-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "35bc179466505cf22610e73fe12dab38be2ef5a45f33973d0e458deb6d40241e"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "130f15fc039047dfa5dcad33354669bf5db3e6b075451cb1249a48fe99b6b5c0"
+      }
+    ]
+  },
+  {
+    "trial": "budget3",
+    "patch": "lz-budget3-from-selected.patch",
+    "files": [
+      {
+        "path": "src/zlib.rs",
+        "sha256": "35bc179466505cf22610e73fe12dab38be2ef5a45f33973d0e458deb6d40241e"
+      },
+      {
+        "path": "src/zlib/deflate.rs",
+        "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+      },
+      {
+        "path": "src/zlib/matcher.rs",
+        "sha256": "52eea329a90233daa4b806d12f5eab9b9368c646fc53b033e68aa7f2be8a4e32"
+      }
+    ]
+  }
+]
