@@ -128,6 +128,12 @@ fn utf8_decode(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes)).into_owned()
 }
 
+// ITU-T H.273 (07/2024), ColourPrimaries / TransferCharacteristics.
+// Code 2 explicitly means unspecified and is not a reserved value.
+fn cicp_known(values: &[u8; 4]) -> bool {
+    matches!(values[0], 1 | 2 | 4..=12 | 22) && matches!(values[1], 1 | 2 | 4..=18)
+}
+
 pub(crate) fn encoding_data<'a>(
     c: &'a AncillaryChunk,
     image: &crate::Image,
@@ -192,7 +198,19 @@ fn parse(
             Metadata::SignificantBits(d.to_vec())
         }
         b"sRGB" if d.len() == 1 && d[0] <= 3 => Metadata::Srgb(d[0]),
-        b"cICP" if d.len() == 4 && d[2] == 0 && d[3] <= 1 => Metadata::Cicp(d.try_into().unwrap()),
+        b"cICP" if d.len() == 4 && d[2] == 0 && d[3] <= 1 => {
+            let values = d.try_into().unwrap();
+            if cicp_known(values) {
+                Metadata::Cicp(*values)
+            } else if !encoding {
+                Metadata::Unknown {
+                    kind: c.kind,
+                    data: d.to_vec(),
+                }
+            } else {
+                return Err(Error::Invalid("reserved cICP primaries or transfer"));
+            }
+        }
         b"mDCV" if d.len() == 24 => Metadata::MasteringDisplay {
             chromaticities: core::array::from_fn(|n| be16(&d[n * 2..])),
             luminance: [be32(&d[16..]), be32(&d[20..])],
@@ -597,6 +615,9 @@ impl Metadata {
                 *b"sRGB"
             }
             Self::Cicp(v) => {
+                if !cicp_known(v) || v[2] != 0 || v[3] > 1 {
+                    return Err(Error::Invalid("cICP fields"));
+                }
                 data.extend_from_slice(v);
                 *b"cICP"
             }

@@ -19,6 +19,7 @@ evidence, application responsibilities and explicitly open items.
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
 | Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
 | sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
+| cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
@@ -294,9 +295,21 @@ production dependency tree remains only the shared `deadlib-image` package.
 `CONFORMANCE.md` now inventories the functional clauses through 15.3.4 with
 concrete evidence and open items. It explicitly distinguishes native sample /
 metadata processing from caller color/display policies. Current audit priorities
-include H.273 code-point validity, systematic unknown/order/field mutations,
+include systematic unknown/order/field mutations,
 DEFLATE header/tree equivalence classes and APNG error-recovery policy. This is
 not a declaration of complete conformance or competitive performance.
+
+cICP audit milestone: [H.273 (07/2024)](https://www.itu.int/rec/T-REC-H.273-202407-I/en)
+assigns primaries 1, 2, 4–12, 22 and transfers 1, 2, 4–18. Code 2 means unspecified;
+it remains supported. Reserved primaries/transfer values decode as unknown raw
+ancillary metadata, so supported lower-precedence descriptions can be selected.
+Both encoders and typed serialization reject reserved fields. PNG's matrix-0 and
+binary range-flag requirements remain enforced. Tests enumerate the complete
+131,072 primaries/transfer/range combinations, all 256 values of each PNG-local
+field, every individual reserved code through buffered/reader/one-byte events,
+and all 408 assigned combinations through both writers and readers.
+The full release suite passes 61 tests (two optional C tests ignored), and strict
+Clippy passes. No production dependencies or application integration changed.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
