@@ -16,7 +16,7 @@ use deadlib_platform::{
 use log::{debug, error, info, warn};
 use std::ffi::c_void;
 use std::slice;
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{SendError, Sender, channel};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Devices::FunctionDiscovery;
 use windows::Win32::Foundation::{self, CloseHandle, HANDLE, WAIT_FAILED};
@@ -387,7 +387,7 @@ fn render_thread(
         ) {
             Ok(()) => return,
             Err(err) if !startup_reported => {
-                if ready_tx.send(Err(err.clone())).is_err() {
+                if let Err(SendError(Err(err))) = ready_tx.send(Err(err)) {
                     error!("WASAPI render thread failed during startup: {err}");
                 }
                 return;

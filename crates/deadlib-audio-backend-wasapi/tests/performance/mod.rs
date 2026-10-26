@@ -521,6 +521,114 @@ fn benchmark_write_frames() {
     }
 }
 
+const MISSING_ENDPOINT: &str = "deadsync-perf-missing-endpoint";
+
+fn startup_attempt() -> impl FnOnce(Sender<std::result::Result<(), String>>) {
+    let (stream, handle) = deadlib_audio_core::music_transport(48_000, 2);
+    let render = RenderState::new(handle, Arc::new(deadlib_audio_core::MixControls::new()), 2);
+    let (sender, receiver) = deadlib_audio_core::sfx_transport(16);
+    let mut format = format_bytes(0xfffe, 32, 3);
+    format[18..20].copy_from_slice(&32u16.to_le_bytes());
+    format[20..24].copy_from_slice(&3u32.to_le_bytes());
+    let prep = WasapiOutputPrep {
+        device_id: Some(MISSING_ENDPOINT.into()),
+        device_name: String::new(),
+        format,
+        sample_rate_hz: 48_000,
+        frame_time: FramesToNanos::new(48_000),
+        channels: 2,
+        samples_per_frame: 2,
+        sample_format: WasapiSampleFormat::F32,
+        mode: WasapiAccessMode::Shared,
+    };
+    // SAFETY: the guard owns this event. It is pre-signaled so even an unexpected
+    // successful endpoint open cannot leave the test waiting in the render loop.
+    let stop =
+        WasapiEvent(unsafe { Threading::CreateEventW(None, true, true, PCWSTR::null()) }.unwrap());
+    move |ready| {
+        render_thread(prep, render, receiver, stop.0, ready);
+        drop((stream, sender, stop));
+    }
+}
+
+#[test]
+#[ignore = "requires Windows WASAPI access to exercise failed startup"]
+fn startup_failure_forwards_the_error_and_handles_a_closed_ready_channel() {
+    struct Errors(std::sync::Mutex<Vec<String>>);
+    impl log::Log for Errors {
+        fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
+            metadata.level() == log::Level::Error
+        }
+        fn log(&self, record: &log::Record<'_>) {
+            if self.enabled(record.metadata()) {
+                self.0.lock().unwrap().push(record.args().to_string());
+            }
+        }
+        fn flush(&self) {}
+    }
+    static ERRORS: Errors = Errors(std::sync::Mutex::new(Vec::new()));
+    log::set_logger(&ERRORS).unwrap();
+    log::set_max_level(log::LevelFilter::Error);
+    let _com = ComGuard::new().unwrap();
+    let expected = open_output_device(Some(MISSING_ENDPOINT)).unwrap_err();
+    assert!(expected.contains(MISSING_ENDPOINT));
+    let attempt = startup_attempt();
+    let (sender, receiver) = channel();
+    attempt(sender);
+    let forwarded = receiver.recv().unwrap().unwrap_err();
+    println!(
+        "startup error storage: len {}; original capacity {}; clone capacity {}; forwarded capacity {}",
+        expected.len(),
+        expected.capacity(),
+        expected.clone().capacity(),
+        forwarded.capacity()
+    );
+    assert_eq!(forwarded, expected);
+    assert!(
+        receiver.recv().is_err(),
+        "startup kept its ready sender alive"
+    );
+    let attempt = startup_attempt();
+    let (sender, receiver) = channel();
+    drop(receiver);
+    attempt(sender);
+    assert_eq!(
+        *ERRORS.0.lock().unwrap(),
+        [format!(
+            "WASAPI render thread failed during startup: {expected}"
+        )]
+    );
+}
+
+#[test]
+#[ignore = "manual CPU/allocation benchmark; exercises Windows WASAPI startup failure"]
+fn benchmark_startup_failure() {
+    let _com = ComGuard::new().unwrap();
+    assert!(open_output_device(Some(MISSING_ENDPOINT)).is_err());
+    for (keep_receiver, label) in [(true, "receiver_live"), (false, "receiver_closed")] {
+        let attempt = startup_attempt();
+        let (sender, receiver) = channel();
+        let receiver = keep_receiver.then_some(receiver);
+        // Count the thread entry itself; fixture allocation is outside this scope.
+        let (_, counts) = perf::measure(|| attempt(sender));
+        if let Some(receiver) = receiver {
+            black_box(receiver.recv().unwrap().unwrap_err());
+        }
+        let label = format!("wasapi/startup_{label}");
+        println!("{label}: allocation {counts:?}");
+        // CPU timing includes rebuilding the fixture and channel each attempt.
+        bench::measure(&label, 50, || {
+            let attempt = startup_attempt();
+            let (sender, receiver) = channel();
+            let receiver = keep_receiver.then_some(receiver);
+            attempt(sender);
+            if let Some(receiver) = receiver {
+                black_box(receiver.recv().unwrap().unwrap_err());
+            }
+        });
+    }
+}
+
 #[test]
 #[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
 fn benchmark_setup() {
