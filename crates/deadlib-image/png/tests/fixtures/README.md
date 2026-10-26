@@ -7,3 +7,6 @@ The original README and license accompany the fixtures. Source:
 Original project: <http://www.schaik.com/pngsuite/>.
 
 The corpus is test data only; no reference codec code is used in production.
+
+`apng/basic_f20.png` comes from the same pinned image-png commit's
+`tests/animated/` directory; its MIT license is included in `apng/`.

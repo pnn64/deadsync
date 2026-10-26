@@ -1,8 +1,10 @@
 //! Independent PNG codec. See the coverage document for verified capabilities.
 #![forbid(unsafe_code)]
 
+mod apng;
 mod checksum;
 mod codec;
+mod composite;
 mod metadata;
 mod scanline;
 pub mod zlib;
@@ -12,6 +14,8 @@ pub use codec::{
     decode, decode_with_options, encode,
 };
 
+pub use apng::{Animation, BlendOp, DisposeOp, Frame, FrameControl};
+pub use composite::{Compositor, RenderedFrame};
 pub use deadlib_image::{ColorType, Image, Samples};
 pub use metadata::Metadata;
 

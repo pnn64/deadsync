@@ -15,9 +15,9 @@ performance. Milestones are committed only after their relevant checks pass.
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
-| APNG frame decoding, compositing, encoding | Pending | Pending |
+| APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | Pending | Pending |
-| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1 and vendored PNGSuite | Rust png / PNGSuite pass; libpng pending |
+| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 611 external libpng native-sample checks and normal Rust png / PNGSuite checks pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
 | Fuzz targets and reproducible campaigns | Pending | Pending |
 | Benchmarks and profile-guided optimization | Pending | Pending |
@@ -56,6 +56,29 @@ and placement errors, invalid methods/values, and cumulative expansion limits.
 Rust png independently checks decoded text. `cargo clippy -p deadlib-image
 -p deadlib-image-png --all-targets -- -D warnings` passes.
 
-Current limitations: APNG chunks are retained but not yet
-interpreted; decoding currently buffers the complete compressed and filtered
-image; no performance parity claim has been made.
+Milestone 3b validation: APNG supports both default-image roles, native-precision
+frame rectangles, contiguous sequence numbers, frame counts, plays and rational
+delays, all disposal/blend operations, and encoding using IDAT/fdAT split at even
+one-byte compressed boundaries. The first frame reuses the default sample
+allocation when applicable. An explicit RGBA16 compositor retains one canvas and
+saves only the affected PREVIOUS region. Tests independently verify native frame
+samples with Rust png, including its canvas-stride output layout for interlaced
+subframes, and a licensed 20-frame APNG fixture. Known-answer blending/disposal
+tests cover integer rounding, reset, separate default images, first PREVIOUS,
+transparency, palette expansion and sub-byte precision. Malformed controls,
+sequence numbers, rectangles, methods, frame counts and aggregate output limits
+are rejected.
+
+The C libpng oracle was built with MSVC 19.44.35229 on Windows x86-64 and passed
+`cargo test -p deadlib-image-png --release --test libpng -- --ignored` on
+2026-10-26. It compares every sample without transforming channel layout or
+precision: 161 valid PNGSuite images plus 450 new encodings (15 legal formats,
+three geometries, five filters, both interlace modes). Setup and pinned source
+commits are in `tests/oracle/README.md`. This external test is explicitly ignored
+by ordinary Cargo runs because it needs a separately built C executable.
+
+Current limitations: decoding buffers complete compressed and filtered images;
+incremental bounded streaming, broader malformed/fuzz campaigns, reproducible
+benchmarks and measured optimization remain required. ICC/Exif interpretation,
+color management, HDR tone mapping, and animation scheduling are caller concerns.
+The compositor works in stored sample space; no color-management parity is claimed.

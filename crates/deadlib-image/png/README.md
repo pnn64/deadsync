@@ -33,3 +33,13 @@ applied implicitly. Color-description precedence is exposed separately.
 See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. In particular,
 APNG, streaming and performance validation remain under development.
 This crate is registered in the workspace but is not used by DeadSync loaders.
+
+APNG frame images retain their original formats. `Animation::default_is_frame`
+distinguishes the fallback image from animation content; `Frame::image == None`
+references the default allocation for the first animation frame. Optional
+`Png::compositor` and `Png::to_rgba16` explicitly produce RGBA16 without automatic
+gamma/ICC/HDR conversion. The compositor supports SOURCE/OVER and all disposal
+operations. Animation timing and repetition are controlled by the caller.
+
+The [external libpng oracle](tests/oracle/README.md) independently validates
+native samples and stays outside the production dependency graph.

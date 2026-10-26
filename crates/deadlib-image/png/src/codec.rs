@@ -87,6 +87,7 @@ pub struct Png {
     pub palette: Vec<[u8; 3]>,
     pub transparency: Option<Transparency>,
     pub ancillary: Vec<AncillaryChunk>,
+    pub animation: Option<crate::Animation>,
 }
 impl Png {
     pub fn new(image: Image) -> Self {
@@ -96,6 +97,7 @@ impl Png {
             palette: Vec::new(),
             transparency: None,
             ancillary: Vec::new(),
+            animation: None,
         }
     }
 }
@@ -192,6 +194,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         return Err(Error::Invalid("IHDR must be first"));
     }
     let header = Header::parse(data)?;
+    let mut animation_decoder = crate::apng::Decoder::new(header, limits)?;
     let expected = scanline::filtered_size(
         header.width,
         header.height,
@@ -220,6 +223,9 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
             ended_data = true;
         }
         match &kind {
+            b"acTL" | b"fcTL" | b"fdAT" => {
+                animation_decoder.chunk(&kind, data, seen_data, palette.len())?
+            }
             b"IHDR" => return Err(Error::Invalid("duplicate IHDR")),
             b"PLTE" => {
                 if seen_data || !palette.is_empty() || transparency.is_some() {
@@ -314,18 +320,20 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         header.interlaced,
         limits.max_output_bytes,
     )?;
+    let animation = animation_decoder.finish(palette.len())?;
     let png = Png {
         image,
         interlaced: header.interlaced,
         palette,
         transparency,
         ancillary,
+        animation,
     };
     validate_pixels(&png)?;
     Ok(png)
 }
 
-fn validate_pixels(png: &Png) -> Result<(), Error> {
+pub(crate) fn validate_pixels(png: &Png) -> Result<(), Error> {
     if png.image.color_type == ColorType::Indexed {
         let Samples::U8(samples) = &png.image.samples else {
             return Err(Error::Invalid("indexed sample storage"));
@@ -360,7 +368,7 @@ fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Res
         if c.kind[0] & 32 == 0
             || c.kind[2] & 32 != 0
             || !c.kind.iter().all(u8::is_ascii_alphabetic)
-            || &c.kind == b"tRNS"
+            || matches!(&c.kind, b"tRNS" | b"acTL" | b"fcTL" | b"fdAT")
         {
             return Err(Error::Invalid("ancillary chunk type"));
         }
@@ -407,6 +415,7 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
             ..Default::default()
         },
     )?;
+    crate::apng::validate(png, header)?;
     write_chunk(&mut out, b"IHDR", &header.wire())?;
     write_ancillary(&mut out, png, ChunkPosition::BeforePalette)?;
     if !png.palette.is_empty() {
@@ -431,11 +440,13 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
         write_chunk(&mut out, b"tRNS", &data)?;
     }
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
+    crate::apng::write_control(&mut out, png)?;
     let raw = scanline::encode(&png.image, options.interlaced, options.filter)?;
     let compressed = zlib::compress(&raw, options.compression)?;
     for part in compressed.chunks(options.idat_chunk_size) {
         write_chunk(&mut out, b"IDAT", part)?;
     }
+    crate::apng::write_frames(&mut out, png, options)?;
     write_ancillary(&mut out, png, ChunkPosition::AfterData)?;
     write_chunk(&mut out, b"IEND", &[])?;
     Ok(out)
