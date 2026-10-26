@@ -205,6 +205,63 @@ fn supported_rates_match_original_for_adversarial_ranges() {
     }
 }
 
+#[test]
+fn endpoint_rounding_matches_original_clamp_and_cast() {
+    let mut actual = Vec::with_capacity(1);
+    let mut seed = 0x5d12_3ace_7789_fe12_u64;
+    for value in [
+        f64::NAN,
+        f64::NEG_INFINITY,
+        -0.0,
+        0.0,
+        f64::MIN_POSITIVE,
+        0.499_999_999,
+        0.5,
+        1.5,
+        44_099.5,
+        u32::MAX as f64 - 0.5,
+        u32::MAX as f64 + 0.5,
+        f64::MAX,
+        f64::INFINITY,
+    ]
+    .into_iter()
+    .chain((0..200_000).map(|_| {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        f64::from_bits(seed)
+    })) {
+        actual.clear();
+        push_sample_rate_hz(&mut actual, value);
+        if value.is_finite() && value > 0.0 {
+            assert_eq!(actual, [value.round().clamp(1.0, u32::MAX as f64) as u32]);
+        } else {
+            assert!(actual.is_empty());
+        }
+    }
+}
+
+#[test]
+fn complete_common_rates_keep_extra_endpoints_and_missing_rate_tolerance() {
+    for missing in 0..=COMMON_SAMPLE_RATES_HZ.len() {
+        let mut ranges: Vec<_> = COMMON_SAMPLE_RATES_HZ
+            .iter()
+            .enumerate()
+            .map(|(index, &rate)| {
+                let value = f64::from(rate) + if index == missing { 0.5 } else { 0.0 };
+                (value, value)
+            })
+            .collect();
+        ranges.push((12_345.25, 67_890.75));
+        ranges.reverse();
+        for default in [0, 48_000, 1_234_567, u32::MAX] {
+            set_ranges(&ranges, false);
+            let expected = RANGES.with_borrow(|ranges| reference_rates(ranges, default));
+            assert_eq!(supported_sample_rates_hz(7, default), expected);
+        }
+    }
+}
+
 fn prep(name: &str) -> Prep {
     Prep {
         device_name: name.to_owned(),
@@ -322,6 +379,20 @@ fn benchmark_coreaudio_setup() {
         kernel_bench::measure(label, 8192, || {
             black_box(supported_sample_rates_hz(black_box(7), black_box(default)));
         });
+    }
+    for (label, value) in [
+        ("endpoint_fractional", 44_099.5),
+        ("endpoint_saturating", f64::MAX),
+    ] {
+        let mut output = Vec::with_capacity(1);
+        let mut work = || {
+            output.clear();
+            push_sample_rate_hz(&mut output, black_box(value));
+            black_box(output.as_slice());
+        };
+        let (_, counts) = perf::measure(&mut work);
+        println!("{label}: allocation {counts:?}");
+        kernel_bench::measure(label, 262_144, work);
     }
     for (label, name) in [
         ("startup_name_short", "Built-in Output".to_owned()),

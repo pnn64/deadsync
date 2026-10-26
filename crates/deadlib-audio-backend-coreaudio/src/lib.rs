@@ -585,14 +585,23 @@ fn supported_sample_rates_hz(device_id: AudioDeviceID, default_rate_hz: u32) -> 
         .collect();
     for &(min_rate_hz, max_rate_hz) in &supported_ranges {
         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);
-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);
+        if max_rate_hz != min_rate_hz {
+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);
+        }
     }
-    for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {
-        let rate = f64::from(sample_rate_hz);
-        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {
-            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz
-        }) {
-            sample_rates_hz.push(sample_rate_hz);
+    // Skip range probes when every common rate is already an endpoint or default.
+    if sample_rates_hz.len() < COMMON_SAMPLE_RATES_HZ.len()
+        || !COMMON_SAMPLE_RATES_HZ
+            .iter()
+            .all(|rate| sample_rates_hz.contains(rate))
+    {
+        for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {
+            let rate = f64::from(sample_rate_hz);
+            if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {
+                rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz
+            }) {
+                sample_rates_hz.push(sample_rate_hz);
+            }
         }
     }
     sample_rates_hz.sort_unstable();
@@ -691,8 +700,16 @@ fn device_uid(device_id: AudioDeviceID) -> Result<String, String> {
 
 #[inline(always)]
 fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {
+    // Constant small timebase divisors avoid hardware division.
+    if denom == 1 {
+        return mach_time.saturating_mul(u64::from(numer));
+    }
     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {
-        return nanos / u64::from(denom);
+        return if denom == 3 {
+            nanos / 3
+        } else {
+            nanos / u64::from(denom)
+        };
     }
     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))
         as u64

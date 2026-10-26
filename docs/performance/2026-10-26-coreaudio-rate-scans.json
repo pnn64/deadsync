@@ -1,0 +1,1269 @@
+{
+  "baseline_commit": "ff728c6a5",
+  "cpu": "Intel Xeon E5-2696 v4 @ 2.20GHz",
+  "retained_measurement_records": 1408,
+  "archives": {
+    "clock_before": {
+      "inputs_sha256": {
+        "lib.rs": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+        "checks.rs": "4ed98bbb83b954183a6cc9a38ed5f88353d52decfe48f47bf1a7005bd82192f2",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\final-before\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\final-before\\timing.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "operations_per_batch": 256,
+      "executable_sha256": "202c8713deefaed78f46bd3b24fcca7adbbbf328bf8062f0d50449509fb31c89",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "0e6c38a56727661713b8ce9e3f20712214ebe6df",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "generated_sha256": "3f50b77387a05718c574256c1677a336225763e240e4492863f637f4b435f9fb",
+      "normalized_source_sha256": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+      "patch_from_baseline": "",
+      "checks": "running 7 tests\ntest checks::benchmark_coreaudio_timing ... ignored, CPU benchmark; run explicitly in release mode\ntest checks::callback_telemetry_matches_for_variable_periods_and_latency_changes ... ok\ntest checks::latency_conversion_preserves_all_integer_boundaries ... ok\ntest checks::mach_scaling_preserves_rounding_overflow_and_saturation ... ok\ntest checks::timing_remains_allocation_free ... ok\ntest checks::zero_timebase_denominator_still_panics - should panic ... ok\ntest checks::zero_timebase_numerator_and_denominator_still_panics - should panic ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-clock-integer\\final-before"
+    },
+    "clock_after": {
+      "inputs_sha256": {
+        "lib.rs": "58118965afb89a4f38739a949315b3b06fa53a26bc3d6cb9bf1736d2043d5efd",
+        "checks.rs": "4ed98bbb83b954183a6cc9a38ed5f88353d52decfe48f47bf1a7005bd82192f2",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\final-after\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\final-after\\timing.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "operations_per_batch": 256,
+      "executable_sha256": "dd70893aea14337e8cd7c51a015e53d058671a8cf9fea67738de973b553ac9bb",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "0e6c38a56727661713b8ce9e3f20712214ebe6df",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "generated_sha256": "8229d0700dc2d542781f8849ea785bf91ccc20561728674871495961143bcfc0",
+      "normalized_source_sha256": "58118965afb89a4f38739a949315b3b06fa53a26bc3d6cb9bf1736d2043d5efd",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ clock_after/lib.rs\n@@ -585,14 +585,23 @@\n         .collect();\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n-    }\n-    for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n-        let rate = f64::from(sample_rate_hz);\n-        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n-            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n-        }) {\n-            sample_rates_hz.push(sample_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n+    }\n+    // Skip range probes when every common rate is already an endpoint or default.\n+    if sample_rates_hz.len() < COMMON_SAMPLE_RATES_HZ.len()\n+        || !COMMON_SAMPLE_RATES_HZ\n+            .iter()\n+            .all(|rate| sample_rates_hz.contains(rate))\n+    {\n+        for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n+            let rate = f64::from(sample_rate_hz);\n+            if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n+                rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n+            }) {\n+                sample_rates_hz.push(sample_rate_hz);\n+            }\n         }\n     }\n     sample_rates_hz.sort_unstable();\n@@ -691,8 +700,16 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    // Constant small timebase divisors avoid hardware division.\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 7 tests\ntest checks::benchmark_coreaudio_timing ... ignored, CPU benchmark; run explicitly in release mode\ntest checks::callback_telemetry_matches_for_variable_periods_and_latency_changes ... ok\ntest checks::latency_conversion_preserves_all_integer_boundaries ... ok\ntest checks::mach_scaling_preserves_rounding_overflow_and_saturation ... ok\ntest checks::timing_remains_allocation_free ... ok\ntest checks::zero_timebase_denominator_still_panics - should panic ... ok\ntest checks::zero_timebase_numerator_and_denominator_still_panics - should panic ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+      "archive": "target\\coreaudio-clock-integer\\final-after"
+    },
+    "rates_before": {
+      "inputs_sha256": {
+        "lib.rs": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+        "fixtures.rs": "1f0d9fe53a692044820dd63d58a2c279d968de6f0bf8a320840c9d51b580114c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\final-before\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\final-before\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "13c720193b094be7776f6414bf3c0114897a7f032c75bf58bf47742bb162f1a1",
+      "generated_sha256": "17b8306348414ba982c5a649c65b5da863d488cb69c15481dd88d1f9746b8796",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "0e6c38a56727661713b8ce9e3f20712214ebe6df",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+      "patch_from_baseline": "",
+      "checks": "running 7 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest complete_common_rates_keep_extra_endpoints_and_missing_rate_tolerance ... ok\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\final-before"
+    },
+    "rates_discrete": {
+      "inputs_sha256": {
+        "lib.rs": "201588d79a7fde0c98962fd064d3887ccbb3f9ebf41002abe10c6f0888d06490",
+        "fixtures.rs": "1f0d9fe53a692044820dd63d58a2c279d968de6f0bf8a320840c9d51b580114c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\final-discrete\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\final-discrete\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "cad9b4789be067d8d9f56f5f3d859e69eb4851ca2b445bad54b0f9bccd8c69f8",
+      "generated_sha256": "e8eae9b872a1fae1f7c0d43fd1782809ab3e91c2c632d9cbda488093a2ef52a1",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "0e6c38a56727661713b8ce9e3f20712214ebe6df",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "201588d79a7fde0c98962fd064d3887ccbb3f9ebf41002abe10c6f0888d06490",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ rates_discrete/lib.rs\n@@ -585,7 +585,9 @@\n         .collect();\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n     }\n     for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n         let rate = f64::from(sample_rate_hz);\n@@ -691,8 +693,15 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 7 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest complete_common_rates_keep_extra_endpoints_and_missing_rate_tolerance ... ok\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\final-discrete"
+    },
+    "rates_after": {
+      "inputs_sha256": {
+        "lib.rs": "58118965afb89a4f38739a949315b3b06fa53a26bc3d6cb9bf1736d2043d5efd",
+        "fixtures.rs": "1f0d9fe53a692044820dd63d58a2c279d968de6f0bf8a320840c9d51b580114c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\final-after\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\final-after\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "ede77850f13ea2c2b1b6761ec6b6a5adb6b475cd76ae6c47dc76327768121779",
+      "generated_sha256": "2c03e168dae5e050cc52d14b0e72820ded4ae5968313d429528d2ef9b5f39226",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "0e6c38a56727661713b8ce9e3f20712214ebe6df",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "58118965afb89a4f38739a949315b3b06fa53a26bc3d6cb9bf1736d2043d5efd",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ rates_after/lib.rs\n@@ -585,14 +585,23 @@\n         .collect();\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n-    }\n-    for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n-        let rate = f64::from(sample_rate_hz);\n-        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n-            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n-        }) {\n-            sample_rates_hz.push(sample_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n+    }\n+    // Skip range probes when every common rate is already an endpoint or default.\n+    if sample_rates_hz.len() < COMMON_SAMPLE_RATES_HZ.len()\n+        || !COMMON_SAMPLE_RATES_HZ\n+            .iter()\n+            .all(|rate| sample_rates_hz.contains(rate))\n+    {\n+        for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n+            let rate = f64::from(sample_rate_hz);\n+            if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n+                rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n+            }) {\n+                sample_rates_hz.push(sample_rate_hz);\n+            }\n         }\n     }\n     sample_rates_hz.sort_unstable();\n@@ -691,8 +700,16 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    // Constant small timebase divisors avoid hardware division.\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 7 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest complete_common_rates_keep_extra_endpoints_and_missing_rate_tolerance ... ok\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\final-after"
+    },
+    "clock_unit_trial": {
+      "inputs_sha256": {
+        "lib.rs": "b8ef84ebf6e05936d01db31655cf3fbe71ab2dbf389196702a1677399a85e39b",
+        "checks.rs": "e0cd3103cc0ad783733fff0ded198a80f04f2684d039c832323b50a940520cd6",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\integer\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\integer\\timing.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "operations_per_batch": 256,
+      "executable_sha256": "7bdc5c82c60e3938a74f44a7ac0c6c49041a2357439d6c01d43d77e428608b7b",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "c4c6ffd1184ab0f71db0474dcfbf477645d08188",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "generated_sha256": "8071a17a07ac0cdd11ce03828fd9c32af1033a203a02172c44c74e0abe1e4c7c",
+      "normalized_source_sha256": "b8ef84ebf6e05936d01db31655cf3fbe71ab2dbf389196702a1677399a85e39b",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ clock_unit_trial/lib.rs\n@@ -691,6 +691,9 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n         return nanos / u64::from(denom);\n     }\n",
+      "checks": "running 6 tests\ntest checks::benchmark_coreaudio_timing ... ignored, CPU benchmark; run explicitly in release mode\ntest checks::callback_telemetry_matches_for_variable_periods_and_latency_changes ... ok\ntest checks::latency_conversion_preserves_all_integer_boundaries ... ok\ntest checks::mach_scaling_preserves_rounding_overflow_and_saturation ... ok\ntest checks::timing_remains_allocation_free ... ok\ntest checks::zero_timebase_denominator_still_panics - should panic ... ok\n\ntest result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-clock-integer\\integer"
+    },
+    "cast_trial": {
+      "inputs_sha256": {
+        "lib.rs": "d08473d748f949e7b3056b319b64ee29ffc3601fb85a324c28a65ce9c5a8e9db",
+        "fixtures.rs": "0244d8d49c4d1fc29e5e2defbd9575e07ea191c529603869c6992ac3f2529d9c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\cast\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\cast\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "3b37060e74486146ac9cf9e4f5dfe9a260de8eff2583385db94b64c32e99b900",
+      "generated_sha256": "ae36d1f966c7c756c1c22501a5e04b83a468b5c45ccadeea459de93a40c18cc7",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "1974cc4ca067dc2eba9e1928f71cb61f759c5d32",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "d08473d748f949e7b3056b319b64ee29ffc3601fb85a324c28a65ce9c5a8e9db",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ cast_trial/lib.rs\n@@ -585,7 +585,9 @@\n         .collect();\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n     }\n     for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n         let rate = f64::from(sample_rate_hz);\n@@ -604,7 +606,7 @@\n     if !sample_rate_hz.is_finite() || sample_rate_hz <= 0.0 {\n         return;\n     }\n-    sample_rates_hz.push(sample_rate_hz.round().clamp(1.0, u32::MAX as f64) as u32);\n+    sample_rates_hz.push((sample_rate_hz.round() as u32).max(1));\n }\n \n fn configure_output_unit(\n@@ -691,8 +693,15 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 6 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\cast"
+    },
+    "membership_trial": {
+      "inputs_sha256": {
+        "lib.rs": "1132bbadf59f9cf91077978cfa8513aa679560c9c4b76958c1aa4b549b3b273a",
+        "fixtures.rs": "0244d8d49c4d1fc29e5e2defbd9575e07ea191c529603869c6992ac3f2529d9c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\existing\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\existing\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "4e9868749643074fd9de1810b16bbe682819f8277f83f65e47db75d5dafdadf7",
+      "generated_sha256": "59330b8149d392f06633ab3ae6951e04030cd2a2612e26596c0e3a127cd9056a",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "29672fa69dc751eb78c69fb860c7b2f4242b2477",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "1132bbadf59f9cf91077978cfa8513aa679560c9c4b76958c1aa4b549b3b273a",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ membership_trial/lib.rs\n@@ -585,13 +585,17 @@\n         .collect();\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n     }\n     for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n         let rate = f64::from(sample_rate_hz);\n-        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n-            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n-        }) {\n+        if !sample_rates_hz.contains(&sample_rate_hz)\n+            && supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n+                rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n+            })\n+        {\n             sample_rates_hz.push(sample_rate_hz);\n         }\n     }\n@@ -691,8 +695,16 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    // Constant small timebase divisors avoid hardware division.\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 6 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\existing"
+    },
+    "discrete_membership_trial": {
+      "inputs_sha256": {
+        "lib.rs": "39713819cc40d3f6048f360c5f6f877d6c2c02c1603d364b134a1cc071fa01f1",
+        "fixtures.rs": "0244d8d49c4d1fc29e5e2defbd9575e07ea191c529603869c6992ac3f2529d9c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\discrete-membership\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\discrete-membership\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "240373547d4ede6805a170b7233dafb714a874e31d24a854c22da80dd2e548cb",
+      "generated_sha256": "0f7141647667d15b65743f4acbc9e0d70c4ea0cebb1b2c7ca618d79b598916b6",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "29672fa69dc751eb78c69fb860c7b2f4242b2477",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "39713819cc40d3f6048f360c5f6f877d6c2c02c1603d364b134a1cc071fa01f1",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ discrete_membership_trial/lib.rs\n@@ -583,15 +583,21 @@\n         .into_iter()\n         .map(|range| (range.mMinimum, range.mMaximum))\n         .collect();\n+    let mut discrete_only = true;\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            discrete_only = false;\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n     }\n     for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n         let rate = f64::from(sample_rate_hz);\n-        if supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n-            rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n-        }) {\n+        if (!discrete_only || !sample_rates_hz.contains(&sample_rate_hz))\n+            && supported_ranges.iter().any(|&(min_rate_hz, max_rate_hz)| {\n+                rate + 0.5 >= min_rate_hz && rate - 0.5 <= max_rate_hz\n+            })\n+        {\n             sample_rates_hz.push(sample_rate_hz);\n         }\n     }\n@@ -691,8 +697,16 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    // Constant small timebase divisors avoid hardware division.\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 6 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\discrete-membership"
+    },
+    "clock_trial_before": {
+      "inputs_sha256": {
+        "lib.rs": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+        "checks.rs": "e0cd3103cc0ad783733fff0ded198a80f04f2684d039c832323b50a940520cd6",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\before\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-clock-integer\\before\\timing.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "operations_per_batch": 256,
+      "executable_sha256": "f83543d2bfdd53f96cc113da3d815919b5820b1376837ec41c255fd515e6836e",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "ff728c6a50bdb142316622cb534a99e9c7d5edb7",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "generated_sha256": "3f50b77387a05718c574256c1677a336225763e240e4492863f637f4b435f9fb",
+      "normalized_source_sha256": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+      "patch_from_baseline": "",
+      "checks": "running 6 tests\ntest checks::benchmark_coreaudio_timing ... ignored, CPU benchmark; run explicitly in release mode\ntest checks::callback_telemetry_matches_for_variable_periods_and_latency_changes ... ok\ntest checks::latency_conversion_preserves_all_integer_boundaries ... ok\ntest checks::mach_scaling_preserves_rounding_overflow_and_saturation ... ok\ntest checks::timing_remains_allocation_free ... ok\ntest checks::zero_timebase_denominator_still_panics - should panic ... ok\n\ntest result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-clock-integer\\before"
+    },
+    "rates_trial_before": {
+      "inputs_sha256": {
+        "lib.rs": "201588d79a7fde0c98962fd064d3887ccbb3f9ebf41002abe10c6f0888d06490",
+        "fixtures.rs": "0244d8d49c4d1fc29e5e2defbd9575e07ea191c529603869c6992ac3f2529d9c",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\discrete\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-rates\\discrete\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "311b2d4f0adde6cfec333050ca659024faf3c647720ad0b1775e202b43cec56a",
+      "generated_sha256": "e8eae9b872a1fae1f7c0d43fd1782809ab3e91c2c632d9cbda488093a2ef52a1",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "1974cc4ca067dc2eba9e1928f71cb61f759c5d32",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "201588d79a7fde0c98962fd064d3887ccbb3f9ebf41002abe10c6f0888d06490",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ rates_trial_before/lib.rs\n@@ -585,7 +585,9 @@\n         .collect();\n     for &(min_rate_hz, max_rate_hz) in &supported_ranges {\n         push_sample_rate_hz(&mut sample_rates_hz, min_rate_hz);\n-        push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        if max_rate_hz != min_rate_hz {\n+            push_sample_rate_hz(&mut sample_rates_hz, max_rate_hz);\n+        }\n     }\n     for sample_rate_hz in COMMON_SAMPLE_RATES_HZ {\n         let rate = f64::from(sample_rate_hz);\n@@ -691,8 +693,15 @@\n \n #[inline(always)]\n fn scale_mach_time(mach_time: u64, numer: u32, denom: u32) -> u64 {\n+    if denom == 1 {\n+        return mach_time.saturating_mul(u64::from(numer));\n+    }\n     if let Some(nanos) = mach_time.checked_mul(u64::from(numer)) {\n-        return nanos / u64::from(denom);\n+        return if denom == 3 {\n+            nanos / 3\n+        } else {\n+            nanos / u64::from(denom)\n+        };\n     }\n     ((u128::from(mach_time) * u128::from(numer)) / u128::from(denom)).min(u128::from(u64::MAX))\n         as u64\n",
+      "checks": "running 6 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+      "archive": "target\\coreaudio-rates\\discrete"
+    }
+  },
+  "summary": {
+    "small-timebases": {
+      "records": 288,
+      "sha256": "f95e59f4a433820bb3e7a3b03bd6a0b6fe65e89b450a7cef3c16c2f5e0a114f8",
+      "updates_per_batch": 256,
+      "workloads": {
+        "mach_identity": {
+          "before": {
+            "cycles_per_update": 30.4033203125,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 7.53845703125,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 4.033095922211369
+        },
+        "mach_fractional": {
+          "before": {
+            "cycles_per_update": 29.1435546875,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 9.597441406249999,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 3.036596260803559
+        },
+        "mach_generic": {
+          "before": {
+            "cycles_per_update": 29.096640625,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 32.42,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 0.8974904572794571
+        },
+        "mach_overflow": {
+          "before": {
+            "cycles_per_update": 106.22443359375,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 106.79087890625,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 0.9946957519377917
+        },
+        "mach_integer_overflow": {
+          "before": {
+            "cycles_per_update": 44.97447265625,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 8.2677734375,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 5.439732111218728
+        },
+        "latency_normal": {
+          "before": {
+            "cycles_per_update": 5.13447265625,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 4.6726953125,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 1.0988246210949582
+        },
+        "latency_overflow": {
+          "before": {
+            "cycles_per_update": 3.274375,
+            "allocation_churn": ""
+          },
+          "after": {
+            "cycles_per_update": 2.9117968750000003,
+            "allocation_churn": ""
+          },
+          "cpu_throughput_ratio": 1.1245204046041157
+        },
+        "callback_fixed": {
+          "before": {
+            "cycles_per_update": 34.18384765625,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 34.206445312499994,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9993393743183909
+        },
+        "callback_variable": {
+          "before": {
+            "cycles_per_update": 34.64017578125,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 35.16056640625,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9851995949386215
+        }
+      }
+    },
+    "discrete-endpoints": {
+      "records": 336,
+      "sha256": "3e647a1466c59ae4eb014579b624182e41e6b490f49dd9165598f4157ade67ee",
+      "updates_per_batch": 1,
+      "workloads": {
+        "rates_continuous": {
+          "before": {
+            "cycles_per_update": 581.5899999999999,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 72, freed_bytes: 72, peak_bytes: 72"
+          },
+          "after": {
+            "cycles_per_update": 547.45,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 72, freed_bytes: 72, peak_bytes: 72"
+          },
+          "cpu_throughput_ratio": 1.0623618595305504
+        },
+        "rates_discrete_2": {
+          "before": {
+            "cycles_per_update": 511.77,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 96, freed_bytes: 96, peak_bytes: 96"
+          },
+          "after": {
+            "cycles_per_update": 471.03,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 96, freed_bytes: 96, peak_bytes: 96"
+          },
+          "cpu_throughput_ratio": 1.0864913062862238
+        },
+        "rates_discrete_11": {
+          "before": {
+            "cycles_per_update": 1400.1,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 312, freed_bytes: 312, peak_bytes: 312"
+          },
+          "after": {
+            "cycles_per_update": 1060.47,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 312, freed_bytes: 312, peak_bytes: 312"
+          },
+          "cpu_throughput_ratio": 1.3202636566805284
+        },
+        "rates_ranges_32": {
+          "before": {
+            "cycles_per_update": 2950.485,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 816, freed_bytes: 816, peak_bytes: 816"
+          },
+          "after": {
+            "cycles_per_update": 2923.45,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 816, freed_bytes: 816, peak_bytes: 816"
+          },
+          "cpu_throughput_ratio": 1.0092476354991535
+        },
+        "rates_error_default": {
+          "before": {
+            "cycles_per_update": 163.49,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 4, freed_bytes: 4, peak_bytes: 4"
+          },
+          "after": {
+            "cycles_per_update": 164.68,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 4, freed_bytes: 4, peak_bytes: 4"
+          },
+          "cpu_throughput_ratio": 0.9927738644644158
+        },
+        "rates_error_empty": {
+          "before": {
+            "cycles_per_update": 21.46,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 19.18,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.118873826903024
+        },
+        "endpoint_fractional": {
+          "before": {
+            "cycles_per_update": 16.725,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 16.295,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.0263884627186253
+        },
+        "endpoint_saturating": {
+          "before": {
+            "cycles_per_update": 14.68,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 14.690000000000001,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9993192648059903
+        },
+        "startup_name_short": {
+          "before": {
+            "cycles_per_update": 573.135,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 576.815,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9936201381725509
+        },
+        "startup_name_long": {
+          "before": {
+            "cycles_per_update": 651.45,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 654.0,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9961009174311928
+        },
+        "refresh_same": {
+          "before": {
+            "cycles_per_update": 1516.5,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 1487.49,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.0195026521186696
+        },
+        "refresh_changed": {
+          "before": {
+            "cycles_per_update": 1745.62,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 14, freed_bytes: 14, peak_bytes: 14"
+          },
+          "after": {
+            "cycles_per_update": 1729.005,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 14, freed_bytes: 14, peak_bytes: 14"
+          },
+          "cpu_throughput_ratio": 1.0096095731359942
+        },
+        "refresh_name_error": {
+          "before": {
+            "cycles_per_update": 1487.655,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 1503.325,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9895764388937854
+        },
+        "refresh_disabled": {
+          "before": {
+            "cycles_per_update": 15.97,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 15.985,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9990616202690022
+        }
+      }
+    },
+    "complete-rates": {
+      "records": 336,
+      "sha256": "a8b13c6528fcf4de6256a38642672734383890b65248ae814e63a70f3a0a2a89",
+      "updates_per_batch": 1,
+      "workloads": {
+        "rates_continuous": {
+          "before": {
+            "cycles_per_update": 541.595,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 72, freed_bytes: 72, peak_bytes: 72"
+          },
+          "after": {
+            "cycles_per_update": 542.45,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 72, freed_bytes: 72, peak_bytes: 72"
+          },
+          "cpu_throughput_ratio": 0.9984238178633975
+        },
+        "rates_discrete_2": {
+          "before": {
+            "cycles_per_update": 467.565,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 96, freed_bytes: 96, peak_bytes: 96"
+          },
+          "after": {
+            "cycles_per_update": 473.08500000000004,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 96, freed_bytes: 96, peak_bytes: 96"
+          },
+          "cpu_throughput_ratio": 0.9883319065284251
+        },
+        "rates_discrete_11": {
+          "before": {
+            "cycles_per_update": 1058.005,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 312, freed_bytes: 312, peak_bytes: 312"
+          },
+          "after": {
+            "cycles_per_update": 741.2149999999999,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 312, freed_bytes: 312, peak_bytes: 312"
+          },
+          "cpu_throughput_ratio": 1.4273928617202838
+        },
+        "rates_ranges_32": {
+          "before": {
+            "cycles_per_update": 2945.14,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 816, freed_bytes: 816, peak_bytes: 816"
+          },
+          "after": {
+            "cycles_per_update": 2956.575,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 816, freed_bytes: 816, peak_bytes: 816"
+          },
+          "cpu_throughput_ratio": 0.9961323490863584
+        },
+        "rates_error_default": {
+          "before": {
+            "cycles_per_update": 165.71,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 4, freed_bytes: 4, peak_bytes: 4"
+          },
+          "after": {
+            "cycles_per_update": 164.08999999999997,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 4, freed_bytes: 4, peak_bytes: 4"
+          },
+          "cpu_throughput_ratio": 1.0098726308733015
+        },
+        "rates_error_empty": {
+          "before": {
+            "cycles_per_update": 19.28,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 19.16,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.0062630480167014
+        },
+        "endpoint_fractional": {
+          "before": {
+            "cycles_per_update": 16.805,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 17.125,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9813138686131386
+        },
+        "endpoint_saturating": {
+          "before": {
+            "cycles_per_update": 14.68,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 15.575,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9425361155698234
+        },
+        "startup_name_short": {
+          "before": {
+            "cycles_per_update": 574.0699999999999,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 579.105,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9913055490800458
+        },
+        "startup_name_long": {
+          "before": {
+            "cycles_per_update": 663.75,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 650.02,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.021122427002246
+        },
+        "refresh_same": {
+          "before": {
+            "cycles_per_update": 1491.4050000000002,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 1497.875,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9956805474422099
+        },
+        "refresh_changed": {
+          "before": {
+            "cycles_per_update": 1749.705,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 14, freed_bytes: 14, peak_bytes: 14"
+          },
+          "after": {
+            "cycles_per_update": 1747.24,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 14, freed_bytes: 14, peak_bytes: 14"
+          },
+          "cpu_throughput_ratio": 1.001410796456125
+        },
+        "refresh_name_error": {
+          "before": {
+            "cycles_per_update": 1523.875,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 1487.64,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.0243573714070608
+        },
+        "refresh_disabled": {
+          "before": {
+            "cycles_per_update": 15.97,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 15.97,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.0
+        }
+      }
+    },
+    "rate-scans-final": {
+      "records": 448,
+      "sha256": "9bd939944ad41ef7a6734cbd4c8d241ed03d65680bd2523c34d42c48d8243843",
+      "updates_per_batch": 1,
+      "workloads": {
+        "rates_continuous": {
+          "before": {
+            "cycles_per_update": 566.155,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 72, freed_bytes: 72, peak_bytes: 72"
+          },
+          "after": {
+            "cycles_per_update": 555.88,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 72, freed_bytes: 72, peak_bytes: 72"
+          },
+          "cpu_throughput_ratio": 1.018484205224149
+        },
+        "rates_discrete_2": {
+          "before": {
+            "cycles_per_update": 531.8299999999999,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 96, freed_bytes: 96, peak_bytes: 96"
+          },
+          "after": {
+            "cycles_per_update": 485.38,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 96, freed_bytes: 96, peak_bytes: 96"
+          },
+          "cpu_throughput_ratio": 1.0956982158308952
+        },
+        "rates_discrete_11": {
+          "before": {
+            "cycles_per_update": 1441.905,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 312, freed_bytes: 312, peak_bytes: 312"
+          },
+          "after": {
+            "cycles_per_update": 764.7550000000001,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 312, freed_bytes: 312, peak_bytes: 312"
+          },
+          "cpu_throughput_ratio": 1.8854469732136432
+        },
+        "rates_ranges_32": {
+          "before": {
+            "cycles_per_update": 3005.265,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 816, freed_bytes: 816, peak_bytes: 816"
+          },
+          "after": {
+            "cycles_per_update": 3075.95,
+            "allocation_churn": "allocs: 2, reallocs: 0, frees: 2, allocated_bytes: 816, freed_bytes: 816, peak_bytes: 816"
+          },
+          "cpu_throughput_ratio": 0.9770201076090314
+        },
+        "rates_error_default": {
+          "before": {
+            "cycles_per_update": 172.515,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 4, freed_bytes: 4, peak_bytes: 4"
+          },
+          "after": {
+            "cycles_per_update": 173.735,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 4, freed_bytes: 4, peak_bytes: 4"
+          },
+          "cpu_throughput_ratio": 0.9929778110340459
+        },
+        "rates_error_empty": {
+          "before": {
+            "cycles_per_update": 21.475,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 19.17,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.1202399582681273
+        },
+        "endpoint_fractional": {
+          "before": {
+            "cycles_per_update": 16.84,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 17.52,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9611872146118722
+        },
+        "endpoint_saturating": {
+          "before": {
+            "cycles_per_update": 14.915,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 16.025,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9307332293291732
+        },
+        "startup_name_short": {
+          "before": {
+            "cycles_per_update": 597.3399999999999,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 616.115,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9695267928876913
+        },
+        "startup_name_long": {
+          "before": {
+            "cycles_per_update": 694.23,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 671.375,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 1.0340420778253585
+        },
+        "refresh_same": {
+          "before": {
+            "cycles_per_update": 1550.085,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 1551.37,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9991716998523886
+        },
+        "refresh_changed": {
+          "before": {
+            "cycles_per_update": 1800.29,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 14, freed_bytes: 14, peak_bytes: 14"
+          },
+          "after": {
+            "cycles_per_update": 1808.395,
+            "allocation_churn": "allocs: 1, reallocs: 0, frees: 1, allocated_bytes: 14, freed_bytes: 14, peak_bytes: 14"
+          },
+          "cpu_throughput_ratio": 0.9955181251883576
+        },
+        "refresh_name_error": {
+          "before": {
+            "cycles_per_update": 1533.8049999999998,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 1557.52,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9847738712825517
+        },
+        "refresh_disabled": {
+          "before": {
+            "cycles_per_update": 15.985,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "after": {
+            "cycles_per_update": 16.0,
+            "allocation_churn": "allocs: 0, reallocs: 0, frees: 0, allocated_bytes: 0, freed_bytes: 0, peak_bytes: 0"
+          },
+          "cpu_throughput_ratio": 0.9990625
+        }
+      }
+    }
+  },
+  "rejected_trials": {
+    "integer-timebase": {
+      "retained": false,
+      "raw_file": "docs\\performance\\2026-10-26-coreaudio-integer-timebase.tsv",
+      "sha256": "c2304915c07379e0473458e6eecdfa789157efa2f051fd2422cec9ed5c30f050",
+      "records": 192,
+      "workloads": {
+        "mach_identity": {
+          "before_cycles_per_batch": 7401.375,
+          "after_cycles_per_batch": 1802.1950000000002,
+          "cpu_throughput_ratio": 4.10686690396988
+        },
+        "mach_fractional": {
+          "before_cycles_per_batch": 6893.78,
+          "after_cycles_per_batch": 7305.13,
+          "cpu_throughput_ratio": 0.9436902560255601
+        },
+        "mach_overflow": {
+          "before_cycles_per_batch": 25272.405,
+          "after_cycles_per_batch": 25659.315000000002,
+          "cpu_throughput_ratio": 0.9849212654351839
+        },
+        "mach_integer_overflow": {
+          "before_cycles_per_batch": 9855.525000000001,
+          "after_cycles_per_batch": 1909.26,
+          "cpu_throughput_ratio": 5.161960654913423
+        },
+        "latency_normal": {
+          "before_cycles_per_batch": 1047.45,
+          "after_cycles_per_batch": 1214.3249999999998,
+          "cpu_throughput_ratio": 0.8625779754184425
+        },
+        "latency_overflow": {
+          "before_cycles_per_batch": 675.6500000000001,
+          "after_cycles_per_batch": 763.3199999999999,
+          "cpu_throughput_ratio": 0.8851464654404446
+        },
+        "callback_fixed": {
+          "before_cycles_per_batch": 7937.264999999999,
+          "after_cycles_per_batch": 7973.915000000001,
+          "cpu_throughput_ratio": 0.995403763396023
+        },
+        "callback_variable": {
+          "before_cycles_per_batch": 8157.405,
+          "after_cycles_per_batch": 8232.32,
+          "cpu_throughput_ratio": 0.990899892132473
+        }
+      },
+      "before_archive": "clock_trial_before",
+      "after_archive": "clock_unit_trial"
+    },
+    "endpoint-cast": {
+      "retained": false,
+      "raw_file": "docs\\performance\\2026-10-26-coreaudio-endpoint-cast.tsv",
+      "sha256": "bed0b7a4cbdc551920fe7c0329d5162e0bd0a5fa0f10566c4dc79f9b77abd6ca",
+      "records": 280,
+      "workloads": {
+        "rates_continuous": {
+          "before_cycles_per_batch": 555.155,
+          "after_cycles_per_batch": 544.105,
+          "cpu_throughput_ratio": 1.0203085801453762
+        },
+        "rates_discrete_2": {
+          "before_cycles_per_batch": 482.02,
+          "after_cycles_per_batch": 450.24,
+          "cpu_throughput_ratio": 1.0705845771144278
+        },
+        "rates_discrete_11": {
+          "before_cycles_per_batch": 1048.24,
+          "after_cycles_per_batch": 1033.955,
+          "cpu_throughput_ratio": 1.0138158817356655
+        },
+        "rates_ranges_32": {
+          "before_cycles_per_batch": 2852.455,
+          "after_cycles_per_batch": 2818.52,
+          "cpu_throughput_ratio": 1.0120400068120858
+        },
+        "rates_error_default": {
+          "before_cycles_per_batch": 161.305,
+          "after_cycles_per_batch": 158.635,
+          "cpu_throughput_ratio": 1.0168310902385982
+        },
+        "rates_error_empty": {
+          "before_cycles_per_batch": 19.560000000000002,
+          "after_cycles_per_batch": 18.395,
+          "cpu_throughput_ratio": 1.0633324272900246
+        },
+        "endpoint_fractional": {
+          "before_cycles_per_batch": 15.91,
+          "after_cycles_per_batch": 16.32,
+          "cpu_throughput_ratio": 0.9748774509803921
+        },
+        "endpoint_saturating": {
+          "before_cycles_per_batch": 14.129999999999999,
+          "after_cycles_per_batch": 14.594999999999999,
+          "cpu_throughput_ratio": 0.9681397738951696
+        },
+        "startup_name_short": {
+          "before_cycles_per_batch": 580.865,
+          "after_cycles_per_batch": 547.4100000000001,
+          "cpu_throughput_ratio": 1.061115069143786
+        },
+        "startup_name_long": {
+          "before_cycles_per_batch": 710.63,
+          "after_cycles_per_batch": 651.155,
+          "cpu_throughput_ratio": 1.0913376999331956
+        },
+        "refresh_same": {
+          "before_cycles_per_batch": 1516.0149999999999,
+          "after_cycles_per_batch": 1482.335,
+          "cpu_throughput_ratio": 1.0227209099157746
+        },
+        "refresh_changed": {
+          "before_cycles_per_batch": 1733.065,
+          "after_cycles_per_batch": 1685.6100000000001,
+          "cpu_throughput_ratio": 1.02815301285588
+        },
+        "refresh_name_error": {
+          "before_cycles_per_batch": 1470.3049999999998,
+          "after_cycles_per_batch": 1484.81,
+          "cpu_throughput_ratio": 0.9902310733359823
+        },
+        "refresh_disabled": {
+          "before_cycles_per_batch": 15.205,
+          "after_cycles_per_batch": 14.68,
+          "cpu_throughput_ratio": 1.0357629427792916
+        }
+      },
+      "before_archive": "rates_trial_before",
+      "after_archive": "cast_trial"
+    },
+    "existing-rates": {
+      "retained": false,
+      "raw_file": "docs\\performance\\2026-10-26-coreaudio-existing-rates.tsv",
+      "sha256": "8cab4a7e06486187c0539150460cb837bb8eedc5d5e5ccf619d3ce06660cc2c7",
+      "records": 280,
+      "workloads": {
+        "rates_continuous": {
+          "before_cycles_per_batch": 578.2349999999999,
+          "after_cycles_per_batch": 665.6800000000001,
+          "cpu_throughput_ratio": 0.8686380843648598
+        },
+        "rates_discrete_2": {
+          "before_cycles_per_batch": 507.93999999999994,
+          "after_cycles_per_batch": 512.835,
+          "cpu_throughput_ratio": 0.9904550196456948
+        },
+        "rates_discrete_11": {
+          "before_cycles_per_batch": 1097.9450000000002,
+          "after_cycles_per_batch": 832.0450000000001,
+          "cpu_throughput_ratio": 1.3195740614990776
+        },
+        "rates_ranges_32": {
+          "before_cycles_per_batch": 3014.39,
+          "after_cycles_per_batch": 3334.645,
+          "cpu_throughput_ratio": 0.9039612912319002
+        },
+        "rates_error_default": {
+          "before_cycles_per_batch": 174.445,
+          "after_cycles_per_batch": 168.04500000000002,
+          "cpu_throughput_ratio": 1.0380850367461096
+        },
+        "rates_error_empty": {
+          "before_cycles_per_batch": 18.305,
+          "after_cycles_per_batch": 19.494999999999997,
+          "cpu_throughput_ratio": 0.9389587073608618
+        },
+        "endpoint_fractional": {
+          "before_cycles_per_batch": 16.6,
+          "after_cycles_per_batch": 16.805,
+          "cpu_throughput_ratio": 0.987801249628087
+        },
+        "endpoint_saturating": {
+          "before_cycles_per_batch": 14.625,
+          "after_cycles_per_batch": 14.705,
+          "cpu_throughput_ratio": 0.9945596735804149
+        },
+        "startup_name_short": {
+          "before_cycles_per_batch": 609.17,
+          "after_cycles_per_batch": 610.215,
+          "cpu_throughput_ratio": 0.998287488835902
+        },
+        "startup_name_long": {
+          "before_cycles_per_batch": 730.175,
+          "after_cycles_per_batch": 676.6800000000001,
+          "cpu_throughput_ratio": 1.0790550925104923
+        },
+        "refresh_same": {
+          "before_cycles_per_batch": 1520.225,
+          "after_cycles_per_batch": 1549.815,
+          "cpu_throughput_ratio": 0.9809073986249971
+        },
+        "refresh_changed": {
+          "before_cycles_per_batch": 1818.335,
+          "after_cycles_per_batch": 1788.275,
+          "cpu_throughput_ratio": 1.0168094951839062
+        },
+        "refresh_name_error": {
+          "before_cycles_per_batch": 1562.3200000000002,
+          "after_cycles_per_batch": 1541.165,
+          "cpu_throughput_ratio": 1.0137266288813982
+        },
+        "refresh_disabled": {
+          "before_cycles_per_batch": 16.0,
+          "after_cycles_per_batch": 15.23,
+          "cpu_throughput_ratio": 1.0505581089954037
+        }
+      },
+      "before_archive": "rates_trial_before",
+      "after_archive": "membership_trial"
+    },
+    "discrete-membership": {
+      "retained": false,
+      "raw_file": "docs\\performance\\2026-10-26-coreaudio-discrete-membership.tsv",
+      "sha256": "88162c26ea2d8b814e1d86a834241e18d29888c48bf41f513bb290bbd2ffaa0c",
+      "records": 336,
+      "workloads": {
+        "rates_continuous": {
+          "before_cycles_per_batch": 586.1400000000001,
+          "after_cycles_per_batch": 618.885,
+          "cpu_throughput_ratio": 0.9470903318063939
+        },
+        "rates_discrete_2": {
+          "before_cycles_per_batch": 530.635,
+          "after_cycles_per_batch": 506.35,
+          "cpu_throughput_ratio": 1.0479608966130147
+        },
+        "rates_discrete_11": {
+          "before_cycles_per_batch": 1117.2649999999999,
+          "after_cycles_per_batch": 847.95,
+          "cpu_throughput_ratio": 1.3176071702340937
+        },
+        "rates_ranges_32": {
+          "before_cycles_per_batch": 3104.775,
+          "after_cycles_per_batch": 3125.915,
+          "cpu_throughput_ratio": 0.993237180153651
+        },
+        "rates_error_default": {
+          "before_cycles_per_batch": 177.34,
+          "after_cycles_per_batch": 178.6,
+          "cpu_throughput_ratio": 0.9929451287793953
+        },
+        "rates_error_empty": {
+          "before_cycles_per_batch": 20.025,
+          "after_cycles_per_batch": 19.115000000000002,
+          "cpu_throughput_ratio": 1.047606591681925
+        },
+        "endpoint_fractional": {
+          "before_cycles_per_batch": 17.255000000000003,
+          "after_cycles_per_batch": 17.41,
+          "cpu_throughput_ratio": 0.9910970706490524
+        },
+        "endpoint_saturating": {
+          "before_cycles_per_batch": 15.46,
+          "after_cycles_per_batch": 15.170000000000002,
+          "cpu_throughput_ratio": 1.019116677653263
+        },
+        "startup_name_short": {
+          "before_cycles_per_batch": 627.995,
+          "after_cycles_per_batch": 623.7049999999999,
+          "cpu_throughput_ratio": 1.0068782517376005
+        },
+        "startup_name_long": {
+          "before_cycles_per_batch": 726.75,
+          "after_cycles_per_batch": 677.6199999999999,
+          "cpu_throughput_ratio": 1.072503763171099
+        },
+        "refresh_same": {
+          "before_cycles_per_batch": 1543.49,
+          "after_cycles_per_batch": 1572.335,
+          "cpu_throughput_ratio": 0.9816546728273555
+        },
+        "refresh_changed": {
+          "before_cycles_per_batch": 1835.69,
+          "after_cycles_per_batch": 1857.935,
+          "cpu_throughput_ratio": 0.9880270300091231
+        },
+        "refresh_name_error": {
+          "before_cycles_per_batch": 1588.615,
+          "after_cycles_per_batch": 1562.01,
+          "cpu_throughput_ratio": 1.0170325414049846
+        },
+        "refresh_disabled": {
+          "before_cycles_per_batch": 15.985,
+          "after_cycles_per_batch": 15.97,
+          "cpu_throughput_ratio": 1.0009392611145898
+        }
+      },
+      "before_archive": "rates_trial_before",
+      "after_archive": "discrete_membership_trial"
+    }
+  },
+  "debug_checks": {
+    "coreaudio-clock-integer": "running 7 tests\ntest checks::benchmark_coreaudio_timing ... ignored, CPU benchmark; run explicitly in release mode\ntest checks::callback_telemetry_matches_for_variable_periods_and_latency_changes ... ok\ntest checks::latency_conversion_preserves_all_integer_boundaries ... ok\ntest checks::mach_scaling_preserves_rounding_overflow_and_saturation ... ok\ntest checks::timing_remains_allocation_free ... ok\ntest checks::zero_timebase_denominator_still_panics - should panic ... ok\ntest checks::zero_timebase_numerator_and_denominator_still_panics - should panic ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+    "coreaudio-rates": "running 7 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest complete_common_rates_keep_extra_endpoints_and_missing_rate_tolerance ... ok\ntest endpoint_rounding_matches_original_clamp_and_cast ... ok\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+  },
+  "rejected_measurement_records": 1088
+}

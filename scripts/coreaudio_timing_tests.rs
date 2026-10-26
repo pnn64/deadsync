@@ -87,6 +87,12 @@ fn zero_timebase_denominator_still_panics() {
 }
 
 #[test]
+#[should_panic]
+fn zero_timebase_numerator_and_denominator_still_panics() {
+    scale_mach_time(1, 0, 0);
+}
+
+#[test]
 fn latency_conversion_preserves_all_integer_boundaries() {
     for rate in [0, 1, 11_025, 44_100, 48_000, 96_000, 192_000, u32::MAX] {
         let divisor = u64::from(rate.max(1));
@@ -164,11 +170,13 @@ fn benchmark_coreaudio_timing() {
     for (label, numer, denom) in [
         ("mach_identity", 1, 1),
         ("mach_fractional", 125, 3),
+        ("mach_generic", 125, 7),
         ("mach_overflow", u32::MAX, 3),
+        ("mach_integer_overflow", u32::MAX, 1),
     ] {
         kernel_bench::measure(label, 1024, || {
             for index in 0..256 {
-                let time = if label == "mach_overflow" {
+                let time = if label.ends_with("overflow") {
                     u64::MAX - index
                 } else {
                     24_000_000_000 + index
