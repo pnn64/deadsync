@@ -17,6 +17,7 @@ def main() -> None:
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
     sources=list((root/'crates/deadlib-lua').rglob('*.rs'))+[root/'crates/deadlib-lua/Cargo.toml',Path(__file__).resolve(),root/'scripts/build_lua_cli_reference.py']
+    sources.append(root/'docs/testing/lua51-predicate-known-gaps.lua')
     def hashes():return {p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(sources)}
     before=hashes()
     target=Path(os.environ.get('CARGO_TARGET_DIR',str(root/'target')))
@@ -89,6 +90,10 @@ def main() -> None:
     case('predicate_captured_repeat_hooks',['-e',"local function f()local n,keep=0,{};repeat local x=n;keep[#keep+1]=function()return x end;n=n+1 until n>=3 or false;return n,keep[1](),keep[3]()end;local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local a,b,c=f();debug.sethook();print(a,b,c,visits)"])
     case('predicate_live_local_hooks',['-e',"local function f(a,b)local n=0;if a then n=17 elseif not a then n=42 end;return n,a,b end;for at=1,6 do local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==at then debug.setlocal(2,1,false);debug.setlocal(2,2,true);collectgarbage()end end end,'',1);local n,a,b=f(true,false);debug.sethook();print(n,a,b,visits)end"])
     case('predicate_terminal_nil_hooks',['-e',"for _,predicate in ipairs{'nil','false or nil','true and nil'}do local f=assert(loadstring('return function()if '..predicate..' then return 0 end;return 42 end'))();local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1);local n=f();debug.sethook();print(n,visits)end"])
+    case('rk_prior_debug_export_gaps',['predicate-gaps.lua'],files={'predicate-gaps.lua':(root/'docs/testing/lua51-predicate-known-gaps.lua').read_bytes()})
+    case('hook_window_gc_mutation',['-e',"local weak=setmetatable({},{__mode='v'});local visits,alive=0,0;local function f()if nil then return 0 end;return 42 end;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==1 then local t={tag=17};weak[1]=t;assert(debug.setlocal(2,2,t)=='(*temporary)');t=nil end;collectgarbage();local name,t=debug.getlocal(2,2);if t==weak[1]and t and t.tag==17 then alive=alive+1 end;if visits==2 then assert(debug.setlocal(2,1,true)=='(*temporary)')end end end,'',1);local n=f();debug.sethook();collectgarbage();print(n,visits,alive,weak[1]==nil)"])
+    case('source_return_hook_window',['-e',"local function f(a,b)return end;debug.sethook(function(e)if e=='return'and debug.getinfo(2,'f').func==f then for i=1,4 do local n,v=debug.getlocal(2,i);print(n,type(v))end end end,'r');f(2,3);debug.sethook()"])
+    case('rk_field_store_local_hooks',['-e',"local function f(value)local t={};t.key=value;return t.key,value end;local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==2 then debug.setlocal(2,1,42);collectgarbage()end end end,'',1);local a,b=f(17);debug.sethook();print(a,b,visits)"])
     case('format_nul_option',['-e',"string.format('%\\000tail',17)"])
     case('format_terminal_specifier',['-e',"string.format('prefix%0',17)"])
     case('format_binary_protected',['-e',"local ok,e=pcall(string.format,'%\\000tail',17);collectgarbage();print(ok,#e,string.find(e,'\\000',1,true),e);print(string.format('%s:%q','alive',19))"])

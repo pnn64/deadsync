@@ -761,6 +761,18 @@ persistent-cache regressions cover the changed paths. Native export still has
 broader hook differences where extra operand loads or copies remain; complete
 hook parity and the other standalone gates remain open.
 
+The [register/constant operand milestone](testing/2026-10-26-rust-lua-rk-windows.md)
+removes hidden constant loads from arithmetic, comparisons and table access.
+Native imports retain RK operands directly and exports emit native RK fields.
+Source metadata carries the parser's logical stack bound so hooks can inspect
+temporary slots without exposing physical scratch registers. Hook windows
+include their registry table, use the actual return/result top, and keep
+temporary writes rooted during callbacks. Reclaimed temporary handles read as
+nil. Single nonlocal stores read a local RHS at their own instruction boundary.
+The persistent representation advances to schema 2 for logical debug bounds.
+Both previously recorded predicate/debug/export probes now match the reference;
+broader stack-layout and hook parity remain open.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

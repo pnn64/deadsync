@@ -156,6 +156,16 @@ Pending branches use flat compiler jobs and linked instruction slots.
 [Boolean validation](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md)
 covers both paths, long chains, native export and fresh-process cache reloads.
 
+Arithmetic, comparisons and table access accept register-or-constant operands.
+Eligible constants remain in the program pool instead of being written into
+hidden operand registers. Source debug metadata records the reference logical
+stack bound independently of physical scratch registers. Hooks expose unnamed
+slots and their registry-table slot; temporary writes remain roots while the
+hook runs. Return hooks use the actual result window, including empty returns
+and open results. [Validation](../../docs/testing/2026-10-26-rust-lua-rk-windows.md)
+also covers native import/export and schema-2 persistent reloads. Complete
+scratch-stack and hook parity remain unfinished.
+
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,

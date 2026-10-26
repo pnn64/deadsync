@@ -1,0 +1,68 @@
+{
+  "cli_audit": {
+    "path": "docs/testing/2026-10-26-rust-lua-rk-windows-audit.json",
+    "sha256": "f4e56e7863700001e34b00a7bd135c7834292581792d0de30f1a2560816c4c21"
+  },
+  "fixtures": {
+    "resolved": {
+      "source": {
+        "path": "docs/testing/lua51-predicate-known-gaps.lua",
+        "sha256": "a1e96a36246ff88e7dcd6fba63a41c33f23d0427fb8c6e964e25d8d4b5a97a8c"
+      },
+      "engines": {
+        "rust": {
+          "binary": {
+            "path": "C:\\GitHub\\deadsync\\target\\lua-rk-isolated-1793036525759340400\\target\\cargo-final-1793037131687631300\\release\\deadlua.exe",
+            "sha256": "3d547a5c99d0e8cc5bf52f0db4d216e4a89cf6e4ab23b7d33f6cd2aeafbfed89"
+          },
+          "returncode": 0,
+          "stdout": "source\t2\t13\r\nexported\t2\t13\r\nslots\t42\t(*temporary):nil:nil|(*temporary):boolean:false|(*temporary):boolean:false|(*temporary):number:42\r\n",
+          "stderr": ""
+        },
+        "reference": {
+          "binary": {
+            "path": "C:\\GitHub\\deadsync\\target\\lua-rk-isolated-1793036525759340400\\target\\lua-cli-reference\\lua.exe",
+            "sha256": "0a061bd14be5fb27710c7d72205d3725dd7c2f69b3f9db0c9a263772d687663d"
+          },
+          "returncode": 0,
+          "stdout": "source\t2\t13\r\nexported\t2\t13\r\nslots\t42\t(*temporary):nil:nil|(*temporary):boolean:false|(*temporary):boolean:false|(*temporary):number:42\r\n",
+          "stderr": ""
+        }
+      },
+      "equal": true
+    },
+    "remaining": {
+      "source": {
+        "path": "docs/testing/lua51-rk-window-followups.lua",
+        "sha256": "d97704756f2c2886998d319ef8ec10172311f7a65db26699d8cbed205dc7a781"
+      },
+      "engines": {
+        "rust": {
+          "binary": {
+            "path": "C:\\GitHub\\deadsync\\target\\lua-rk-isolated-1793036525759340400\\target\\cargo-final-1793037131687631300\\release\\deadlua.exe",
+            "sha256": "3d547a5c99d0e8cc5bf52f0db4d216e4a89cf6e4ab23b7d33f6cd2aeafbfed89"
+          },
+          "returncode": 0,
+          "stdout": "entry\t(*temporary)\tnil\tnil\t(*temporary)\tnil\tnil\r\ncleared\tnumber:17\r\n",
+          "stderr": ""
+        },
+        "reference": {
+          "binary": {
+            "path": "C:\\GitHub\\deadsync\\target\\lua-rk-isolated-1793036525759340400\\target\\lua-cli-reference\\lua.exe",
+            "sha256": "0a061bd14be5fb27710c7d72205d3725dd7c2f69b3f9db0c9a263772d687663d"
+          },
+          "returncode": 0,
+          "stdout": "entry\t(*temporary)\tnil\tnil\t(*temporary)\tnil\tnil\r\ncleared\tnil:nil\r\n",
+          "stderr": ""
+        }
+      },
+      "equal": false
+    }
+  },
+  "observations": {
+    "prior_fixture_matches": true,
+    "entry_hook_control_matches": true,
+    "scalar_clearing_matches": false
+  },
+  "limitations": "The resolved fixture closes the two recorded predicate/debug/native-export gaps. The second fixture retains a matching ignored-argument entry-hook control and failing evidence for scalar clearing above the active native stack. Complete debug-stack parity is unfinished."
+}

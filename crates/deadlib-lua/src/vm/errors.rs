@@ -79,7 +79,15 @@ fn object_name(proto: &Prototype, pc: usize, mut register: u8) -> Option<(&[u8],
             }
             Op::GetTable => {
                 let key = instruction.c as u8;
-                let name = if local_name(proto, producer, key).is_none()
+                let name = if instruction.c >= crate::bytecode::RK {
+                    if let Constant::String(name) =
+                        &proto.constants[(instruction.c - crate::bytecode::RK) as usize]
+                    {
+                        name.as_ref()
+                    } else {
+                        b"?"
+                    }
+                } else if local_name(proto, producer, key).is_none()
                     && let Some((_, load)) = definition(proto, producer, key)
                     && load.op == Op::Load
                     && let Constant::String(name) = &proto.constants[load.c as usize]
@@ -183,7 +191,7 @@ impl Vm {
             }
             _ => return None,
         };
-        Some(frame.base + register)
+        (register < crate::bytecode::RK as usize).then_some(frame.base + register)
     }
 
     #[cold]

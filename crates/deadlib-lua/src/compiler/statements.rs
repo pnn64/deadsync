@@ -23,6 +23,11 @@ impl<'a> Compiler<'a> {
                 self.tasks.push(Task::Results(*value, dst, 0));
             }
             Stmt::Return(values, end_line) => {
+                if values.is_empty() {
+                    self.line = *end_line;
+                    self.emit(Op::Return, 0, 0, 0)?;
+                    return Ok(());
+                }
                 if values.len() == 1 {
                     let mut value = values[0];
                     while let Expr::Paren(inner) = self.ast.exprs[value].0 {
@@ -174,6 +179,15 @@ impl<'a> Compiler<'a> {
                 self.tasks.push(Task::Results(*value, *dst, 1));
                 return Ok(());
             }
+        }
+        if locations.len() == 1
+            && !matches!(locations[0], Target::Local(_))
+            && let [value] = values
+            && let Some(register) = self.local_operand(*value)
+        {
+            self.result = register;
+            self.tasks.push(Task::AssignEnd(id, locations));
+            return Ok(());
         }
         self.tasks.push(Task::AssignEnd(id, locations));
         self.tasks.push(Task::Values(values, targets.len()));

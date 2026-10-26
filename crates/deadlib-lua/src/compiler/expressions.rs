@@ -93,7 +93,7 @@ impl<'a> Compiler<'a> {
                     None
                 };
                 if let Some(constant) = constant
-                    && !self.eager_numeric_tree(id)
+                    && (self.rk_operand(*left) || !self.eager_numeric_tree(id))
                 {
                     self.tasks
                         .push(Task::BinaryConstant(id, dst, work, constant));
@@ -142,6 +142,12 @@ impl<'a> Compiler<'a> {
                         vararg: *vararg,
                         compat_arg: *vararg,
                         defined: [span.start, *end_line],
+                        debug_stack: self
+                            .ast
+                            .stacks
+                            .binary_search_by_key(&id, |&(id, _)| id)
+                            .map(|i| self.ast.stacks[i].1)
+                            .unwrap(),
                         zero_sign: self
                             .ast
                             .zero_signs
@@ -196,15 +202,26 @@ impl<'a> Compiler<'a> {
         self.result = dst;
         Ok(())
     }
-    pub(super) fn operand(&mut self, id: ExprId, dst: u8) {
+    pub(super) fn operand(&mut self, id: ExprId, dst: u8) -> Result<(), Error> {
         let reference = self.unparen(id);
         if let Some(reg) = self.local_operand(reference) {
             self.line = self.ast.exprs[id].1.discharge;
             self.result = reg;
-            return;
+            return Ok(());
         }
-        self.tasks.push(Task::OperandEnd(reference, dst));
+        if self.rk_operand(id)
+            && let Some(constant) = self.constant_operand(id)?
+            && constant <= u32::from(u16::MAX) - RK
+        {
+            self.line = self.ast.exprs[id].1.discharge;
+            self.emit(Op::Load, dst, RK_LOAD, constant)?;
+            self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
+            self.debug_line(0);
+            self.result = dst;
+            return Ok(());
+        }
         self.tasks.push(Task::Expr(id, dst));
+        Ok(())
     }
     pub(super) fn unparen(&self, mut id: ExprId) -> ExprId {
         while let Expr::Paren(inner) = self.ast.exprs[id].0 {
@@ -360,7 +377,7 @@ impl<'a> Compiler<'a> {
         self.tasks.push(Task::Expr(right, dst));
         Ok(())
     }
-    pub(super) fn binary_right(&mut self, id: ExprId, dst: u8, left: u8) -> Result<(), Error> {
+    pub(super) fn binary_right(&mut self, id: ExprId, dst: u8, left: u16) -> Result<(), Error> {
         let Expr::Binary(op, _, right_id, _) = self.ast.exprs[id].0 else {
             unreachable!()
         };
@@ -377,13 +394,13 @@ impl<'a> Compiler<'a> {
             && (tail.op == Op::ConcatRange
                 || (tail.op == Op::Concat && tail.c == u32::from(tail.b) + 1))
             && tail.a == right
-            && tail.b == u16::from(left) + 1
+            && tail.b == left + 1
         {
             let pc = self.function.code.len() - 1;
             self.function.code[pc] = Instruction {
                 op: Op::ConcatRange,
                 a: dst,
-                b: u16::from(left),
+                b: left,
                 c: tail.c,
             };
             // Keep the original before-map: all unevaluated range operands
@@ -414,12 +431,12 @@ impl<'a> Compiler<'a> {
         };
         if matches!(op, Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge) {
             let boolean = self.alloc(1)?;
-            self.emit(op, boolean, u16::from(left), u32::from(right))?;
+            self.emit(op, boolean, left, u32::from(right))?;
             self.function.live[usize::from(boolean) / 64] &= !(1u64 << (boolean % 64));
             self.line = self.ast.exprs[id].1.discharge;
             self.emit(Op::Bool, dst, u16::from(boolean), 0)?;
         } else {
-            self.emit(op, dst, u16::from(left), u32::from(right))?;
+            self.emit(op, dst, left, u32::from(right))?;
         }
         Ok(())
     }
@@ -434,12 +451,13 @@ impl<'a> Compiler<'a> {
             unreachable!("constant left operand")
         };
         let right = self.result;
+        if self.rk_operand(left) && constant <= u32::from(u16::MAX) - RK {
+            return self.binary_right(id, dst, (RK + constant) as u16);
+        }
         let reg = if right == work { self.alloc(1)? } else { work };
         self.line = self.ast.exprs[left].1.discharge;
         self.emit(Op::Load, reg, 0, constant)?;
-        self.function.debug_hidden[usize::from(reg) / 64] |= 1u64 << (reg % 64);
-        self.debug_line(0);
-        self.binary_right(id, dst, reg)
+        self.binary_right(id, dst, u16::from(reg))
     }
     pub(super) fn table_next(&mut self, state: TableState) -> Result<(), Error> {
         let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
@@ -485,7 +503,7 @@ impl<'a> Compiler<'a> {
         let constant = match self.ast.constant_operands[index].1 {
             crate::parser::ConstantOperand::Nil => Constant::Nil,
             crate::parser::ConstantOperand::Boolean(value) => Constant::Boolean(value),
-            crate::parser::ConstantOperand::Number(value) => Constant::Number(value),
+            crate::parser::ConstantOperand::Number(value, _) => Constant::Number(value),
             crate::parser::ConstantOperand::String(source) => {
                 let Expr::String(bytes) = &self.ast.exprs[source].0 else {
                     unreachable!("constant key literal")
@@ -494,6 +512,17 @@ impl<'a> Compiler<'a> {
             }
         };
         self.constant(constant).map(Some)
+    }
+    pub(super) fn rk_operand(&self, id: ExprId) -> bool {
+        self.ast
+            .constant_operands
+            .binary_search_by_key(&id, |&(id, _)| id)
+            .is_ok_and(|index| {
+                !matches!(
+                    self.ast.constant_operands[index].1,
+                    crate::parser::ConstantOperand::Number(_, false)
+                )
+            })
     }
     pub(super) fn call_parts(&self, id: ExprId) -> (ExprId, Option<&'a [u8]>, &'a [ExprId], u32) {
         match &self.ast.exprs[id].0 {

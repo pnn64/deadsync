@@ -7,6 +7,9 @@ pub(crate) const OPEN: u32 = u32::MAX;
 pub(crate) const OPEN_ARGS: u16 = u16::MAX;
 pub(crate) const COMPARE_BRANCH: u16 = 1;
 pub(crate) const BOOLEAN_SKIP: u16 = 2;
+/// On RK-capable operands, values below this boundary are register indices;
+/// larger values are constant indices plus this boundary.
+pub(crate) const RK: u32 = 256;
 
 pub(crate) fn chunk_id(name: &[u8]) -> Vec<u8> {
     chunk_id_limit(name, 60)
@@ -84,6 +87,29 @@ pub(crate) enum Op {
     TailCall,
     CallIter,
     ConcatRange,
+}
+impl Op {
+    pub(crate) fn rk_b(self) -> bool {
+        matches!(
+            self,
+            Self::Add
+                | Self::Sub
+                | Self::Mul
+                | Self::Div
+                | Self::Mod
+                | Self::Pow
+                | Self::Eq
+                | Self::Ne
+                | Self::Lt
+                | Self::Le
+                | Self::Gt
+                | Self::Ge
+                | Self::SetTable
+        )
+    }
+    pub(crate) fn rk_c(self) -> bool {
+        self.rk_b() || self == Self::GetTable
+    }
 }
 
 /// Eight-byte instructions keep full-width constant and jump indices.
@@ -165,6 +191,7 @@ pub(crate) struct DebugCall {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct DebugInfo {
+    pub stack: u16,
     pub native: Option<Box<NativeDebug>>,
     pub defined: [u32; 2],
     pub upvalues: Box<[Box<[u8]>]>,
@@ -300,12 +327,14 @@ impl Prototype {
     }
 
     pub fn debug_registers(&self) -> usize {
-        usize::from(
-            self.debug
-                .native
-                .as_ref()
-                .map_or(self.registers, |n| n.stack),
-        )
+        usize::from(self.debug.native.as_ref().map_or(
+            if self.debug.stack == 0 {
+                self.registers
+            } else {
+                self.debug.stack
+            },
+            |n| n.stack,
+        ))
     }
 
     fn verify(&self, prototypes: &[Prototype]) -> Result<(), Error> {
@@ -317,6 +346,7 @@ impl Prototype {
             )
         };
         if self.registers > 256
+            || self.debug.stack > self.registers
             || self.registers == 0
             || self.params > self.registers
             || self.upvalues.len() > if self.debug.native.is_some() { 255 } else { 60 }
@@ -478,7 +508,6 @@ impl Prototype {
                 | Op::Div
                 | Op::Mod
                 | Op::Pow
-                | Op::Concat
                 | Op::Eq
                 | Op::Ne
                 | Op::Lt
@@ -488,17 +517,30 @@ impl Prototype {
                 | Op::GetTable
                 | Op::SetTable => {
                     reg(u32::from(i.a))?;
-                    reg(u32::from(i.b))?;
-                    reg(i.c)?;
+                    let operand = |value: u32| {
+                        if value < RK {
+                            reg(value)
+                        } else if (value - RK) as usize >= self.constants.len() {
+                            Err(fail(pc, "constant operand out of bounds"))
+                        } else {
+                            Ok(())
+                        }
+                    };
+                    if i.op.rk_b() {
+                        operand(u32::from(i.b))?;
+                    } else {
+                        reg(u32::from(i.b))?;
+                    }
+                    operand(i.c)?;
                 }
                 Op::ForPrep | Op::ForLoop => {
                     range(u32::from(i.a), 4)?;
                 }
-                Op::ConcatRange => {
+                Op::Concat | Op::ConcatRange => {
                     reg(u32::from(i.a))?;
                     reg(u32::from(i.b))?;
                     reg(i.c)?;
-                    if u32::from(i.b) >= i.c {
+                    if i.op == Op::ConcatRange && u32::from(i.b) >= i.c {
                         return Err(fail(pc, "invalid concatenation range"));
                     }
                 }
@@ -684,6 +726,32 @@ mod tests {
                 _ => proto.code[jump].c = skip as u32,
             }
             assert_eq!(p.verify().unwrap_err().kind(), ErrorKind::Bytecode);
+        }
+    }
+
+    #[test]
+    fn verifier_bounds_constant_operands_and_source_debug_windows() {
+        let good = crate::compile(b"local a=2;local t={key=a};return a+3,3-a,t.key").unwrap();
+        let proto = &good.data.prototypes[good.data.entry as usize];
+        assert!(proto.code.iter().any(|i| i.op.rk_c() && i.c >= RK));
+        assert!(
+            proto
+                .code
+                .iter()
+                .any(|i| i.op.rk_b() && u32::from(i.b) >= RK)
+        );
+        for corrupt in 0..4 {
+            let mut bad = good.clone();
+            let data = Arc::make_mut(&mut bad.data);
+            let p = &mut data.prototypes[data.entry as usize];
+            let count = p.constants.len() as u32;
+            match corrupt {
+                0 => p.code.iter_mut().find(|i| i.op.rk_b()).unwrap().b = (RK + count) as u16,
+                1 => p.code.iter_mut().find(|i| i.op.rk_c()).unwrap().c = RK + count,
+                2 => p.code.iter_mut().find(|i| i.op == Op::GetTable).unwrap().b = RK as u16,
+                _ => p.debug.stack = p.registers + 1,
+            }
+            assert_eq!(bad.verify().unwrap_err().kind(), ErrorKind::Bytecode);
         }
     }
 

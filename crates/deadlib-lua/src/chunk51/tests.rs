@@ -736,6 +736,28 @@ fn source_concatenation_ranges_export_with_original_grouping_and_errors() {
 }
 
 #[test]
+fn constant_operands_export_without_hidden_load_hook_events() {
+    for body in [
+        "local n=0;while n<3 and(a or b)do n=n+1;if n==2 then break end end;return n",
+        "local n=0;repeat local x=n;keep=function()return x end;n=n+1 until n>=3 or false;return n,keep()",
+        "local n=a+3;local t={key=n};t.key=b;return t.key,3-a",
+    ] {
+        let source = format!(
+            r#"local keep
+local function f(a,b)
+{body}
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local a,b=f(2,3);debug.sethook();return a,b,table.concat(out,'|')"#
+        );
+        let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+        let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+        compare_execution_against(&bytes, source.as_bytes());
+        compare_execution(&bytes);
+    }
+}
+
+#[test]
 fn predicate_branches_export_results_and_selected_hook_traces() {
     for body in [
         "if a then n=1 elseif not a then n=2 end",

@@ -1315,7 +1315,7 @@ impl Vm {
                     }
                     Op::GetTable => {
                         let target = self.registers[b];
-                        let key = self.registers[base + c];
+                        let key = self.operand_value(base, program_index, proto_index, i.c);
                         if let Value::Table(id) = target
                             && self.tables[slot_index(id.0)].metatable().is_none()
                         {
@@ -1326,8 +1326,9 @@ impl Vm {
                     }
                     Op::SetTable => {
                         let target = self.registers[a];
-                        let key = self.registers[b];
-                        let value = self.registers[base + c];
+                        let key =
+                            self.operand_value(base, program_index, proto_index, u32::from(i.b));
+                        let value = self.operand_value(base, program_index, proto_index, i.c);
                         if let Value::Table(id) = target
                             && self.tables[slot_index(id.0)].metatable().is_none()
                         {
@@ -1340,7 +1341,9 @@ impl Vm {
                         }
                     }
                     Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
-                        let (left, right) = (self.registers[b], self.registers[base + c]);
+                        let left =
+                            self.operand_value(base, program_index, proto_index, u32::from(i.b));
+                        let right = self.operand_value(base, program_index, proto_index, i.c);
                         if let (Value::Number(x), Value::Number(y)) = (left, right) {
                             self.registers[a] = Value::Number(Self::number_op(i.op, x, y));
                         } else {
@@ -1348,7 +1351,9 @@ impl Vm {
                         }
                     }
                     Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                        let (left, right) = (self.registers[b], self.registers[base + c]);
+                        let left =
+                            self.operand_value(base, program_index, proto_index, u32::from(i.b));
+                        let right = self.operand_value(base, program_index, proto_index, i.c);
                         if let (Value::Number(x), Value::Number(y)) = (left, right) {
                             self.registers[a] = Value::Boolean(match i.op {
                                 Op::Eq => x == y,
@@ -1517,6 +1522,15 @@ impl Vm {
                     continue 'frames;
                 }
             }
+        }
+    }
+
+    #[inline]
+    fn operand_value(&self, base: usize, program: usize, prototype: usize, operand: u32) -> Value {
+        if operand < crate::bytecode::RK {
+            self.registers[base + operand as usize]
+        } else {
+            self.programs[program].constants[prototype][(operand - crate::bytecode::RK) as usize]
         }
     }
 

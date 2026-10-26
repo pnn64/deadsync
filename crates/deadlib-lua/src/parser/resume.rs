@@ -174,6 +174,7 @@ impl Parser {
             + self.bindings.heap_bytes()
             + self.resources.heap_bytes()
             + self.ast.zero_signs.capacity() * size_of::<(ExprId, bool)>()
+            + self.ast.stacks.capacity() * size_of::<(ExprId, u16)>()
             + self.ast.constant_operands.capacity() * size_of::<(ExprId, ConstantOperand)>()
     }
     pub(crate) fn heap_bytes(&self) -> usize {
@@ -1032,7 +1033,9 @@ impl Parser {
                     self.locals = locals;
                     self.function_line = parent_line;
                     self.bindings.leave();
-                    if let Some(sign) = self.resources.leave() {
+                    let (sign, stack) = self.resources.leave();
+                    self.ast.stacks.push((self.ast.exprs.len(), stack));
+                    if let Some(sign) = sign {
                         self.ast.zero_signs.push((self.ast.exprs.len(), sign));
                     }
                     let body = std::mem::take(&mut self.body);

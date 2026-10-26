@@ -153,6 +153,7 @@ impl Pool {
 #[derive(Debug, Default)]
 struct Function {
     next: u16,
+    max: u16,
     locals: u16,
     pool: Pool,
     zero_sign: Option<bool>,
@@ -186,10 +187,11 @@ impl Resources {
                 .map(|f| f.pool.heap_bytes())
                 .sum::<usize>()
     }
-    pub(super) fn check(&self, count: usize) -> Check {
+    pub(super) fn check(&mut self, count: usize) -> Check {
         if usize::from(self.function.next) + count >= 250 {
             Err(())
         } else {
+            self.function.max = self.function.max.max(self.function.next + count as u16);
             Ok(())
         }
     }
@@ -207,6 +209,7 @@ impl Resources {
     pub(super) fn locals(&mut self, count: u16) {
         self.function.locals = count;
         self.function.next = count;
+        self.function.max = self.function.max.max(count);
     }
     pub(super) fn reset(&mut self) {
         self.function.next = self.function.locals;
@@ -215,17 +218,18 @@ impl Resources {
         self.parents.push(std::mem::take(&mut self.function));
         self.locals(count);
     }
-    pub(super) fn leave(&mut self) -> Option<bool> {
+    pub(super) fn leave(&mut self) -> (Option<bool>, u16) {
         let child = std::mem::replace(
             &mut self.function,
             self.parents.pop().expect("resource parent"),
         );
-        child.zero_sign
+        (child.zero_sign, child.max.max(2))
     }
     pub(super) fn finish(&mut self, ast: &mut Ast) {
         self.constants.sort_unstable_by_key(|&(id, _)| id);
         ast.constant_operands = std::mem::take(&mut self.constants);
         ast.root_zero_sign = self.function.zero_sign;
+        ast.root_stack = self.function.max.max(2);
     }
     fn number(&mut self, number: f64, cx: &Context<'_>) -> u32 {
         if number == 0.0 && self.function.zero_sign.is_none() {
@@ -241,11 +245,14 @@ impl Resources {
         let constant = match key.kind {
             0 => {
                 let number = f64::from_bits(key.data);
-                ConstantOperand::Number(if number == 0.0 && self.function.zero_sign == Some(true) {
-                    -0.0
-                } else {
-                    number
-                })
+                ConstantOperand::Number(
+                    if number == 0.0 && self.function.zero_sign == Some(true) {
+                        -0.0
+                    } else {
+                        number
+                    },
+                    true,
+                )
             }
             1 => ConstantOperand::Nil,
             2 | 3 => ConstantOperand::Boolean(key.kind == 3),
@@ -455,6 +462,7 @@ impl Resources {
         &mut self,
         op: Kind,
         left: ExprId,
+        right: ExprId,
         mut a: Value,
         mut b: Value,
         cx: &Context<'_>,
@@ -499,20 +507,22 @@ impl Resources {
                 return Ok(Value::number(n));
             }
         }
-        if a.form == Form::Constant && a.info <= 255 {
-            self.save_operand(left, RK + a.info as u16);
-        } else if a.numeral() && !matches!(cx.ast.exprs[left].0, Expr::Number(_)) {
-            // Plain numbers use the backend's literal fast path. A reference
-            // numeral can also come from a folded logical expression.
-            self.constants
-                .push((left, ConstantOperand::Number(a.number)));
-        }
+        let folded_left =
+            (a.numeral() && !matches!(cx.ast.exprs[left].0, Expr::Number(_))).then_some(a.number);
         let (ar, br) = if comparison {
             (self.rk(&mut a, cx)?, self.rk(&mut b, cx)?)
         } else {
             let br = self.rk(&mut b, cx)?;
             (self.rk(&mut a, cx)?, br)
         };
+        self.save_operand(left, ar);
+        self.save_operand(right, br);
+        if ar < RK
+            && let Some(number) = folded_left
+        {
+            self.constants
+                .push((left, ConstantOperand::Number(number, false)));
+        }
         if ar > br {
             self.free_value(a);
             self.free_value(b);
@@ -691,7 +701,8 @@ impl Resources {
     pub(super) fn field(&mut self, key: Option<ExprId>, value: ExprId, cx: &Context<'_>) -> Check {
         if key.is_some() {
             let mut v = self.values[value];
-            self.rk(&mut v, cx)?;
+            let operand = self.rk(&mut v, cx)?;
+            self.save_operand(value, operand);
             self.function.next = self.tables.last().unwrap().saved;
         }
         let t = self.tables.last_mut().unwrap();
@@ -732,11 +743,12 @@ impl Resources {
             }
             Expr::Unary(op, inner) => self.unary(*op, self.values[*inner], cx)?,
             Expr::Binary(op, a, b, _) => {
-                self.binary(*op, *a, self.values[*a], self.values[*b], cx)?
+                self.binary(*op, *a, *b, self.values[*a], self.values[*b], cx)?
             }
             Expr::Index(table, key) => {
                 let mut k = self.values[*key];
                 let operand = self.rk(&mut k, cx)?;
+                self.save_operand(*key, operand);
                 let mut v = self.values[*table];
                 v.form = Form::Index;
                 v.key = operand;

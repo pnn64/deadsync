@@ -76,6 +76,7 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
         ("unary.lua", b"local a,b=2,3;local value=not(a>b);assert(value);collectgarbage();return value and 42 or 0".as_slice()),
         ("boolean.lua", b"local a,b,c=2,3,false;local value=not((a<b)or c);collectgarbage();return value and 0 or 42".as_slice()),
         ("predicate.lua", b"local keep;local n=0;repeat local x=n;keep=function()return x end;n=n+1 until n>=3 or false;while n<6 and true do n=n+1 end;if n==6 then collectgarbage();return keep()+40 else return 0 end".as_slice()),
+        ("rk-window.lua", b"local function f(a)local x=a+3;return x end;local seen=false;debug.sethook(function()if debug.getinfo(2,'f').func==f then local n,v=debug.getlocal(2,2);if n=='(*temporary)'and v==nil then seen=true end;collectgarbage()end end,'',1);local n=f(2);debug.sethook();assert(n==5 and seen);return 42".as_slice()),
         ("invalid.lua", b"local =".as_slice()),
     ] {
         let path = directory.0.join(filename);
@@ -110,6 +111,6 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
                 .extension()
                 .is_some_and(|s| s == "dlc"))
             .count(),
-        5
+        6
     );
 }

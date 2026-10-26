@@ -55,7 +55,6 @@ pub(super) enum Task<'a> {
     Results(ExprId, u8, u32),
     FillNil(u8, u32),
     Operand(ExprId, u8),
-    OperandEnd(ExprId, u8),
     Paren(ExprId, u32),
     Unary(ExprId, u8, u8),
     BooleanNode(ExprId, u8),
@@ -202,7 +201,16 @@ impl<'a> Compiler<'a> {
                                     TargetKey::Register(reg) => *reg,
                                     TargetKey::Constant(constant) => {
                                         let reg = self.alloc(1)?;
-                                        self.emit(Op::Load, reg, 0, *constant)?;
+                                        self.emit(
+                                            Op::Load,
+                                            reg,
+                                            if *constant <= u32::from(u16::MAX) - RK {
+                                                RK_LOAD
+                                            } else {
+                                                0
+                                            },
+                                            *constant,
+                                        )?;
                                         self.function.debug_hidden[usize::from(reg) / 64] |=
                                             1u64 << (reg % 64);
                                         self.debug_line(0);
@@ -410,19 +418,7 @@ impl<'a> Compiler<'a> {
                     }
                     self.result = dst;
                 }
-                Task::Operand(id, dst) => self.operand(id, dst),
-                Task::OperandEnd(reference, dst) => {
-                    if self.folded[reference].is_some()
-                        || matches!(
-                            &self.ast.exprs[reference].0,
-                            Expr::Nil | Expr::Boolean(_) | Expr::String(_)
-                        )
-                    {
-                        self.function.debug_hidden[usize::from(dst) / 64] |= 1u64 << (dst % 64);
-                        self.debug_line(0);
-                    }
-                    self.result = dst;
-                }
+                Task::Operand(id, dst) => self.operand(id, dst)?,
                 Task::Paren(inner, line) => self.discharge_line(inner, line, LineUse::Copy),
                 Task::Unary(id, dst, work) => self.unary(id, dst, work)?,
                 Task::BooleanNode(id, work) => self.boolean_node(id, work),
@@ -466,7 +462,7 @@ impl<'a> Compiler<'a> {
                         Task::Operand(right, right_reg)
                     });
                 }
-                Task::BinaryRight(id, dst, left) => self.binary_right(id, dst, left)?,
+                Task::BinaryRight(id, dst, left) => self.binary_right(id, dst, u16::from(left))?,
                 Task::BinaryConstant(id, dst, work, constant) => {
                     self.binary_constant(id, dst, work, constant)?
                 }
@@ -519,7 +515,16 @@ impl<'a> Compiler<'a> {
                     self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
                         .1
                         .discharge;
-                    self.emit(Op::Load, key, 0, constant)?;
+                    self.emit(
+                        Op::Load,
+                        key,
+                        if constant <= u32::from(u16::MAX) - RK {
+                            RK_LOAD
+                        } else {
+                            0
+                        },
+                        constant,
+                    )?;
                     self.function.debug_hidden[usize::from(key) / 64] |= 1u64 << (key % 64);
                     self.debug_line(0);
                     self.line = line;

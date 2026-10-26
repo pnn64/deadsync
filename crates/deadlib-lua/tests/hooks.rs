@@ -658,6 +658,105 @@ local value=f();debug.sethook();return value,table.concat(out,'|')"#).as_bytes()
 }
 
 #[test]
+fn instruction_hooks_observe_unnamed_slots_across_the_full_lua_window() {
+    for (function, inputs) in [
+        (
+            "return function()if nil then return 0 end;return 42 end",
+            "",
+        ),
+        ("return function(a)local x=-a;return x end", "2"),
+        ("return function(a,b)local x=a+b;return x end", "2,3"),
+        ("return function(a)local x=a+3;return x end", "2"),
+        ("return function(a)local x=a+(3);return x end", "2"),
+        ("return function(a,b)local x=17-(a+b);return x end", "2,3"),
+        ("return function(a)local t={x=a};return t.x end", "2"),
+        ("return function(a)local t={a,2};return t[1]end", "2"),
+        ("return function(a,b)local x=a<b;return x end", "2,3"),
+        ("return function()local t={x=3};return t end", ""),
+        ("return function(a,b)return a end", "2,3"),
+        ("return function(a,b)return end", "2,3"),
+    ] {
+        for mask in ["", "l", "c", "r"] {
+            compare(format!(r#"local f=assert(loadstring({function:?}))()
+local out={{}};debug.sethook(function(event,line)
+if debug.getinfo(2,'f').func==f then
+local row={{}};for i=1,6 do local name,value=debug.getlocal(2,i);row[#row+1]=tostring(name)..':'..type(value)..':'..((type(value)=='number' or type(value)=='boolean')and tostring(value)or '')end
+out[#out+1]=table.concat(row,',')
+end end,{mask:?},1)
+local value=f({inputs});debug.sethook();return type(value),type(value)=='table' and value.x or value,table.concat(out,'|')"#).as_bytes());
+        }
+    }
+}
+
+#[test]
+fn instruction_hook_temporary_writes_survive_collection_and_change_the_pending_test() {
+    compare(br#"local weak=setmetatable({},{__mode='v'});local visits,alive=0,0
+local function f()if nil then return 0 end;return 42 end
+debug.sethook(function()
+if debug.getinfo(2,'f').func==f then
+visits=visits+1
+if visits==1 then local t={tag=17};weak[1]=t;assert(debug.setlocal(2,2,t)=='(*temporary)');t=nil end
+collectgarbage();local name,t=debug.getlocal(2,2);if t==weak[1]and t and t.tag==17 then alive=alive+1 end
+if visits==2 then assert(debug.setlocal(2,1,true)=='(*temporary)')end
+end end,'',1)
+local value=f();debug.sethook();collectgarbage();return value,visits,alive,weak[1]==nil"#);
+}
+
+#[test]
+fn collected_hook_temporaries_are_not_returned_as_stale_object_handles() {
+    compare(br#"local weak=setmetatable({},{__mode='v'});local visits=0;local after
+local function f()collectgarbage();local x=string.sub('abc',1,2);return x end
+debug.sethook(function()
+if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==1 then local t={tag=17};weak[1]=t;debug.setlocal(2,4,t)end
+if visits==3 then local _,v=debug.getlocal(2,4);after=type(v)end
+end end,'',1)
+local value=f();debug.sethook();return value,after,weak[1]==nil"#);
+}
+
+#[test]
+fn hook_windows_cover_open_results_beyond_the_fixed_register_bitmap() {
+    compare(br#"local args={};for i=1,300 do args[i]=i end
+local function f(...)return ... end
+local out={};debug.sethook(function(event)
+if debug.getinfo(2,'f').func==f then local row={event};for _,i in ipairs{1,2,300,301,302,303}do local n,v=debug.getlocal(2,i);row[#row+1]=tostring(n)..':'..type(v)..':'..(type(v)=='number'and v or '')end;out[#out+1]=table.concat(row,',');collectgarbage()end end,'r',1)
+local result={f(unpack(args))};debug.sethook();return #result,result[300],table.concat(out,'|')"#);
+}
+
+#[test]
+fn direct_constant_operands_keep_metamethod_order_errors_and_live_store_values() {
+    for expression in [
+        "x+3",
+        "3+x",
+        "x-'2'",
+        "'2'-x",
+        "x%3",
+        "3%x",
+        "x^2",
+        "2^x",
+        "x<3",
+        "3<=x",
+        "x=='x'",
+        "x~=nil",
+        "x[('key')]",
+        "x.key",
+    ] {
+        for value in [
+            "2",
+            "'2'",
+            "nil",
+            "false",
+            "{key=17}",
+            "setmetatable({key=17},{__add=function(a,b)collectgarbage();return 42 end,__index=function()collectgarbage();return 19 end})",
+        ] {
+            compare(format!(r#"local x={value};local ok,v=pcall(function()return {expression} end);return ok,type(v),v"#).as_bytes());
+        }
+    }
+    compare(br#"local function f(value)local t={};t.key=value;return t.key,value end
+local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==2 then debug.setlocal(2,1,42);collectgarbage()end end end,'',1)
+local a,b=f(17);debug.sethook();return a,b,visits"#);
+}
+
+#[test]
 fn predicate_loops_and_empty_else_keep_reference_hook_events() {
     for predicate in [
         "a",

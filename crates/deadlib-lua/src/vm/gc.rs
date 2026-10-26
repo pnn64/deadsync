@@ -242,13 +242,19 @@ fn frames_roots(
                 work.push(Trace::Value(Value::Function(function)));
                 let closure = &vm.functions[slot_index(function.0)];
                 let proto = &vm.programs[closure.program].data.prototypes[closure.prototype];
-                if frames
+                let return_top = frames
                     .get(i + 1)
-                    .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
-                {
+                    .filter(|f| matches!(f.function, FrameKind::Native(CONT_RETURN)))
+                    .map_or(cutoff, |f| (f.vararg_start + f.argc()).min(cutoff));
+                if frames.get(i + 1).is_some_and(|f| {
+                    matches!(
+                        f.function,
+                        FrameKind::Native(CONT_HOOK | CONT_TRACE | CONT_RETURN)
+                    )
+                }) {
                     let end = (frame.base + proto.debug_registers())
                         .min(registers.len())
-                        .min(cutoff);
+                        .min(return_top);
                     work.extend(
                         registers[frame.base.min(end)..end]
                             .iter()
@@ -274,7 +280,7 @@ fn frames_roots(
                     while bits != 0 {
                         let r = word * 64 + bits.trailing_zeros() as usize;
                         let pos = frame.base + r;
-                        if pos < registers.len().min(cutoff) {
+                        if pos < registers.len().min(return_top) {
                             work.extend(edge(registers[pos]));
                         }
                         bits &= bits - 1;
@@ -342,6 +348,17 @@ impl Vm {
         self.gc.control_allocated = self.gc.control_allocated.saturating_add(bytes);
     }
     pub(super) fn validate_value(&self, value: Value) -> Result<(), Error> {
+        if self.is_live_value(value) {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::Runtime,
+                0,
+                "invalid or collected Lua object handle",
+            ))
+        }
+    }
+    pub(super) fn is_live_value(&self, value: Value) -> bool {
         let valid = match value {
             Value::String(id) => self.strings.bytes.contains(id.0),
             Value::Table(id) => self.tables.contains(id.0),
@@ -365,15 +382,7 @@ impl Vm {
                 Value::String(id) => self.strings.bytes.marked(id.0),
                 _ => self.marked_value(value),
             };
-        if valid && live_during_sweep {
-            Ok(())
-        } else {
-            Err(Error::new(
-                ErrorKind::Runtime,
-                0,
-                "invalid or collected Lua object handle",
-            ))
-        }
+        valid && live_during_sweep
     }
     /// Keep a value alive across future executions and garbage collections.
     /// Values must originate in this VM. Root handles additionally check VM ownership.

@@ -4,7 +4,7 @@ use crate::{
     Error, ErrorKind,
     bytecode::{
         BOOLEAN_SKIP, COMPARE_BRANCH, Constant, DebugCall, DebugInfo, DebugLocal, Instruction,
-        NameKind, OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue,
+        NameKind, OPEN, OPEN_ARGS, Op, Program, Prototype, RK, Upvalue,
     },
     lexer::Kind,
     parser::{Ast, Expr, ExprId, Stmt, StmtId},
@@ -25,6 +25,7 @@ struct Local<'a> {
     captured: bool,
 }
 const TAIL: u32 = OPEN - 1;
+const RK_LOAD: u16 = 2;
 enum Target {
     Local(u8),
     Upvalue(u16),
@@ -70,6 +71,7 @@ struct Function<'a> {
     hook_lines: Vec<u32>,
     hook_visible: usize,
     logical_tests: Vec<usize>,
+    debug_stack: u16,
     zero_sign: Option<bool>,
 }
 
@@ -91,6 +93,7 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
         function: Function {
             vararg: true,
             zero_sign: ast.root_zero_sign,
+            debug_stack: ast.root_stack,
             ..Function::default()
         },
         parents: Vec::new(),
@@ -113,6 +116,11 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 impl<'a> Compiler<'a> {
     fn finish(&mut self) -> u32 {
         let mut f = std::mem::take(&mut self.function);
+        for i in &mut f.code {
+            if i.op == Op::Load {
+                i.b &= 1;
+            }
+        }
         boolean::thread_jumps(&mut f.code);
         for &pc in &f.logical_tests {
             let i = f.code[pc];
@@ -169,13 +177,14 @@ impl<'a> Compiler<'a> {
             gc_live: f.gc_live.into_boxed_slice(),
             gc_maps: f.gc_maps.into_boxed_slice(),
             constants: f.constants.finish(),
-            registers: f.max.max(2),
+            registers: f.max.max(f.debug_stack).max(2),
             params: f.params,
             vararg: f.vararg,
             compat_arg: f.compat_arg,
             upvalues: upvalues.into_boxed_slice(),
             bindings: Box::default(),
             debug: DebugInfo {
+                stack: f.debug_stack,
                 native: None,
                 defined: f.defined,
                 upvalues: names.into_boxed_slice(),
@@ -272,7 +281,28 @@ impl<'a> Compiler<'a> {
         self.function.gc_index.insert(mask, index);
         Ok(index)
     }
-    fn emit(&mut self, op: Op, a: u8, b: u16, c: u32) -> Result<usize, Error> {
+    fn emit(&mut self, op: Op, a: u8, mut b: u16, mut c: u32) -> Result<usize, Error> {
+        if op.rk_c() {
+            while let Some(load) = self.function.code.last().copied().filter(|load| {
+                load.op == Op::Load
+                    && load.b & RK_LOAD != 0
+                    && ((op.rk_b() && b == u16::from(load.a)) || c == u32::from(load.a))
+            }) {
+                let value = RK + load.c;
+                if op.rk_b() && b == u16::from(load.a) {
+                    b = value as u16;
+                }
+                if c == u32::from(load.a) {
+                    c = value;
+                }
+                let before = self.function.gc_live.pop().unwrap() as u16 as usize;
+                self.function.live = self.function.gc_maps[before];
+                self.function.code.pop();
+                self.function.lines.pop();
+                self.function.debug_lines.pop();
+                assert_eq!(self.function.hook_lines.pop(), Some(0));
+            }
+        }
         let pc = self.function.code.len();
         if pc >= u32::MAX as usize {
             return Err(self.error(ErrorKind::Limit, "function has too many instructions"));

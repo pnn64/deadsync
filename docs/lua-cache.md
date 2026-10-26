@@ -62,17 +62,23 @@ without cache I/O.
 
 ## Format and bounds
 
-The private format starts with DeadLuaCache, a NUL byte, schema version 1 and
+The private format starts with DeadLuaCache, a NUL byte, schema version 2 and
 dialect byte 0x51. It uses explicit little-endian integer fields, not Rust struct
 layouts or addresses. Strings and arrays carry u32 lengths. Instructions retain
 their opcode/u8 destination/u16 operand/u32 operand fields; numeric constants
 retain binary64 bits, including signed zero and NaN payloads.
 
 The payload preserves the entry, source-name pool, flat prototypes, constants,
-captures and per-site closure bindings, register/parameter flags, line/hook maps,
+captures and per-site closure bindings, register/parameter flags, logical debug
+stack bounds, line/hook maps,
 collector liveness masks and indices, debug locals/upvalue names/calls/temporary
 ranges, and retained native words/debug offsets used by string.dump. It ends
 with a CRC32C over all preceding bytes. Trailing data is rejected.
+
+Register-or-constant operands use values below 256 for registers and larger
+values for constant indices plus 256 on arithmetic, comparison and table
+instructions. Version 1 entries are rejected and rebuilt from source. The
+source-derived build identity separately invalidates compiler/runtime changes.
 
 The checksum advances through eight-byte blocks using one compile-time 8 KiB
 lookup table and a scalar tail. Safe byte-array loads support unaligned input;

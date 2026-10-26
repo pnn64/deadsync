@@ -74,14 +74,6 @@ impl Builder {
         self.constants.push(value);
         index
     }
-    fn rk(&mut self, operand: u16, scratch: u8) -> u16 {
-        if operand & 256 == 0 {
-            operand
-        } else {
-            self.emit(Op::Load, scratch, 0, u32::from(operand & 255));
-            u16::from(scratch)
-        }
-    }
 }
 
 fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'static str> {
@@ -177,12 +169,12 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                 );
             }
             6 => {
-                let key = out.rk(c, scratch);
+                let key = c;
                 out.emit(Op::GetTable, a, b, u32::from(key));
             }
             9 => {
-                let key = out.rk(b, scratch);
-                let value = out.rk(c, scratch + 1);
+                let key = b;
+                let value = c;
                 out.emit(Op::SetTable, a, key, u32::from(value));
             }
             10 => {
@@ -190,12 +182,12 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
             }
             11 => {
                 out.emit(Op::Move, a + 1, b, 0);
-                let key = out.rk(c, scratch);
+                let key = c;
                 out.emit(Op::GetTable, a, b, u32::from(key));
             }
             12..=17 => {
-                let left = out.rk(b, scratch);
-                let right = out.rk(c, scratch + 1);
+                let left = b;
+                let right = c;
                 out.emit(
                     [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow][op - 12],
                     a,
@@ -213,8 +205,8 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                 out.jump(Op::Jump, 0, target(pc, word));
             }
             23..=25 => {
-                let left = out.rk(b, scratch);
-                let right = out.rk(c, scratch + 1);
+                let left = b;
+                let right = c;
                 out.emit(
                     [Op::Eq, Op::Lt, Op::Le][op - 23],
                     scratch,
@@ -432,6 +424,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
         upvalues: vec![Upvalue::Outer(0); usize::from(p.nups)].into_boxed_slice(),
         bindings: bindings.into_boxed_slice(),
         debug: DebugInfo {
+            stack: 0,
             native: Some(Box::new(NativeDebug {
                 source,
                 stack: u16::from(p.stack),

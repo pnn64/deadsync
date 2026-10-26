@@ -79,6 +79,8 @@ pub(crate) struct Ast {
     pub constant_operands: Vec<(ExprId, ConstantOperand)>,
     pub zero_signs: Vec<(ExprId, bool)>,
     pub root_zero_sign: Option<bool>,
+    pub stacks: Vec<(ExprId, u16)>,
+    pub root_stack: u16,
 }
 
 /// Reference constant operands for deferred loads. String indices borrow
@@ -87,7 +89,9 @@ pub(crate) struct Ast {
 pub(crate) enum ConstantOperand {
     Nil,
     Boolean(bool),
-    Number(f64),
+    /// The flag records an RK operand; a folded left value can be known even
+    /// when the reference must materialize it in a register.
+    Number(f64, bool),
     String(ExprId),
 }
 

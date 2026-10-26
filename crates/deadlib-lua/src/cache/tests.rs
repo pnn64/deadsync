@@ -364,6 +364,39 @@ fn file_and_decode_limits_and_io_errors_bypass_cache_without_rejecting_lua() {
 }
 
 #[test]
+fn constant_operands_and_logical_hook_windows_round_trip_in_the_new_wire_version() {
+    let source=b"local a=2;local t={key=3};local function f()if nil then return 0 end;return a+t.key end;return f()";
+    let program = crate::compile_named(source, b"=(rk)").unwrap();
+    let bytes = encode(&program, source, b"=(rk)");
+    let loaded = decode(&bytes, source, b"=(rk)").unwrap();
+    for (a, b) in program
+        .data
+        .prototypes
+        .iter()
+        .zip(loaded.data.prototypes.iter())
+    {
+        assert_eq!(a.debug.stack, b.debug.stack);
+        assert_eq!(
+            a.code
+                .iter()
+                .map(|i| (i.op, i.a, i.b, i.c))
+                .collect::<Vec<_>>(),
+            b.code
+                .iter()
+                .map(|i| (i.op, i.a, i.b, i.c))
+                .collect::<Vec<_>>()
+        );
+    }
+    assert_eq!(results(&program), results(&loaded));
+    let mut old = bytes.clone();
+    old[b"DeadLuaCache\0".len()] = 1;
+    let end = old.len() - 4;
+    let checksum = codec::checksum(&old[..end]);
+    old[end..].copy_from_slice(&checksum.to_le_bytes());
+    assert!(decode(&old, source, b"=(rk)").is_none());
+}
+
+#[test]
 fn parallel_writers_publish_complete_entries_without_temporary_leaks() {
     let directory = Directory::new();
     std::thread::scope(|scope| {

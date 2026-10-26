@@ -24,6 +24,17 @@ struct Builder {
     max: u16,
 }
 impl Builder {
+    fn rk(&mut self, value: u32, scratch: u16) -> Result<u16, Error> {
+        if value < 256 {
+            self.reg(value as u16)
+        } else if value < 512 {
+            Ok(value as u16)
+        } else {
+            self.reg(scratch)?;
+            self.abx(1, scratch, value - 256)?;
+            Ok(scratch)
+        }
+    }
     fn abc(&mut self, op: u32, a: u16, b: u16, c: u32) -> Result<(), Error> {
         if a >= 250 || b > 511 || c > 511 {
             return Err(fail());
@@ -238,8 +249,22 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             | Op::Mod
             | Op::Pow => {
                 out.reg(a)?;
-                out.reg(b)?;
-                out.reg(c)?;
+                let b = if i.op.rk_b() {
+                    out.rk(
+                        if i.b < 256 {
+                            u32::from(b)
+                        } else {
+                            u32::from(i.b)
+                        },
+                        mapped(p.registers),
+                    )?
+                } else {
+                    out.reg(b)?
+                };
+                let c = out.rk(
+                    if i.c < 256 { u32::from(c) } else { i.c },
+                    mapped(p.registers) + 1,
+                )?;
                 let op = match i.op {
                     Op::GetTable => 6,
                     Op::SetTable => 9,
@@ -288,8 +313,18 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 if branch.is_none() {
                     out.reg(dest)?;
                 }
-                out.reg(b)?;
-                out.reg(c)?;
+                let b = out.rk(
+                    if i.b < 256 {
+                        u32::from(b)
+                    } else {
+                        u32::from(i.b)
+                    },
+                    mapped(p.registers),
+                )?;
+                let c = out.rk(
+                    if i.c < 256 { u32::from(c) } else { i.c },
+                    mapped(p.registers) + 1,
+                )?;
                 let (op, left, right) = match i.op {
                     Op::Eq | Op::Ne => (23, b, c),
                     Op::Lt => (24, b, c),

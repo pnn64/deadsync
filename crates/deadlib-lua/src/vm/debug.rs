@@ -319,6 +319,40 @@ impl Vm {
                 let closure = &self.functions[slot_index(id.0)];
                 let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
                 let pc = frame.pc.saturating_sub(1);
+                let hook = frames[index + 1..].iter().find(|f| {
+                    matches!(f.function, FrameKind::Native(CONT_HOOK)) && f.vararg_start == index
+                });
+                let window = if let Some(next) = frames
+                    .get(index + 1)
+                    .filter(|f| matches!(f.function, FrameKind::Native(CONT_RETURN)))
+                {
+                    (next.vararg_start + next.argc()).saturating_sub(frame.base)
+                } else if let Some(next) = frames
+                    .get(index + 1)
+                    .filter(|f| matches!(f.function, FrameKind::Native(CONT_TRACE)))
+                {
+                    let previous = (next.vararg_count as usize)
+                        .checked_sub(1)
+                        .and_then(|pc| proto.code.get(pc));
+                    if previous.is_some_and(|i| {
+                        matches!(i.op, Op::Call | Op::Vararg | Op::Move) && i.c == OPEN
+                    }) {
+                        next.result.saturating_sub(frame.base)
+                    } else {
+                        proto.debug_registers()
+                    }
+                } else {
+                    proto.debug_registers()
+                };
+                let register = |r: usize| {
+                    if let Some(hook) = hook.filter(|_| r >= window) {
+                        let position = hook.base + r - window;
+                        if self.debug_register(thread, position).is_some() {
+                            return position;
+                        }
+                    }
+                    frame.base + r
+                };
                 let mut active = [0u64; 4];
                 let mut named = 0;
                 for (local_index, local) in proto.debug.locals.iter().enumerate() {
@@ -326,12 +360,33 @@ impl Vm {
                         if named == n {
                             return Some((
                                 LocalName::Named(closure.program, closure.prototype, local_index),
-                                LocalSlot::Register(frame.base + usize::from(local.register)),
+                                LocalSlot::Register(register(usize::from(local.register))),
                             ));
                         }
                         named += 1;
                         active[usize::from(local.register) / 64] |= 1u64 << (local.register % 64);
                     }
+                }
+                // A Lua hook is called above the interrupted stack window and
+                // leaves its registry hook table just below the callback.
+                if let Some(hook) = hook {
+                    if n >= window {
+                        return (n == window)
+                            .then_some((LocalName::Temporary, LocalSlot::Register(hook.base)));
+                    }
+                    let mut wanted = n.checked_sub(named)?;
+                    for r in 0..window {
+                        if active.get(r / 64).copied().unwrap_or(0) & (1u64 << (r % 64)) == 0 {
+                            if wanted == 0 {
+                                return Some((
+                                    LocalName::Temporary,
+                                    LocalSlot::Register(frame.base + r),
+                                ));
+                            }
+                            wanted -= 1;
+                        }
+                    }
+                    return None;
                 }
                 let limit = if proto.debug.native.is_some() {
                     let instruction = proto.code[(pc as usize).min(proto.code.len() - 1)];
@@ -350,26 +405,6 @@ impl Vm {
                         })
                         .min(proto.debug_registers())
                 };
-                // A call hook runs above the newly allocated full register
-                // window, before the first instruction has produced live values.
-                if frames
-                    .get(index + 1)
-                    .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
-                {
-                    let mut wanted = n.checked_sub(named)?;
-                    for r in 0..proto.debug_registers() {
-                        if active[r / 64] & (1u64 << (r % 64)) == 0 {
-                            if wanted == 0 {
-                                return Some((
-                                    LocalName::Temporary,
-                                    LocalSlot::Register(frame.base + r),
-                                ));
-                            }
-                            wanted -= 1;
-                        }
-                    }
-                    return None;
-                }
                 let pc = (pc as usize).min(proto.gc_live.len() - 1);
                 if let Ok(i) = proto
                     .debug
@@ -541,12 +576,17 @@ impl Vm {
             self.registers[base] = Value::Nil;
             return Ok(1);
         };
-        let value = match slot {
+        let mut value = match slot {
             LocalSlot::Register(r) => self
                 .debug_register(thread, r)
                 .expect("validated debug register"),
             LocalSlot::Copy(v) => v,
         };
+        if matches!(name, LocalName::Temporary) && !self.is_live_value(value) {
+            // Precise roots can leave a reclaimed object's old bits in an
+            // unused physical slot. Debug access must not revive that handle.
+            value = Value::Nil;
+        }
         if id == SET_LOCAL
             && let LocalSlot::Register(r) = slot
         {

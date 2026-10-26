@@ -4,7 +4,7 @@ use std::{mem::size_of, sync::Arc};
 
 // Bump for a wire-layout change. Cargo's build identity also invalidates entries
 // after compiler/runtime changes without depending on the package version.
-const HEADER: &[u8] = b"DeadLuaCache\0\x01\x51";
+const HEADER: &[u8] = b"DeadLuaCache\0\x02\x51";
 const OPS: [Op; 40] = [
     Op::Load,
     Op::Move,
@@ -204,6 +204,7 @@ impl Writer {
             w.upvalues(&binding.upvalues)
         })?;
         let d = &p.debug;
+        self.u16(d.stack)?;
         for n in d.defined {
             self.u32(n)?;
         }
@@ -355,6 +356,7 @@ impl<'a> Reader<'a> {
                 upvalues: r.upvalues()?,
             })
         })?;
+        let stack = self.u16()?;
         let defined = [self.u32()?, self.u32()?];
         let names = self.list(4, Self::boxed)?;
         let locals = self.list(14, |r| {
@@ -419,6 +421,7 @@ impl<'a> Reader<'a> {
             constants,
             bindings,
             debug: DebugInfo {
+                stack,
                 native,
                 defined,
                 upvalues: names,
