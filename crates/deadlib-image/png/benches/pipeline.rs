@@ -1,5 +1,9 @@
 use deadlib_image_png::{ColorType, EncodeOptions, Image, Png, Samples, decode, encode};
-use std::{hint::black_box, io::Cursor, time::Instant};
+use std::{
+    hint::black_box,
+    io::{Cursor, Read},
+    time::Instant,
+};
 
 fn fixture(width: u32, height: u32, depth: u8, noise: bool) -> Png {
     let mut random = 0x7a19_28c3u32;
@@ -90,11 +94,48 @@ fn main() {
     ] {
         let raw = wire(&png.image);
         let bytes = reference_encode(&png.image, &raw);
+        let mut idat = Vec::new();
+        let mut pos = 8;
+        while pos < bytes.len() {
+            let n = u32::from_be_bytes(bytes[pos..pos + 4].try_into().unwrap()) as usize;
+            if &bytes[pos + 4..pos + 8] == b"IDAT" {
+                idat.extend_from_slice(&bytes[pos + 8..pos + 8 + n]);
+            }
+            pos += n + 12;
+        }
+        let filtered_bytes = raw.len() + png.image.height as usize;
         assert_eq!(decode(&bytes).unwrap().image, png.image);
         assert_eq!(reference_decode(&bytes), png.image.samples);
         let native = encode(&png, &EncodeOptions::default()).unwrap();
         assert_eq!(reference_decode(&native), png.image.samples);
         for (codec, operation, size, ns) in [
+            (
+                "deadlib-image-png",
+                "inflate",
+                idat.len(),
+                time(
+                    || {
+                        deadlib_image_png::zlib::decompress(black_box(&idat), filtered_bytes)
+                            .unwrap()
+                    },
+                    iterations,
+                ),
+            ),
+            (
+                "flate2-1.1.10",
+                "inflate",
+                idat.len(),
+                time(
+                    || {
+                        let mut out = Vec::new();
+                        flate2::read::ZlibDecoder::new(black_box(idat.as_slice()))
+                            .read_to_end(&mut out)
+                            .unwrap();
+                        out
+                    },
+                    iterations,
+                ),
+            ),
             (
                 "deadlib-image-png",
                 "decode",

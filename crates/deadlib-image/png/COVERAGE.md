@@ -20,7 +20,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 611 external libpng native-sample checks and normal Rust png / PNGSuite checks pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
 | Fuzz targets and reproducible campaigns | Pending | Pending |
-| Benchmarks and profile-guided optimization | Pending | Pending |
+| Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
 sample matrix; (3) metadata and APNG; (4) streaming and external conformance;
@@ -82,3 +82,14 @@ incremental bounded streaming, broader malformed/fuzz campaigns, reproducible
 benchmarks and measured optimization remain required. ICC/Exif interpretation,
 color management, HDR tone mapping, and animation scheduling are caller concerns.
 The compositor works in stored sample space; no color-management parity is claimed.
+
+First optimization validation: release tests, Clippy with warnings denied, the
+3,240-case format matrix, APNG frame matrix, and 611 libpng checks pass with bulk
+DEFLATE copies, contiguous row copies and slicing-by-eight CRC. Additional
+independent bitstream fixtures cover 400 fixed/stored/fixed block boundaries and
+65 dynamic literal-only/single-symbol/empty-distance streams. CRC bulk/tail and
+split-boundary checks use an independent bitwise reference. Decode throughput
+improved locally by about 1.8–2.3x; see the benchmark document for limits.
+
+PNG editor behavior is explicit: decoded unknown chunks remain accessible,
+while reencoding omits unrecognized chunks whose safe-to-copy bit is unset.

@@ -239,10 +239,16 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
                 return Err(Error::LimitExceeded);
             }
             reserve(&mut output, len)?;
-            // read() can hold bytes prefetched by a preceding Huffman block.
-            for _ in 0..len {
+            // Drain bytes prefetched by a preceding Huffman block, then copy
+            // the byte-aligned payload directly without bit-reader dispatch.
+            let mut left = len;
+            while left != 0 && bits.count >= 8 {
                 output.push(bits.read(8)? as u8);
+                left -= 1;
             }
+            let end = bits.pos.checked_add(left).ok_or(Error::LimitExceeded)?;
+            output.extend_from_slice(bits.input.get(bits.pos..end).ok_or(Error::Truncated)?);
+            bits.pos = end;
         } else if kind == 1 || kind == 2 {
             let (lit, dist) = if kind == 1 {
                 fixed()
@@ -277,9 +283,15 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
                         }
                         reserve(&mut output, len)?;
                         let start = output.len() - distance;
-                        for n in 0..len {
-                            let value = output[start + n];
-                            output.push(value);
+                        if distance == 1 {
+                            output.resize(output.len() + len, output[start]);
+                        } else {
+                            let mut left = len;
+                            while left != 0 {
+                                let count = (output.len() - start).min(left);
+                                output.extend_from_within(start..start + count);
+                                left -= count;
+                            }
                         }
                     }
                     _ => return Err(Error::Invalid("reserved literal symbol")),

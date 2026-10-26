@@ -29,3 +29,18 @@ encoder also produces larger files (especially the 16-bit gradient). Competitive
 performance has **not** been reached. Initial candidate bottlenecks to measure:
 byte-at-a-time stored-block and back-reference copying, per-sample scanline
 scatter on contiguous rows, CRC throughput, and compression match selection.
+
+First scalar optimization: `benchmark-stages-before.tsv` adds inflation timings
+and shows roughly 40–64% of native decode time spent in zlib on these fixtures.
+The implementation now copies stored blocks directly, expands overlapping
+matches in bulk, uses slicing-by-eight CRC, and copies contiguous scanline samples
+without per-channel scatter or a second previous-row buffer copy. It stays safe
+Rust. No SIMD has been introduced.
+
+`benchmark-bulk-after.tsv` (20 iterations) and `benchmark-bulk-confirm.tsv`
+(40 iterations) record the results. The confirmation run measures native decode
+at 165–353 MiB/s, approximately 1.8–2.3 times the stage baseline. Rust png still
+measures 695–1085 MiB/s; encoding ratios and match selection remain unresolved.
+Some tool builds ran on the shared host during measurement, so these are local
+directional results, not controlled comparative claims. Exact sample parity was
+rechecked with the normal suite and all 611 libpng oracle cases after the change.

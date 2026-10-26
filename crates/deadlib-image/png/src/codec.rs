@@ -372,6 +372,11 @@ fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Res
         {
             return Err(Error::Invalid("ancillary chunk type"));
         }
+        // Reencoding changes critical IDAT data. PNG editors must not copy
+        // unrecognized chunks whose safe-to-copy bit is unset (PNG 3, 14.2).
+        if c.kind[3] & 32 == 0 && !crate::metadata::is_known(&c.kind) {
+            continue;
+        }
         write_chunk(out, &c.kind, &c.data)?;
     }
     Ok(())

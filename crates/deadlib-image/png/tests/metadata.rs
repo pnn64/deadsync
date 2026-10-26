@@ -231,3 +231,25 @@ fn metadata_constraints_and_expansion_budget() {
         Err(Error::LimitExceeded)
     );
 }
+
+#[test]
+fn unknown_chunks_obey_png_editor_copy_rules() {
+    let mut png = base();
+    png.ancillary = vec![
+        AncillaryChunk {
+            kind: *b"vpAG",
+            data: vec![1],
+            position: Pos::BeforeData,
+        },
+        AncillaryChunk {
+            kind: *b"vpAg",
+            data: vec![2],
+            position: Pos::BeforeData,
+        },
+    ];
+    let decoded = decode(&encode(&png, &EncodeOptions::default()).unwrap()).unwrap();
+    assert_eq!(decoded.ancillary.len(), 1);
+    assert_eq!(decoded.ancillary[0].kind, *b"vpAg");
+    png.ancillary[0].kind = *b"ABCD";
+    assert!(encode(&png, &EncodeOptions::default()).is_err());
+}

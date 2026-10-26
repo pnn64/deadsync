@@ -23,6 +23,8 @@ dependencies supply independent Rust png and flate2 reference implementations.
 `decode_with_options` exposes explicit input/output/metadata/chunk limits. CRC
 verification is mandatory. Invalid critical data is an error, unknown critical
 chunks are rejected, and unknown ancillary chunks are retained with placement.
+On reencoding, unrecognized ancillary chunks with the unsafe-to-copy flag are
+omitted because critical image chunks are rewritten (PNG Third Edition 14.2).
 PNG Third Edition's recommended tolerance for trailing bytes inside final IDAT
 is implemented. Bytes after IEND are rejected by this whole-datastream API.
 

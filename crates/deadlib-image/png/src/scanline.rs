@@ -136,16 +136,36 @@ pub(crate) fn decode(
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
-        let mut previous = Vec::new();
-        reserve(&mut previous, stride)?;
-        previous.resize(stride, 0);
+        let mut zeros = Vec::new();
+        reserve(&mut zeros, stride)?;
+        zeros.resize(stride, 0);
         for row_index in 0..h {
-            let filter = *raw.get(position).ok_or(Error::Truncated)?;
-            let row = raw
-                .get_mut(position + 1..position + 1 + stride)
-                .ok_or(Error::Truncated)?;
-            unfilter(row, &previous, bpp, filter)?;
+            let (before, after) = raw.split_at_mut(position);
+            let filter = *after.first().ok_or(Error::Truncated)?;
+            let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
+            let previous = if row_index == 0 {
+                &zeros
+            } else {
+                &before[position - stride..position]
+            };
+            unfilter(row, previous, bpp, filter)?;
             let dst_y = y as usize + row_index * dy as usize;
+            if dx == 1 && depth >= 8 {
+                let dst = (dst_y * width as usize + x as usize) * channels;
+                match &mut samples {
+                    Samples::U8(v) => v[dst..dst + row.len()].copy_from_slice(row),
+                    Samples::U16(v) => {
+                        for (out, &bytes) in v[dst..dst + w * channels]
+                            .iter_mut()
+                            .zip(row.as_chunks::<2>().0)
+                        {
+                            *out = u16::from_be_bytes(bytes);
+                        }
+                    }
+                }
+                position += stride + 1;
+                continue;
+            }
             for pixel in 0..w {
                 let dst = (dst_y * width as usize + x as usize + pixel * dx as usize) * channels;
                 for channel in 0..channels {
@@ -163,7 +183,6 @@ pub(crate) fn decode(
                     }
                 }
             }
-            previous.copy_from_slice(row);
             position += stride + 1;
         }
     }

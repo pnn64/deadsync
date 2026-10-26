@@ -1,4 +1,27 @@
 use crate::codec::{Header, be16, be32};
+
+pub(crate) fn is_known(kind: &[u8; 4]) -> bool {
+    matches!(
+        kind,
+        b"gAMA"
+            | b"cHRM"
+            | b"sBIT"
+            | b"sRGB"
+            | b"cICP"
+            | b"mDCV"
+            | b"cLLI"
+            | b"iCCP"
+            | b"bKGD"
+            | b"hIST"
+            | b"pHYs"
+            | b"sPLT"
+            | b"eXIf"
+            | b"tIME"
+            | b"tEXt"
+            | b"zTXt"
+            | b"iTXt"
+    )
+}
 use crate::{AncillaryChunk, ChunkPosition, ColorType, Error, Limits, Png, zlib};
 use std::collections::HashSet;
 

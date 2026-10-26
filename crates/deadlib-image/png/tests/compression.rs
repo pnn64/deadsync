@@ -110,3 +110,113 @@ fn deterministic_mutation_campaign() {
         }
     }
 }
+
+struct FixtureBits {
+    bytes: Vec<u8>,
+    word: u64,
+    count: u8,
+}
+impl FixtureBits {
+    fn put(&mut self, value: u32, n: u8) {
+        for bit in 0..n {
+            self.word |= u64::from((value >> bit) & 1) << self.count;
+            self.count += 1;
+            if self.count == 8 {
+                self.bytes.push(self.word as u8);
+                self.word = 0;
+                self.count = 0;
+            }
+        }
+    }
+    fn align(&mut self) {
+        if self.count != 0 {
+            self.bytes.push(self.word as u8);
+            self.word = 0;
+            self.count = 0;
+        }
+    }
+    fn finish(mut self, raw: &[u8]) -> Vec<u8> {
+        self.align();
+        let mut out = vec![0x78, 0x01];
+        out.extend_from_slice(&self.bytes);
+        let (mut a, mut b) = (1u32, 0u32);
+        for &v in raw {
+            a = (a + u32::from(v)) % 65521;
+            b = (b + a) % 65521;
+        }
+        out.extend_from_slice(&((b << 16) | a).to_be_bytes());
+        out
+    }
+}
+
+#[test]
+fn mixed_block_alignment_and_prefetched_stored_bytes() {
+    for leading in 0..20 {
+        for stored in 0..20 {
+            let mut bits = FixtureBits {
+                bytes: Vec::new(),
+                word: 0,
+                count: 0,
+            };
+            bits.put(2, 3); // Non-final fixed block.
+            for _ in 0..leading {
+                bits.put(0x8e, 8);
+            } // Canonical fixed 'A', reversed.
+            bits.put(0, 7); // End of block.
+            bits.put(0, 3);
+            bits.align(); // Non-final stored block.
+            bits.put(stored, 16);
+            bits.put(stored ^ 65535, 16);
+            for n in 0..stored {
+                bits.put(n, 8);
+            }
+            bits.put(3, 3);
+            bits.put(0x4e, 8);
+            bits.put(0, 7); // Final fixed 'B'.
+            let mut raw = vec![b'A'; leading];
+            raw.extend((0..stored).map(|n| n as u8));
+            raw.push(b'B');
+            let compressed = bits.finish(&raw);
+            assert_eq!(zlib::decompress(&compressed, raw.len()).unwrap(), raw);
+            let mut reference = Vec::new();
+            flate2::read::ZlibDecoder::new(compressed.as_slice())
+                .read_to_end(&mut reference)
+                .unwrap();
+            assert_eq!(reference, raw);
+        }
+    }
+}
+
+#[test]
+fn dynamic_literal_only_and_single_symbol_trees() {
+    for length in 0..65 {
+        let mut bits = FixtureBits {
+            bytes: Vec::new(),
+            word: 0,
+            count: 0,
+        };
+        bits.put(5, 3); // Final dynamic block.
+        bits.put(0, 5);
+        bits.put(0, 5);
+        bits.put(14, 4); // 257 literal, 1 distance, 18 CL codes.
+        let order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1];
+        for symbol in order {
+            bits.put(u32::from(symbol == 0 || symbol == 1), 3);
+        }
+        for symbol in 0..258 {
+            bits.put(u32::from(symbol == 256 || (length != 0 && symbol == 97)), 1);
+        }
+        for _ in 0..length {
+            bits.put(0, 1);
+        } // 'a' is code 0.
+        bits.put(u32::from(length != 0), 1); // EOB is code 1, or sole code 0.
+        let raw = vec![b'a'; length];
+        let compressed = bits.finish(&raw);
+        assert_eq!(zlib::decompress(&compressed, length).unwrap(), raw);
+        let mut reference = Vec::new();
+        flate2::read::ZlibDecoder::new(compressed.as_slice())
+            .read_to_end(&mut reference)
+            .unwrap();
+        assert_eq!(reference, raw);
+    }
+}
