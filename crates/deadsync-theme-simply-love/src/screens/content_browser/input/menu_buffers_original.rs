@@ -54,11 +54,15 @@ pub fn original_handle_raw_key_event(
                     return true;
                 }
                 KeyCode::Escape => {
-                    if original_edit_query(state, String::clear) {
-                        effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+                    if state.zone == Zone::Tabs {
+                        return false;
                     }
+                    state.zone = Zone::Tabs;
+                    state.nav_hold = None;
+                    effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
                     return true;
                 }
+                code if types_text(code) => return true,
                 _ => {}
             }
         }

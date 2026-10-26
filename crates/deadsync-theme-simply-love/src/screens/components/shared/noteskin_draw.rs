@@ -9,7 +9,7 @@
 //!
 //! Note previews preserve authored proportions at the same field scale as taps.
 //! Other menu helpers fit their component to the requested icon bounds.
-//! The field helpers (`draw_tap`, `draw_mine`, `draw_receptor`,
+//! The field helpers (`draw_tap`, `draw_hold`, `draw_mine`, `draw_receptor`,
 //! `draw_explosion`) scale every layer by gameplay's field zoom, so a
 //! receptor glow or an explosion keeps its authored size relative to the arrow
 //! exactly as the notefield draws it.
@@ -83,11 +83,12 @@ pub(crate) fn preview_note_slots(
 }
 
 /// Every slot the field helpers can draw in columns `0..cols`: taps and lifts
-/// at every quantization, the mine, the receptor's layers and the W1
-/// explosion. What a caller must have ready -- textures resident, model
-/// geometry built -- before it draws a field, and nothing a field never draws
-/// (hold bodies, other judgments' explosions). A slot two pieces share is
-/// visited once for each; callers dedupe.
+/// at every quantization, hold and roll heads, bodies and bottom caps, the
+/// mine, the receptor's layers and the W1 explosion. What a caller must have
+/// ready -- textures resident, model geometry built -- before it draws a
+/// field, and nothing a field never draws (top caps, other judgments'
+/// explosions). A slot two pieces share is visited once for each; callers
+/// dedupe.
 pub(crate) fn for_each_field_slot<'a>(
     skin: &'a Noteskin,
     cols: usize,
@@ -100,6 +101,33 @@ pub(crate) fn for_each_field_slot<'a>(
                 preview_note_slots(skin, part, col * NUM_QUANTIZATIONS + quant)
                     .iter()
                     .for_each(&mut visit);
+            }
+        }
+        for roll in [false, true] {
+            let visuals = skin.hold_visuals_for_col(col, roll);
+            for layers in [&visuals.head_inactive_layers, &visuals.head_active_layers]
+                .into_iter()
+                .flatten()
+            {
+                layers.iter().for_each(&mut visit);
+            }
+            for slot in [&visuals.head_inactive, &visuals.head_active]
+                .into_iter()
+                .flatten()
+            {
+                visit(slot);
+            }
+            for slot in [
+                &visuals.body_inactive,
+                &visuals.body_active,
+                &visuals.bottomcap_inactive,
+                &visuals.bottomcap_active,
+            ]
+            .into_iter()
+            .flatten()
+            .filter(|slot| hold_part_drawn(slot))
+            {
+                visit(slot);
             }
         }
         if let Some(layers) = skin.mine_layers.get(col) {
@@ -436,6 +464,245 @@ fn draw_mine_layers(
     {
         *clear = true;
     }
+}
+
+/// How near a tile's edge a hold body counts as on it, as the notefield's.
+const HOLD_PHASE_EPS: f32 = 1e-4;
+/// The most tiles one body is drawn in: a bound on a skin whose body texture
+/// is a sliver, far past what any real one needs.
+const HOLD_MAX_TILES: usize = 512;
+
+/// A hold or roll in column `col` on an upscroll field, as the notefield
+/// draws one: the body from the head down to the tail at `tail_y`, the bottom
+/// cap under it, and the head over them both at `head`. `active` is the held
+/// look; where a held head sits -- its receptor -- is the caller's to say. The
+/// body and cap are clipped to `bounds`, top and bottom.
+///
+/// The head takes its quantization's colour as a tap does, and a skin with no
+/// hold head of its own draws its tap there, as gameplay does. The body and
+/// cap are drawn at `z`, and the head's layers stack up from `z + 1`. A model
+/// body is a strip the notefield slices along the hold; this leaves it out.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn draw_hold(
+    actors: &mut Vec<Actor>,
+    skin: &Noteskin,
+    col: usize,
+    quant: usize,
+    roll: bool,
+    active: bool,
+    head: [f32; 2],
+    tail_y: f32,
+    bounds: [f32; 2],
+    size: f32,
+    alpha: f32,
+    z: i16,
+    time: f32,
+    beat: f32,
+    cache: Option<&mut ModelMeshCache>,
+) {
+    let visuals = skin.hold_visuals_for_col(skin_col(skin, col), roll);
+    let (head_part, body_part, cap_part) = if roll {
+        (
+            NoteAnimPart::RollHead,
+            NoteAnimPart::RollBody,
+            NoteAnimPart::RollBottomCap,
+        )
+    } else {
+        (
+            NoteAnimPart::HoldHead,
+            NoteAnimPart::HoldBody,
+            NoteAnimPart::HoldBottomCap,
+        )
+    };
+    let quant = quant.min(NUM_QUANTIZATIONS - 1);
+    let note_beat = QUANT_NOTE_BEATS[quant];
+    let zoom = size / FIELD_UNIT_PX;
+    let uv = |slot: &SpriteSlot, part: NoteAnimPart| {
+        let phase = skin.part_uv_phase(part, time, beat, note_beat);
+        slot.uv_for_note_at(
+            slot.frame_index_from_phase(phase),
+            time,
+            skin.part_uv_translation(part, note_beat, false),
+        )
+    };
+    if let Some(body) = hold_visual(
+        visuals.body_active.as_ref(),
+        visuals.body_inactive.as_ref(),
+        active,
+    )
+    .filter(|slot| hold_part_drawn(slot))
+    {
+        let uv = uv(body, body_part);
+        draw_hold_body(actors, body, uv, head, tail_y, bounds, zoom, alpha, z);
+    }
+    if let Some(cap) = hold_visual(
+        visuals.bottomcap_active.as_ref(),
+        visuals.bottomcap_inactive.as_ref(),
+        active,
+    )
+    .filter(|slot| hold_part_drawn(slot))
+    {
+        let uv = uv(cap, cap_part);
+        draw_hold_cap(actors, cap, uv, head[0], tail_y, bounds, zoom, alpha, z);
+    }
+    let head_slots = hold_visual(
+        visuals.head_active_layers.as_deref(),
+        visuals.head_inactive_layers.as_deref(),
+        active,
+    )
+    .or_else(|| {
+        hold_visual(
+            visuals.head_active.as_ref(),
+            visuals.head_inactive.as_ref(),
+            active,
+        )
+        .map(std::slice::from_ref)
+    });
+    match head_slots {
+        Some(slots) => draw_note_slots(
+            actors,
+            slots,
+            skin.part_uv_phase(head_part, time, beat, note_beat),
+            skin.part_uv_translation(head_part, note_beat, false),
+            head,
+            zoom,
+            alpha,
+            z + 1,
+            time,
+            beat,
+            cache,
+        ),
+        None => draw_tap(
+            actors,
+            skin,
+            col,
+            quant,
+            false,
+            head,
+            size,
+            alpha,
+            z + 1,
+            time,
+            beat,
+            cache,
+        ),
+    }
+}
+
+/// The held look or the idle one, falling back to whichever the skin has.
+fn hold_visual<'a, T: ?Sized>(
+    active: Option<&'a T>,
+    inactive: Option<&'a T>,
+    held: bool,
+) -> Option<&'a T> {
+    if held {
+        active.or(inactive)
+    } else {
+        inactive.or(active)
+    }
+}
+
+/// Whether [`draw_hold`] draws a body or cap slot: sprites only.
+fn hold_part_drawn(slot: &SpriteSlot) -> bool {
+    slot.model.is_none()
+}
+
+/// A hold's body from `head` down to `tail_y`, in tiles of its texture's own
+/// height at the field's `zoom`, as the notefield draws an upscroll body:
+/// counted so whole tiles end on the tail and a part one starts at the head,
+/// which keeps the pattern fixed to the tail while a held body shortens.
+#[allow(clippy::too_many_arguments)]
+fn draw_hold_body(
+    actors: &mut Vec<Actor>,
+    slot: &SpriteSlot,
+    uv: [f32; 4],
+    head: [f32; 2],
+    tail_y: f32,
+    bounds: [f32; 2],
+    zoom: f32,
+    alpha: f32,
+    z: i16,
+) {
+    let [width, tile] = slot.source_size().map(|px| px.max(0) as f32 * zoom);
+    let top = head[1].max(bounds[0]);
+    let bottom = tail_y.min(bounds[1]);
+    if width <= f32::EPSILON || tile <= f32::EPSILON || bottom - top <= f32::EPSILON {
+        return;
+    }
+    let [u0, v_top, u1, v_bottom] = uv;
+    let v_range = v_bottom - v_top;
+    let tiles = (tail_y - head[1]) / tile;
+    let part = tiles.fract();
+    let offset =
+        if tiles >= 1.0 + HOLD_PHASE_EPS && part > HOLD_PHASE_EPS && 1.0 - part > HOLD_PHASE_EPS {
+            1.0 - part
+        } else {
+            0.0
+        };
+    let mut phase = (top - head[1]) / tile + offset;
+    let end = (bottom - head[1]) / tile + offset;
+    // The tail's own tile ends on the texture's end, float error or not.
+    let tail_shows = tail_y <= bounds[1];
+    for _ in 0..HOLD_MAX_TILES {
+        if end - phase <= HOLD_PHASE_EPS {
+            break;
+        }
+        let base = phase.floor();
+        let next = (base + 1.0).min(end);
+        if next - phase <= HOLD_PHASE_EPS {
+            // on a tile's end already: the next tile starts here
+            phase = next;
+            continue;
+        }
+        let seg_top = (phase - offset).mul_add(tile, head[1]);
+        let height = (next - phase) * tile;
+        let (v0, v1) = if tail_shows && next >= end - HOLD_PHASE_EPS {
+            (
+                v_range.mul_add(-(height / tile).min(1.0), v_bottom),
+                v_bottom,
+            )
+        } else {
+            (
+                v_range.mul_add(phase - base, v_top),
+                v_range.mul_add((next - base).min(1.0), v_top),
+            )
+        };
+        actors.push(act!(sprite(slot.texture_key_shared()):
+            align(0.5, 0.5): xy(head[0], height.mul_add(0.5, seg_top)): setsize(width, height):
+            customtexturerect(u0, v0, u1, v1):
+            diffuse(1.0, 1.0, 1.0, alpha): z(z)
+        ));
+        phase = next;
+    }
+}
+
+/// A hold's bottom cap, from the tail down by its own height at `zoom`,
+/// clipped to `bounds`.
+#[allow(clippy::too_many_arguments)]
+fn draw_hold_cap(
+    actors: &mut Vec<Actor>,
+    slot: &SpriteSlot,
+    uv: [f32; 4],
+    x: f32,
+    tail_y: f32,
+    bounds: [f32; 2],
+    zoom: f32,
+    alpha: f32,
+    z: i16,
+) {
+    let [width, height] = slot.source_size().map(|px| px.max(0) as f32 * zoom);
+    let top = tail_y.max(bounds[0]);
+    let bottom = (tail_y + height).min(bounds[1]);
+    if width <= f32::EPSILON || height <= f32::EPSILON || bottom - top <= f32::EPSILON {
+        return;
+    }
+    let [u0, v0, u1, v1] = uv;
+    let v_at = |y: f32| (v1 - v0).mul_add((y - tail_y) / height, v0);
+    actors.push(act!(sprite(slot.texture_key_shared()):
+        align(0.5, 0.5): xy(x, f32::midpoint(top, bottom)): setsize(width, bottom - top):
+        customtexturerect(u0, v_at(top), u1, v_at(bottom)):
+        diffuse(1.0, 1.0, 1.0, alpha): z(z)
+    ));
 }
 
 #[inline(always)]
@@ -1669,6 +1936,25 @@ mod tests {
                     );
                 }
             }
+            for (quant, roll, active) in [(0, false, false), (3, true, false), (1, false, true)] {
+                draw_hold(
+                    &mut actors,
+                    skin,
+                    col,
+                    quant,
+                    roll,
+                    active,
+                    CENTER,
+                    CENTER[1] + 150.0,
+                    [CENTER[1], CENTER[1] + 400.0],
+                    32.0,
+                    1.0,
+                    10,
+                    0.3,
+                    0.6,
+                    cache.as_deref_mut(),
+                );
+            }
             draw_mine(
                 &mut actors,
                 skin,
@@ -1737,7 +2023,7 @@ mod tests {
                     "{name}: '{key}' is drawn but not a field slot's"
                 );
             }
-            // and only that: hold bodies, other judgments' explosions and the
+            // and only that: top caps, other judgments' explosions and the
             // like are left for gameplay to load.
             let mut all: Vec<Arc<str>> = Vec::new();
             skin.for_each_slot(|slot| all.push(slot.texture_key_shared()));
@@ -1752,6 +2038,116 @@ mod tests {
                 all.len()
             );
         }
+    }
+
+    /// A hold's body is tiles of its texture's own height at the field's zoom,
+    /// counted from the tail: whole ones end on it, and the head's is a part
+    /// one cut from the texture's top. Clipped short of the tail, the last
+    /// tile keeps its place in the pattern; the cap hangs under the tail only
+    /// while the tail is in bounds.
+    #[test]
+    fn a_hold_body_is_tiled_from_its_tail() {
+        let skin = dance_skin("default");
+        let visuals = skin.hold_visuals_for_col(0, false);
+        let body = visuals.body_inactive.as_ref().expect("a body");
+        let cap = visuals.bottomcap_inactive.as_ref().expect("a cap");
+        let (body_key, cap_key) = (body.texture_key_shared(), cap.texture_key_shared());
+        assert_ne!(body_key, cap_key);
+        let tile = body.source_size()[1] as f32 * 0.5;
+        let cap_h = cap.source_size()[1] as f32 * 0.5;
+        let phase = skin.part_uv_phase(NoteAnimPart::HoldBody, 0.0, 0.0, 0.0);
+        let [_, top, _, bottom] = body.uv_for_note_at(
+            body.frame_index_from_phase(phase),
+            0.0,
+            skin.part_uv_translation(NoteAnimPart::HoldBody, 0.0, false),
+        );
+        let v = |at: f32| (bottom - top).mul_add(at, top);
+        // (top, bottom, v0, v1) of each piece drawn from `key`, top down
+        let pieces = |head: f32, tail: f32, bounds: [f32; 2], key: &str| {
+            let mut actors = Vec::new();
+            draw_hold(
+                &mut actors,
+                &skin,
+                0,
+                0,
+                false,
+                false,
+                [50.0, head],
+                tail,
+                bounds,
+                32.0,
+                1.0,
+                10,
+                0.0,
+                0.0,
+                None,
+            );
+            let mut pieces: Vec<[f32; 4]> = actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Sprite {
+                        offset,
+                        size: [_, SizeSpec::Px(height)],
+                        source,
+                        uv_rect: Some(uv),
+                        ..
+                    } if source.texture_key() == Some(key) => Some([
+                        offset[1] - height * 0.5,
+                        offset[1] + height * 0.5,
+                        uv[1],
+                        uv[3],
+                    ]),
+                    _ => None,
+                })
+                .collect();
+            pieces.sort_by(|a, b| a[0].total_cmp(&b[0]));
+            pieces
+        };
+        #[track_caller]
+        fn close(actual: &[[f32; 4]], expected: &[[f32; 4]]) {
+            assert_eq!(actual.len(), expected.len(), "{actual:?} vs {expected:?}");
+            for (a, e) in actual.iter().zip(expected) {
+                assert!(
+                    a.iter().zip(e).all(|(a, e)| (a - e).abs() < 1e-3),
+                    "{actual:?} vs {expected:?}"
+                );
+            }
+        }
+
+        let (head, tail) = (100.0, tile.mul_add(2.5, 100.0));
+        let open = [0.0, 1000.0];
+        close(
+            &pieces(head, tail, open, &body_key),
+            &[
+                [head, tile.mul_add(0.5, head), v(0.5), v(1.0)],
+                [
+                    tile.mul_add(0.5, head),
+                    tile.mul_add(1.5, head),
+                    v(0.0),
+                    v(1.0),
+                ],
+                [tile.mul_add(1.5, head), tail, v(0.0), v(1.0)],
+            ],
+        );
+        let caps = pieces(head, tail, open, &cap_key);
+        assert_eq!(caps.len(), 1);
+        assert!((caps[0][0] - tail).abs() < 1e-3 && (caps[0][1] - (tail + cap_h)).abs() < 1e-3);
+
+        let clipped = [tile.mul_add(0.25, head), tile.mul_add(2.0, head)];
+        close(
+            &pieces(head, tail, clipped, &body_key),
+            &[
+                [clipped[0], tile.mul_add(0.5, head), v(0.75), v(1.0)],
+                [
+                    tile.mul_add(0.5, head),
+                    tile.mul_add(1.5, head),
+                    v(0.0),
+                    v(1.0),
+                ],
+                [tile.mul_add(1.5, head), clipped[1], v(0.0), v(0.5)],
+            ],
+        );
+        assert!(pieces(head, tail, clipped, &cap_key).is_empty());
     }
 
     /// A model cache changes how geometry is kept, never what is drawn: the
