@@ -199,10 +199,17 @@ fn parse_spec(
             b"data" => data = Some((payload_offset, u64::from(chunk_size))),
             _ => {}
         }
-        reader.seek(SeekFrom::Start(padded_end(payload_offset, chunk_size)))?;
         if format.is_some() && data.is_some() {
             break;
         }
+        // Format parsing consumed its payload. Skip other chunks inside the
+        // existing buffer when possible, including their RIFF padding byte.
+        let skip = if chunk_id == *b"fmt " {
+            0
+        } else {
+            i64::from(chunk_size)
+        };
+        reader.seek_relative(skip + i64::from(chunk_size & 1))?;
     }
 
     let format = format.ok_or("WAV file is missing a fmt chunk")?;
@@ -233,12 +240,6 @@ fn read_chunk_header(
     }
 }
 
-fn padded_end(start: u64, chunk_size: u32) -> u64 {
-    start
-        .saturating_add(u64::from(chunk_size))
-        .saturating_add(u64::from(chunk_size & 1))
-}
-
 fn parse_format_chunk(
     reader: &mut BufReader<File>,
     chunk_size: u32,
@@ -246,17 +247,24 @@ fn parse_format_chunk(
     if chunk_size < 16 {
         return Err(format!("WAV fmt chunk is too small ({chunk_size} bytes)").into());
     }
-    // PCM/float headers fit in 16 bytes, extensible headers in 40. Keep the
-    // original complete read for larger chunks and for truncation errors.
+    // Only the first 40 bytes contain format fields. Consume the entire tail
+    // before validation so truncated extensions retain their original error.
     let mut fixed = [0u8; 40];
-    let mut extended;
-    let fmt: &mut [u8] = if chunk_size as usize <= fixed.len() {
-        &mut fixed[..chunk_size as usize]
-    } else {
-        extended = vec![0u8; chunk_size as usize];
-        &mut extended
-    };
-    reader.read_exact(fmt)?;
+    let header_len = (chunk_size as usize).min(fixed.len());
+    reader.read_exact(&mut fixed[..header_len])?;
+    let mut remaining = chunk_size as usize - header_len;
+    while remaining > 0 {
+        let buffered = remaining.min(reader.fill_buf()?.len());
+        if buffered == 0 {
+            // Use read_exact's standard EOF error rather than inventing one.
+            reader.read_exact(&mut [0])?;
+            remaining -= 1;
+        } else {
+            reader.consume(buffered);
+            remaining -= buffered;
+        }
+    }
+    let fmt = &fixed[..header_len];
 
     let format_tag = le_u16(fmt, 0)?;
     let channels = le_u16(fmt, 2)? as usize;

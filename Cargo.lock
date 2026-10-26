@@ -1230,6 +1230,7 @@ name = "deadlib-audio-decode"
 version = "0.1.0"
 dependencies = [
  "deadlib-platform",
+ "memchr",
  "ogg",
  "opusic-c",
  "rubato",

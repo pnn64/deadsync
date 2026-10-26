@@ -15,6 +15,11 @@ TARGETS = {
     "mapped": ("mapped_output_kernel", "benchmark_mapped_output", 80),
     "planar": ("planar_kernel", "benchmark_planar_kernel", 12),
     "append": ("planar_kernel", "benchmark_mapping_kernel", 28),
+    "mp3-scan": ("metadata_probes", "benchmark_mp3_scan", 16),
+    "mp3-file": ("metadata_probes", "benchmark_mp3_file_probe", 6),
+    "wav-walk": ("metadata_probes", "benchmark_wav_walk", 8),
+    "wav-length": ("metadata_probes", "benchmark_wav_length", 4),
+    "wav-format": ("wav_format_kernel", "benchmark_wav_format", 8),
 }
 
 
@@ -52,7 +57,8 @@ def main():
         if not binaries:
             raise ValueError("no audio-decode executables found")
         sources = [*Path("crates/deadlib-audio-decode").rglob("*.rs"),
-                   Path("Cargo.lock"), Path("Cargo.toml"), Path(".cargo/config.toml"),
+                   Path("Cargo.lock"), Path("Cargo.toml"), Path("crates/deadlib-audio-decode/Cargo.toml"),
+                   Path(".cargo/config.toml"),
                    Path("tests/support/kernel_bench.rs"), Path("tests/support/perf.rs")]
         manifest = dict(
             stage=args.capture, binaries=binaries,
@@ -68,7 +74,7 @@ def main():
         parser.error("comparison requires --output and positive --runs")
     logs = args.root / "runs" / args.output.stem
     logs.mkdir(parents=True, exist_ok=True)
-    label_pattern = r"((?:resampler|mapped|planar|mapping)/[^:\r\n]+)"
+    label_pattern = r"((?:resampler|mapped|planar|mapping|probe|format)/[^:\r\n]+)"
     timing = re.compile(label_pattern + r": cycles/op ([\d.]+); ns/op ([\d.]+)")
     churn = re.compile(label_pattern + r": allocation Churn \{ ([^}]+) \}")
     rows = []
@@ -95,10 +101,12 @@ def main():
                 if len(measurements) != expected or len(allocations) != expected:
                     raise ValueError(f"{target}: expected {expected} cycle and allocation probes")
                 for label, cycles, nanos in measurements:
-                    frames = int(re.search(r"frames=(\d+)", label)[1])
+                    frame_match = re.search(r"frames=(\d+)", label)
+                    frames = int(frame_match[1]) if frame_match else None
                     rows.append(dict(run=run, stage=stage, workload=label,
                                      cycles_per_op=float(cycles), ns_per_op=float(nanos),
-                                     frames_per_cycle=frames / float(cycles),
+                                     frames_per_cycle=frames / float(cycles) if frames is not None else None,
+                                     operations_per_cycle=1 / float(cycles),
                                      binary_sha256=manifests[stage]["binaries"][executable + ".exe"],
                                      **allocations[label]))
                 print(f"run {run + 1}/{args.runs}: {stage} {target}", flush=True)
