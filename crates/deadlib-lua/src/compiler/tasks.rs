@@ -57,7 +57,7 @@ pub(super) enum Task<'a> {
     Operand(ExprId, u8),
     OperandEnd(ExprId, u8),
     Paren(ExprId, u32),
-    Unary(Kind, u8, u8, u32),
+    Unary(ExprId, u8, u8),
     LogicalLeft(ExprId, u8),
     LogicalEnd(ExprId, u32, usize),
     BinaryLeft(ExprId, u8, u8),
@@ -394,16 +394,7 @@ impl<'a> Compiler<'a> {
                     self.result = dst;
                 }
                 Task::Paren(inner, line) => self.discharge_line(inner, line, LineUse::Copy),
-                Task::Unary(op, dst, work, line) => {
-                    self.line = line;
-                    let op = match op {
-                        Kind::Minus => Op::Neg,
-                        Kind::Not => Op::Not,
-                        Kind::Hash => Op::Len,
-                        _ => unreachable!(),
-                    };
-                    self.emit(op, dst, u16::from(work), 0)?;
-                }
+                Task::Unary(id, dst, work) => self.unary(id, dst, work)?,
                 Task::LogicalLeft(id, dst) => self.logical_left(id, dst)?,
                 Task::LogicalEnd(right, line, done) => {
                     self.discharge_line(right, line, LineUse::Copy);

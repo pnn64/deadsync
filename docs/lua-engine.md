@@ -40,8 +40,8 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 444 differential/adversarial integration tests, sixty-four unit tests and
-three runnable documentation examples. Generated cases include 1,000 numeric/logical
+crate, 459 differential/adversarial integration tests, sixty-five unit tests and
+four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
 radix conversion cases. Sort tests compare comparator
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-host-reentry.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-unary-hooks.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -724,6 +724,18 @@ field adds eight bytes to Vm; Value and call-frame sizes stay unchanged.
 [Measurements](performance/2026-10-26-rust-lua-host-reentry.md) include protected
 Rust-to-Lua calls and their C lua_pcall comparison. Suspending Rust callback stacks,
 richer host objects and complete standalone compatibility remain open.
+
+The [unary hook milestone](testing/2026-10-26-rust-lua-unary-hooks.md) removes
+redundant local-operand copies, folds constant logical negation and combines
+comparison negation with its final boolean materialization. Count/line hooks
+retain the comparison's original operation, metamethod order and NaN behavior;
+callbacks between comparison and materialization cannot change the completed
+predicate. Exported Lua 5.1 chunks and fresh-process private-cache reloads
+preserve these results. Three new CLI cases reproduce failures in the preserved
+parent and pass against the official reference. [Measurements](performance/2026-10-26-rust-lua-unary-hooks.md)
+compare current, parent and C CLIs with process CPU counters, alongside the
+broader runtime, frontend, callback and cache harnesses. Complete hook parity and
+the other standalone gates remain open.
 
 ## Reference contract
 

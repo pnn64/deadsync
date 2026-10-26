@@ -459,7 +459,7 @@ impl Prototype {
                     reg(u32::from(i.a))?;
                     reg(u32::from(i.b))?;
                     if i.op == Op::Bool
-                        && (i.c != 0
+                        && (i.c > 1
                             || pc == 0
                             || !matches!(
                                 self.code[pc - 1].op,
@@ -555,7 +555,7 @@ mod tests {
             let boolean = proto.code.iter().position(|i| i.op == Op::Bool).unwrap();
             match corrupt {
                 0 => proto.code[boolean].b = proto.registers,
-                1 => proto.code[boolean].c = 1,
+                1 => proto.code[boolean].c = 2,
                 2 => {
                     let jump = proto
                         .code

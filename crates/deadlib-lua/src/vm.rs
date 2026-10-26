@@ -1216,7 +1216,14 @@ impl Vm {
                         self.registers.copy_within(b..b + count, a);
                         self.top = a + count;
                     }
-                    Op::Move | Op::Bool => self.registers[a] = self.registers[b],
+                    Op::Move => self.registers[a] = self.registers[b],
+                    Op::Bool => {
+                        self.registers[a] = if c == 0 {
+                            self.registers[b]
+                        } else {
+                            Value::Boolean(!self.registers[b].is_truthy())
+                        }
+                    }
                     Op::GetGlobal => self.get_table(
                         Value::Table(env),
                         self.programs[program_index].constants[proto_index][c],
@@ -1360,7 +1367,11 @@ impl Vm {
                             && let Some(next) = prototype.code.get(pc)
                             && next.op == Op::Bool
                         {
-                            self.registers[base + usize::from(next.a)] = self.registers[a];
+                            self.registers[base + usize::from(next.a)] = if next.c == 0 {
+                                self.registers[a]
+                            } else {
+                                Value::Boolean(!self.registers[a].is_truthy())
+                            };
                             pc += 1;
                         }
                     }

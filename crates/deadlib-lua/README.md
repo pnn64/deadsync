@@ -145,6 +145,12 @@ Callbacks can inspect/mutate stacks, collect and resume children; recursive hook
 delivery is suppressed. Broader instruction-event parity and exact scratch-stack
 bounds remain unfinished.
 
+Unary instructions read local operands directly at their hook boundary. Constant
+logical negation folds without a temporary load; negated comparisons retain the
+original predicate/metamethod and invert its later boolean materialization.
+[Unary validation](../../docs/testing/2026-10-26-rust-lua-unary-hooks.md) covers
+hook mutation, NaNs, native exports and persistent reloads.
+
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,
@@ -423,5 +429,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-host-reentry.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-unary-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

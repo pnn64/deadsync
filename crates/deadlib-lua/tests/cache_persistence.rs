@@ -73,6 +73,7 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
     for (filename, bytes) in [
         ("text.lua", source.as_slice()),
         ("native.luac", native.as_slice()),
+        ("unary.lua", b"local a,b=2,3;local value=not(a>b);assert(value);collectgarbage();return value and 42 or 0".as_slice()),
         ("invalid.lua", b"local =".as_slice()),
     ] {
         let path = directory.0.join(filename);
@@ -107,6 +108,6 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
                 .extension()
                 .is_some_and(|s| s == "dlc"))
             .count(),
-        2
+        3
     );
 }

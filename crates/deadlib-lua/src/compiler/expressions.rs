@@ -35,9 +35,25 @@ impl<'a> Compiler<'a> {
                 self.tasks.push(Task::Expr(*inner, dst));
             }
             Expr::Unary(op, inner) => {
-                let work = self.work_register(dst)?;
-                self.tasks.push(Task::Unary(*op, dst, work, span.end));
-                self.tasks.push(Task::Expr(*inner, work));
+                if *op == Kind::Not
+                    && let Some(truth) = self.constant_truth(*inner)
+                {
+                    self.load(dst, Constant::Boolean(!truth))?;
+                    return Ok(());
+                }
+                // Unary instructions can read a live local directly. Copying it
+                // first adds an observable hook event and snapshots its value
+                // before the unary instruction's own callback can mutate it.
+                let local = self.local_operand(*inner);
+                let work = if let Some(local) = local {
+                    local
+                } else {
+                    self.work_register(dst)?
+                };
+                self.tasks.push(Task::Unary(id, dst, work));
+                if local.is_none() {
+                    self.tasks.push(Task::Expr(*inner, work));
+                }
             }
             Expr::Binary(Kind::And | Kind::Or, left, _, _) => {
                 self.tasks.push(Task::LogicalLeft(id, dst));
@@ -187,6 +203,74 @@ impl<'a> Compiler<'a> {
         } else {
             None
         }
+    }
+    fn constant_truth(&self, mut id: ExprId) -> Option<bool> {
+        let mut invert = false;
+        loop {
+            id = self.unparen(id);
+            let truth = match &self.ast.exprs[id].0 {
+                Expr::Unary(Kind::Not, inner) => {
+                    invert = !invert;
+                    id = *inner;
+                    continue;
+                }
+                Expr::Nil => false,
+                Expr::Boolean(value) => *value,
+                Expr::String(_) => true,
+                _ if self.folded[id].is_some() => true,
+                _ => return None,
+            };
+            return Some(truth ^ invert);
+        }
+    }
+    pub(super) fn unary(&mut self, id: ExprId, dst: u8, work: u8) -> Result<(), Error> {
+        let Expr::Unary(op, inner) = self.ast.exprs[id].0 else {
+            unreachable!("unary continuation")
+        };
+        self.line = self.ast.exprs[id].1.end;
+        let mut source = self.unparen(inner);
+        while let Expr::Unary(Kind::Not, inner) = self.ast.exprs[source].0 {
+            source = self.unparen(inner);
+        }
+        if op == Kind::Not
+            && matches!(
+                self.ast.exprs[source].0,
+                Expr::Binary(
+                    Kind::Eq | Kind::Ne | Kind::Lt | Kind::Le | Kind::Gt | Kind::Ge,
+                    ..
+                )
+            )
+            && let Some(tail) = self
+                .function
+                .code
+                .last_mut()
+                .filter(|i| i.op == Op::Bool && i.a == work)
+        {
+            // Invert the final boolean, not the comparison predicate: NaNs and
+            // comparison metamethods must keep the original operation/order.
+            tail.a = dst;
+            tail.c ^= 1;
+            let pc = self.function.code.len() - 1;
+            self.live_register(u16::from(dst));
+            let after = self.live_map()?;
+            self.function.gc_live[pc] =
+                (self.function.gc_live[pc] & 0xffff) | (u32::from(after) << 16);
+            self.function.lines[pc] = self.line;
+            self.debug_line(self.line);
+            return Ok(());
+        }
+        self.emit(
+            match op {
+                Kind::Minus => Op::Neg,
+                Kind::Not => Op::Not,
+                Kind::Hash => Op::Len,
+                _ => unreachable!("unary operator"),
+            },
+            dst,
+            u16::from(work),
+            0,
+        )?;
+        Ok(())
     }
     fn work_register(&mut self, dst: u8) -> Result<u8, Error> {
         // A named destination must keep its previous value until the complete

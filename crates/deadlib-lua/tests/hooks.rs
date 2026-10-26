@@ -377,6 +377,154 @@ fn comparison_materialization_callbacks_run_after_the_comparison_has_finished() 
 }
 
 #[test]
+fn compound_expressions_preserve_reference_instruction_events() {
+    for expression in [
+        "a",
+        "a+b",
+        "a+b*c",
+        "a+b+c",
+        "a*(b+c)",
+        "a^b^c",
+        "a+(b+c)",
+        "a-b-c",
+        "a-(b-c)",
+        "-a",
+        "not a",
+        "not not a",
+        "not nil",
+        "not true",
+        "not false",
+        "not 17",
+        "not 'bytes'",
+        "not not 'bytes'",
+        "not not not false",
+        "a<b",
+        "a<=b",
+        "a==b",
+        "a~=b",
+        "a>b",
+        "a>=b",
+        "(a<b)==(b<c)",
+        "not(a<b)",
+        "not not(a<b)",
+        "a and b",
+        "a or b",
+        "false and a",
+        "true and a",
+        "false or a",
+        "true or a",
+        "(a<b)and a or b",
+        "(a<b)and(b<c)",
+        "(a>b)or(b<c)",
+        "a..b",
+        "a..b..c",
+        "(a..b)..c",
+        "a..(b..c)",
+        "({a,b,c})[2]",
+        "({x=a+b}).x",
+        "#{a,b,c}",
+        "math.abs(a-b)",
+        "(function(x)return x+1 end)(a)",
+    ] {
+        let source = format!(
+            r#"local function f(a,b,c)
+local value={expression}
+return value
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local value=f(2,3,4);debug.sethook();return value,table.concat(out,'|')"#
+        );
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn unary_instructions_read_local_mutations_at_their_own_hook_boundary() {
+    for (expression, initial, replacement) in [
+        ("-value", "2", "17"),
+        ("not value", "false", "true"),
+        ("#value", "'old'", "'replacement'"),
+        ("-(value)", "2", "17"),
+        ("not(value)", "false", "true"),
+        ("#(value)", "'old'", "'replacement'"),
+    ] {
+        let source = format!(
+            r#"local function f(value)
+local result={expression}
+return result,value
+end
+local visits=0;debug.sethook(function(event)local d=debug.getinfo(2,'f');if d.func==f then visits=visits+1;if visits==1 then assert(debug.setlocal(2,1,{replacement})=='value');collectgarbage()end end end,'',1)
+local result,value=f({initial});debug.sethook();return result,value,visits"#
+        );
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn negated_comparisons_keep_metamethods_nan_rules_and_completed_comparison_results() {
+    for operator in ["<", "<=", ">", ">=", "==", "~="] {
+        for negations in 1..=5 {
+            for (a, b) in [
+                ("2", "3"),
+                ("0/0", "3"),
+                ("3", "0/0"),
+                ("1/0", "1/0"),
+                ("-0", "0"),
+            ] {
+                let prefix = "not ".repeat(negations);
+                let source = format!(
+                    r#"local function f(a,b)
+local result={prefix}(a{operator}b)
+return result
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local result=f({a},{b});debug.sethook();return result,table.concat(out,'|')"#
+                );
+                compare(source.as_bytes());
+            }
+            let prefix = "not ".repeat(negations);
+            let source = format!(
+                r#"local trace={{}};local mt={{__lt=function(a,b)trace[#trace+1]='lt:'..a.n..':'..b.n;collectgarbage();return {{}}end,__le=function(a,b)trace[#trace+1]='le:'..a.n..':'..b.n;return false end,__eq=function(a,b)trace[#trace+1]='eq:'..a.n..':'..b.n;return true end}};local a=setmetatable({{n=2}},mt);local b=setmetatable({{n=3}},mt);return {prefix}(a{operator}b),table.concat(trace,'|')"#
+            );
+            compare(source.as_bytes());
+        }
+    }
+    compare(br#"local function f(a,b)
+local result=not(a<b)
+return result,a
+end
+local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==2 then assert(debug.setlocal(2,1,99)=='a');collectgarbage()end end end,'',1)
+local result,a=f(2,3);debug.sethook();return result,a,visits"#);
+}
+
+#[test]
+fn multiline_unary_operands_and_boolean_literals_keep_line_events_and_constant_signs() {
+    for expression in [
+        "-\n a",
+        "#\n 'bytes'",
+        "not\n a",
+        "not\n(a<b)",
+        "not(\n a<b\n)",
+        "not\n not(\n a<b\n)",
+        "not\n false",
+        "not(\n 0\n)",
+        "not not(\n 'x'\n)",
+    ] {
+        let source = format!(
+            r#"local function f(a,b)
+local result={expression}
+return result
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local result=f(2,3);debug.sethook();return result,table.concat(out,'|')"#
+        );
+        compare(source.as_bytes());
+    }
+    compare(b"local a=not -0;local b=not not 0;return a,b,1/0,1/-0");
+    compare(b"local a=not 0;local b=not not -0;return a,b,1/-0,1/0");
+}
+
+#[test]
 fn call_hooks_and_initial_nil_stores_keep_parameter_and_local_lifetimes() {
     for body in [
         "local a\nreturn a",

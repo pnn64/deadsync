@@ -68,6 +68,7 @@ fn results(program: &Program) -> Vec<Vec<u8>> {
 fn source_cache_round_trips_complete_metadata_and_number_bits() {
     for source in [
         b"return -0,0,'a\\000b\\255c',true,false,nil".as_slice(),
+        b"local a,b=2,3;local c=not(a<b);local d=not not(a>b);local e=not false;collectgarbage();return c,d,e,not(0/0<3)",
         b"local x=7;local function f(a,...)local t={...};return function(b)return x+a+b,t[1]end end;local g=f(4,13);local c=coroutine.create(function()local y=g(2);coroutine.yield(y);return g(3)end);local ok,a=coroutine.resume(c);local ok2,b,d=coroutine.resume(c);collectgarbage();return ok,a,ok2,b,d,g==g",
         b"local trace={};debug.sethook(function(e,l)trace[#trace+1]=e..':'..l end,'l');local a=1;if a<4 then a=a+3 end;debug.sethook();local function f(...)return arg.n,arg[1]end;return a,f(12,nil),table.concat(trace,'|')",
     ] {

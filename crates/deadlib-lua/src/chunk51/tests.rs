@@ -529,6 +529,27 @@ fn source_dump_register_pressure_reaches_native_limits() {
 }
 
 #[test]
+fn source_dump_negated_comparisons_keep_native_execution_and_hook_events() {
+    for operator in ["<", "<=", ">", ">=", "==", "~="] {
+        for negations in 1..=4 {
+            let prefix = "not ".repeat(negations);
+            let source = format!(
+                r#"local function f(a,b)
+local result={prefix}(a{operator}b)
+return result
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local a=f(2,3);local b=f(0/0,3);debug.sethook();return a,b,table.concat(out,'|')"#
+            );
+            let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+            let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+            compare_execution(&bytes);
+            compare_execution_against(&bytes, source.as_bytes());
+        }
+    }
+}
+
+#[test]
 fn official_native_dumps_reexport_like_the_c_writer() {
     let lua = Lua::new();
     let cases: &[&[u8]]=&[

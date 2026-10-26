@@ -260,11 +260,12 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 out.abc(21, a, b, u32::from(c))?;
             }
             Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-                let dest = if let Some(next) = p.code.get(pc + 1).filter(|n| n.op == Op::Bool) {
-                    mapped(u16::from(next.a))
-                } else {
-                    a
-                };
+                let (dest, invert) =
+                    if let Some(next) = p.code.get(pc + 1).filter(|n| n.op == Op::Bool) {
+                        (mapped(u16::from(next.a)), next.c as u16)
+                    } else {
+                        (a, 0)
+                    };
                 out.reg(dest)?;
                 out.reg(b)?;
                 out.reg(c)?;
@@ -277,8 +278,8 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                 };
                 out.abc(op, u16::from(i.op != Op::Ne), left, u32::from(right))?;
                 out.abx(22, 0, 131072)?;
-                out.abc(2, dest, 0, 1)?;
-                out.abc(2, dest, 1, 0)?;
+                out.abc(2, dest, invert, 1)?;
+                out.abc(2, dest, invert ^ 1, 0)?;
             }
             Op::Jump => out.jump(22, 0, i.c as usize)?,
             Op::JumpFalse | Op::JumpTrue => {
