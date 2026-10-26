@@ -1,0 +1,31 @@
+[package]
+name = "deadlib-image-png-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+deadlib-image-png = { path = ".." }
+png = "0.18.1"
+flate2 = "1.1.10"
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "zlib"
+path = "fuzz_targets/zlib.rs"
+test = false
+doc = false
+bench = false

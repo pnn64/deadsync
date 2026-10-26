@@ -19,7 +19,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | Bounded streaming with arbitrary input boundaries | Pending | Pending |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 611 external libpng native-sample checks and normal Rust png / PNGSuite checks pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Pending | Pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, seed generator, checked-in reports | 10,000 PNG and 20,000 zlib AddressSanitizer smoke runs pass; long campaigns and coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -93,3 +93,14 @@ improved locally by about 1.8–2.3x; see the benchmark document for limits.
 
 PNG editor behavior is explicit: decoded unknown chunks remain accessible,
 while reencoding omits unrecognized chunks whose safe-to-copy bit is unset.
+
+Fuzz smoke validation (2026-10-26): isolated libFuzzer targets type-check on
+Windows. The instrumented MSVC link failed with missing sanitizer coverage
+symbols, so campaigns ran on Debian WSL with Linux nightly, cargo-fuzz 0.13.2,
+default AddressSanitizer, fixed seed 782347, 64 KiB input cap, 1 MiB native output
+cap, 5-second per-input timeout and 1024 MiB RSS cap. PNG: 10,000 runs, no failure,
+170 MiB peak RSS; zlib: 20,000 runs, no failure, 360 MiB peak RSS. Zlib compares
+native-accepted output against flate2; PNG compares native samples on inputs also
+accepted by Rust png. These are smoke checks, not exhaustive fuzz evidence.
+The seed generator and full logs are in the crate. Longer structured campaigns,
+CRC-repaired chunk mutations and APNG frame differential fuzzing remain required.
