@@ -1,6 +1,10 @@
 //! Resident-input timing worker. No PCM retention or file IO in timed regions.
 #[path = "support/huffman.rs"]
 mod huffman;
+#[path = "support/io.rs"]
+mod io_support;
+#[path = "support/seek.rs"]
+mod seek_support;
 use deadlib_audio_decode_vorbis::{Imdct, OggEvent, OggOptions, OggReader};
 use std::{
     hint::black_box,
@@ -175,15 +179,64 @@ fn main() {
         .skip(1)
         .filter(|a| a != "--bench")
         .collect();
-    assert_eq!(
-        args.len(),
-        4,
-        "ENGINE PHASE ITERATIONS FILE_OR_BLOCK_SIZE (native|symphonia; full|stream4096|startup|imdct|huffman)"
+    assert!(
+        args.len() == 4 || args.len() == 5,
+        "ENGINE PHASE ITERATIONS FILE_OR_BLOCK_SIZE [SEEK_REQUESTS]"
     );
     let engine = &args[0];
     let phase = &args[1];
     let iterations: usize = args[2].parse().unwrap();
     assert!(iterations > 0);
+    if phase == "seek_open" || phase == "seek_batch" {
+        assert_eq!(
+            args.len(),
+            5,
+            "seek timing requires a reference request file"
+        );
+        let workload =
+            seek_support::Workload::read(std::path::Path::new(&args[4]), phase == "seek_batch");
+        let data: Arc<[u8]> = std::fs::read(&args[3]).unwrap().into();
+        let stats = Arc::new(io_support::IoStats::default());
+        let open = || {
+            seek_support::Session::open(
+                engine,
+                io_support::Source::new(&data, usize::MAX, true, &stats),
+                workload.geometry,
+            )
+        };
+        let mut elapsed = 0;
+        let mut exposed = 0;
+        let units;
+        if phase == "seek_batch" {
+            let mut session = open();
+            session.warm(workload.geometry);
+            session.batch(&workload, true);
+            stats.reset();
+            let begin = Instant::now();
+            for _ in 0..iterations {
+                exposed += session.batch(&workload, false);
+            }
+            elapsed = begin.elapsed().as_nanos();
+            units = workload.expected_samples() * iterations as u64;
+        } else {
+            drop(open());
+            stats.reset();
+            for _ in 0..iterations {
+                let begin = Instant::now();
+                let session = open();
+                black_box(&session);
+                drop(session);
+                elapsed += begin.elapsed().as_nanos();
+            }
+            units = iterations as u64;
+        }
+        let [reads, bytes, seeks, tells] = stats.values();
+        println!(
+            "{engine}\t{phase}\t{iterations}\t{elapsed}\t{units}\t{reads}\t{bytes}\t{seeks}\t{tells}\t{exposed}"
+        );
+        return;
+    }
+    assert_eq!(args.len(), 4);
     if phase == "huffman" {
         assert_eq!(engine, "native");
         huffman::measure(&std::fs::read(&args[3]).unwrap(), iterations);

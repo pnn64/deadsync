@@ -271,9 +271,11 @@ counts match without discarding comparison samples.
   or repair arbitrary malformed containers.
 * Native encoding, independently decoded lossy validation, measured pipeline
   optimization and broader throughput/startup plus memory/allocation/seek
-  comparisons with libvorbis and Symphonia. The initial throughput/startup
-  baseline above is not a complete benchmark suite. No SIMD or competitive
-  performance claims yet.
+  comparisons with libvorbis and Symphonia. The five-file
+  [resource/seek baseline](RESOURCES.md) now covers requested heap, process memory
+  and 500 shared PCM-window requests, exposing substantial seek performance
+  gaps. This remains an initial sample rather than a complete benchmark suite.
+  No SIMD or competitive performance claims yet.
 
 Raw packet and full-container comparisons are separate: raw PCM tests assign
 unknown granules and omit EOS trimming; `ogg_mapping` tests independently use

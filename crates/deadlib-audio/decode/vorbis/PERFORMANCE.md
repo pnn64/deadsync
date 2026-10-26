@@ -285,10 +285,15 @@ no artifacts/failures: [statistics](validation/2026-10-26-huffman-fuzz.tsv),
 
 ## Remaining measurements and next optimization gate
 
-Allocation counts/requested-byte peaks, process memory, indexed construction,
-arbitrary seeking, Ogg-only container throughput and cold startup still need
-comparative measurements. Existing zero-allocation tests cover specific warmed
-native decode/reset/seek paths; sanitizer RSS is not a production memory result.
+[RESOURCES.md](RESOURCES.md) adds separate requested-heap counters, uninstrumented
+process memory, indexed construction and validated 100-request seek batches for
+five files. Native uses less requested heap than Symphonia in this sample, but
+the longer-file seek batches remain 1.5-2.5x slower than Symphonia and 2.3-4.6x
+slower than libvorbisfile. The eager index reads the entire source twice; native
+page callbacks expose 9.1-20.9x the requested samples on the two longer files.
+Three small native allocation requests also remain in one warmed seek batch.
+Ogg-only container throughput and truly cold startup still need comparative
+measurements. Sanitizer RSS is not a production memory result.
 
 Add actual symbol-frequency/profile evidence and floor/residue component
 measurements to explain the remaining pipeline gap. Optimize a measured bottleneck,

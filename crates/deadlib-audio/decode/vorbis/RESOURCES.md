@@ -1,0 +1,209 @@
+# Allocation, process memory, and arbitrary seeking
+
+The resource benchmark compares the native decoder, Symphonia 0.6.1, and the
+pinned libvorbisfile 1.3.7 / libogg 1.3.6 source builds. It changes no production
+decoder behavior and adds no production dependency. Run from the repository:
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark_resources.py
+```
+
+Optional positional files replace the default mono, stereo, eight-channel
+silence, `in_two (loop).ogg`, and downloaded `goin-under.ogg` inputs. Files must
+contain one nonempty, ordinarily trimmed stream with a zero retained timestamp
+origin. No legacy repair policy is enabled. The eight-channel fixture is
+silence because Symphonia 0.6.1's known dependent-coupling disagreement would
+otherwise fail the required seek PCM comparison; see [COVERAGE.md](COVERAGE.md).
+This fixture exercises channel count, rather than realistic multichannel work.
+
+## Work and measurement boundaries
+
+Every worker receives resident compressed input. File loading, process launch,
+and common request-file parsing are outside timing and allocation windows.
+
+* **Full:** construct a forward-only reader, decode every retained sample, and
+  destroy the reader. The requested-heap window includes destruction and must
+  return to its starting live-byte count.
+* **Startup:** construct a forward-only reader and stop at its first nonempty
+  PCM block. Snapshot requested heap before destroying it. Native callbacks can
+  continue to the end of that page; the heap snapshot is inside the first PCM
+  callback. RSS is a process high-water value, so it includes that page's work.
+* **Seek open:** construct and validate a seek-ready reader. Requested heap is
+  captured while it is alive; timing includes its destruction. Native performs
+  its documented two full indexing passes, while the references use their own
+  default seek initialization. These are different startup guarantees; source
+  byte/read/seek counts expose that work.
+* **Seek batch:** reuse a reader warmed by a full decode and an untimed validated
+  request batch. Measure the same 100 boundary/random requests, consuming up to
+  256 frames after each seek. Construction, warm-up, and PCM comparison are
+  excluded. Every timed subprocess repeats the comparison before measurement.
+
+The first targets are 0, 1, 127, 255, the midpoint, and the final frame, clipped
+to the stream. Remaining targets use the documented 64-bit LCG in the runner
+with seed 1337. Each request consumes `min(256, frames - target)` frames. The
+pinned independent C oracle generates planar reference PCM once for all workers.
+It must report the exact seek position and requested frame count. All workers
+check each channel's PCM before timing: floor-one peak error <= 3e-6 and RMS
+<= 5e-7, scaled by `max(1, reference peak)`. The previously justified floor-zero
+tier is peak 5e-5 / RMS 3e-6. No alignment search or fitted tolerance is used.
+
+Native seeks prime the preceding packet and discard to the exact target.
+Symphonia seeks one maximum block earlier, resets its codec, and discards using
+packet PTS plus trim-start, as its packet-oriented interface requires. Its track
+range can include a negative-PTS priming packet even for an ordinary stream;
+the benchmark validates retained output positions and counts instead. libvorbisfile
+uses `ov_pcm_seek`, checks `ov_pcm_tell`, then requests exactly the wanted frames.
+
+The native public `read_next` processes a whole page, so it may synthesize and
+expose far more PCM than requested. `api_exposed_samples` records this effect.
+Symphonia can expose pre-roll and packet tails; libvorbisfile hides its internal
+pre-roll behind its read API. This diagnostic is not an equal count of internal
+synthesis across libraries. All consumers still require identical PCM windows.
+libvorbisfile also defers synthesis initialization beyond `ov_open_callbacks`,
+whereas the native constructor already owns its selected packet decoder. Its
+seek-open time and retained heap therefore do not include equivalent synthesis
+initialization. The warmed seek-batch comparison includes initialized codecs.
+
+## Requested heap and process memory are separate metrics
+
+`bench-alloc` installs a benchmark-only Rust global allocator that forwards to
+`System` and tracks successful allocation/reallocation requests. C builds use
+`DEADLIB_TRACK_ALLOCATIONS=ON` in a separate build directory, force-including
+wrappers only in libogg, libvorbis, and libvorbisfile C translation units.
+The C++ harness and input/request storage are outside these wrappers. The
+production Rust library does not use this feature or contain allocator hooks.
+
+Both counters report:
+
+* successful allocation/reallocation operations (free operations excluded);
+* total requested bytes, counting a successful realloc's entire new size;
+* peak additional live requested bytes above the window's initial live bytes;
+* signed live requested-byte change at the snapshot.
+
+They track live allocations outside windows too, so freeing or resizing a
+preexisting buffer during seeking does not underflow window-local accounting.
+The actual instrumented workers self-test zero-fill, realloc, free, and exact
+counts before a run. C additionally checks maximum alignment and overflow.
+Counters exclude allocator size classes, metadata, fragmentation, stack/alloca,
+mapped executable pages, and allocations made inside a system runtime. The C
+wrapper's aligned size header is excluded from requested bytes. Rust's heap
+scratch and C's stack/alloca scratch therefore have different accounting scopes.
+Reported retained heap at startup/open is live reader state, not a leak.
+
+**No instrumented timing or RSS is reported.** Uninstrumented workers separately
+query Windows `GetProcessMemoryInfo` / `PeakWorkingSetSize`. Other platforms
+currently report null. Each resource case runs in a fresh subprocess. Full,
+startup, and seek-open RSS skip the allocation worker's registry warm-up.
+Seek-batch RSS includes full warming and golden-window validation. Whole-process
+RSS includes input loading and its temporary buffers, the golden workload when
+needed, harness, runtime, code pages, and decoder. It is not codec-owned heap or
+a baseline-subtracted incremental peak. Input loaders and Rust/static versus
+C/dynamic runtime builds differ. Use requested-byte counts for their narrower,
+explicit heap scope; neither metric alone describes total codec memory.
+
+Timing uses uninstrumented builds, Rust `Instant` / C++ `steady_clock`, and
+resident input. Source callback counters remain enabled in all workers (Rust
+relaxed atomics, C ordinary counters). Construction/destruction are included for
+seek-open. Seek batches reuse a warmed context. Calibration targets at least
+150 ms per trial, capped at 10,000 iterations; at least five trials by default
+shuffle engine order using seed 1337. Resource cases use three fresh processes
+per phase/engine/instrumentation by default. The runner retains raw resource
+rows, timing trials, summary, configuration, source/input/workload/binary hashes,
+reference pins, build logs, and completion verification in ignored scratch.
+
+## Results
+
+Measured 2026-10-27 on the same shared Windows x64 Xeon E5-2696 v4 / 44 logical
+CPU machine as the earlier pipeline reports. Rust uses opt-level 3, LTO, and the
+workspace static CRT flags; C uses MSVC 19.44 Release /O2 /Ob2 /DNDEBUG and the
+dynamic CRT. CPU frequency, affinity, and other work were not controlled. Five
+shuffled timing trials and three resource processes per case produced 150 timing
+rows and 360 resource rows. All allocation and I/O counters are identical across
+the three process repetitions. RSS varies and is summarized by its median.
+
+Peak additional **requested heap**, full forward decode, KiB (1,024 bytes):
+
+| Input | Native | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: |
+| Mono fixture | 96.4 | 1,323.3 | 125.6 |
+| Stereo fixture | 372.8 | 1,804.0 | 160.0 |
+| Eight-channel silence | 308.4 | 1,696.4 | 265.5 |
+| `in_two` | 179.7 | 1,904.5 | 185.6 |
+| `Goin' Under` | 394.2 | 1,734.7 | 169.1 |
+
+Native has 205/337/288/391/371 successful allocation/reallocation operations in
+these full-decode windows, versus Symphonia's 1,347/1,609/1,584/12,370/12,444 and
+libvorbisfile's 314/581/472/626/612. Every full window returns to zero live-byte
+delta. Native uses 4.4-13.7x less requested peak heap than Symphonia here, but
+does not consistently beat libvorbisfile, and C's stack scratch is excluded.
+Startup/open snapshots and requested-byte totals are in the raw resource table.
+
+Warmed 100-request batches allocate **0/0/0/0/3** times for native in the same
+input order, **400/600/300/9,799/20,149** for Symphonia, and **zero** for
+libvorbisfile. Native's `Goin' Under` batch requests 1,785 bytes in those three
+operations, with zero additional requested-heap high water and zero net retained
+change. It must not be described as universally allocation-free seeking.
+Symphonia's two longer batches request 4.55/4.30 MB cumulatively while adding only
+5,392/1,586 bytes of peak live heap; cumulative allocation traffic is not a live
+memory peak.
+
+Median times, milliseconds, including all 100 seeks and their requested PCM:
+
+| Input / phase | Native | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: |
+| Mono, seek batch | 2.226 | 1.072 | 0.925 |
+| Stereo, seek batch | 24.952 | 8.435 | 5.787 |
+| Eight-channel silence, seek batch | 24.091 | 11.653 | 11.402 |
+| `in_two`, seek open | 33.521 | 2.301 | 0.179 |
+| `in_two`, seek batch | 44.604 | 28.935 | 19.795 |
+| `Goin' Under`, seek open | 18.508 | 2.550 | 0.217 |
+| `Goin' Under`, seek batch | 71.238 | 28.480 | 15.395 |
+
+Native seek batches remain 1.5-2.5x slower than Symphonia and 2.3-4.6x slower
+than libvorbisfile on the two longer files. Native `in_two` batch min/median/max
+is 42.444/44.604/48.122 ms; `Goin' Under` is 67.973/71.238/71.374 ms. Construction
+is also substantially slower and currently scans the entire file twice.
+These results demonstrate open performance work despite the smaller requested
+heap and allocation traffic.
+
+The longer batches each consume exactly 50,690 channel samples. Native exposes
+462,262 / 1,059,258 samples (9.1x / 20.9x demand) through its page callbacks;
+Symphonia exposes 642,664 / 639,360. Native reads 0.921 / 0.845 MB per batch,
+versus Symphonia's 12.111 / 17.129 MB and libvorbisfile's 7.525 / 8.043 MB.
+The dense native index reduces source probing, while page-sized synthesis work
+remains a measured cost. Input is memory-resident, so these timings do not
+predict relative disk or network behavior.
+
+Native seek-open reads exactly twice the file length: 9,878,028 / 4,700,278 bytes.
+Its live requested heap at the ready snapshot is 390,687 / 495,515 bytes, versus
+Symphonia's 1,938,223 / 1,763,631 and libvorbisfile's 67,938 / 74,079. Remember
+libvorbisfile's deferred synthesis initialization when interpreting this phase.
+
+Median **whole-process** peak working set for full decoding, MiB (1,048,576 bytes):
+
+| Input | Native | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: |
+| Mono fixture | 3.828 | 5.617 | 4.230 |
+| Stereo fixture | 4.082 | 5.945 | 4.281 |
+| Eight-channel silence | 4.078 | 5.805 | 4.445 |
+| `in_two` | 12.965 | 12.965 | 12.352 |
+| `Goin' Under` | 8.027 | 8.168 | 8.129 |
+
+The longer files' input-loading peaks dominate some process readings. Equal RSS
+does not contradict the narrower requested-heap difference. These are process
+measurements with the harness/runtime caveats above, not isolated codec RSS.
+
+Evidence: [manifest](validation/2026-10-27-resources.json),
+[all resource rows](validation/2026-10-27-resources.tsv),
+[seek trials](validation/2026-10-27-seek-trials.tsv),
+[seek summary](validation/2026-10-27-seek-summary.tsv),
+[completion](validation/2026-10-27-resources-complete.json), and
+[validation checks](validation/2026-10-27-resources-checks.json).
+All 500 workload requests pass exact count/position and channel PCM checks in
+the actual instrumented and uninstrumented workers. Production source is
+unchanged; release tests, both Clippy feature configurations, independent offline
+package tests/dependency checks, and both allocator self-tests pass.
+
+The broader performance goal remains open: sparse codec seeking, control over
+page-sized synthesis work, Ogg-only throughput, truly cold startup, more
+files/platforms, profiling, and native encoding still require work.

@@ -142,8 +142,10 @@ comparative startup/seek optimization remain performance work.
 The initial [performance baseline](PERFORMANCE.md) compares resident full decode,
 4 KiB fragmented reads and time to first PCM against libvorbisfile and Symphonia.
 The measured N/4 transform update improves the two longer tracks by 1.35–1.67x
-in observed full-file runs, while a native throughput gap remains. Allocation/memory/seek
-comparisons and measured optimization remain open.
+in observed full-file runs, while a native throughput gap remains.
+[Allocation/memory/seek comparisons](RESOURCES.md) now measure five files:
+native uses less requested heap than Symphonia here, while eager indexing and
+page-sized synthesis leave substantial construction/seek performance work.
 
 Legacy handling is explicit and disabled by default.
 `OggOptions::allow_zero_span_granules` and the same `SeekOptions` flag ignore

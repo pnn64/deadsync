@@ -110,13 +110,13 @@ def huffman_corpus(path: Path, oracle: Path, directory: Path, number: int) -> tu
     return destination, {"books": count, "symbols": symbols, "bits": bits_total,
                          "sha256": sha(destination), "reference_output_sha256": hashlib.sha256(result.stdout).hexdigest()}
 
-def rust_worker(build_output: str) -> tuple[Path, dict]:
+def rust_worker(build_output: str, target: str = "pipeline") -> tuple[Path, dict]:
     binaries = []
     for line in build_output.splitlines():
         message = json.loads(line)
         if (message.get("reason") == "compiler-artifact"
             and "deadlib-audio-decode-vorbis" in message.get("package_id", "")
-            and message["target"]["name"] == "pipeline" and message.get("executable")):
+            and message["target"]["name"] == target and message.get("executable")):
             binaries.append((Path(message["executable"]), message["profile"]))
     if len(binaries) != 1:
         raise RuntimeError(f"cannot identify exact native/Symphonia worker: {binaries}")

@@ -7,6 +7,10 @@ license = "GPL-3.0"
 description = "Independent pure-Rust Vorbis I codec with raw packet support"
 repository = "https://github.com/pnn64/deadsync"
 
+[features]
+# Benchmark-only allocator instrumentation; production library code is unchanged.
+bench-alloc = []
+
 [dependencies]
 deadlib-audio-decode-ogg = { path = "../ogg", version = "0.1.0" }
 
@@ -19,4 +23,8 @@ perf = { level = "warn", priority = -1 }
 
 [[bench]]
 name = "pipeline"
+harness = false
+
+[[bench]]
+name = "resources"
 harness = false

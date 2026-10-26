@@ -91,6 +91,13 @@ speedup on the longer tracks in interleaved baseline/current trials, at about
 setup budget. Scalar, full PCM, seeking and sanitizer gates remain unchanged;
 the short-clip tradeoff is explicit in the report.
 
+The [resource and arbitrary-seek baseline](vorbis/RESOURCES.md) separates
+requested-heap instrumentation, fresh-process memory and uninstrumented timing.
+Five files pass 500 shared reference-PCM seek requests. Native's requested heap
+is smaller than Symphonia's here, while eager two-pass indexing and page-sized
+decoding leave clear seek performance gaps. Raw trials, counter rows and hashes
+are retained; this milestone changes no production decoder behavior.
+
 ## Normative sources
 
 * [RFC 3533](https://www.rfc-editor.org/rfc/rfc3533.txt).
