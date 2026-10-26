@@ -7493,10 +7493,13 @@ fn default_player_options() -> PlayerOptionsData {
         scatterplot_max_window: ScatterplotMaxWindow::Off,
         score_position: ScorePosition::Normal,
         score_display_mode: ScoreDisplayMode::Normal,
-        show_golf_score: false,
+        // Golf scoring defaults on so golf packs light up as soon as the machine's
+        // golf master switch is enabled. `golf_all_charts` stays off, so charts
+        // without an authored par keep the normal score and results.
+        show_golf_score: true,
         golf_all_charts: false,
         golf_stroke_feedback: false,
-        show_golf_results: false,
+        show_golf_results: true,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         pad_light_brightness: PAD_LIGHT_BRIGHTNESS_DEFAULT,
@@ -14946,19 +14949,19 @@ ApiKey = gs-key
     }
 
     #[test]
-    fn golf_options_default_off_and_round_trip_independently() {
+    fn golf_scoring_defaults_to_golf_charts_only_and_round_trips_independently() {
         let defaults = PlayerOptionsData::default();
         assert!(
-            !defaults.show_golf_score
+            defaults.show_golf_score
                 && !defaults.golf_all_charts
                 && !defaults.golf_stroke_feedback
-                && !defaults.show_golf_results
+                && defaults.show_golf_results
         );
         let options = PlayerOptionsData {
-            show_golf_score: true,
+            show_golf_score: false,
             golf_all_charts: true,
             golf_stroke_feedback: true,
-            show_golf_results: true,
+            show_golf_results: false,
             ..defaults.clone()
         };
         let mut text = String::new();
@@ -14978,7 +14981,8 @@ ApiKey = gs-key
         profile.set_current_player_options(options.clone());
         assert_eq!(profile.current_player_options(), options);
         let legacy = load_player_options_section(true, |_| None, &defaults).unwrap();
-        assert!(!legacy.show_golf_score && !legacy.show_golf_results);
+        assert!(legacy.show_golf_score && legacy.show_golf_results);
+        assert!(!legacy.golf_all_charts && !legacy.golf_stroke_feedback);
     }
 
     #[test]
