@@ -10,6 +10,7 @@ mod floor_table;
 mod headers;
 mod ogg;
 mod residue;
+mod seek;
 mod setup;
 mod transform;
 
@@ -19,6 +20,7 @@ pub use ogg::{
     OggDecoder, OggEvent, OggOptions, OggPcm, OggReader, OggStreamDecoder, StreamEnd, StreamId,
     StreamInfo, decode_reader,
 };
+pub use seek::{OggSeekReader, SeekOptions, SeekStream, VorbisIndex};
 pub use setup::{
     AudioHeader, Floor, Floor0, Floor1, FloorClass, Mapping, Mode, Residue, Setup, Submap,
 };

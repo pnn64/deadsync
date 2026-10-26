@@ -113,8 +113,15 @@ impl PacketDecoder {
     /// Discard overlap and reset the raw output position. Keep setup, tables
     /// and allocations; the next audio packet primes again and returns 0 frames.
     pub fn reset(&mut self) {
+        self.reset_at(0);
+    }
+    /// Reset for caller-managed raw-packet seeking. `position` is the raw end
+    /// position of the packet that will prime overlap, before container trims.
+    /// That next valid packet returns zero frames; subsequent output begins at
+    /// this position. The caller must supply the actual preceding audio packet.
+    pub fn reset_at(&mut self, position: u64) {
         self.previous_size = 0;
-        self.position = 0;
+        self.position = position;
     }
 
     /// None means a non-audio packet or a truncated mode/window prefix was
@@ -123,17 +130,8 @@ impl PacketDecoder {
     /// End-of-packet after the prefix is nominal and produces a truncated block.
     /// Do not invent/flush a final block: a container supplies final sample count.
     pub fn decode(&mut self, packet: &[u8]) -> Result<Option<PcmBlock<'_>>, Error> {
-        if packet.len() > self.limits.max_packet_bytes {
-            return Err(Error::LimitExceeded("audio packet bytes"));
-        }
-        if packet.is_empty() || packet[0] & 1 != 0 {
+        let Some((header, mut bits)) = packet_header(&self.setup, &self.limits, packet)? else {
             return Ok(None);
-        }
-        let mut bits = BitReader::new(packet);
-        let header = match self.setup.read_audio_header(&mut bits) {
-            Ok(header) => header,
-            Err(Error::EndOfPacket) => return Ok(None),
-            Err(error) => return Err(error),
         };
         let channels = self.setup.channels() as usize;
         let [small, large] = self.setup.block_sizes();
@@ -288,6 +286,25 @@ impl PacketDecoder {
         }))
     }
 }
+pub(crate) fn packet_header<'a>(
+    setup: &Setup,
+    limits: &Limits,
+    packet: &'a [u8],
+) -> Result<Option<(AudioHeader, BitReader<'a>)>, Error> {
+    if packet.len() > limits.max_packet_bytes {
+        return Err(Error::LimitExceeded("audio packet bytes"));
+    }
+    if packet.is_empty() || packet[0] & 1 != 0 {
+        return Ok(None);
+    }
+    let mut bits = BitReader::new(packet);
+    match setup.read_audio_header(&mut bits) {
+        Ok(header) => Ok(Some((header, bits))),
+        Err(Error::EndOfPacket) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 fn zeroed<T: Default + Clone>(count: usize) -> Result<Vec<T>, Error> {
     let mut out = Vec::new();
     out.try_reserve_exact(count)

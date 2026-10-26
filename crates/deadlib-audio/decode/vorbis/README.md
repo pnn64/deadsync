@@ -28,6 +28,8 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   overlap-add. Output is borrowed planar, unclipped f32 in Vorbis channel order.
   The first block primes overlap and returns zero frames. `reset` keeps tables
   and allocations; decode/reset perform zero allocations after construction.
+  `reset_at` also seeds the raw position for caller-managed packet seeks; supply
+  the actual preceding packet to prime overlap before consuming output.
 * `Imdct`: reusable native inverse transform for all legal 64..=8192 block sizes.
 
 ```rust
@@ -88,7 +90,53 @@ signatures, setup errors and explicit resource-limit failures remain fatal.
 `OggOptions` bounds active streams and their aggregate retained setup, metadata
 and synthesis elements; container packet assembly has independent limits.
 
-**Seeking and native audio encoding remain pending.**
+`OggSeekReader` provides sample-accurate indexed seeking. Frames are relative to
+the retained start of one logical stream; original broadcast timestamps remain
+available in each `OggPcm`. Streams in multiplexed/chained input can be selected
+independently, with their own rates and layouts.
+
+```rust
+use std::io::Cursor;
+use deadlib_audio_decode_vorbis::{OggEvent, OggSeekReader};
+# fn seek_example(ogg_bytes: &[u8]) -> Result<(), deadlib_audio_decode_vorbis::Error> {
+let mut reader = OggSeekReader::new(Cursor::new(ogg_bytes))?;
+let stream = reader.selected().info.id;
+let frame = reader.selected().end.frames / 2;
+reader.seek(stream, frame)?;
+while reader.read_next(|event| {
+    if let OggEvent::Pcm(data) = event {
+        // The first data.start_frame equals frame, including within a packet.
+        std::hint::black_box(data.pcm.plane(0));
+    }
+})? {}
+# Ok(())
+# }
+```
+
+Construction validates the complete container, then scans Vorbis headers, packet
+modes and granules without synthesizing PCM. `VorbisIndex` caches metadata/setup
+packets and one timing landmark per completed audio page. It can be built
+separately and passed to `with_index`; `into_parts` preserves it for reuse with
+the exact same immutable source. Audio floor/residue errors are still detected
+when those packets are decoded. Use the streaming reader for low-latency startup
+when a complete index is unnecessary.
+
+`seek` resets overlap and selects the preceding audio packet; `read_next` primes
+it, decodes forward and discards to the exact target. The exact stream end is a
+valid target. Repeated seeks within one stream retain setup, transform tables
+and synthesis buffers. Changing streams rebuilds the selected codec. Start/end
+events repeat after each seek; `StreamEnd` describes the whole stream. A read
+processes at most one selected-stream page and may emit several PCM blocks.
+Invalid seek arguments preserve the cursor; read/seek IO failures are terminal
+until a successful seek resets state. As with streaming, output is provisional
+until end validation. Wrap unbuffered file sources in `BufReader`.
+
+`SeekOptions` independently bounds the container page count, additional retained
+Vorbis index elements, setup/synthesis memory, and packet resources. Indexing is
+eager and requires two container passes; sparse/index-free codec seeking and
+comparative startup/seek optimization remain performance work.
+
+**Native audio encoding remains pending.**
 Raw decoder positions count overlap output before container initial/final trim.
 There is no synthetic final flush; the container mapping supplies final length.
 Header writers are not audio encoders. Do not replace the existing decoding

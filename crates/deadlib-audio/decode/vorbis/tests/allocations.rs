@@ -41,8 +41,8 @@ fn repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing() {
         ALLOCATIONS.store(0, Ordering::Relaxed);
         let mut samples = 0;
         TRACK.with(|track| track.set(true));
-        for _ in 0..4 {
-            decoder.reset();
+        for cycle in 0..4 {
+            decoder.reset_at(cycle * 1_000_000);
             for packet in &packets[3..] {
                 let block = decoder.decode(packet).unwrap().unwrap();
                 samples += block.frames * block.channels;
@@ -56,6 +56,39 @@ fn repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing() {
         assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
     }
     in_page_mapping_allocate_nothing();
+    repeated_seeks_allocate_nothing();
+}
+
+fn repeated_seeks_allocate_nothing() {
+    use deadlib_audio_decode_vorbis::{OggEvent, OggSeekReader};
+    use std::io::Cursor;
+    for bytes in [
+        include_bytes!("fixtures/stereo.ogg").as_slice(),
+        include_bytes!("fixtures/surround.ogg").as_slice(),
+        include_bytes!("fixtures/mono.ogg").as_slice(),
+    ] {
+        let mut reader = OggSeekReader::new(Cursor::new(bytes)).unwrap();
+        let id = reader.selected().info.id;
+        let frames = reader.selected().end.frames;
+        while reader.read_next(|_| {}).unwrap() {} // Warm transport capacity.
+        ALLOCATIONS.store(0, Ordering::Relaxed);
+        TRACK.with(|track| track.set(true));
+        for frame in [frames, 0, 1, frames / 2, frames - 1, 17, 0] {
+            reader.seek(id, frame).unwrap();
+            while reader
+                .read_next(|event| {
+                    if let OggEvent::Pcm(data) = event {
+                        for plane in data.pcm.planes() {
+                            std::hint::black_box(plane);
+                        }
+                    }
+                })
+                .unwrap()
+            {}
+        }
+        TRACK.with(|track| track.set(false));
+        assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+    }
 }
 
 fn in_page_mapping_allocate_nothing() {

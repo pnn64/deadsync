@@ -53,9 +53,13 @@ All 38 repository assets have exact retained counts against libvorbisfile and
 Symphonia; strict behavior remains separate from legacy compatibility. Native
 Ogg now provides a validated page/packet index, index-free granule bisection and
 strict packet capture after seeks, including continuation and multiplexing.
-**This is not the completed goal:** sample-accurate codec seeking, encoding, broader
-conformance/fuzzing and comparative performance work remain. The next milestone
-is sample-accurate Vorbis seeking with pre-roll using the native container APIs.
+Vorbis now provides prefix-based indexing and sample-accurate retained-frame
+seeking with overlap pre-roll, initial/final trimming and repeated stream selection.
+All 1,900 corpus seeks match libvorbisfile positions/counts and PCM criteria.
+**This is not the completed goal:** encoding, broader conformance/legacy/fuzzing,
+index-free codec seeking and comparative performance work remain. The next work
+is broader conformance and explicit legacy compatibility before measured pipeline
+optimization and independent native encoding validation.
 
 ## Normative sources
 

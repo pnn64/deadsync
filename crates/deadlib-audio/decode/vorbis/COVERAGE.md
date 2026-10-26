@@ -1,6 +1,6 @@
 # Vorbis coverage and numerical evidence
 
-Status: **raw-packet synthesis and streaming Ogg Vorbis mapping implemented**. No full
+Status: **raw synthesis, streaming mapping and indexed sample-accurate seeking implemented**. No full
 Vorbis I conformance or competitive-performance claim is made. The complete
 requested end state remains in the parent work plan.
 
@@ -47,6 +47,17 @@ requested end state remains in the parent work plan.
   Per-channel frame counts and timestamps are exact. Mapping failures are terminal
   until reset. Byte chunks down to one byte, interrupted/fragmented IO, truncation,
   invalid header boundaries and invalid granules are covered.
+* Full container/prefix Vorbis index, cached metadata/setup packets and per-page
+  granule/raw-position/pre-roll landmarks. Exact retained-frame seeks select one
+  preceding valid audio packet, prime overlap, then decode/discard to the target.
+  Raw packet `reset_at` supports caller-managed positions with the same pre-roll.
+  Logical streams can be selected independently through multiplexed input and
+  mixed-rate/layout chains. Index and selected codec storage have separate limits.
+* Repeated forward/backward/end seeks, one-sample/empty files, nonfatal/spanning
+  metadata, ignored packets, complete initial-overlap discard, negative start
+  edits, positive offsets above 2^54, tail trim and nil EOS. Injected read/seek
+  failures are terminal until a successful seek; failed stream switches cannot
+  pair the previous stream with the new codec's setup.
 
 Windows x86-64, rustc 1.99.1 evidence:
 
@@ -103,6 +114,28 @@ Windows x86-64, rustc 1.99.1 evidence:
 * Counting allocator: page-to-PCM mapping of in-page audio packets allocates
   zero times after setup, including final trimming/EOS. This excludes transport
   buffer growth, spanning-packet assembly, setup, metadata and new logical streams.
+* Release tests exhaust **8,242 retained-frame targets** in the short mono,
+  stereo and eight-channel fixtures. Every returned block on the first output
+  page is bit-identical to sequential native synthesis; selected complete
+  suffixes also match. Debug tests sample every 97th target to bound runtime.
+* libvorbisfile 1.3.7: **1,900 repeated sample-accurate seeks across all 38 assets**,
+  **12,032,724 returned channel samples**, exact seek positions/counts and peak/RMS
+  error **5.960464478e-7 / 5.852150475e-8**. Boundary, end, backward and seeded
+  random targets are included. Results:
+  [validation/2026-10-26-seeks.tsv](validation/2026-10-26-seeks.tsv), with the
+  same source hashes as `validation/2026-10-26-assets.sha256`.
+* Generated libvorbisfile seek comparisons include stereo, 8 kHz mono, dependent
+  eight-channel coupling, initial/tail edits, one sample, nil EOS and mixed-rate
+  chains. Symphonia 0.6.1 agrees on generated mono/stereo/edited/broadcast seeks
+  when its packet-level seek is followed by codec pre-roll and timestamp discard.
+* Historical floor-zero packets repacketized unchanged into strict Ogg: 50 seeks,
+  393,218 channel samples, peak/RMS error 1.764297485e-5 / 1.352849024e-6 versus
+  libvorbisfile, within the existing floor-zero bounds. This isolates codec
+  seeking and introduces no exception for the source's invalid Ogg granules.
+* Counting allocator: repeated same-stream seeks plus complete suffix decoding
+  allocate zero times after warming transport capacity for mono/stereo/surround.
+  Raw positioned reset also allocates zero times. Index construction, codec
+  switching and growth of transport/spanning-packet buffers are excluded.
 
 ## Numerical criteria
 
@@ -152,11 +185,17 @@ counts match without discarding comparison samples.
 * Strict final trimming is limited to the last packet's overlap span. Synthetic
   larger trims make libvorbisfile's declared total disagree with its emitted PCM;
   they are rejected rather than silently treated as a compatibility policy.
+* libvorbisfile 1.3.7 reports PCM position 900 after requesting retained frame 1
+  in the generated stream with broadcast offset +900. A named external regression
+  records this discrepancy. Native seeking preserves frame 1 / granule 901 and
+  matches sequential PCM; the Symphonia pre-roll comparison also covers this case.
 
 ## Remaining required work
 
-* Sample-accurate seeking/pre-roll/repeated seeks, container seek/index APIs and
-  broader malformed packet concealment differential validation.
+* Index-free/sparse codec seeking and measured startup/seek optimizations. The
+  indexed reader eagerly scans the full container and all audio mode prefixes;
+  it does not decode every audio payload during construction. Broader malformed
+  packet concealment differential validation remains necessary.
 * Official conformance material, unusual/legacy encoders, malformed/fuzz corpora,
   real ITGmania/StepMania song packs. Repository assets are only initial coverage.
   No nonstandard legacy compatibility policy has been added.
@@ -167,5 +206,7 @@ counts match without discarding comparison samples.
 Raw packet and full-container comparisons are separate: raw PCM tests assign
 unknown granules and omit EOS trimming; `ogg_mapping` tests independently use
 libvorbisfile and Symphonia's container demuxer with real timestamps and trim.
-Neither establishes seeking correctness. External reference APIs remain in
+The separate `seeking` suite checks pre-roll, exact requested positions, retained
+suffixes and repeated seeks. These fixtures/corpus checks do not establish full
+Vorbis conformance or competitive performance. External reference APIs remain in
 separate test helpers.

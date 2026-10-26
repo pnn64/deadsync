@@ -70,12 +70,104 @@ pub enum OggEvent<'a> {
 }
 
 #[derive(Default)]
-struct Timing {
-    audio_packets: u64,
-    raw_end: u64,
-    origin: Option<i128>,
-    frames: u64,
+pub(crate) struct Timing {
+    pub(crate) raw_end: u64,
+    pub(crate) origin: Option<i128>,
+    pub(crate) frames: u64,
     last_span: u64,
+}
+pub(crate) struct Crop {
+    pub(crate) skip: usize,
+    pub(crate) keep: usize,
+    pub(crate) start_frame: u64,
+    pub(crate) start_granule: u64,
+}
+impl Timing {
+    pub(crate) fn advance(
+        &mut self,
+        raw_start: u64,
+        frames: usize,
+        has_granule: bool,
+        page: PageHeader,
+        ends_packet: bool,
+    ) -> Result<Option<Crop>, Error> {
+        self.raw_end = raw_start
+            .checked_add(frames as u64)
+            .ok_or(Error::LimitExceeded("PCM frame position"))?;
+        self.last_span = frames as u64;
+        if frames == 0 {
+            return Ok(None);
+        }
+        if self.origin.is_none() {
+            let origin = if has_granule {
+                let end = granule(page.granule_position)? as i128;
+                // A reduced first audio page that is also EOS describes tail
+                // padding; initial and final trim cannot be distinguished there.
+                if page.is_eos() && end <= self.raw_end as i128 {
+                    0
+                } else {
+                    end - self.raw_end as i128
+                }
+            } else {
+                0
+            };
+            if origin != 0 && (!has_granule || !ends_packet) {
+                return Err(Error::Invalid(
+                    "nonzero initial offset requires the second audio packet to flush its page",
+                ));
+            }
+            if origin < -(frames as i128) {
+                return Err(Error::Invalid("initial trim exceeds first overlap span"));
+            }
+            self.origin = Some(origin);
+        }
+        let start = self.origin.unwrap() + raw_start as i128;
+        let skip = (-start).clamp(0, frames as i128) as usize;
+        let keep = if page.is_eos() {
+            (granule(page.granule_position)? as i128 - start).clamp(0, frames as i128) as usize
+        } else {
+            frames
+        };
+        if has_granule {
+            check_granule(self, page, frames as u64)?;
+        }
+        if keep < skip {
+            return Err(Error::Invalid("negative retained PCM interval"));
+        }
+        let crop = Crop {
+            skip,
+            keep,
+            start_frame: self.frames,
+            start_granule: (start + skip as i128) as u64,
+        };
+        self.frames = self
+            .frames
+            .checked_add((keep - skip) as u64)
+            .ok_or(Error::LimitExceeded("stream frame count"))?;
+        Ok(Some(crop))
+    }
+    pub(crate) fn check_page(&self, page: PageHeader) -> Result<(), Error> {
+        if self.origin.is_none() && self.raw_end == 0 {
+            if page.granule_position != 0 {
+                return Err(Error::Invalid("granule before any complete overlap output"));
+            }
+            return Ok(());
+        }
+        check_granule(self, page, self.last_span)
+    }
+    pub(crate) fn end(&self, id: StreamId, page: PageHeader) -> Result<StreamEnd, Error> {
+        let origin = self.origin.unwrap_or(0).max(0) as u64;
+        let end = granule(page.granule_position)?;
+        if end.checked_sub(origin) != Some(self.frames) {
+            return Err(Error::Invalid("final Vorbis sample count"));
+        }
+        Ok(StreamEnd {
+            stream: id,
+            frames: self.frames,
+            start_granule: origin,
+            end_granule: end,
+        })
+    }
 }
 struct Stream {
     id: StreamId,
@@ -196,7 +288,7 @@ impl OggDecoder {
                     return Err(Error::Invalid("setup page granule"));
                 }
             } else if page.completed_packets() != 0 || header.is_eos() {
-                check_page_end(stream, header)?;
+                stream.timing.check_page(header)?;
             }
         }
         if header.is_eos() {
@@ -204,17 +296,7 @@ impl OggDecoder {
                 if stream.phase != 3 {
                     return Err(Error::Invalid("EOS before all Vorbis headers"));
                 }
-                let origin = stream.timing.origin.unwrap_or(0).max(0) as u64;
-                let end = granule(header.granule_position)?;
-                if end.checked_sub(origin) != Some(stream.timing.frames) {
-                    return Err(Error::Invalid("final Vorbis sample count"));
-                }
-                emit(OggEvent::StreamEnd(StreamEnd {
-                    stream: info.id,
-                    frames: stream.timing.frames,
-                    start_granule: origin,
-                    end_granule: end,
-                }));
+                emit(OggEvent::StreamEnd(stream.timing.end(info.id, header)?));
             }
             let ended = streams.swap_remove(index);
             *memory -= ended.memory;
@@ -241,21 +323,17 @@ impl OggDecoder {
                 return Err(Error::LimitExceeded("active Ogg streams"));
             }
             reserve(streams, 1)?;
-            let info = if packet.data.starts_with(b"\x01vorbis") {
-                if page_len != 58 || page.granule_position != 0 {
-                    return Err(Error::Invalid(
-                        "Vorbis identification page must be 58 bytes at granule zero",
-                    ));
-                }
-                Some(StreamInfo {
-                    id,
-                    identification: Identification::parse(packet.data)?,
-                    metadata: Metadata::default(),
-                })
-            } else {
-                emit(OggEvent::IgnoredStream(id));
-                None
-            };
+            let info =
+                if let Some(identification) = read_identification(packet.data, page, page_len)? {
+                    Some(StreamInfo {
+                        id,
+                        identification,
+                        metadata: Metadata::default(),
+                    })
+                } else {
+                    emit(OggEvent::IgnoredStream(id));
+                    None
+                };
             streams.push(Stream {
                 id,
                 info,
@@ -276,36 +354,11 @@ impl OggDecoder {
         };
         match stream.phase {
             1 => {
-                let mut limits = options.limits;
                 let available = options.max_stream_memory - *memory;
-                limits.max_comment_bytes = limits.max_comment_bytes.min(available);
-                limits.max_comments = limits
-                    .max_comments
-                    .min(available / core::mem::size_of::<core::ops::Range<usize>>());
-                let metadata = match Comments::parse(packet.data, &limits) {
-                    Ok(comments) => {
-                        let required = comments
-                            .comments
-                            .len()
-                            .checked_mul(core::mem::size_of::<core::ops::Range<usize>>())
-                            .and_then(|n| n.checked_add(comments.vendor.len()))
-                            .and_then(|n| {
-                                comments
-                                    .comments
-                                    .iter()
-                                    .try_fold(n, |n, field| n.checked_add(field.len()))
-                            });
-                        if required.is_none_or(|n| n > available) {
-                            return Err(Error::LimitExceeded("active stream memory"));
-                        }
-                        comments.to_owned()?
-                    }
-                    Err(error @ (Error::EndOfPacket | Error::Invalid("comment framing bit"))) => {
-                        emit(OggEvent::CommentError { stream: id, error });
-                        Metadata::default()
-                    }
-                    Err(error) => return Err(error),
-                };
+                let (metadata, warning) = read_metadata(packet.data, options.limits, available)?;
+                if let Some(error) = warning {
+                    emit(OggEvent::CommentError { stream: id, error });
+                }
                 charge(memory, metadata.storage_bytes(), options)?;
                 stream.memory += metadata.storage_bytes();
                 info.metadata = metadata;
@@ -348,63 +401,23 @@ impl OggDecoder {
                 let Some(block) = decoder.decode(packet.data)? else {
                     return Ok(());
                 };
-                let timing = &mut stream.timing;
-                timing.audio_packets += 1;
-                timing.raw_end = block.start_frame + block.frames as u64;
-                timing.last_span = block.frames as u64;
-                if block.frames == 0 {
+                let Some(crop) = stream.timing.advance(
+                    block.start_frame,
+                    block.frames,
+                    packet.info.granule_position.is_some(),
+                    page,
+                    ends_packet,
+                )?
+                else {
                     return Ok(());
-                }
-                if timing.origin.is_none() {
-                    let origin = if packet.info.granule_position.is_some() {
-                        let end = granule(page.granule_position)? as i128;
-                        // A single audio page can trim the tail. Its shorter
-                        // final granule must not be mistaken for initial trim.
-                        if page.is_eos() && end <= timing.raw_end as i128 {
-                            0
-                        } else {
-                            end - timing.raw_end as i128
-                        }
-                    } else {
-                        0
-                    };
-                    if origin != 0 && (packet.info.granule_position.is_none() || !ends_packet) {
-                        return Err(Error::Invalid(
-                            "nonzero initial offset requires the second audio packet to flush its page",
-                        ));
-                    }
-                    if origin < -(block.frames as i128) {
-                        return Err(Error::Invalid("initial trim exceeds first overlap span"));
-                    }
-                    timing.origin = Some(origin);
-                }
-                let origin = timing.origin.unwrap();
-                let start = origin + block.start_frame as i128;
-                let skip = (-start).clamp(0, block.frames as i128) as usize;
-                let keep = if page.is_eos() {
-                    (granule(page.granule_position)? as i128 - start).clamp(0, block.frames as i128)
-                        as usize
-                } else {
-                    block.frames
                 };
-                if packet.info.granule_position.is_some() {
-                    check_granule(timing, page, block.frames as u64)?;
-                }
-                if keep < skip {
-                    return Err(Error::Invalid("negative retained PCM interval"));
-                }
-                let start_frame = timing.frames;
-                timing.frames = timing
-                    .frames
-                    .checked_add((keep - skip) as u64)
-                    .ok_or(Error::LimitExceeded("stream frame count"))?;
-                if keep != skip {
+                if crop.keep != crop.skip {
                     emit(OggEvent::Pcm(OggPcm {
                         stream: id,
                         sample_rate: info.identification.sample_rate,
-                        start_frame,
-                        start_granule: (start + skip as i128) as u64,
-                        pcm: block.crop(skip, keep),
+                        start_frame: crop.start_frame,
+                        start_granule: crop.start_granule,
+                        pcm: block.crop(crop.skip, crop.keep),
                     }));
                 }
             }
@@ -429,6 +442,54 @@ impl OggDecoder {
         result
     }
 }
+pub(crate) fn read_identification(
+    packet: &[u8],
+    page: PageHeader,
+    page_len: usize,
+) -> Result<Option<Identification>, Error> {
+    if !packet.starts_with(b"\x01vorbis") {
+        return Ok(None);
+    }
+    if page_len != 58 || page.granule_position != 0 {
+        return Err(Error::Invalid(
+            "Vorbis identification page must be 58 bytes at granule zero",
+        ));
+    }
+    Identification::parse(packet).map(Some)
+}
+pub(crate) fn read_metadata(
+    packet: &[u8],
+    mut limits: Limits,
+    available: usize,
+) -> Result<(Metadata, Option<Error>), Error> {
+    limits.max_comment_bytes = limits.max_comment_bytes.min(available);
+    limits.max_comments = limits
+        .max_comments
+        .min(available / core::mem::size_of::<core::ops::Range<usize>>());
+    match Comments::parse(packet, &limits) {
+        Ok(comments) => {
+            let required = comments
+                .comments
+                .len()
+                .checked_mul(core::mem::size_of::<core::ops::Range<usize>>())
+                .and_then(|n| n.checked_add(comments.vendor.len()))
+                .and_then(|n| {
+                    comments
+                        .comments
+                        .iter()
+                        .try_fold(n, |n, field| n.checked_add(field.len()))
+                });
+            if required.is_none_or(|n| n > available) {
+                return Err(Error::LimitExceeded("active stream memory"));
+            }
+            Ok((comments.to_owned()?, None))
+        }
+        Err(error @ (Error::EndOfPacket | Error::Invalid("comment framing bit"))) => {
+            Ok((Metadata::default(), Some(error)))
+        }
+        Err(error) => Err(error),
+    }
+}
 fn charge(memory: &mut usize, amount: usize, options: &OggOptions) -> Result<(), Error> {
     *memory = memory
         .checked_add(amount)
@@ -436,7 +497,7 @@ fn charge(memory: &mut usize, amount: usize, options: &OggOptions) -> Result<(),
         .ok_or(Error::LimitExceeded("active stream memory"))?;
     Ok(())
 }
-fn granule(value: u64) -> Result<u64, Error> {
+pub(crate) fn granule(value: u64) -> Result<u64, Error> {
     if value > i64::MAX as u64 {
         return Err(Error::Invalid("unknown/negative Vorbis granule"));
     }
@@ -455,15 +516,6 @@ fn check_granule(timing: &Timing, page: PageHeader, span: u64) -> Result<(), Err
         ));
     }
     Ok(())
-}
-fn check_page_end(stream: &Stream, page: PageHeader) -> Result<(), Error> {
-    if stream.timing.origin.is_none() && stream.timing.raw_end == 0 {
-        if page.granule_position != 0 {
-            return Err(Error::Invalid("granule before any complete overlap output"));
-        }
-        return Ok(());
-    }
-    check_granule(&stream.timing, page, stream.timing.last_span)
 }
 
 /// Incremental byte-driven decoder. Each push consumes at most one Ogg page;

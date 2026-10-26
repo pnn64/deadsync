@@ -144,8 +144,41 @@ static void ogg_pcm(FILE *file) {
     }
     ov_clear(&reader);
 }
+static void ogg_seek(FILE *file, const char *requests_path) {
+    OggVorbis_File reader; FILE *requests; uint64_t count, request; int links, i;
+    if (ov_open_callbacks(file, &reader, NULL, 0, OV_CALLBACKS_NOCLOSE)) fail("vorbisfile seek open");
+    links = (int)ov_streams(&reader); put32((uint32_t)links);
+    for (i = 0; i < links; ++i) {
+        vorbis_info *info = ov_info(&reader, i); ogg_int64_t total = ov_pcm_total(&reader, i);
+        if (!info || total < 0) fail("vorbisfile seek information");
+        put32((uint32_t)ov_serialnumber(&reader, i)); put32((uint32_t)info->channels);
+        put32((uint32_t)info->rate); put64((uint64_t)total);
+    }
+    requests = fopen(requests_path, "rb"); if (!requests) fail("seek requests open");
+    count = get64(requests); if (count > 1000000) fail("seek request count");
+    for (request = 0; request < count; ++request) {
+        uint64_t target = get64(requests), remaining = get64(requests);
+        if (target > INT64_MAX || remaining > 100000000) fail("seek request size");
+        if (ov_pcm_total(&reader, -1) == 0 && target == 0) { put64(0); put32(0); continue; }
+        if (ov_pcm_seek(&reader, (ogg_int64_t)target)) fail("vorbisfile PCM seek");
+        put64((uint64_t)ov_pcm_tell(&reader));
+        while (remaining) {
+            float **samples; int link, ch; long frame;
+            long frames = ov_read_float(&reader, &samples, remaining < 4096 ? (int)remaining : 4096, &link);
+            if (frames < 0) fail("vorbisfile seek decode/hole");
+            if (frames == 0) break;
+            put32((uint32_t)frames); put32((uint32_t)link);
+            for (ch = 0; ch < ov_info(&reader, link)->channels; ++ch) for (frame = 0; frame < frames; ++frame) {
+                uint32_t raw; memcpy(&raw, &samples[ch][frame], sizeof(raw)); put32(raw);
+            }
+            remaining -= (uint64_t)frames;
+        }
+        put32(0);
+    }
+    fclose(requests); ov_clear(&reader);
+}
 int main(int argc, char **argv) {
-    FILE *file; if (argc != 3) fail("usage: oracle headers|books|pcm|mdct|oggpcm input");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|books|pcm|mdct|oggpcm input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -155,6 +188,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "pcm")) pcm(file);
     else if (!strcmp(argv[1], "mdct")) transform(file);
     else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file);
+    else if (!strcmp(argv[1], "oggseek")) ogg_seek(file, argv[3]);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;
 }

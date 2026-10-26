@@ -21,6 +21,8 @@ $env:DEADLIB_VORBIS_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation
 cargo test -p deadlib-audio-decode-vorbis --release --test pcm -- --ignored --skip historical_floor0 --skip regenerate_surround_pcm_golden --nocapture
 $env:DEADLIB_VORBIS_MAPPING_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/ogg-pcm.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test ogg_mapping -- --include-ignored --nocapture
+$env:DEADLIB_VORBIS_SEEK_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/seeks.tsv"
+cargo test -p deadlib-audio-decode-vorbis --release --test seeking -- --include-ignored --skip historical_floor0 --nocapture
 ```
 
 Skip clones already present. Use platform executable paths and omit `-A x64`
@@ -44,6 +46,17 @@ Zero-total files have no PCM seek target and produce no sample records. This
 mode verifies final counts, trimming and mixed-rate chains separately from raw
 synthesis. Symphonia's format-reader path checks timestamps, durations and PCM.
 
+`oggseek input.ogg requests.bin` opens libvorbisfile once, then performs repeated
+`ov_pcm_seek`/`ov_pcm_tell`/`ov_read_float` operations without reopening. Requests
+contain a little-endian u64 count followed by u64 global retained-frame positions
+and u64 requested output lengths. Output starts with link metadata as in `oggpcm`,
+then the actual PCM position and planar records for each request. Rust checks
+exact positions/counts and justified PCM error bounds. Positive broadcast-offset
+position disagreement is kept in a named regression, not hidden by tolerances.
+The Symphonia seek test explicitly requests a maximum block of pre-roll, resets
+the codec, and discards by packet timestamp, as required for sample precision
+with its packet-level `FormatReader` seek API.
+
 For the external historical floor-zero fixture (never redistributed in this
 repository):
 
@@ -51,6 +64,7 @@ repository):
 $env:DEADLIB_VORBIS_FLOOR0 = "$pwd/target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg"
 Invoke-WebRequest 'https://samples.ffmpeg.org/A-codecs/vorbis/floor_type_0/vorbis_floor_type_0.ogg' -OutFile $env:DEADLIB_VORBIS_FLOOR0
 cargo test -p deadlib-audio-decode-vorbis --release --test pcm historical_floor0 -- --ignored --nocapture
+cargo test -p deadlib-audio-decode-vorbis --release --test seeking historical_floor0 -- --ignored --nocapture
 ```
 
 Create the destination directory before download. Expected SHA-256:
@@ -59,3 +73,5 @@ This file has known nonconforming container granules. Its raw test deliberately
 uses the independent Rust Ogg development dependency to extract codec packets,
 without relaxing the native container's strict validation. See COVERAGE.md for
 the separate floor-zero numerical criteria and unresolved legacy container work.
+The seek test repacketizes unchanged floor-zero codec packets with strict native
+granules; it validates floor-zero pre-roll without accepting the legacy container.
