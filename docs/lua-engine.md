@@ -60,6 +60,13 @@ checks 5,507 bounded cases against the standalone Windows/MSVC reference. It
 matches 5,493 cases after fixing `math.ldexp` validation order and retains
 fourteen native-module loading failures. The audit exits unsuccessfully until
 those mismatches are resolved; full standard-library parity remains open.
+A [native-call boundary proof](testing/2026-10-26-rust-lua-native-boundary.md)
+now compares an unchanged C module against official Lua and Rust under the
+release `panic=abort` policy. A small development C shim returns Rust dispatch
+errors before jumping within C, preserving Rust stack cleanup and Lua error
+identity. Production native-module loading still requires stable per-thread
+C states, a complete rooted API stack, full C API coverage, and library ownership
+and loader integration. The proof does not close that compatibility gate.
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
 150 live locals, automatic concatenation/array pressure, stale host handles and

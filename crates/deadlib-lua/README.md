@@ -197,6 +197,11 @@ Lua build when both arguments are invalid. The
 also retains failures for unsupported native module loading. It does not
 establish full standard-library parity.
 
+The development [native-boundary proof](../../docs/testing/2026-10-26-rust-lua-native-boundary.md)
+exercises real C callbacks through the Rust host API, including recoverable
+errors under `panic=abort`. It uses a test-only C shim; production `package.loadlib`
+and the complete Lua C API remain unfinished.
+
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function
 replacements, and Lua 5.1 formatting. Patterns use cached compact instructions,
