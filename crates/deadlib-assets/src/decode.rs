@@ -204,16 +204,30 @@ fn png_error(error: png::DecodingError) -> image::ImageError {
     ))
 }
 
-fn image_signature(path: &Path) -> image::ImageResult<[u8; 8]> {
+fn image_source(path: &Path) -> image::ImageResult<([u8; 8], std::fs::File)> {
     let mut signature = [0; 8];
-    std::fs::File::open(path)?.read_exact(&mut signature)?;
-    Ok(signature)
+    let mut input = std::fs::File::open(path)?;
+    input.read_exact(&mut signature)?;
+    Ok((signature, input))
+}
+
+fn image_reader(
+    mut input: std::fs::File,
+    path: &Path,
+) -> image::ImageResult<BufReader<std::fs::File>> {
+    // Reproduce the original reopen if this source cannot rewind.
+    if input.rewind().is_err() {
+        drop(input);
+        input = std::fs::File::open(path)?;
+    }
+    Ok(BufReader::new(input))
 }
 
 /// Raw native texture dimensions before resolution hints or image preparation.
 /// GIF textures use the logical canvas, including the first frame's offsets.
 pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
-    let signature = image_signature(path)?;
+    let (signature, input) = image_source(path)?;
+    drop(input);
     if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
         let reader = gif_reader(path)?;
         if reader.width() == 0 || reader.height() == 0 {
@@ -227,17 +241,20 @@ pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
 }
 
 fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let signature = image_signature(path)?;
+    let (signature, input) = image_source(path)?;
     if signature == *b"\x89PNG\r\n\x1a\n" {
-        return decode_png(path, color_key);
+        return decode_png_from_reader(image_reader(input, path)?, color_key);
     }
     if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
-        return decode_gif(path, color_key);
+        return decode_gif_from_reader(image_reader(input, path)?, color_key);
     }
     if &signature[..2] == b"BM" {
-        if let Some(image) = decode_indexed_bmp(path, color_key)? {
+        if let Some(image) = decode_indexed_bmp_from_reader(image_reader(input, path)?, color_key)?
+        {
             return Ok(image);
         }
+    } else {
+        drop(input);
     }
     let mut image = open_image_fallback(path)?.into_rgba8();
     if color_key {
@@ -258,18 +275,30 @@ fn gif_error(error: gif::DecodingError) -> image::ImageError {
 }
 
 fn gif_reader(path: &Path) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
+    gif_reader_from_reader(BufReader::new(std::fs::File::open(path)?))
+}
+
+fn gif_reader_from_reader(
+    input: BufReader<std::fs::File>,
+) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
     let mut options = gif::DecodeOptions::new();
     options.set_color_output(gif::ColorOutput::Indexed);
     let limit = std::num::NonZeroU64::new(image::Limits::default().max_alloc.unwrap_or(u64::MAX))
         .ok_or_else(image_limit)?;
     options.set_memory_limit(gif::MemoryLimit::Bytes(limit));
-    options
-        .read_info(BufReader::new(std::fs::File::open(path)?))
-        .map_err(gif_error)
+    options.read_info(input).map_err(gif_error)
 }
 
+#[cfg(test)]
 fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let mut reader = gif_reader(path)?;
+    decode_gif_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
+}
+
+fn decode_gif_from_reader(
+    input: BufReader<std::fs::File>,
+    color_key: bool,
+) -> image::ImageResult<RgbaImage> {
+    let mut reader = gif_reader_from_reader(input)?;
     let canvas = [u32::from(reader.width()), u32::from(reader.height())];
     check_image_alloc(canvas)?;
     let frame = reader
@@ -322,11 +351,18 @@ fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     Ok(image)
 }
 
+#[cfg(test)]
+fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
+    decode_indexed_bmp_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
+}
+
 // Native indexed BMP parsing stays together: DIB12/DIB40 headers, palette,
 // padded bottom-up rows and bit unpacking share the file offset contract.
 // Other BMP formats retain the existing decoder pending native mask validation.
-fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
-    let mut input = BufReader::new(std::fs::File::open(path)?);
+fn decode_indexed_bmp_from_reader(
+    mut input: BufReader<std::fs::File>,
+    color_key: bool,
+) -> image::ImageResult<Option<RgbaImage>> {
     let mut header = [0; 54];
     input.read_exact(&mut header[..18])?;
     let le32 = |offset| {
@@ -471,8 +507,16 @@ fn unpack_palette<const N: usize>(row: &[u8], pixels: &mut [[u8; 4]], colors: &[
 // PNG indexed entries must remain distinct: native palette color keying
 // changes the first matching entry, even when another entry has identical RGB.
 // Native PNG loading strips 16-bit channels rather than rescaling their values.
+#[cfg(test)]
 fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let mut decoder = png::Decoder::new(BufReader::new(std::fs::File::open(path)?));
+    decode_png_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
+}
+
+fn decode_png_from_reader(
+    input: BufReader<std::fs::File>,
+    color_key: bool,
+) -> image::ImageResult<RgbaImage> {
+    let mut decoder = png::Decoder::new(input);
     // Match the image loader's allocation limit instead of png's smaller default.
     decoder.set_limits(png::Limits {
         bytes: image::Limits::default()
@@ -510,19 +554,12 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
         let palette = reader.info().palette.as_deref();
         let alpha = reader.info().trns.as_deref();
         let mut colors = [[0, 0, 0, 255]; 256];
-        for (i, rgb) in palette
-            .unwrap_or_default()
-            .chunks_exact(3)
-            .enumerate()
-        {
+        for (i, rgb) in palette.unwrap_or_default().chunks_exact(3).enumerate() {
             colors[i] = [
                 rgb[0],
                 rgb[1],
                 rgb[2],
-                alpha
-                    .and_then(|a| a.get(i))
-                    .copied()
-                    .unwrap_or(255),
+                alpha.and_then(|a| a.get(i)).copied().unwrap_or(255),
             ];
         }
         if color_key {
@@ -1030,3 +1067,9 @@ mod key_kernel;
 
 #[cfg(test)]
 mod palette_perf;
+
+#[cfg(test)]
+mod open_perf;
+
+#[cfg(test)]
+mod open_seek;

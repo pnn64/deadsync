@@ -60,7 +60,7 @@ fn png_and_gif_match_original_pixels_and_errors() {
     let mut checked = 0;
     type Decoder = fn(&Path, bool) -> image::ImageResult<RgbaImage>;
     for path in paths {
-        let signature = image_signature(&path).unwrap();
+        let signature = image_source(&path).unwrap().0;
         let (before, after): (Decoder, Decoder) = if signature == *b"\x89PNG\r\n\x1a\n" {
             (decode_png_original, decode_png)
         } else if &signature[..3] == b"GIF" {

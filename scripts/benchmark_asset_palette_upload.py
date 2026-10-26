@@ -30,8 +30,9 @@ def build(args):
     # Omit the unrelated existing tests; keep production code and the new tests.
     upload = upload[:upload.index("#[cfg(test)]\nmod tests {")]
     names = ["check_image_alloc", "image_limit", "decode_error", "gif_error", "gif_reader",
-             "decode_gif", "decode_indexed_bmp", "unpack_palette", "key_rgba"]
-    bodies = {name: function(decode, name) for name in names}
+             "decode_gif", "decode_indexed_bmp", "unpack_palette", "key_rgba",
+             "gif_reader_from_reader", "decode_gif_from_reader", "decode_indexed_bmp_from_reader"]
+    bodies = {name: function(decode, name) for name in names if re.search(r"\bfn " + name + r"(?:<|\()", decode)}
     source = '#![allow(dead_code)]\n'
     for name, path in [("perf", root / "tests/support/perf.rs"),
                        ("perf_fixture", crate / "src/perf_fixture.rs")]:
@@ -94,10 +95,10 @@ def build(args):
 
 
 def compare(args):
-    logs = Path("target/asset-palette-upload") / args.output.stem
+    logs = getattr(args, "log_root", Path("target/asset-palette-upload")) / args.output.stem
     logs.mkdir(parents=True, exist_ok=True)
-    timing = re.compile(r"((?:palette|uploads|cachepaths)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
-    allocation = re.compile(r"((?:palette|uploads|cachepaths)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
+    timing = re.compile(r"((?:palette|uploads|cachepaths|open)/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
+    allocation = re.compile(r"((?:palette|uploads|cachepaths|open)/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
     metadata, rows = {}, []
     for version in ["before", "after"]:
         binary = getattr(args, version).resolve()

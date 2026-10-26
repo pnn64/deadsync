@@ -1252,6 +1252,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-image"
+version = "0.1.0"
+
+[[package]]
+name = "deadlib-image-png"
+version = "0.1.0"
+dependencies = [
+ "deadlib-image",
+ "flate2",
+ "png",
+]
+
+[[package]]
 name = "deadlib-input-native"
 version = "0.1.0"
 dependencies = [

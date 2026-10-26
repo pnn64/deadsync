@@ -1,0 +1,6 @@
+
+running 2 tests
+test decode::open_perf::dispatch_matches_committed_image_corpus ... ok
+test decode::open_perf::dispatch_matches_frozen_pixels_error_categories_and_dimensions ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.31s

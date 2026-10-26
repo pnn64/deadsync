@@ -163,7 +163,7 @@ fn indexed_decoders_match_original_pixels_and_errors() {
             if !path.is_file() {
                 continue;
             }
-            let signature = image_signature(&path).unwrap();
+            let signature = image_source(&path).unwrap().0;
             for key in [false, true] {
                 if signature == *b"\x89PNG\r\n\x1a\n" {
                     assert_eq!(

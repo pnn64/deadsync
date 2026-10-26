@@ -1,0 +1,115 @@
+--- a/crates/deadlib-assets/src/decode.rs
++++ b/crates/deadlib-assets/src/decode.rs
+@@ -207 +207 @@
+-fn image_signature(path: &Path) -> image::ImageResult<[u8; 8]> {
++fn image_source(path: &Path) -> image::ImageResult<([u8; 8], std::fs::File)> {
+@@ -209,2 +209,15 @@
+-    std::fs::File::open(path)?.read_exact(&mut signature)?;
+-    Ok(signature)
++    let mut input = std::fs::File::open(path)?;
++    input.read_exact(&mut signature)?;
++    Ok((signature, input))
++}
++
++fn image_reader(
++    mut input: std::fs::File,
++    path: &Path,
++) -> image::ImageResult<BufReader<std::fs::File>> {
++    // Reproduce the original reopen if this source cannot rewind.
++    if input.rewind().is_err() {
++        drop(input);
++        input = std::fs::File::open(path)?;
++    }
++    Ok(BufReader::new(input))
+@@ -216 +229,2 @@
+-    let signature = image_signature(path)?;
++    let (signature, input) = image_source(path)?;
++    drop(input);
+@@ -230 +244 @@
+-    let signature = image_signature(path)?;
++    let (signature, input) = image_source(path)?;
+@@ -232 +246 @@
+-        return decode_png(path, color_key);
++        return decode_png_from_reader(image_reader(input, path)?, color_key);
+@@ -235 +249 @@
+-        return decode_gif(path, color_key);
++        return decode_gif_from_reader(image_reader(input, path)?, color_key);
+@@ -238 +252,2 @@
+-        if let Some(image) = decode_indexed_bmp(path, color_key)? {
++        if let Some(image) = decode_indexed_bmp_from_reader(image_reader(input, path)?, color_key)?
++        {
+@@ -240,0 +256,2 @@
++    } else {
++        drop(input);
+@@ -260,0 +278,6 @@
++    gif_reader_from_reader(BufReader::new(std::fs::File::open(path)?))
++}
++
++fn gif_reader_from_reader(
++    input: BufReader<std::fs::File>,
++) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
+@@ -266,5 +289,4 @@
+-    options
+-        .read_info(BufReader::new(std::fs::File::open(path)?))
+-        .map_err(gif_error)
+-}
+-
++    options.read_info(input).map_err(gif_error)
++}
++
++#[cfg(test)]
+@@ -272 +294,8 @@
+-    let mut reader = gif_reader(path)?;
++    decode_gif_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
++}
++
++fn decode_gif_from_reader(
++    input: BufReader<std::fs::File>,
++    color_key: bool,
++) -> image::ImageResult<RgbaImage> {
++    let mut reader = gif_reader_from_reader(input)?;
+@@ -324,0 +354,5 @@
++#[cfg(test)]
++fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
++    decode_indexed_bmp_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
++}
++
+@@ -328,2 +362,4 @@
+-fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
+-    let mut input = BufReader::new(std::fs::File::open(path)?);
++fn decode_indexed_bmp_from_reader(
++    mut input: BufReader<std::fs::File>,
++    color_key: bool,
++) -> image::ImageResult<Option<RgbaImage>> {
+@@ -473,0 +510 @@
++#[cfg(test)]
+@@ -475 +512,8 @@
+-    let mut decoder = png::Decoder::new(BufReader::new(std::fs::File::open(path)?));
++    decode_png_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
++}
++
++fn decode_png_from_reader(
++    input: BufReader<std::fs::File>,
++    color_key: bool,
++) -> image::ImageResult<RgbaImage> {
++    let mut decoder = png::Decoder::new(input);
+@@ -513,5 +557 @@
+-        for (i, rgb) in palette
+-            .unwrap_or_default()
+-            .chunks_exact(3)
+-            .enumerate()
+-        {
++        for (i, rgb) in palette.unwrap_or_default().chunks_exact(3).enumerate() {
+@@ -522,4 +562 @@
+-                alpha
+-                    .and_then(|a| a.get(i))
+-                    .copied()
+-                    .unwrap_or(255),
++                alpha.and_then(|a| a.get(i)).copied().unwrap_or(255),
+@@ -1032,0 +1070,6 @@
++
++#[cfg(test)]
++mod open_perf;
++
++#[cfg(test)]
++mod open_seek;
