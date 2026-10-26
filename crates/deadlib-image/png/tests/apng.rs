@@ -313,7 +313,8 @@ fn malformed_animation_controls_and_aggregate_limits() {
                 limits: Limits {
                     max_frames: 0,
                     ..Default::default()
-                }
+                },
+                ..Default::default()
             }
         ),
         Err(Error::LimitExceeded)
@@ -325,7 +326,8 @@ fn malformed_animation_controls_and_aggregate_limits() {
                 limits: Limits {
                     max_output_bytes: 19,
                     ..Default::default()
-                }
+                },
+                ..Default::default()
             }
         ),
         Err(Error::LimitExceeded)

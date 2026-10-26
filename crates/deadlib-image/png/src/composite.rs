@@ -8,7 +8,7 @@ fn validate(png: &Png) -> Result<(), Error> {
     png.image
         .validate()
         .map_err(|_| Error::Invalid("image samples"))?;
-    crate::codec::validate_pixels(png)?;
+    crate::codec::validate_pixels(png, crate::PalettePolicy::RecoverBlack)?;
     let color = png.image.color_type;
     if let Some(t) = &png.transparency {
         match t {
@@ -28,6 +28,7 @@ fn validate(png: &Png) -> Result<(), Error> {
             depth: png.image.bit_depth,
             interlaced: png.interlaced,
         },
+        crate::PalettePolicy::RecoverBlack,
     )
 }
 
@@ -63,7 +64,9 @@ fn rgba(png: &Png, image: &Image, index: usize) -> [u16; 4] {
         }
         ColorType::Indexed => {
             let index = raw(base) as usize;
-            let [r, g, b] = png.palette[index];
+            let Some(&[r, g, b]) = png.palette.get(index) else {
+                return [0, 0, 0, 65535];
+            };
             let a = match &png.transparency {
                 Some(Transparency::Palette(v)) => v.get(index).copied().unwrap_or(255),
                 _ => 255,
@@ -104,6 +107,7 @@ fn canvas(png: &Png, limits: Limits) -> Result<Vec<u16>, Error> {
 impl Png {
     /// Explicitly expand to RGBA16 without applying gamma, ICC or HDR transforms.
     /// Sub-byte samples and palette channels scale to the complete u16 range.
+    /// Out-of-range palette indices expand to opaque black (PNG 3, 13.1).
     pub fn to_rgba16(&self, limits: Limits) -> Result<Image, Error> {
         validate(self)?;
         let mut out = canvas(self, limits)?;

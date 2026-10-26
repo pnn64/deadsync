@@ -119,6 +119,7 @@ pub struct Animation {
 pub(crate) struct Decoder {
     h: Header,
     limits: Limits,
+    palette_policy: crate::PalettePolicy,
     control: Option<(u32, u32)>,
     sequence: u32,
     default: bool,
@@ -130,7 +131,8 @@ fn image_bytes(h: Header) -> Result<usize, Error> {
     h.sample_bytes()
 }
 impl Decoder {
-    pub(crate) fn new(h: Header, limits: Limits) -> Result<Self, Error> {
+    pub(crate) fn new(h: Header, options: crate::DecodeOptions) -> Result<Self, Error> {
+        let limits = options.limits;
         let remaining = limits
             .max_output_bytes
             .checked_sub(image_bytes(h)?)
@@ -138,6 +140,7 @@ impl Decoder {
         Ok(Self {
             h,
             limits,
+            palette_policy: options.palette_policy,
             control: None,
             sequence: 0,
             default: false,
@@ -184,7 +187,7 @@ impl Decoder {
                 h.interlaced,
                 self.limits.max_output_bytes,
             )?;
-            validate_image(&image, self.h, palette)?;
+            validate_image(&image, self.h, palette, self.palette_policy)?;
             self.frames.push(Frame {
                 control,
                 image: Some(image),
@@ -271,7 +274,12 @@ impl Decoder {
     }
 }
 
-fn validate_image(image: &Image, h: Header, palette: usize) -> Result<(), Error> {
+fn validate_image(
+    image: &Image,
+    h: Header,
+    palette: usize,
+    policy: crate::PalettePolicy,
+) -> Result<(), Error> {
     image
         .validate()
         .map_err(|_| Error::Invalid("APNG frame samples"))?;
@@ -282,13 +290,13 @@ fn validate_image(image: &Image, h: Header, palette: usize) -> Result<(), Error>
         let Samples::U8(values) = &image.samples else {
             return Err(Error::Invalid("indexed APNG storage"));
         };
-        if values.iter().any(|&v| v as usize >= palette) {
+        if policy == crate::PalettePolicy::Strict && values.iter().any(|&v| v as usize >= palette) {
             return Err(Error::Invalid("APNG palette index"));
         }
     }
     Ok(())
 }
-pub(crate) fn validate(png: &Png, h: Header) -> Result<(), Error> {
+pub(crate) fn validate(png: &Png, h: Header, policy: crate::PalettePolicy) -> Result<(), Error> {
     if let Some(a) = &png.animation {
         if a.frames.is_empty() || a.frames.len() > 0x7fff_ffff || a.plays > 0x7fff_ffff {
             return Err(Error::Invalid("APNG control"));
@@ -305,7 +313,7 @@ pub(crate) fn validate(png: &Png, h: Header) -> Result<(), Error> {
                     .image
                     .as_ref()
                     .ok_or(Error::Invalid("missing APNG frame image"))?;
-                validate_image(image, h, png.palette.len())?;
+                validate_image(image, h, png.palette.len(), policy)?;
                 if image.width != f.control.width || image.height != f.control.height {
                     return Err(Error::Invalid("APNG image/control dimensions"));
                 }

@@ -25,6 +25,18 @@ impl Default for Limits {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DecodeOptions {
     pub limits: Limits,
+    pub palette_policy: PalettePolicy,
+}
+
+/// Handling of pixel indices outside PLTE. Native samples always retain their
+/// original indices; expansion and APNG rendering use opaque black for them.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PalettePolicy {
+    /// PNG Third Edition 13.1 recovery, without changing samples or the palette.
+    #[default]
+    RecoverBlack,
+    /// Report an error instead of accepting an out-of-range palette index.
+    Strict,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -201,7 +213,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         return Err(Error::Invalid("IHDR must be first"));
     }
     let header = Header::parse(data)?;
-    let mut animation_decoder = crate::apng::Decoder::new(header, limits)?;
+    let mut animation_decoder = crate::apng::Decoder::new(header, *options)?;
     let expected = scanline::filtered_size(
         header.width,
         header.height,
@@ -336,18 +348,19 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         ancillary,
         animation,
     };
-    validate_pixels(&png)?;
+    validate_pixels(&png, options.palette_policy)?;
     Ok(png)
 }
 
-pub(crate) fn validate_pixels(png: &Png) -> Result<(), Error> {
+pub(crate) fn validate_pixels(png: &Png, policy: PalettePolicy) -> Result<(), Error> {
     if png.image.color_type == ColorType::Indexed {
         let Samples::U8(samples) = &png.image.samples else {
             return Err(Error::Invalid("indexed sample storage"));
         };
         if png.palette.is_empty()
             || png.palette.len() > 1usize << png.image.bit_depth
-            || samples.iter().any(|&v| v as usize >= png.palette.len())
+            || (policy == PalettePolicy::Strict
+                && samples.iter().any(|&v| v as usize >= png.palette.len()))
         {
             return Err(Error::Invalid("palette index outside PLTE"));
         }
@@ -402,7 +415,7 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
     {
         return Err(Error::Invalid("encoding dimensions or chunk size"));
     }
-    validate_pixels(png)?;
+    validate_pixels(png, PalettePolicy::Strict)?;
     if png.palette.len() > 256
         || (!png.palette.is_empty()
             && matches!(
@@ -428,7 +441,7 @@ pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<He
             ..Default::default()
         },
     )?;
-    crate::apng::validate(png, header)?;
+    crate::apng::validate(png, header, PalettePolicy::Strict)?;
     match &png.transparency {
         None => (),
         Some(Transparency::Grayscale(_)) if header.color == ColorType::Grayscale => (),

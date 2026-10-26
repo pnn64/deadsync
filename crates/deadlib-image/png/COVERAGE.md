@@ -14,6 +14,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
+| Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
 | Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
@@ -169,19 +170,26 @@ the C oracle explicitly ignored and separately verified above. The source copy
 is retained; `independent-build.log` records the run. The original application
 workspace and image loaders are not used by this isolated build.
 
-New conformance audit finding: PNG Third Edition 13.1 specifies opaque-black
-recovery for out-of-range palette indices. The present decoders/render helpers
-still reject those malformed indices, so that recovery rule is **not achieved**.
-Also audit UTF-8 handling against the Encoding Standard recommendation (13.7),
-and separate encoder field requirements from decoder-tolerated values. These
-gaps take priority over additional optimization. The official Third Edition
+Conformance recovery milestone: PNG Third Edition 13.1 opaque-black recovery is
+implemented by explicit RGBA16 expansion and APNG rendering. Buffered and streamed
+decoding retain original indices and palette entries; `PalettePolicy::Strict`
+is available for rejection instead. Both encoders reject invalid indices before
+writing output. Tests cover all four indexed depths, plain/Adam7, both default
+image roles, SOURCE/OVER, indices only in fdAT, every index in each depth's
+sample range, one-byte chunk/IO boundaries, borrowed row events and an independent
+Rust png fixture. The malformed-input suite still rejects illegal palette
+structure and uses explicit strict policy for index errors.
+
+Continue auditing UTF-8 handling against the Encoding Standard recommendation
+(13.7), and separate encoder field requirements from decoder-tolerated values.
+These gaps take priority over additional optimization. The official Third Edition
 errata currently corrects an mDCV example without changing conformance.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
-1. Address the known Third Edition indexed-color recovery gap, audit UTF-8 and
-   encoder/decoder field distinctions, and validate normative error behavior.
+1. Audit UTF-8 and encoder/decoder field distinctions, and validate normative
+   error behavior beyond the now-covered indexed-color recovery rule.
 2. Extend independent conformance evidence to the full Third Edition clause
    matrix, including ancillary semantic edge cases, BCP47 language-tag grammar,
    all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.

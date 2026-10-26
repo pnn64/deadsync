@@ -67,12 +67,6 @@ fn independent_known_answer_and_normative_failures() {
         file(&[h.clone(), image_data(&[0, 1, 2]), e.clone()]),
         file(&[h.clone(), chunk(b"PLTE", &[1, 2, 3]), d.clone(), e.clone()]),
         file(&[ihdr(3, 1), d.clone(), e.clone()]),
-        file(&[
-            ihdr(3, 1),
-            chunk(b"PLTE", &[1, 2, 3]),
-            image_data(&[0, 128]),
-            e.clone(),
-        ]),
         file(&[ihdr(3, 1), chunk(b"PLTE", &[0; 9]), d.clone(), e.clone()]),
         file(&[h.clone(), chunk(b"tRNS", &[0]), d.clone(), e.clone()]),
         file(&[
@@ -132,7 +126,13 @@ fn configured_resource_limits() {
         },
     ] {
         assert_eq!(
-            decode_with_options(&bytes, &DecodeOptions { limits }),
+            decode_with_options(
+                &bytes,
+                &DecodeOptions {
+                    limits,
+                    ..Default::default()
+                }
+            ),
             Err(Error::LimitExceeded)
         );
     }

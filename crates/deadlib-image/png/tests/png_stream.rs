@@ -110,7 +110,13 @@ fn every_truncation_limits_and_reader_errors() {
         },
     ] {
         assert_eq!(
-            decode_reader(reader(&bytes, 1), &DecodeOptions { limits }),
+            decode_reader(
+                reader(&bytes, 1),
+                &DecodeOptions {
+                    limits,
+                    ..Default::default()
+                }
+            ),
             Err(Error::LimitExceeded)
         );
     }

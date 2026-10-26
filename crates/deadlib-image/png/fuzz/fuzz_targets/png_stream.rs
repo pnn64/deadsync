@@ -1,7 +1,7 @@
 #![no_main]
 use deadlib_image_png::{
-    DecodeEvent, DecodeOptions, DecodeStatus, Image, ImageKind, Limits, Row, RowSamples, Samples,
-    StreamDecoder, decode_with_options,
+    DecodeEvent, DecodeOptions, DecodeStatus, Image, ImageKind, Limits, PalettePolicy, Row,
+    RowSamples, Samples, StreamDecoder, decode_with_options,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -49,6 +49,11 @@ fuzz_target!(|bytes: &[u8]| {
             max_metadata_bytes: 1 << 16,
             max_chunks: 4096,
             max_frames: 64,
+        },
+        palette_policy: if bytes.first().copied().unwrap_or(0) & 1 == 0 {
+            PalettePolicy::RecoverBlack
+        } else {
+            PalettePolicy::Strict
         },
     };
     let expected = decode_with_options(&fixed, &options);

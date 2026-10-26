@@ -21,7 +21,11 @@ dependencies supply independent Rust png and flate2 reference implementations.
 `cargo tree -p deadlib-image-png --edges normal` verifies the production graph.
 
 `decode_with_options` exposes explicit input/output/metadata/chunk limits. CRC
-verification is mandatory. Invalid critical data is an error, unknown critical
+verification is mandatory. Out-of-range palette indices are retained, and
+`to_rgba16` / APNG rendering display them as opaque black (PNG Third Edition
+13.1). Set `DecodeOptions::palette_policy` to `PalettePolicy::Strict` to reject
+them while decoding. Both encoders always reject out-of-range indices. Other
+invalid critical data is an error, unknown critical
 chunks are rejected, and unknown ancillary chunks are retained with placement.
 On reencoding, unrecognized ancillary chunks with the unsafe-to-copy flag are
 omitted because critical image chunks are rewritten (PNG Third Edition 14.2).

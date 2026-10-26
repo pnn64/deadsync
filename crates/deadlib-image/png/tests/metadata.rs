@@ -232,6 +232,7 @@ fn metadata_constraints_and_expansion_budget() {
             max_metadata_bytes: 1024,
             ..Default::default()
         },
+        ..Default::default()
     };
     assert_eq!(
         decode_with_options(&bytes, &options),

@@ -11,7 +11,13 @@ fuzz_target!(|bytes: &[u8]| {
         max_chunks: 4096,
         max_frames: 64,
     };
-    let Ok(actual) = decode_with_options(bytes, &DecodeOptions { limits }) else {
+    let Ok(actual) = decode_with_options(
+        bytes,
+        &DecodeOptions {
+            limits,
+            ..Default::default()
+        },
+    ) else {
         return;
     };
     let mut decoder = png::Decoder::new(Cursor::new(bytes));

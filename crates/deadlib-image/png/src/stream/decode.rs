@@ -526,8 +526,11 @@ impl StreamDecoder {
                             .as_mut()
                             .ok_or(Error::Invalid("missing image decoder"))?;
                         if !rows.is_done() {
-                            let (used, event) =
-                                rows.feed(&input[pos..pos + available], self.palette.len())?;
+                            let (used, event) = rows.feed(
+                                &input[pos..pos + available],
+                                self.palette.len(),
+                                self.options.palette_policy,
+                            )?;
                             self.crc.update(&input[pos..pos + used]);
                             self.left -= used;
                             self.input_left -= used;

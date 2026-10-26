@@ -112,7 +112,12 @@ impl ImageRows {
         Ok(())
     }
     /// Consume compressed bytes until one complete row is ready or input ends.
-    pub(super) fn feed(&mut self, input: &[u8], palette: usize) -> Result<(usize, bool), Error> {
+    pub(super) fn feed(
+        &mut self,
+        input: &[u8],
+        palette: usize,
+        policy: crate::PalettePolicy,
+    ) -> Result<(usize, bool), Error> {
         self.advance()?;
         let output = if self.complete {
             &mut [][..]
@@ -147,7 +152,7 @@ impl ImageRows {
                     );
                 }
             }
-            if self.header.color == ColorType::Indexed {
+            if self.header.color == ColorType::Indexed && policy == crate::PalettePolicy::Strict {
                 let values = if self.header.depth == 8 {
                     &self.row[1..]
                 } else {
