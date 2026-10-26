@@ -44,3 +44,8 @@ measures 695–1085 MiB/s; encoding ratios and match selection remain unresolved
 Some tool builds ran on the shared host during measurement, so these are local
 directional results, not controlled comparative claims. Exact sample parity was
 rechecked with the normal suite and all 611 libpng oracle cases after the change.
+
+A subsequent weighted 16-byte Adler-32 grouping trial did not show a material
+pipeline improvement (`benchmark-adler-groups.tsv`, 40 iterations) and was
+reverted. The simpler scalar checksum remains, with added modulus/block boundary
+known-answer checks. SIMD and further filter/inflate profiling remain open.

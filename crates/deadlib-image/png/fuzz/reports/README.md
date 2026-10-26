@@ -16,3 +16,7 @@ generated corpus, seed 782347, `-max_len=65536 -timeout=5 -rss_limit_mb=1024
 Full stdout/stderr are in the adjacent log files. libFuzzer coverage/feature
 counts include reference implementations and are not native-only coverage.
 No claim of exhaustive validation or fuzz saturation is made.
+
+Toolchain: Rust nightly 1.101.0 (76456a688, 2026-10-25), cargo-fuzz 0.13.2,
+Debian C++ 14.2.0, Linux 6.6.87.2-microsoft-standard-WSL2 x86-64. The instrumented
+binary's `__asan_init` symbol was verified with `nm` after both runs.

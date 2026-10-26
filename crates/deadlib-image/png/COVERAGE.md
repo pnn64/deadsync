@@ -104,3 +104,26 @@ native-accepted output against flate2; PNG compares native samples on inputs als
 accepted by Rust png. These are smoke checks, not exhaustive fuzz evidence.
 The seed generator and full logs are in the crate. Longer structured campaigns,
 CRC-repaired chunk mutations and APNG frame differential fuzzing remain required.
+
+## Remaining completion gates
+
+The requested end state is not yet achieved. Continue without application
+integration, preserving unrelated work and committing verified milestones:
+
+1. Implement genuinely incremental, bounded zlib/PNG decoding and encoding,
+   including arbitrary read/write fragmentation, frame/row boundaries, and
+   resource/error behavior without replaying complete input prefixes.
+2. Extend independent conformance evidence to the full Third Edition clause
+   matrix, including ancillary semantic edge cases, BCP47 language-tag grammar,
+   all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
+3. Add shrinking/generated image properties, structured CRC-repaired mutations,
+   APNG differential fuzzing, longer sanitizer campaigns and coverage review.
+4. Improve compression ratio/match selection and profile filters/inflation on a
+   representative external corpus. Add controlled repetitions, allocation and
+   peak-memory measurements, streaming benchmarks, and comparable libpng timings.
+   Select SIMD only after a measured bottleneck justifies it. Current decode and
+   compression results do not meet the competitive-performance objective.
+5. Audit every original requirement against current code and reproducible
+   evidence; publish the final coverage/performance/limitations documentation.
+   Keep the goal active until every gate is proved, rather than treating the
+   present feature list or green tests as full conformance.

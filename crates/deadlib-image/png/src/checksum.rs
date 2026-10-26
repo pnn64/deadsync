@@ -96,4 +96,35 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn adler_block_and_modulus_boundaries() {
+        for len in [
+            0,
+            1,
+            7,
+            15,
+            16,
+            17,
+            31,
+            32,
+            33,
+            5551,
+            5552,
+            5553,
+            5567,
+            5568,
+            5552 * 3,
+        ] {
+            for byte in [0u8, 1, 127, 255] {
+                let data = vec![byte; len];
+                let (mut a, mut b) = (1u32, 0u32);
+                for &v in &data {
+                    a = (a + u32::from(v)) % 65521;
+                    b = (b + a) % 65521;
+                }
+                assert_eq!(adler32(&data), (b << 16) | a, "len={len} byte={byte}");
+            }
+        }
+    }
 }
