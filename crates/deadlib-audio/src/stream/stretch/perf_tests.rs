@@ -15,7 +15,7 @@ fn noise(len: usize, mut seed: u32) -> Vec<f32> {
         .collect()
 }
 
-fn reference(buffer: &[f32], pattern: &[f32]) -> usize {
+pub(super) fn reference(buffer: &[f32], pattern: &[f32]) -> usize {
     let mut best = f32::INFINITY;
     let mut offset = 0;
     for (index, candidate) in buffer.windows(pattern.len()).enumerate() {

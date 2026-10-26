@@ -654,10 +654,8 @@ fn find_closest_match_after_first(buffer: &[f32], correlate: &[f32], mut best_sc
     best_offset
 }
 
-/// Two independent L1 searches sharing candidate traversal and sample-loop
-/// bookkeeping. Scores retain the scalar operation order of
-/// [`find_closest_match`], so each selected offset is bit-for-bit identical to
-/// running that function separately for the two channels.
+/// Search each channel independently using the exact, grouped PCM scorer.
+/// Dual-mono buffers share the selected offset and need only one search.
 fn find_closest_match_stereo(
     left_buffer: &[f32],
     left_correlate: &[f32],
@@ -666,123 +664,13 @@ fn find_closest_match_stereo(
 ) -> (usize, usize) {
     debug_assert_eq!(left_buffer.len(), right_buffer.len());
     debug_assert_eq!(left_correlate.len(), right_correlate.len());
-    if left_buffer.len() <= left_correlate.len() {
-        return (0, 0);
-    }
-    let distance = left_buffer.len() - left_correlate.len();
-    let (left_first, right_first) = correlation_score_stereo(
-        &left_buffer[..left_correlate.len()],
-        left_correlate,
-        &right_buffer[..right_correlate.len()],
-        right_correlate,
-        f32::INFINITY,
-        f32::INFINITY,
-    );
-    let mut left_best_offset = 0usize;
-    let mut right_best_offset = 0usize;
-    let mut left_best_score = if left_first.is_nan() {
-        f32::INFINITY
+    let left = find_closest_match(left_buffer, left_correlate);
+    let right = if left_buffer == right_buffer && left_correlate == right_correlate {
+        left
     } else {
-        left_first
+        find_closest_match(right_buffer, right_correlate)
     };
-    let mut right_best_score = if right_first.is_nan() {
-        f32::INFINITY
-    } else {
-        right_first
-    };
-    let left_exact = left_first == 0.0;
-    let right_exact = right_first == 0.0;
-    if left_exact && right_exact {
-        return (0, 0);
-    }
-    // Dual-mono material needs only one search. Check after the perfect-first
-    // exit so silence stays cheap, and reject differing first scores before
-    // comparing the samples. Floating equality safely leaves NaNs on the
-    // independent-channel path; signed-zero differences have the same L1 score.
-    if left_first == right_first && left_buffer == right_buffer && left_correlate == right_correlate
-    {
-        let offset = find_closest_match_after_first(left_buffer, left_correlate, left_best_score);
-        return (offset, offset);
-    }
-    for offset in 1..=distance {
-        let (left_score, right_score) = correlation_score_stereo(
-            &left_buffer[offset..offset + left_correlate.len()],
-            left_correlate,
-            &right_buffer[offset..offset + right_correlate.len()],
-            right_correlate,
-            left_best_score,
-            right_best_score,
-        );
-        if left_score < left_best_score {
-            left_best_score = left_score;
-            left_best_offset = offset;
-            if left_score == 0.0 && right_best_score == 0.0 {
-                return (left_best_offset, right_best_offset);
-            }
-        }
-        if right_score < right_best_score {
-            right_best_score = right_score;
-            right_best_offset = offset;
-            if right_score == 0.0 && left_best_score == 0.0 {
-                return (left_best_offset, right_best_offset);
-            }
-        }
-    }
-    (left_best_offset, right_best_offset)
-}
-
-#[inline(always)]
-fn correlation_score_stereo(
-    left_frames: &[f32],
-    left_correlate: &[f32],
-    right_frames: &[f32],
-    right_correlate: &[f32],
-    left_best: f32,
-    right_best: f32,
-) -> (f32, f32) {
-    let mut left_score = 0.0f32;
-    let mut right_score = 0.0f32;
-    let mut left_active = left_best > 0.0;
-    let mut right_active = right_best > 0.0;
-    let mut index = 0usize;
-    while index + 8 <= left_correlate.len() {
-        if left_active {
-            left_score += (left_frames[index] - left_correlate[index]).abs();
-            left_score += (left_frames[index + 1] - left_correlate[index + 1]).abs();
-            left_score += (left_frames[index + 2] - left_correlate[index + 2]).abs();
-            left_score += (left_frames[index + 3] - left_correlate[index + 3]).abs();
-            left_score += (left_frames[index + 4] - left_correlate[index + 4]).abs();
-            left_score += (left_frames[index + 5] - left_correlate[index + 5]).abs();
-            left_score += (left_frames[index + 6] - left_correlate[index + 6]).abs();
-            left_score += (left_frames[index + 7] - left_correlate[index + 7]).abs();
-            left_active = left_score < left_best;
-        }
-        if right_active {
-            right_score += (right_frames[index] - right_correlate[index]).abs();
-            right_score += (right_frames[index + 1] - right_correlate[index + 1]).abs();
-            right_score += (right_frames[index + 2] - right_correlate[index + 2]).abs();
-            right_score += (right_frames[index + 3] - right_correlate[index + 3]).abs();
-            right_score += (right_frames[index + 4] - right_correlate[index + 4]).abs();
-            right_score += (right_frames[index + 5] - right_correlate[index + 5]).abs();
-            right_score += (right_frames[index + 6] - right_correlate[index + 6]).abs();
-            right_score += (right_frames[index + 7] - right_correlate[index + 7]).abs();
-            right_active = right_score < right_best;
-        }
-        index += 8;
-        if !left_active && !right_active {
-            return (left_score, right_score);
-        }
-    }
-    while index < left_correlate.len() {
-        if left_active {
-            left_score += (left_frames[index] - left_correlate[index]).abs();
-        }
-        if right_active {
-            right_score += (right_frames[index] - right_correlate[index]).abs();
-        }
-        index += 1;
-    }
-    (left_score, right_score)
+    (left, right)
 }
 
 #[inline(always)]
@@ -889,7 +777,7 @@ mod tests {
     }
 
     #[test]
-    fn fused_stereo_correlation_matches_independent_searches() {
+    fn stereo_correlation_matches_scalar_oracle() {
         for correlate_len in [1usize, 7, 8, 9, 31, 64, 127, 360] {
             let make_samples = |len: usize, multiplier: u32, increment: u32| {
                 (0..len)
@@ -919,8 +807,8 @@ mod tests {
                     &right_pattern,
                 ),
                 (
-                    find_closest_match(&left_search, &left_pattern),
-                    find_closest_match(&right_search, &right_pattern),
+                    perf_tests::reference(&left_search, &left_pattern),
+                    perf_tests::reference(&right_search, &right_pattern),
                 ),
                 "correlate_len={correlate_len}"
             );
