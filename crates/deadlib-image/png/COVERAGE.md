@@ -16,7 +16,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
-| Bounded streaming with arbitrary input boundaries | Pending | Pending |
+| Bounded streaming with arbitrary input boundaries | Native `zlib::Inflater` and fragmented-output tests | Incremental inflation verified; PNG row/chunk decoder and streaming encoder pending |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 611 external libpng native-sample checks and normal Rust png / PNGSuite checks pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
 | Fuzz targets and reproducible campaigns | Isolated `fuzz/`, seed generator, checked-in reports | 10,000 PNG and 20,000 zlib AddressSanitizer smoke runs pass; long campaigns and coverage audit pending |
@@ -106,6 +106,16 @@ The seed generator and full logs are in the crate. Longer structured campaigns,
 CRC-repaired chunk mutations and APNG frame differential fuzzing remain required.
 
 ## Remaining completion gates
+
+Streaming milestone 4a: `zlib::Inflater` keeps a single 32 KiB ring, two flat
+Huffman tables and bounded grammar state. Caller-supplied input/output fragments
+can be one byte or empty; partial fields, repeats, literals, matches and checksum
+bytes resume without replay. Tests cross six input sizes and six output sizes
+for independent stored/fixed/dynamic encodings, stress wraparound and 32 KiB
+distances, and run the 400 mixed-block / 65 special-tree fixtures with one-byte
+input and output. Prefix consumption leaves trailing bytes untouched; errors are
+terminal, output limits are cumulative and checksum verification is mandatory.
+Decoder-owned memory stays below 40 KiB across every tested fragment.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:

@@ -3,6 +3,7 @@ use deadlib_image_png::{
     zlib::{self, Compression},
 };
 use std::io::{Read, Write};
+mod support;
 
 fn data() -> Vec<Vec<u8>> {
     let mut cases = vec![
@@ -177,6 +178,10 @@ fn mixed_block_alignment_and_prefetched_stored_bytes() {
             raw.extend((0..stored).map(|n| n as u8));
             raw.push(b'B');
             let compressed = bits.finish(&raw);
+            assert_eq!(
+                support::inflate(&compressed, 1, 1, raw.len()).unwrap(),
+                (raw.clone(), compressed.len())
+            );
             assert_eq!(zlib::decompress(&compressed, raw.len()).unwrap(), raw);
             let mut reference = Vec::new();
             flate2::read::ZlibDecoder::new(compressed.as_slice())
@@ -212,6 +217,10 @@ fn dynamic_literal_only_and_single_symbol_trees() {
         bits.put(u32::from(length != 0), 1); // EOB is code 1, or sole code 0.
         let raw = vec![b'a'; length];
         let compressed = bits.finish(&raw);
+        assert_eq!(
+            support::inflate(&compressed, 1, 1, raw.len()).unwrap(),
+            (raw.clone(), compressed.len())
+        );
         assert_eq!(zlib::decompress(&compressed, length).unwrap(), raw);
         let mut reference = Vec::new();
         flate2::read::ZlibDecoder::new(compressed.as_slice())

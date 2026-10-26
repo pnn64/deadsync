@@ -45,3 +45,10 @@ operations. Animation timing and repetition are controlled by the caller.
 
 The [external libpng oracle](tests/oracle/README.md) independently validates
 native samples and stays outside the production dependency graph.
+
+`zlib::Inflater` accepts arbitrary input/output slices through `process`, returns
+exact consumed/written counts and `NeedInput`/`NeedOutput`/`Done`, and owns a
+bounded 32 KiB history ring. Only `Done` proves a complete checksum-verified zlib
+stream. `finish` reports truncated input; errors remain terminal. The caller
+retains any bytes after the completed stream. See `tests/inflate_stream.rs` for
+driving examples and zero-capacity boundary cases.

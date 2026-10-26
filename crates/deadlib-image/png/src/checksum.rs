@@ -54,17 +54,32 @@ pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
 }
 
 pub(crate) fn adler32(input: &[u8]) -> u32 {
-    let mut a = 1u32;
-    let mut b = 0u32;
-    for block in input.chunks(5552) {
-        for &byte in block {
-            a += u32::from(byte);
-            b += a;
-        }
-        a %= 65521;
-        b %= 65521;
+    let mut checksum = Adler32::new();
+    checksum.update(input);
+    checksum.finish()
+}
+
+pub(crate) struct Adler32 {
+    a: u32,
+    b: u32,
+}
+impl Adler32 {
+    pub(crate) fn new() -> Self {
+        Self { a: 1, b: 0 }
     }
-    (b << 16) | a
+    pub(crate) fn update(&mut self, input: &[u8]) {
+        for block in input.chunks(5552) {
+            for &byte in block {
+                self.a += u32::from(byte);
+                self.b += self.a;
+            }
+            self.a %= 65521;
+            self.b %= 65521;
+        }
+    }
+    pub(crate) fn finish(&self) -> u32 {
+        (self.b << 16) | self.a
+    }
 }
 
 #[cfg(test)]

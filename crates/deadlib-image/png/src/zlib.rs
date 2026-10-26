@@ -1,6 +1,9 @@
 //! Native RFC 1950/1951 compression. No dictionaries are permitted in PNG.
 use crate::{Error, checksum::adler32, reserve};
 
+mod inflate;
+pub use inflate::{InflateProgress, Inflater, StreamStatus};
+
 const LENGTH_BASE: [usize; 29] = [
     3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
     163, 195, 227, 258,
@@ -44,7 +47,7 @@ impl<'a> Bits<'a> {
         if self.count < n {
             return Err(Error::Truncated);
         }
-        let value = self.word as u32 & ((1u32 << n) - 1);
+        let value = self.word as u32 & ((1u64 << n) - 1) as u32;
         self.word >>= n;
         self.count -= n;
         Ok(value)
@@ -138,16 +141,23 @@ impl Huffman {
             bits.count -= n;
             return Ok((entry >> 4) as usize);
         }
+        bits.fill(self.max);
         let mut code = 0u16;
-        for n in 1..=self.max as usize {
-            code = (code << 1) | bits.read(1)? as u16;
+        for n in 1..=self.max.min(bits.count) as usize {
+            code = (code << 1) | ((bits.word >> (n - 1)) & 1) as u16;
             if code >= self.first[n] && code - self.first[n] < self.counts[n] {
+                bits.word >>= n;
+                bits.count -= n as u8;
                 return Ok(
                     self.symbols[(self.offsets[n] + code - self.first[n]) as usize] as usize,
                 );
             }
         }
-        Err(Error::Invalid("invalid Huffman code"))
+        if bits.count < self.max {
+            Err(Error::Truncated)
+        } else {
+            Err(Error::Invalid("invalid Huffman code"))
+        }
     }
 }
 
