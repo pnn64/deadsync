@@ -1,9 +1,11 @@
 //! Independent GIF87a/GIF89a codec. Indexed pixels are always retained exactly.
 //!
-//! [`Decoder`] accepts arbitrary input fragments. Timing is in original
+//! [`Decoder`] accepts arbitrary input fragments. [`Compositor`] optionally
+//! renders onto a reusable RGBA8 logical screen. Timing is in original
 //! centiseconds; scheduling, user input, and loop playback belong to the caller.
 #![forbid(unsafe_code)]
 
+mod composite;
 mod decode;
 mod encode;
 pub mod lzw;
@@ -52,3 +54,4 @@ impl From<std::io::Error> for Error {
 pub(crate) fn reserve<T>(vec: &mut Vec<T>, extra: usize) -> Result<(), Error> {
     vec.try_reserve(extra).map_err(|_| Error::Allocation)
 }
+pub use composite::{Background, CompositeOptions, Compositor, RenderedFrame, TextRasterizer};

@@ -15,3 +15,10 @@ Unrelated working-tree changes must remain untouched.
 
 Each milestone is committed independently. Completion requires evidence for
 every requested capability, not only successful internal roundtrips.
+
+Completed:
+- Milestone 1: b7bfb9df8; native model/parser/LZW/encoder, all palette sizes,
+  both Rust gif differential directions, interlacing and fragmented input.
+- Milestone 2: compositor and explicit policies; rectangle snapshots, background
+  selection, external palettes, text rendering callback, scoped controls,
+  extension/loop preservation. Nine integration tests pass in debug mode.

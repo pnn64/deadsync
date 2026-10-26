@@ -155,6 +155,23 @@ struct ChannelState {
     last_correlated_pos: usize,
 }
 
+// Keep the per-layout loops out of the packet-control function.
+#[inline(never)]
+fn append_fixed_channels<const CHANNELS: usize>(state: &mut [ChannelState], input: &[i16]) {
+    let state: &mut [ChannelState; CHANNELS] = state
+        .try_into()
+        .expect("channel state matches input layout");
+    let frames = input.as_chunks::<CHANNELS>().0;
+    for channel in state.iter_mut() {
+        channel.data.reserve(frames.len());
+    }
+    for block in frames.chunks((4096 / CHANNELS).max(1)) {
+        for (index, channel) in state.iter_mut().enumerate() {
+            channel.data.extend(block.iter().map(|frame| frame[index]));
+        }
+    }
+}
+
 pub struct SolaStretcher {
     channels: usize,
     sample_rate: u32,
@@ -332,13 +349,16 @@ impl SolaStretcher {
                 let (left, right) = self.state.split_at_mut(1);
                 append_stereo_i16(&mut left[0].data, &mut right[0].data, interleaved);
             }
+            6 => append_fixed_channels::<6>(&mut self.state, interleaved),
+            8 => append_fixed_channels::<8>(&mut self.state, interleaved),
+            16 => append_fixed_channels::<16>(&mut self.state, interleaved),
             _ => {
                 let complete = &interleaved[..frames * self.channels];
                 for channel in &mut self.state {
                     channel.data.reserve(frames);
                 }
                 // 4096 i16 samples occupy 8 KiB, leaving L1 space for the
-                // contiguous f32 outputs even with wide source packets.
+                // contiguous planar i16 output even with wide source packets.
                 let block_samples = (4096 / self.channels).max(1) * self.channels;
                 for block in complete.chunks(block_samples) {
                     for (index, channel) in self.state.iter_mut().enumerate() {

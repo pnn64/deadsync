@@ -120,7 +120,7 @@ def compare(names, output, runs, benchmark):
             retained = {label: dict(re.findall(r"(\w+): (\d+)", values))
                         for label, values in storage.findall(result.stdout)}
             measurements = timing.findall(result.stdout)
-            expected = 6 if benchmark == "benchmark_sola_rates" else 19
+            expected = 19 if benchmark == "benchmark_sola_kernels" else 6
             if len(measurements) != expected or len(counts) != expected:
                 raise ValueError(f"Expected {expected} workloads: {name}")
             for label, cpu, ns in measurements:
@@ -176,7 +176,8 @@ def main():
     parser.add_argument("--test-source", type=Path)
     parser.add_argument("--compare", nargs="+")
     parser.add_argument("--verify", nargs="+")
-    parser.add_argument("--benchmark", choices=["benchmark_sola_kernels", "benchmark_sola_rates"],
+    parser.add_argument("--benchmark", choices=["benchmark_sola_kernels", "benchmark_sola_rates",
+                                              "benchmark_sola_packets"],
                         default="benchmark_sola_kernels")
     parser.add_argument("--runs", type=int, default=4)
     parser.add_argument("--output", type=Path)

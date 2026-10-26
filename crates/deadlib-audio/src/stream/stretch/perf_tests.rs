@@ -166,7 +166,7 @@ fn stream_input(channels: usize, kind: &str) -> Vec<i16> {
 
 #[test]
 fn deinterleaving_preserves_every_i16_value_and_channel() {
-    for channels in [1, 2, 3, 4, 6, 8, 16] {
+    for channels in [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 16] {
         let input = (0..65_536 * channels)
             .map(|i| ((i / channels) as u16).wrapping_add((i % channels) as u16 * 97) as i16)
             .collect::<Vec<_>>();
@@ -177,6 +177,28 @@ fn deinterleaving_preserves_every_i16_value_and_channel() {
             for (frame, &sample) in channel.data.iter().enumerate() {
                 assert_eq!(sample, input[frame * channels + index]);
             }
+        }
+    }
+}
+
+#[test]
+fn fixed_layout_unpacking_handles_block_boundaries_and_reused_buffers() {
+    for channels in [6, 8, 16] {
+        let frames = 4096 / channels + 3;
+        let input = (0..frames * channels)
+            .map(|i| (i as u32).wrapping_mul(503).wrapping_add(65_500) as i16)
+            .collect::<Vec<_>>();
+        let mut stretch = SolaStretcher::new(channels, 48_000);
+        for _ in 0..2 {
+            stretch.push_interleaved_i16(&input);
+            assert_eq!(stretch.buffered_source_frames(), frames);
+            for (index, channel) in stretch.state.iter().enumerate() {
+                assert_eq!(channel.data.len(), frames);
+                for (frame, &sample) in channel.data.iter().enumerate() {
+                    assert_eq!(sample, input[frame * channels + index]);
+                }
+            }
+            stretch.reset();
         }
     }
 }
@@ -250,8 +272,10 @@ fn dump_sola_pcm() {
         (2, 48_000, "left-silent"),
         (2, 96_000, "tone"),
         (2, 48_000, "silence"),
+        (5, 48_000, "noise"),
         (6, 48_000, "noise"),
         (8, 44_100, "tone"),
+        (16, 48_000, "noise"),
     ] {
         let input = stream_input(channels, kind);
         for (packet, cap) in [(137, 7), (997, 256), (4096, 997)] {

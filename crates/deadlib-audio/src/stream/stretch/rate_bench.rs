@@ -28,3 +28,32 @@ fn benchmark_sola_rates() {
         bench::measure(&label, 2, work);
     }
 }
+
+#[test]
+#[ignore = "CPU-cycle benchmark; packet-sized planar unpacking"]
+fn benchmark_sola_packets() {
+    for channels in [6, 8, 16] {
+        let samples = stream_input(channels, "noise");
+        for frames in [137, 997] {
+            let input = &samples[..frames * channels];
+            let mut stretch = SolaStretcher::new(channels, 48_000);
+            stretch.push_interleaved_i16(input);
+            let mut hash = 0xcbf29ce484222325u64;
+            for channel in &stretch.state {
+                for &sample in &channel.data {
+                    hash = (hash ^ u64::from(sample as u16)).wrapping_mul(0x100000001b3);
+                }
+            }
+            let label = format!("sola/packet-{channels}ch-{frames}");
+            println!("{label}: fingerprint {hash:016x}");
+            let mut work = || {
+                stretch.reset();
+                stretch.push_interleaved_i16(black_box(input));
+                black_box(&stretch.state);
+            };
+            let (_, counts) = allocations::measure(&mut work);
+            println!("{label}: allocation {counts:?}");
+            bench::measure(&label, 256, work);
+        }
+    }
+}
