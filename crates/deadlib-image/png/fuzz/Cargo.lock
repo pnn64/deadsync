@@ -62,6 +62,7 @@ dependencies = [
 name = "deadlib-image-png-fuzz"
 version = "0.0.0"
 dependencies = [
+ "crc32fast",
  "deadlib-image-png",
  "flate2",
  "libfuzzer-sys",

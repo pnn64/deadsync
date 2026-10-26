@@ -110,6 +110,10 @@ fn metadata_wire_and_typed_roundtrip_with_reference_text() {
     }
     let encoded = encode(&png, &EncodeOptions::default()).unwrap();
     let decoded = decode(&encoded).unwrap();
+    assert_eq!(
+        deadlib_image_png::decode_reader(encoded.as_slice(), &Default::default()).unwrap(),
+        decoded
+    );
     let expected = png.metadata(Limits::default()).unwrap();
     let actual = decoded.metadata(Limits::default()).unwrap();
     // Encoder groups by legal placement, preserving order within each group.

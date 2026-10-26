@@ -332,12 +332,42 @@ pub(crate) fn validate(
     palette: usize,
     limits: Limits,
 ) -> Result<Vec<Metadata>, Error> {
-    let mut unique = HashSet::new();
-    let mut names = HashSet::new();
-    let mut remaining = limits.max_metadata_bytes;
+    let mut validator = Validator::new(limits.max_metadata_bytes);
     let mut out = Vec::new();
     for c in chunks {
-        remaining = remaining
+        out.push(validator.check(c, h, palette)?);
+    }
+    validator.finish()?;
+    Ok(out)
+}
+
+pub(crate) struct Validator {
+    unique: HashSet<[u8; 4]>,
+    names: HashSet<Vec<u8>>,
+    remaining: usize,
+}
+impl Validator {
+    pub(crate) fn new(limit: usize) -> Self {
+        Self {
+            unique: HashSet::new(),
+            names: HashSet::new(),
+            remaining: limit,
+        }
+    }
+    pub(crate) fn remaining(&self) -> usize {
+        self.remaining
+    }
+    pub(crate) fn has(&self, kind: &[u8; 4]) -> bool {
+        self.unique.contains(kind)
+    }
+    pub(crate) fn check(
+        &mut self,
+        c: &AncillaryChunk,
+        h: Header,
+        palette: usize,
+    ) -> Result<Metadata, Error> {
+        self.remaining = self
+            .remaining
             .checked_sub(c.data.len())
             .ok_or(Error::LimitExceeded)?;
         let early = matches!(
@@ -358,22 +388,24 @@ pub(crate) fn validate(
             return Err(Error::Invalid("ancillary chunk must follow PLTE"));
         }
         if (early || matches!(&c.kind, b"bKGD" | b"hIST" | b"pHYs" | b"eXIf" | b"tIME"))
-            && !unique.insert(c.kind)
+            && !self.unique.insert(c.kind)
         {
             return Err(Error::Invalid("duplicate ancillary chunk"));
         }
-        let value = parse(c, h, palette, &mut remaining)?;
+        let value = parse(c, h, palette, &mut self.remaining)?;
         if let Metadata::SuggestedPalette { name, .. } = &value
-            && !names.insert(name.clone())
+            && !self.names.insert(name.clone())
         {
             return Err(Error::Invalid("duplicate suggested palette name"));
         }
-        out.push(value);
+        Ok(value)
     }
-    if unique.contains(b"mDCV") && !unique.contains(b"cICP") {
-        return Err(Error::Invalid("mDCV requires cICP"));
+    pub(crate) fn finish(&self) -> Result<(), Error> {
+        if self.unique.contains(b"mDCV") && !self.unique.contains(b"cICP") {
+            return Err(Error::Invalid("mDCV requires cICP"));
+        }
+        Ok(())
     }
-    Ok(out)
 }
 
 impl Png {

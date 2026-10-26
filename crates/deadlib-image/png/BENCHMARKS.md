@@ -49,3 +49,14 @@ A subsequent weighted 16-byte Adler-32 grouping trial did not show a material
 pipeline improvement (`benchmark-adler-groups.tsv`, 40 iterations) and was
 reverted. The simpler scalar checksum remains, with added modulus/block boundary
 known-answer checks. SIMD and further filter/inflate profiling remain open.
+
+`benchmark-streaming-decode.tsv` adds the new `decode-reader` (collect final native
+images) and `decode-rows` (consume and discard borrowed native rows) operations.
+The latter includes an `image_pipeline_bytes` column for the measured decoder
+buffer capacities; zero on other operations means unmeasured. This excludes
+metadata, caller input, retained image output and process RSS. On the same shared
+host, 20 iterations measured collected streaming decode at 248–413 MiB/s and
+row consumption at 288–519 MiB/s, with 40,762 bytes of image-pipeline storage for
+RGBA8 and 48,954 for RGBA16, independent of image height. These are local
+directional results with concurrent activity on the host, not controlled parity
+claims. Rust png still measured 727–1310 MiB/s on these fixtures.

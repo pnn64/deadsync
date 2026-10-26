@@ -111,7 +111,7 @@ pub(crate) struct Header {
     pub interlaced: bool,
 }
 impl Header {
-    fn parse(data: &[u8]) -> Result<Self, Error> {
+    pub(crate) fn parse(data: &[u8]) -> Result<Self, Error> {
         if data.len() != 13 {
             return Err(Error::Invalid("IHDR length"));
         }
@@ -132,7 +132,7 @@ impl Header {
             interlaced: data[12] != 0,
         })
     }
-    fn wire(self) -> [u8; 13] {
+    pub(crate) fn wire(self) -> [u8; 13] {
         let mut data = [0; 13];
         data[..4].copy_from_slice(&self.width.to_be_bytes());
         data[4..8].copy_from_slice(&self.height.to_be_bytes());
@@ -140,6 +140,13 @@ impl Header {
         data[9] = self.color as u8;
         data[12] = u8::from(self.interlaced);
         data
+    }
+    pub(crate) fn sample_bytes(self) -> Result<usize, Error> {
+        (self.width as usize)
+            .checked_mul(self.height as usize)
+            .and_then(|n| n.checked_mul(self.color.channels()))
+            .and_then(|n| n.checked_mul(if self.depth == 16 { 2 } else { 1 }))
+            .ok_or(Error::LimitExceeded)
     }
 }
 pub(crate) fn be32(data: &[u8]) -> u32 {

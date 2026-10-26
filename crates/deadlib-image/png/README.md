@@ -33,7 +33,7 @@ values. ICC and Exif payloads remain opaque to this codec. No color management i
 applied implicitly. Color-description precedence is exposed separately.
 
 See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. In particular,
-APNG, streaming and performance validation remain under development.
+Streaming encoding and broader conformance/performance validation remain under development.
 This crate is registered in the workspace but is not used by DeadSync loaders.
 
 APNG frame images retain their original formats. `Animation::default_is_frame`
@@ -52,3 +52,13 @@ bounded 32 KiB history ring. Only `Done` proves a complete checksum-verified zli
 stream. `finish` reports truncated input; errors remain terminal. The caller
 retains any bytes after the completed stream. See `tests/inflate_stream.rs` for
 driving examples and zero-capacity boundary cases.
+
+`StreamDecoder::process` emits borrowed metadata, palette/transparency, APNG
+controls and native sample rows. Plain rows use pass 0; Adam7 rows use passes 1–7
+and expose their x/y/step coordinates within the current image or frame rectangle.
+Only `ImageEnd` verifies the current zlib stream and its data-chunk CRCs; rows
+before it are provisional. `Done` verifies the complete PNG grammar. Push parsing
+leaves bytes after IEND untouched, while `decode_reader(reader, &options)` collects
+final images and rejects trailing bytes like `decode`. The row pipeline keeps a
+bounded number of rows and a 32 KiB history, without complete compressed or
+filtered-image buffers. See `tests/png_stream.rs` for fragmented IO and events.

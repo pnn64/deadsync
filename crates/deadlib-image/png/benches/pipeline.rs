@@ -77,6 +77,27 @@ fn time<T>(mut f: impl FnMut() -> T, iterations: usize) -> u128 {
     }
     start.elapsed().as_nanos() / iterations as u128
 }
+fn row_decode(bytes: &[u8]) -> (usize, usize) {
+    use deadlib_image_png::{DecodeEvent, DecodeOptions, DecodeStatus, StreamDecoder};
+    let mut decoder = StreamDecoder::new(DecodeOptions::default());
+    let mut pos = 0;
+    let mut rows = 0;
+    loop {
+        let progress = decoder.process(&bytes[pos..]).unwrap();
+        pos += progress.consumed;
+        if let Some(DecodeEvent::Row(row)) = decoder.event() {
+            black_box(row.samples);
+            rows += 1;
+        }
+        if progress.status == DecodeStatus::Done {
+            assert_eq!(pos, bytes.len());
+            return (rows, decoder.peak_image_buffer_bytes());
+        }
+        if progress.status == DecodeStatus::NeedInput && pos == bytes.len() {
+            decoder.finish().unwrap();
+        }
+    }
+}
 fn main() {
     let iterations = std::env::var("DEADLIB_PNG_BENCH_ITERS")
         .ok()
@@ -84,7 +105,7 @@ fn main() {
         .unwrap_or(20)
         .max(1);
     println!(
-        "case\tcodec\toperation\titerations\tencoded_bytes\tsample_bytes\tns_per_image\tMiB_per_second"
+        "case\tcodec\toperation\titerations\tencoded_bytes\tsample_bytes\tns_per_image\tMiB_per_second\timage_pipeline_bytes"
     );
     for (name, png) in [
         ("gradient-rgba8", fixture(512, 512, 8, false)),
@@ -105,6 +126,14 @@ fn main() {
         }
         let filtered_bytes = raw.len() + png.image.height as usize;
         assert_eq!(decode(&bytes).unwrap().image, png.image);
+        assert_eq!(
+            deadlib_image_png::decode_reader(bytes.as_slice(), &Default::default())
+                .unwrap()
+                .image,
+            png.image
+        );
+        let (row_count, row_memory) = row_decode(&bytes);
+        assert_eq!(row_count, png.image.height as usize);
         assert_eq!(reference_decode(&bytes), png.image.samples);
         let native = encode(&png, &EncodeOptions::default()).unwrap();
         assert_eq!(reference_decode(&native), png.image.samples);
@@ -150,6 +179,27 @@ fn main() {
             ),
             (
                 "deadlib-image-png",
+                "decode-reader",
+                bytes.len(),
+                time(
+                    || {
+                        deadlib_image_png::decode_reader(
+                            black_box(bytes.as_slice()),
+                            &Default::default(),
+                        )
+                        .unwrap()
+                    },
+                    iterations,
+                ),
+            ),
+            (
+                "deadlib-image-png",
+                "decode-rows",
+                bytes.len(),
+                time(|| row_decode(black_box(&bytes)), iterations),
+            ),
+            (
+                "deadlib-image-png",
                 "encode",
                 native.len(),
                 time(
@@ -168,9 +218,14 @@ fn main() {
             ),
         ] {
             println!(
-                "{name}\t{codec}\t{operation}\t{iterations}\t{size}\t{}\t{ns}\t{:.3}",
+                "{name}\t{codec}\t{operation}\t{iterations}\t{size}\t{}\t{ns}\t{:.3}\t{}",
                 raw.len(),
-                raw.len() as f64 * 1e9 / ns as f64 / (1024. * 1024.)
+                raw.len() as f64 * 1e9 / ns as f64 / (1024. * 1024.),
+                if operation == "decode-rows" {
+                    row_memory
+                } else {
+                    0
+                },
             );
         }
     }

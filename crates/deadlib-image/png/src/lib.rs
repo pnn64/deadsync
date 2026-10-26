@@ -7,6 +7,7 @@ mod codec;
 mod composite;
 mod metadata;
 mod scanline;
+mod stream;
 pub mod zlib;
 
 pub use codec::{
@@ -18,6 +19,10 @@ pub use apng::{Animation, BlendOp, DisposeOp, Frame, FrameControl};
 pub use composite::{Compositor, RenderedFrame};
 pub use deadlib_image::{ColorType, Image, Samples};
 pub use metadata::Metadata;
+pub use stream::{
+    DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, Row, RowSamples,
+    StreamDecoder, decode_reader,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {

@@ -11,13 +11,13 @@ const ADAM7: [(u32, u32, u32, u32); 7] = [
     (0, 1, 1, 2),
 ];
 const PLAIN: [(u32, u32, u32, u32); 1] = [(0, 0, 1, 1)];
-fn passes(interlaced: bool) -> &'static [(u32, u32, u32, u32)] {
+pub(crate) fn passes(interlaced: bool) -> &'static [(u32, u32, u32, u32)] {
     if interlaced { &ADAM7 } else { &PLAIN }
 }
-fn extent(size: u32, start: u32, step: u32) -> usize {
+pub(crate) fn extent(size: u32, start: u32, step: u32) -> usize {
     size.saturating_sub(start).div_ceil(step) as usize
 }
-fn row_bytes(width: usize, channels: usize, depth: u8) -> Result<usize, Error> {
+pub(crate) fn row_bytes(width: usize, channels: usize, depth: u8) -> Result<usize, Error> {
     width
         .checked_mul(channels)
         .and_then(|v| v.checked_mul(depth as usize))
@@ -66,7 +66,7 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
     }
 }
 
-fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> Result<(), Error> {
+pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> Result<(), Error> {
     match filter {
         0 => (),
         1 => {

@@ -32,9 +32,23 @@ const fn crc_slices() -> [[u32; 256]; 8] {
 const CRC_SLICES: [[u32; 256]; 8] = crc_slices();
 
 pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
-    let mut crc = !0u32;
+    let mut checksum = Crc32::new();
     for part in parts {
-        let (groups, tail) = part.as_chunks::<8>();
+        checksum.update(part);
+    }
+    checksum.finish()
+}
+
+pub(crate) struct Crc32 {
+    state: u32,
+}
+impl Crc32 {
+    pub(crate) fn new() -> Self {
+        Self { state: !0 }
+    }
+    pub(crate) fn update(&mut self, bytes: &[u8]) {
+        let mut crc = self.state;
+        let (groups, tail) = bytes.as_chunks::<8>();
         for &bytes in groups {
             let value = u64::from_le_bytes(bytes) ^ u64::from(crc);
             crc = CRC_SLICES[7][(value & 255) as usize]
@@ -49,8 +63,11 @@ pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
         for &byte in tail {
             crc = (crc >> 8) ^ CRC_TABLE[((crc as u8) ^ byte) as usize];
         }
+        self.state = crc;
     }
-    !crc
+    pub(crate) fn finish(&self) -> u32 {
+        !self.state
+    }
 }
 
 pub(crate) fn adler32(input: &[u8]) -> u32 {

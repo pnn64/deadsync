@@ -35,7 +35,7 @@ impl FrameControl {
                 self.delay_den
             })
     }
-    fn validate(self, h: Header, default: bool) -> Result<(), Error> {
+    pub(crate) fn validate(self, h: Header, default: bool) -> Result<(), Error> {
         if self.width == 0
             || self.height == 0
             || self.width > h.width
@@ -52,7 +52,7 @@ impl FrameControl {
         }
         Ok(())
     }
-    fn parse(data: &[u8], h: Header, default: bool) -> Result<Self, Error> {
+    pub(crate) fn parse(data: &[u8], h: Header, default: bool) -> Result<Self, Error> {
         if data.len() != 26 {
             return Err(Error::Invalid("fcTL length"));
         }
@@ -80,7 +80,7 @@ impl FrameControl {
         value.validate(h, default)?;
         Ok(value)
     }
-    fn wire(self, sequence: u32) -> [u8; 26] {
+    pub(crate) fn wire(self, sequence: u32) -> [u8; 26] {
         let mut out = [0; 26];
         for (n, v) in [
             sequence,
@@ -127,11 +127,7 @@ pub(crate) struct Decoder {
     remaining: usize,
 }
 fn image_bytes(h: Header) -> Result<usize, Error> {
-    (h.width as usize)
-        .checked_mul(h.height as usize)
-        .and_then(|n| n.checked_mul(h.color.channels()))
-        .and_then(|n| n.checked_mul(if h.depth == 16 { 2 } else { 1 }))
-        .ok_or(Error::LimitExceeded)
+    h.sample_bytes()
 }
 impl Decoder {
     pub(crate) fn new(h: Header, limits: Limits) -> Result<Self, Error> {

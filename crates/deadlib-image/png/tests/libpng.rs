@@ -3,6 +3,11 @@ use std::{fs, path::Path, process::Command};
 
 fn verify(oracle: &Path, path: &Path) {
     let actual = decode(&fs::read(path).unwrap()).unwrap();
+    assert_eq!(
+        deadlib_image_png::decode_reader(fs::File::open(path).unwrap(), &Default::default())
+            .unwrap(),
+        actual
+    );
     let output = Command::new(oracle).arg(path).output().unwrap();
     assert!(
         output.status.success(),

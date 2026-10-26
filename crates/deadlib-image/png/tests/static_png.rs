@@ -132,6 +132,14 @@ fn complete_native_format_filter_and_adam7_matrix() {
                             let encoded = encode(&original, &options).unwrap();
                             let actual = decode(&encoded).unwrap();
                             assert_eq!(
+                                deadlib_image_png::decode_reader(
+                                    encoded.as_slice(),
+                                    &Default::default()
+                                )
+                                .unwrap(),
+                                actual
+                            );
+                            assert_eq!(
                                 actual.image, original.image,
                                 "{color:?} {depth} {w}x{h} {filter:?} {interlaced}"
                             );

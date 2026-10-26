@@ -16,7 +16,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
-| Bounded streaming with arbitrary input boundaries | Native `zlib::Inflater` and fragmented-output tests | Incremental inflation verified; PNG row/chunk decoder and streaming encoder pending |
+| Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader`, fragmentation tests | PNG/APNG decoding verified with bounded row buffers; streaming encoding pending |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 611 external libpng native-sample checks and normal Rust png / PNGSuite checks pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
 | Fuzz targets and reproducible campaigns | Isolated `fuzz/`, seed generator, checked-in reports | 10,000 PNG and 20,000 zlib AddressSanitizer smoke runs pass; long campaigns and coverage audit pending |
@@ -77,8 +77,9 @@ three geometries, five filters, both interlace modes). Setup and pinned source
 commits are in `tests/oracle/README.md`. This external test is explicitly ignored
 by ordinary Cargo runs because it needs a separately built C executable.
 
-Current limitations: decoding buffers complete compressed and filtered images;
-incremental bounded streaming, broader malformed/fuzz campaigns, reproducible
+Current limitations: the original slice `decode` path buffers complete compressed
+and filtered images. `StreamDecoder` and `decode_reader` avoid those buffers;
+bounded streaming encoding, broader malformed/fuzz campaigns, reproducible
 benchmarks and measured optimization remain required. ICC/Exif interpretation,
 color management, HDR tone mapping, and animation scheduling are caller concerns.
 The compositor works in stored sample space; no color-management parity is claimed.
@@ -103,7 +104,7 @@ cap, 5-second per-input timeout and 1024 MiB RSS cap. PNG: 10,000 runs, no failu
 native-accepted output against flate2; PNG compares native samples on inputs also
 accepted by Rust png. These are smoke checks, not exhaustive fuzz evidence.
 The seed generator and full logs are in the crate. Longer structured campaigns,
-CRC-repaired chunk mutations and APNG frame differential fuzzing remain required.
+longer structured campaigns and coverage review remain required.
 
 ## Remaining completion gates
 
@@ -117,17 +118,40 @@ input and output. Prefix consumption leaves trailing bytes untouched; errors are
 terminal, output limits are cumulative and checksum verification is mandatory.
 Decoder-owned memory stays below 40 KiB across every tested fragment.
 
+Streaming milestone 4b: `StreamDecoder` parses chunk headers, CRCs, metadata,
+APNG sequence/control fields and native rows without storing IDAT/fdAT payloads
+or complete images. It emits plain/Adam7 rows and validated image boundaries.
+`decode_reader` collects final native images and frames from arbitrary `Read`
+fragments, retries Interrupted, and rejects trailing bytes. Chunk/sample/metadata
+validators are shared with buffered APIs. All 3,240 format cases and the 60 APNG
+combinations also pass through the new collector. PNGSuite (161 valid / 14 invalid)
+and the independent APNG fixture match across 1/2/7/4096-byte reads. Tests cover
+every truncation, IO failures, limits, fused errors, prefix consumption and rows
+that precede a bad data-chunk CRC. `ImageEnd` is never emitted for an unverified
+image. Identical-width 2-row and 4,096-row images report identical pipeline buffer
+capacity. Both buffered and streaming collectors pass the 611 libpng cases.
+
+Two additional Linux AddressSanitizer campaigns pass: 20,000 fragmented zlib
+inputs (389 MiB peak RSS) and 20,000 PNG inputs with repaired CRCs (396 MiB).
+The latter compares buffered acceptance and every native default/APNG-frame row
+sample; the existing buffered differential campaigns supply independent codec
+comparisons. Full logs and deterministic seed generation are checked in.
+The local streaming benchmark reports 248–413 MiB/s for collected images and
+288–519 MiB/s for row consumption, with approximately 40–49 KiB of image-pipeline
+storage for the 512-pixel RGBA fixtures. See `BENCHMARKS.md` for measurement limits.
+
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
-1. Implement genuinely incremental, bounded zlib/PNG decoding and encoding,
-   including arbitrary read/write fragmentation, frame/row boundaries, and
-   resource/error behavior without replaying complete input prefixes.
+1. Complete bounded zlib/PNG encoding to match the new incremental decoders,
+   including arbitrary input/output and write fragmentation, APNG/row boundaries,
+   finish/error behavior and resource bounds without complete payload buffers.
 2. Extend independent conformance evidence to the full Third Edition clause
    matrix, including ancillary semantic edge cases, BCP47 language-tag grammar,
    all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
-3. Add shrinking/generated image properties, structured CRC-repaired mutations,
-   APNG differential fuzzing, longer sanitizer campaigns and coverage review.
+3. Add shrinking/generated image properties, broader structured mutations,
+   independent APNG compositing comparisons, longer sanitizer campaigns and
+   coverage review beyond the current streaming and CRC-repaired smoke targets.
 4. Improve compression ratio/match selection and profile filters/inflation on a
    representative external corpus. Add controlled repetitions, allocation and
    peak-memory measurements, streaming benchmarks, and comparable libpng timings.

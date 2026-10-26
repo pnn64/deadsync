@@ -133,6 +133,11 @@ fn all_formats_apng_default_roles_and_interlace() {
                     )
                     .unwrap();
                     let actual = decode(&bytes).unwrap();
+                    assert_eq!(
+                        deadlib_image_png::decode_reader(bytes.as_slice(), &Default::default())
+                            .unwrap(),
+                        actual
+                    );
                     assert_eq!(actual.image, original.image);
                     assert_eq!(actual.animation, original.animation);
                     let mut reader = png::Decoder::new(Cursor::new(bytes.as_slice()))
