@@ -119,6 +119,9 @@ impl Huffman {
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
+    fn storage_bytes(&self) -> usize {
+        self.nodes.capacity() * core::mem::size_of::<[u32; 2]>()
+    }
 }
 fn add_node(nodes: &mut Vec<[u32; 2]>, limit: usize, budget: &mut Budget) -> Result<u32, Error> {
     if nodes.len() >= limit || nodes.len() >= LEAF as usize {
@@ -139,6 +142,9 @@ pub struct Codebook {
     vectors: Vec<f32>,
 }
 impl Codebook {
+    pub fn storage_bytes(&self) -> usize {
+        self.lengths.capacity() + self.vectors.capacity() * 4 + self.huffman.storage_bytes()
+    }
     pub fn dimensions(&self) -> usize {
         self.dimensions as usize
     }

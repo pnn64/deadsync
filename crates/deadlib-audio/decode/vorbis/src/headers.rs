@@ -3,6 +3,7 @@ use crate::{
     bitpack::{BitReader, BitWriter},
     reserve,
 };
+use core::ops::Range;
 
 pub(crate) fn header(packet: &[u8], kind: u8) -> Result<&[u8], Error> {
     if packet.len() < 7 {
@@ -96,7 +97,7 @@ pub struct CommentField<'a> {
     pub value: &'a [u8],
 }
 impl<'a> Comments<'a> {
-    /// Strict metadata parse. A future stream decoder must treat malformed
+    /// Strict metadata parse. A stream decoder must treat malformed
     /// comment metadata as nonfatal, per Vorbis section 4.2 (unlike setup).
     pub fn parse(packet: &'a [u8], limits: &Limits) -> Result<Self, Error> {
         if packet.len() > limits.max_packet_bytes || packet.len() > limits.max_comment_bytes {
@@ -105,11 +106,11 @@ impl<'a> Comments<'a> {
         let mut input = header(packet, 3)?;
         let vendor = vector(&mut input)?;
         let count = uint(&mut input)? as usize;
-        if count > limits.max_comments {
-            return Err(Error::LimitExceeded("comment count"));
-        }
         if count > input.len() / 4 {
             return Err(Error::EndOfPacket);
+        }
+        if count > limits.max_comments {
+            return Err(Error::LimitExceeded("comment count"));
         }
         let mut comments = Vec::new();
         reserve(&mut comments, count)?;
@@ -122,17 +123,9 @@ impl<'a> Comments<'a> {
         Ok(Self { vendor, comments })
     }
     pub fn fields(&self) -> impl Iterator<Item = CommentField<'a>> + '_ {
-        self.comments.iter().filter_map(|field| {
-            let equal = field.iter().position(|&n| n == b'=')?;
-            let name = &field[..equal];
-            if name.is_empty() || !name.iter().all(|n| (0x20..=0x7d).contains(n)) {
-                return None;
-            }
-            Some(CommentField {
-                name,
-                value: &field[equal + 1..],
-            })
-        })
+        self.comments
+            .iter()
+            .filter_map(|field| comment_field(field))
     }
     pub fn values<'s>(&'s self, name: &'s [u8]) -> impl Iterator<Item = &'a [u8]> + 's {
         self.fields()
@@ -168,6 +161,70 @@ impl<'a> Comments<'a> {
         }
         out.push(1);
         Ok(out)
+    }
+    /// Copy into two flat allocations rather than allocating every field.
+    pub fn to_owned(&self) -> Result<Metadata, Error> {
+        let total = self
+            .comments
+            .iter()
+            .try_fold(self.vendor.len(), |n, field| n.checked_add(field.len()))
+            .ok_or(Error::LimitExceeded("metadata bytes"))?;
+        let mut data = Vec::new();
+        data.try_reserve_exact(total)
+            .map_err(|_| Error::Allocation)?;
+        let mut fields = Vec::new();
+        fields
+            .try_reserve_exact(self.comments.len())
+            .map_err(|_| Error::Allocation)?;
+        data.extend_from_slice(self.vendor);
+        for field in &self.comments {
+            let start = data.len();
+            data.extend_from_slice(field);
+            fields.push(start..data.len());
+        }
+        Ok(Metadata {
+            data,
+            vendor_len: self.vendor.len(),
+            fields,
+        })
+    }
+}
+fn comment_field(field: &[u8]) -> Option<CommentField<'_>> {
+    let equal = field.iter().position(|&n| n == b'=')?;
+    let name = &field[..equal];
+    if name.is_empty() || !name.iter().all(|n| (0x20..=0x7d).contains(n)) {
+        return None;
+    }
+    Some(CommentField {
+        name,
+        value: &field[equal + 1..],
+    })
+}
+
+/// Owned, eight-bit-clean comments stored in flat data and range arrays.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Metadata {
+    data: Vec<u8>,
+    vendor_len: usize,
+    fields: Vec<Range<usize>>,
+}
+impl Metadata {
+    pub fn vendor(&self) -> &[u8] {
+        &self.data[..self.vendor_len]
+    }
+    pub fn comments(&self) -> impl ExactSizeIterator<Item = &[u8]> {
+        self.fields.iter().map(|range| &self.data[range.clone()])
+    }
+    pub fn fields(&self) -> impl Iterator<Item = CommentField<'_>> {
+        self.comments().filter_map(comment_field)
+    }
+    pub fn values<'a>(&'a self, name: &'a [u8]) -> impl Iterator<Item = &'a [u8]> {
+        self.fields()
+            .filter(move |field| field.name.eq_ignore_ascii_case(name))
+            .map(|field| field.value)
+    }
+    pub fn storage_bytes(&self) -> usize {
+        self.data.capacity() + self.fields.capacity() * core::mem::size_of::<Range<usize>>()
     }
 }
 fn uint(input: &mut &[u8]) -> Result<u32, Error> {

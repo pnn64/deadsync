@@ -30,7 +30,7 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOCATOR: Counting = Counting;
 
 #[test]
-fn repeated_packet_decode_and_reset_allocate_nothing() {
+fn repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing() {
     for bytes in [
         include_bytes!("fixtures/stereo.ogg").as_slice(),
         include_bytes!("fixtures/surround.ogg").as_slice(),
@@ -52,6 +52,44 @@ fn repeated_packet_decode_and_reset_allocate_nothing() {
             }
         }
         TRACK.with(|track| track.set(false));
+        assert!(samples > 0);
+        assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+    }
+    in_page_mapping_allocate_nothing();
+}
+
+fn in_page_mapping_allocate_nothing() {
+    use deadlib_audio_decode_ogg::Page;
+    use deadlib_audio_decode_vorbis::{OggDecoder, OggEvent};
+    for bytes in [
+        include_bytes!("fixtures/stereo.ogg").as_slice(),
+        include_bytes!("fixtures/surround.ogg").as_slice(),
+        include_bytes!("fixtures/mono.ogg").as_slice(),
+    ] {
+        let mut decoder = OggDecoder::default();
+        let mut offset = 0;
+        let mut ready = false;
+        let mut samples = 0;
+        ALLOCATIONS.store(0, Ordering::Relaxed);
+        while offset < bytes.len() {
+            let (page, consumed) = Page::parse(&bytes[offset..]).unwrap();
+            TRACK.with(|track| track.set(ready));
+            decoder
+                .push_page(page, offset as u64, |event| match event {
+                    OggEvent::StreamStart(_) => ready = true,
+                    OggEvent::Pcm(data) => {
+                        samples += data.pcm.channels * data.pcm.frames;
+                        for plane in data.pcm.planes() {
+                            std::hint::black_box(plane);
+                        }
+                    }
+                    _ => {}
+                })
+                .unwrap();
+            TRACK.with(|track| track.set(false));
+            offset += consumed;
+        }
+        decoder.finish().unwrap();
         assert!(samples > 0);
         assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
     }

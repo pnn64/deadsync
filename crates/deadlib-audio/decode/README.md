@@ -43,14 +43,17 @@ scope while implementation progresses.
 
 ## Current checkpoint
 
-Ogg framing/streaming and Vorbis raw-packet PCM synthesis are implemented, with
+Ogg framing/streaming, Vorbis raw-packet PCM synthesis and the Ogg Vorbis mapping are implemented, with
 libogg, libvorbis and Symphonia differential evidence. Both packages are Cargo
 workspace members. Raw synthesis includes both floors, all residues, inverse
 coupling, native FFT MDCT, windows and overlap, with zero packet/reset allocations.
-**This is not the completed goal:** Ogg Vorbis sample positioning/streaming,
-codec/container seeking, encoding, broader conformance/fuzzing and comparative
-performance work remain. The next milestone is the Vorbis container mapping,
-including header lifecycle and exact initial/final granule trimming before seeks.
+The mapping adds metadata/header lifecycle, exact initial/final trimming,
+timestamps, arbitrary byte streaming, independent multiplexed streams and chains.
+All 38 repository assets have exact retained counts against libvorbisfile and
+Symphonia; strict behavior remains separate from legacy compatibility.
+**This is not the completed goal:** codec/container seeking, encoding, broader
+conformance/fuzzing and comparative performance work remain. The next milestone
+is native container indexing and sample-accurate Vorbis seeking with pre-roll.
 
 ## Normative sources
 

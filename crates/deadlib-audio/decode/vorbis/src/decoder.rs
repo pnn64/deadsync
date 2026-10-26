@@ -21,9 +21,14 @@ impl<'a> PcmBlock<'a> {
         Some(&self.data[channel * self.stride..channel * self.stride + self.frames])
     }
     pub fn planes(&self) -> impl ExactSizeIterator<Item = &'a [f32]> + '_ {
-        self.data
-            .chunks_exact(self.stride)
-            .map(|plane| &plane[..self.frames])
+        (0..self.channels).map(move |channel| self.plane(channel).unwrap())
+    }
+    pub(crate) fn crop(mut self, start: usize, end: usize) -> Self {
+        debug_assert!(start <= end && end <= self.frames);
+        self.data = &self.data[start..];
+        self.start_frame += start as u64;
+        self.frames = end - start;
+        self
     }
 }
 
@@ -55,8 +60,7 @@ impl PacketDecoder {
         let channels = setup.channels() as usize;
         let [small, large] = setup.block_sizes();
         let half = large / 2;
-        let transforms = small + if large != small { large } else { 0 };
-        let storage = channels * large * 12 + channels * half + transforms * 22;
+        let storage = Self::required_storage(&setup);
         if storage > limits.max_decode_memory {
             return Err(Error::LimitExceeded("decode memory"));
         }
@@ -92,6 +96,12 @@ impl PacketDecoder {
     }
     pub fn setup(&self) -> &Setup {
         &self.setup
+    }
+    pub fn required_storage(setup: &Setup) -> usize {
+        let channels = setup.channels() as usize;
+        let [small, large] = setup.block_sizes();
+        let transforms = small + if large != small { large } else { 0 };
+        channels * large * 12 + channels * (large / 2) + transforms * 22
     }
     pub fn position(&self) -> u64 {
         self.position

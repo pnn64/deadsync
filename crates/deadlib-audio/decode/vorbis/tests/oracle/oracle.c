@@ -1,5 +1,6 @@
 /* External test oracle. Private codebook APIs are deliberately confined here. */
 #include <vorbis/codec.h>
+#include <vorbis/vorbisfile.h>
 #include "codebook.h"
 #include "mdct.h"
 #include <stdint.h>
@@ -120,8 +121,31 @@ static void transform(FILE *file) {
     for (k = 0; k < n; ++k) { uint32_t raw; memcpy(&raw, &output[k], sizeof(raw)); put32(raw); }
     mdct_clear(&lookup); free(input); free(output); free(data);
 }
+static void ogg_pcm(FILE *file) {
+    OggVorbis_File reader; int links, i, link;
+    if (ov_open_callbacks(file, &reader, NULL, 0, OV_CALLBACKS_NOCLOSE)) fail("vorbisfile open");
+    links = (int)ov_streams(&reader); put32((uint32_t)links);
+    for (i = 0; i < links; ++i) {
+        vorbis_info *info = ov_info(&reader, i); ogg_int64_t total = ov_pcm_total(&reader, i);
+        if (!info || total < 0) fail("vorbisfile stream information");
+        put32((uint32_t)ov_serialnumber(&reader, i)); put32((uint32_t)info->channels); put32((uint32_t)info->rate); put64((uint64_t)total);
+    }
+    /* No PCM seek target exists in an empty stream. The reported count is zero. */
+    if (ov_pcm_total(&reader, -1) == 0) { ov_clear(&reader); return; }
+    /* Establish the first link's cursor explicitly after the metadata scan. */
+    if (ov_pcm_seek(&reader, 0)) fail("vorbisfile initial PCM seek");
+    for (;;) {
+        float **samples; long frames = ov_read_float(&reader, &samples, 4096, &link); int ch; long frame;
+        if (frames == 0) break; if (frames < 0) fail("vorbisfile decode/hole");
+        put32((uint32_t)link); put32((uint32_t)frames);
+        for (ch = 0; ch < ov_info(&reader, link)->channels; ++ch) for (frame = 0; frame < frames; ++frame) {
+            uint32_t raw; memcpy(&raw, &samples[ch][frame], sizeof(raw)); put32(raw);
+        }
+    }
+    ov_clear(&reader);
+}
 int main(int argc, char **argv) {
-    FILE *file; if (argc != 3) fail("usage: oracle headers|books|pcm|mdct input");
+    FILE *file; if (argc != 3) fail("usage: oracle headers|books|pcm|mdct|oggpcm input");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -130,6 +154,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "books")) books(file);
     else if (!strcmp(argv[1], "pcm")) pcm(file);
     else if (!strcmp(argv[1], "mdct")) transform(file);
+    else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;
 }

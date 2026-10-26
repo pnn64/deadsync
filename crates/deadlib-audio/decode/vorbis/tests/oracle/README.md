@@ -1,7 +1,7 @@
 # Test-only libvorbis oracle
 
 This process links unmodified libvorbis/libogg and checks raw headers, codebooks,
-inverse MDCT and packet PCM. Its codebook mode uses libvorbis's private APIs to
+inverse MDCT, packet PCM and full Ogg PCM via libvorbisfile. Its codebook mode uses libvorbis's private APIs to
 unpack VQ values and encode all used Huffman codewords. The Rust production
 graph never links either reference implementation.
 
@@ -19,18 +19,30 @@ cargo test -p deadlib-audio-decode-vorbis --release --test libvorbis -- --ignore
 cargo test -p deadlib-audio-decode-vorbis --release --test headers -- --ignored --nocapture
 $env:DEADLIB_VORBIS_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/raw-pcm.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test pcm -- --ignored --skip historical_floor0 --skip regenerate_surround_pcm_golden --nocapture
+$env:DEADLIB_VORBIS_MAPPING_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/ogg-pcm.tsv"
+cargo test -p deadlib-audio-decode-vorbis --release --test ogg_mapping -- --include-ignored --nocapture
 ```
 
 Skip clones already present. Use platform executable paths and omit `-A x64`
 for other generators. Pinned source commits are in `COVERAGE.md`.
 
-The corpus helpers currently require single-stream Ogg Vorbis files; this is a
-test-harness limitation, not evidence for multiplexed/chained Vorbis decoding.
+The corpus helpers require single-stream Ogg Vorbis files. Generated mapping
+tests separately exercise multiplexing natively and mixed-rate chains against
+libvorbisfile. This is a test-harness limitation, not a production restriction.
 The `pcm` mode receives length-delimited raw packets, assigns unknown granules
 and clears EOS, then emits unclipped, untrimmed planar PCM. It verifies raw
 overlap frame counts independently, including the zero-frame priming packet.
 It does not verify the Ogg Vorbis initial/final sample mapping. `mdct` tests the
 reference inverse transform directly, independently of headers or packet decode.
+
+`oggpcm` reads an actual Ogg file, reports each link's serial, channels, rate and
+`ov_pcm_total`, and emits planar `ov_read_float` records tagged by link. The Rust
+test checks both decoded and declared reference lengths before comparison.
+After querying metadata, the oracle explicitly seeks to PCM zero, which also
+avoids libvorbisfile skipping the first short link at its raw-open position.
+Zero-total files have no PCM seek target and produce no sample records. This
+mode verifies final counts, trimming and mixed-rate chains separately from raw
+synthesis. Symphonia's format-reader path checks timestamps, durations and PCM.
 
 For the external historical floor-zero fixture (never redistributed in this
 repository):

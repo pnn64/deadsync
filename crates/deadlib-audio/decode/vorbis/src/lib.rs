@@ -1,4 +1,4 @@
-//! Native Vorbis I primitives; see COVERAGE.md for the in-development status.
+//! Native Vorbis I raw synthesis and Ogg streaming; see COVERAGE.md for status.
 //! Raw packet APIs have no dependency on a container or playback environment.
 #![forbid(unsafe_code)]
 
@@ -8,12 +8,17 @@ mod decoder;
 mod floor;
 mod floor_table;
 mod headers;
+mod ogg;
 mod residue;
 mod setup;
 mod transform;
 
 pub use decoder::{PacketDecoder, PcmBlock};
-pub use headers::{Channel, CommentField, Comments, Identification, channel_order};
+pub use headers::{Channel, CommentField, Comments, Identification, Metadata, channel_order};
+pub use ogg::{
+    OggDecoder, OggEvent, OggOptions, OggPcm, OggReader, OggStreamDecoder, StreamEnd, StreamId,
+    StreamInfo, decode_reader,
+};
 pub use setup::{
     AudioHeader, Floor, Floor0, Floor1, FloorClass, Mapping, Mode, Residue, Setup, Submap,
 };
@@ -25,6 +30,7 @@ pub enum Error {
     Invalid(&'static str),
     LimitExceeded(&'static str),
     Allocation,
+    Failed,
     Container(deadlib_audio_decode_ogg::Error),
 }
 impl core::fmt::Display for Error {
@@ -34,6 +40,7 @@ impl core::fmt::Display for Error {
             Self::Invalid(reason) => write!(f, "invalid Vorbis packet: {reason}"),
             Self::LimitExceeded(reason) => write!(f, "Vorbis resource limit: {reason}"),
             Self::Allocation => f.write_str("Vorbis allocation failed"),
+            Self::Failed => f.write_str("Vorbis stream state is terminal after an earlier error"),
             Self::Container(error) => error.fmt(f),
         }
     }

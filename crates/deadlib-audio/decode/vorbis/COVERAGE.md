@@ -1,6 +1,6 @@
 # Vorbis coverage and numerical evidence
 
-Status: **raw-packet PCM synthesis implemented**. No full
+Status: **raw-packet synthesis and streaming Ogg Vorbis mapping implemented**. No full
 Vorbis I conformance or competitive-performance claim is made. The complete
 requested end state remains in the parent work plan.
 
@@ -35,6 +35,18 @@ requested end state remains in the parent work plan.
 * Reusable overlap/reset lifecycle; nominal floor/residue truncation behavior,
   prefix/non-audio discard, error preservation of previous overlap, explicit
   decode-memory policy and rejection of nonfinite spectral/PCM results.
+* Page, incremental-byte and pull-reader Ogg mapping APIs; exact header page
+  boundaries/granules, nonfatal comment truncation/framing errors, flat owned
+  metadata, independent logical stream state, multiplexing, chains and unknown
+  codec skipping. Ended streams release codec/metadata storage. Active-stream
+  count and aggregate retained codec-element budgets are tested across chains
+  and multiplexed input.
+* Initial trim through the full first overlap, positive broadcast timestamps,
+  final packet trim, zero/one-sample streams, single audio-page EOS and nil EOS.
+  Retained positions, raw synthesis positions and original granules are distinct.
+  Per-channel frame counts and timestamps are exact. Mapping failures are terminal
+  until reset. Byte chunks down to one byte, interrupted/fragmented IO, truncation,
+  invalid header boundaries and invalid granules are covered.
 
 Windows x86-64, rustc 1.99.1 evidence:
 
@@ -77,6 +89,20 @@ Windows x86-64, rustc 1.99.1 evidence:
 * Historical floor-zero fixture: 12,525,696 raw samples with exact libvorbis
   counts. Peak/RMS errors: 2.533197403e-5 / 1.510420136e-6 vs libvorbis and
   2.259016037e-5 / 1.581026734e-6 vs Symphonia. The oracle README pins its URL/hash.
+* Full Ogg mapping on all 38 repository assets: **140,832,876 retained channel
+  samples**, with exact final counts independently matching libvorbisfile 1.3.7
+  and Symphonia 0.6.1. Peak/RMS errors: 7.152557373e-7 / 6.553499110e-8 versus
+  libvorbisfile; 5.960464478e-7 / 4.441172991e-8 versus Symphonia. The Symphonia
+  comparison also checks every retained packet timestamp and duration. See
+  [validation/2026-10-26-ogg-pcm.tsv](validation/2026-10-26-ogg-pcm.tsv); source
+  hashes are unchanged from `validation/2026-10-26-assets.sha256`.
+* Generated mono/stereo/eight-channel full-file output, shifted/trimmed starts,
+  shortened tails and mixed-rate chains match libvorbisfile counts and PCM.
+  Empty streams match its reported zero total; its PCM seek API has no empty
+  target, so the oracle emits no sample records in that case.
+* Counting allocator: page-to-PCM mapping of in-page audio packets allocates
+  zero times after setup, including final trimming/EOS. This excludes transport
+  buffer growth, spanning-packet assembly, setup, metadata and new logical streams.
 
 ## Numerical criteria
 
@@ -85,7 +111,7 @@ test allows `abs(native - reference) <= 2e-6 * max(1, abs(reference))` for diffe
 floating arithmetic rounding; the actual tested vectors above were exact. This
 is a codebook check, **not a PCM parity criterion**.
 
-For raw floor-one PCM, the gate is peak error <= `3e-6 * max(1, reference_peak)`
+For raw and container-trimmed floor-one PCM, the gate is peak error <= `3e-6 * max(1, reference_peak)`
 and RMS error <= `5e-7 * max(1, reference_peak)`. This accommodates different f32
 FFT butterfly/rotation/window arithmetic while staying below one tenth of a
 16-bit full-scale sample step at unit peak. Observed corpus errors are smaller.
@@ -118,13 +144,19 @@ counts match without discarding comparison samples.
   packet. Native strict Ogg correctly rejects it. The raw codec test uses the
   independent development-only Ogg reader to extract packets, isolating codec
   validation. No production compatibility exception has been introduced yet.
+* Symphonia 0.6.1 assigns negative timestamps for an edited negative initial
+  offset but does not discard those samples (`trim_start == 0`). A named test
+  documents the extra 37 samples on the edited fixture and compares the retained
+  suffix separately. Ordinary parity tests require exact counts without shifting.
+  Native strict counts and the initial-trimmed samples match libvorbisfile.
+* Strict final trimming is limited to the last packet's overlap span. Synthetic
+  larger trims make libvorbisfile's declared total disagree with its emitted PCM;
+  they are rejected rather than silently treated as a compatibility policy.
 
 ## Remaining required work
 
-* Complete header lifecycle with nonfatal comment handling; broader malformed
-  packet concealment differential validation beyond the implemented rules.
-* Ogg Vorbis mapping, exact initial/final trimming and sample count, timestamps,
-  multiplexing/chains, sample-accurate seeking/pre-roll/repeated seeks.
+* Sample-accurate seeking/pre-roll/repeated seeks, container seek/index APIs and
+  broader malformed packet concealment differential validation.
 * Official conformance material, unusual/legacy encoders, malformed/fuzz corpora,
   real ITGmania/StepMania song packs. Repository assets are only initial coverage.
   No nonstandard legacy compatibility policy has been added.
@@ -132,6 +164,8 @@ counts match without discarding comparison samples.
   optimization and reproducible throughput/startup/memory/allocation/seek
   comparisons with libvorbis and Symphonia. No SIMD or performance claims yet.
 
-Raw PCM parity does not prove Ogg final sample counts or seeking. Reference PCM
-tests deliberately assign unknown granules and omit EOS trimming; these mapping
-requirements remain open. External reference APIs remain in separate test helpers.
+Raw packet and full-container comparisons are separate: raw PCM tests assign
+unknown granules and omit EOS trimming; `ogg_mapping` tests independently use
+libvorbisfile and Symphonia's container demuxer with real timestamps and trim.
+Neither establishes seeking correctness. External reference APIs remain in
+separate test helpers.

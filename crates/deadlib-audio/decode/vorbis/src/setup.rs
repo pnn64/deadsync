@@ -158,6 +158,42 @@ impl Setup {
     pub fn channels(&self) -> u8 {
         self.channels
     }
+    /// Owned setup elements, excluding allocator and parent struct metadata.
+    pub fn storage_bytes(&self) -> usize {
+        fn size<T>(v: &Vec<T>) -> usize {
+            v.capacity() * core::mem::size_of::<T>()
+        }
+        size(&self.codebooks)
+            + self
+                .codebooks
+                .iter()
+                .map(Codebook::storage_bytes)
+                .sum::<usize>()
+            + size(&self.floors)
+            + self
+                .floors
+                .iter()
+                .map(|floor| match floor {
+                    Floor::Type0(value) => size(&value.books),
+                    Floor::Type1(value) => {
+                        size(&value.partition_classes)
+                            + size(&value.classes)
+                            + size(&value.x)
+                            + size(&value.neighbors)
+                            + size(&value.sorted_order)
+                    }
+                })
+                .sum::<usize>()
+            + size(&self.residues)
+            + self.residues.iter().map(|r| size(&r.books)).sum::<usize>()
+            + size(&self.mappings)
+            + self
+                .mappings
+                .iter()
+                .map(|m| size(&m.coupling) + size(&m.mux) + size(&m.submaps))
+                .sum::<usize>()
+            + size(&self.modes)
+    }
     pub fn block_sizes(&self) -> [usize; 2] {
         self.block_sizes
     }

@@ -5,17 +5,17 @@ dependency is the sibling `deadlib-audio-decode-ogg` container. Symphonia and
 libvorbis serve only as test oracles. Neither new crate is integrated into
 DeadSync's decoder or playback pipeline.
 
-Current APIs operate on **raw Vorbis packets**, independently of Ogg:
+Raw Vorbis packet APIs remain usable independently of Ogg:
 
 * `bitpack::{BitReader, BitWriter}`: native LSB-first arbitrary-width integers
   (0..=32), lookahead and sticky end-of-packet semantics.
 * `Identification::{parse, encode}`: stream parameters, bitrate hints, block
   sizes and framing validation. `channel_order` exposes mapping-zero speaker
   order for one through eight channels; larger counts remain explicitly unassigned.
-* `Comments::{parse, encode}`: borrowed eight-bit-clean metadata, duplicates and
+* `Comments::{parse, encode, to_owned}`: borrowed eight-bit-clean metadata, duplicates and
   unknown/unstructured vectors preserved. `fields` and `values` expose valid
-  field names and ASCII-insensitive lookup. Strict metadata parse errors are
-  separate from a future decoder's mandated nonfatal comment error handling.
+  field names and ASCII-insensitive lookup. `Metadata` owns fields in two flat
+  allocations. Strict parsing is separate from nonfatal stream comment handling.
 * `codebook::{Codebook, Huffman}`: ordered/unordered/sparse entry lengths,
   entry-order Huffman assignment, scalar and VQ decode, lookup types 0/1/2,
   exact integer lattice sizes and the specification's single-entry erratum.
@@ -44,11 +44,55 @@ decoder.reset();
 # }
 ```
 
-**Ogg sample positioning, seeking and native audio encoding remain pending.**
+Ogg Vorbis decoding uses the independent native container:
+
+* `OggDecoder::push_page`: validates the header lifecycle and mapping, maintains
+  independent overlap/timing/metadata for multiplexed streams and chains, and
+  skips unknown codecs while validating their physical framing.
+* `OggStreamDecoder::push`: accepts arbitrary byte chunks, consuming at most one
+  page per call. Repeat until the supplied chunk is consumed, then call `finish`.
+* `OggReader::read_next` and `decode_reader`: synchronous `Read` adapters. Use a
+  `BufReader` for files/sockets to reduce small underlying reads.
+* `OggEvent`: stream start (parameters and metadata), borrowed PCM, stream end,
+  ignored codec and nonfatal comment error events. No PCM copying or queues are
+  required. Codec storage is released at each logical EOS.
+
+```rust
+use deadlib_audio_decode_vorbis::{decode_reader, OggEvent, OggOptions};
+# fn example(ogg_bytes: &[u8]) -> Result<(), deadlib_audio_decode_vorbis::Error> {
+decode_reader(ogg_bytes, OggOptions::default(), |event| {
+    if let OggEvent::Pcm(data) = event {
+        // data.start_frame: position relative to this stream's retained start.
+        // data.start_granule: original sample timestamp, including broadcast offset.
+        for plane in data.pcm.planes() {
+            // Consume each borrowed, unclipped f32 channel before returning.
+            std::hint::black_box(plane);
+        }
+    }
+})?;
+# Ok(())
+# }
+```
+
+Initial edits discard samples before time zero; a positive starting granule
+preserves broadcast timestamps. EOS clips trailing padding, with exact retained
+counts at `StreamEnd`. Rates/layouts/positions are per logical stream, rather
+than a fabricated combined timeline across incompatible chains. A short stream
+whose first audio page is also EOS interprets a reduced granule as tail padding;
+its initial and final trim cannot be distinguished from that one landmark.
+
+Mapping errors are terminal until reset. Callback output is provisional until
+`StreamEnd` and final `finish` validation. Truncated comments or a missing comment
+framing bit produce an empty metadata set and `CommentError`; wrong header
+signatures, setup errors and explicit resource-limit failures remain fatal.
+`OggOptions` bounds active streams and their aggregate retained setup, metadata
+and synthesis elements; container packet assembly has independent limits.
+
+**Seeking and native audio encoding remain pending.**
 Raw decoder positions count overlap output before container initial/final trim.
 There is no synthetic final flush; the container mapping supplies final length.
 Header writers are not audio encoders. Do not replace the existing decoding
-pipeline until the remaining mapping/conformance/performance gates pass.
+pipeline until the remaining conformance/performance gates pass.
 See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
 
 Packet prefix truncation discards the packet without advancing overlap. A
