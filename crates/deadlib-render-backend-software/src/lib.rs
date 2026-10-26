@@ -2937,8 +2937,13 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
             if m == 0 {
                 0
             } else if i >= 0 && i < m {
-                // UVs are already wrapped; only edge texels need a remainder.
+                // UVs are already wrapped; ordinary texels are in range.
                 i as usize
+            } else if i == m {
+                0
+            } else if i == -1 && m > 0 {
+                // Bilinear border texels wrap without integer division.
+                (m - 1) as usize
             } else {
                 let mut v = i % m;
                 if v < 0 {
@@ -2999,8 +3004,10 @@ fn sample_tex_linear<const OPAQUE: bool, const CHANNELS: usize>(
 ) -> Option<[f32; CHANNELS]> {
     let x = wrap_uv(u, sampler.wrap).mul_add(tex_w as f32, -0.5);
     let y = wrap_uv(v, sampler.wrap).mul_add(tex_h as f32, -0.5);
-    let x0 = x.floor() as i32;
-    let y0 = y.floor() as i32;
+    // Wrapped UVs put x/y in [-0.5, size - 0.5] (or NaN). Truncation
+    // already floors nonnegative values; only the negative edge needs -1.
+    let x0 = x as i32 - i32::from(x < 0.0);
+    let y0 = y as i32 - i32::from(y < 0.0);
     let fx = clamp01(x - x0 as f32);
     let fy = clamp01(y - y0 as f32);
     let ix0 = wrap_index(x0, tex_w, sampler.wrap);
@@ -3213,10 +3220,16 @@ fn raster_bounds(
     stripe_y_start: usize,
     stripe_y_end: usize,
 ) -> Option<(i32, i32, i32, i32, i32)> {
+    let clip_x = (width - 1) as f32;
+    let clip_y = (height - 1) as f32;
+    // A ceiling at or below -1 cannot reach either nonnegative raster axis.
+    if (max_x <= -1.0) | (max_y <= -1.0) {
+        return None;
+    }
     let min_x = min_x.max(0.0) as i32;
-    let max_x = max_x.ceil().min((width - 1) as f32) as i32;
+    let max_x = max_x.ceil().min(clip_x) as i32;
     let mut min_y = min_y.max(0.0) as i32;
-    let mut max_y = max_y.ceil().min((height - 1) as f32) as i32;
+    let mut max_y = max_y.ceil().min(clip_y) as i32;
     if min_x > max_x || min_y > max_y {
         return None;
     }
