@@ -419,7 +419,28 @@ impl SongData {
     /// it. Used by the player-options "No `CMod` alternative" auto-switch.
     #[must_use]
     pub fn is_no_cmod(&self) -> bool {
-        title_subtitle_contains_ignore_ascii_case(&self.title, &self.subtitle, "no cmod")
+        let contains = |text: &str| {
+            text.as_bytes()
+                .windows(b"no cmod".len())
+                .any(|window| window.eq_ignore_ascii_case(b"no cmod"))
+        };
+        if contains(&self.title) {
+            return true;
+        }
+        if self.subtitle.trim().is_empty() {
+            return false;
+        }
+        contains(&self.subtitle)
+            || (self
+                .title
+                .as_bytes()
+                .get(self.title.len().wrapping_sub(2)..)
+                .is_some_and(|tail| tail.eq_ignore_ascii_case(b"no"))
+                && self
+                    .subtitle
+                    .as_bytes()
+                    .get(..4)
+                    .is_some_and(|head| head.eq_ignore_ascii_case(b"cmod")))
     }
 
     #[must_use]
@@ -820,37 +841,6 @@ fn is_video_extension(extension: &str) -> bool {
             | b"mpeg"
             | b"wmv"
     )
-}
-
-#[inline]
-fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle: &str) -> bool {
-    let subtitle = (!subtitle.trim().is_empty()).then_some(subtitle);
-    let joined_len = title
-        .len()
-        .saturating_add(subtitle.map_or(0, |value| value.len().saturating_add(1)));
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
-        return true;
-    }
-    if needle.len() > joined_len {
-        return false;
-    }
-
-    let title = title.as_bytes();
-    let subtitle = subtitle.map(str::as_bytes).unwrap_or_default();
-    (0..=joined_len - needle.len()).any(|start| {
-        needle.iter().enumerate().all(|(offset, expected)| {
-            let index = start + offset;
-            let actual = if index < title.len() {
-                title[index]
-            } else if index == title.len() {
-                b' '
-            } else {
-                subtitle[index - title.len() - 1]
-            };
-            actual.eq_ignore_ascii_case(expected)
-        })
-    })
 }
 
 #[cfg(test)]
