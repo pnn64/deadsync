@@ -1951,7 +1951,10 @@ fn prepare_mesh_triangles(
 #[inline]
 fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4], usize) {
     let distances = triangle.map(|vertex| vertex.clip.z + vertex.clip.w);
-    if distances.iter().all(|distance| *distance >= 0.0) {
+    if distances
+        .into_iter()
+        .fold(true, |inside, distance| inside & (distance >= 0.0))
+    {
         return ([triangle[0], triangle[1], triangle[2], triangle[0]], 3);
     }
     if distances.iter().all(|distance| *distance < 0.0) {
@@ -3468,14 +3471,8 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
                 continue;
             }
 
-            let cr = v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1));
-            let cg = v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1));
-            let cb = v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1));
             let ca = v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1));
 
-            let sr = if MASK { cr } else { sampled[0] * cr };
-            let sg = if MASK { cg } else { sampled[1] * cg };
-            let sb = if MASK { cb } else { sampled[2] * cb };
             let sa = sampled[3] * ca;
             if sa <= 1.0 / 256.0 {
                 continue;
@@ -3486,6 +3483,12 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
             if !depth.test(dst_idx, z) {
                 continue;
             }
+            let cr = v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1));
+            let cg = v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1));
+            let cb = v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1));
+            let sr = if MASK { cr } else { sampled[0] * cr };
+            let sg = if MASK { cg } else { sampled[1] * cg };
+            let sb = if MASK { cb } else { sampled[2] * cb };
             buffer(dst_idx, [sr, sg, sb, sa], blend);
         }
     }
@@ -3551,7 +3554,9 @@ fn covered(weights: [f32; 3], edges: [bool; 3]) -> bool {
     weights
         .into_iter()
         .zip(edges)
-        .all(|(w, edge)| w > 0.0 || (w == 0.0 && edge))
+        .fold(true, |inside, (w, edge)| {
+            inside & ((w > 0.0) | ((w == 0.0) & edge))
+        })
 }
 
 #[inline(always)]
