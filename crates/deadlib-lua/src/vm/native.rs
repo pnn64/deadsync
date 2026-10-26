@@ -118,12 +118,13 @@ impl Vm {
                 self.check_calls()?;
                 let index = self.frames.len();
                 let base = self.registers.len();
+                let host = self.host_callback(id);
                 // Calls that can fail after emitting results keep their actual
                 // arguments available to the error handler's stack inspector.
                 let separate = matches!(id, strings::STR_FIND | strings::STR_MATCH)
                     || (io::FIRST..=io::LAST).contains(&id)
                     || id >= strings::ITERATOR_FIRST;
-                if separate {
+                if separate && host.is_none() {
                     self.resize_registers(base + count + 1);
                     self.registers[base] = Value::Native(id);
                     self.registers
@@ -142,18 +143,22 @@ impl Vm {
                     tail_calls: 0,
                 });
                 let previous = self.active_native.replace(index);
-                let result = self
-                    .native(id, if separate { base } else { call }, count)
-                    .map(Some)
-                    .map_err(|error| {
-                        if error.kind() == ErrorKind::Runtime && error.value().is_none() {
-                            let value = self.intern(error.message_bytes());
-                            let value = self.located_error(value, 1);
-                            error.with_value(value)
-                        } else {
-                            error
-                        }
-                    });
+                // Host callbacks read the original arguments and write separate
+                // results, so they need no duplicated C argument stack.
+                let result = match host {
+                    Some(callback) => self.host_native(id, base, count, callback),
+                    None => self.native(id, if separate { base } else { call }, count),
+                }
+                .map(Some)
+                .map_err(|error| {
+                    if error.kind() == ErrorKind::Runtime && error.value().is_none() {
+                        let value = self.intern(error.message_bytes());
+                        let value = self.located_error(value, 1);
+                        error.with_value(value)
+                    } else {
+                        error
+                    }
+                });
                 self.active_native = previous;
                 if separate && let Ok(Some(actual)) = result {
                     self.registers.copy_within(base..base + actual, call);
@@ -432,6 +437,10 @@ impl Vm {
             threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
             _ if scheduled == 1 => self.coroutine_step(id, frame),
             _ => {
+                if let Some(callback) = self.host_callback(id) {
+                    let actual = self.host_native(id, base, frame.argc(), callback)?;
+                    return Ok(self.return_frame(frame, base, actual));
+                }
                 // Return hooks run before results replace the caller's slots.
                 self.registers[base] = Value::Native(id);
                 self.registers.copy_within(

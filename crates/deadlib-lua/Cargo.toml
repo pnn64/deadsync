@@ -20,5 +20,9 @@ harness = false
 name = "cache"
 harness = false
 
+[[bench]]
+name = "host_functions"
+harness = false
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

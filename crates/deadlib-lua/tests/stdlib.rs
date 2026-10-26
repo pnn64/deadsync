@@ -447,6 +447,48 @@ fn generated_float_formats_match_reference_bytes() {
 }
 
 #[test]
+fn generated_binary_replacements_preserve_captures_counts_and_errors() {
+    let patterns: &[&[u8]] = &[
+        b".",
+        b"(.)",
+        b"()",
+        b"(%a*)(%d*)",
+        b"(a?)",
+        b"",
+        b"^",
+        b"$",
+        b"(%b())",
+        b"(%f[%w]%w+)",
+        b"(%d+)(%a*)",
+        b"(())",
+        b"(.-)",
+        b"%z",
+    ];
+    let mut seed = 0xd154a32c695ed813u64;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed as usize
+    };
+    for _ in 0..2000 {
+        let len = next() % 25;
+        let subject: Vec<_> = (0..len).map(|_| b"ab019() \0\xff"[next() % 10]).collect();
+        let pattern = patterns[next() % patterns.len()];
+        let len = next() % 12;
+        let replacement: Vec<_> = (0..len).map(|_| b"a%019\0\xff"[next() % 7]).collect();
+        let maximum = next() % 10;
+        let source = format!(
+            "return pcall(string.gsub,{},{},{},{maximum})",
+            quoted(&subject),
+            quoted(pattern),
+            quoted(&replacement)
+        );
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
 fn binary_format_options_and_malformed_specs_match_reference_errors() {
     for byte in 0..=255 {
         for suffix in [b"".as_slice(), b"tail"] {

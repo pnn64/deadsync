@@ -25,6 +25,8 @@ pub struct UserdataId(pub(crate) u64);
 /// Numbers use IEEE 754 binary64, including signed zero, infinities, and NaNs.
 /// Copying a value does not keep its object alive; use [`crate::Vm::pin`] for
 /// values retained by the host across executions or garbage collections.
+/// Raw object identities are scoped to a VM and may coincide across VMs;
+/// callers must not transfer them between VMs. Root handles check VM ownership.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
     /// Absence of a value.

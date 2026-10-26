@@ -12,6 +12,7 @@ mod debug;
 mod errors;
 mod gc;
 mod hooks;
+mod host;
 mod io;
 mod limits;
 mod loads;
@@ -28,6 +29,7 @@ mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{HeapStats, Root};
+pub use host::{HostCall, HostFunction};
 use native::format_number;
 
 #[derive(Debug, Default)]
@@ -616,9 +618,10 @@ impl Vm {
     }
 
     /// Set a table entry without invoking metamethods.
+    /// All object handles must originate in this VM.
     ///
     /// # Errors
-    /// Returns an error for foreign/collected handles, nil keys or NaN keys.
+    /// Returns an error for invalid/collected handles, nil keys or NaN keys.
     pub fn raw_table_set(&mut self, table: TableId, key: Value, value: Value) -> Result<(), Error> {
         self.validate_value(Value::Table(table))?;
         self.validate_value(key)?;

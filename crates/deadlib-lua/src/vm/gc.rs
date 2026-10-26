@@ -420,6 +420,14 @@ impl Vm {
             .sum::<usize>();
         payload += self.programs.iter().map(program_bytes).sum::<usize>();
         payload += self.userdata.iter().map(|u| u.bytes.len()).sum::<usize>();
+        payload += self
+            .native_closures
+            .iter()
+            .map(|f| match &f.kind {
+                threads::NativeKind::Host(f) => std::mem::size_of_val(f.upvalues.as_ref()),
+                _ => 0,
+            })
+            .sum::<usize>();
         payload += self.io.heap_bytes();
         let mut control = self.registers.capacity() * std::mem::size_of::<Value>()
             + self.frames.capacity() * std::mem::size_of::<Frame>()
@@ -817,6 +825,9 @@ impl Vm {
                                 }
                                 threads::NativeKind::Lines { file, .. } => {
                                     work.push(Trace::Value(Value::Userdata(*file)))
+                                }
+                                threads::NativeKind::Host(f) => {
+                                    work.extend(f.upvalues.iter().copied().filter_map(edge));
                                 }
                                 threads::NativeKind::StandaloneMain
                                 | threads::NativeKind::StandaloneTraceback => {}

@@ -31,6 +31,7 @@ pub(super) enum NativeKind {
     Match(strings::MatchIterator),
     Wrap(ThreadId),
     Lines { file: UserdataId, close: bool },
+    Host(host::Function),
     StandaloneMain,
     StandaloneTraceback,
 }

@@ -105,6 +105,7 @@ impl Vm {
                     Some(threads::NativeKind::Match(_)) => 3,
                     Some(threads::NativeKind::Wrap(_)) => 1,
                     Some(threads::NativeKind::Lines { .. }) => 2,
+                    Some(threads::NativeKind::Host(f)) => f.upvalues.len(),
                     _ => 0,
                 }
             }

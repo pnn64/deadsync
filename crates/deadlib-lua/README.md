@@ -339,6 +339,23 @@ frames, and uncaught runtime errors force collection after the handler returns.
 `run_interactive` runs the Lua 5.1 console inside a standalone context, reporting
 recoverable diagnostics through a caller-provided function.
 
+`Vm::new_host_function` registers a Rust function pointer as a native Lua
+function. `HostCall::arguments` borrows the original register range, while
+`push` appends results in separate storage. Each registration has its own
+identity and up to 60 captured Lua values; `set_capture` updates them with the
+collector barrier. Captures and returned values can retain tables, functions,
+threads and userdata. Native userdata allocation inherits the function's
+environment. Callback errors use `error` for a message or `raise` for an exact
+Lua error value, including nil and object identities.
+
+Callbacks run synchronously and can allocate strings, tables and userdata or
+perform raw table access. This interface does not invoke Lua or suspend from
+inside Rust. Panics follow the Rust build strategy; after an unwind, discard
+the VM. Dropping that interrupted VM skips Lua finalizers. Raw object identities
+can coincide across VMs, so values and captures must remain in their originating
+VM. [Callback measurements](../../docs/performance/2026-10-26-rust-lua-host-functions.md)
+cover direct host entry, Lua loops, allocations, heaps and process CPU.
+
 `ProgramCache` loads or saves immutable compiled programs in a caller-selected
 directory. It compares full source/name bytes, compiler build and lexer locale
 classes, bounds decoding, checks integrity and verifies shared bytecode. Native
@@ -400,5 +417,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-format-diagnostics.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-host-functions.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
