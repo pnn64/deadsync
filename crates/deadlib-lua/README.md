@@ -166,6 +166,13 @@ and open results. [Validation](../../docs/testing/2026-10-26-rust-lua-rk-windows
 also covers native import/export and schema-2 persistent reloads. Complete
 scratch-stack and hook parity remain unfinished.
 
+Thread marking clears unused Lua register slots, including scalar values exposed
+by debug hooks. Native arguments, open upvalues and active hook/result windows
+remain roots. Open hook results can extend beyond the fixed register bitmap.
+The collector builtin also preserves its pushed result in a caller's spare
+slot. [Stack-clearing validation](../../docs/testing/2026-10-26-rust-lua-stack-clearing.md)
+covers explicit and stepped collection, suspended threads and persistent reloads.
+
 Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,

@@ -112,6 +112,18 @@ impl Vm {
             }
             return Ok(None);
         }
+        // The C builtin pushes its result after its arguments before the call
+        // moves it to the destination. A later Lua hook can see that spare
+        // slot, including the boolean returned by collectgarbage('step').
+        let pushed = frame.vararg_start + frame.argc();
+        if pushed < frame.stack_start
+            && self
+                .frames
+                .get(index.wrapping_sub(1))
+                .is_some_and(|caller| matches!(caller.function, FrameKind::Lua(_)))
+        {
+            self.registers[pushed] = self.registers[frame.base];
+        }
         Ok(self.return_frame(frame, frame.base, 1))
     }
 

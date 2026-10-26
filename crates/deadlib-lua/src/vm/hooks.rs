@@ -1,5 +1,29 @@
 //! Per-thread hook controls and non-recursive event delivery.
 use super::*;
+use crate::bytecode::Prototype;
+
+pub(super) fn stack_top(proto: &Prototype, frame: Frame, next: Option<&Frame>) -> Option<usize> {
+    let next = next?;
+    match next.function {
+        FrameKind::Native(CONT_RETURN) => Some(next.vararg_start + next.argc()),
+        FrameKind::Native(CONT_HOOK) => Some(frame.base + proto.debug_registers()),
+        FrameKind::Native(CONT_TRACE) => {
+            let previous = (next.vararg_count as usize)
+                .checked_sub(1)
+                .and_then(|pc| proto.code.get(pc));
+            Some(
+                if previous.is_some_and(|i| {
+                    matches!(i.op, Op::Call | Op::Vararg | Op::Move) && i.c == OPEN
+                }) {
+                    next.result
+                } else {
+                    frame.base + proto.debug_registers()
+                },
+            )
+        }
+        _ => None,
+    }
+}
 
 pub(super) const GET_HOOK: u64 = 118;
 pub(super) const SET_HOOK: u64 = 119;

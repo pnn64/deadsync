@@ -224,16 +224,33 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
     }
     bytes
 }
+fn register_roots(
+    registers: &[Value],
+    range: std::ops::Range<usize>,
+    live: &mut [u64],
+    work: &mut Vec<Trace>,
+) {
+    for position in range {
+        live[position / 64] |= 1u64 << (position % 64);
+        work.extend(edge(registers[position]));
+    }
+}
 fn frames_roots(
     vm: &Vm,
     registers: &[Value],
     frames: &[Frame],
     top: usize,
     cutoff: usize,
+    live: &mut [u64],
     work: &mut Vec<Trace>,
 ) {
     if frames.is_empty() {
-        work.extend(registers.iter().take(top).copied().filter_map(edge));
+        register_roots(
+            registers,
+            0..top.min(registers.len()).min(cutoff),
+            live,
+            work,
+        );
         return;
     }
     for (i, frame) in frames.iter().enumerate() {
@@ -246,21 +263,23 @@ fn frames_roots(
                     .get(i + 1)
                     .filter(|f| matches!(f.function, FrameKind::Native(CONT_RETURN)))
                     .map_or(cutoff, |f| (f.vararg_start + f.argc()).min(cutoff));
-                if frames.get(i + 1).is_some_and(|f| {
-                    matches!(
-                        f.function,
-                        FrameKind::Native(CONT_HOOK | CONT_TRACE | CONT_RETURN)
-                    )
-                }) {
-                    let end = (frame.base + proto.debug_registers())
-                        .min(registers.len())
-                        .min(return_top);
-                    work.extend(
-                        registers[frame.base.min(end)..end]
-                            .iter()
-                            .copied()
-                            .filter_map(edge),
-                    );
+                let visible_top =
+                    hooks::stack_top(proto, *frame, frames.get(i + 1)).or_else(|| {
+                        (i + 1 == frames.len()).then(|| {
+                            let previous =
+                                frame.pc().checked_sub(1).and_then(|pc| proto.code.get(pc));
+                            if previous.is_some_and(|op| {
+                                matches!(op.op, Op::Call | Op::Vararg | Op::Move) && op.c == OPEN
+                            }) {
+                                top
+                            } else {
+                                frame.base + proto.debug_registers()
+                            }
+                        })
+                    });
+                if let Some(visible_top) = visible_top {
+                    let end = visible_top.min(registers.len()).min(return_top);
+                    register_roots(registers, frame.base.min(end)..end, live, work);
                 }
                 let pc = frame.pc().saturating_sub(1).min(proto.code.len() - 1);
                 let maps = proto.gc_live[pc];
@@ -281,6 +300,7 @@ fn frames_roots(
                         let r = word * 64 + bits.trailing_zeros() as usize;
                         let pos = frame.base + r;
                         if pos < registers.len().min(return_top) {
+                            live[pos / 64] |= 1u64 << (pos % 64);
                             work.extend(edge(registers[pos]));
                         }
                         bits &= bits - 1;
@@ -295,22 +315,16 @@ fn frames_roots(
                     let start = frame.base + usize::from(instruction.a);
                     let frame_top = interrupt.map_or(top, |f| f.result);
                     let end = frame_top.min(cutoff).min(registers.len());
-                    work.extend(
-                        registers[start.min(end)..end]
-                            .iter()
-                            .copied()
-                            .filter_map(edge),
-                    );
+                    register_roots(registers, start.min(end)..end, live, work);
                 }
             }
             FrameKind::Native(id) => {
                 if id == CONT_GC && frame.wanted == FRAME_OPEN {
-                    work.extend(
-                        registers
-                            .iter()
-                            .take(frame.result)
-                            .copied()
-                            .filter_map(edge),
+                    register_roots(
+                        registers,
+                        0..frame.result.min(registers.len()).min(cutoff),
+                        live,
+                        work,
                     );
                 }
                 if !(CONT_RAW..strings::ITERATOR_FIRST).contains(&id) {
@@ -320,12 +334,7 @@ fn frames_roots(
                     .get(i + 1)
                     .map_or(registers.len(), |f| f.stack_start)
                     .min(cutoff);
-                work.extend(
-                    registers[frame.base.min(end)..end]
-                        .iter()
-                        .copied()
-                        .filter_map(edge),
-                );
+                register_roots(registers, frame.base.min(end)..end, live, work);
             }
         }
         if !matches!(frame.function, FrameKind::Native(CONT_HOOK | CONT_TRACE))
@@ -333,12 +342,23 @@ fn frames_roots(
         {
             let start = frame.vararg_start;
             let end = (start + frame.argc()).min(registers.len()).min(cutoff);
-            work.extend(
-                registers[start.min(end)..end]
-                    .iter()
-                    .copied()
-                    .filter_map(edge),
-            );
+            register_roots(registers, start.min(end)..end, live, work);
+        }
+    }
+}
+fn clear_unused_registers(registers: &mut [Value], frames: &[Frame], live: &[u64]) {
+    for (index, frame) in frames.iter().enumerate() {
+        if !matches!(frame.function, FrameKind::Lua(_)) {
+            continue;
+        }
+        let end = frames
+            .get(index + 1)
+            .map_or(registers.len(), |next| next.stack_start)
+            .min(registers.len());
+        for position in frame.base.min(end)..end {
+            if live[position / 64] & (1u64 << (position % 64)) == 0 {
+                registers[position] = Value::Nil;
+            }
         }
     }
 }
@@ -751,7 +771,16 @@ impl Vm {
         } else {
             registers.len()
         };
-        frames_roots(self, registers, frames, top, cutoff, work);
+        let mut live = vec![0; registers.len().div_ceil(64)];
+        frames_roots(self, registers, frames, top, cutoff, &mut live, work);
+        for &cell in open {
+            if let Cell::Open(owner, position) = self.upvalues[cell as usize]
+                && owner == id
+                && position < registers.len()
+            {
+                live[position / 64] |= 1u64 << (position % 64);
+            }
+        }
         for job in subs {
             work.extend(job.roots().filter_map(edge));
         }
@@ -768,6 +797,15 @@ impl Vm {
                 .iter()
                 .filter_map(|j| j.file.map(|f| Trace::File(f.key))),
         );
+        // Lua 5.1 clears unused stack slots while traversing a thread. Clear
+        // scalar values too: debug.getlocal can observe them after collection.
+        // Native scratch windows and aliased argument/upvalue slots stay live.
+        if id == self.thread {
+            clear_unused_registers(&mut self.registers, &self.frames, &live);
+        } else {
+            let thread = &mut self.threads[slot_index(id.0)];
+            clear_unused_registers(&mut thread.registers, &thread.frames, &live);
+        }
         self.shrink_thread_calls(id);
     }
     fn marked_weak_value(&self, value: Value, key: bool) -> bool {

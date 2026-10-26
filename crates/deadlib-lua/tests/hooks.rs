@@ -723,6 +723,116 @@ local result={f(unpack(args))};debug.sethook();return #result,result[300],table.
 }
 
 #[test]
+fn thread_scans_clear_unused_hook_slots_even_when_values_have_other_roots() {
+    for value in [
+        "nil",
+        "false",
+        "17",
+        "'still interned'",
+        "{}",
+        "function()end",
+        "coroutine.create(function()end)",
+        "newproxy(true)",
+    ] {
+        for imported in [false, true] {
+            compare(
+                format!(
+                    r#"
+local keep={value};local visits,after=0
+local function f()collectgarbage();local x=string.sub('abc',1,2);return x end
+if {imported} then f=assert(loadstring(string.dump(f))) end
+debug.sethook(function()
+if debug.getinfo(2,'f').func==f then
+visits=visits+1
+if visits==1 then assert(debug.setlocal(2,4,keep)=='(*temporary)')end
+if visits==3 then local _,v=debug.getlocal(2,4);after=type(v)..':'..tostring(v==nil)end
+end end,'',1)
+local result=f();debug.sethook();return result,after,type(keep)
+"#
+                )
+                .as_bytes(),
+            );
+        }
+    }
+}
+
+#[test]
+fn hook_collections_preserve_objects_in_open_results_beyond_register_maps() {
+    compare(
+        br#"
+local function make()
+local result={};for i=1,300 do result[i]={tag=i}end
+return unpack(result)
+end
+local function f()return 0,make()end
+local seen=0
+debug.sethook(function()
+if debug.getinfo(2,'f').func==f then
+collectgarbage();local _,v=debug.getlocal(2,300)
+if type(v)=='table' then seen=v.tag end
+end end,'',1)
+local result={f()};debug.sethook()
+return #result,result[2].tag,result[301].tag,seen
+"#,
+    );
+}
+
+#[test]
+fn stopped_collection_preserves_unused_slots_until_a_real_thread_scan() {
+    for operation in ["collectgarbage()", "collectgarbage('step',1000000)"] {
+        compare(
+            format!(
+                r#"
+collectgarbage('stop');local visits=0;local before,after
+local function f()
+collectgarbage('count')
+{operation}
+local x=string.sub('abc',1,2)
+return x
+end
+debug.sethook(function(event,line)
+if debug.getinfo(2,'f').func==f then
+visits=visits+1
+if visits==1 then debug.setlocal(2,4,17)end
+if line==5 then local _,v=debug.getlocal(2,4);before=type(v)..':'..tostring(v)end
+if line==6 then local _,v=debug.getlocal(2,4);after=type(v)..':'..tostring(v)end
+end end,'l')
+local result=f();debug.sethook();collectgarbage('restart')
+return result,before,after
+"#
+            )
+            .as_bytes(),
+        );
+    }
+}
+
+#[test]
+fn collecting_a_suspended_thread_clears_unused_slots_and_preserves_open_upvalues() {
+    compare(
+        br#"
+collectgarbage('stop');local visits,phase=0,0;local captured,before,after
+local function f()
+local alive={tag=42};captured=function()return alive.tag end
+coroutine.yield()
+local x=string.sub('abc',1,2)
+return captured(),x
+end
+local co=coroutine.create(f)
+debug.sethook(co,function()
+if debug.getinfo(2,'f').func==f then
+visits=visits+1
+if visits==1 then assert(debug.setlocal(2,5,17)=='(*temporary)')end
+if visits==2 then local _,v=debug.getlocal(2,5);before=type(v)..':'..tostring(v)end
+if phase==1 and after==nil then local _,v=debug.getlocal(2,5);after=type(v)..':'..tostring(v)end
+end end,'',1)
+assert(coroutine.resume(co));collectgarbage();phase=1
+local ok,result,x=coroutine.resume(co);debug.sethook(co)
+return before,after,captured(),ok,result,x
+"#,
+    );
+}
+
+#[test]
 fn direct_constant_operands_keep_metamethod_order_errors_and_live_store_values() {
     for expression in [
         "x+3",

@@ -6,6 +6,12 @@ The first completion target remains arbitrary standalone Lua 5.1 programs with
 correct libraries, GC, closures, metatables, coroutines and errors. The current
 implementation is an early functional stage of that target.
 
+Current work follows correctness and Lua 5.1 compatibility first. Close known
+failures and expand differential coverage against official Lua before resuming
+performance tuning. Existing performance reports remain historical baselines;
+new compatibility milestones require correctness checks, not benchmark campaigns.
+Full standalone Lua 5.1 parity is still an open gate.
+
 ## Preservation and current scope
 
 The mlua fork lives in `crates/deadlib-lua-legacy`, including tests, benchmarks,

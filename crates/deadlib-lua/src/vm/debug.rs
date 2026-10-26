@@ -322,28 +322,9 @@ impl Vm {
                 let hook = frames[index + 1..].iter().find(|f| {
                     matches!(f.function, FrameKind::Native(CONT_HOOK)) && f.vararg_start == index
                 });
-                let window = if let Some(next) = frames
-                    .get(index + 1)
-                    .filter(|f| matches!(f.function, FrameKind::Native(CONT_RETURN)))
-                {
-                    (next.vararg_start + next.argc()).saturating_sub(frame.base)
-                } else if let Some(next) = frames
-                    .get(index + 1)
-                    .filter(|f| matches!(f.function, FrameKind::Native(CONT_TRACE)))
-                {
-                    let previous = (next.vararg_count as usize)
-                        .checked_sub(1)
-                        .and_then(|pc| proto.code.get(pc));
-                    if previous.is_some_and(|i| {
-                        matches!(i.op, Op::Call | Op::Vararg | Op::Move) && i.c == OPEN
-                    }) {
-                        next.result.saturating_sub(frame.base)
-                    } else {
-                        proto.debug_registers()
-                    }
-                } else {
-                    proto.debug_registers()
-                };
+                let window = hooks::stack_top(proto, frame, frames.get(index + 1))
+                    .unwrap_or(frame.base + proto.debug_registers())
+                    .saturating_sub(frame.base);
                 let register = |r: usize| {
                     if let Some(hook) = hook.filter(|_| r >= window) {
                         let position = hook.base + r - window;
