@@ -151,6 +151,8 @@ There is no synthetic final flush; the container mapping supplies final length.
 Header writers are not audio encoders. Do not replace the existing decoding
 pipeline until the remaining conformance/performance gates pass.
 See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
+The separate [fuzz workspace](../fuzz/README.md) covers headers, raw packet
+synthesis, streaming/reset and indexed seek error recovery under AddressSanitizer.
 
 Packet prefix truncation discards the packet without advancing overlap. A
 truncated floor produces a zero current window for every channel (spec 4.3.2)

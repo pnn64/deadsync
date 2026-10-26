@@ -66,8 +66,14 @@ pages using the final length known in advance. Four historical/shipped files
 and 36 native seeks validate those policies; see [vorbis/LEGACY.md](vorbis/LEGACY.md).
 **This is not the completed goal:** encoding, broader conformance/legacy/fuzzing,
 index-free codec seeking and comparative performance work remain. The next work
-is sustained malformed-input validation and reproducible pipeline benchmarks,
+is longer fuzz campaigns and reproducible pipeline benchmarks,
 followed by measured optimization and independent native encoding validation.
+
+The independent [fuzz workspace](fuzz/README.md) supplies four coverage-guided
+AddressSanitizer targets, seeded from normal and optional floor-zero fixtures,
+generated multiplexing/chains and spanning packets. Its Windows runner retains
+replayable corpora, hashes, logs and statistics without changing production
+dependencies or the application workspace.
 
 ## Normative sources
 

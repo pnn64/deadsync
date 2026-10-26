@@ -102,3 +102,5 @@ still reports holes. See [COVERAGE.md](COVERAGE.md) for the current limits.
 Build/test by package name (`cargo test -p deadlib-audio-decode-ogg`) or manifest
 path. The Rust `ogg` development dependency and the external
 [libogg oracle](tests/oracle/README.md) are used only for differential tests.
+Coverage-guided sanitizer targets live in the separate
+[fuzz workspace](../fuzz/README.md), including checksum-aware container mutation.

@@ -154,6 +154,16 @@ Windows x86-64, rustc 1.99.1 evidence:
   count differs from its declared count, recorded separately rather than
   accepted as ordinary count parity. See [LEGACY.md](LEGACY.md) and
   [validation/2026-10-26-legacy.tsv](validation/2026-10-26-legacy.tsv).
+* Independent libFuzzer workspace with Windows AddressSanitizer, debug assertions
+  and overflow checks. Initial concurrent 300-second campaigns completed
+  **127,539 header**, **3,777 raw packet** and **3,914 streaming/seek** executions
+  without crash/assertion/timeout/RSS-limit failure. Seeds include floor-zero,
+  dependent eight-channel coupling, chains/multiplexing and spanning packets.
+  Oracles check reset determinism, finite PCM, pull/push agreement and repeated
+  seek error recovery. See [the fuzz documentation](../fuzz/README.md), including
+  source/binary/seed hashes, caps and feedback counter limitations. Longer
+  campaigns, additional grammar/malformed inputs and independent differential
+  fuzz oracles remain required.
 
 ## Numerical criteria
 

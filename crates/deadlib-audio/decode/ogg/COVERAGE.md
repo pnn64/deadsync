@@ -63,6 +63,12 @@ Evidence on Windows x86-64, rustc 1.99.1:
 * `cargo tree -p deadlib-audio-decode-ogg --edges normal`: only this package.
 * Parent `scripts/verify_independent.ps1`: copied only Ogg and Vorbis into a
   separate workspace and passed offline package tests and dependency trees.
+* Coverage-guided Windows AddressSanitizer campaign: 300 seconds per target,
+  **48,516 container executions**, no crash/assertion/timeout/RSS-limit failure.
+  Pull/push agreement, strict/explicit compatibility, CRC-aware mutation,
+  recovering transport and accepted-index capture are exercised. See the
+  [fuzz workspace](../fuzz/README.md) and its pinned campaign evidence. This is
+  an initial bounded campaign, not exhaustive validation.
 
 ## Outstanding work
 
@@ -72,7 +78,7 @@ Evidence on Windows x86-64, rustc 1.99.1:
   validity or exclude a deliberately embedded valid page inside a packet payload;
   use the fully validated index for trusted page boundaries.
 * Additional independent generated multiplexed/chained and malformed-stream
-  differential corpora, official conformance material, sustained fuzzing and
+  differential corpora, official conformance material, longer fuzz campaigns and
   wider ITGmania/StepMania song-pack validation beyond two pinned shipped songs
   covered by the Vorbis tests (theme assets are not song packs).
 * Reproducible comparative throughput/startup/allocation/memory/seek benchmarks,
