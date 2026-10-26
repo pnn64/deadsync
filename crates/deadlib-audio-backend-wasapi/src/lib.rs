@@ -252,29 +252,25 @@ pub fn prepare(
     let _com = ComGuard::new()?;
     let device = open_output_device(device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
-    let mix_format = get_mix_format_bytes(&audio_client)?;
-    let mut chosen_format = mix_format.clone();
-    if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
+    let mut chosen_format = get_mix_format_bytes(&audio_client)?;
+    let mix_wave = *waveformat(&chosen_format);
+    let requested_rate_hz = requested_rate_hz.filter(|rate| *rate > 0);
+    if let Some(rate_hz) = requested_rate_hz {
         set_waveformat_sample_rate(&mut chosen_format, rate_hz);
-        match mode {
-            WasapiAccessMode::Shared => {
-                if let Err(err) = init::validate_shared_format(&audio_client, &chosen_format) {
-                    warn!(
-                        "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
-                    );
-                    chosen_format = mix_format;
-                }
-            }
-            WasapiAccessMode::Exclusive => {
-                chosen_format = init::exclusive_format(&audio_client, chosen_format, &device_name)?;
+    }
+    match mode {
+        WasapiAccessMode::Shared => {
+            if let Some(rate_hz) = requested_rate_hz
+                && let Err(err) = init::validate_shared_format(&audio_client, &chosen_format)
+            {
+                warn!(
+                    "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
+                );
+                *waveformat_mut(&mut chosen_format) = mix_wave;
             }
         }
-    } else {
-        match mode {
-            WasapiAccessMode::Shared => {}
-            WasapiAccessMode::Exclusive => {
-                chosen_format = init::exclusive_format(&audio_client, chosen_format, &device_name)?;
-            }
+        WasapiAccessMode::Exclusive => {
+            chosen_format = init::exclusive_format(&audio_client, chosen_format, &device_name)?;
         }
     }
 

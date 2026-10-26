@@ -177,6 +177,21 @@ fn device_id_encoding_does_not_reallocate() {
 }
 
 #[test]
+fn device_id_encoding_preserves_ascii_boundaries_and_unicode_tails() {
+    for len in 0..=513 {
+        let ascii: String = (0..len).map(|i| char::from((i % 128) as u8)).collect();
+        let expected: Vec<u16> = ascii.encode_utf16().chain([0]).collect();
+        assert_eq!(wide_null(&ascii), expected);
+        for index in [0, len / 2, len] {
+            let mut text = ascii.clone();
+            text.insert(index, '🎵');
+            let expected: Vec<u16> = text.encode_utf16().chain([0]).collect();
+            assert_eq!(wide_null(&text), expected);
+        }
+    }
+}
+
+#[test]
 fn com_task_free_accepts_null_and_owned_memory_without_rust_allocations() {
     // SAFETY: null is accepted by CoTaskMemFree, and each non-null pointer comes
     // from CoTaskMemAlloc and is freed exactly once.
@@ -225,4 +240,102 @@ fn benchmark_setup() {
             black_box(wide_null(black_box(text)));
         });
     }
+}
+
+fn format_bytes(tag: u16, bits: u16, subtype: u16) -> Vec<u8> {
+    let mut bytes = vec![0; 40];
+    let wave = waveformat_mut(&mut bytes);
+    wave.wFormatTag = tag;
+    wave.nChannels = 2;
+    wave.nSamplesPerSec = 48_000;
+    wave.nBlockAlign = bits / 4;
+    wave.nAvgBytesPerSec = u32::from(wave.nBlockAlign) * 48_000;
+    wave.wBitsPerSample = bits;
+    wave.cbSize = 22;
+    bytes[24..40].copy_from_slice(&[
+        subtype as u8,
+        (subtype >> 8) as u8,
+        0,
+        0,
+        0,
+        0,
+        16,
+        0,
+        128,
+        0,
+        0,
+        170,
+        0,
+        56,
+        155,
+        113,
+    ]);
+    bytes
+}
+
+fn format_cases() -> [(u16, u16, u16, &'static str); 6] {
+    [
+        (1, 16, 1, "pcm16"),
+        (3, 32, 3, "float32"),
+        (0xfffe, 16, 1, "ext_pcm16"),
+        (0xfffe, 32, 3, "ext_float32"),
+        (0xfffe, 24, 1, "ext_unsupported_bits"),
+        (0xfffe, 32, 5, "ext_unsupported_guid"),
+    ]
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
+fn benchmark_formats() {
+    for (tag, bits, subtype, label) in format_cases() {
+        let bytes = format_bytes(tag, bits, subtype);
+        measure(&format!("wasapi/format_{label}"), 1_000_000, || {
+            black_box(sample_format_from_waveformat(black_box(&bytes)));
+        });
+    }
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; opens the default audio endpoint"]
+fn benchmark_prepare() {
+    let rate = prepare(None, String::new(), None, WasapiAccessMode::Shared)
+        .unwrap()
+        .sample_rate_hz;
+    for (mode, requested, label) in [
+        (WasapiAccessMode::Shared, None, "shared_mix"),
+        (WasapiAccessMode::Shared, Some(rate), "shared_requested"),
+        (WasapiAccessMode::Shared, Some(1), "shared_rejected"),
+        (WasapiAccessMode::Exclusive, None, "exclusive_mix"),
+    ] {
+        measure(&format!("wasapi/prepare_{label}"), 50, || {
+            black_box(prepare(None, String::new(), black_box(requested), black_box(mode)).unwrap());
+        });
+    }
+}
+
+#[test]
+#[ignore = "requires an available Windows audio endpoint"]
+fn preparation_keeps_mix_bytes_on_rejected_rate_and_changes_only_rate_fields() {
+    let _com = ComGuard::new().unwrap();
+    let device = open_output_device(None).unwrap();
+    let client = build_audio_client(&device).unwrap();
+    let mix = get_mix_format_bytes(&client).unwrap();
+    for requested in [None, Some(0), Some(1)] {
+        if requested == Some(1) {
+            let mut invalid = mix.clone();
+            set_waveformat_sample_rate(&mut invalid, 1);
+            assert!(init::validate_shared_format(&client, &invalid).is_err());
+        }
+        let (prep, counts) = perf::measure(|| {
+            prepare(None, String::new(), requested, WasapiAccessMode::Shared).unwrap()
+        });
+        assert_eq!(prep.format, mix);
+        assert_eq!(counts.allocs, if requested == Some(1) { 2 } else { 1 });
+        assert_eq!(counts.reallocs, 0);
+    }
+    let rate = waveformat(&mix).nSamplesPerSec;
+    let mut expected = mix.clone();
+    set_waveformat_sample_rate(&mut expected, rate);
+    let prep = prepare(None, String::new(), Some(rate), WasapiAccessMode::Shared).unwrap();
+    assert_eq!(prep.format, expected);
 }

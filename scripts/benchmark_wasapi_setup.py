@@ -12,6 +12,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", action="append", required=True, help="stage=executable")
     parser.add_argument("--runs", type=int, default=5)
+    parser.add_argument("--test", default="performance_tests::benchmark_setup")
+    parser.add_argument("--workloads", type=int, default=6)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.runs < 1:
@@ -27,7 +29,7 @@ def main():
     for run in range(args.runs):
         for stage, binary in archives[run % len(archives):] + archives[:run % len(archives)]:
             result = subprocess.run(
-                [str(Path(binary).resolve()), "performance_tests::benchmark_setup", "--ignored",
+                [str(Path(binary).resolve()), args.test, "--ignored",
                  "--nocapture", "--test-threads=1"],
                 capture_output=True, text=True, encoding="utf-8", check=True,
             )
@@ -35,8 +37,8 @@ def main():
             counts = {label: dict(re.findall(r"(\w+): (\d+)", values))
                       for label, values in allocation.findall(result.stdout)}
             matches = timing.findall(result.stdout)
-            if len(matches) != 6 or len(counts) != 6:
-                raise ValueError("expected six timing and allocation measurements")
+            if len(matches) != args.workloads or len(counts) != args.workloads:
+                raise ValueError(f"expected {args.workloads} timing and allocation measurements")
             for label, cycles, ns in matches:
                 rows.append(dict(run=run, stage=stage, workload=label,
                                  cycles_per_op=float(cycles), ns_per_op=float(ns),
