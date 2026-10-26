@@ -36,6 +36,58 @@ fn legal_period_is_the_smallest_supported_multiple() {
 }
 
 #[test]
+fn legal_period_matches_wide_rounding_at_integer_boundaries() {
+    for fundamental in [0, 1, 2, 3, 32, 65_537, u32::MAX] {
+        for min in [0, 1, 2, 127, 128, u32::MAX - 65_536, u32::MAX - 1, u32::MAX] {
+            for max in [0, min, min.saturating_add(1), u32::MAX] {
+                let expected = if fundamental == 0 || min == 0 || min > max {
+                    None
+                } else {
+                    let period =
+                        u64::from(min).div_ceil(u64::from(fundamental)) * u64::from(fundamental);
+                    (period <= u64::from(max)).then_some(period as u32)
+                };
+                assert_eq!(minimum_period(fundamental, min, max), expected);
+            }
+        }
+    }
+    let mut random = 0xb15d_7421u32;
+    for _ in 0..100_000 {
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let fundamental = random.max(1);
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let min = random.max(1);
+        let rounded = u64::from(min).div_ceil(u64::from(fundamental)) * u64::from(fundamental);
+        for max in [min, u32::MAX] {
+            let expected = (rounded <= u64::from(max)).then_some(rounded as u32);
+            assert_eq!(minimum_period(fundamental, min, max), expected);
+        }
+    }
+}
+
+#[test]
+#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
+fn benchmark_periods() {
+    use std::hint::black_box;
+    for (fundamental, min, max, label) in [
+        (32, 128, 480, "aligned"),
+        (32, 129, 480, "rounded"),
+        (48, 128, 480, "nonpower"),
+        (1, 128, 480, "unit"),
+        (65_537, u32::MAX - 65_536, u32::MAX, "large"),
+        (2, u32::MAX, u32::MAX, "overflow"),
+    ] {
+        crate::performance_tests::measure(&format!("wasapi/period_{label}"), 1_000_000, || {
+            black_box(minimum_period(
+                black_box(fundamental),
+                black_box(min),
+                black_box(max),
+            ));
+        });
+    }
+}
+
+#[test]
 fn aligned_duration_round_trips_to_driver_frame_count() {
     for rate in [44_100u32, 48_000, 96_000, 192_000] {
         for frames in [1u32, 128, 240, 448, 512, 1024, u32::MAX] {
