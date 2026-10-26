@@ -106,6 +106,9 @@ Validation:
   reader-based entry points. Existing private kernel tests retain their path
   constructors; two signature-inspection tests now select the returned bytes.
 
+Some worktree files were normalized to CRLF after measurement. Their staged LF
+bytes match the recorded hashes exactly, and their text is unchanged.
+
 ## Measurement and reproduction
 
 Windows x86-64, Xeon E5-2696 v4, rustc 1.99.1 (`58cf8f9c3`, LLVM 23.1.1).

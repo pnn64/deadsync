@@ -35,5 +35,10 @@
     "crates\\deadlib-assets\\src\\decode\\open_seek.rs": "217ac1cb9a5a946f261575b21d401aaa23a80783263eb78fc79609c29a1ba738"
   },
   "all_seven_frozen_bodies_match_starting_commit_after_rustfmt": true,
-  "final_patch_replays_to_working_source": true
+  "final_patch_replays_to_working_source": true,
+  "post_measurement_crlf_only_changes_verified_against_exact_staged_lf_hashes": [
+    "crates/deadlib-assets/src/decode/open_perf.rs",
+    "crates/deadlib-assets/src/decode/open_original.rs",
+    "tests/support/perf.rs"
+  ]
 }
