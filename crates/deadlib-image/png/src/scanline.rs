@@ -198,7 +198,7 @@ pub(crate) fn decode(
     })
 }
 
-fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) -> u64 {
+pub(crate) fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) -> u64 {
     let mut score = 0u64;
     for n in 0..row.len() {
         let left = if n >= bpp { row[n - bpp] } else { 0 };
@@ -214,6 +214,56 @@ fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) 
         score += u64::from((out[n] as i8).unsigned_abs());
     }
     score
+}
+
+pub(crate) fn pack_row(
+    image: &Image,
+    y: usize,
+    x: usize,
+    step: usize,
+    width: usize,
+    row: &mut [u8],
+) {
+    let channels = image.color_type.channels();
+    let depth = image.bit_depth;
+    let start = (y * image.width as usize + x) * channels;
+    if step == 1 {
+        match &image.samples {
+            Samples::U8(v) if depth == 8 => {
+                row.copy_from_slice(&v[start..start + width * channels]);
+                return;
+            }
+            Samples::U16(v) => {
+                for (out, value) in row
+                    .as_chunks_mut::<2>()
+                    .0
+                    .iter_mut()
+                    .zip(&v[start..start + width * channels])
+                {
+                    *out = value.to_be_bytes();
+                }
+                return;
+            }
+            _ => (),
+        }
+    }
+    row.fill(0);
+    for pixel in 0..width {
+        let src = start + pixel * step * channels;
+        for channel in 0..channels {
+            let dst = pixel * channels + channel;
+            match &image.samples {
+                Samples::U16(v) => {
+                    row[dst * 2..dst * 2 + 2].copy_from_slice(&v[src + channel].to_be_bytes())
+                }
+                Samples::U8(v) if depth == 8 => row[dst] = v[src + channel],
+                Samples::U8(v) => {
+                    row[dst * depth as usize / 8] |=
+                        v[src + channel] << (8 - depth - (dst * depth as usize % 8) as u8)
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<Vec<u8>, Error> {
@@ -241,24 +291,8 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
         let mut candidate = vec![0; stride];
         let mut best = vec![0; stride];
         for row_index in 0..h {
-            row.fill(0);
             let src_y = y as usize + row_index * dy as usize;
-            for pixel in 0..w {
-                let src =
-                    (src_y * image.width as usize + x as usize + pixel * dx as usize) * channels;
-                for channel in 0..channels {
-                    let dst = pixel * channels + channel;
-                    match &image.samples {
-                        Samples::U16(v) => row[dst * 2..dst * 2 + 2]
-                            .copy_from_slice(&v[src + channel].to_be_bytes()),
-                        Samples::U8(v) if depth == 8 => row[dst] = v[src + channel],
-                        Samples::U8(v) => {
-                            row[dst * depth as usize / 8] |=
-                                v[src + channel] << (8 - depth - (dst * depth as usize % 8) as u8)
-                        }
-                    }
-                }
-            }
+            pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
             let mut selected = 0;
             if filter == Filter::Adaptive {
                 let mut score = u64::MAX;

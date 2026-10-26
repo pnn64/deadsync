@@ -33,7 +33,7 @@ values. ICC and Exif payloads remain opaque to this codec. No color management i
 applied implicitly. Color-description precedence is exposed separately.
 
 See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. In particular,
-Streaming encoding and broader conformance/performance validation remain under development.
+Broader conformance and competitive performance validation remain under development.
 This crate is registered in the workspace but is not used by DeadSync loaders.
 
 APNG frame images retain their original formats. `Animation::default_is_frame`
@@ -62,3 +62,16 @@ leaves bytes after IEND untouched, while `decode_reader(reader, &options)` colle
 final images and rejects trailing bytes like `decode`. The row pipeline keeps a
 bounded number of rows and a 32 KiB history, without complete compressed or
 filtered-image buffers. See `tests/png_stream.rs` for fragmented IO and events.
+
+`zlib::Deflater` is the matching bounded encoder: pass input/output fragments to
+`process`, mark final input with `finish=true`, and drain to `Done`. It retains
+32 KiB input blocks and cross-block LZ77 history. `encode_writer(&png, &options,
+writer)` filters native rows and emits PNG/APNG chunks directly to `Write`,
+handling partial and Interrupted writes. It returns byte and image-buffer
+statistics; the caller controls flushing. Compressed chunks are capped at
+64 KiB while honoring smaller `idat_chunk_size` values. Encoding retains the
+caller's images and metadata without whole filtered/compressed output buffers.
+
+`scripts/verify_independent.ps1` copies only the two packages into a separate
+temporary workspace and runs offline package tests plus the production dependency
+tree. `independent-build.log` records the latest verified run.

@@ -1,10 +1,13 @@
 use crate::codec::Header;
 use crate::{AncillaryChunk, ColorType, FrameControl, Metadata, Transparency};
 mod decode;
+mod encode_rows;
 mod read;
 mod rows;
+mod write;
 pub use decode::StreamDecoder;
 pub use read::decode_reader;
+pub use write::{EncodeStats, encode_writer};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ImageInfo {

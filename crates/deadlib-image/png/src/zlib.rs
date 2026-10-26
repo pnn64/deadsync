@@ -1,7 +1,9 @@
 //! Native RFC 1950/1951 compression. No dictionaries are permitted in PNG.
 use crate::{Error, checksum::adler32, reserve};
 
+mod deflate;
 mod inflate;
+pub use deflate::{DeflateProgress, Deflater};
 pub use inflate::{InflateProgress, Inflater, StreamStatus};
 
 const LENGTH_BASE: [usize; 29] = [

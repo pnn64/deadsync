@@ -154,6 +154,44 @@ fn all_formats_apng_default_roles_and_interlace() {
                         }
                     }
                     reader.finish().unwrap();
+                    for compression in [
+                        deadlib_image_png::zlib::Compression::Stored,
+                        deadlib_image_png::zlib::Compression::Fast,
+                    ] {
+                        let mut streamed = Vec::new();
+                        deadlib_image_png::encode_writer(
+                            &original,
+                            &EncodeOptions {
+                                interlaced,
+                                compression,
+                                idat_chunk_size: 1,
+                                ..Default::default()
+                            },
+                            &mut streamed,
+                        )
+                        .unwrap();
+                        let actual = decode(&streamed).unwrap();
+                        assert_eq!(actual.image, original.image);
+                        assert_eq!(actual.animation, original.animation);
+                        assert_eq!(
+                            deadlib_image_png::decode_reader(
+                                streamed.as_slice(),
+                                &Default::default()
+                            )
+                            .unwrap(),
+                            actual
+                        );
+                        let mut reader = png::Decoder::new(Cursor::new(streamed.as_slice()))
+                            .read_info()
+                            .unwrap();
+                        check_reference(&streamed, &original.image, &mut reader);
+                        for f in &original.animation.as_ref().unwrap().frames {
+                            if let Some(image) = &f.image {
+                                check_reference(&streamed, image, &mut reader);
+                            }
+                        }
+                        reader.finish().unwrap();
+                    }
                 }
             }
         }

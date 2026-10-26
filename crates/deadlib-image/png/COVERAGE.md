@@ -6,20 +6,20 @@ performance. Milestones are committed only after their relevant checks pass.
 
 | Requirement | Implementation / authoritative evidence | State |
 | --- | --- | --- |
-| Separate packages, no application integration | Workspace member list; `cargo tree -p deadlib-image-png --edges normal` contains only `deadlib-image` | Verified |
+| Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
 | Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history and output limits; `tests/compression.rs` | Bidirectional flate2 differential tests pass; exhaustive tree fixtures still pending |
-| Native compression | Stored and fixed Huffman LZ77 encoder; `tests/compression.rs` | Bidirectional flate2 differential tests pass |
+| Native compression | Stored/fixed Huffman LZ77; bounded `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments and 32 KiB block/history boundaries pass |
 | PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Metadata, including Third Edition color chunks | `metadata.rs`, `tests/metadata.rs`, PNGSuite | Typed wire roundtrips and reference text checks pass; language registry and embedded ICC/Exif semantics left to applications |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
-| Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader`, fragmentation tests | PNG/APNG decoding verified with bounded row buffers; streaming encoding pending |
-| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 611 external libpng native-sample checks and normal Rust png / PNGSuite checks pass |
+| Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
+| Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 libpng cases including streaming encodings, format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, seed generator, checked-in reports | 10,000 PNG and 20,000 zlib AddressSanitizer smoke runs pass; long campaigns and coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Five sanitized targets pass 90,000 total executions; longer campaigns and coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -78,8 +78,9 @@ commits are in `tests/oracle/README.md`. This external test is explicitly ignore
 by ordinary Cargo runs because it needs a separately built C executable.
 
 Current limitations: the original slice `decode` path buffers complete compressed
-and filtered images. `StreamDecoder` and `decode_reader` avoid those buffers;
-bounded streaming encoding, broader malformed/fuzz campaigns, reproducible
+and filtered images. `StreamDecoder`, `decode_reader` and `encode_writer` avoid
+unbounded intermediate image/output buffers; broader malformed/fuzz campaigns,
+conformance auditing, reproducible
 benchmarks and measured optimization remain required. ICC/Exif interpretation,
 color management, HDR tone mapping, and animation scheduling are caller concerns.
 The compositor works in stored sample space; no color-management parity is claimed.
@@ -140,16 +141,51 @@ The local streaming benchmark reports 248–413 MiB/s for collected images and
 288–519 MiB/s for row consumption, with approximately 40–49 KiB of image-pipeline
 storage for the 512-pixel RGBA fixtures. See `BENCHMARKS.md` for measurement limits.
 
+Streaming milestone 4c: `zlib::Deflater` preserves bit state, a single 32 KiB input
+block and cross-block match history, with fixed memory across arbitrary input /
+output fragmentation. Empty streams, exact block ends, separately signaled EOF,
+zero-capacity output, fused misuse errors and long wraparound histories pass
+native and independent flate2 checks. `encode_writer` generates filtered native
+plain/Adam7 rows, writes IDAT/fdAT chunks directly and returns measured byte /
+buffer statistics. It handles Interrupted, partial and zero/error writes, honors
+smaller chunk limits, and caps compressed chunk payloads at 64 KiB. Image-pipeline
+capacity is independent of height. The caller retains the input images; no
+entire filtered/compressed/output PNG is buffered internally.
+
+Both encoding APIs pass all 3,240 format combinations against Rust png. The
+stream writer also passes both compression modes across the 60 APNG combinations,
+metadata checks, 540 fragmented-writer cases and both interlace encodings of all
+161 valid PNGSuite files. Libpng now checks 1,061 files: the original 611 plus
+450 stream-writer encodings. The generated-image/APNG property target passes
+20,000 AddressSanitizer executions (409 MiB peak RSS), comparing both native
+decoders and independent Rust png samples. An initial harness-only placement
+assumption was corrected and preserved with a replay log and regression test:
+without PLTE, BeforePalette and BeforeData map to the same wire position.
+
+Independent reuse validation: `scripts/verify_independent.ps1` copies only the
+shared primitives and PNG package into a new temporary workspace, then runs
+offline debug tests and the normal production tree. All tests pass there, with
+the C oracle explicitly ignored and separately verified above. The source copy
+is retained; `independent-build.log` records the run. The original application
+workspace and image loaders are not used by this isolated build.
+
+New conformance audit finding: PNG Third Edition 13.1 specifies opaque-black
+recovery for out-of-range palette indices. The present decoders/render helpers
+still reject those malformed indices, so that recovery rule is **not achieved**.
+Also audit UTF-8 handling against the Encoding Standard recommendation (13.7),
+and separate encoder field requirements from decoder-tolerated values. These
+gaps take priority over additional optimization. The official Third Edition
+errata currently corrects an mDCV example without changing conformance.
+
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
-1. Complete bounded zlib/PNG encoding to match the new incremental decoders,
-   including arbitrary input/output and write fragmentation, APNG/row boundaries,
-   finish/error behavior and resource bounds without complete payload buffers.
+1. Address the known Third Edition indexed-color recovery gap, audit UTF-8 and
+   encoder/decoder field distinctions, and validate normative error behavior.
 2. Extend independent conformance evidence to the full Third Edition clause
    matrix, including ancillary semantic edge cases, BCP47 language-tag grammar,
    all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
-3. Add shrinking/generated image properties, broader structured mutations,
+3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and
    coverage review beyond the current streaming and CRC-repaired smoke targets.
 4. Improve compression ratio/match selection and profile filters/inflation on a

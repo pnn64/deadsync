@@ -13,6 +13,7 @@ cargo +nightly fuzz run decode -- -runs=10000 -seed=782347 -max_len=65536 -timeo
 cargo +nightly fuzz run zlib -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run png_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run inflate_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
+cargo +nightly fuzz run encode_stream -- -runs=20000 -seed=782347 -max_len=256 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 ```
 
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
@@ -34,6 +35,14 @@ every emitted default-image / APNG-frame row sample, under varying input splits.
 `inflate_stream` compares fragmented decoding, prefix byte counts and fused
 errors against buffered native zlib decoding. Independent reference parity is
 provided by the other targets and integration/oracle tests.
+
+`encode_stream` derives legal native images and APNG rectangles from shrinkable
+byte inputs, covering all 15 formats, filters, interlace, both compression modes,
+transparency and text. It checks the stream writer's native roundtrip through
+both decoders, bounded capacity, byte counts, and independent Rust png frame
+samples. The seed generator provides 1,080 deterministic structured inputs.
+An initial harness assumed distinct metadata slots without PLTE; the corrected
+canonical placement and a fixed-input replay are documented in `reports/`.
 
 The harness type-checks on Windows, but the instrumented MSVC build encountered
 unresolved `__start___sancov_*` / `__stop___sancov_*` linker symbols on this host.

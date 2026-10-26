@@ -98,6 +98,12 @@ fn row_decode(bytes: &[u8]) -> (usize, usize) {
         }
     }
 }
+fn writer_encode(png: &Png) -> (Vec<u8>, deadlib_image_png::EncodeStats) {
+    let mut output = Vec::new();
+    let stats =
+        deadlib_image_png::encode_writer(png, &EncodeOptions::default(), &mut output).unwrap();
+    (output, stats)
+}
 fn main() {
     let iterations = std::env::var("DEADLIB_PNG_BENCH_ITERS")
         .ok()
@@ -137,6 +143,8 @@ fn main() {
         assert_eq!(reference_decode(&bytes), png.image.samples);
         let native = encode(&png, &EncodeOptions::default()).unwrap();
         assert_eq!(reference_decode(&native), png.image.samples);
+        let (streamed, encode_stats) = writer_encode(&png);
+        assert_eq!(reference_decode(&streamed), png.image.samples);
         for (codec, operation, size, ns) in [
             (
                 "deadlib-image-png",
@@ -216,6 +224,28 @@ fn main() {
                     iterations,
                 ),
             ),
+            (
+                "deadlib-image-png",
+                "encode-writer",
+                streamed.len(),
+                time(|| writer_encode(black_box(&png)), iterations),
+            ),
+            (
+                "deadlib-image-png",
+                "encode-discard",
+                streamed.len(),
+                time(
+                    || {
+                        deadlib_image_png::encode_writer(
+                            black_box(&png),
+                            &EncodeOptions::default(),
+                            std::io::sink(),
+                        )
+                        .unwrap()
+                    },
+                    iterations,
+                ),
+            ),
         ] {
             println!(
                 "{name}\t{codec}\t{operation}\t{iterations}\t{size}\t{}\t{ns}\t{:.3}\t{}",
@@ -223,6 +253,8 @@ fn main() {
                 raw.len() as f64 * 1e9 / ns as f64 / (1024. * 1024.),
                 if operation == "decode-rows" {
                     row_memory
+                } else if matches!(operation, "encode-writer" | "encode-discard") {
+                    encode_stats.peak_image_buffer_bytes
                 } else {
                     0
                 },

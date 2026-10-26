@@ -15,6 +15,9 @@ produce native sample vectors, including conversion to native u16 for 16-bit
 images. Encode timings use each codec's default settings; compression effort and
 resulting sizes differ and must be considered alongside throughput.
 
+Checked-in TSV artifacts use UTF-8. Windows PowerShell 5 defaults to UTF-16 for
+redirection; use `Out-File -Encoding utf8` when capturing results there.
+
 Baseline: 2026-10-26, Windows x86-64, Intel Xeon E5-2696 v4 @ 2.20 GHz
 (22 cores, 44 logical processors), Rust 1.99.1, Cargo bench profile (opt-level 3,
 LTO enabled, debug info 1, static MSVC runtime), png 0.18.1, flate2 1.1.10.
@@ -60,3 +63,14 @@ row consumption at 288–519 MiB/s, with 40,762 bytes of image-pipeline storage 
 RGBA8 and 48,954 for RGBA16, independent of image height. These are local
 directional results with concurrent activity on the host, not controlled parity
 claims. Rust png still measured 727–1310 MiB/s on these fixtures.
+
+`benchmark-streaming-encode.tsv` adds `encode-writer` (retain the output vector)
+and `encode-discard` (write to a sink). Native rows, 32 KiB DEFLATE blocks and a
+64 KiB chunk buffer replace whole filtered/compressed image allocations. The
+default Fast writer reported 700,666 bytes of image-pipeline storage for RGBA8
+and 708,858 for RGBA16 at width 512; caller images, destination storage and
+metadata validation are excluded. Identical-width tests confirm capacity does
+not grow with height. Native writer throughput was 23–45 MiB/s locally and the
+compression-size gap remains, particularly on the 16-bit gradient. The writer
+and original encoder need not emit identical bytes because their DEFLATE block
+boundaries differ. Exact decoded samples are compared independently instead.

@@ -110,6 +110,9 @@ fn metadata_wire_and_typed_roundtrip_with_reference_text() {
     }
     let encoded = encode(&png, &EncodeOptions::default()).unwrap();
     let decoded = decode(&encoded).unwrap();
+    let mut streamed = Vec::new();
+    deadlib_image_png::encode_writer(&png, &EncodeOptions::default(), &mut streamed).unwrap();
+    assert_eq!(decode(&streamed).unwrap(), decoded);
     assert_eq!(
         deadlib_image_png::decode_reader(encoded.as_slice(), &Default::default()).unwrap(),
         decoded
@@ -256,4 +259,34 @@ fn unknown_chunks_obey_png_editor_copy_rules() {
     assert_eq!(decoded.ancillary[0].kind, *b"vpAg");
     png.ancillary[0].kind = *b"ABCD";
     assert!(encode(&png, &EncodeOptions::default()).is_err());
+}
+
+#[test]
+fn metadata_slots_without_palette_have_the_same_wire_position() {
+    let mut png = base();
+    let value = M::Text {
+        keyword: b"Comment".to_vec(),
+        text: b"same position without PLTE".to_vec(),
+        compressed: false,
+    };
+    png.ancillary.push(
+        value
+            .to_chunk(Pos::BeforeData, Compression::Stored)
+            .unwrap(),
+    );
+    for streaming in [false, true] {
+        let bytes = if streaming {
+            let mut out = Vec::new();
+            deadlib_image_png::encode_writer(&png, &EncodeOptions::default(), &mut out).unwrap();
+            out
+        } else {
+            encode(&png, &EncodeOptions::default()).unwrap()
+        };
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(decoded.ancillary[0].position, Pos::BeforePalette);
+        assert_eq!(
+            decoded.metadata(Limits::default()).unwrap(),
+            vec![value.clone()]
+        );
+    }
 }

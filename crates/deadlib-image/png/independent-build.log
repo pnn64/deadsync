@@ -1,0 +1,157 @@
+Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-9e035770f6834b0a93dbbeb025b665e2
+Command: cargo test -p deadlib-image -p deadlib-image-png --offline
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+     Locking 11 packages to highest Rust 1.97 compatible versions
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-9e035770f6834b0a93dbbeb025b665e2)
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-9e035770f6834b0a93dbbeb025b665e2\png)
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.75s
+     Running unittests src\lib.rs (target\debug\deps\deadlib_image-7341d42afe0051e4.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\deadlib_image_png-e684ee025b6cad6a.exe)
+
+running 3 tests
+test checksum::tests::known_checksums ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\apng.rs (target\debug\deps\apng-38d3302bd0874a61.exe)
+
+running 4 tests
+test malformed_animation_controls_and_aggregate_limits ... ok
+test decode_independent_reference_apng ... ok
+test independent_twenty_frame_fixture ... ok
+test all_formats_apng_default_roles_and_interlace ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.94s
+
+     Running tests\compositing.rs (target\debug\deps\compositing-e7de915ed00ec819.exe)
+
+running 3 tests
+test explicit_precision_palette_and_transparency_expansion ... ok
+test source_over_and_disposal_known_answers ... ok
+test separate_default_and_first_previous ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compression.rs (target\debug\deps\compression-7233ca6cd596c65e.exe)
+
+running 5 tests
+test truncation_checksums_limits_and_trailing_data ... ok
+test dynamic_literal_only_and_single_symbol_trees ... ok
+test mixed_block_alignment_and_prefetched_stored_bytes ... ok
+test bidirectional_differential ... ok
+test deterministic_mutation_campaign ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.60s
+
+     Running tests\deflate_stream.rs (target\debug\deps\deflate_stream-32b21059cc86bc8e.exe)
+
+running 3 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.11s
+
+     Running tests\inflate_stream.rs (target\debug\deps\inflate_stream-eb4c90ad5a588dec.exe)
+
+running 3 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.37s
+
+     Running tests\libpng.rs (target\debug\deps\libpng-62f7916e9ecec2bd.exe)
+
+running 1 test
+test libpng_native_sample_conformance ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\malformed.rs (target\debug\deps\malformed-541d596ab5ad1183.exe)
+
+running 2 tests
+test configured_resource_limits ... ok
+test independent_known_answer_and_normative_failures ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metadata.rs (target\debug\deps\metadata-1646e145bfecec85.exe)
+
+running 5 tests
+test unknown_chunks_obey_png_editor_copy_rules ... ok
+test metadata_slots_without_palette_have_the_same_wire_position ... ok
+test icc_and_palette_metadata ... ok
+test metadata_wire_and_typed_roundtrip_with_reference_text ... ok
+test metadata_constraints_and_expansion_budget ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\png_stream.rs (target\debug\deps\png_stream-f660d07fc3cdfbcb.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.17s
+
+     Running tests\png_write.rs (target\debug\deps\png_write-7cd4ecec7e75e861.exe)
+
+running 3 tests
+test write_failures_and_input_validation ... ok
+test bounded_encoder_scratch_and_maximum_chunk_size ... ok
+test all_formats_fragmented_writes_and_chunks ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+
+     Running tests\pngsuite.rs (target\debug\deps\pngsuite-97e00989336d2ad3.exe)
+
+running 1 test
+test pngsuite_native_samples_and_reencoding ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.96s
+
+     Running tests\static_png.rs (target\debug\deps\static_png-8ceb40fc0dd143b8.exe)
+
+running 3 tests
+test decode_reference_encodings ... ok
+test one_byte_idat_and_truncations ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.06s
+
+   Doc-tests deadlib_image
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_image_png
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-9e035770f6834b0a93dbbeb025b665e2\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-9e035770f6834b0a93dbbeb025b665e2)

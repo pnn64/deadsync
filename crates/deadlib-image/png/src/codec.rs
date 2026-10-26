@@ -372,24 +372,26 @@ pub(crate) fn write_chunk(output: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) -> 
 
 fn write_ancillary(out: &mut Vec<u8>, png: &Png, position: ChunkPosition) -> Result<(), Error> {
     for c in png.ancillary.iter().filter(|c| c.position == position) {
-        if c.kind[0] & 32 == 0
-            || c.kind[2] & 32 != 0
-            || !c.kind.iter().all(u8::is_ascii_alphabetic)
-            || matches!(&c.kind, b"tRNS" | b"acTL" | b"fcTL" | b"fdAT")
-        {
-            return Err(Error::Invalid("ancillary chunk type"));
+        if ancillary_writable(c)? {
+            write_chunk(out, &c.kind, &c.data)?;
         }
-        // Reencoding changes critical IDAT data. PNG editors must not copy
-        // unrecognized chunks whose safe-to-copy bit is unset (PNG 3, 14.2).
-        if c.kind[3] & 32 == 0 && !crate::metadata::is_known(&c.kind) {
-            continue;
-        }
-        write_chunk(out, &c.kind, &c.data)?;
     }
     Ok(())
 }
 
-pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
+pub(crate) fn ancillary_writable(c: &AncillaryChunk) -> Result<bool, Error> {
+    if c.kind[0] & 32 == 0
+        || c.kind[2] & 32 != 0
+        || !c.kind.iter().all(u8::is_ascii_alphabetic)
+        || matches!(&c.kind, b"tRNS" | b"acTL" | b"fcTL" | b"fdAT")
+    {
+        return Err(Error::Invalid("ancillary chunk type"));
+    }
+    // Reencoding changes critical IDAT data (PNG 3, 14.2).
+    Ok(c.kind[3] & 32 != 0 || crate::metadata::is_known(&c.kind))
+}
+
+pub(crate) fn validate_encoding(png: &Png, options: &EncodeOptions) -> Result<Header, Error> {
     png.image
         .validate()
         .map_err(|_| Error::Invalid("image samples"))?;
@@ -410,7 +412,6 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     {
         return Err(Error::Invalid("palette for color type"));
     }
-    let mut out = SIGNATURE.to_vec();
     let header = Header {
         width: png.image.width,
         height: png.image.height,
@@ -428,27 +429,38 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
         },
     )?;
     crate::apng::validate(png, header)?;
+    match &png.transparency {
+        None => (),
+        Some(Transparency::Grayscale(_)) if header.color == ColorType::Grayscale => (),
+        Some(Transparency::Rgb(_)) if header.color == ColorType::Rgb => (),
+        Some(Transparency::Palette(v))
+            if header.color == ColorType::Indexed && v.len() <= png.palette.len() => {}
+        _ => return Err(Error::Invalid("transparency for color type")),
+    }
+    for c in &png.ancillary {
+        ancillary_writable(c)?;
+    }
+    Ok(header)
+}
+
+pub(crate) fn transparency_bytes(png: &Png) -> Option<Vec<u8>> {
+    Some(match png.transparency.as_ref()? {
+        Transparency::Grayscale(v) => v.to_be_bytes().to_vec(),
+        Transparency::Rgb(v) => v.iter().flat_map(|v| v.to_be_bytes()).collect(),
+        Transparency::Palette(v) => v.clone(),
+    })
+}
+
+pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
+    let header = validate_encoding(png, options)?;
+    let mut out = SIGNATURE.to_vec();
     write_chunk(&mut out, b"IHDR", &header.wire())?;
     write_ancillary(&mut out, png, ChunkPosition::BeforePalette)?;
     if !png.palette.is_empty() {
         let data: Vec<u8> = png.palette.iter().flatten().copied().collect();
         write_chunk(&mut out, b"PLTE", &data)?;
     }
-    if let Some(value) = &png.transparency {
-        let data = match value {
-            Transparency::Grayscale(v) if header.color == ColorType::Grayscale => {
-                v.to_be_bytes().to_vec()
-            }
-            Transparency::Rgb(v) if header.color == ColorType::Rgb => {
-                v.iter().flat_map(|v| v.to_be_bytes()).collect()
-            }
-            Transparency::Palette(v)
-                if header.color == ColorType::Indexed && v.len() <= png.palette.len() =>
-            {
-                v.clone()
-            }
-            _ => return Err(Error::Invalid("transparency for color type")),
-        };
+    if let Some(data) = transparency_bytes(png) {
         write_chunk(&mut out, b"tRNS", &data)?;
     }
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;

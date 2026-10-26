@@ -6,6 +6,18 @@ fn main() -> std::io::Result<()> {
     let zlib = root.join("fuzz/corpus/zlib");
     let png_stream = root.join("fuzz/corpus/png_stream");
     let inflate_stream = root.join("fuzz/corpus/inflate_stream");
+    let encode_stream = root.join("fuzz/corpus/encode_stream");
+    fs::create_dir_all(&encode_stream)?;
+    for format in 0..15 {
+        for flags in [0, 1, 2, 3, 4, 6, 12, 14, 16, 32, 64, 127] {
+            for filter in 0..6 {
+                fs::write(
+                    encode_stream.join(format!("format-{format}-{flags}-{filter}")),
+                    [format, 17, 13, flags, filter, 0, 7, 127, 255, 1, 42, 128],
+                )?;
+            }
+        }
+    }
     fs::create_dir_all(&png)?;
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;

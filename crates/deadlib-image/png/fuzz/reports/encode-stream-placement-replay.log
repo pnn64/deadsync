@@ -1,0 +1,15 @@
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.58s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.14s
+     Running `/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/encode_stream/ -runs=1 -timeout=5 fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 823808181
+INFO: Loaded 1 modules   (21909 inline 8-bit counters): 21909 [0x6112672d3350, 0x6112672d88e5), 
+INFO: Loaded 1 PC tables (21909 PCs): 21909 [0x6112672d88e8,0x61126732e238), 
+/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/encode_stream: Running 1 inputs 1 time(s) each.
+Running: fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f
+Executed fuzz/artifacts/encode_stream/crash-e68279215d400c33ad5865fc518958487863509f in 6 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***

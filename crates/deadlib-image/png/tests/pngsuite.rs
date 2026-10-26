@@ -60,6 +60,21 @@ fn pngsuite_native_samples_and_reencoding() {
         }
         reader.finish().unwrap();
         for interlaced in [false, true] {
+            let mut streamed = Vec::new();
+            deadlib_image_png::encode_writer(
+                &actual,
+                &EncodeOptions {
+                    interlaced,
+                    ..Default::default()
+                },
+                &mut streamed,
+            )
+            .unwrap_or_else(|e| panic!("stream encode {name}: {e}"));
+            assert_eq!(
+                decode(&streamed).unwrap().image,
+                actual.image,
+                "stream roundtrip {name}"
+            );
             let encoded = encode(
                 &actual,
                 &EncodeOptions {

@@ -23,6 +23,7 @@ pub use stream::{
     DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, Row, RowSamples,
     StreamDecoder, decode_reader,
 };
+pub use stream::{EncodeStats, encode_writer};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {

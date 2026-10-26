@@ -1,0 +1,4 @@
+*.tsv text eol=lf
+independent-build.log text eol=lf
+# Keep raw tool diagnostics, including libFuzzer's intentional trailing spaces.
+fuzz/reports/*.log -whitespace

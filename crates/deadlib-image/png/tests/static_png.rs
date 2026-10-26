@@ -146,6 +146,16 @@ fn complete_native_format_filter_and_adam7_matrix() {
                             assert_eq!(actual.palette, original.palette);
                             assert_eq!(actual.transparency, original.transparency);
                             assert_reference(&encoded, &original.image);
+                            let mut streamed = Vec::new();
+                            let stats = deadlib_image_png::encode_writer(
+                                &original,
+                                &options,
+                                &mut streamed,
+                            )
+                            .unwrap();
+                            assert_eq!(stats.bytes_written, streamed.len());
+                            assert_eq!(decode(&streamed).unwrap().image, original.image);
+                            assert_reference(&streamed, &original.image);
                             cases += 1;
                         }
                     }

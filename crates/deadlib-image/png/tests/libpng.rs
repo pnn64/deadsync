@@ -129,11 +129,26 @@ fn libpng_native_sample_conformance() {
                         fs::write(&scratch, bytes).unwrap();
                         verify(oracle, &scratch);
                         count += 1;
+                        let mut streamed = Vec::new();
+                        deadlib_image_png::encode_writer(
+                            &png,
+                            &EncodeOptions {
+                                filter,
+                                interlaced,
+                                idat_chunk_size: 7,
+                                ..Default::default()
+                            },
+                            &mut streamed,
+                        )
+                        .unwrap();
+                        fs::write(&scratch, streamed).unwrap();
+                        verify(oracle, &scratch);
+                        count += 1;
                     }
                 }
             }
         }
     }
     fs::remove_file(scratch).unwrap();
-    assert_eq!(count, 611);
+    assert_eq!(count, 1061);
 }
