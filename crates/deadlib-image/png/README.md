@@ -51,8 +51,9 @@ an explicit development script; decoding and encoding perform no network access.
 Encoding zeroes unused tRNS/bKGD sample bits and rejects hIST zero frequencies
 for palette indices used by the default image or animation frames.
 
-See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. In particular,
-Broader conformance and competitive performance validation remain under development.
+See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. Broader
+conformance and competitive performance validation remain under development.
+The [clause audit](CONFORMANCE.md) records supported behavior and remaining gates.
 This crate is registered in the workspace but is not used by DeadSync loaders.
 
 APNG frame images retain their original formats. `Animation::default_is_frame`

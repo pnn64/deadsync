@@ -245,3 +245,117 @@ fn metadata_access_rejects_invalid_sample_formats_without_panicking() {
     png.image.bit_depth = 0;
     assert!(png.metadata(Limits::default()).is_err());
 }
+
+#[test]
+fn srgb_requires_compatible_fallback_gamma_and_chromaticities_when_encoding() {
+    use deadlib_image_png::zlib::Compression;
+    let chromaticities = [31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000];
+    for color in [
+        ColorType::Grayscale,
+        ColorType::Rgb,
+        ColorType::Indexed,
+        ColorType::GrayscaleAlpha,
+        ColorType::Rgba,
+    ] {
+        for depth in [1, 2, 4, 8, 16] {
+            if !color.allows_depth(depth) {
+                continue;
+            }
+            let mut png = Png::new(Image {
+                width: 1,
+                height: 1,
+                color_type: color,
+                bit_depth: depth,
+                samples: if depth == 16 {
+                    Samples::U16(vec![12345; color.channels()])
+                } else {
+                    Samples::U8(vec![1; color.channels()])
+                },
+            });
+            if color == ColorType::Indexed {
+                png.palette = vec![[0; 3], [255; 3]];
+            }
+            for intent in 0..4 {
+                for value in [
+                    Metadata::Srgb(intent),
+                    Metadata::Gamma(45455),
+                    Metadata::Chromaticities(chromaticities),
+                ] {
+                    png.ancillary.push(
+                        value
+                            .to_chunk(ChunkPosition::BeforePalette, Compression::Fast)
+                            .unwrap(),
+                    );
+                }
+                for encoded in both_encodings(&png) {
+                    let actual = decode(&encoded).unwrap();
+                    assert_eq!(
+                        actual.metadata(Limits::default()).unwrap(),
+                        png.metadata(Limits::default()).unwrap()
+                    );
+                    assert_eq!(actual.color_description().unwrap().kind, *b"sRGB");
+                }
+                png.ancillary.clear();
+            }
+        }
+    }
+    let base = Png::new(Image {
+        width: 1,
+        height: 1,
+        color_type: ColorType::Rgba,
+        bit_depth: 8,
+        samples: Samples::U8(vec![0; 4]),
+    });
+    let srgb = Metadata::Srgb(0)
+        .to_chunk(ChunkPosition::BeforePalette, Compression::Fast)
+        .unwrap();
+    let mut invalid_fallbacks = Vec::new();
+    for gamma in [1, 45454, 45456, 0x7fff_ffff] {
+        invalid_fallbacks.push(Metadata::Gamma(gamma));
+    }
+    for channel in 0..8 {
+        let mut values = chromaticities;
+        values[channel] += 1;
+        invalid_fallbacks.push(Metadata::Chromaticities(values));
+    }
+    for value in invalid_fallbacks {
+        let fallback = value
+            .to_chunk(ChunkPosition::BeforePalette, Compression::Fast)
+            .unwrap();
+        for reverse in [false, true] {
+            let mut chunks = vec![
+                (b"sRGB", srgb.data.clone()),
+                (&fallback.kind, fallback.data.clone()),
+            ];
+            if reverse {
+                chunks.reverse();
+            }
+            let bytes = fixture(&base, &chunks);
+            let actual = decode(&bytes).unwrap();
+            assert_eq!(
+                decode_reader(bytes.as_slice(), &Default::default()).unwrap(),
+                actual
+            );
+            // The mismatched lower-precedence value remains available as raw
+            // metadata; native image decoding follows the supported sRGB chunk.
+            assert_eq!(actual.color_description().unwrap().kind, *b"sRGB");
+            assert!(actual.metadata(Limits::default()).unwrap().contains(&value));
+            assert!(encode(&actual, &Default::default()).is_err());
+            let mut out = Vec::new();
+            assert!(encode_writer(&actual, &Default::default(), &mut out).is_err());
+            assert!(out.is_empty());
+            let mut higher = actual.clone();
+            higher.ancillary.push(
+                Metadata::Cicp([9, 16, 0, 1])
+                    .to_chunk(ChunkPosition::BeforePalette, Compression::Fast)
+                    .unwrap(),
+            );
+            assert!(encode(&higher, &Default::default()).is_err());
+            let mut without_srgb = actual;
+            without_srgb.ancillary.retain(|c| &c.kind != b"sRGB");
+            for encoded in both_encodings(&without_srgb) {
+                assert!(decode(&encoded).is_ok());
+            }
+        }
+    }
+}

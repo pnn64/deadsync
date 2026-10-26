@@ -3,6 +3,8 @@
 This is an incremental implementation, not yet a claim of complete conformance.
 The target remains complete independent PNG support and measured competitive
 performance. Milestones are committed only after their relevant checks pass.
+The [clause audit](CONFORMANCE.md) maps the Third Edition to current code,
+evidence, application responsibilities and explicitly open items.
 
 | Requirement | Implementation / authoritative evidence | State |
 | --- | --- | --- |
@@ -16,6 +18,7 @@ performance. Milestones are committed only after their relevant checks pass.
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
 | Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
+| sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
@@ -276,13 +279,32 @@ It passes 20,000 Linux AddressSanitizer executions in 245 seconds, peak RSS
 372 MiB, from 1,800 deterministic eight-byte seeds. The full log is
 `fuzz/reports/profiles-linux.log`; `__asan_init` was verified in its binary.
 
+sRGB relationship audit: encoder validation now rejects a supplied sRGB chunk
+whose accompanying gAMA or cHRM values differ from PNG 11.3.2.5 Table 17. The
+condition is independent of chunk order and still applies when cICP is present.
+Tests cover all 15 formats and four intents, four incompatible gamma values and
+each chromaticity component, before/after sRGB. The decoder retains lower-priority
+wire values and selects supported sRGB; native samples remain unchanged. Both
+encoders reject before writer output, while the same gAMA/cHRM values remain
+encodable when no sRGB chunk is supplied.
+The complete release suite passes 58 tests (two optional C tests ignored), strict
+Clippy passes, and the updated isolated offline package build passes. The
+production dependency tree remains only the shared `deadlib-image` package.
+
+`CONFORMANCE.md` now inventories the functional clauses through 15.3.4 with
+concrete evidence and open items. It explicitly distinguishes native sample /
+metadata processing from caller color/display policies. Current audit priorities
+include H.273 code-point validity, systematic unknown/order/field mutations,
+DEFLATE header/tree equivalence classes and APNG error-recovery policy. This is
+not a declaration of complete conformance or competitive performance.
+
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
 
 1. Continue the clause-by-clause field and error-behavior audit beyond the now-
    covered indexed-color recovery, text decoding and encoder field distinctions.
-2. Extend independent conformance evidence to the full Third Edition clause
-   matrix, including ancillary semantic edge cases and BCP47 extension semantics,
+2. Resolve the open rows in the Third Edition clause matrix, including ancillary
+   semantic edge cases and the scope of BCP47 extension semantics,
    all Huffman tree corner cases, malformed APNG ordering, and unknown chunks.
 3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and

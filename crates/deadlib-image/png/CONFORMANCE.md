@@ -1,0 +1,104 @@
+# PNG Third Edition clause audit
+
+This matrix tracks the implementation against the [24 June 2025 Recommendation](https://www.w3.org/TR/2025/REC-png-3-20250624/)
+and its [published errata](https://www.w3.org/2025/06/REC-PNG-20250624-errata).
+It is an audit in progress, not a certificate of complete conformance.
+`Covered` identifies current code and automated evidence; it does not mean every
+possible input was enumerated. `Open` identifies missing implementation or
+insufficient evidence. `Application` identifies an explicit caller responsibility
+of this native-sample codec, rather than an implicit image transformation.
+
+All test paths below are relative to the PNG package. `COVERAGE.md` records exact
+campaign counts, external tool versions, isolated builds and remaining milestones.
+
+## Representation, framing and compression
+
+| Clauses | Implementation and evidence | Audit |
+| --- | --- | --- |
+| 1–3: scope and terminology | Two independent Cargo packages; native `Image`, `Samples`, color type and precision; production dependency tree in `independent-build.log` | Covered for package architecture; no application integration |
+| 4.1–4.6, 6.1: static images and native representation | Five color types, all 15 legal depth combinations; `tests/static_png.rs`, `tests/pngsuite.rs`, external C oracle | Covered for native samples; arbitrary non-PNG reference formats are outside `Image`'s current contract |
+| 4.4.1–4.4.5, 6.2: alpha/indexing/merging/scaling | Native channels and indices remain exact; `to_rgba16` is explicit; `tests/compositing.rs`, `tests/palette.rs`, `tests/metadata_fields.rs` | Covered for PNG sample storage and explicit expansion; source-image quantization/scaling is caller-controlled |
+| 4.7: additional information and color precedence | Raw placement plus typed metadata; supported color selection with bounded ICC validation; `tests/metadata.rs`, `tests/profiles.rs` | Covered for wire values and selection; color transforms are Application |
+| 4.8, 5.1–5.3: signature and chunks | Literal signature, checked lengths, CRCs and core grammar in buffered/stream parsers; `tests/malformed.rs`, `tests/png_stream.rs` | Covered; more systematic length/placement mutations remain Open |
+| 5.4: chunk property bits | Literal case-sensitive dispatch; unknown critical errors; ancillary retention; reserved-bit chunks take unknown handling | Covered by implementation and existing unknown-chunk tests; full bit/case permutation matrix remains Open |
+| 5.5: CRC | Native CRC-32 for chunks and fdAT sequence/data; known answers, bulk tails/splits, corrupt-stream tests | Covered |
+| 5.6: ordering | Core parser state plus shared ancillary singleton/order/name validator; static/APNG/metadata suites | Covered for named cases; exhaustive ordering mutations remain Open |
+| 5.7–5.8: extensions and private fields | Public raw ancillary API enforces alphabetic names, ancillary/reserved bits; unknown critical chunks fail; encoder emits only supported IHDR methods | Covered for current extension API; no new public chunk definitions |
+| 7.1: integers and byte order | Big-endian native u16 samples; 31-bit PNG u32 fields and checked dimensions/lengths; format and malformed suites | Covered; full field-boundary matrix remains Open |
+| 7.2: scanlines | Native sub-byte packing/unpacking, per-row padding, 8/16-bit samples; 3,240 format/geometry/filter/interlace/compression cases | Covered; nonzero unused input bits are not image samples |
+| 7.3, 9.1–9.4: filters | Native None/Sub/Up/Average/Paeth plus adaptive encoder selection; byte-wise wrapping arithmetic and pass resets | Covered by reference sample matrix and PNGSuite |
+| 8.1: Adam7 | All seven pass origins/steps, empty passes, plain/stream writer and row-reader paths | Covered by geometry matrix, PNGSuite and APNG subframes |
+| 10.1, RFC 1950: zlib | CM/FCHECK/CINFO/FDICT checks, advertised-window distances, Adler-32, explicit limits and prefix consumption | Covered by code and differential tests; dedicated exhaustive header/small-window boundary fixtures remain Open |
+| 10.1, RFC 1951: DEFLATE decode | Stored/fixed/dynamic trees, repeats, lengths/distances, empty/single trees and mixed blocks; `tests/compression.rs`, `tests/inflate_stream.rs` | Covered for existing equivalence classes; broader malformed tree generation remains Open |
+| 10.2: image datastream | One zlib stream across arbitrary IDAT/fdAT splits; exact filtered/native output lengths; prefix tolerance for unused final data | Covered by one-byte payloads, truncations and streaming properties |
+| 10.3: compressed metadata | Independent native zlib streams and cumulative raw/inflated metadata limits; metadata/text/profile tests and structured profile fuzzer | Covered; no preset dictionaries or concatenated metadata streams |
+
+## Chunk requirements
+
+| Clause / chunk | Implementation and evidence | Audit |
+| --- | --- | --- |
+| 11.2.1 IHDR | Required first, singleton, nonzero 31-bit dimensions, legal color/depth, method 0, interlace 0/1 | Covered by native/reference format matrix and malformed headers |
+| 11.2.2 PLTE | Presence by color type, 1–256 RGB entries, depth capacity and placement; native index retention | Covered; out-of-range index recovery is listed below |
+| 11.2.3 IDAT | Consecutive chunks, arbitrary/empty payload boundaries, single concatenated zlib stream, ignored unused final compressed bytes | Covered by buffered/reader/row/encoder tests |
+| 11.2.4 IEND | Empty, required last; whole-file APIs reject trailing bytes, push parser reports prefix completion | Covered by truncation/grammar/prefix tests |
+| 11.3.1.1 tRNS | Color-specific lengths, PLTE dependency, missing palette alpha = opaque, unused bits masked, both bytes of 16-bit keys compared | Covered by palette/field/compositing tests; encoder zeroes unused bits |
+| 11.3.2.1 cHRM | Exact fixed-point integers, size, 31-bit range, singleton/order and sRGB compatibility | Covered for wire values; physical color interpretation is Application |
+| 11.3.2.2 gAMA | Exact nonzero fixed-point value, range, singleton/order and sRGB compatibility | Covered for wire values; gamma conversion is Application |
+| 11.3.2.3 iCCP | Names/method, bounded native inflate, RGB/GRAY match, common ICC header/tag framing and version-aware v4.4 table checks | Covered by 960 profile wire cases, eight pinned independent profiles, C oracle and structured mutations; transform/tag semantics remain opaque |
+| 11.3.2.4 sBIT | Exact channel count and nonzero depth bounded by native/palette precision | Covered by metadata suite; original significant-bit recovery is available from unchanged native samples |
+| 11.3.2.5 sRGB | Four intents, singleton/order; accompanying gAMA/cHRM must use Table 17 values when encoding | Covered by all-format/intent and incompatible-fallback tests; decoder follows higher-precedence description |
+| 11.3.2.6 cICP | Four raw code points, matrix 0, full-range flag 0/1, singleton/order and highest selection priority | Covered for PNG-local fields; H.273 primaries/transfer code-point validity and future values remain Open |
+| 11.3.2.7 mDCV | Exact 16/32-bit fixed-point fields, length/range, cICP dependency and placement | Covered for wire structure; broader semantic/boundary fixtures and tone mapping remain Open / Application |
+| 11.3.2.8 cLLI | Exact MaxCLL/MaxFALL values, 31-bit range and placement | Covered for wire structure; broader boundary fixtures and rendering policy remain Open / Application |
+| 11.3.3.1 keywords | Printable Latin-1 ranges, 1–79 bytes, no leading/trailing/consecutive spaces | Covered by metadata tests; exhaustive keyword-byte/length matrix remains Open |
+| 11.3.3.2 tEXt | Keyword and non-null Latin-1 bytes; raw placement/retention and typed serialization | Covered by PNGSuite, metadata and reference tests |
+| 11.3.3.3 zTXt | Method 0 and independent bounded zlib stream; non-null Latin-1 text | Covered by compression/expansion/method tests |
+| 11.3.3.4 iTXt | Flags, ignored decoder method when uncompressed, strict encoder method, UTF-8 BOM/replacement, raw retention and BCP47 grammar/registration | Covered by all 256 method values, UTF-8 known answers and 9,902 IANA records/codes; extension-specific semantics need final scope audit |
+| 11.3.4.1 bKGD | Color-specific size, indexed bounds, unused-bit masking, encoder normalization and placement | Covered by all nonindexed formats and indexed metadata tests; compositing against suggested background is Application |
+| 11.3.4.2 hIST | One frequency per PLTE entry, placement and nonzero frequencies for used encoded indices, including frames | Covered by field tests; suggested-quantization semantics for truecolor are Application |
+| 11.3.4.3 pHYs | Two exact 31-bit values, known unit flag, singleton/order | Covered for wire structure; display aspect correction is Application |
+| 11.3.4.4 sPLT | Names/depth/entry shape/frequency order; repeated names rejected | Covered by 8/16-bit metadata tests; broader entry-count/frequency mutations remain Open |
+| 11.3.4.5 eXIf | Both TIFF byte orders and first-directory framing; unsupported data retained as unknown; encoder rejects unsupported containers | Covered by endian/truncation/offset tests and exact C/Rust payload comparisons; remaining Exif tags/directories/thumbnails are opaque |
+| 11.3.5.1 tIME | Exact fields, documented month/day/time ranges, leap second, singleton and legal placement | Covered by metadata tests; calendar/display/local-time policy is Application |
+| 11.3.6.1 acTL | Before IDAT, singleton, nonzero frame count, plays/frame limits and actual count agreement | Covered by APNG tests; larger malformed-ordering matrix remains Open |
+| 11.3.6.2 fcTL | Contiguous sequence numbers, legal rectangles, default-image restrictions, timing, blend and disposal enums | Covered by 60 format/default-role/interlace combinations and known-answer compositor tests; broader external rendered-frame oracle remains Open |
+| 11.3.6.3 fdAT | Sequence prefix, preceding frame control, arbitrary splits/empty frame-data fields, shared image format and independent frame zlib | Covered by native/reference APNG matrix, independent 20-frame fixture and streamed one-byte data |
+
+## Encoders, decoders, viewers and editors
+
+| Clauses | Implementation and evidence | Audit |
+| --- | --- | --- |
+| 12.1–12.2: color/gamma | Caller supplies stored samples and color metadata; integer metadata stays exact; precedence exposed | Application for selecting/converting color spaces; no implicit CMS |
+| 12.3–12.4: alpha and source precision | Straight native alpha retained; encoder accepts legal PNG sample formats and validates ranges | Covered for native PNG contract; assess arbitrary reference-depth scaling against the encoder conformance boundary before final sign-off |
+| 12.5: suggested palettes | PLTE/sPLT/hIST serialization and usage checks; no automatic quantization | Covered for supplied metadata; palette generation is Application |
+| 12.6–12.7: interlace/filter choice | Plain/Adam7 and all filters selectable; adaptive score shared by both writers | Covered; filter optimization/benchmarking remains Open |
+| 12.8: compression | Native stored/fixed-Huffman LZ77, bounded cross-block streaming history | Format compatibility covered; competitive ratio, match selection and encoder throughput remain Open |
+| 12.9: text | UTF-8 serialization, keyword/null checks, native metadata compression, raw/typed APIs | Covered for current format rules; line wrapping/display conventions are Application |
+| 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered; full ordering mutation matrix remains Open |
+| 13.1: errors/recovery | Explicit error enum, fused stream errors, opaque-black indexed recovery, unsupported profile/language ancillary retention | Covered for named recovery cases; APNG fallback-image recovery on animation errors remains Open |
+| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; six sanitizer targets | Covered for tested cases; longer campaigns and native-only coverage review remain Open |
+| 13.4: privacy | Exact hidden color samples, Exif and text are retained; encoder does not claim redaction or metadata scrubbing | Application; native preservation is intentional |
+| 13.5: unknown chunks | Literal names, numerical property-bit handling, unknown critical errors, raw ancillary retention | Covered for current tests; exhaustive property-bit/case permutations remain Open |
+| 13.6: pixel dimensions | pHYs values available without changing pixel storage | Application for presentation scaling |
+| 13.7: text presentation | Typed Unicode decode and raw bytes available | Covered for decoding; escaping controls, line breaks and UI display are Application |
+| 13.8–13.9: decompression/filtering | Fully resumable zlib and row reconstruction with checksum-verified image boundaries | Covered by fragmentation, truncation, mixed-block and row-memory tests |
+| 13.10: progressive display | Adam7 row pass/origin/step exposed; `ImageEnd` separates provisional rows from verified images | Covered for codec events; progressive filling/painting is Application |
+| 13.11–13.12: truecolor/scaling | Native precision retained; explicit full-range RGBA16 expansion | Covered for native values and known expansion cases; display quantization is Application |
+| 13.13–13.14: color/gamma rendering | Supported metadata selection is available; source sample space remains explicit | Application; no automatic ICC, HDR or gamma conversion |
+| 13.15–13.17: backgrounds/alpha/palettes | bKGD/hIST/sPLT retained; explicit APNG SOURCE/OVER and disposal renderer | Covered for known-answer straight RGBA16 rendering; external rendered-frame differential corpus remains Open |
+| 14.1–14.3: editor copy/order rules | Reencoding changes IDAT, so unknown unsafe-to-copy ancillary chunks are omitted; safe chunks retain legal relative placement | Covered by editor-copy tests; arbitrary edit operations are not provided |
+| 15.3.1: datastream conditions | Signature, core grammar, per-chunk fields/relationships, known order constraints and encoder validation | Partial until all open field/order audit items are resolved |
+| 15.3.2: encoder conditions | Both native writers agree with independent readers for supported native formats; invalid supplied fields rejected before writer output | Partial: remaining metadata audit and reference-image input boundary require sign-off |
+| 15.3.3: decoder conditions | All standardized critical methods/formats, unknown handling, both transparency bytes and arbitrary data splitting | Partial: broader malformed equivalence classes, unknown-chunk permutations and completion audit remain |
+| 15.3.4: editor conditions | Native reference-image samples preserved; safe-to-copy handling implemented | Partial for reencoding API; no general editing UI or color-managed viewer is claimed |
+
+## Completion evidence still required
+
+The user also requested competitive performance, comprehensive differential and
+fuzz evidence, independent reuse and no DeadSync integration. Package isolation
+and the production dependency boundary are verified by the retained offline
+build. Performance is explicitly incomplete in `BENCHMARKS.md`; the current
+fixed-Huffman encoder's ratio and pipeline speed require substantial work.
+Resolve the open rows above, obtain broader external APNG rendering comparisons,
+extend structured malformed/coverage campaigns, and repeat the requirement audit
+against the resulting implementation and measurements before claiming completion.

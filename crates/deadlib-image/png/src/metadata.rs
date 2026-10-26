@@ -426,6 +426,7 @@ pub(crate) struct Validator {
     names: HashSet<Vec<u8>>,
     remaining: usize,
     encoding: bool,
+    srgb_compatible: bool,
 }
 impl Validator {
     pub(crate) fn new(limit: usize) -> Self {
@@ -434,6 +435,7 @@ impl Validator {
             names: HashSet::new(),
             remaining: limit,
             encoding: false,
+            srgb_compatible: true,
         }
     }
     pub(crate) fn remaining(&self) -> usize {
@@ -475,6 +477,17 @@ impl Validator {
             return Err(Error::Invalid("duplicate ancillary chunk"));
         }
         let value = parse(c, h, palette, &mut self.remaining, self.encoding)?;
+        // PNG 11.3.2.5, Table 17: optional fallback gAMA/cHRM accompanying
+        // sRGB must describe sRGB, even if a still higher color chunk exists.
+        match &value {
+            Metadata::Gamma(v) if *v != 45455 => self.srgb_compatible = false,
+            Metadata::Chromaticities(v)
+                if *v != [31270, 32900, 64000, 33000, 30000, 60000, 15000, 6000] =>
+            {
+                self.srgb_compatible = false
+            }
+            _ => (),
+        }
         if let Metadata::SuggestedPalette { name, .. } = &value
             && !self.names.insert(name.clone())
         {
@@ -483,6 +496,9 @@ impl Validator {
         Ok(value)
     }
     pub(crate) fn finish(&self) -> Result<(), Error> {
+        if self.encoding && self.unique.contains(b"sRGB") && !self.srgb_compatible {
+            return Err(Error::Invalid("gAMA or cHRM does not match sRGB"));
+        }
         if self.unique.contains(b"mDCV") && !self.unique.contains(b"cICP") {
             return Err(Error::Invalid("mDCV requires cICP"));
         }
