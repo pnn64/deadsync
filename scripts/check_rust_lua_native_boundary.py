@@ -61,7 +61,7 @@ def main():
     compile_native('reference_module','reference',['/DREFERENCE','/I'+str(source),fixture/'module.c',directory/'reference/lua51.lib'])
     compile_native('boundary','rust',['/I'+str(fixture),fixture/'boundary.c'])
     compile_native('rust_module','rust',['/I'+str(fixture),fixture/'module.c',directory/'rust/boundary.lib'])
-    names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call']
+    names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     for engine in ['reference','rust']:
@@ -81,7 +81,7 @@ def main():
     match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     artifacts=[reference,runner,*directory.rglob('*.dll')]
-    result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,limitations=__doc__+' The probe has 58 rooted stack slots, invocation-borrowed state pointers and five fixture callbacks. Persistent states, complete C APIs, library caching/unload integration, production package.loadlib and require integration remain unfinished.')
+    result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,limitations=__doc__+' The probe uses the VM-owned native stack and seven fixture callbacks. State pointers are invocation-borrowed. Persistent states, complete C APIs, unprotected-call fault-stack semantics, library caching/unload integration, production package.loadlib and require integration remain unfinished.')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,flush=True)

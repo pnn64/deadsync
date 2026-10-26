@@ -1,9 +1,10 @@
 //! Development proof of a C-only error jump around the Rust host-call API.
 //! Not the production Lua C API: states are borrowed for one invocation and
 //! this small fixture supports only the operations in tests/native-boundary.
+//! Temporary values use the VM-owned mutable native stack.
 #[cfg(windows)]
 mod windows {
-    use deadlib_lua::{Error, HostCall, Value, Vm, compile_named};
+    use deadlib_lua::{Error, HostCall, NativeStack, Value, Vm, compile_named};
     use std::{
         ffi::{CString, c_char, c_int, c_void},
         sync::atomic::{AtomicUsize, Ordering},
@@ -65,38 +66,10 @@ mod windows {
         }
     }
     struct Context<'a, 'vm> {
-        call: &'a mut HostCall<'vm>,
-        stack: Vec<Value>,
+        stack: NativeStack<'a, 'vm>,
         error: Option<Error>,
     }
     impl Context<'_, '_> {
-        fn index(&self, index: c_int) -> Result<usize, Error> {
-            let position = if index > 0 {
-                index as isize - 1
-            } else {
-                self.stack.len() as isize + index as isize
-            };
-            if position < 0 || position as usize >= self.stack.len() {
-                return Err(self.call.error(b"invalid boundary-probe stack index"));
-            }
-            Ok(position as usize)
-        }
-        fn push(&mut self, value: Value) -> Result<(), Error> {
-            if self.stack.len() >= 58 {
-                return Err(self.call.error(b"boundary-probe stack limit"));
-            }
-            // The fixture uses host captures to root its temporary C stack.
-            self.call.set_capture(self.stack.len() + 2, value)?;
-            self.stack.push(value);
-            Ok(())
-        }
-        fn truncate(&mut self, length: usize) -> Result<(), Error> {
-            for index in length..self.stack.len() {
-                self.call.set_capture(index + 2, Value::Nil)?;
-            }
-            self.stack.truncate(length);
-            Ok(())
-        }
         fn operation(
             &mut self,
             op: c_int,
@@ -105,10 +78,10 @@ mod windows {
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
             match op {
-                0 => value.integer = self.stack.len() as c_int,
-                1 => self.push(Value::Number(value.number))?,
-                2 => self.push(Value::Boolean(value.integer != 0))?,
-                3 => self.push(Value::Nil)?,
+                0 => value.integer = self.stack.top() as c_int,
+                1 => self.stack.push(Value::Number(value.number))?,
+                2 => self.stack.push(Value::Boolean(value.integer != 0))?,
+                3 => self.stack.push(Value::Nil)?,
                 4 => {
                     // SAFETY: lua_pushlstring lends this buffer until dispatch returns.
                     let bytes = if value.length == 0 {
@@ -116,41 +89,39 @@ mod windows {
                     } else {
                         unsafe { std::slice::from_raw_parts(value.bytes.cast(), value.length) }
                     };
-                    let string = self.call.intern(bytes);
-                    self.push(string)?;
+                    let string = self.stack.intern(bytes);
+                    self.stack.push(string)?;
                 }
-                5 => self.push(self.stack[self.index(a)?])?,
-                6 => {
-                    // This fixture's checknumber operations address the unchanged
-                    // original arguments, as boundary_sum does in module.c.
-                    let index = self.index(a)?;
-                    if index >= self.call.arguments().len() {
-                        return Err(self
-                            .call
-                            .error(b"probe checknumber requires an original argument"));
-                    }
-                    value.number = self.call.number(index)?;
-                }
-                7 => return Err(self.call.raise(*self.stack.last().unwrap_or(&Value::Nil))),
+                5 => self
+                    .stack
+                    .push(self.stack.value(a as isize).unwrap_or(Value::Nil))?,
+                6 => value.number = self.stack.number(a as isize)?,
+                7 => return Err(self.stack.raise(self.stack.value(-1).unwrap_or(Value::Nil))),
                 8 => {
                     let count = usize::try_from(a)
-                        .map_err(|_| self.call.error(b"invalid probe call count"))?;
-                    let function = self
-                        .stack
-                        .len()
-                        .checked_sub(count + 1)
-                        .ok_or_else(|| self.call.error(b"probe call stack underflow"))?;
-                    let arguments = self.stack[function + 1..].to_vec();
-                    let mut results = self.call.call(self.stack[function], &arguments)?.to_vec();
-                    if b >= 0 {
-                        results.resize(b as usize, Value::Nil);
-                    }
-                    self.truncate(function)?;
-                    for result in results {
-                        self.push(result)?;
-                    }
+                        .map_err(|_| self.stack.error(b"invalid probe call count"))?;
+                    self.stack.call(count, (b >= 0).then_some(b as usize))?;
                 }
-                _ => return Err(self.call.error(b"unknown boundary-probe operation")),
+                9 => value.integer = c_int::from(a >= 0 && self.stack.check_stack(a as usize)),
+                10 => {
+                    let top = if a >= 0 {
+                        a as isize
+                    } else {
+                        self.stack.top() as isize + a as isize + 1
+                    };
+                    let top =
+                        usize::try_from(top).map_err(|_| self.stack.error(b"invalid stack top"))?;
+                    self.stack.set_top(top)?;
+                }
+                11 => {
+                    let value = self
+                        .stack
+                        .value(-1)
+                        .ok_or_else(|| self.stack.error(b"empty replacement stack"))?;
+                    self.stack.set(a as isize, value)?;
+                    self.stack.set_top(self.stack.top() - 1)?;
+                }
+                _ => return Err(self.stack.error(b"unknown boundary-probe operation")),
             }
             Ok(())
         }
@@ -185,15 +156,10 @@ mod windows {
         let invoke: Invoke = unsafe { std::mem::transmute(invoke as usize) };
         // SAFETY: every registered symbol has lua_CFunction's C signature.
         let function: CFunction = unsafe { std::mem::transmute(function as usize) };
-        let arguments = call.arguments().to_vec();
         let mut context = Context {
-            call,
-            stack: Vec::new(),
+            stack: call.native_stack()?,
             error: None,
         };
-        for value in arguments {
-            context.push(value)?;
-        }
         // SAFETY: trusted C functions borrow the Context only until return.
         // setjmp/longjmp and every skipped frame are within the C DLLs.
         let count = unsafe {
@@ -203,18 +169,12 @@ mod windows {
                 function,
             )
         };
-        let outcome = if let Some(error) = context.error.take() {
-            Err(error)
-        } else if count < 0 || count as usize > context.stack.len() {
-            Err(context.call.error(b"invalid boundary-probe result count"))
-        } else {
-            for &value in &context.stack[context.stack.len() - count as usize..] {
-                context.call.push(value)?;
-            }
-            Ok(())
-        };
-        context.truncate(0)?;
-        outcome
+        if let Some(error) = context.error.take() {
+            return Err(error);
+        }
+        let count = usize::try_from(count)
+            .map_err(|_| context.stack.error(b"invalid boundary-probe result count"))?;
+        context.stack.finish(count)
     }
     pub fn run() {
         let args: Vec<_> = std::env::args().skip(1).collect();
@@ -233,8 +193,10 @@ mod windows {
             "boundary_raise",
             "boundary_binary",
             "boundary_call",
+            "boundary_stack",
+            "boundary_mutate",
         ] {
-            let mut captures = [Value::Nil; 60];
+            let mut captures = [Value::Nil; 2];
             captures[0] = Value::LightUserdata(module.symbol(name) as u64);
             captures[1] = Value::LightUserdata(invoke as u64);
             let function = vm.new_host_function(native, &captures).unwrap();

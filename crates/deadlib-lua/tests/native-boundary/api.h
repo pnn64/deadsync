@@ -26,4 +26,7 @@ API void lua_pushvalue(lua_State *, int);
 API double luaL_checknumber(lua_State *, int);
 API int lua_error(lua_State *);
 API void lua_call(lua_State *, int, int);
+API int lua_checkstack(lua_State *, int);
+API void lua_settop(lua_State *, int);
+API void lua_replace(lua_State *, int);
 #endif

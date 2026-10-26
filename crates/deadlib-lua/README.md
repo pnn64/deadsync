@@ -202,6 +202,15 @@ exercises real C callbacks through the Rust host API, including recoverable
 errors under `panic=abort`. It uses a test-only C shim; production `package.loadlib`
 and the complete Lua C API remain unfinished.
 
+`HostCall::native_stack` opens a VM-owned mutable argument/temporary window.
+`NativeStack` supports signed indexes, growth/pop, numeric reads, protected calls
+and selection of the last values as results. Its 8,000-slot bound is independent
+of closure captures. Popped arguments stop acting as roots, and return hooks can
+inspect and mutate selected result slots before copying them to the caller.
+The [native-stack validation](../../docs/testing/2026-10-26-rust-lua-native-stack.md)
+replaces the development bridge's capture-based temporary stack. Persistent C
+states and unprotected C API call semantics still require implementation.
+
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function
 replacements, and Lua 5.1 formatting. Patterns use cached compact instructions,

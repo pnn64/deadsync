@@ -45,3 +45,24 @@ EXPORT int boundary_call(lua_State *L) {
   }
   return lua_gettop(L) - arguments;
 }
+EXPORT int boundary_stack(lua_State *L) {
+  int i;
+  if (!lua_checkstack(L, 128)) return 0;
+  for (i = 0; i < 96; i++) {
+    char bytes[3]; bytes[0] = (char)i; bytes[1] = 0; bytes[2] = (char)(255-i);
+    lua_pushlstring(L, bytes, sizeof(bytes));
+  }
+  lua_pushvalue(L, 1);
+  lua_call(L, 0, 0);
+  return 96;
+}
+EXPORT int boundary_mutate(lua_State *L) {
+  lua_settop(L, 3);
+  lua_pushnumber(L, 99);
+  lua_replace(L, 1);
+  lua_pushvalue(L, -2);
+  lua_settop(L, -2);
+  lua_pushlstring(L, "7.25", 4);
+  lua_pushnumber(L, luaL_checknumber(L, -1) * 2);
+  return 5;
+}

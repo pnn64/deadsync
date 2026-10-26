@@ -56,3 +56,13 @@ API int lua_error(lua_State *L) {
 API void lua_call(lua_State *L, int arguments, int results) {
   BoundaryValue value = {0}; operation(L, 8, arguments, results, &value);
 }
+API int lua_checkstack(lua_State *L, int extra) {
+  BoundaryValue value = {0}; operation(L, 9, extra, 0, &value);
+  return value.integer;
+}
+API void lua_settop(lua_State *L, int top) {
+  BoundaryValue value = {0}; operation(L, 10, top, 0, &value);
+}
+API void lua_replace(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 11, index, 0, &value);
+}

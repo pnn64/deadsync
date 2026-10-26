@@ -147,9 +147,12 @@ impl Vm {
                 // results, so they need no duplicated C argument stack.
                 let result = match host {
                     Some(callback) => self.host_native(id, base, count, callback),
-                    None => self.native(id, if separate { base } else { call }, count),
+                    None => {
+                        let source = if separate { base } else { call };
+                        self.native(id, source, count)
+                            .map(|actual| (source, actual))
+                    }
                 }
-                .map(Some)
                 .map_err(|error| {
                     if error.kind() == ErrorKind::Runtime && error.value().is_none() {
                         let value = self.intern(error.message_bytes());
@@ -160,21 +163,20 @@ impl Vm {
                     }
                 });
                 self.active_native = previous;
-                if separate && let Ok(Some(actual)) = result {
-                    self.registers.copy_within(base..base + actual, call);
-                    self.registers.truncate(base.max(call + actual));
-                }
-                if let Ok(Some(actual)) = result
+                if let Ok((source, actual)) = result
                     && self.hooks.mask & hooks::RETURN != 0
                     && self.hooks.allowed()
                 {
-                    self.return_frame(self.frames[index], call, actual);
+                    self.return_frame(self.frames[index], source, actual);
                     return Ok(None);
                 }
-                if result.is_ok() {
-                    self.frames.pop();
+                let (source, actual) = result?;
+                if separate {
+                    self.registers.copy_within(source..source + actual, call);
+                    self.registers.truncate(base.max(call + actual));
                 }
-                result
+                self.frames.pop();
+                Ok(Some(actual))
             }
             _ => unreachable!("call target was normalized"),
         }
@@ -451,8 +453,8 @@ impl Vm {
             _ if scheduled == 1 => self.coroutine_step(id, frame),
             _ => {
                 if let Some(callback) = self.host_callback(id) {
-                    let actual = self.host_native(id, base, frame.argc(), callback)?;
-                    return Ok(self.return_frame(frame, base, actual));
+                    let (source, actual) = self.host_native(id, base, frame.argc(), callback)?;
+                    return Ok(self.return_frame(self.frames[index], source, actual));
                 }
                 // Return hooks run before results replace the caller's slots.
                 self.registers[base] = Value::Native(id);

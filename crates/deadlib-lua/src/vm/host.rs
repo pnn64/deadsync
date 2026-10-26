@@ -1,5 +1,7 @@
 //! Direct Rust function pointers over the native register call boundary.
 use super::*;
+mod stack;
+pub use stack::NativeStack;
 
 /// A synchronous Rust callback. Append results through [`HostCall::push`].
 ///
@@ -29,6 +31,7 @@ pub struct HostCall<'vm> {
     output: usize,
     results: usize,
     abort: Option<Error>,
+    stack_opened: bool,
 }
 
 impl Vm {
@@ -93,7 +96,7 @@ impl Vm {
         base: usize,
         count: usize,
         callback: HostFunction,
-    ) -> Result<usize, Error> {
+    ) -> Result<(usize, usize), Error> {
         let arguments = self.frames[self.active_native.expect("native host frame")].vararg_start;
         let mut context = HostCall {
             vm: self,
@@ -103,6 +106,7 @@ impl Vm {
             output: base,
             results: 0,
             abort: None,
+            stack_opened: false,
         };
         let outcome =
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(&mut context)));
@@ -119,7 +123,7 @@ impl Vm {
             return Err(error);
         }
         result?;
-        Ok(context.results)
+        Ok((context.output, context.results))
     }
 
     fn host_error(&self, value: Value) -> Error {
@@ -228,7 +232,8 @@ impl HostCall<'_> {
     pub fn call_and_return(&mut self, function: Value, arguments: &[Value]) -> Result<(), Error> {
         let range = self.call_range(function, arguments)?;
         let count = range.len();
-        if count > limits::MAX_CSTACK.saturating_sub(self.count + self.results) {
+        let arguments = if self.stack_opened { 0 } else { self.count };
+        if count > limits::MAX_CSTACK.saturating_sub(arguments + self.results) {
             return Err(self.error(b"too many host function results"));
         }
         self.results += count;
@@ -320,9 +325,19 @@ impl HostCall<'_> {
         }
     }
 
-    /// Borrow the positional arguments, including explicit nil values.
+    /// Borrow positional arguments, including explicit nil values. After opening
+    /// a native stack, this borrows its current complete window instead.
     pub fn arguments(&self) -> &[Value] {
-        &self.vm.registers[self.arguments..self.arguments + self.count]
+        let (start, count) = self.argument_window();
+        &self.vm.registers[start..start + count]
+    }
+    fn argument_window(&self) -> (usize, usize) {
+        if self.stack_opened {
+            let frame = self.vm.frames[self.vm.active_native.expect("active host callback")];
+            (frame.vararg_start, frame.argc())
+        } else {
+            (self.arguments, self.count)
+        }
     }
 
     /// Borrow the closure's captured values.
@@ -369,8 +384,9 @@ impl HostCall<'_> {
             .get(index)
             .and_then(|&value| self.vm.number(value))
             .ok_or_else(|| {
+                let (start, count) = self.argument_window();
                 self.vm
-                    .argument_type_error(self.arguments - 1, self.count, index, "number")
+                    .argument_type_error(start - 1, count, index, "number")
             })
     }
 
@@ -381,7 +397,8 @@ impl HostCall<'_> {
     /// stack bound, including the original arguments.
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
         self.vm.validate_value(value)?;
-        if self.results >= limits::MAX_CSTACK.saturating_sub(self.count) {
+        let arguments = if self.stack_opened { 0 } else { self.count };
+        if self.results >= limits::MAX_CSTACK.saturating_sub(arguments) {
             return Err(Error::new(
                 ErrorKind::Runtime,
                 0,

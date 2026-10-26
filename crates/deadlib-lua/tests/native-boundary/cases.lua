@@ -12,6 +12,25 @@ local held=boundary_call(function()
   local value={tag=99};weak[1]=value;return value
 end,nil,function()collectgarbage()end)
 assert(held.tag==99 and weak[1]==held)
+local many={boundary_stack(function()collectgarbage()end)}
+assert(#many==96)
+for i=1,96 do assert(many[i]==string.char(i-1,0,256-i))end
+local a,b,c,d,e=boundary_mutate(2,3)
+assert(a==99 and b==3 and c==nil and d=='7.25' and e==14.5)
+assert(select('#',boundary_mutate(2,3))==5)
+
+local inspected=false
+debug.sethook(function(event)
+  if event=='return'and debug.getinfo(2,'f').func==boundary_sum then
+    local _,a=debug.getlocal(2,1);local _,b=debug.getlocal(2,2)
+    local _,c=debug.getlocal(2,3);local _,d=debug.getlocal(2,4)
+    assert(a=='17.5'and b==25 and c==42.5 and d==3)
+    assert(debug.setlocal(2,3,99)=='(*temporary)')
+    collectgarbage();inspected=true
+  end
+end,'r')
+local a,b=boundary_sum('17.5',25)
+debug.sethook();assert(inspected and a==99 and b==3)
 
 local values={false,17,'error\000bytes',payload,function()end,
   coroutine.create(function()end),newproxy(true)}
