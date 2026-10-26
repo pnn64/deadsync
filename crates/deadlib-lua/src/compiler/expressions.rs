@@ -339,6 +339,7 @@ impl<'a> Compiler<'a> {
             self.debug_line(0);
         }
         let done = self.emit(if and { Op::JumpFalse } else { Op::JumpTrue }, dst, 0, 0)?;
+        self.function.logical_tests.push(done);
         if omitted
             || matches!(
                 self.ast.exprs[first].0,

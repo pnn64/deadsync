@@ -1,0 +1,15 @@
+{
+  "base_revision": "c591dba17735aab0fcd5fb9fb3bc4e2f6445bdfe",
+  "worktree": "C:\\GitHub\\deadsync\\target\\lua-predicates-isolated-1793030623793178300",
+  "target_directory": "C:\\GitHub\\deadsync\\target\\lua-predicates-isolated-1793030623793178300\\target\\cargo-final-1793032147637113000",
+  "source_hash_overrides": {
+    "Cargo.toml": "docs/performance/2026-10-26-rust-lua-predicates-workspace-inputs/workspace-Cargo.toml",
+    "Cargo.lock": "docs/performance/2026-10-26-rust-lua-predicates-workspace-inputs/workspace-Cargo.lock"
+  },
+  "frozen_hashes": {
+    "Cargo.toml": "46b891a8f8f65d8ffba9660459d05fd7fe6742a52265aeaca0dc346a67d1861d",
+    "Cargo.lock": "83b237b8e27da00a564c6a1fa3643302cacad115112c02abe3dec66ccac06d71",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "reason": "Exact Lua and reference sources with fixed workspace inputs, isolated from concurrent unrelated edits."
+}

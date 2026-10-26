@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument('--parent-audit',required=True,type=Path)
     parser.add_argument('--parent-revision',required=True)
     parser.add_argument('--current-audit',required=True,type=Path)
-    parser.add_argument('--family',choices=('unary','logical'),default='unary')
+    parser.add_argument('--family',choices=('unary','logical','predicate'),default='unary')
     args=parser.parse_args()
     if os.name!='nt':raise SystemExit('Windows process counters are required')
     root=Path(__file__).resolve().parents[1]
@@ -55,6 +55,14 @@ def main() -> None:
             'and_shortcut_false':(f"local a,b=false,true;local n=0;for i=1,{count} do local value=not not(a and b);if value then n=n+1 end end;io.write(n)",b'0'),
             'nested_mixed':(f"local a,b,c=false,true,false;local n=0;for i=1,{count} do local value=not not((a and b)or c);if value then n=n+1 end end;io.write(n)",b'0'),
             'comparison_rhs':(f"local a,b,c=false,2,3;local n=0;for i=1,{count} do local value=not(a or(b<c));if value then n=n+1 end end;io.write(n)",b'0'),
+        }
+    if args.family=='predicate':
+        fixtures={
+            'if_local':(f"local a=true;local n=0;for i=1,{count} do if a then n=n+1 end end;io.write(n)",b'5000000'),
+            'if_comparison':(f"local n=0;for i=1,{count} do if i<2500001 then n=n+1 end end;io.write(n)",b'2500000'),
+            'if_logical':(f"local a,b,c=false,true,false;local n=0;for i=1,{count} do if not((a and b)or c)then n=n+1 end end;io.write(n)",b'5000000'),
+            'while_comparison':(f"local n=0;while n<{count} do n=n+1 end;io.write(n)",b'5000000'),
+            'repeat_logical':(f"local n=0;repeat n=n+1 until n>={count} or false;io.write(n)",b'5000000'),
         }
     kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
     get_times=kernel32.GetProcessTimes;get_times.argtypes=[wintypes.HANDLE]+[ctypes.POINTER(wintypes.FILETIME)]*4;get_times.restype=wintypes.BOOL

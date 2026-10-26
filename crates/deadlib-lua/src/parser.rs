@@ -44,7 +44,7 @@ pub(crate) enum Stmt {
     Do(Block),
     While(ExprId, Block),
     Repeat(Block, ExprId),
-    If(Box<[(ExprId, Block)]>, Block),
+    If(Box<[(ExprId, Block)]>, Option<Block>),
     For {
         name: Box<[u8]>,
         start: ExprId,

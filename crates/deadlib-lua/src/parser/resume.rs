@@ -210,7 +210,7 @@ impl Parser {
                 Stmt::If(a, b) => {
                     std::mem::size_of_val(a.as_ref())
                         + a.iter().map(|(_, b)| block(b)).sum::<usize>()
-                        + block(b)
+                        + b.as_deref().map_or(0, block)
                 }
                 Stmt::For { name, body, .. } => name.len() + block(body),
                 Stmt::ForIn(n, v, b, _) => names(n) + std::mem::size_of_val(v.as_ref()) + block(b),
@@ -796,13 +796,13 @@ impl Parser {
                         self.tasks.push(Task::Block);
                     } else {
                         self.close(Kind::End, Kind::If, line)?;
-                        self.statement(Stmt::If(arms.into_boxed_slice(), Box::default()), line);
+                        self.statement(Stmt::If(arms.into_boxed_slice(), None), line);
                     }
                 }
                 Task::IfElse(line, arms) => {
                     self.close(Kind::End, Kind::If, line)?;
                     let body = std::mem::take(&mut self.body);
-                    self.statement(Stmt::If(arms.into_boxed_slice(), body), line);
+                    self.statement(Stmt::If(arms.into_boxed_slice(), Some(body)), line);
                 }
                 Task::ForName(line) => {
                     let name = self.expect(Kind::Name)?.text;

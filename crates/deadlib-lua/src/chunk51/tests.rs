@@ -734,3 +734,37 @@ fn source_concatenation_ranges_export_with_original_grouping_and_errors() {
         compare_execution(&bytes);
     }
 }
+
+#[test]
+fn predicate_branches_export_results_and_selected_hook_traces() {
+    for body in [
+        "if a then n=1 elseif not a then n=2 end",
+        "if a or b then n=1 else end",
+        "while a or b do n=2;break end",
+    ] {
+        let source = format!(
+            r#"local keep
+local function f(a,b)
+local n=0
+{body}
+return n,keep and keep()
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local a,b=f(false,true);debug.sethook();return a,b,table.concat(out,'|')"#
+        );
+        let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
+        let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+        compare_execution_against(&bytes, source.as_bytes());
+        compare_execution(&bytes);
+    }
+    for source in [
+        b"local n=0;while n<3 and true do n=n+1 end;return n".as_slice(),
+        b"local n,keep=0,{};repeat local x=n;keep[#keep+1]=function()return x end;n=n+1 until n>=3 or false;return n,keep[1](),keep[3]()".as_slice(),
+        b"local n,keep=0,{};repeat local x=n;keep[#keep+1]=function()return x end;n=n+1;if n==2 then break end until n>=3;return n,keep[1](),keep[2]()".as_slice(),
+    ] {
+        let program = crate::compile_named(source, b"=(binary codec)").unwrap();
+        let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
+        compare_execution_against(&bytes, source);
+        compare_execution(&bytes);
+    }
+}

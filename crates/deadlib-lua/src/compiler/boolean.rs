@@ -1,6 +1,48 @@
 //! Flat boolean lowering with pending short-circuit edges in instruction slots.
 use super::*;
 
+/// Resolve shared unconditional jumps once, including cycles in empty loops.
+/// Boolean LOADBOOL skips remain adjacent to their two materializers.
+pub(super) fn thread_jumps(code: &mut [Instruction]) {
+    if !code.iter().any(|i| i.op == Op::Jump && i.b == 0) {
+        return;
+    }
+    const NEW: u32 = u32::MAX;
+    const VISITING: u32 = u32::MAX - 1;
+    let mut targets = vec![NEW; code.len()];
+    let mut path = Vec::new();
+    for pc in 0..code.len() {
+        if code[pc].op != Op::Jump || code[pc].b != 0 || targets[pc] != NEW {
+            continue;
+        }
+        let mut target = pc;
+        while let Some(i) = code.get(target) {
+            if i.op != Op::Jump || i.b != 0 || targets[target] != NEW {
+                break;
+            }
+            targets[target] = VISITING;
+            path.push(target);
+            target = i.c as usize;
+        }
+        let destination = match targets.get(target) {
+            Some(&resolved) if resolved < VISITING => resolved,
+            _ => target as u32,
+        };
+        for step in path.drain(..) {
+            targets[step] = destination;
+        }
+    }
+    for i in code {
+        if matches!(i.op, Op::Jump | Op::JumpFalse | Op::JumpTrue)
+            && i.b != BOOLEAN_SKIP
+            && let Some(&target) = targets.get(i.c as usize)
+            && target < VISITING
+        {
+            i.c = target;
+        }
+    }
+}
+
 #[derive(Clone, Copy, Default)]
 pub(super) struct List {
     head: u32,
@@ -53,7 +95,7 @@ impl Compiler<'_> {
         }
         left.tail = right.tail;
     }
-    fn list_patch(&mut self, mut list: List, target: usize) {
+    pub(super) fn list_patch(&mut self, mut list: List, target: usize) {
         while list.head != 0 {
             let pc = list.head as usize - 1;
             list.head = self.function.code[pc].c;
@@ -233,6 +275,19 @@ impl Compiler<'_> {
             pending,
         );
         self.boolean = value;
+    }
+    pub(super) fn predicate_finish(&mut self, id: ExprId, work: u8) -> Result<List, Error> {
+        let mut value = self.boolean;
+        // Lua's statement condition converts a terminal nil descriptor to
+        // false before generating its test (also visible in debug slots).
+        if let Value::Constant(id) = value.value
+            && matches!(self.ast.exprs[id].0, Expr::Nil)
+        {
+            value.value = Value::Boolean(false);
+        }
+        self.boolean_condition(&mut value, false, work, self.ast.exprs[id].1.discharge)?;
+        self.list_patch(value.yes, self.function.code.len());
+        Ok(value.no)
     }
     pub(super) fn boolean_finish(&mut self, id: ExprId, dst: u8) -> Result<(), Error> {
         let mut value = self.boolean;

@@ -49,7 +49,8 @@ def main() -> None:
         packed.extractall(cache, filter="data")
     command = ["cargo", "build", "--release", "-p", "deadlib-lua", "--example", "official_suite"]
     subprocess.run(command, cwd=root, check=True)
-    binary = root / "target/release/examples" / ("official_suite.exe" if sys.platform == "win32" else "official_suite")
+    target = (root/Path(os.environ.get('CARGO_TARGET_DIR','target'))).resolve()
+    binary = target / "release/examples" / ("official_suite.exe" if sys.platform == "win32" else "official_suite")
     suite = cache / "lua5.1-tests"
     cache_directory = cache / f"compiled-{time.time_ns()}-{os.getpid()}" if args.cached else None
     engines = ("reference", "rust", "rust_cache_cold", "rust_cache_hit") if args.cached else ("reference", "rust")

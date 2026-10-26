@@ -38,8 +38,9 @@ def main() -> None:
     command = ['cargo', 'build', '--release', '-p', 'deadlib-lua', '--example', 'os_process', '--bin', 'deadlua']
     subprocess.run(command, cwd=root, check=True)
     extension = '.exe' if os.name == 'nt' else ''
-    binary = root/f'target/release/examples/os_process{extension}'
-    cli = root/f'target/release/deadlua{extension}'
+    target = (root/Path(os.environ.get('CARGO_TARGET_DIR','target'))).resolve()
+    binary = target/f'release/examples/os_process{extension}'
+    cli = target/f'release/deadlua{extension}'
     fixture_root = root/'target/lua-process-fixtures'
     fixture_root.mkdir(parents=True, exist_ok=True)
     results = []

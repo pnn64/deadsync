@@ -749,6 +749,18 @@ including long-branch relay insertion. Expanded source/native/cache probes and
 cover both branches, local mutation, GC, metamethods and long chains. Complete
 hook parity and the broader standalone-engine gates remain unfinished.
 
+The [predicate milestone](testing/2026-10-26-rust-lua-predicates.md) extends
+pending boolean edges to `if`, `while` and `repeat`. Conditions use local
+registers and comparison branches directly, and short-circuit expressions avoid
+materializing a boolean value. The parser distinguishes an absent `else` from
+an explicit empty block. Compiler capture tracking removes unnecessary scope
+closes and preserves the two closing paths of a captured repeat scope. Shared
+unconditional jump targets resolve in linear time; value-chain test sharing
+remains distinct from statement callback boundaries. Source, native export and
+persistent-cache regressions cover the changed paths. Native export still has
+broader hook differences where extra operand loads or copies remain; complete
+hook parity and the other standalone gates remain open.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

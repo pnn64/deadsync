@@ -595,6 +595,144 @@ fn long_boolean_chains_compile_flat_and_patch_both_outcomes() {
 }
 
 #[test]
+fn predicates_preserve_reference_events_without_materializing_boolean_values() {
+    for predicate in [
+        "a",
+        "not a",
+        "not not a",
+        "a or b",
+        "a and b",
+        "not(a or b)",
+        "not not(a or b)",
+        "(a and b)or c",
+        "a<b",
+        "not(a<b)",
+        "a or(b<c)",
+        "false",
+        "nil",
+        "true",
+        "17",
+        "'x'",
+        "nil or a",
+        "true and a",
+        "false and a",
+        "true or a",
+    ] {
+        for arguments in ["2,3,4", "3,2,1", "false,nil,4", "nil,false,4"] {
+            if predicate.contains('<')
+                && (arguments.starts_with("false") || arguments.starts_with("nil"))
+            {
+                continue;
+            }
+            let source = format!(
+                r#"local function f(a,b,c)
+local value=0
+if {predicate} then
+value=17
+else
+value=42
+end
+return value
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local value=f({arguments});debug.sethook();return value,table.concat(out,'|')"#
+            );
+            compare(source.as_bytes());
+        }
+    }
+}
+
+#[test]
+fn terminal_nil_predicates_keep_reference_instruction_events() {
+    for predicate in ["nil", "false or nil", "true and nil"] {
+        compare(format!(r#"local f=assert(loadstring('return function()if {predicate} then return 0 end;return 42 end'))()
+local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1 end end,'',1)
+local value=f();debug.sethook();return value,visits"#).as_bytes());
+        compare(format!(r#"local function f()
+if {predicate} then return 0 end
+return 42
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local value=f();debug.sethook();return value,table.concat(out,'|')"#).as_bytes());
+    }
+}
+
+#[test]
+fn predicate_loops_and_empty_else_keep_reference_hook_events() {
+    for predicate in [
+        "a",
+        "not a",
+        "not not a",
+        "i<2",
+        "not(i<2)",
+        "i<2 and a",
+        "i<2 or a",
+        "not(i<2 or a)",
+        "nil",
+        "false",
+        "true",
+        "17",
+    ] {
+        for body in [
+            format!("while {predicate} do\ni=i+1\nif i==3 then break end\nend"),
+            format!("repeat\ni=i+1\nif i==3 then break end\nuntil {predicate}"),
+            format!("if {predicate} then\ni=1\nend"),
+            format!("if {predicate} then\ni=1\nelse\nend"),
+            format!("if {predicate} then\ni=1\nelseif not a then\ni=2\nend"),
+        ] {
+            for argument in ["true", "false"] {
+                compare(format!(r#"local function f(a)
+local i=0
+{body}
+return i
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local value=f({argument});debug.sethook();return value,table.concat(out,'|')"#).as_bytes());
+            }
+        }
+    }
+}
+
+#[test]
+fn repeat_predicates_close_captured_locals_on_both_edges() {
+    for predicate in ["i>=3", "not(i<3)", "i>=3 or false", "not(i<3 and true)"] {
+        compare(format!(r#"local function f()
+local i,closures=0,{{}}
+repeat
+local value=i
+closures[#closures+1]=function()return value end
+i=i+1
+until {predicate}
+return i,closures[1](),closures[2](),closures[3]()
+end
+local out={{}};debug.sethook(function(event,line)local d=debug.getinfo(2,'fl');if d.func==f then out[#out+1]=event..':'..tostring(line)..':'..d.currentline end end,'l',1)
+local a,b,c,d=f();debug.sethook();return a,b,c,d,table.concat(out,'|')"#).as_bytes());
+    }
+}
+
+#[test]
+fn predicate_callbacks_read_live_locals_and_close_break_scopes() {
+    for body in [
+        "if a or b then value=17 else value=42 end",
+        "if a then value=17 elseif not a then value=42 end",
+        "if not(a and b)then value=17 end",
+        "repeat local x=value;keep=function()return x end;value=value+1;if value==2 then break end until a and b",
+        "while a or b do local x=value;keep=function()return x end;value=value+1;if value==2 then break end end",
+    ] {
+        for visit in 1..=7 {
+            compare(format!(r#"local keep
+local function f(a,b)
+local value=0
+{body}
+return value,a,b,keep and keep()
+end
+local visits=0;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits=={visit} then debug.setlocal(2,1,false);debug.setlocal(2,2,true);collectgarbage()end end end,'',1)
+local a,b,c,d=f(true,false);debug.sethook();return a,b,c,d,visits"#).as_bytes());
+        }
+    }
+}
+
+#[test]
 fn negated_comparisons_keep_metamethods_nan_rules_and_completed_comparison_results() {
     for operator in ["<", "<=", ">", ">=", "==", "~="] {
         for negations in 1..=5 {

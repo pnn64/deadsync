@@ -22,6 +22,7 @@ struct Local<'a> {
     name: &'a [u8],
     reg: u8,
     debug: usize,
+    captured: bool,
 }
 const TAIL: u32 = OPEN - 1;
 enum Target {
@@ -68,6 +69,7 @@ struct Function<'a> {
     debug_lines: Vec<u32>,
     hook_lines: Vec<u32>,
     hook_visible: usize,
+    logical_tests: Vec<usize>,
     zero_sign: Option<bool>,
 }
 
@@ -111,20 +113,23 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 impl<'a> Compiler<'a> {
     fn finish(&mut self) -> u32 {
         let mut f = std::mem::take(&mut self.function);
-        for pc in 0..f.code.len() {
+        boolean::thread_jumps(&mut f.code);
+        for &pc in &f.logical_tests {
             let i = f.code[pc];
-            if matches!(i.op, Op::JumpFalse | Op::JumpTrue)
-                && i.c as usize > pc
+            if i.c as usize > pc
                 && f.code.get(i.c as usize).is_some_and(|next| {
                     matches!(next.op, Op::JumpFalse | Op::JumpTrue)
                         && next.op != i.op
                         && next.a == i.a
                 })
             {
-                // On this edge the opposite test cannot jump. Logical chains
-                // go straight to its right operand, as in native codegen.
+                // Value-producing logical chains share the outer test.
+                // Statement predicates retain their own callback boundary.
                 f.code[pc].c += 1;
             }
+        }
+        for pc in 0..f.code.len() {
+            let i = f.code[pc];
             let consumed_branch = matches!(i.op, Op::JumpFalse | Op::JumpTrue)
                 && f.code[..pc]
                     .iter()
@@ -188,8 +193,9 @@ impl<'a> Compiler<'a> {
             return Ok(Some(index as u16));
         }
         let mut owner = None;
-        for (index, parent) in self.parents.iter().enumerate().rev() {
-            if let Some(local) = parent.locals.iter().rev().find(|l| l.name == name) {
+        for (index, parent) in self.parents.iter_mut().enumerate().rev() {
+            if let Some(local) = parent.locals.iter_mut().rev().find(|l| l.name == name) {
+                local.captured = true;
                 owner = Some((index, Upvalue::Local(local.reg)));
                 break;
             }
@@ -403,7 +409,12 @@ impl<'a> Compiler<'a> {
             return Err(self.error(ErrorKind::Limit, "too many local variables"));
         }
         let debug = self.debug_local(name, reg);
-        self.function.locals.push(Local { name, reg, debug });
+        self.function.locals.push(Local {
+            name,
+            reg,
+            debug,
+            captured: false,
+        });
         self.live_register(u16::from(reg));
         Ok(())
     }

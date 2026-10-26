@@ -54,7 +54,7 @@ impl<'a> Compiler<'a> {
                 let start = self.function.code.len() as u32;
                 let reg = self.alloc(1)?;
                 self.tasks.push(Task::WhileCond(id, saved, start, reg));
-                self.tasks.push(Task::Expr(*cond, reg));
+                self.tasks.push(Task::BooleanNode(*cond, reg));
             }
             Stmt::Repeat(body, _) => {
                 let start = self.function.code.len() as u32;
@@ -76,7 +76,16 @@ impl<'a> Compiler<'a> {
                 let Some((next, _)) = self.function.loops.last() else {
                     return Err(self.error(ErrorKind::Syntax, "no loop to break"));
                 };
-                self.close(*next)?;
+                let next = *next;
+                if self
+                    .function
+                    .locals
+                    .iter()
+                    .any(|l| u16::from(l.reg) >= next && l.captured)
+                {
+                    self.close(next)?;
+                    self.debug_line(self.line);
+                }
                 let pc = self.emit(Op::Jump, 0, 0, 0)?;
                 self.function.loops.last_mut().unwrap().1.push(pc);
             }

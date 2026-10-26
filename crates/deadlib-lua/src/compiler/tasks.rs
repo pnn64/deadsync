@@ -37,12 +37,12 @@ pub(super) enum Task<'a> {
     ReturnNext(StmtId, u8, usize, u32),
     TailEnd(u32),
     WhileCond(StmtId, u16, u32, u8),
-    WhileEnd(u32, usize),
+    WhileEnd(u32, boolean::List),
     RepeatCond(StmtId, u16, u32, usize),
-    RepeatEnd(u16, u32, usize, u8),
+    RepeatEnd(ExprId, u16, u32, usize, u8),
     IfNext(StmtId, usize, u16, Vec<usize>),
     IfCond(StmtId, usize, u16, Vec<usize>, u8),
-    IfBody(StmtId, usize, u16, Vec<usize>, usize),
+    IfBody(StmtId, usize, u16, Vec<usize>, boolean::List),
     IfEnd(Vec<usize>),
     ForLimit(StmtId, u16, u8),
     ForStep(StmtId, u16, u8),
@@ -104,8 +104,12 @@ impl<'a> Compiler<'a> {
                     self.tasks.push(Task::Block(body));
                 }
                 Task::ScopeEnd(locals, next) => {
-                    self.close(next)?;
+                    let captured = self.function.locals[locals..].iter().any(|l| l.captured);
                     self.end_locals(locals);
+                    if captured {
+                        self.close(next)?;
+                        self.debug_line(self.line);
+                    }
                     self.reset(next);
                 }
                 Task::Reset(next) => self.reset(next),
@@ -245,10 +249,10 @@ impl<'a> Compiler<'a> {
                         .expect("tail call emits return") = line;
                 }
                 Task::WhileCond(id, saved, start, reg) => {
-                    let Stmt::While(_, body) = &self.ast.stmts[id].0 else {
+                    let Stmt::While(cond, body) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
-                    let done = self.emit(Op::JumpFalse, reg, 0, 0)?;
+                    let done = self.predicate_finish(*cond, reg)?;
                     self.reset(saved);
                     self.function.loops.push((saved, Vec::new()));
                     self.tasks.push(Task::WhileEnd(start, done));
@@ -256,7 +260,7 @@ impl<'a> Compiler<'a> {
                 }
                 Task::WhileEnd(start, done) => {
                     self.emit(Op::Jump, 0, 0, start)?;
-                    self.patch(done);
+                    self.list_patch(done, self.function.code.len());
                     self.finish_loop();
                 }
                 Task::RepeatCond(id, saved, start, locals) => {
@@ -264,13 +268,26 @@ impl<'a> Compiler<'a> {
                         unreachable!()
                     };
                     let reg = self.alloc(1)?;
-                    self.tasks.push(Task::RepeatEnd(saved, start, locals, reg));
-                    self.tasks.push(Task::Expr(cond, reg));
+                    self.tasks
+                        .push(Task::RepeatEnd(cond, saved, start, locals, reg));
+                    self.tasks.push(Task::BooleanNode(cond, reg));
                 }
-                Task::RepeatEnd(saved, start, locals, reg) => {
-                    self.close(saved)?;
-                    self.emit(Op::JumpFalse, reg, 0, start)?;
-                    self.end_locals(locals);
+                Task::RepeatEnd(cond, saved, start, locals, reg) => {
+                    let again = self.predicate_finish(cond, reg)?;
+                    if self.function.locals[locals..].iter().any(|l| l.captured) {
+                        self.close(saved)?;
+                        self.debug_line(self.line);
+                        let done = self.emit(Op::Jump, 0, 0, 0)?;
+                        self.list_patch(again, self.function.code.len());
+                        self.end_locals(locals);
+                        self.close(saved)?;
+                        self.debug_line(self.line);
+                        self.emit(Op::Jump, 0, 0, start)?;
+                        self.patch(done);
+                    } else {
+                        self.end_locals(locals);
+                        self.list_patch(again, start as usize);
+                    }
                     self.finish_loop();
                 }
                 Task::IfNext(id, index, saved, exits) => {
@@ -280,24 +297,31 @@ impl<'a> Compiler<'a> {
                     if let Some((cond, _)) = arms.get(index) {
                         let reg = self.alloc(1)?;
                         self.tasks.push(Task::IfCond(id, index, saved, exits, reg));
-                        self.tasks.push(Task::Expr(*cond, reg));
+                        self.tasks.push(Task::BooleanNode(*cond, reg));
                     } else {
                         self.tasks.push(Task::IfEnd(exits));
-                        self.tasks.push(Task::Scope(other));
+                        if let Some(other) = other {
+                            self.tasks.push(Task::Scope(other));
+                        }
                     }
                 }
                 Task::IfCond(id, index, saved, exits, reg) => {
                     let Stmt::If(arms, _) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
-                    let skip = self.emit(Op::JumpFalse, reg, 0, 0)?;
+                    let skip = self.predicate_finish(arms[index].0, reg)?;
                     self.reset(saved);
                     self.tasks.push(Task::IfBody(id, index, saved, exits, skip));
                     self.tasks.push(Task::Scope(&arms[index].1));
                 }
                 Task::IfBody(id, index, saved, mut exits, skip) => {
-                    exits.push(self.emit(Op::Jump, 0, 0, 0)?);
-                    self.patch(skip);
+                    let Stmt::If(arms, other) = &self.ast.stmts[id].0 else {
+                        unreachable!()
+                    };
+                    if index + 1 < arms.len() || other.is_some() {
+                        exits.push(self.emit(Op::Jump, 0, 0, 0)?);
+                    }
+                    self.list_patch(skip, self.function.code.len());
                     self.tasks.push(Task::IfNext(id, index + 1, saved, exits));
                 }
                 Task::IfEnd(exits) => {
