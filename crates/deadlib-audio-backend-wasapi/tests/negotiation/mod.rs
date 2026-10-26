@@ -51,6 +51,18 @@ fn legal_period_matches_wide_rounding_at_integer_boundaries() {
             }
         }
     }
+    let mut random = 0xb15d_7421u32;
+    for _ in 0..100_000 {
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let fundamental = random.max(1);
+        random = random.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let min = random.max(1);
+        let rounded = u64::from(min).div_ceil(u64::from(fundamental)) * u64::from(fundamental);
+        for max in [min, u32::MAX] {
+            let expected = (rounded <= u64::from(max)).then_some(rounded as u32);
+            assert_eq!(minimum_period(fundamental, min, max), expected);
+        }
+    }
 }
 
 #[test]
