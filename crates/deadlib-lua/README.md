@@ -163,6 +163,11 @@ Pattern searches, table concatenation and insertion impose no artificial work
 count limit. Execution quotas apply at VM driver steps and do not interrupt a
 running native loop. `table.sort` checks its native stack reserve before validating
 the comparator and discards unused arguments before comparisons.
+Sort and traversal reread native argument slots changed through `debug.setlocal`.
+Replaced sort arguments stop acting as collector roots. Traversal keeps its
+iteration state separate from callable self arguments and discarded native results.
+Native operand errors retain their C-frame origin; Lua operations retain source
+locations, and protected-call argument diagnostics retain names and slot numbers.
 
 Coroutines provide `create`, `resume`, `running`, `status`, `wrap` and `yield`.
 Each thread owns its register/frame vectors and environment; threads share the
@@ -352,5 +357,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-work-limits.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-native-args.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

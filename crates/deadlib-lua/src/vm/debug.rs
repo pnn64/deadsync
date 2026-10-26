@@ -473,7 +473,7 @@ impl Vm {
                     }
                     tables::TAB_FOREACH if !current && frame.pc == 1 => {
                         if n == frame.argc() {
-                            frame.base + 3
+                            frame.base + 1
                         } else if n == frame.argc() + 1 {
                             frame.base + 2
                         } else if n < frame.argc() {

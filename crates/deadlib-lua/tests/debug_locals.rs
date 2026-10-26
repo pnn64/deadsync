@@ -14,6 +14,90 @@ fn sort_return_hook_sees_the_normalized_optional_comparator_slot() {
 }
 
 #[test]
+fn sort_reloads_comparator_and_table_arguments_after_callbacks() {
+    compare(br#"local out={};local first=true;local a={3,1,2};local b={7,6,5};local function second(x,y)out[#out+1]='new:'..x..':'..y;return x<y end;table.sort(a,function(x,y)out[#out+1]='old:'..x..':'..y;if first then first=false;debug.setlocal(2,1,b);debug.setlocal(2,2,second)end;return x<y end);return table.concat(out,'|'),table.concat(a,','),table.concat(b,',')"#);
+}
+
+#[test]
+fn sort_releases_replaced_native_argument_roots() {
+    compare(br#"local weak=setmetatable({},{__mode='v'});local gone=false;local function second(a,b)collectgarbage();gone=weak[1]==nil;return a<b end;local function make()local function first(a,b)debug.setlocal(2,2,second);return a<b end;weak[1]=first;return first end;local t={3,2,1};table.sort(t,make());return gone,table.concat(t,',')"#);
+    compare(br#"local weak=setmetatable({},{__mode='v'});local other={7,6,5};local gone=false;local first=true;local function make()local t={3,2,1};weak[1]=t;return t end;table.sort(make(),function(a,b)if first then first=false;debug.setlocal(2,1,other);collectgarbage();gone=weak[1]==nil end;return a<b end);return gone,table.concat(other,',')"#);
+}
+
+#[test]
+fn native_traversal_and_completed_sort_return_before_rechecking_mutated_tables() {
+    compare(br#"local a=table.foreach({7},function()debug.setlocal(2,1,false);return 42 end);local b=table.foreachi({7},function()debug.setlocal(2,1,false);return 43 end);local ok,e=pcall(function()table.sort({1,2},function()debug.setlocal(2,1,false);return false end)end);return a,b,ok,e"#);
+    compare(br#"local n=0;local ok,e=pcall(function()table.sort({1,2,3},function(a,b)n=n+1;if n==3 then debug.setlocal(2,1,false)end;return a<b end)end);return ok,e,n"#);
+}
+
+#[test]
+fn sort_accepts_a_callable_replacement_after_initial_function_validation() {
+    compare(br#"local out={};local replacement=setmetatable({},{__call=function(t,a,b)out[#out+1]='new';return a<b end});local first=true;local t={3,2,1};table.sort(t,function(a,b)out[#out+1]='old';if first then first=false;debug.setlocal(2,2,replacement)end;return a<b end);return table.concat(out,','),table.concat(t,',')"#);
+}
+
+#[test]
+fn generated_sort_argument_changes_preserve_pending_values_and_comparison_order() {
+    for count in 2..=6 {
+        for change in 1..=6 {
+            compare(format!("local a,b={{}},{{}};for i=1,{count} do a[i]={count}-i+1;b[i]=i+10 end;local n=0;local out={{}};local function second(x,y)n=n+1;out[#out+1]='new:'..tostring(x)..':'..tostring(y);return x<y end;local ok,e=pcall(function()table.sort(a,function(x,y)n=n+1;out[#out+1]='old:'..tostring(x)..':'..tostring(y);if n=={change} then debug.setlocal(2,1,b);debug.setlocal(2,2,second)end;return x<y end)end);return ok,e,n,table.concat(a,','),table.concat(b,','),table.concat(out,'|')").as_bytes());
+        }
+    }
+}
+
+#[test]
+fn replaced_sort_comparators_use_default_and_dynamic_call_semantics() {
+    for replacement in ["nil", "false", "17"] {
+        compare(format!("local t={{3,2,1}};local n=0;local ok,e=pcall(function()table.sort(t,function(a,b)n=n+1;debug.setlocal(2,2,{replacement});return a<b end)end);return ok,e,n,table.concat(t,',')").as_bytes());
+    }
+    compare(br#"local out={};debug.setmetatable(0,{__call=function(self,a,b)out[#out+1]=self;return a<b end});local t={3,2,1};table.sort(t,function(a,b)debug.setlocal(2,2,17);return a<b end);return table.concat(t,','),table.concat(out,',')"#);
+}
+
+#[test]
+fn traversal_reloads_table_and_callable_callback_slots_between_iterations() {
+    for function in ["foreach", "foreachi"] {
+        compare(format!("local out={{}};local replacement=setmetatable({{}},{{__call=function(self,k,v)out[#out+1]='new:'..k..':'..v end}});table.{function}({{4,5,6}},function(k,v)out[#out+1]='old:'..k..':'..v;debug.setlocal(2,1,{{7,8,9}});debug.setlocal(2,2,replacement)end);return table.concat(out,'|')").as_bytes());
+    }
+}
+
+#[test]
+fn sort_observes_comparator_replacement_from_default_order_metamethods() {
+    compare(br#"local out={};local function second(a,b)out[#out+1]='new';return a.n<b.n end;local mt={__lt=function(a,b)out[#out+1]='meta';debug.setlocal(2,2,second);return a.n<b.n end};local t={};for i=1,3 do t[i]=setmetatable({n=4-i},mt)end;table.sort(t);return t[1].n,t[2].n,t[3].n,table.concat(out,',')"#);
+}
+
+#[test]
+fn traversal_state_survives_native_callbacks_with_discarded_results() {
+    compare(br#"local key={1,2,3,4,5,6};local count=select('#',table.foreach({[key]=0},unpack));return count"#);
+}
+
+#[test]
+fn failed_calls_keep_native_and_lua_error_locations_distinct() {
+    for body in [
+        "return pcall(nil)",
+        "return pcall(false)",
+        "return pcall(17)",
+        "return pcall(tostring,setmetatable({},{__tostring=false}))",
+        "return pcall(function()local f=false;return f()end)",
+        "return pcall(function()local t=setmetatable({},{__call=false});return t()end)",
+        "return pcall(function()local t=setmetatable({},{__add=false});return t+1 end)",
+        "return pcall(function()local t=setmetatable({},{__lt=false});return t<t end)",
+        "return pcall(function()return next({},17)end)",
+        "return pcall(function()return table.sort({true,false})end)",
+        "return pcall(function()return true<false end)",
+        "return pcall(function()return {}+true end)",
+        "return pcall(function()table.foreach({7},function()debug.setlocal(2,3,17)end)end)",
+        "return pcall(function()local t={};setmetatable(t,{__index=t});return t.x end)",
+        "return pcall(function()local t={};setmetatable(t,{__newindex=t});t.x=1 end)",
+        "return pcall(function()local t={};setmetatable(t,{__index=t});return string.gsub('a','.',t)end)",
+        "return pcall(function()return rawset({},nil,1)end)",
+        "return pcall(function()return rawset({},0/0,1)end)",
+        "return pcall(function()local t={};t[nil]=1 end)",
+        "return pcall(function()local t={};t[0/0]=1 end)",
+    ] {
+        compare(body.as_bytes());
+    }
+}
+
+#[test]
 fn named_local_ranges_include_parameters_shadowing_varargs_and_loops() {
     compare(
         br#"

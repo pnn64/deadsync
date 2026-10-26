@@ -362,7 +362,7 @@ impl Vm {
                 if frame.pc() == 0 {
                     let minimum = if id == XPCALL { 2 } else { 1 };
                     if frame.argc() < minimum {
-                        return Err(Error::new(ErrorKind::Runtime, 0, "value expected"));
+                        return Err(self.argument_error(minimum - 1, b"value expected"));
                     }
                     let count = if id == XPCALL { 0 } else { frame.argc() - 1 };
                     self.registers
@@ -745,7 +745,9 @@ impl Vm {
             }
             NEXT | PAIRS_NEXT => {
                 let table = self.table_argument(base, count)?;
-                let next = self.tables[slot_index(table.0)].next(arg(self, 1))?;
+                let next = self.tables[slot_index(table.0)]
+                    .next(arg(self, 1))
+                    .map_err(|error| self.operand_error(error))?;
                 if let Some((key, value)) = next {
                     self.resize_registers(self.registers.len().max(base + 2));
                     self.registers[base] = key;

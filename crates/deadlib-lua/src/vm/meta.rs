@@ -104,7 +104,8 @@ impl Vm {
             }
             target = handler;
         }
-        Err(Error::new(ErrorKind::Runtime, 0, "loop in gettable"))
+        let error = Error::new(ErrorKind::Runtime, 0, "loop in gettable");
+        Err(self.operand_error(error))
     }
     pub(super) fn set_table(
         &mut self,
@@ -144,7 +145,8 @@ impl Vm {
             }
             target = handler;
         }
-        Err(Error::new(ErrorKind::Runtime, 0, "loop in settable"))
+        let error = Error::new(ErrorKind::Runtime, 0, "loop in settable");
+        Err(self.operand_error(error))
     }
     pub(super) fn arithmetic(
         &mut self,
@@ -371,7 +373,7 @@ impl Vm {
                 }
             }
         }
-        Err(Error::new(
+        let error = Error::new(
             ErrorKind::Runtime,
             0,
             if left.type_name().as_bytes()[2] == right.type_name().as_bytes()[2] {
@@ -383,6 +385,7 @@ impl Vm {
                     right.type_name()
                 )
             },
-        ))
+        );
+        Err(self.operand_error(error))
     }
 }

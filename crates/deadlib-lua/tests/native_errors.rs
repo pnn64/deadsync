@@ -5,6 +5,18 @@ struct Oracle {
     vm: Vm,
     lua: Lua,
 }
+
+#[test]
+fn protected_calls_validate_the_required_native_slots() {
+    Oracle::new().cases(&[
+        "pcall()",
+        "xpcall()",
+        "xpcall(nil)",
+        "xpcall(false)",
+        "local t={call=xpcall};t:call()",
+        "local f=pcall;f()",
+    ]);
+}
 impl Oracle {
     fn new() -> Self {
         // SAFETY: fixed developer cases use only the official standard libraries.

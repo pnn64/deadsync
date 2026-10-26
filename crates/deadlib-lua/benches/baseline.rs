@@ -140,6 +140,18 @@ fn main() {
     for (name, source, expected, repeats) in [
         ("entry_args", "local a,b,c=...;return a+b+c", 6.0, 10_000),
         (
+            "debug_sort_args",
+            "local sort=table.sort;local n=0;local function second(a,b)n=n+1;return a<b end;local function first(a,b)n=n+1;debug.setlocal(2,2,second);return a<b end;for i=1,100 do sort({3,2,1},first)end;return n",
+            300.0,
+            20,
+        ),
+        (
+            "debug_foreach_args",
+            "local n=0;local replacement=setmetatable({},{__call=function(self,k,v)n=n+v end});local function first(k,v)n=n+v;debug.setlocal(2,2,replacement)end;for i=1,100 do table.foreachi({4,5,6},first)end;return n",
+            1500.0,
+            20,
+        ),
+        (
             "standalone_entry",
             "local a,b,c=...;return a+b+c",
             6.0,

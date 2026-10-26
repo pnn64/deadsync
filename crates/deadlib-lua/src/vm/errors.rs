@@ -188,7 +188,7 @@ impl Vm {
 
     #[cold]
     pub(super) fn type_error(
-        &self,
+        &mut self,
         value: Value,
         operation: &str,
         register: Option<usize>,
@@ -231,6 +231,25 @@ impl Vm {
         } else {
             message.extend_from_slice(format!("a {} value", value.type_name()).as_bytes());
         }
-        Error::from_bytes(ErrorKind::Runtime, 0, message)
+        let error = Error::from_bytes(ErrorKind::Runtime, 0, message);
+        self.operand_error(error)
+    }
+
+    #[cold]
+    pub(super) fn operand_error(&mut self, error: Error) -> Error {
+        // VM/API operand errors originate in the current visible call frame.
+        // luaL_error argument/domain diagnostics separately skip their C frame.
+        if self
+            .frames
+            .iter()
+            .rev()
+            .find(|f| f.is_call())
+            .is_some_and(|f| matches!(f.function, FrameKind::Native(_)))
+        {
+            let value = self.intern(error.message_bytes());
+            error.with_value(value)
+        } else {
+            error
+        }
     }
 }

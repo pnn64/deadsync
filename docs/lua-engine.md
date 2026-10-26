@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 386 differential/adversarial integration tests, forty-three unit tests and
+crate, 397 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-work-limits.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-native-args.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -605,6 +605,19 @@ scratch storage. All 430 tests and 140 process probes pass. The CLI audit retain
 cover 76 runtime and 22 frontend workloads. The measured x64 VM struct shrinks
 from 4,440 to 4,432 bytes. Native loops still run between execution-budget checks;
 full resource, standalone and integration gates remain open.
+
+The [live native argument validation](testing/2026-10-26-rust-lua-native-args.md)
+reloads sort table/comparator slots after callbacks and removes their stale job
+roots. Traversal returns before rechecking unused mutated arguments and keeps
+iteration state below callable/wide-result callback storage. Native operand
+errors preserve C-frame origin; Lua errors keep source locations. Missing
+protected-call slots retain reference argument diagnostics. All 441 tests and
+140 process probes pass. The CLI audit retains 124/162 raw matches, with all
+thirty-eight differences limited to the version banner; 162/162 match after only
+that leading banner is removed. Official files remain 17/18 in both engines.
+Two [measurement runs](performance/2026-10-26-rust-lua-native-args.md) cover 78 runtime
+and 22 frontend workloads. Full native/debug, resource, standalone and integration
+gates remain open.
 
 ## Reference contract
 

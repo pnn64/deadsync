@@ -581,7 +581,9 @@ impl Vm {
     fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();
-        table.set(key, value)?;
+        if let Err(error) = table.set(key, value) {
+            return Err(self.operand_error(error));
+        }
         let growth = table.heap_bytes().saturating_sub(before);
         if growth != 0 {
             self.tables.note_alloc(growth);
