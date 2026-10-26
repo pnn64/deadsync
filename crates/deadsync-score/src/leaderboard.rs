@@ -174,22 +174,92 @@ pub fn scorebox_score_percent(score_10000: f64) -> f64 {
     }
 }
 
+const SCOREBOX_DIGIT_PAIRS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+
+#[inline]
+fn format_scorebox_fixed(score_10000: f64, with_percent: bool) -> String {
+    // Preserve the existing finite clamp and its signed-zero result.
+    let bits = scorebox_score_percent(score_10000).to_bits();
+    let shift = 1075 - ((bits >> 52) & 0x7ff) as u32;
+    let units = if shift >= 61 {
+        // The scaled significand is below half a unit at this denominator.
+        0
+    } else {
+        // Exact significand * 100 fits in 60 bits. Round its binary fraction
+        // directly, avoiding a second floating-point rounding at half cents.
+        let scaled = ((bits & 0x000f_ffff_ffff_ffff) | (1 << 52)) * 100;
+        let whole = scaled >> shift;
+        let remainder = scaled & ((1u64 << shift) - 1);
+        let half = 1u64 << (shift - 1);
+        whole + u64::from(remainder > half || (remainder == half && whole & 1 != 0))
+    } as u32;
+    let mut bytes = [b'0'; 8];
+    let mut len = 0;
+    if bits >> 63 != 0 {
+        bytes[len] = b'-';
+        len += 1;
+    }
+    let whole = units / 100;
+    if whole == 100 {
+        bytes[len..len + 3].copy_from_slice(b"100");
+        len += 3;
+    } else if whole >= 10 {
+        let pair = whole as usize * 2;
+        bytes[len..len + 2].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+        len += 2;
+    } else {
+        bytes[len] = b'0' + whole as u8;
+        len += 1;
+    }
+    bytes[len] = b'.';
+    let pair = (units % 100) as usize * 2;
+    bytes[len + 1..len + 3].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+    len += 3;
+    if with_percent {
+        bytes[len] = b'%';
+        len += 1;
+    }
+    std::str::from_utf8(&bytes[..len])
+        .expect("score display contains only ASCII")
+        .to_owned()
+}
+
 #[inline(always)]
 #[must_use]
 pub fn format_scorebox_score_percent(score_10000: f64) -> String {
-    format!("{:.2}%", scorebox_score_percent(score_10000))
+    format_scorebox_fixed(score_10000, true)
 }
 
 #[inline(always)]
 #[must_use]
 pub fn format_scorebox_score_value(score_10000: f64) -> String {
-    format!("{:.2}", scorebox_score_percent(score_10000))
+    format_scorebox_fixed(score_10000, false)
 }
 
 #[inline(always)]
 #[must_use]
 pub fn format_scorebox_rank(rank: u32) -> String {
-    format!("{rank}.")
+    let mut bytes = [b'0'; 11];
+    bytes[10] = b'.';
+    let mut cursor = 10;
+    let mut value = rank;
+    while value >= 100 {
+        let pair = (value % 100) as usize * 2;
+        cursor -= 2;
+        bytes[cursor..cursor + 2].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+        value /= 100;
+    }
+    if value >= 10 {
+        let pair = value as usize * 2;
+        cursor -= 2;
+        bytes[cursor..cursor + 2].copy_from_slice(&SCOREBOX_DIGIT_PAIRS[pair..pair + 2]);
+    } else {
+        cursor -= 1;
+        bytes[cursor] = b'0' + value as u8;
+    }
+    std::str::from_utf8(&bytes[cursor..])
+        .expect("rank contains only ASCII")
+        .to_owned()
 }
 
 #[inline(always)]
@@ -449,7 +519,7 @@ fn replay_edges_from_local(replay: Vec<LocalReplayEdge>) -> Vec<ReplayEdge> {
 #[inline(always)]
 #[must_use]
 pub fn leaderboard_username_matches(entry_name: &str, username: &str) -> bool {
-    !username.trim().is_empty() && entry_name.eq_ignore_ascii_case(username)
+    entry_name.eq_ignore_ascii_case(username) && !username.trim().is_empty()
 }
 
 #[inline(always)]
