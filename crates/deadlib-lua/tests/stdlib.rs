@@ -590,6 +590,49 @@ fn generated_binary_scaling_rounds_subnormals_once() {
 }
 
 #[test]
+#[cfg(windows)]
+fn ldexp_validates_the_exponent_before_the_mantissa_like_the_msvc_reference() {
+    let arguments = [
+        "nil",
+        "false",
+        "true",
+        "0",
+        "1",
+        "-1",
+        "''",
+        "'2'",
+        "'bad'",
+        "'a\\000b'",
+        "{}",
+        "function()end",
+        "coroutine.create(function()end)",
+    ];
+    compare(b"return pcall(math.ldexp)");
+    for first in arguments {
+        compare(format!("return pcall(math.ldexp,{first})").as_bytes());
+        for second in arguments {
+            compare(format!("return pcall(math.ldexp,{first},{second},'ignored')").as_bytes());
+        }
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn imported_functions_preserve_ldexp_errors_and_successful_number_coercions() {
+    for operands in ["nil,nil", "false,'bad'", "'bad',1", "'1.5','2'", "'-0',0/0"] {
+        compare(
+            format!(
+                r#"
+local f=assert(loadstring(string.dump(function(a,b)return math.ldexp(a,b)end)))
+return pcall(f,{operands})
+"#
+            )
+            .as_bytes(),
+        );
+    }
+}
+
+#[test]
 fn generated_radix_conversions_include_overflow_and_invalid_digits() {
     let mut seed = 0x51765aa839e05a81u64;
     for _ in 0..2000 {

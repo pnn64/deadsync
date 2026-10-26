@@ -191,6 +191,12 @@ other CRT random sequences are not emulated. `compile_named` assigns
 chunk names for error locations. `print` writes to stdout unless capture is
 enabled through `Vm::set_output_capture`.
 
+`math.ldexp` checks its exponent before its mantissa, matching the pinned MSVC
+Lua build when both arguments are invalid. The
+[library argument audit](../../docs/testing/2026-10-26-rust-lua-stdlib-arguments.md)
+also retains failures for unsupported native module loading. It does not
+establish full standard-library parity.
+
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function
 replacements, and Lua 5.1 formatting. Patterns use cached compact instructions,

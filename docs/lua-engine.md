@@ -46,7 +46,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 463 differential/adversarial integration tests, sixty-eight unit tests and
+crate, 479 differential/adversarial integration tests, seventy-two unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -55,6 +55,11 @@ traces across all permutations through length six, callback mutations, nested
 sorting, errors and metatables. Coroutine generation exercises 300 resume sequences
 and recursive generators, alongside nested resumers, native callbacks, environments,
 failed/suspended thread cells, result arity, C-call limits and quota recovery.
+A separate [library argument audit](testing/2026-10-26-rust-lua-stdlib-arguments.md)
+checks 5,507 bounded cases against the standalone Windows/MSVC reference. It
+matches 5,493 cases after fixing `math.ldexp` validation order and retains
+fourteen native-module loading failures. The audit exits unsuccessfully until
+those mismatches are resolved; full standard-library parity remains open.
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
 150 live locals, automatic concatenation/array pressure, stale host handles and

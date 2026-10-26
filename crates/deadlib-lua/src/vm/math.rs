@@ -160,6 +160,15 @@ impl Vm {
             RANDOM.with(|state| state.set(seed));
             return Ok(0);
         }
+        if id == 57 {
+            // The pinned MSVC Lua 5.1 build evaluates ldexp's exponent check
+            // before its mantissa check. This determines which error is raised
+            // when both arguments are invalid, including a missing exponent.
+            let exponent = self.integer_argument(base, count, 1, None)? as i32;
+            let x = self.math_number(base, count, 0)?;
+            self.registers[base] = Value::Number(ldexp(x, exponent));
+            return Ok(1);
+        }
         let x = self.math_number(base, count, 0)?;
         let y = |vm: &Self| vm.math_number(base, count, 1);
         let result = match id {
@@ -213,7 +222,6 @@ impl Vm {
                 self.registers[base + 1] = Value::Number(f64::from(exponent));
                 return Ok(2);
             }
-            57 => ldexp(x, self.integer_argument(base, count, 1, None)? as i32),
             _ => unreachable!("math ID range is fixed"),
         };
         self.registers[base] = Value::Number(result);

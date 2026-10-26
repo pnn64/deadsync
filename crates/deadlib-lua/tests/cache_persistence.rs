@@ -78,6 +78,7 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
         ("predicate.lua", b"local keep;local n=0;repeat local x=n;keep=function()return x end;n=n+1 until n>=3 or false;while n<6 and true do n=n+1 end;if n==6 then collectgarbage();return keep()+40 else return 0 end".as_slice()),
         ("rk-window.lua", b"local function f(a)local x=a+3;return x end;local seen=false;debug.sethook(function()if debug.getinfo(2,'f').func==f then local n,v=debug.getlocal(2,2);if n=='(*temporary)'and v==nil then seen=true end;collectgarbage()end end,'',1);local n=f(2);debug.sethook();assert(n==5 and seen);return 42".as_slice()),
         ("stack-clearing.lua", b"local visits,cleared=0,false;local function f()collectgarbage();local x=string.sub('abc',1,2);return x end;debug.sethook(function()if debug.getinfo(2,'f').func==f then visits=visits+1;if visits==1 then debug.setlocal(2,4,17)end;if visits==3 then local _,v=debug.getlocal(2,4);cleared=v==nil end end end,'',1);assert(f()=='ab');debug.sethook();assert(cleared);return 42".as_slice()),
+        ("ldexp-validation.lua", b"local ok,e=pcall(math.ldexp,nil,nil);assert(not ok and e==\"bad argument #2 to '?' (number expected, got nil)\");assert(math.ldexp('1.5','2')==6);return 42".as_slice()),
         ("invalid.lua", b"local =".as_slice()),
     ] {
         let path = directory.0.join(filename);
@@ -112,6 +113,6 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
                 .extension()
                 .is_some_and(|s| s == "dlc"))
             .count(),
-        7
+        8
     );
 }
