@@ -303,7 +303,7 @@ fn normalized_background_lua_color(field: Option<&str>) -> String {
         pair[1] = HEX[usize::from(byte & 15)];
     }
     let len = if a == 255 { 6 } else { 8 };
-    let mut output = String::new();
+    let mut output = String::with_capacity(if a == 255 { 8 } else { 16 });
     output.push('#');
     output.push_str(std::str::from_utf8(&digits[..len]).expect("hex digits are ASCII"));
     output
@@ -377,6 +377,7 @@ fn resolve_background_changes_from_values<'a>(
 ) -> Vec<SongBackgroundChange> {
     let entries = list_song_dir_rel_entries(song_dir);
     let mut out: Vec<SongBackgroundChange> = Vec::new();
+    let mut beat_indices = None;
     let mut saw_no_song_bg = false;
     for raw in values {
         let decoded = decode_bytes(raw);
@@ -396,7 +397,7 @@ fn resolve_background_changes_from_values<'a>(
                 saw_no_song_bg = true;
                 continue;
             }
-            upsert_background_change(&mut out, change);
+            upsert_background_change(&mut out, &mut beat_indices, change);
         }
     }
 
@@ -633,14 +634,47 @@ fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn upsert_background_change(out: &mut Vec<SongBackgroundChange>, change: SongBackgroundChange) {
-    if let Some(slot) = out
-        .iter_mut()
-        .find(|existing| existing.start_beat == change.start_beat)
-    {
-        *slot = change;
-    } else {
+fn upsert_background_change(
+    out: &mut Vec<SongBackgroundChange>,
+    indices: &mut Option<rustc_hash::FxHashMap<u32, usize>>,
+    change: SongBackgroundChange,
+) {
+    // NaNs never replace an existing beat, including another NaN.
+    if change.start_beat.is_nan() {
         out.push(change);
+        return;
+    }
+    const INDEX_THRESHOLD: usize = 32;
+    if out.len() < INDEX_THRESHOLD {
+        if let Some(slot) = out
+            .iter_mut()
+            .find(|existing| existing.start_beat == change.start_beat)
+        {
+            *slot = change;
+        } else {
+            out.push(change);
+        }
+        return;
+    }
+    // Numeric equality merges both zero signs; all other non-NaN beats have
+    // unique bit patterns. Store positions so replacements keep their first slot.
+    let key = |beat: f32| if beat == 0.0 { 0 } else { beat.to_bits() };
+    let indices = indices.get_or_insert_with(|| {
+        let mut indices =
+            rustc_hash::FxHashMap::with_capacity_and_hasher(INDEX_THRESHOLD, Default::default());
+        for (index, existing) in out.iter().enumerate() {
+            if !existing.start_beat.is_nan() {
+                indices.insert(key(existing.start_beat), index);
+            }
+        }
+        indices
+    });
+    match indices.entry(key(change.start_beat)) {
+        std::collections::hash_map::Entry::Occupied(slot) => out[*slot.get()] = change,
+        std::collections::hash_map::Entry::Vacant(slot) => {
+            slot.insert(out.len());
+            out.push(change);
+        }
     }
 }
 
@@ -692,6 +726,10 @@ fn sort_foreground_changes<T>(
 #[cfg(test)]
 #[path = "changes/background_fields.rs"]
 mod background_fields;
+
+#[cfg(test)]
+#[path = "changes/lookup_growth.rs"]
+mod lookup_growth;
 
 #[cfg(test)]
 mod tests {
