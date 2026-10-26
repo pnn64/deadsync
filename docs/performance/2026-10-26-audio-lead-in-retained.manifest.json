@@ -1,0 +1,58 @@
+{
+  "before": {
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "-p",
+      "deadlib-audio",
+      "--lib",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "environment": {
+      "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-lead-in\\cargo",
+      "CARGO_PROFILE_RELEASE_DEBUG": "1",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1"
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "source_sha256": {
+      "crates/deadlib-audio/src/stream.rs": "97979d097bd142a640064df343941fe2d5c45707332f8c35f61542ee9603bde6",
+      "crates/deadlib-audio/src/stream/perf_tests.rs": "3975d9fcc2e27bfb73d5f895be97e2d0bed0fcc92671d0166b43efbe791ec7c0",
+      "crates/deadlib-audio/src/stream/silence_perf_tests.rs": "7d76d11004addabba914272c4155d1eee75a6600c8c4cef4359b52347fda87a1",
+      "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+      "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+    },
+    "binary_sha256": "010114ffaa942abcc3adff564d9c6cd2032c749bf28db90b5ce20a09f16e01a5",
+    "binary_bytes": 2335744
+  },
+  "retained": {
+    "command": [
+      "cargo",
+      "test",
+      "--release",
+      "-p",
+      "deadlib-audio",
+      "--lib",
+      "--no-run",
+      "--message-format=json"
+    ],
+    "environment": {
+      "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-lead-in\\cargo",
+      "CARGO_PROFILE_RELEASE_DEBUG": "1",
+      "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1"
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "source_sha256": {
+      "crates/deadlib-audio/src/stream.rs": "440dd2f30f92442b2dfe12684b6b5d71ece184d6835e3ecd37631cbe975d7b36",
+      "crates/deadlib-audio/src/stream/perf_tests.rs": "3975d9fcc2e27bfb73d5f895be97e2d0bed0fcc92671d0166b43efbe791ec7c0",
+      "crates/deadlib-audio/src/stream/silence_perf_tests.rs": "3f5075812b316aa690051ef3b2c68da9a5d3644e44be29b50d89fba55289c182",
+      "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+      "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+      "crates/deadlib-audio/src/stream/stretch.rs": "2da8881bda13c8e4f7cdc49ffa364900363b800ef421fa0097f87f368e0c3e5d",
+      "crates/deadlib-audio/src/stream/stretch/perf_tests.rs": "6fa5e1f581c9a7727014696abe30b8b7e0df8f5725dbd204987512ff6e934e89"
+    },
+    "binary_sha256": "e33909612898c3d02b02e7f42aafdc2817cb34eeed1a2dfc906238c890ebbbbb",
+    "binary_bytes": 2371584
+  }
+}

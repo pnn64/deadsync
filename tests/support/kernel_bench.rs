@@ -2,7 +2,7 @@
 use std::time::Instant;
 
 #[cfg(windows)]
-fn cycles() -> u64 {
+pub fn cycles() -> u64 {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentThread() -> *mut std::ffi::c_void;
@@ -18,11 +18,11 @@ fn cycles() -> u64 {
 }
 
 #[cfg(not(windows))]
-fn cycles() -> u64 {
+pub fn cycles() -> u64 {
     0
 }
 
-fn pin_thread() {
+pub fn pin_thread() {
     #[cfg(windows)]
     {
         #[link(name = "kernel32")]

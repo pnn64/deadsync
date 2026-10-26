@@ -9,6 +9,8 @@ mod bench;
 mod original_processing;
 #[path = "perf_original_sfx.rs"]
 mod original_sfx;
+#[path = "silence_perf_tests.rs"]
+mod silence;
 
 fn samples(frames: usize, channels: usize) -> Vec<i16> {
     (0..frames * channels)

@@ -704,7 +704,7 @@ fn correlation_score(frames: &[f32], correlate: &[f32], best_score: f32) -> f32 
 
 #[cfg(test)]
 #[path = "stretch/perf_tests.rs"]
-mod perf_tests;
+pub(super) mod perf_tests;
 
 #[cfg(test)]
 mod tests {

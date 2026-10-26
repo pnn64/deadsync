@@ -4,7 +4,7 @@ use super::*;
 use std::hint::black_box;
 
 #[path = "../../../../../tests/support/kernel_bench.rs"]
-mod bench;
+pub(crate) mod bench;
 
 fn noise(len: usize, mut seed: u32) -> Vec<f32> {
     (0..len)
