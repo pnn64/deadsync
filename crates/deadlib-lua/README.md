@@ -297,6 +297,9 @@ Program before calling lets Lua ownership determine its environment's lifetime.
 `begin_standalone`/`end_standalone` add a parked C main frame and protected message
 handling for CLI-style entry. Default/custom tracebacks inspect live faulting
 frames, and uncaught runtime errors force collection after the handler returns.
+`get_global` honors global `__index` callbacks; `global` performs a raw lookup.
+`run_interactive` runs the Lua 5.1 console inside a standalone context, reporting
+recoverable diagnostics through a caller-provided function.
 
 `Value::LightUserdata` carries an unmanaged opaque identity. It owns no storage,
 is never dereferenced, survives weak tables and has a metatable shared by light
@@ -313,9 +316,12 @@ work limits. Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode
 are provisional. The CLI accepts scripts with positional arguments, stdin, chained
 `-e`/`-l` actions, `--`, `-` and `LUA_INIT` strings/files. Script values appear in
-`...` and the Lua 5.1 `arg` table, including negative option indices. Interactive
-mode and full standalone usage/console behavior remain unfinished; the
-CLI audit retains their mismatches. The version banner identifies DeadLua.
+`...` and the Lua 5.1 `arg` table, including negative option indices. `-i` enters
+the console after commands/scripts; an argument-free terminal enters it directly.
+The console supports `=expression`, continued chunks, mutable prompts, shared stdin
+and recovery after chunk/print errors. The version banner identifies DeadLua.
+Console signals, terminal-mode/echo details and broader standalone compatibility
+remain unfinished; raw CLI audit results retain all banner differences.
 
 ```sh
 cargo test -p deadlib-lua
@@ -337,5 +343,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-cli-traces.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-console.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

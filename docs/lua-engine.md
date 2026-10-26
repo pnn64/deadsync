@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 370 differential/adversarial integration tests, forty-three unit tests and
+crate, 371 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-cli-traces.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-console.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -565,6 +565,19 @@ file results remain seventeen of eighteen in both engines. Two
 [measurement runs](performance/2026-10-26-rust-lua-cli-traces.md) cover sixty-six
 runtime and twenty-two frontend workloads, including standalone entry overhead.
 Complete standalone compatibility and the full engine/integration goal remain open.
+
+The [console validation](testing/2026-10-26-rust-lua-console.md) adds `-i` and
+automatic terminal entry, expression results, continued chunks, prompt callbacks,
+shared stdin and recovery after chunk/print failures. Host global lookup honors
+`__index`; previous console results remain rooted during print lookup callbacks.
+The message-handler-free print call reuses the protected entry driver. Usage
+diagnostics match the reference. All 415 crate tests and 140 process probes pass;
+both engines still pass seventeen of eighteen official files. The expanded CLI
+audit retains 72/110 raw matches and 110/110 after removing one exact leading
+version banner; all thirty-eight raw differences are project branding. This is
+not full terminal/signal or standalone compatibility. Complete process timing
+and two [engine measurement runs](performance/2026-10-26-rust-lua-console.md)
+retain source hashes, outputs and remaining limitations. The full goal stays open.
 
 ## Reference contract
 

@@ -2,7 +2,22 @@
 use super::*;
 use threads::NativeKind;
 
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum EntryMode {
+    Message,
+    Protected,
+    Unprotected,
+}
+
 impl Vm {
+    /// Whether a standalone main context remains active.
+    ///
+    /// Errors outside protected entry abort the context. Protected chunk errors
+    /// leave it available for subsequent calls or [`Self::end_standalone`].
+    pub fn standalone_active(&self) -> bool {
+        self.standalone != 0
+    }
+
     /// Begin a Lua 5.1 standalone main context.
     ///
     /// Subsequent calls retain an observable outer C frame and run the current
@@ -54,8 +69,10 @@ impl Vm {
         self.frames.push(Frame {
             function: FrameKind::Native(id),
             pc,
-            base,
-            stack_start: base,
+            // Saved host results precede the opaque argument while rebuilding
+            // this frame. They remain live C-main scratch slots during callbacks.
+            base: 0,
+            stack_start: 0,
             result: 0,
             wanted: FRAME_OPEN,
             barriers: 0,
@@ -76,7 +93,7 @@ impl Vm {
         &mut self,
         function: Value,
         arguments: &[Value],
-        protected: bool,
+        mode: EntryMode,
     ) -> Result<&[Value], Error> {
         if arguments.len() > u32::MAX as usize {
             return Err(Error::new(ErrorKind::Limit, 0, "too many arguments"));
@@ -84,7 +101,7 @@ impl Vm {
         self.registers.clear();
         self.frames.clear();
         self.standalone_main(self.standalone, 0);
-        let handler = if protected {
+        let handler = if mode == EntryMode::Message {
             self.new_native(NativeKind::StandaloneTraceback)?
         } else {
             Value::Nil
@@ -94,7 +111,11 @@ impl Vm {
         self.registers.extend_from_slice(arguments);
         self.push_record(Frame {
             function: FrameKind::Native(CONT_STANDALONE),
-            pc: if protected { 0 } else { 4 },
+            pc: match mode {
+                EntryMode::Message => 0,
+                EntryMode::Unprotected => 4,
+                EntryMode::Protected => 6,
+            },
             base: 1,
             stack_start: 1,
             result: 0,
@@ -106,7 +127,7 @@ impl Vm {
         });
         // A fresh C message-handler closure is an allocation safe point before
         // lua_pcall installs that handler. Keep its failure outside protection.
-        if protected {
+        if mode == EntryMode::Message {
             self.maybe_gc();
         }
         let result = self.drive();
@@ -129,7 +150,9 @@ impl Vm {
             let error = self.finish_execution(result).unwrap_err();
             // docall removes its message handler before forcing collection.
             // Finalizer failures therefore escape the outer C main context.
-            if let Err(error) = self.collect_garbage() {
+            if mode == EntryMode::Message
+                && let Err(error) = self.collect_garbage()
+            {
                 self.standalone = 0;
                 return Err(error);
             }
@@ -141,7 +164,7 @@ impl Vm {
     pub(super) fn standalone_driver(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
         let index = self.frames.len() - 1;
         match frame.pc {
-            0 | 4 => {
+            0 | 4 | 6 => {
                 self.frames[index].pc += 1;
                 if let Some(actual) =
                     self.start_call(frame.vararg_start, frame.argc(), OPEN, false)?
@@ -150,7 +173,7 @@ impl Vm {
                 }
                 Ok(None)
             }
-            1 | 5 => {
+            1 | 5 | 7 => {
                 let count = self.top - frame.vararg_start;
                 self.registers.copy_within(frame.vararg_start..self.top, 0);
                 self.registers.truncate(count);

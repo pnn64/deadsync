@@ -207,3 +207,33 @@ fn loaded_functions_follow_lua_ownership_after_the_program_is_dropped() {
     assert_eq!(vm.global(b"finalized"), Value::Boolean(true));
     assert!(vm.call(Value::Function(function), &[]).is_err());
 }
+
+#[test]
+fn global_lookup_callbacks_keep_previous_results_alive_and_recover_after_errors() {
+    for standalone in [false, true] {
+        let mut vm = Vm::new();
+        if standalone {
+            vm.begin_standalone().unwrap();
+        }
+        vm.execute(&compile(b"setmetatable(_G,{__index=function(t,k)collectgarbage();if k=='bad' then error('lookup failed')end;return 17 end})").unwrap()).unwrap();
+        assert_eq!(vm.global(b"missing"), Value::Nil);
+        let table = vm.execute(&compile(b"return {tag=7}").unwrap()).unwrap()[0];
+        let root = (!standalone).then(|| vm.pin(table).unwrap());
+        assert_eq!(vm.get_global(b"missing").unwrap(), Value::Number(17.));
+        vm.set_global(b"saved", table).unwrap();
+        if let Some(root) = root {
+            vm.unpin(root).unwrap();
+        }
+        assert_eq!(
+            vm.execute(&compile(b"return saved.tag").unwrap()).unwrap(),
+            &[Value::Number(7.)]
+        );
+        let error = vm.get_global(b"bad").unwrap_err();
+        assert!(error.message().contains("lookup failed"));
+        assert_eq!(
+            vm.execute(&compile(b"return 42").unwrap()).unwrap(),
+            &[Value::Number(42.)]
+        );
+        vm.end_standalone().unwrap();
+    }
+}

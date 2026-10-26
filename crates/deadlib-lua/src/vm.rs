@@ -7,6 +7,7 @@ use crate::{
     table::Table,
 };
 use std::{collections::HashMap, sync::Arc};
+mod console;
 mod debug;
 mod errors;
 mod gc;
@@ -494,6 +495,50 @@ impl Vm {
         self.tables[slot_index(self.globals.0)].get(k)
     }
 
+    /// Read a global variable, honoring the global table's `__index` metamethod.
+    ///
+    /// The result is retained until the next VM mutation; pin it for longer use.
+    /// Unlike [`Self::global`], this can execute Lua. In a standalone context,
+    /// lookup runs in the outer main frame without a message handler.
+    ///
+    /// # Errors
+    /// Returns lookup errors or instruction-limit errors.
+    pub fn get_global(&mut self, name: &[u8]) -> Result<Value, Error> {
+        let key = self.intern(name);
+        let target = Value::Table(self.globals);
+        let value = self.tables[slot_index(self.globals.0)].get(key);
+        if value != Value::Nil || self.metafield(target, Meta::Index) == Value::Nil {
+            self.registers.clear();
+            self.registers.push(value);
+            self.top = 1;
+            return Ok(value);
+        }
+        // Keep previous results rooted while a lookup callback runs. The
+        // console looks up print with its arguments still on the Lua stack.
+        let contextual = self.standalone != 0;
+        if contextual {
+            self.standalone_main(self.standalone, 0);
+        }
+        let result_slot = self.registers.len();
+        self.resize_registers(result_slot + 1);
+        let result = self.get_table(target, key, result_slot).and_then(|()| {
+            let slot = if self.frames.is_empty() {
+                result_slot
+            } else {
+                self.drive()?;
+                if contextual { result_slot } else { 0 }
+            };
+            self.registers[0] = self.registers[slot];
+            self.registers.truncate(1);
+            self.top = 1;
+            Ok(1)
+        });
+        if result.is_err() {
+            self.standalone = 0;
+        }
+        self.finish_execution(result).map(|values| values[0])
+    }
+
     /// Set a global variable.
     ///
     /// # Errors
@@ -931,7 +976,7 @@ impl Vm {
 
     fn call_root(&mut self, function: Value, arguments: &[Value]) -> Result<&[Value], Error> {
         if self.standalone != 0 {
-            return self.standalone_call(function, arguments, true);
+            return self.standalone_call(function, arguments, standalone::EntryMode::Message);
         }
         if arguments.len() > u32::MAX as usize {
             return Err(Error::new(ErrorKind::Limit, 0, "too many arguments"));
@@ -959,7 +1004,7 @@ impl Vm {
         arguments: &[Value],
     ) -> Result<&[Value], Error> {
         if self.standalone != 0 {
-            self.standalone_call(function, arguments, false)
+            self.standalone_call(function, arguments, standalone::EntryMode::Unprotected)
         } else {
             self.call_root(function, arguments)
         }

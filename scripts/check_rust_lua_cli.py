@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 from build_lua_cli_reference import build
 
 def main() -> None:
@@ -33,6 +34,12 @@ def main() -> None:
     script=b"print(arg[0],arg[-1],arg[-2],arg[-3]);print(select('#',...),...);print(arg[1],arg[2],arg[3],arg[4]);print(x)"
     case('piped_stdin',[],b"print('stdin',arg==nil,select('#',...))")
     case('empty_stdin',[])
+    case('piped_stdin_runtime_error',[],b"error('stdin')")
+    case('piped_stdin_syntax_error',[],b'local =')
+    case('piped_stdin_nil_error',[],b'error(nil)')
+    case('module_then_stdin_error',['-lmath'],b"error('stdin')")
+    case('explicit_stdin_error',['-'],b"error('stdin')")
+    case('piped_stdin_finalizer_error',[],b"local p=newproxy(true);getmetatable(p).__gc=function()error('gc failed')end;p=nil;error('original')")
     case('command_chain',['-ex=3','-e','print(x,arg==nil)'])
     case('empty_command',['-e',''],b"error('stdin should not execute')")
     case('module_then_command',['-lmath','-eprint(math.sqrt(81))'])
@@ -95,6 +102,48 @@ def main() -> None:
     case('argument_roots_through_global_callback',['probe.lua','a','b'],env={'LUA_INIT':"setmetatable(_G,{__newindex=function(t,k,v)if k=='arg' then collectgarbage('collect');return end;rawset(t,k,v)end})"},files={'probe.lua':b"collectgarbage('collect');print(arg==nil,...)"})
     for name,arguments in [('missing_e',['-e']),('missing_l',['-l']),('unknown_option',['-q']),('invalid_version_tail',['-vv']),('version',['-v']),('interactive',['-i'])]:
         case(name,arguments,b'=1\n')
+    case('invalid_interactive_tail',['-ii'])
+    case('require_global_lookup_callback',['-lx'],env={'LUA_INIT':"require=nil;setmetatable(_G,{__index=function(t,k)if k=='require' then return function(n)print('required',n)end end end})"})
+    case('interactive_empty',['-i'])
+    case('interactive_results_and_globals',['-i'],b'x=7\n=x, nil, false\nreturn x+1\n')
+    case('interactive_continuations',['-i'],b'function f(a)\nreturn a*3\nend\n=f(7)\n')
+    case('interactive_incomplete_eof',['-i'],b'function f()\n')
+    case('interactive_unterminated_string',['-i'],b"='abc\n=9\n")
+    case('interactive_long_string',['-i'],b'=[=[one\ntwo]=]\n')
+    case('interactive_syntax_recovery',['-i'],b'local =\n=17\n')
+    case('interactive_runtime_recovery',['-i'],b"error('bad')\n=17\n")
+    case('interactive_nil_and_object_errors',['-i'],b'error(nil)\nerror({})\n=17\n')
+    case('interactive_custom_handler',['-i'],b"error('bad')\n=17\n",env={'LUA_INIT':"debug.traceback=function(e,l)return 'handled:'..e..':'..l end"})
+    case('interactive_prompts',['-i'],b'if true then\nprint(7)\nend\n',env={'LUA_INIT':"_PROMPT='one\\000hidden';_PROMPT2=17"})
+    case('interactive_prompt_lookup_callback',['-i'],b'if true then\nprint(7)\nend\n',env={'LUA_INIT':"local n=0;setmetatable(_G,{__index=function(t,k)if k=='_PROMPT' or k=='_PROMPT2' then n=n+1;collectgarbage();return k..n..':' end end})"})
+    case('interactive_prompt_lookup_failure',['-i'],b'=17\n',env={'LUA_INIT':"setmetatable(_G,{__index=function(t,k)if k=='_PROMPT' then error('prompt failed')end end})"})
+    case('interactive_replaced_print',['-i'],b'=1, nil, false\n',env={'LUA_INIT':"print=function(...)io.write(select('#',...),':',tostring(...),'\\n')end"})
+    case('interactive_callable_print',['-i'],b'=17\n',env={'LUA_INIT':"print=setmetatable({},{__call=function(t,...)io.write(type(t),':',...,'\\n')end})"})
+    case('interactive_print_failure',['-i'],b'=1\n=2\n',env={'LUA_INIT':"print=function()error('print failed')end;debug.traceback=function()return 'wrong'end"})
+    case('interactive_print_nonstring_errors',['-i'],b'=1\n=2\n',env={'LUA_INIT':"local n=0;print=function()n=n+1;if n==1 then error(nil)else error({})end end"})
+    case('interactive_print_lookup_result_roots',['-i'],b"=setmetatable({},{__tostring=function()return 'alive'end})\n",env={'LUA_INIT':"local old=print;print=nil;setmetatable(_G,{__index=function(t,k)if k=='print' then collectgarbage();return old end end})"})
+    case('interactive_print_lookup_failure',['-i'],b'=17\n',env={'LUA_INIT':"print=nil;setmetatable(_G,{__index=function(t,k)if k=='print' then error('lookup failed')end end})"})
+    case('interactive_reader_in_print_has_no_handler',['-i'],b'=17\n',env={'LUA_INIT':"print=function()local f,e=load(function()error('reader',0)end);io.write(tostring(f),':',e,'\\n')end;debug.traceback=function()return 'wrong'end"})
+    case('interactive_shared_stdin',['-i'],b'=io.read()\nconsumed\n=9\n')
+    case('interactive_stdin_after_init_read',['-i'],b'before\n=3\n',env={'LUA_INIT':"print('init',io.read())"})
+    case('interactive_after_script',['-i','probe.lua','one'],b'=arg[0],arg[1],x\n',files={'probe.lua':b"x=9;print('script',...)"})
+    case('interactive_skipped_after_script_error',['-i','probe.lua'],b'=17\n',files={'probe.lua':b"error('script failed')"})
+    case('interactive_uses_original_stdin',['-i'],b'=io.read()\n=9\n',env={'LUA_INIT':"io.input('data.txt');io.stdin=nil;collectgarbage()"},files={'data.txt':b'file line\n'})
+    case('interactive_input_fragment_limit',['-i'],b'--'+b'x'*509+b'\n=3\n')
+    case('interactive_embedded_nul',['-i'],b'=1\x00ignored\n=3\n')
+    case('interactive_crlf_and_control_eof',['-i'],b'=1\r\n=3\x1a\n=9\n')
+    case('interactive_call_return_hooks',['-i'],b'=17\n',env={'LUA_INIT':"debug.sethook(function(e)io.write('hook:',e,'\\n')end,'cr')"})
+    case('interactive_finalizer_error_escapes',['-i'],b"local p=newproxy(true);getmetatable(p).__gc=function()error('gc failed')end;p=nil;error('original')\n=17\n")
+    case('interactive_missing_print',['-i'],b'=17\n',env={'LUA_INIT':'print=nil'})
+    case('interactive_print_binary_error',['-i'],b'=17\n',env={'LUA_INIT':"print=function()error('a\\000b',0)end"})
+    case('interactive_prompt_fallbacks',['-i'],b'if true then\nend\n',env={'LUA_INIT':'_PROMPT=false;_PROMPT2={}'})
+    case('interactive_returned_closure_survives_lookup_gc',['-i'],b'=function()return 42 end\n',env={'LUA_INIT':"print=nil;setmetatable(_G,{__index=function(t,k)if k=='print' then collectgarbage();return function(f)io.write(f(),'\\n')end end end})"})
+    case('interactive_command_then_console',['-i','-ex=9'],b'=x\n')
+    case('interactive_repeated_flag',['-i','-i','-v'],b'=9\n')
+    version=tomllib.loads((root/'crates/deadlib-lua/Cargo.toml').read_text())['package']['version']
+    newline=b'\r\n' if os.name=='nt' else b'\n'
+    banners={'reference':b'Lua 5.1.5  Copyright (C) 1994-2012 Lua.org, PUC-Rio'+newline,
+             'rust':f'DeadLua {version} (Lua 5.1)'.encode()+newline}
     results=[]
     with tempfile.TemporaryDirectory(prefix='deadlua-cli-') as temporary:
         directory=Path(temporary)
@@ -103,9 +152,8 @@ def main() -> None:
             row['stdin_hex']=item['stdin'].hex()
             row['files']={k:v.hex() for k,v in item['files'].items()}
             for engine,executable in [('reference',reference),('rust',binary)]:
-                work=directory/engine
-                work.mkdir(exist_ok=True)
-                for name in ('probe.lua','init.lua','-','-e'):(work/name).unlink(missing_ok=True)
+                work=directory/item['name']/engine
+                work.mkdir(parents=True)
                 for name,contents in item['files'].items():(work/name).write_bytes(contents)
                 env=os.environ.copy()
                 for name in ('LUA_INIT','LUA_PATH','LUA_CPATH'):env.pop(name,None)
@@ -113,14 +161,23 @@ def main() -> None:
                 env.update(item['environment'])
                 try:
                     run=subprocess.run(['lua',*item['arguments']],executable=executable,cwd=work,input=item['stdin'],env=env,capture_output=True,timeout=10)
-                    row[engine]=dict(returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+                    row[engine]=dict(returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex(),
+                                     files={p.relative_to(work).as_posix():p.read_bytes().hex() for p in sorted(work.rglob('*')) if p.is_file()})
                 except subprocess.TimeoutExpired:row[engine]=dict(timeout=True)
             row['equal']=row['reference']==row['rust']
+            def without_banner(engine):
+                observation=row[engine].copy()
+                raw=bytes.fromhex(observation.get('stderr_hex',''))
+                if raw.startswith(banners[engine]):observation['stderr_hex']=raw[len(banners[engine]):].hex()
+                return observation
+            row['equal_without_version_banner']=without_banner('reference')==without_banner('rust')
+            row['version_banner_only']=not row['equal'] and row['equal_without_version_banner']
             results.append(row)
-            print(item['name'],'pass' if row['equal'] else 'FAIL',flush=True)
+            print(item['name'],'pass' if row['equal'] else 'banner only' if row['version_banner_only'] else 'FAIL',flush=True)
     if hashes()!=before:raise SystemExit('sources changed during CLI audit')
     result=dict(source_hashes=before,reference=metadata,rust_binary=dict(path=str(binary),sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),prebuilt=args.rust_binary is not None),cases=results,passed=sum(r['equal'] for r in results),
-                limitations='Fixed isolated CLI audit. ASCII Windows argv/path contract; full interactive, diagnostic and environment semantics remain required where mismatches are recorded.')
+                equal_without_version_banner=sum(r['equal_without_version_banner'] for r in results),version_banners={k:v.hex() for k,v in banners.items()},
+                limitations='Fixed isolated CLI audit. Raw comparisons retain all banner differences. An additional comparison removes at most one exact known leading version banner from stderr. ASCII Windows argv/path contract; terminal/signal and broader diagnostic semantics remain required.')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n')
     print(f"{result['passed']}/{len(results)} CLI probes match")

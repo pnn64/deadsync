@@ -1,6 +1,10 @@
 //! Standalone Lua 5.1 command chunks, module loading and script arguments.
 use deadlib_lua::{Error, ErrorKind, Value, Vm, compile_named};
-use std::{env, io::Write, process::ExitCode};
+use std::{
+    env,
+    io::{IsTerminal, Write},
+    process::ExitCode,
+};
 
 fn stderr(bytes: &[u8]) {
     let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
@@ -30,6 +34,7 @@ struct Options<'a> {
     script: Option<usize>,
     version: bool,
     execute: bool,
+    interactive: bool,
 }
 
 fn options(args: &[Vec<u8>]) -> Option<Options<'_>> {
@@ -38,6 +43,7 @@ fn options(args: &[Vec<u8>]) -> Option<Options<'_>> {
         script: None,
         version: false,
         execute: false,
+        interactive: false,
     };
     let mut index = 1;
     while let Some(arg) = args.get(index) {
@@ -51,6 +57,10 @@ fn options(args: &[Vec<u8>]) -> Option<Options<'_>> {
         }
         match arg.get(1) {
             Some(b'v') if arg.len() == 2 => result.version = true,
+            Some(b'i') if arg.len() == 2 => {
+                result.interactive = true;
+                result.version = true;
+            }
             Some(flag @ (b'e' | b'l')) => {
                 let value = if arg.len() == 2 {
                     index += 1;
@@ -79,6 +89,13 @@ fn error_bytes(vm: &Vm, error: &Error) -> Option<Vec<u8>> {
         Some(Value::Nil) => None,
         _ => Some(b"(error object is not a string)".to_vec()),
     }
+}
+
+fn report(args: &[Vec<u8>], error: &[u8]) {
+    stderr(args.first().map_or(b"deadlua", Vec::as_slice));
+    stderr(b": ");
+    stderr(error);
+    stderr(b"\n");
 }
 
 fn execute(vm: &mut Vm, source: &[u8], name: &[u8]) -> Result<(), Option<Vec<u8>>> {
@@ -118,7 +135,10 @@ fn run(vm: &mut Vm, args: &[Vec<u8>]) -> Result<(), Option<Vec<u8>>> {
         }
     }
     let Some(options) = options(args) else {
-        return Err(Some(b"usage: deadlua [options] [script [args]].\nAvailable options are:\n  -e stat  execute string 'stat'\n  -l name  require library 'name'\n  -v       show version information\n  --       stop handling options\n  -        execute stdin and stop handling options".to_vec()));
+        stderr(b"usage: ");
+        stderr(args.first().map_or(b"deadlua", Vec::as_slice));
+        stderr(b" [options] [script [args]].\nAvailable options are:\n  -e stat  execute string 'stat'\n  -l name  require library 'name'\n  -i       enter interactive mode after executing 'script'\n  -v       show version information\n  --       stop handling options\n  -        execute stdin and stop handling options\n");
+        return Err(None);
     };
     if options.version {
         stderr(format!("DeadLua {} (Lua 5.1)\n", env!("CARGO_PKG_VERSION")).as_bytes());
@@ -127,7 +147,7 @@ fn run(vm: &mut Vm, args: &[Vec<u8>]) -> Result<(), Option<Vec<u8>>> {
         match action {
             Action::Execute(source) => execute(vm, source, b"=(command line)")?,
             Action::Require(name) => {
-                let function = vm.global(b"require");
+                let function = vm.get_global(b"require").map_err(|e| error_bytes(vm, &e))?;
                 let name = vm.intern(name);
                 vm.call(function, &[name])
                     .map(|_| ())
@@ -166,10 +186,45 @@ fn run(vm: &mut Vm, args: &[Vec<u8>]) -> Result<(), Option<Vec<u8>>> {
         vm.call(Value::Function(function), &arguments)
             .map(|_| ())
             .map_err(|e| error_bytes(vm, &e))?;
-    } else if !options.execute && !options.version {
-        file(vm, None, &[])?;
+    }
+    if options.interactive {
+        interactive(vm)?;
+    } else if options.script.is_none() && !options.execute && !options.version {
+        if std::io::stdin().is_terminal() {
+            stderr(format!("DeadLua {} (Lua 5.1)\n", env!("CARGO_PKG_VERSION")).as_bytes());
+            interactive(vm)?;
+        } else {
+            // Lua 5.1 pmain reports dofile(stdin)'s status without assigning it
+            // to Smain.status. Errors that unwind pmain itself still fail.
+            if let Err(error) = file(vm, None, &[]) {
+                if !vm.standalone_active() {
+                    return Err(error);
+                }
+                if let Some(error) = error {
+                    report(args, &error);
+                }
+            }
+        }
     }
     Ok(())
+}
+
+fn interactive(vm: &mut Vm) -> Result<(), Option<Vec<u8>>> {
+    let result = vm.run_interactive(|message| {
+        stderr(message);
+        stderr(b"\n");
+    });
+    if let Err(error) = result {
+        // dotty clears progname for the entire console, including errors that
+        // escape pmain before dotty can restore it.
+        if let Some(message) = error_bytes(vm, &error) {
+            stderr(&message);
+            stderr(b"\n");
+        }
+        Err(None)
+    } else {
+        Ok(())
+    }
 }
 
 pub(super) fn main() -> ExitCode {
@@ -180,19 +235,13 @@ pub(super) fn main() -> ExitCode {
     vm.begin_standalone().expect("fresh standalone VM");
     let result = run(&mut vm, &args);
     if let Err(Some(error)) = &result {
-        stderr(args.first().map_or(b"deadlua", Vec::as_slice));
-        stderr(b": ");
-        stderr(error);
-        stderr(b"\n");
+        report(&args, error);
     }
     let finished = vm.end_standalone();
     if let Err(error) = &finished
         && let Some(error) = error_bytes(&vm, error)
     {
-        stderr(args.first().map_or(b"deadlua", Vec::as_slice));
-        stderr(b": ");
-        stderr(&error);
-        stderr(b"\n");
+        report(&args, &error);
     }
     if result.is_ok() && finished.is_ok() {
         ExitCode::SUCCESS

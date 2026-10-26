@@ -13,12 +13,14 @@ fn standalone_errors_include_the_faulting_stack_before_cleanup() {
     vm.begin_standalone().unwrap();
     let program = compile_named(b"error('bad')", b"=standalone-test").unwrap();
     let error = vm.execute(&program).unwrap_err();
+    assert!(vm.standalone_active());
     assert_eq!(error_string(&vm, &error), b"standalone-test:1: bad\nstack traceback:\n\t[C]: in function 'error'\n\tstandalone-test:1: in main chunk\n\t[C]: ?");
     assert_eq!(
         vm.execute(&compile(b"return 42").unwrap()).unwrap(),
         &[Value::Number(42.)]
     );
     vm.end_standalone().unwrap();
+    assert!(!vm.standalone_active());
 }
 
 #[test]

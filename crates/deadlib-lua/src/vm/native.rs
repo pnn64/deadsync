@@ -216,7 +216,7 @@ impl Vm {
                 (matches!(
                     f.function,
                     FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE)
-                ) && matches!(f.pc, 1 | 3))
+                ) && matches!(f.pc, 1 | 3 | 7))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
             }) else {
                 return Ok(false);
@@ -240,23 +240,21 @@ impl Vm {
                     (matches!(
                         f.function,
                         FrameKind::Native(PCALL | XPCALL | CONT_STANDALONE)
-                    ) && matches!(f.pc, 1 | 3))
+                    ) && matches!(f.pc, 1 | 3 | 7))
                         || (loads::protected(f.function) && f.pc == 3)
                 })
             } else {
                 None
             };
-            let handler_index =
-                if matches!(frame.function, FrameKind::Native(XPCALL | CONT_STANDALONE)) {
-                    Some(index)
-                } else {
-                    inherited.filter(|&i| {
-                        matches!(
-                            self.frames[i].function,
-                            FrameKind::Native(XPCALL | CONT_STANDALONE)
-                        )
-                    })
-                };
+            let has_handler = |f: Frame| {
+                matches!(f.function, FrameKind::Native(XPCALL))
+                    || (matches!(f.function, FrameKind::Native(CONT_STANDALONE)) && f.pc != 7)
+            };
+            let handler_index = if has_handler(frame) {
+                Some(index)
+            } else {
+                inherited.filter(|&i| has_handler(self.frames[i]))
+            };
             if let Some(handler_index) = handler_index {
                 self.frames[index].pc = 3;
                 let handler_frame = self.frames[handler_index];
@@ -298,7 +296,7 @@ impl Vm {
                 }
             }
             let value = if frame.pc() == 3
-                || matches!(frame.function, FrameKind::Native(XPCALL | CONT_STANDALONE))
+                || has_handler(frame)
                 || handler_index.is_some()
                 || inherited.is_some_and(|i| self.frames[i].pc == 3)
             {
