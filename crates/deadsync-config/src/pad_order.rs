@@ -82,11 +82,19 @@ fn serialize_uuid_list(list: &[[u8; 16]]) -> String {
 
 #[inline]
 fn append_uuid_hex(out: &mut String, uuid: &[u8; 16]) {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
+    const PAIRS: [[u8; 2]; 256] = {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut pairs = [[0; 2]; 256];
+        let mut i = 0;
+        while i < 256 {
+            pairs[i] = [HEX[i >> 4], HEX[i & 15]];
+            i += 1;
+        }
+        pairs
+    };
     let mut text = [0; 32];
     for (pair, &byte) in text.as_chunks_mut::<2>().0.iter_mut().zip(uuid) {
-        pair[0] = HEX[usize::from(byte >> 4)];
-        pair[1] = HEX[usize::from(byte & 0x0f)];
+        *pair = PAIRS[usize::from(byte)];
     }
     out.push_str(std::str::from_utf8(&text).expect("hex digits are ASCII"));
 }

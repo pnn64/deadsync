@@ -93,7 +93,17 @@ where
     km
 }
 
-pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
+// Keep the individual defaults and their serialized block in one declaration.
+macro_rules! default_keymap_ini {
+    ($(($key:literal, $value:literal),)*) => {
+        pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [$(($key, $value),)*];
+        const DEFAULT_KEYMAP_INI_SECTION: &str = concat!(
+            "[Keymaps]\n", $($key, "=", $value, "\n",)* "\n"
+        );
+    };
+}
+
+default_keymap_ini! {
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyQ"),
     ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyZ"),
@@ -126,7 +136,7 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
     ("P2_Center", "KeyCode::Numpad5"),
     ("P1_Coin", "KeyCode::F1"),
     ("P2_Coin", ""),
-];
+}
 
 #[must_use]
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
@@ -159,11 +169,7 @@ fn write_binding_list(content: &mut String, bindings: &[InputBinding]) {
 }
 
 pub fn write_default_keymap_ini_section(content: &mut String) {
-    content.push_str("[Keymaps]\n");
-    for (key, value) in DEFAULT_KEYMAP_INI_LINES {
-        writeln!(content, "{key}={value}").expect("writing into String cannot fail");
-    }
-    content.push('\n');
+    content.push_str(DEFAULT_KEYMAP_INI_SECTION);
 }
 
 pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
