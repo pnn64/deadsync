@@ -40,7 +40,7 @@ cache integration/eviction. Production migration requires the complete compatibi
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 426 differential/adversarial integration tests, sixty-four unit tests and
+crate, 428 differential/adversarial integration tests, sixty-four unit tests and
 two runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-constant-pool.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-format-diagnostics.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -694,6 +694,14 @@ cover scaling, allocations, tracked live layout sizes and process CPU. Complete
 compiled artifacts remain byte-identical to the parent under the benchmark's
 shared build ID. Runtime layouts and the full standalone-engine gates remain
 unchanged.
+
+The [format diagnostic validation](testing/2026-10-26-rust-lua-format-diagnostics.md)
+checks 544 binary/malformed format cases, seven native error contexts and four
+new standalone CLI probes. A terminal or NUL conversion now omits the diagnostic
+NUL as Lua 5.1 does. An isolated comparison reproduces four mismatches in the
+committed parent and six current/reference matches, including two unchanged
+controls. Literal NULs in format text remain in successful output. This advances
+standard library error compatibility; the complete standalone-engine gates remain open.
 
 ## Reference contract
 

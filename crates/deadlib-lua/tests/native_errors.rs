@@ -20,6 +20,19 @@ fn protected_calls_validate_the_required_native_slots() {
         "local f=tostring;f()",
     ]);
 }
+
+#[test]
+fn nul_format_conversions_preserve_native_error_context_and_recovery() {
+    Oracle::new().cases(&[
+        "string.format('%',17)",
+        "return string.format('%\\000tail',17)",
+        "return ('prefix%0'):format(17)",
+        "local f=string.format;f('prefix%.\\000tail',17)",
+        "local ok,e=pcall(string.format,'%\\000tail',17);collectgarbage();error(e,0)",
+        "debug.sethook(function()end,'c');string.format('%',17)",
+        "local co=coroutine.create(function()string.format('%\\000tail',17)end);local ok,e=coroutine.resume(co);error(e,0)",
+    ]);
+}
 impl Oracle {
     fn new() -> Self {
         // SAFETY: fixed developer cases use only the official standard libraries.

@@ -447,6 +447,44 @@ fn generated_float_formats_match_reference_bytes() {
 }
 
 #[test]
+fn binary_format_options_and_malformed_specs_match_reference_errors() {
+    for byte in 0..=255 {
+        for suffix in [b"".as_slice(), b"tail"] {
+            let mut format = vec![b'%', byte];
+            format.extend_from_slice(suffix);
+            compare(format!("return pcall(string.format,{},17,'abc')", quoted(&format)).as_bytes());
+        }
+    }
+    for format in [
+        "%",
+        "%0",
+        "%.",
+        "%12",
+        "%123d",
+        "%.123f",
+        "%------d",
+        "%000000d",
+        "%+-# 0d",
+        "%1.2.3f",
+        "%*s",
+        "%ls",
+        "%Lf",
+        "%99.99q",
+        "%\0tail",
+        "before\0%safter",
+    ] {
+        compare(
+            format!(
+                "return pcall(string.format,{},17,'abc')",
+                quoted(format.as_bytes())
+            )
+            .as_bytes(),
+        );
+        compare(format!("return pcall(string.format,{})", quoted(format.as_bytes())).as_bytes());
+    }
+}
+
+#[test]
 fn extended_math_preserves_bits_and_multiple_result_arity() {
     for source in [
         "return math.asin(0.25),math.acos(0.75),math.atan(1),math.atan2(-0,-1),math.sinh(3),math.cosh(-3),math.tanh(0.5)",

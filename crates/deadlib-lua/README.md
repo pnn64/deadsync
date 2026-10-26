@@ -182,6 +182,9 @@ Native operand errors retain their C-frame origin; Lua operations retain source
 locations, and protected-call argument diagnostics retain names and slot numbers.
 Native string checks coerce numeric arguments in place. Return hooks and partial
 pattern/I/O failures preserve the argument slots independently of result writes.
+Malformed formatting conversions preserve Lua 5.1's diagnostic bytes, including
+the omitted NUL for a terminal or binary NUL conversion specifier. Literal NULs
+in the format text remain in successful output.
 `string.gsub` rereads its replacement after callbacks and releases replaced
 objects. Its native buffer stack exposes partial strings, preserves lazy numeric
 replacement conversion, and resumes Lua concatenation metamethods without a
@@ -397,5 +400,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-constant-pool.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-format-diagnostics.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

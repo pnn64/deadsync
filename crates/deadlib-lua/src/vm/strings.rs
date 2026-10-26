@@ -967,7 +967,11 @@ impl Vm {
                 }
                 c => {
                     let mut message = b"invalid option '%".to_vec();
-                    message.push(c);
+                    // Lua 5.1's diagnostic %c passes a two-byte C string, so
+                    // a NUL conversion contributes an empty string.
+                    if c != 0 {
+                        message.push(c);
+                    }
                     message.extend_from_slice(b"' to 'format'");
                     return Err(Error::from_bytes(ErrorKind::Runtime, 0, message));
                 }
