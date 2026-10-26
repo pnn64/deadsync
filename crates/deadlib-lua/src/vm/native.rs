@@ -171,6 +171,7 @@ impl Vm {
                     return Ok(None);
                 }
                 let (source, actual) = result?;
+                self.relocate_native_error_functions(base..self.registers.len(), call + 1);
                 if separate {
                     self.registers.copy_within(source..source + actual, call);
                     self.registers.truncate(base.max(call + actual));
@@ -239,6 +240,9 @@ impl Vm {
         };
         self.registers.extend_from_slice(&[first, value]);
         self.frames[index].pc = 2;
+        if matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) {
+            self.frames[index].vararg_count = 0;
+        }
         self.trim_loads();
         self.trim_tracebacks();
         self.trim_hooks();
@@ -260,7 +264,12 @@ impl Vm {
                 (matches!(
                     f.function,
                     FrameKind::Native(
-                        PCALL | XPCALL | CONT_STANDALONE | CONT_HOST_CALL | debug::CONSOLE
+                        PCALL
+                            | XPCALL
+                            | CONT_STANDALONE
+                            | CONT_HOST_CALL
+                            | CONT_HOST_PCALL
+                            | debug::CONSOLE
                     )
                 ) && matches!(f.pc, 1 | 3 | 7))
                     || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
@@ -277,6 +286,9 @@ impl Vm {
             };
             if error.bypass_handler {
                 self.protected_failure(index, value);
+                if matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) {
+                    self.frames[index].pc = 5;
+                }
                 return Ok(true);
             }
             // lua_load protects the parser while retaining the current error
@@ -291,7 +303,12 @@ impl Vm {
                     (matches!(
                         f.function,
                         FrameKind::Native(
-                            PCALL | XPCALL | CONT_STANDALONE | CONT_HOST_CALL | debug::CONSOLE
+                            PCALL
+                                | XPCALL
+                                | CONT_STANDALONE
+                                | CONT_HOST_CALL
+                                | CONT_HOST_PCALL
+                                | debug::CONSOLE
                         )
                     ) && matches!(f.pc, 1 | 3 | 7))
                         || (loads::protected(f.function) && f.pc == 3)
@@ -301,6 +318,7 @@ impl Vm {
             };
             let has_handler = |f: Frame| {
                 matches!(f.function, FrameKind::Native(XPCALL))
+                    || (matches!(f.function, FrameKind::Native(CONT_HOST_PCALL)) && f.argc() != 0)
                     || (matches!(f.function, FrameKind::Native(CONT_STANDALONE)) && f.pc != 7)
             };
             let handler_index = if has_handler(frame) {
@@ -311,14 +329,15 @@ impl Vm {
             if let Some(handler_index) = handler_index {
                 self.frames[index].pc = 3;
                 let handler_frame = self.frames[handler_index];
-                let handler = self.registers[if matches!(
-                    handler_frame.function,
-                    FrameKind::Native(CONT_STANDALONE)
-                ) {
-                    handler_frame.base
-                } else {
-                    handler_frame.vararg_start + 1
-                }];
+                let handler = self
+                    .registers
+                    .get(match handler_frame.function {
+                        FrameKind::Native(CONT_STANDALONE) => handler_frame.base,
+                        FrameKind::Native(CONT_HOST_PCALL) => handler_frame.vararg_start,
+                        _ => handler_frame.vararg_start + 1,
+                    })
+                    .copied()
+                    .unwrap_or(Value::Nil);
                 if matches!(handler, Value::Function(_) | Value::Native(_)) {
                     self.charge()?;
                     // Preserve faulting frames until the error handler has returned.
@@ -348,16 +367,19 @@ impl Vm {
                     return Ok(true);
                 }
             }
-            let value = if frame.pc() == 3
+            let handler_failed = frame.pc() == 3
                 || has_handler(frame)
                 || handler_index.is_some()
-                || inherited.is_some_and(|i| self.frames[i].pc == 3)
-            {
+                || inherited.is_some_and(|i| self.frames[i].pc == 3);
+            let value = if handler_failed {
                 self.intern(b"error in error handling")
             } else {
                 value
             };
             self.protected_failure(index, value);
+            if handler_failed && matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) {
+                self.frames[index].pc = 5;
+            }
             return Ok(true);
         }
     }
@@ -367,6 +389,7 @@ impl Vm {
         let scheduled = self.scheduled_native(id);
         match id {
             CONT_HOST_CALL => self.host_return(frame),
+            CONT_HOST_PCALL => Ok(self.host_protected_return(frame)),
             CONT_HOST_META => Ok(self.return_frame(frame, base, usize::from(frame.wanted != 0))),
             CONT_STANDALONE => self.standalone_driver(frame),
             debug::CONSOLE => self.debug_console_step(frame),

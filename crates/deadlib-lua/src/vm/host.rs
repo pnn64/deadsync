@@ -3,19 +3,20 @@ use super::*;
 use std::any::Any;
 mod stack;
 mod thread;
-pub use stack::NativeStack;
+pub use stack::{NativeCallStatus, NativeStack};
 pub use thread::HostThreadState;
 pub(super) use thread::ThreadData;
 
 enum Action<'a> {
     Call(Value, &'a [Value]),
+    ProtectedCall(Value, &'a [Value], Option<usize>),
     Get([Value; 2]),
     Set([Value; 3]),
 }
 impl Action<'_> {
     fn arguments(&self) -> &[Value] {
         match self {
-            Self::Call(_, values) => values,
+            Self::Call(_, values) | Self::ProtectedCall(_, values, _) => values,
             Self::Get(values) => values,
             Self::Set(values) => values,
         }
@@ -212,6 +213,54 @@ impl Vm {
         }
     }
 
+    pub(super) fn host_protected_return(&mut self, frame: Frame) -> Option<usize> {
+        self.frames.pop();
+        let status = match frame.pc {
+            2 => 2,
+            5 => 5,
+            _ => 0,
+        };
+        if status != 0 {
+            self.registers[frame.base] = self.registers[frame.base + 1];
+            self.top = frame.base + 1;
+        }
+        // Status occupies a hidden slot preceding results.
+        self.registers[frame.stack_start] = Value::Number(f64::from(status));
+        Some(self.top - frame.stack_start)
+    }
+
+    pub(super) fn relocate_native_error_functions(
+        &mut self,
+        source: std::ops::Range<usize>,
+        destination: usize,
+    ) {
+        if !self.native_protected {
+            return;
+        }
+        for frame in &mut self.frames {
+            if matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL))
+                && frame.argc() != 0
+                && source.contains(&frame.vararg_start)
+            {
+                frame.vararg_start = destination + frame.vararg_start - source.start;
+            }
+        }
+    }
+
+    pub(super) fn discard_native_error_function_slots(&mut self, source: std::ops::Range<usize>) {
+        if !self.native_protected {
+            return;
+        }
+        for frame in &self.frames {
+            if matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL))
+                && frame.argc() != 0
+                && source.contains(&frame.vararg_start)
+            {
+                self.registers[frame.vararg_start] = Value::Nil;
+            }
+        }
+    }
+
     fn drive_host(
         &mut self,
         owner: ThreadId,
@@ -336,9 +385,17 @@ impl HostCall<'_> {
         if let Some(error) = &self.abort {
             return Err(error.clone());
         }
-        if let Action::Call(function, _) = action {
+        if let Action::Call(function, _) | Action::ProtectedCall(function, _, _) = action {
             self.vm.validate_value(function)?;
         }
+        let handler = match action {
+            Action::ProtectedCall(_, _, handler) => handler,
+            _ => None,
+        };
+        if let Some(handler) = handler {
+            self.vm.validate_value(self.vm.registers[handler])?;
+        }
+        let c_protected = matches!(action, Action::ProtectedCall(..));
         let arguments = action.arguments();
         for &value in arguments {
             self.vm.validate_value(value)?;
@@ -352,32 +409,56 @@ impl HostCall<'_> {
         let depth = self.vm.frames.len();
         let top = self.vm.top;
         let active = self.vm.active_native;
-        let base = self.output + self.results;
-        self.vm.registers.truncate(base);
+        let scratch = self.output + self.results;
+        let base = scratch + usize::from(c_protected);
+        if c_protected {
+            self.vm
+                .relocate_native_error_functions(scratch..self.vm.registers.len(), base);
+        }
+        self.vm.registers.truncate(scratch);
         self.vm.resize_registers(base + 1 + arguments.len());
+        if c_protected {
+            self.vm.registers[scratch] = Value::Nil;
+        }
         self.vm.registers[base] = match action {
-            Action::Call(function, _) => function,
+            Action::Call(function, _) | Action::ProtectedCall(function, _, _) => function,
             _ => Value::Nil,
         };
         self.vm.registers[base + 1..].copy_from_slice(arguments);
         self.vm.push_record(Frame {
-            function: FrameKind::Native(CONT_HOST_CALL),
+            function: FrameKind::Native(if c_protected {
+                CONT_HOST_PCALL
+            } else {
+                CONT_HOST_CALL
+            }),
             pc: u32::from(protected),
             base,
-            stack_start: base,
+            stack_start: scratch,
             result: base,
             wanted: match action {
-                Action::Call(..) => FRAME_OPEN,
+                Action::Call(..) | Action::ProtectedCall(..) => FRAME_OPEN,
                 Action::Get(..) => 1,
                 Action::Set(..) => 0,
             },
             barriers: self.vm.frames.last().unwrap().barriers,
-            vararg_start: base + 1,
-            vararg_count: arguments.len() as u32,
+            vararg_start: if c_protected {
+                handler.map_or(scratch, |slot| slot + usize::from(slot >= scratch))
+            } else {
+                base + 1
+            },
+            vararg_count: if c_protected {
+                u32::from(handler.is_some())
+            } else {
+                arguments.len() as u32
+            },
             tail_calls: 0,
         });
+        let previous_protection = self.vm.native_protected;
+        self.vm.native_protected |= c_protected;
         let start = match action {
-            Action::Call(..) => self.vm.start_call(base, arguments.len(), OPEN, false),
+            Action::Call(..) | Action::ProtectedCall(..) => {
+                self.vm.start_call(base, arguments.len(), OPEN, false)
+            }
             Action::Get([target, key]) => self.vm.get_table(target, key, base).map(|()| None),
             Action::Set([target, key, value]) => {
                 self.vm.set_table(target, key, value).map(|()| None)
@@ -394,6 +475,7 @@ impl HostCall<'_> {
             }
         });
         let result = self.vm.drive_host(owner, depth, start);
+        self.vm.native_protected = previous_protection;
         if !protected
             && self.vm.thread == owner
             && let Err(error) = &result
@@ -407,7 +489,7 @@ impl HostCall<'_> {
         }
         let mut line = 0;
         self.vm.abort_threads_to(owner, &mut line);
-        self.vm.close_upvalues(base);
+        self.vm.close_upvalues(scratch);
         self.vm.discard_finalizers(depth);
         self.vm.frames.truncate(depth);
         self.vm.restore_calls();
@@ -422,11 +504,11 @@ impl HostCall<'_> {
         self.vm.top = top;
         match result {
             Ok(count) => {
-                self.vm.registers.truncate(base + count);
-                Ok(base..base + count)
+                self.vm.registers.truncate(scratch + count);
+                Ok(scratch..scratch + count)
             }
             Err(error) => {
-                self.vm.registers.truncate(base);
+                self.vm.registers.truncate(scratch);
                 if let Some(value) = error.value() {
                     self.vm.registers.push(value);
                 }

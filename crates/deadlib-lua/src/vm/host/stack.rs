@@ -1,7 +1,9 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
 mod objects;
+mod protected;
 mod tables;
+pub use protected::NativeCallStatus;
 
 /// A rooted mutable stack for one synchronous native callback.
 ///
@@ -40,6 +42,8 @@ impl<'vm> HostCall<'vm> {
         self.vm
             .registers
             .copy_within(self.arguments..self.arguments + self.count, base);
+        self.vm
+            .relocate_native_error_functions(self.arguments..self.arguments + self.count, base);
         // Call arguments have moved into this window. Clear their old owned
         // temporaries so suspended-call maps do not retain popped arguments.
         let start = self.arguments.min(base);

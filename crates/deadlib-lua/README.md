@@ -449,6 +449,16 @@ compare payload mutation, finalizers, resurrection, environments and stable C
 string pointers against official Lua. Complete C API and module loading remain
 open compatibility gates.
 
+`NativeStack::protected_call` implements Lua 5.1 protected execution with an
+optional error-function index. It returns `NativeCallStatus`, replaces the
+function/arguments with results or one error value, and keeps the callback
+usable after runtime errors. Error handlers run before faulting frames and open
+locals unwind. Handler failure has its own status, even when a successful
+handler returns identical diagnostic bytes. The
+[protected native checks](../../docs/testing/2026-10-27-rust-lua-native-protected.md)
+compare `lua_pcall`, `lua_cpcall`, handler recursion and stack effects against
+official Lua. Instruction/resource limits still abort the outer Rust entry.
+
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected
 nested Lua boundary; `call_and_return` appends its results without an intermediate

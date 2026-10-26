@@ -126,6 +126,21 @@ milestone; native loading, the rest of the C API, broader native GC/debug
 behavior and full standalone Lua 5.1 parity remain open. No performance tuning
 or benchmarks accompany this change.
 
+The [protected native checks](testing/2026-10-27-rust-lua-native-protected.md)
+add `NativeStack::protected_call` and distinct success/runtime/handler-failure
+statuses. A hidden continuation roots the error function, invokes the existing
+handler path before closing faulting cells, and returns status separately from
+Lua error bytes. The development bridge compares `lua_pcall` and `lua_cpcall`
+against official Lua, including negative error-function indexes, result counts,
+reader-error inheritance, protected-boundary isolation, coroutine yield errors,
+binary C errors and recursion reserve exhaustion. Error functions retain mutable
+stack-slot references through Lua/native argument-window moves and vararg entry.
+Nine Rust groups cover protected execution, slot aliases and fatal instruction
+limits. The development shim declares 37 of the pinned Lua header's 80 core C
+functions, plus one auxiliary function; declarations do not establish full
+semantic coverage. Production native loading and full standalone Lua 5.1
+compatibility remain open; performance work stays deferred.
+
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
 150 live locals, automatic concatenation/array pressure, stale host handles and

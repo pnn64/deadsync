@@ -103,6 +103,51 @@ EXPORT int boundary_userdata_empty(lua_State *L) {
   return 3;
 }
 
+static int protected_call(lua_State *L, int negative) {
+  int results = (int)luaL_checknumber(L, 3);
+  int arguments = lua_gettop(L) - 3;
+  int handler = lua_type(L, 1) == 0 ? 0 : (negative ? -lua_gettop(L) + 1 : 1);
+  int status;
+  lua_remove(L, 3);
+  status = lua_pcall(L, arguments, results, handler);
+  lua_pushnumber(L, status); lua_insert(L, 2);
+  return lua_gettop(L) - 1;
+}
+EXPORT int boundary_protected(lua_State *L) { return protected_call(L, 0); }
+EXPORT int boundary_protected_negative(lua_State *L) { return protected_call(L, 1); }
+EXPORT int boundary_protected_argument(lua_State *L) {
+  int status = lua_pcall(L, 1, -1, 2);
+  lua_pushnumber(L, status); lua_insert(L, 1); return lua_gettop(L);
+}
+static int replacement_handler(lua_State *L) {
+  lua_pushlstring(L, "native-replacement", 18); return 1;
+}
+EXPORT int boundary_replace_handler(lua_State *L) {
+  lua_pushcfunction(L, replacement_handler); lua_replace(L, 1);
+  lua_pushnil(L); return lua_error(L);
+}
+typedef struct ProtectedData { int fail; } ProtectedData;
+static int protected_cfunction(lua_State *L) {
+  ProtectedData *data = (ProtectedData *)lua_touserdata(L, 1);
+  if (lua_gettop(L) != 1 || lua_type(L, lua_upvalueindex(1)) != -1 || !data) {
+    lua_pushlstring(L, "invalid cpcall layout", 21); return lua_error(L);
+  }
+  if (data->fail) {
+    lua_pushlstring(L, "cpcall\0\xff", 8); return lua_error(L);
+  }
+  lua_pushnumber(L, 42); lua_pushnil(L); return 2;
+}
+EXPORT int boundary_cpcall(lua_State *L) {
+  ProtectedData data;
+  int before = lua_gettop(L), status, balanced;
+  data.fail = luaL_checknumber(L, 1) != 0;
+  status = lua_cpcall(L, protected_cfunction, &data);
+  balanced = lua_gettop(L) == before + (status != 0);
+  lua_pushnumber(L, status); lua_insert(L, before + 1);
+  lua_pushboolean(L, balanced);
+  return lua_gettop(L) - before;
+}
+
 EXPORT int boundary_sum(lua_State *L) {
   double a = luaL_checknumber(L, 1);
   double b = luaL_checknumber(L, 2);

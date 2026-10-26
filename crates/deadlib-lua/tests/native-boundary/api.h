@@ -62,4 +62,6 @@ API size_t lua_objlen(lua_State *, int);
 API const char *lua_tolstring(lua_State *, int, size_t *);
 API void lua_getfenv(lua_State *, int);
 API int lua_setfenv(lua_State *, int);
+API int lua_pcall(lua_State *, int, int, int);
+API int lua_cpcall(lua_State *, lua_CFunction, void *);
 #endif

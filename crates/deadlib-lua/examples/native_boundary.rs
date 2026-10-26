@@ -225,6 +225,16 @@ mod windows {
                 },
                 32 => self.stack.get_environment(a as isize)?,
                 33 => value.integer = c_int::from(self.stack.set_environment(a as isize)?),
+                34 => {
+                    let arguments = usize::try_from(a)
+                        .map_err(|_| self.stack.error(b"invalid protected call count"))?;
+                    let handler = (value.integer != 0).then_some(value.integer as isize);
+                    value.integer = self.stack.protected_call(
+                        arguments,
+                        (b >= 0).then_some(b as usize),
+                        handler,
+                    )? as c_int;
+                }
                 25 => {
                     value.integer = match self.stack.value(a as isize) {
                         None => -1,
@@ -378,6 +388,11 @@ mod windows {
             "boundary_capture_bytes",
             "boundary_length",
             "boundary_userdata_empty",
+            "boundary_protected",
+            "boundary_protected_negative",
+            "boundary_protected_argument",
+            "boundary_replace_handler",
+            "boundary_cpcall",
         ] {
             let function = vm
                 .new_host_function_with_data(

@@ -418,3 +418,112 @@ do
   text,before,after=f(99);assert(text=='99' and before==3 and after==4)
   print('capture-bytes',text,before,after)
 end
+
+
+do
+  local function values(x)return x,nil,false,42 end
+  for _,protect in ipairs{boundary_protected,boundary_protected_negative}do
+    local status,a,b,c,d=protect(nil,values,-1,17)
+    assert(status==0 and a==17 and b==nil and c==false and d==42)
+    assert(select('#',protect(nil,values,0))==1)
+    assert(select('#',protect(false,values,7))==8)
+    local marker={};local escaped;local inspected=false
+    local function fail()
+      local retained={tag=17};escaped=function()return retained end
+      error(marker,0)
+    end
+    local function handler(e)
+      assert(e==marker)
+      for level=2,12 do
+        local info=debug.getinfo(level,'f');if not info then break end
+        if info.func==fail then
+          for i=1,6 do
+            local name,value=debug.getlocal(level,i)
+            if name=='retained' then
+              assert(value.tag==17);debug.setlocal(level,i,{tag=42});inspected=true
+            end
+          end
+        end
+      end
+      collectgarbage();return e
+    end
+    local status,e=protect(handler,fail,0)
+    assert(status==2 and e==marker and inspected and escaped().tag==42)
+    collectgarbage();assert(escaped().tag==42)
+    local status,e=protect(function()return 'error in error handling'end,fail,-1)
+    assert(status==2 and e=='error in error handling')
+    local status,e=protect(false,fail,-1)
+    assert(status==5 and e=='error in error handling')
+    local callable=setmetatable({},{__call=function()error('must not call handler table')end})
+    local status,e=protect(callable,fail,-1)
+    assert(status==5 and e=='error in error handling')
+    local alias_calls=0
+    local replacement=function(e)return 'replacement'end
+    local function alias_handler(e)
+      alias_calls=alias_calls+1
+      if alias_calls==1 then
+        for level=2,12 do
+          local info=debug.getinfo(level,'f');if not info then break end
+          if info.func==protect then debug.setlocal(level,1,replacement);break end
+        end
+        error(e,0)
+      end
+      return 'snapshot'
+    end
+    local alias_status,alias_value=protect(alias_handler,fail,-1)
+    print('protected-alias',alias_status,alias_value,alias_calls)
+    assert(alias_status==2 and alias_value=='replacement' and alias_calls==1)
+    local attempts=0
+    local status,e=protect(function(e)
+      attempts=attempts+1;collectgarbage();if attempts<4 then error(marker,0)end
+      return e
+    end,fail,-1)
+    assert(status==2 and e==marker and attempts==4)
+    local calls=0
+    local status,a,b=protect(function(e)calls=calls+1;return 'handled'end,function()
+      return load(function()error(marker,0)end)
+    end,-1)
+    assert(status==0 and a==nil and b=='handled' and calls==1)
+    local status,a,b=protect(function()error('unexpected outer handler')end,function()
+      return protect(nil,fail,-1)
+    end,-1)
+    assert(status==0 and a==2 and b==marker)
+    local co=coroutine.create(function()
+      return protect(nil,function()coroutine.yield()end,-1)
+    end)
+    local ok,status,e=coroutine.resume(co)
+    assert(ok and status==2 and e:find('yield across',1,true))
+    print('protected',attempts,escaped().tag,select('#',protect(nil,values,7)))
+    local overflows=0
+    local status,e=protect(function(e)overflows=overflows+1;error(e,0)end,fail,-1)
+    assert(status==5 and e=='error in error handling')
+    print('protected-overflow',overflows,status,e)
+  end
+  local ok,balanced=boundary_cpcall(0);assert(ok==0 and balanced)
+  local status,e,balanced=boundary_cpcall(1)
+  assert(status==2 and e=='cpcall\0\255' and balanced)
+  print('cpcall',ok,status,#e,balanced)
+end
+
+
+do
+  local function original()return 'original'end
+  local replacement=function()return 'argument-replacement'end
+  local status,e=boundary_protected_argument(function(handler)
+    handler=replacement;collectgarbage();error({},0)
+  end,original)
+  print('protected-argument',status,e)
+  assert(status==2 and e=='argument-replacement')
+  local status,e=boundary_protected_argument(function(handler,...)
+    handler=replacement;collectgarbage();error({},0)
+  end,original)
+  print('protected-vararg-argument',status,e)
+  assert(status==5 and e=='error in error handling')
+end
+
+
+do
+  local status,e=boundary_protected_argument(boundary_replace_handler,function()return 'stale'end)
+  print('protected-native-argument',status,e)
+  assert(status==2 and e=='native-replacement')
+end

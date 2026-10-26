@@ -29,7 +29,7 @@ mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{HeapStats, Root};
-pub use host::{HostCall, HostFunction, HostThreadState, NativeStack};
+pub use host::{HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeStack};
 use native::format_number;
 
 /// Stable Lua string storage, including the C API's trailing zero byte.
@@ -237,6 +237,7 @@ const CONT_CONCAT: u64 = 266;
 const CONT_STANDALONE: u64 = 267;
 const CONT_HOST_CALL: u64 = 268;
 const CONT_HOST_META: u64 = 269;
+const CONT_HOST_PCALL: u64 = 270;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -350,6 +351,8 @@ pub struct Vm {
     meta_names: [StringId; 19],
     output: Option<Vec<u8>>,
     active_native: Option<usize>,
+    // A synchronous protected host invocation can also drive child threads.
+    native_protected: bool,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
     pattern_work: crate::pattern::Work,
     pattern_locale: u64,
@@ -409,6 +412,7 @@ impl Vm {
             meta_names: [StringId(0); 19],
             output: None,
             active_native: None,
+            native_protected: false,
             patterns: HashMap::new(),
             pattern_work: crate::pattern::Work::default(),
             pattern_locale: crate::locale::revision(),
@@ -834,15 +838,28 @@ impl Vm {
         self.check_calls()?;
         let closure = &self.functions[slot_index(function.0)];
         let proto = &self.programs[closure.program].data.prototypes[closure.prototype];
-        let (registers, params, compat_arg) = (
+        let (registers, params, compat_arg, vararg) = (
             usize::from(proto.registers),
             usize::from(proto.params),
             proto.compat_arg,
+            proto.vararg,
         );
         let base = self.registers.len();
         self.resize_registers(base + registers);
         self.registers
             .copy_within(call + 1..call + 1 + count.min(params), base);
+        // lua_pcall keeps a stack-slot reference, including when that slot is
+        // passed as a parameter. Follow moved fixed arguments; vararg entry
+        // clears their original slots as Lua 5.1 adjust_varargs does.
+        let fixed = call + 1..call + 1 + count.min(params);
+        if vararg {
+            self.discard_native_error_function_slots(fixed);
+        } else {
+            self.relocate_native_error_functions(fixed, base);
+            self.discard_native_error_function_slots(
+                call + 1 + count.min(params)..call + 1 + count,
+            );
+        }
         let vararg_count = count.saturating_sub(params);
         let vararg_start = call + 1 + count.min(params);
         if compat_arg {
@@ -939,6 +956,12 @@ impl Vm {
         self.finish_frame(frame, source, count)
     }
     fn finish_frame(&mut self, frame: Frame, source: usize, count: usize) -> Option<usize> {
+        if frame.is_call() {
+            self.relocate_native_error_functions(
+                frame.base..self.registers.len(),
+                frame.result + 1,
+            );
+        }
         self.close_upvalues(frame.base);
         if self.frames.len() == 1 {
             self.registers.copy_within(source..source + count, 0);

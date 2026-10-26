@@ -45,6 +45,16 @@ API int lua_setfenv(lua_State *L, int index) {
   BoundaryValue value = {0}; operation(L, 33, index, 0, &value);
   return value.integer;
 }
+API int lua_pcall(lua_State *L, int arguments, int results, int handler) {
+  BoundaryValue value = {0}; value.integer = handler;
+  operation(L, 34, arguments, results, &value);
+  return value.integer;
+}
+API int lua_cpcall(lua_State *L, lua_CFunction function, void *data) {
+  lua_pushcclosure(L, function, 0);
+  lua_pushlightuserdata(L, data);
+  return lua_pcall(L, 1, 0, 0);
+}
 
 API lua_State *boundary_state_new(void) {
   return (lua_State *)calloc(1, sizeof(lua_State));
