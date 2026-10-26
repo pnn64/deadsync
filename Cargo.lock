@@ -1238,6 +1238,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-audio-decode-ogg"
+version = "0.1.0"
+dependencies = [
+ "ogg",
+]
+
+[[package]]
 name = "deadlib-bincode"
 version = "2.0.1"
 dependencies = [

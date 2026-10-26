@@ -19,6 +19,7 @@ members = [
     "crates/deadlib-audio-backend-jack",
     "crates/deadsync-audio-analysis",
     "crates/deadlib-audio",
+    "crates/deadlib-audio/decode/ogg",
     "crates/deadlib-audio-backend-pipewire",
     "crates/deadlib-audio-backend-pulse",
     "crates/deadlib-audio-backend-wasapi",
