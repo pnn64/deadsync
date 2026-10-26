@@ -140,15 +140,24 @@ pub fn chart_ix_for_steps_index(
 
 #[inline]
 fn lowercase_cmp(left: &str, right: &str) -> Ordering {
-    if left.is_ascii() && right.is_ascii() {
-        return left
-            .bytes()
-            .map(|byte| byte.to_ascii_lowercase())
-            .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()));
+    let mut offset = 0;
+    for (&a, &b) in left.as_bytes().iter().zip(right.as_bytes()) {
+        if !a.is_ascii() || !b.is_ascii() {
+            break;
+        }
+        match a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()) {
+            Ordering::Equal => offset += 1,
+            different => return different,
+        }
     }
-    left.chars()
+    if offset == left.len().min(right.len()) {
+        return left.len().cmp(&right.len());
+    }
+    // The skipped prefix is ASCII on both sides, so these are UTF-8 boundaries.
+    left[offset..]
+        .chars()
         .flat_map(char::to_lowercase)
-        .cmp(right.chars().flat_map(char::to_lowercase))
+        .cmp(right[offset..].chars().flat_map(char::to_lowercase))
 }
 
 #[inline]
@@ -161,8 +170,11 @@ fn edit_chart_cmp(left: &ChartData, right: &ChartData) -> Ordering {
 
 #[inline(always)]
 fn is_edit_chart(chart: &ChartData, chart_type: &str) -> bool {
-    chart.chart_type.eq_ignore_ascii_case(chart_type)
-        && chart.difficulty.eq_ignore_ascii_case("edit")
+    // Reject unequal types cheaply, then test the fixed four-letter marker.
+    chart.chart_type.len() == chart_type.len()
+        && matches!(chart.difficulty.as_bytes(), [a, b, c, d]
+            if [a | 0x20, b | 0x20, c | 0x20, d | 0x20] == *b"edit")
+        && chart.chart_type.eq_ignore_ascii_case(chart_type)
 }
 
 #[derive(Clone, Debug)]
@@ -456,13 +468,20 @@ impl SongData {
 
     #[must_use]
     pub fn edit_charts_sorted(&self, chart_type: &str) -> Vec<&ChartData> {
-        let mut edits: Vec<&ChartData> = self
+        let mut edits = self
             .charts
             .iter()
-            .filter(|chart| is_edit_chart(chart, chart_type))
-            .collect();
-        edits.sort_by(|left, right| edit_chart_cmp(left, right));
-        edits
+            .filter(|chart| is_edit_chart(chart, chart_type));
+        let Some(first) = edits.next() else {
+            return Vec::new();
+        };
+        let Some(second) = edits.next() else {
+            return vec![first];
+        };
+        let mut sorted = smallvec::SmallVec::<[&ChartData; 8]>::from_slice(&[first, second]);
+        sorted.extend(edits);
+        sorted.sort_by(|left, right| edit_chart_cmp(left, right));
+        sorted.into_vec()
     }
 
     #[must_use]
@@ -1282,3 +1301,7 @@ mod tests {
 #[cfg(test)]
 #[path = "metadata_perf.rs"]
 mod metadata_perf;
+
+#[cfg(test)]
+#[path = "song_sort_shortcuts.rs"]
+mod song_sort_shortcuts;
