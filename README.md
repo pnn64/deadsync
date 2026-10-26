@@ -293,6 +293,8 @@ player and Select Music choices.
 - **Player Options > Advanced Modifiers > Results Extras > Golf Results** adds a
   golf evaluation pane, independently of the gameplay counter.
 - **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
+  Turning the master switch on also turns this on, so pars appear right away;
+  switch it off here if you would rather not see them.
 - **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
   enables the online event board alongside the other selectable leaderboards.
 
