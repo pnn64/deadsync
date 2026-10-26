@@ -51,6 +51,40 @@ fn main() {
                 .unwrap(),
             )
             .unwrap();
+            let mut extensions = g.clone();
+            extensions.blocks.push(Block::Extension(Extension::Unknown {
+                label: 0x42,
+                control: Some(GraphicControl {
+                    delay: 19,
+                    ..Default::default()
+                }),
+                data: vec![vec![1], vec![2, 3]],
+            }));
+            extensions
+                .blocks
+                .push(Block::Extension(Extension::PlainText(PlainText {
+                    left: 0,
+                    top: 0,
+                    width: w,
+                    height: h,
+                    cell_width: 2,
+                    cell_height: 3,
+                    foreground_index: 1,
+                    background_index: 0,
+                    data: vec![b"GIF text".to_vec(), vec![0, 255]],
+                    control: Some(GraphicControl {
+                        disposal: Disposal::Previous,
+                        transparent_index: Some(0),
+                        delay: 0,
+                        user_input: true,
+                    }),
+                })));
+            fs::write(
+                root.join("decode")
+                    .join(format!("extensions-{min}-{n}.gif")),
+                encode(&extensions, &EncodeOptions::default()).unwrap(),
+            )
+            .unwrap();
             let data = &g.frames().next().unwrap().indices;
             let mut seed = vec![min - 2, data.len() as u8, (data.len() >> 8) as u8];
             seed.extend(lzw::encode(data, min).unwrap());

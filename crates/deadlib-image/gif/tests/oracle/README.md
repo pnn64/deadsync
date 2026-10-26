@@ -19,3 +19,9 @@ uses every accepted upstream sample and a deterministic matrix of native files,
 then decodes giflib's independently compressed rewrites. Temporary files are
 removed on success. This optional test fails if its executable is unavailable;
 ordinary tests need no native libraries.
+
+Executed with giflib 5.2.2 on Debian WSL. That version rejects the valid upstream
+empty-comment sample, so that specific sample is covered by Rust gif and the
+independent hand-built fixture. giflib does not expose local palette sort flags;
+its rewrites lose those flags. The test documents that normalization while
+checking all palette bytes, indices, controls and interlace flags exactly.

@@ -126,6 +126,7 @@ fn extensions_roundtrip_scope_and_text_rendering() {
     }));
     g.blocks.push(Block::Extension(Extension::Unknown {
         label: 0x42,
+        control: None,
         data: vec![vec![1], vec![2, 3]],
     }));
     let text = PlainText {

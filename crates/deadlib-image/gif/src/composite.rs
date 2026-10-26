@@ -95,13 +95,12 @@ impl Compositor {
                 [c[0], c[1], c[2], 255]
             }
         };
+        let byte_count = count.checked_mul(4).ok_or(Error::LimitExceeded)?;
         let mut pixels = Vec::new();
-        reserve(
-            &mut pixels,
-            count.checked_mul(4).ok_or(Error::LimitExceeded)?,
-        )?;
-        for _ in 0..count {
-            pixels.extend_from_slice(&background);
+        reserve(&mut pixels, byte_count)?;
+        pixels.resize(byte_count, 0);
+        if background != [0; 4] {
+            pixels.as_chunks_mut::<4>().0.fill(background);
         }
         Ok(Self {
             header: header.clone(),
@@ -218,6 +217,9 @@ impl Compositor {
         match block {
             Block::Frame(frame) => self.render(frame).map(Some),
             Block::Extension(Extension::PlainText(_)) => Err(Error::TextRendererRequired),
+            Block::Extension(Extension::Unknown { label, .. }) if is_graphic_label(*label) => {
+                Err(Error::UnsupportedGraphicExtension(*label))
+            }
             _ => Ok(None),
         }
     }

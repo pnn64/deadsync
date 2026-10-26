@@ -18,6 +18,7 @@ on shared `deadlib-image` storage. No application loader is connected to this cr
 | Transparency without modifying destination pixels | corpus vs gif-dispose; manual expected RGBA and independent full-canvas model |
 | All disposal values; Background/Previous; consecutive and first Previous | `animation.rs`, 512-graphic independent snapshot model, corpus vs gif-dispose |
 | Comments, application, plain text and unknown extensions | payload/sub-block/order roundtrips, XMP/ICC corpus, empty extensions, scope tests |
+| Control scope across unknown extension classes | `unknown_extension_scope_uses_specification_label_ranges`, GIF89a section 12 |
 | Plain-text control scope, cells, palette, clipping, transparency and disposal | `extensions_roundtrip_scope_and_text_rendering`, `TextRasterizer` interface |
 | NETSCAPE2.0 and ANIMEXTS1.0 loops | typed helper/recognizer, finite/infinite tests and corpus; playback policy documented in README |
 | Incremental arbitrary fragments, buffer reuse | every split of independently constructed metadata-rich file, 1-byte through 1024-byte chunks, recycling tests and fuzz target |
@@ -36,6 +37,11 @@ on shared `deadlib-image` storage. No application loader is connected to this cr
 - Nightly Rust, LLVM coverage and AddressSanitizer: decode 29,392 runs and LZW
   66,637 runs, 61 seconds each, seed 1327; committed smoke logs in `fuzz/reports`.
   Fuzzing has bounded resources and is not an exhaustive proof.
+- Final code, including unknown graphic-extension scope and text rasterization:
+  decode 24,165 runs in 62 seconds; LZW 107,360 runs in 61 seconds. Both pass
+  without a failure; final logs are `fuzz/reports/*-final-linux.log`.
+  All 19 ordinary integration tests pass in debug and release; the separately
+  executed external oracle also passes. Rustdoc warnings are denied.
 
 ## Corpus and oracle policy differences
 
@@ -71,6 +77,9 @@ against independently specified expected pixels, not inferred from that policy.
   events belong to the host. Original timing and control values are retained.
 - Application data (including ICC/XMP) remains opaque; color management and
   optional lossy palette quantization are outside this codec.
+- Unknown graphic extensions retain control and data using specification label
+  classes. Their rendering is undefined by GIF87a/89a; the compositor returns an
+  explicit unsupported-graphic error instead of silently emitting partial output.
 - Encoding normalizes GCE placement and recompresses LZW; it preserves valid
   indexed samples, palettes and meaningful extension data, not original bytes.
 - Bounds and strictness settings are explicit. The encoder writes conforming

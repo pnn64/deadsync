@@ -162,6 +162,49 @@ fn strict_and_compatibility_are_explicit() {
         .is_ok()
     );
 }
+
+#[test]
+fn unknown_extension_scope_uses_specification_label_ranges() {
+    let control = GraphicControl {
+        disposal: Disposal::Previous,
+        delay: 17,
+        transparent_index: Some(0),
+        user_input: true,
+    };
+    for label in [0x00, 0x02, 0x2a, 0x3b, 0x7f, 0x80, 0xf8, 0xfa, 0xfd] {
+        let bytes = insert(
+            &tiny(),
+            &[0x21, 0xf9, 4, 15, 17, 0, 0, 0, 0x21, label, 1, b'x', 0],
+        );
+        let actual = decode(&bytes).unwrap();
+        let graphic = label < 0x80 && label != 0x3b;
+        let Block::Extension(Extension::Unknown { control: c, .. }) = &actual.blocks[0] else {
+            panic!()
+        };
+        assert_eq!(*c, graphic.then_some(control));
+        assert_eq!(
+            actual.frames().next().unwrap().control,
+            (!graphic).then_some(control)
+        );
+        assert_eq!(
+            decode(&encode(&actual, &EncodeOptions::default()).unwrap()).unwrap(),
+            actual
+        );
+        let mut compositor = Compositor::new(&actual.header).unwrap();
+        if graphic {
+            assert!(
+                matches!(compositor.render_block(&actual.blocks[0]),Err(Error::UnsupportedGraphicExtension(l)) if l==label)
+            );
+        } else {
+            assert!(
+                compositor
+                    .render_block(&actual.blocks[0])
+                    .unwrap()
+                    .is_none()
+            );
+        }
+    }
+}
 #[test]
 fn cumulative_limits_and_encoder_validation() {
     let bytes = insert(&tiny(), &[0x21, 0xfe, 1, b'a', 1, b'b', 0]);

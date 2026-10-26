@@ -334,6 +334,11 @@ impl Decoder {
                         label => {
                             self.extension = Some(Extension::Unknown {
                                 label,
+                                control: if is_graphic_label(label) {
+                                    self.pending.take()
+                                } else {
+                                    None
+                                },
                                 data: Vec::new(),
                             });
                             self.state = State::MetadataSize;

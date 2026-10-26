@@ -62,12 +62,22 @@ impl Decoder {
         output: &mut Vec<u8>,
         limit: usize,
     ) -> Result<(), Error> {
-        for &byte in input {
-            if self.ended {
+        let mut input = input;
+        while !input.is_empty() && !self.ended {
+            if input.len() >= 4 {
+                // A safe unaligned word refill amortizes the byte/width
+                // loop. At most 11 bits remain, so 32 more fit in u64.
+                self.bits |=
+                    u64::from(u32::from_le_bytes(input[..4].try_into().unwrap())) << self.bit_count;
+                self.bit_count += 32;
+                input = &input[4..];
+            } else if let Some((&byte, rest)) = input.split_first() {
+                self.bits |= u64::from(byte) << self.bit_count;
+                self.bit_count += 8;
+                input = rest;
+            } else {
                 break;
             }
-            self.bits |= u64::from(byte) << self.bit_count;
-            self.bit_count += 8;
             while self.bit_count >= self.width {
                 let code = (self.bits & ((1 << self.width) - 1)) as u16;
                 self.bits >>= self.width;

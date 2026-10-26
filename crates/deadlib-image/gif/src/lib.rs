@@ -11,6 +11,7 @@ mod encode;
 pub mod lzw;
 mod model;
 
+pub use composite::{Background, CompositeOptions, Compositor, RenderedFrame, TextRasterizer};
 pub use deadlib_image::{ColorType, Image, Samples};
 pub use decode::{DecodeOptions, Decoder, Event, Limits, Progress, decode, decode_with_options};
 pub use encode::{EncodeOptions, Encoder, encode, encode_into};
@@ -24,6 +25,7 @@ pub enum Error {
     Allocation,
     MissingPalette,
     TextRendererRequired,
+    UnsupportedGraphicExtension(u8),
     Io(String),
 }
 
@@ -40,6 +42,10 @@ impl core::fmt::Display for Error {
             Self::TextRendererRequired => {
                 f.write_str("plain-text graphics require a text rasterizer")
             }
+            Self::UnsupportedGraphicExtension(label) => write!(
+                f,
+                "unknown graphic extension {label:#04x}; caller rendering required"
+            ),
             Self::Io(reason) => write!(f, "GIF I/O error: {reason}"),
         }
     }
@@ -54,4 +60,3 @@ impl From<std::io::Error> for Error {
 pub(crate) fn reserve<T>(vec: &mut Vec<T>, extra: usize) -> Result<(), Error> {
     vec.try_reserve(extra).map_err(|_| Error::Allocation)
 }
-pub use composite::{Background, CompositeOptions, Compositor, RenderedFrame, TextRasterizer};

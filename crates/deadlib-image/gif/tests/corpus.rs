@@ -177,8 +177,8 @@ fn upstream_malformed_and_regression_cases() {
                 path.file_name().unwrap().to_string_lossy(),
                 result.as_ref().map(|g| g.frames().count())
             );
-            // These upstream cases contain invalid minimum sizes, illegal pixels,
-            // extension size errors, empty LZW streams, or unknown block types.
+            // Crash/stall cases are malformed; regression cases exercise valid
+            // clear-heavy LZW and an unknown extension that must be retained.
             if group == "regression" {
                 let actual = result.unwrap();
                 if path.file_name().unwrap() == "issue-209-extension-block-type.gif" {

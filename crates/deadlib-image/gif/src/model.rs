@@ -189,14 +189,22 @@ pub enum Extension {
     PlainText(PlainText),
     Unknown {
         label: u8,
+        /// A future graphic extension (label 0x00..=0x7f, except 0x3b)
+        /// delimits control scope even when its payload is uninterpreted.
+        control: Option<GraphicControl>,
         data: SubBlocks,
     },
+}
+
+pub(crate) fn is_graphic_label(label: u8) -> bool {
+    label < 0x80 && label != 0x3b
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LoopCount {
     Infinite,
-    /// Repetitions after the first playback, as stored by NETSCAPE2.0.
+    /// Repetitions after the first playback, 1..=65535, as stored by NETSCAPE2.0.
+    /// Zero normalizes to Infinite; omit the extension for a single playback.
     Finite(u16),
 }
 

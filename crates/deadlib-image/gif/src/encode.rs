@@ -211,10 +211,14 @@ impl<W: Write> Encoder<W> {
                     text.background_index,
                 ])?;
             }
-            Extension::Unknown { label, .. } => {
+            Extension::Unknown { label, control, .. } => {
                 if matches!(label, 0xf9 | 0xfe | 0xff | 1) {
                     return Err(Error::Invalid("known extension represented as unknown"));
                 }
+                if control.is_some() && !is_graphic_label(*label) {
+                    return Err(Error::Invalid("graphic control on non-graphic extension"));
+                }
+                self.control(*control)?;
                 self.writer.write_all(&[0x21, *label])?;
             }
         }
