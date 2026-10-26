@@ -22,8 +22,8 @@ use windows::Win32::Devices::FunctionDiscovery;
 use windows::Win32::Foundation::{self, CloseHandle, HANDLE, WAIT_FAILED};
 use windows::Win32::Media::{Audio, KernelStreaming, Multimedia};
 use windows::Win32::System::Com::StructuredStorage;
-use windows::Win32::System::{Com, LibraryLoader, Threading, Variant};
-use windows::core::{PCWSTR, PWSTR, s, w};
+use windows::Win32::System::{Com, Threading, Variant};
+use windows::core::{PCWSTR, PWSTR};
 
 const DEVICE_HEALTH_CHECK_MS: u32 = 1_000;
 const DEVICE_RECOVERY_RETRY_MS: u32 = 1_000;
@@ -883,20 +883,12 @@ fn get_mix_format_bytes(audio_client: &Audio::IAudioClient) -> Result<Vec<u8>, S
     }
 }
 
-#[inline(always)]
-unsafe fn free_com_task_mem(ptr: *const c_void) {
+#[link(name = "ole32")]
+unsafe extern "system" {
     // `windows` links `CoTaskMemFree` from combase.dll, which is not available
-    // on Windows 7. Resolve ole32.dll at runtime to avoid a static combase
-    // import table entry.
-    type CoTaskMemFreeFn = unsafe extern "system" fn(*const c_void);
-    let Ok(ole32) = (unsafe { LibraryLoader::GetModuleHandleW(w!("ole32.dll")) }) else {
-        return;
-    };
-    let Some(proc) = (unsafe { LibraryLoader::GetProcAddress(ole32, s!("CoTaskMemFree")) }) else {
-        return;
-    };
-    let free: CoTaskMemFreeFn = unsafe { std::mem::transmute(proc) };
-    unsafe { free(ptr) };
+    // on Windows 7. Import it directly from its Windows 7 provider instead.
+    #[link_name = "CoTaskMemFree"]
+    fn free_com_task_mem(ptr: *const c_void);
 }
 
 #[inline(always)]
@@ -981,6 +973,10 @@ fn propvariant_lpwstr(value: &StructuredStorage::PROPVARIANT) -> Option<String> 
 #[cfg(test)]
 #[path = "../tests/native/mod.rs"]
 mod native_tests;
+
+#[cfg(test)]
+#[path = "../tests/performance/mod.rs"]
+mod performance_tests;
 
 #[cfg(test)]
 mod tests {
