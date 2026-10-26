@@ -2,6 +2,7 @@
 use super::*;
 
 const MAX_CALLS: u16 = 20_000;
+pub(super) const MAX_CSTACK: usize = 8_000;
 
 fn depth(frames: &[Frame]) -> usize {
     frames.iter().filter(|frame| frame.is_call()).count()

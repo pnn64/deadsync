@@ -701,12 +701,13 @@ impl Vm {
                     self.registers[base] = Value::Number(count.saturating_sub(1) as f64);
                     return Ok(1);
                 }
-                let n = self
-                    .number(arg(self, 0))
-                    .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?
-                    as isize;
+                let n = self.integer_argument(base, count, 0, None)? as i32;
                 let available = count.saturating_sub(1);
-                let start = if n < 0 { available as isize + n } else { n - 1 };
+                let start = if n < 0 {
+                    available as i64 + i64::from(n)
+                } else {
+                    i64::from(n) - 1
+                };
                 if start < 0 {
                     return Err(self.argument_error(0, b"index out of range"));
                 }
@@ -716,35 +717,28 @@ impl Vm {
                 return Ok(available - start);
             }
             8 => {
-                let t = arg(self, 0);
                 let id = self.table_argument(base, count)?;
-                let table = &self.tables[slot_index(id.0)];
-                let start = if count < 2 || arg(self, 1) == Value::Nil {
-                    1.0
-                } else {
-                    self.number(arg(self, 1))
-                        .ok_or_else(|| self.argument_type_error(base, count, 1, "number"))?
-                        .trunc()
-                };
+                let start = self.integer_argument(base, count, 1, Some(1))? as i32;
                 let end = if count < 3 || arg(self, 2) == Value::Nil {
-                    table.len() as f64
+                    self.tables[slot_index(id.0)].len() as i32
                 } else {
-                    self.number(arg(self, 2))
-                        .ok_or_else(|| self.argument_type_error(base, count, 2, "number"))?
-                        .trunc()
+                    self.integer_argument(base, count, 2, None)? as i32
                 };
-                let results = (end - start + 1.0).max(0.0);
-                if !results.is_finite() || results > 1_000_000.0 {
+                if start > end {
+                    return Ok(0);
+                }
+                let results = (i64::from(end) - i64::from(start) + 1) as usize;
+                if results > limits::MAX_CSTACK.saturating_sub(count) {
                     return Err(Error::new(
-                        ErrorKind::Limit,
+                        ErrorKind::Runtime,
                         0,
                         "too many results to unpack",
                     ));
                 }
-                let results = results as usize;
                 self.resize_registers(self.registers.len().max(base + results));
+                let table = &self.tables[slot_index(id.0)];
                 for i in 0..results {
-                    let v = self.table(t)?.get(Value::Number(start + i as f64));
+                    let v = table.get(Value::Number((i64::from(start) + i as i64) as f64));
                     self.registers[base + i] = v;
                 }
                 return Ok(results);

@@ -221,7 +221,7 @@ impl Vm {
         if id == STR_CHAR {
             let mut bytes = self.take_buffer(count);
             for index in 0..count {
-                let n = self.integer_argument(base, count, index, None)?;
+                let n = self.integer_argument(base, count, index, None)? as i32;
                 if !(0..=255).contains(&n) {
                     return Err(self.argument_error(index, b"invalid value"));
                 }
@@ -263,19 +263,29 @@ impl Vm {
                 if id == STR_SUB {
                     Value::String(self.strings.substring(source, range))
                 } else {
-                    let count = range.len();
-                    self.resize_registers(self.registers.len().max(base + count));
+                    let results = range.len();
+                    if results > i32::MAX as usize {
+                        return Err(Error::new(ErrorKind::Runtime, 0, "string slice too long"));
+                    }
+                    if results != 0 && results > limits::MAX_CSTACK.saturating_sub(count) {
+                        return Err(Error::new(
+                            ErrorKind::Runtime,
+                            0,
+                            "stack overflow (string slice too long)",
+                        ));
+                    }
+                    self.resize_registers(self.registers.len().max(base + results));
                     for (i, &byte) in self.strings.bytes[slot_index(source.0)][range]
                         .iter()
                         .enumerate()
                     {
                         self.registers[base + i] = Value::Number(f64::from(byte));
                     }
-                    return Ok(count);
+                    return Ok(results);
                 }
             }
             STR_REP => {
-                let repeat = self.integer_argument(base, count, 1, None)?.max(0) as usize;
+                let repeat = (self.integer_argument(base, count, 1, None)? as i32).max(0) as usize;
                 if len == 0 || repeat == 0 {
                     self.registers[base] = self.intern(b"");
                     return Ok(1);

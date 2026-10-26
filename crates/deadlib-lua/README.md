@@ -137,6 +137,11 @@ Base functions include `assert`, `error`, `type`, radix-aware `tonumber`, raw
 access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,
 `loadstring`, `loadfile`, `dofile` and `newproxy`.
+`select`, `unpack`, `string.char` and `string.rep` narrow integer arguments to
+the reference's native 32-bit `int` after 64-bit Lua integer conversion.
+`unpack` and `string.byte` check the 8,000-slot native stack limit, including
+unused arguments, before growing result storage. Overflow errors are catchable
+Lua errors; empty unpack ranges return no values.
 `require`, `module` and the package namespace provide preloaded, Lua-file and
 custom loaders, shared import caching and Lua 5.1 module environments.
 The Lua 5.1 `math` function set and debug metatable/environment operations are available. Binary
@@ -343,5 +348,5 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. See the
-[suite report](../../docs/testing/2026-10-26-rust-lua-console.md) and
+[suite report](../../docs/testing/2026-10-26-rust-lua-native-bounds.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.

@@ -105,6 +105,114 @@ fn byte_string_primitives_and_methods() {
 }
 
 #[test]
+fn select_and_unpack_narrow_native_integer_arguments() {
+    for index in [
+        "4294967297",
+        "4294967298",
+        "-4294967297",
+        "2147483648",
+        "0/0",
+        "1/0",
+        "-1/0",
+        "9223372036854775808",
+        "'4294967297'",
+        "-0.9",
+    ] {
+        compare(format!("local function pack(...)return select('#',...),... end;return pack(pcall(select,{index},'a',nil,false,'d'))").as_bytes());
+        compare(format!("local t={{[0]='zero',[1]='one',[2]='two',[3]='three'}};return pcall(unpack,t,{index},{index})").as_bytes());
+    }
+}
+
+#[test]
+fn character_arguments_use_native_int_narrowing() {
+    for value in [
+        "4294967296",
+        "4294967361",
+        "-4294967231",
+        "4294967551",
+        "4294967552",
+        "-4294967297",
+        "0/0",
+        "1/0",
+        "-1/0",
+        "9223372036854775808",
+        "'4294967361'",
+        "65.9",
+    ] {
+        compare(format!("return pcall(string.char,{value})").as_bytes());
+    }
+}
+
+#[test]
+fn native_result_limits_are_catchable_and_include_unused_arguments() {
+    for extra in 0..=3 {
+        let extra_args = ",true".repeat(extra);
+        for count in 7994..=8001 {
+            // Summarize in Lua before pcall returns: the development oracle's
+            // API checks reject pcall's own status push after huge open results.
+            compare(format!("local function summarize(...)return select('#',...),select(1,...),select(-1,...)end;return pcall(function()return summarize(unpack({{[1]='first',[{count}]='last'}},1,{count}{extra_args}))end)").as_bytes());
+            compare(format!("local s=string.rep('a',{count});local function summarize(...)return select('#',...),select(1,...),select(-1,...)end;return pcall(function()return summarize(string.byte(s,1,{count}{extra_args}))end)").as_bytes());
+        }
+    }
+}
+
+#[test]
+fn repeated_strings_narrow_counts_before_allocating() {
+    for value in [
+        "4294967296",
+        "4294967297",
+        "4294967299",
+        "-4294967295",
+        "-4294967297",
+        "0/0",
+        "1/0",
+        "-1/0",
+        "9223372036854775808",
+        "'4294967297'",
+        "3.9",
+    ] {
+        compare(format!("return pcall(string.rep,'xy',{value})").as_bytes());
+    }
+}
+
+#[test]
+fn generated_native_narrowing_preserves_results_errors_and_numeric_strings() {
+    let mut inputs = Vec::new();
+    for high in [-1_048_576_i64, -65_536, -1, 0, 1, 65_536, 1_048_576] {
+        for low in [-7, -1, 0, 1, 2, 3, 32, 255, 256] {
+            let value = high * 4_294_967_296 + low;
+            inputs.push(value.to_string());
+            inputs.push(format!("'{value}'"));
+        }
+    }
+    compare(format!(r#"local out={{}};local function save(...)out[#out+1]=tostring(select('#',...));for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end;local t={{[0]='zero','one','two','three'}};for _,x in ipairs({{{}}})do save(pcall(select,x,'a',nil,false));save(pcall(unpack,t,x,x+2));save(pcall(string.char,x));save(pcall(string.rep,'xy',x))end;return table.concat(out,'|')"#,inputs.join(",")).as_bytes());
+}
+
+#[test]
+fn unpack_defaults_empty_ranges_and_overflow_keep_native_error_precedence() {
+    for count in 7997..=8001 {
+        compare(format!("local t={{}};for i=1,{count} do t[i]=i end;local function summarize(...)return select('#',...),select(1,...),select(-1,...)end;return pcall(function()return summarize(unpack(t))end)").as_bytes());
+    }
+    for arguments in [
+        "{},3,1",
+        "{},0/0,0/0",
+        "{},-2147483648,2147483647",
+        "{},0,2147483647",
+        "{},2147483647,-2147483648",
+        "{},nil,false",
+        "false,false,false",
+        "{},false,false",
+    ] {
+        compare(format!("return pcall(function()return unpack({arguments})end)").as_bytes());
+    }
+}
+
+#[test]
+fn maximum_unpack_results_remain_live_during_collection() {
+    compare(br#"local function build()local t={};for i=1,7999 do t[i]={i}end;return unpack(t)end;local function check(...)collectgarbage();local t={...};return #t,t[1][1],t[#t][1]end;return check(build())"#);
+}
+
+#[test]
 fn patterns_captures_backtracking_and_boundaries() {
     for source in [
         "return string.find('hello world','world'),string.match('hello world','(%a+)%s+(%a+)')",

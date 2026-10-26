@@ -40,7 +40,7 @@ caches. Production migration requires the complete compatibility and
 performance gates; the current regression corpus does not establish them.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 371 differential/adversarial integration tests, forty-three unit tests and
+crate, 378 differential/adversarial integration tests, forty-three unit tests and
 a runnable documentation example. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -58,7 +58,7 @@ finalization order across 100 reuse batches, resurrection, weak tables, nested
 collection, error handlers, C-call depth, instruction aborts and VM shutdown.
 Nested collection after automatic interruption also tests completed-opcode
 register maps, 500 open results and host return roots.
-The [official suite report](testing/2026-10-26-rust-lua-console.md) identifies the
+The [official suite report](testing/2026-10-26-rust-lua-native-bounds.md) identifies the
 current failing files without changing or excluding their assertions. The initial
 [performance baseline](performance/2026-10-24-rust-lua-baseline.md) records
 execution ratios of 2.38â€“13.51 times the reference duration. Subsequent
@@ -578,6 +578,20 @@ version banner; all thirty-eight raw differences are project branding. This is
 not full terminal/signal or standalone compatibility. Complete process timing
 and two [engine measurement runs](performance/2026-10-26-rust-lua-console.md)
 retain source hashes, outputs and remaining limitations. The full goal stays open.
+
+The [native integer/result validation](testing/2026-10-26-rust-lua-native-bounds.md)
+narrows select/unpack/character/repetition arguments through the reference's
+64-bit Lua integer and 32-bit native int conversions. Unpack and byte results
+honor the 8,000-slot native limit, counting unused arguments and preserving
+catchable errors. Seven groups cover numeric strings, non-finite/platform edge
+values, 126 generated arguments across four functions, result boundaries,
+error precedence and collection with 7,999 unpacked objects. All 422 tests and
+140 process probes pass. The direct CLI audit retains 88/126 raw matches;
+all thirty-eight differences are the project banner, and all 126 match after
+only that leading banner is removed. Both engines still pass seventeen of
+eighteen official files. Two [measurement runs](performance/2026-10-26-rust-lua-native-bounds.md)
+cover 72 runtime and 22 frontend workloads, including result-width scaling and
+failure paths. Complete standalone compatibility and the full goal remain open.
 
 ## Reference contract
 

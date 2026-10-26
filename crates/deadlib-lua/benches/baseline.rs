@@ -129,6 +129,14 @@ fn main() {
     };
     let concat16 = concat_kernel(16);
     let concat128 = concat_kernel(128);
+    let unpack_kernel = |count| {
+        format!(
+            "if not unpack_input then local t={{}};for i=1,{count} do t[i]=i end;unpack_input=t end;local function count(...)return select('#',...)end;local s=0;for i=1,100 do s=s+count(unpack(unpack_input))end;return s"
+        )
+    };
+    let unpack4 = unpack_kernel(4);
+    let unpack512 = unpack_kernel(512);
+    let unpack7999 = unpack_kernel(7999);
     for (name, source, expected, repeats) in [
         ("entry_args", "local a,b,c=...;return a+b+c", 6.0, 10_000),
         (
@@ -139,6 +147,27 @@ fn main() {
         ),
         ("concat_chain_16", concat16.as_str(), 51_200.0, 10),
         ("concat_chain_128", concat128.as_str(), 409_600.0, 10),
+        ("unpack_4", unpack4.as_str(), 400.0, 20),
+        ("unpack_512", unpack512.as_str(), 51_200.0, 10),
+        ("unpack_7999", unpack7999.as_str(), 799_900.0, 10),
+        (
+            "byte_7997",
+            "if not byte_input then byte_input=string.rep('a',7997)end;local function count(...)return select('#',...)end;local s=0;for i=1,100 do s=s+count(string.byte(byte_input,1,7997))end;return s",
+            799_700.0,
+            10,
+        ),
+        (
+            "native_int_narrow",
+            "local n=0;for i=1,1000 do n=n+#string.char(4294967361)+#string.rep('x',4294967299)+select(4294967297,2)end;return n",
+            6000.0,
+            20,
+        ),
+        (
+            "native_result_error",
+            "local t={};local n=0;for i=1,1000 do local ok,e=pcall(unpack,t,1,7998);if not ok and e=='too many results to unpack' then n=n+1 end end;return n",
+            1000.0,
+            20,
+        ),
         (
             "numeric_for",
             "local s=0; for i=1,100000 do s=s+i end; return s",
