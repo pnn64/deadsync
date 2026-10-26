@@ -24,6 +24,28 @@ static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) 
   if (frame->dispatch(frame->context, op, a, b, value)) longjmp(frame->failure, 1);
 }
 
+API void *lua_newuserdata(lua_State *L, size_t size) {
+  BoundaryValue value = {0}; value.length = size;
+  operation(L, 29, 0, 0, &value);
+  return lua_touserdata(L, -1);
+}
+API size_t lua_objlen(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 30, index, 0, &value);
+  return value.length;
+}
+API const char *lua_tolstring(lua_State *L, int index, size_t *length) {
+  BoundaryValue value = {0}; operation(L, 31, index, 0, &value);
+  if (length) *length = value.length;
+  return value.bytes;
+}
+API void lua_getfenv(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 32, index, 0, &value);
+}
+API int lua_setfenv(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 33, index, 0, &value);
+  return value.integer;
+}
+
 API lua_State *boundary_state_new(void) {
   return (lua_State *)calloc(1, sizeof(lua_State));
 }

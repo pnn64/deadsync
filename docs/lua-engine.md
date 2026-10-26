@@ -112,6 +112,20 @@ calls and 219 while handling overflow. Ten new Rust groups also cover embedded
 versus standalone depth, collection, field privacy, coroutine scheduling,
 metatable protection, capacity failures and quota recovery. Production native
 loading and the remaining C API remain open.
+
+The [native userdata checks](testing/2026-10-26-rust-lua-native-userdata.md)
+add stable, pointer/double-aligned full userdata payloads to the native stack,
+function/userdata/thread environment access, raw object lengths and numeric
+string conversion in the original slot or capture. Interned strings include
+the C API's trailing NUL without changing their logical bytes. The identical C
+fixture checks direct payload writes, pointer stability through collection,
+finalization and resurrection, environment identity and binary strings against
+official Lua. Eight new Rust groups cover payload sizes, VM moves, collection,
+allocation rejection and pending-error guards. This is a compatibility
+milestone; native loading, the rest of the C API, broader native GC/debug
+behavior and full standalone Lua 5.1 parity remain open. No performance tuning
+or benchmarks accompany this change.
+
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
 150 live locals, automatic concatenation/array pressure, stale host handles and

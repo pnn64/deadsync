@@ -439,7 +439,12 @@ impl Vm {
     }
     /// Inspect live object counts and estimated VM-owned heap storage.
     pub fn heap_stats(&mut self) -> HeapStats {
-        let mut payload = self.strings.bytes.iter().map(|s| s.len()).sum::<usize>()
+        let mut payload = self
+            .strings
+            .bytes
+            .iter()
+            .map(|s| s.c_bytes().len())
+            .sum::<usize>()
             + self.strings.buckets.capacity() * 4;
         payload += self.tables.iter().map(Table::heap_bytes).sum::<usize>();
         payload += self
@@ -448,7 +453,11 @@ impl Vm {
             .map(|f| f.upvalues.len() * 4)
             .sum::<usize>();
         payload += self.programs.iter().map(program_bytes).sum::<usize>();
-        payload += self.userdata.iter().map(|u| u.bytes.len()).sum::<usize>();
+        payload += self
+            .userdata
+            .iter()
+            .map(|u| u.bytes.storage_bytes())
+            .sum::<usize>();
         payload += self
             .native_closures
             .iter()
@@ -495,7 +504,7 @@ impl Vm {
         control += self.proxy_metatables.capacity() * (std::mem::size_of::<TableId>() + 1);
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
             + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
-        let objects = self.strings.bytes.live_len() * std::mem::size_of::<Box<[u8]>>()
+        let objects = self.strings.bytes.live_len() * std::mem::size_of::<ByteString>()
             + self.tables.live_len() * std::mem::size_of::<Table>()
             + self.functions.live_len() * std::mem::size_of::<Closure>()
             + self.upvalues.live_len() * std::mem::size_of::<Cell>()

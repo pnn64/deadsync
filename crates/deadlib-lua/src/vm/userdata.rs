@@ -1,12 +1,61 @@
 //! Full userdata storage and the Lua 5.1 proxy constructor.
 use super::*;
+use std::mem::align_of;
+
+// C userdata must support the target's pointer/double alignment. Select an
+// aligned subslice of an ordinary byte allocation, without casting Rust slices.
+const ALIGNMENT: usize = if align_of::<usize>() > align_of::<f64>() {
+    align_of::<usize>()
+} else {
+    align_of::<f64>()
+};
+
+#[derive(Debug)]
+pub(super) struct Bytes(Box<[u8]>);
+impl Bytes {
+    fn new(size: usize) -> Result<Self, Error> {
+        let failed = || Error::new(ErrorKind::Runtime, 0, "not enough memory");
+        // Keep even a zero-sized payload address inside its own allocation,
+        // so it cannot coincide with the next allocation's first address.
+        let total = size.checked_add(ALIGNMENT).ok_or_else(failed)?;
+        let mut bytes = Vec::new();
+        bytes.try_reserve_exact(total).map_err(|_| failed())?;
+        bytes.resize(total, 0);
+        Ok(Self(bytes.into_boxed_slice()))
+    }
+    fn offset(&self) -> usize {
+        (self.0.as_ptr() as usize).wrapping_neg() & (ALIGNMENT - 1)
+    }
+    fn payload_len(&self) -> usize {
+        self.0.len() - ALIGNMENT
+    }
+    pub(super) fn len(&self) -> usize {
+        self.payload_len()
+    }
+    pub(super) fn storage_bytes(&self) -> usize {
+        self.0.len()
+    }
+}
+impl AsRef<[u8]> for Bytes {
+    fn as_ref(&self) -> &[u8] {
+        let start = self.offset();
+        &self.0[start..start + self.payload_len()]
+    }
+}
+impl AsMut<[u8]> for Bytes {
+    fn as_mut(&mut self) -> &mut [u8] {
+        let start = self.offset();
+        let len = self.payload_len();
+        &mut self.0[start..start + len]
+    }
+}
 
 #[derive(Debug)]
 pub(super) struct Userdata {
     pub file: Option<std::num::NonZeroU64>,
     pub env: TableId,
     pub metatable: Option<TableId>,
-    pub bytes: Box<[u8]>,
+    pub bytes: Bytes,
     pub finalized: bool,
     pub order: u64,
 }
@@ -176,21 +225,31 @@ impl Vm {
     }
 
     pub(super) fn allocate_userdata(&mut self, size: usize, env: TableId) -> UserdataId {
+        self.try_allocate_userdata(size, env)
+            .expect("allocate userdata")
+    }
+
+    pub(super) fn try_allocate_userdata(
+        &mut self,
+        size: usize,
+        env: TableId,
+    ) -> Result<UserdataId, Error> {
+        let bytes = Bytes::new(size)?;
         self.userdata_order = self
             .userdata_order
             .checked_add(1)
             .expect("userdata creation order exhausted");
-        self.userdata.note_alloc(size);
+        self.userdata.note_alloc(bytes.storage_bytes());
         let id = UserdataId(self.userdata.insert(Userdata {
             file: None,
             env,
             metatable: None,
-            bytes: vec![0; size].into_boxed_slice(),
+            bytes,
             finalized: false,
             order: self.userdata_order,
         }));
         self.gc_new_value(Value::Userdata(id));
-        id
+        Ok(id)
     }
 
     /// Allocate zero-initialized userdata in this thread's environment.

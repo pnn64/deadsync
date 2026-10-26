@@ -166,6 +166,12 @@ mod windows {
                 13 => {
                     value.bytes = match self.stack.value(a as isize) {
                         Some(Value::LightUserdata(pointer)) => pointer as usize as *const c_char,
+                        Some(Value::Userdata(_)) => self
+                            .stack
+                            .userdata_bytes_mut(a as isize)?
+                            .unwrap()
+                            .as_mut_ptr()
+                            .cast(),
                         _ => std::ptr::null(),
                     }
                 }
@@ -205,6 +211,20 @@ mod windows {
                 22 => value.integer = c_int::from(self.stack.get_metatable(a as isize)?),
                 23 => self.stack.set_metatable(a as isize)?,
                 24 => value.integer = c_int::from(self.stack.next_table(a as isize)?),
+                29 => self.stack.new_userdata(value.length)?,
+                30 => value.length = self.stack.object_len(a as isize)?,
+                31 => match self.stack.to_c_bytes(a as isize)? {
+                    Some(bytes) => {
+                        value.bytes = bytes.as_ptr().cast();
+                        value.length = bytes.len() - 1;
+                    }
+                    None => {
+                        value.bytes = std::ptr::null();
+                        value.length = 0;
+                    }
+                },
+                32 => self.stack.get_environment(a as isize)?,
+                33 => value.integer = c_int::from(self.stack.set_environment(a as isize)?),
                 25 => {
                     value.integer = match self.stack.value(a as isize) {
                         None => -1,
@@ -350,6 +370,14 @@ mod windows {
             "boundary_metatable",
             "boundary_count",
             "boundary_shuffle",
+            "boundary_userdata",
+            "boundary_userdata_read",
+            "boundary_userdata_finalize",
+            "boundary_bytes",
+            "boundary_environment",
+            "boundary_capture_bytes",
+            "boundary_length",
+            "boundary_userdata_empty",
         ] {
             let function = vm
                 .new_host_function_with_data(

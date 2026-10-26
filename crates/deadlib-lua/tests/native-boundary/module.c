@@ -6,6 +6,102 @@
 #include "api.h"
 #endif
 #define EXPORT __declspec(dllexport)
+#include <stdint.h>
+#include <string.h>
+
+typedef struct Payload {
+  double number;
+  size_t visits;
+  char binary[6];
+} Payload;
+
+EXPORT int boundary_userdata(lua_State *L) {
+  double number = luaL_checknumber(L, 1);
+  Payload *payload = (Payload *)lua_newuserdata(L, sizeof(Payload));
+  memset(payload, 0, sizeof(*payload));
+  payload->number = number;
+  memcpy(payload->binary, "a\0b\r\n\xff", 6);
+  if (lua_type(L, 2) == 5) {
+    lua_pushvalue(L, 2); lua_setmetatable(L, -2);
+  }
+  lua_pushlightuserdata(L, payload);
+  return 2;
+}
+EXPORT int boundary_userdata_read(lua_State *L) {
+  Payload *payload = (Payload *)lua_touserdata(L, 1);
+  if (lua_type(L, 1) != 7 || lua_objlen(L, 1) != sizeof(Payload)) return 0;
+  if (!payload || (uintptr_t)payload % __alignof(Payload)) return 0;
+  payload->number += luaL_checknumber(L, 2);
+  payload->visits++;
+  lua_pushnumber(L, payload->number);
+  lua_pushnumber(L, (double)payload->visits);
+  lua_pushlstring(L, payload->binary, sizeof(payload->binary));
+  lua_pushboolean(L, payload == lua_touserdata(L, 3));
+  return 4;
+}
+EXPORT int boundary_userdata_finalize(lua_State *L) {
+  Payload *payload = (Payload *)lua_touserdata(L, 1);
+  double count;
+  lua_getfenv(L, 1);
+  lua_getfield(L, -1, "finalized");
+  count = luaL_checknumber(L, -1); lua_settop(L, -2);
+  lua_pushnumber(L, count + 1); lua_setfield(L, -2, "finalized");
+  lua_pushnumber(L, payload->number); lua_setfield(L, -2, "last_value");
+  return 0;
+}
+EXPORT int boundary_bytes(lua_State *L) {
+  size_t length = 999, again = 999;
+  const char *bytes = lua_tolstring(L, 1, &length);
+  const char *after;
+  int kind = lua_type(L, 1);
+  if (lua_type(L, 2) == 6) {
+    lua_pushvalue(L, 2); lua_call(L, 0, 0);
+  }
+  after = lua_tolstring(L, 1, &again);
+  if (bytes) lua_pushlstring(L, bytes, length); else lua_pushnil(L);
+  lua_pushnumber(L, (double)length);
+  lua_pushnumber(L, kind);
+  lua_pushboolean(L, bytes == after && length == again && (!bytes || bytes[length] == 0));
+  return 4;
+}
+EXPORT int boundary_environment(lua_State *L) {
+  int supported = -1;
+  if (lua_type(L, 2) == 5) {
+    lua_pushvalue(L, 2); supported = lua_setfenv(L, 1);
+  }
+  lua_getfenv(L, 1);
+  if (supported < 0) lua_pushnil(L); else lua_pushboolean(L, supported);
+  return 2;
+}
+static int capture_bytes(lua_State *L) {
+  size_t length;
+  int before;
+  const char *bytes;
+  if (lua_gettop(L)) {
+    lua_pushvalue(L, 1); lua_replace(L, lua_upvalueindex(1));
+  }
+  before = lua_type(L, lua_upvalueindex(1));
+  bytes = lua_tolstring(L, lua_upvalueindex(1), &length);
+  if (bytes) lua_pushlstring(L, bytes, length); else lua_pushnil(L);
+  lua_pushnumber(L, before);
+  lua_pushnumber(L, lua_type(L, lua_upvalueindex(1)));
+  return 3;
+}
+EXPORT int boundary_capture_bytes(lua_State *L) {
+  lua_pushvalue(L, 1); lua_pushcclosure(L, capture_bytes, 1); return 1;
+}
+EXPORT int boundary_length(lua_State *L) {
+  size_t length = lua_objlen(L, 1);
+  lua_pushnumber(L, (double)length);
+  lua_pushnumber(L, lua_type(L, 1));
+  return 2;
+}
+EXPORT int boundary_userdata_empty(lua_State *L) {
+  void *first = lua_newuserdata(L, 0);
+  void *second = lua_newuserdata(L, 0);
+  lua_pushboolean(L, first && second && first != second);
+  return 3;
+}
 
 EXPORT int boundary_sum(lua_State *L) {
   double a = luaL_checknumber(L, 1);

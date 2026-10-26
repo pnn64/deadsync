@@ -337,3 +337,84 @@ do
   local ok,e=coroutine.resume(co)
   assert(not ok and e:find('yield across',1,true))
 end
+
+
+do
+  local u,v,distinct=boundary_userdata_empty()
+  assert(type(u)=='userdata' and type(v)=='userdata' and distinct)
+  assert(boundary_length(u)==0 and boundary_length(v)==0)
+  local env={finalized=0};local saved
+  local mt={__metatable='hidden',__gc=function(u)
+    boundary_userdata_finalize(u);saved=u
+  end}
+  local u,pointer=boundary_userdata(17,mt)
+  assert(getmetatable(u)=='hidden')
+  local actual,ok=boundary_environment(u,env);assert(actual==env and ok)
+  for i=1,40 do
+    local objects={};for j=1,100 do objects[j]=boundary_userdata(j,{})end
+    collectgarbage()
+    local n,visits,bytes,same=boundary_userdata_read(u,0.5,pointer)
+    assert(n==17+i*.5 and visits==i and bytes=='a\0b\r\n\255' and same)
+  end
+  assert(boundary_length(u)>6 and env.finalized==0)
+  u=nil;collectgarbage();collectgarbage()
+  assert(saved and env.finalized==1 and env.last_value==37)
+  local n,visits,bytes,same=boundary_userdata_read(saved,5,pointer)
+  assert(n==42 and visits==41 and same)
+  saved=nil;collectgarbage();collectgarbage();assert(env.finalized==1)
+  local direct_env={finalized=0}
+  do
+    local direct=boundary_userdata(73,{__gc=boundary_userdata_finalize})
+    boundary_environment(direct,direct_env)
+  end
+  collectgarbage();collectgarbage()
+  assert(direct_env.finalized==1 and direct_env.last_value==73)
+  print('userdata',env.finalized,n,visits,direct_env.finalized,direct_env.last_value)
+end
+
+do
+  local original=boundary_environment(boundary_userdata)
+  local env={tag=17}
+  assert(select(2,boundary_environment(boundary_userdata,env)))
+  local u=boundary_userdata(1)
+  assert(boundary_environment(u)==env)
+  assert(select(2,boundary_environment(boundary_userdata,original)))
+  local function f()return __native_environment_value end
+  local env={__native_environment_value=42}
+  assert(select(2,boundary_environment(f,env)) and f()==42 and boundary_environment(f)==env)
+  local co=coroutine.create(function()return getfenv(0)end)
+  local env=setmetatable({thread_value=99},{__index=_G})
+  assert(select(2,boundary_environment(co,env)) and boundary_environment(co)==env)
+  local ok,actual=coroutine.resume(co);assert(ok and actual==env)
+  for _,v in ipairs{false,17,'text',{}}do
+    local e,supported=boundary_environment(v,{})
+    assert(e==nil and supported==false)
+  end
+  assert(boundary_environment(nil)==nil and boundary_environment()==nil)
+  print('environments',f(),actual.thread_value)
+end
+
+do
+  local function churn()
+    local t={};for i=1,2000 do t[i]=tostring(i)..'\0'..string.rep('x',i%100)end
+    collectgarbage()
+  end
+  for _,value in ipairs{'','a\0b\r\n\255',17,-0,1.5,1e100,1/0,-1/0,0/0}do
+    local text,length,kind,stable=boundary_bytes(value,churn)
+    assert(text==tostring(value) and length==#text and kind==4 and stable)
+    local n,k=boundary_length(value);assert(n==#text and k==4)
+    print('bytes',#text,(text:gsub('.',function(c)return string.format('%02x',c:byte())end)))
+  end
+  for _,v in ipairs{false,{},function()end,coroutine.create(function()end)}do
+    local text,length,kind,stable=boundary_bytes(v,churn)
+    assert(text==nil and length==0 and kind~=4 and stable)
+  end
+  assert(boundary_length(setmetatable({1,2,3},{__len=function()error('raw length')end}))==3)
+  assert(boundary_length(nil)==0 and boundary_length()==0)
+  local f=boundary_capture_bytes(17)
+  local text,before,after=f();assert(text=='17' and before==3 and after==4)
+  collectgarbage();text,before,after=f();assert(text=='17' and before==4 and after==4)
+  assert(select('#',debug.setupvalue(f,1,99))==0)
+  text,before,after=f(99);assert(text=='99' and before==3 and after==4)
+  print('capture-bytes',text,before,after)
+end

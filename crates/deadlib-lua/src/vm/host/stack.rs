@@ -1,5 +1,6 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
+mod objects;
 mod tables;
 
 /// A rooted mutable stack for one synchronous native callback.

@@ -32,9 +32,34 @@ pub use gc::{HeapStats, Root};
 pub use host::{HostCall, HostFunction, HostThreadState, NativeStack};
 use native::format_number;
 
+/// Stable Lua string storage, including the C API's trailing zero byte.
+#[derive(Debug)]
+struct ByteString(Box<[u8]>);
+impl ByteString {
+    fn new(bytes: Box<[u8]>) -> Self {
+        let mut bytes = bytes.into_vec();
+        bytes.push(0);
+        Self(bytes.into_boxed_slice())
+    }
+    fn c_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+impl std::ops::Deref for ByteString {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.0[..self.0.len() - 1]
+    }
+}
+impl AsRef<[u8]> for ByteString {
+    fn as_ref(&self) -> &[u8] {
+        self
+    }
+}
+
 #[derive(Debug, Default)]
 struct Strings {
-    bytes: Arena<Box<[u8]>>,
+    bytes: Arena<ByteString>,
     buckets: Vec<u32>,
 }
 
@@ -126,7 +151,8 @@ impl Strings {
         while self.buckets[slot] != 0 {
             slot = (slot + 1) & (self.buckets.len() - 1);
         }
-        self.bytes.note_alloc(bytes.len());
+        let bytes = ByteString::new(bytes);
+        self.bytes.note_alloc(bytes.c_bytes().len());
         let id = self.bytes.insert(bytes);
         self.buckets[slot] = slot_index(id) as u32 + 1;
         StringId(id)

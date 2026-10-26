@@ -57,4 +57,9 @@ API int lua_type(lua_State *, int);
 API int lua_rawequal(lua_State *, int, int);
 API void lua_remove(lua_State *, int);
 API void lua_insert(lua_State *, int);
+API void *lua_newuserdata(lua_State *, size_t);
+API size_t lua_objlen(lua_State *, int);
+API const char *lua_tolstring(lua_State *, int, size_t *);
+API void lua_getfenv(lua_State *, int);
+API int lua_setfenv(lua_State *, int);
 #endif

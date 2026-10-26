@@ -439,6 +439,16 @@ compare these operations, call limits and overflow-handler reserves against
 official Lua in matching standalone contexts. The development bridge still
 does not enable production native-module loading.
 
+Native stacks also expose full userdata payloads, function/userdata/thread
+environments, raw object lengths and numeric-to-string conversion in the
+original slot or capture. Userdata storage is zero-initialized, aligned for
+pointers and doubles, and stable while rooted. Interned strings retain a
+trailing NUL outside their logical byte length; binary strings keep embedded
+NUL bytes. The [native userdata checks](../../docs/testing/2026-10-26-rust-lua-native-userdata.md)
+compare payload mutation, finalizers, resurrection, environments and stable C
+string pointers against official Lua. Complete C API and module loading remain
+open compatibility gates.
+
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected
 nested Lua boundary; `call_and_return` appends its results without an intermediate
