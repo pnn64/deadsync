@@ -1,6 +1,6 @@
 # Vorbis coverage and numerical evidence
 
-Status: **header/codebook implementation; no audio synthesis yet**. No full
+Status: **raw-packet PCM synthesis implemented**. No full
 Vorbis I conformance or competitive-performance claim is made. The complete
 requested end state remains in the parent work plan.
 
@@ -24,10 +24,23 @@ requested end state remains in the parent work plan.
   precomputed neighbors/order, cross-references and reserved fields validated.
   Synthetic fixtures cover both floors/all residues and every truncated prefix.
   Audio packet mode/window prefix parsing is available independently of Ogg.
+* Floor-one integer prediction/line rendering and normative inverse-dB table;
+  floor-zero LSP reconstruction with the corrected Bark equation, odd/even
+  polynomial cases and 0..=63-bit amplitudes. Floor-one setup rejects >65 points.
+* Residues 0/1/2, submap bundles, nonzero propagation and reverse-order inverse
+  coupling. Flat reusable spectral/curve/classification storage.
+* Native O(N log N) FFT-based inverse MDCT for every legal block size, Vorbis
+  windows and hybrid slopes, exact raw overlap range and priming, planar f32
+  output in Vorbis channel order. No clipping, resampling or hidden reordering.
+* Reusable overlap/reset lifecycle; nominal floor/residue truncation behavior,
+  prefix/non-audio discard, error preservation of previous overlap, explicit
+  decode-memory policy and rejection of nonfinite spectral/PCM results.
 
 Windows x86-64, rustc 1.99.1 evidence:
 
-* Nine primitive tests plus one generated-fixture header test; external/corpus
+* Nine primitive tests, seven synthesis unit tests, four lifecycle/malformed
+  tests, zero-allocation test, generated PCM/golden/discrepancy tests and the
+  generated-fixture header test; external/corpus
   tests are explicitly ignored unless invoked with their required inputs.
 * Generated stereo tones (48 kHz) and eight-channel silence (44.1 kHz) accepted
   independently by Symphonia 0.6.1 and libvorbis 1.3.7.
@@ -44,22 +57,72 @@ Windows x86-64, rustc 1.99.1 evidence:
   The normal dependency graph contains only this crate and native Ogg.
 * Parent `scripts/verify_independent.ps1`: both copied crates passed their tests
   offline in a separate workspace; production trees contain no reference codecs.
+* All 38 repository assets: **140,856,832 raw PCM samples** matched libvorbis
+  and Symphonia with exact per-packet frame counts and positions. Maximum
+  absolute error: **7.152557373e-7** vs libvorbis, **5.960464478e-7** vs Symphonia.
+  Aggregate RMS error: 6.552946408e-8 / 4.440798834e-8. Per-file data is in
+  [validation/2026-10-26-raw-pcm.tsv](validation/2026-10-26-raw-pcm.tsv).
+* MDCT sizes 64..=8192 match an independent direct cosine equation and the
+  libvorbis transform; maximum observed reference error 3.576278687e-7.
+* Generated eight-channel distinct tones (including dependent coupling) match
+  libvorbis with peak error 7.450580597e-8. The retained independent golden
+  verifies this without a C toolchain. 8 kHz mono and reset replay also pass.
+* Test-only counting allocator: **zero allocations during decode and reset**,
+  including first decode, for stereo/8-channel tones/8 kHz mono across four
+  repeated decode/reset cycles. Tables and scratch allocate during construction.
+* Every byte prefix of the short stereo audio packets, plus 1,000 seeded
+  malformed multichannel packets, completes without buffer escapes/nonfinite
+  output; reset restores identical subsequent synthesis. This is not sustained
+  coverage-guided fuzzing.
+* Historical floor-zero fixture: 12,525,696 raw samples with exact libvorbis
+  counts. Peak/RMS errors: 2.533197403e-5 / 1.510420136e-6 vs libvorbis and
+  2.259016037e-5 / 1.581026734e-6 vs Symphonia. The oracle README pins its URL/hash.
 
 ## Numerical criteria
 
 Codebook vectors use f64 unpacking/evaluation and f32 storage. The external VQ
 test allows `abs(native - reference) <= 2e-6 * max(1, abs(reference))` for different
 floating arithmetic rounding; the actual tested vectors above were exact. This
-is a codebook check, **not a PCM parity criterion**. PCM tolerances must be derived
-and documented when the transform/synthesis implementation exists; exact sample
-counts, layout, granule interpretation and seek positions will have zero tolerance.
+is a codebook check, **not a PCM parity criterion**.
+
+For raw floor-one PCM, the gate is peak error <= `3e-6 * max(1, reference_peak)`
+and RMS error <= `5e-7 * max(1, reference_peak)`. This accommodates different f32
+FFT butterfly/rotation/window arithmetic while staying below one tenth of a
+16-bit full-scale sample step at unit peak. Observed corpus errors are smaller.
+Counts, positions and channel identity have zero tolerance. No frame shifting,
+cross-correlation, resampling or gain fitting is applied to comparisons.
+
+Floor-zero nonlinear LSP reconstruction gets a separate gate: peak <=
+`5e-5 * max(1, reference_peak)`, RMS <= `3e-6 * max(1, reference_peak)`. Native
+curves evaluate the specification's cosine/polynomial equations in f64 before
+f32 storage; libvorbis stores intermediate cosines and polynomial products in
+f32. Near LSP resonances these rounding differences are amplified. The separate
+unit-peak bounds correspond to about 1.64 / 0.10 of a 16-bit sample step and do
+not relax counts or channel layout. Odd/even products have independent closed
+form DC checks. The historical file's observed maximum is below one 16-bit step.
+Further high-order/dynamic-range conformance material remains necessary.
+
+The Symphonia raw API is used with gapless priming enabled and untrimmed raw
+packets (`trim_start/end == 0`), so initial priming and all subsequent raw frame
+counts match without discarding comparison samples.
+
+## Explicit reference/legacy discrepancies
+
+* Symphonia 0.6.1 undoes coupling in forward order; Vorbis I section 4.3.5 requires
+  reverse order. Independent coupling steps and stereo agree, but the eight-tone
+  7.1 fixture exposes dependent-step disagreement (peak 0.2883, RMS 0.05769).
+  The native decoder follows the specification and matches libvorbis. A named
+  regression test keeps this discrepancy visible; reference tolerances are not
+  widened for it. Symphonia is pinned to 0.6.1 in development dependencies.
+* The historical floor-zero file assigns granules to pages without a completed
+  packet. Native strict Ogg correctly rejects it. The raw codec test uses the
+  independent development-only Ogg reader to extract packets, isolating codec
+  validation. No production compatibility exception has been introduced yet.
 
 ## Remaining required work
 
-* Floor-zero/one audio curve decode, all residue audio decode, inverse coupling,
-  inverse MDCT, windowing, overlap-add and PCM output.
-* Raw decoder lifecycle/overlap/reset and nominal truncated audio packet behavior;
-  non-audio packets and nonfatal comment handling at decoder level.
+* Complete header lifecycle with nonfatal comment handling; broader malformed
+  packet concealment differential validation beyond the implemented rules.
 * Ogg Vorbis mapping, exact initial/final trimming and sample count, timestamps,
   multiplexing/chains, sample-accurate seeking/pre-roll/repeated seeks.
 * Official conformance material, unusual/legacy encoders, malformed/fuzz corpora,
@@ -69,6 +132,6 @@ counts, layout, granule interpretation and seek positions will have zero toleran
   optimization and reproducible throughput/startup/memory/allocation/seek
   comparisons with libvorbis and Symphonia. No SIMD or performance claims yet.
 
-Header syntax alone does not prove audio conformance. The synthetic floor-zero
-header check does not prove floor-zero audio compatibility. External codebook
-tests use private libvorbis APIs only inside the separate test helper process.
+Raw PCM parity does not prove Ogg final sample counts or seeking. Reference PCM
+tests deliberately assign unknown granules and omit EOS trimming; these mapping
+requirements remain open. External reference APIs remain in separate test helpers.

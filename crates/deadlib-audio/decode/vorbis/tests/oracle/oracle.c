@@ -1,6 +1,7 @@
 /* External test oracle. Private codebook APIs are deliberately confined here. */
 #include <vorbis/codec.h>
 #include "codebook.h"
+#include "mdct.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,14 +75,61 @@ static void books(FILE *file) {
     }
     free(data);
 }
+static void pcm(FILE *file) {
+    vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp; vorbis_block block;
+    ogg_int64_t number = 0; int i;
+    vorbis_info_init(&info); vorbis_comment_init(&comments);
+    for (i = 0; i < 3; ++i) {
+        ogg_packet op; memset(&op, 0, sizeof(op)); op.packet = packet(file, &op.bytes);
+        op.b_o_s = i == 0; op.packetno = number++;
+        if (vorbis_synthesis_headerin(&info, &comments, &op)) fail("PCM header"); free(op.packet);
+    }
+    if (vorbis_synthesis_init(&dsp, &info) || vorbis_block_init(&dsp, &block)) fail("PCM init");
+    put32((uint32_t)info.channels);
+    for (;;) {
+        ogg_packet op; int marker = fgetc(file), result, frames, ch, sample; float **samples;
+        if (marker == EOF) break; if (ungetc(marker, file) == EOF) fail("ungetc");
+        memset(&op, 0, sizeof(op)); op.packet = packet(file, &op.bytes); op.packetno = number++;
+        /* No container timing or EOS trim: test pure packet synthesis/overlap. */
+        op.granulepos = -1; result = vorbis_synthesis(&block, &op);
+        free(op.packet);
+        if (result != 0) { put8('S'); continue; }
+        if (vorbis_synthesis_blockin(&dsp, &block)) fail("blockin");
+        frames = vorbis_synthesis_pcmout(&dsp, &samples); if (frames < 0) fail("pcmout");
+        put8('P'); put32((uint32_t)block.pcmend); put32((uint32_t)frames);
+        for (ch = 0; ch < info.channels; ++ch) for (sample = 0; sample < frames; ++sample) {
+            uint32_t raw; memcpy(&raw, &samples[ch][sample], sizeof(raw)); put32(raw);
+        }
+        if (vorbis_synthesis_read(&dsp, frames)) fail("synthesis read");
+    }
+    vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
+}
+static void transform(FILE *file) {
+    long size; unsigned char *data = packet(file, &size); int n, k; float *input, *output; mdct_lookup lookup;
+    if (size < 4) fail("MDCT protocol");
+    n = (int)((uint32_t)data[0] | (uint32_t)data[1] << 8 | (uint32_t)data[2] << 16 | (uint32_t)data[3] << 24);
+    if (n < 64 || n > 8192 || (n & (n - 1)) || size != 4 + n / 2 * 4) fail("MDCT size");
+    input = (float *)malloc((size_t)n / 2 * sizeof(float)); output = (float *)malloc((size_t)n * sizeof(float));
+    if (!input || !output) fail("MDCT allocation");
+    for (k = 0; k < n / 2; ++k) {
+        unsigned char *p = data + 4 + k * 4;
+        uint32_t raw = (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+        memcpy(&input[k], &raw, sizeof(raw));
+    }
+    mdct_init(&lookup, n); mdct_backward(&lookup, input, output);
+    for (k = 0; k < n; ++k) { uint32_t raw; memcpy(&raw, &output[k], sizeof(raw)); put32(raw); }
+    mdct_clear(&lookup); free(input); free(output); free(data);
+}
 int main(int argc, char **argv) {
-    FILE *file; if (argc != 3) fail("usage: oracle headers|books input");
+    FILE *file; if (argc != 3) fail("usage: oracle headers|books|pcm|mdct input");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     if (!strcmp(argv[1], "headers")) headers(file);
     else if (!strcmp(argv[1], "books")) books(file);
+    else if (!strcmp(argv[1], "pcm")) pcm(file);
+    else if (!strcmp(argv[1], "mdct")) transform(file);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;
 }

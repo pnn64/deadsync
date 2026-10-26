@@ -1249,6 +1249,7 @@ name = "deadlib-audio-decode-vorbis"
 version = "0.1.0"
 dependencies = [
  "deadlib-audio-decode-ogg",
+ "ogg",
  "symphonia",
 ]
 

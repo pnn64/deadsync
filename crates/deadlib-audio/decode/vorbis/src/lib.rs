@@ -4,13 +4,20 @@
 
 pub mod bitpack;
 pub mod codebook;
+mod decoder;
+mod floor;
+mod floor_table;
 mod headers;
+mod residue;
 mod setup;
+mod transform;
 
+pub use decoder::{PacketDecoder, PcmBlock};
 pub use headers::{Channel, CommentField, Comments, Identification, channel_order};
 pub use setup::{
     AudioHeader, Floor, Floor0, Floor1, FloorClass, Mapping, Mode, Residue, Setup, Submap,
 };
+pub use transform::Imdct;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
@@ -48,6 +55,8 @@ pub struct Limits {
     pub max_codebook_values: usize,
     pub max_huffman_nodes: usize,
     pub max_setup_memory: usize,
+    /// Owned decode buffer/table elements, separately from setup storage.
+    pub max_decode_memory: usize,
 }
 impl Default for Limits {
     fn default() -> Self {
@@ -59,6 +68,7 @@ impl Default for Limits {
             max_codebook_values: 16 << 20,
             max_huffman_nodes: 2 << 20,
             max_setup_memory: 128 << 20,
+            max_decode_memory: 128 << 20,
         }
     }
 }

@@ -294,6 +294,9 @@ fn read_floor1(
         .iter()
         .map(|&n| classes[n as usize].dimensions as usize)
         .sum::<usize>();
+    if values > 65 {
+        return Err(Error::Invalid("floor1 has more than 65 points"));
+    }
     let mut x = storage(values, budget)?;
     x.push(0);
     x.push(1u16 << range_bits);
@@ -446,4 +449,45 @@ fn read_mapping(
         mux,
         submaps,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bitpack::BitWriter;
+    #[test]
+    fn floor1_sixty_five_point_limit_is_a_format_constraint() {
+        for count in [65, 66] {
+            let mut bits = BitWriter::new();
+            bits.write(8, 5).unwrap();
+            for i in 0..8 {
+                bits.write(u32::from(i == 7 && count == 65), 4).unwrap();
+            }
+            for dimensions in if count == 65 {
+                &[8u32, 7][..]
+            } else {
+                &[8][..]
+            } {
+                bits.write(dimensions - 1, 3).unwrap();
+                bits.write(0, 2).unwrap();
+                bits.write(0, 8).unwrap();
+            }
+            bits.write(0, 2).unwrap();
+            bits.write(7, 4).unwrap();
+            for x in 1..count - 1 {
+                bits.write(x, 7).unwrap();
+            }
+            let bytes = bits.finish().unwrap();
+            let limits = Limits::default();
+            let result = read_floor1(&mut BitReader::new(&bytes), &[], &mut Budget::new(&limits));
+            if count == 65 {
+                assert_eq!(result.unwrap().x.len(), 65);
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(Error::Invalid("floor1 has more than 65 points"))
+                ));
+            }
+        }
+    }
 }
