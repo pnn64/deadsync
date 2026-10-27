@@ -6,6 +6,7 @@ mod checksum;
 mod codec;
 mod composite;
 mod metadata;
+mod reference;
 mod scanline;
 mod stream;
 pub mod zlib;

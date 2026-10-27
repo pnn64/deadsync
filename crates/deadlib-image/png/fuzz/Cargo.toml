@@ -80,3 +80,10 @@ path = "fuzz_targets/text_body.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "reference_samples"
+path = "fuzz_targets/reference_samples.rs"
+test = false
+doc = false
+bench = false

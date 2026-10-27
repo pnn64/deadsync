@@ -989,3 +989,54 @@ hashes and full per-target logs. The 80,000 successful inputs bring the
 historical count to 750,000. Competitive pipeline/encoder performance,
 compression ratio, remaining conformance audits, broader high-precision APNG
 composition and native-only fuzz coverage remain open.
+
+## Reference sample precision (2026-10-27)
+
+`Png::from_reference_samples` explicitly converts straight, interleaved gray,
+gray/alpha, RGB or RGBA samples with independently declared 1–16-bit channel
+depths. It selects the smallest legal PNG depth, rounds exact integer linear
+scaling to nearest, and records original significant bits in sBIT when needed.
+Every original value is recoverable from the stored high bits; black, white and
+alpha endpoints remain exact. Matching U8/U16 allocations are reused in place.
+The native PNG image contract, palette indices and decoder samples retain their
+existing meaning. Source color conversion, optional indexing/merging and alpha
+reduction are caller choices. This closes the explicit reference-depth input
+gap identified in Third Edition 4.2, 4.4.5, 12.4 and 15.3.2; it does not establish
+complete encoder conformance.
+
+`tests/reference_samples.rs` independently models scaling with a doubled u64
+rational expression. It checks all 69,904 channel-depth declarations, every
+uniform source value (1,310,700 wide-container sample checks plus narrow inputs),
+and every lower-precision value when a different channel forces 16-bit storage.
+Invalid dimensions, counts, depths and values fail; indexed inputs retain their
+separate native constructor. Both writers produce 3,456 static and 1,152 APNG
+files across plain/Adam7 and Stored/Fast modes; static files also cover every
+filter. Native slice and fragmented readers retain exact samples, and independent
+Rust png verifies stored values and sBIT, including APNG frame rectangles and
+both default-image roles. The rebuilt C libpng oracle checks 576 stored-sample
+files and separately uses `png_set_shift` to recover all original samples from
+the same 576 files.
+
+The full release suite passes 125 tests, including all thirteen optional checks
+and the new API doctest. Strict main/fuzz all-target Clippy and scoped rustfmt
+pass, along with the 65,652-case strict-window C audit and 19,645-case compatibility
+Huffman audit. A retained independent offline copy passes 112 normal tests with
+thirteen optional checks ignored. All 21 native source hashes match the isolated
+copy; its only production dependency is `deadlib-image`. Commands, source/oracle
+hashes, counts and logs are retained in `reference-samples-validation.json`,
+`reference-samples-validation.log` and `reference-samples-independent.log`.
+
+The tenth fuzz target, `reference_samples`, independently checks constructor
+validation, exact scaling, high-bit recovery, both writers and Rust png values.
+Its fresh initial corpus has 640 structured files. Another 256 converted PNG
+seeds extend each PNG corpus to 19,743 files / 4,314,004 bytes. Fresh Linux ASan
+campaigns pass 20,000 reference-input, 30,000 structured encoder, 30,000 PNG-stream
+and 30,000 buffered PNG executions. Fuzzing time / peak RSS are respectively
+48 seconds / 404 MiB, 128 / 417, 44 / 654 and 6 / 464. All four instrumented
+binaries define the ASan runtime entry and final source hashes match the initial
+snapshot. `fuzz/reports/reference-samples-source.json` retains exact commands and
+initial-corpus/source/binary hashes, with full target logs alongside it.
+These 110,000 successful inputs bring the historical count to 860,000 across
+ten targets. No comparative performance measurements were taken for this API
+addition; existing encoder throughput/ratio gaps, remaining field/order audits,
+broader high-precision APNG composition and native-only fuzz coverage remain open.

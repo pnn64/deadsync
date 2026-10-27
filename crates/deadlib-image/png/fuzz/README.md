@@ -1,5 +1,19 @@
 # PNG and zlib fuzz targets
 
+`reference_samples` exercises the explicit 1–16-bit reference constructor with
+uniform/mixed channel precision, both input containers, invalid depth/value/
+dimension/count classes, alpha endpoints and high-bit recovery. Its independent
+u64 rational model checks stored samples, target depth and sBIT; both writers
+then roundtrip through native buffered/reader paths and independent Rust png,
+including packed grayscale, Adam7, every filter and Stored/Fast compression.
+The generator supplies 640 structured 12-byte seeds plus 256 valid converted
+PNG files in each PNG corpus. Input is capped at 4,096 bytes; generated images
+are at most 17x17 pixels. Invalid large dimensions fail before allocation.
+
+```sh
+cargo +nightly fuzz run reference_samples -- -runs=20000 -seed=928671 -max_len=4096 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
+```
+
 This is an isolated Cargo workspace. It never adds libFuzzer, png, flate2, or any
 other codec to the production dependency graph. All targets bound decompression,
 metadata, frame counts and input sizes before exercising untrusted inputs.
@@ -265,3 +279,16 @@ late controls and embedded NUL. `reports/text-body-source.json` records the
 20,000-run target campaign plus 20,000 fresh decode and streaming runs with the
 512 added PNG-body seeds. These 60,000 successful ASan executions are included
 in the historical total; the expected failing pre-fix regression is not.
+
+## Reference sample precision campaign
+
+Fresh Linux ASan runs pass 20,000 `reference_samples`, 30,000 `encode_stream`,
+30,000 `png_stream` and 30,000 `decode` inputs. Fuzzing seconds / peak RSS are
+48 / 404 MiB, 128 / 417, 44 / 654 and 6 / 464 respectively. All four binaries
+define the ASan runtime entry and final source hashes match their initial
+snapshot. `reports/reference-samples-source.json` records commands, fresh corpus
+digests, source hashes and instrumented binary hashes; full per-target logs are
+retained alongside it. The PNG corpora each begin with 19,743 files, including
+256 new reference-converted images. These 110,000 successful executions bring
+the historical count to 860,000 across ten targets. This remains smoke evidence;
+native-only coverage and longer campaigns remain open.

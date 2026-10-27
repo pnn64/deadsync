@@ -20,6 +20,18 @@ Build/test independently using `cargo test -p deadlib-image-png` or
 dependencies supply independent Rust png and flate2 reference implementations.
 `cargo tree -p deadlib-image-png --edges normal` verifies the production graph.
 
+For reference color samples with 1–16 significant bits per channel, use
+`Png::from_reference_samples(width, height, color_type, channel_depths, samples)`.
+For example, RGB565 channels use `[5, 6, 5]`; RGBA1010102 uses `[10, 10, 10, 2]`.
+The constructor selects the smallest legal PNG depth, applies exact integer
+linear scaling, and records sBIT when needed. Shifting decoded samples right
+by `PNG depth - original channel depth` recovers every original value. Alpha
+zero/maximum remain exact. Both U8/U16 input containers are accepted; matching
+containers are reused in place. Gray, gray/alpha, RGB and RGBA channel order is
+preserved. Palette indices retain the native `Png::new` contract and are never
+scaled as color values. The existing native encode/decode paths keep their
+stored-sample contract.
+
 `decode_with_options` exposes explicit input/output/metadata/chunk limits. CRC
 verification is mandatory. Out-of-range palette indices are retained, and
 `to_rgba16` / APNG rendering display them as opaque black (PNG Third Edition

@@ -123,11 +123,15 @@ int main(int argc,char **argv) {
     png_bytepp rows;
     png_uint_32 width,height,y;
     size_t stride;
+    png_color_8p significant=NULL;
+    png_byte original_bits[4]={0,0,0,0};
+    unsigned int original_count=0;
     int metadata=argc==3 && strcmp(argv[1],"--metadata")==0;
     int names=argc==3 && strcmp(argv[1],"--named-metadata")==0;
     int hdr=argc==3 && strcmp(argv[1],"--hdr-metadata")==0;
     int batch=argc==3 && strcmp(argv[1],"--zlib-batch")==0;
-    const char *path=argc==2 ? argv[1] : ((metadata || names || hdr || batch) ? argv[2] : NULL);
+    int reference=argc==3 && strcmp(argv[1],"--reference-samples")==0;
+    const char *path=argc==2 ? argv[1] : ((metadata || names || hdr || batch || reference) ? argv[2] : NULL);
     if (path==NULL || !(file=fopen(path,"rb"))) return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
@@ -142,6 +146,18 @@ int main(int argc,char **argv) {
     png_set_user_limits(png,100000,100000);
     png_read_info(png,info);
     width=png_get_image_width(png,info); height=png_get_image_height(png,info);
+    if (reference && png_get_sBIT(png,info,&significant)) {
+        int color=png_get_color_type(png,info);
+        if (color==PNG_COLOR_TYPE_GRAY || color==PNG_COLOR_TYPE_GRAY_ALPHA) {
+            original_bits[original_count++]=significant->gray;
+        } else {
+            original_bits[original_count++]=significant->red;
+            original_bits[original_count++]=significant->green;
+            original_bits[original_count++]=significant->blue;
+        }
+        if (color & PNG_COLOR_MASK_ALPHA) original_bits[original_count++]=significant->alpha;
+        png_set_shift(png,significant);
+    }
     png_set_interlace_handling(png);
     png_read_update_info(png,info);
     stride=png_get_rowbytes(png,info);
@@ -167,6 +183,7 @@ int main(int argc,char **argv) {
         if (exif_size && fwrite(exif,1,exif_size,stdout)!=exif_size) return 3;
     } else {
         word(width);word(height);word(png_get_bit_depth(png,info));word(png_get_color_type(png,info));
+        if (reference) { word(original_count);blob(original_bits,original_count); }
         if (fwrite(data,stride,height,stdout)!=height) return 3;
     }
     free(rows);free(data);png_destroy_read_struct(&png,&info,NULL);fclose(file);return 0;

@@ -39,6 +39,47 @@ fn main() -> std::io::Result<()> {
     let profiles = corpus.join("profiles");
     let deflate_stream = corpus.join("deflate_stream");
     let huffman_dir = corpus.join("huffman");
+    let reference_samples = corpus.join("reference_samples");
+    fs::create_dir_all(&reference_samples)?;
+    for format in 0..4 {
+        for precision in 1..=16 {
+            for flags in [0, 1, 2, 3, 4, 16, 32, 128] {
+                let bits = if flags & 1 == 0 {
+                    precision - 1
+                } else {
+                    precision
+                };
+                fs::write(
+                    reference_samples
+                        .join(format!("format-{format}-depth-{precision}-flags-{flags}")),
+                    [format, 16, 12, flags, bits, bits, bits, bits, 4, 3, 7, 255],
+                )?;
+            }
+        }
+    }
+    for format in 0..4 {
+        for variant in 0..16 {
+            for flags in [0, 2] {
+                fs::write(
+                    reference_samples.join(format!("mixed-{format}-{variant}-{flags}")),
+                    [
+                        format,
+                        16,
+                        12,
+                        flags,
+                        variant,
+                        (variant + 5) % 16,
+                        (variant + 10) % 16,
+                        (variant + 15) % 16,
+                        4,
+                        3,
+                        7,
+                        255,
+                    ],
+                )?;
+            }
+        }
+    }
     fs::create_dir_all(&huffman_dir)?;
     fs::create_dir_all(&zlib)?;
     let cases = huffman::all_cases();
@@ -102,6 +143,56 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    for (format, color, channels) in [
+        (0, deadlib_image_png::ColorType::Grayscale, 1),
+        (1, deadlib_image_png::ColorType::Rgb, 3),
+        (2, deadlib_image_png::ColorType::GrayscaleAlpha, 2),
+        (3, deadlib_image_png::ColorType::Rgba, 4),
+    ] {
+        for variant in 0..16 {
+            let bits: Vec<u8> = (0..channels)
+                .map(|c| 1 + ((variant + c * 5) % 16) as u8)
+                .collect();
+            let values: Vec<u16> = (0..9 * 7 * channels)
+                .map(|n| {
+                    let maximum = (1u32 << bits[n % channels]) - 1;
+                    (match n % 7 {
+                        0 => 0,
+                        1 => maximum,
+                        _ => (n as u32 * 137 + 31) & maximum,
+                    }) as u16
+                })
+                .collect();
+            let reference = deadlib_image_png::Png::from_reference_samples(
+                9,
+                7,
+                color,
+                &bits,
+                deadlib_image_png::Samples::U16(values),
+            )
+            .unwrap();
+            for interlaced in [false, true] {
+                for (mode, compression) in [
+                    deadlib_image_png::zlib::Compression::Stored,
+                    deadlib_image_png::zlib::Compression::Fast,
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let options = deadlib_image_png::EncodeOptions {
+                        interlaced,
+                        compression,
+                        idat_chunk_size: 7,
+                        ..Default::default()
+                    };
+                    let data = deadlib_image_png::encode(&reference, &options).unwrap();
+                    let name = format!("reference-{format}-{variant}-{interlaced}-{mode}.png");
+                    fs::write(png.join(&name), &data)?;
+                    fs::write(png_stream.join(&name), &data)?;
+                }
+            }
+        }
+    }
     let chunk_cases = chunks::seeds();
     for (name, bytes) in &chunk_cases {
         // Case-sensitive names collide on Windows filesystems. Encode bytes in

@@ -10,6 +10,7 @@ filter-*.log text eol=lf
 # perf's raw call-chain reports contain intentional trailing alignment spaces.
 profiling/*.txt text eol=lf -whitespace
 reference-conformance.log text eol=lf
+reference-samples-*.log text eol=lf
 coverage-reports/*.txt text eol=lf
 coverage-reports/*.log text eol=lf
 tests/fixtures/language/* text eol=lf

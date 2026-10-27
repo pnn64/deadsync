@@ -4,6 +4,15 @@ The C helper emits packed native samples without color, gamma, alpha, or depth
 transformation. It retains libpng's error/setjmp boundary inside a separate
 process. CMake and a C compiler are needed only for this optional external check.
 
+`--reference-samples FILE.png` adds an independent significant-bit recovery
+mode. Its output is the usual width/height/PNG-depth/color header (four u32 BE
+words), followed by the original sBIT byte count (u32 BE), those channel-depth
+bytes, and scanlines transformed by libpng's `png_set_shift`. Recovered values
+remain packed at the PNG storage depth; row padding is not sample data. The
+reference-sample test checks 576 files through both ordinary native decoding
+and this recovery mode, including mixed channel precision and alpha. The
+ordinary mode continues to apply no sample transformations.
+
 From the workspace root (PowerShell; choose any scratch reference directory):
 
 ```powershell
