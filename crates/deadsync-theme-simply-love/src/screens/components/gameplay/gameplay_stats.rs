@@ -3100,6 +3100,7 @@ fn push_live_timing_stats_at(
 
     let stats = state.display_live_timing_stats(player_idx);
     let compact = enabled_count >= 3;
+    let row_h = timing.row_height;
     let row_h = if compact { row_h * 0.68 } else { row_h };
     let zoom = if compact { zoom * 0.82 } else { zoom };
     let first_y = if compact {
