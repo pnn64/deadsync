@@ -8,6 +8,7 @@
 #define EXPORT __declspec(dllexport)
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 
 static int scalar_index(lua_State *L, int index) {
   double number = lua_tonumber(L, index);
@@ -387,4 +388,126 @@ EXPORT int boundary_shuffle(lua_State *L) {
   lua_pushboolean(L, lua_rawequal(L, 1, 99));
   lua_pushnumber(L, lua_type(L, 99));
   return lua_gettop(L);
+}
+
+
+static const char *aux_vformat(lua_State *L, const char *format, ...) {
+  const char *result; va_list arguments;
+  va_start(arguments,format); result=lua_pushvfstring(L,format,arguments); va_end(arguments);
+  return result;
+}
+EXPORT int boundary_format(lua_State *L) {
+  const char *text=lua_type(L,1)<=0 ? NULL : luaL_checklstring(L,1,NULL);
+  const char *cached; int record, token=17; char expected[64];
+  lua_createtable(L,0,6); record=lua_gettop(L);
+  cached=lua_pushfstring(L,"s=%s d=%d f=%f c=%c z=%c %% %z",text,-17,1.25,255,0);
+  lua_setfield(L,record,"main");
+  aux_vformat(L,"%d:%f:%s",2147483647,-0.0,NULL); lua_setfield(L,record,"va");
+  lua_pushfstring(L,"literal %% / %q %02d",123); lua_setfield(L,record,"unknown");
+  sprintf(expected,"%p",(void *)&token);
+  lua_pushboolean(L,!strcmp(lua_pushfstring(L,"%p",(void *)&token),expected));
+  lua_setfield(L,record,"pointer"); lua_settop(L,record);
+  if (lua_type(L,3)==6) { lua_pushvalue(L,3);lua_call(L,0,0); }
+  lua_getfield(L,record,"main");
+  lua_pushboolean(L,cached==lua_tolstring(L,-1,NULL)); lua_setfield(L,record,"stable");
+  lua_settop(L,record);return 1;
+}
+static int format_finalizers;
+static int format_gc(lua_State *L) { (void)L;format_finalizers++;return 0; }
+EXPORT int boundary_format_gc(lua_State *L) {
+  int i, before;
+  lua_newtable(L);lua_pushcfunction(L,format_gc);lua_setfield(L,-2,"__gc");
+  for (i=0;i<64;i++) {
+    lua_newuserdata(L,0);lua_pushvalue(L,-2);lua_setmetatable(L,-2);lua_settop(L,-2);
+  }
+  before=format_finalizers;
+  lua_pushfstring(L,"parts:%s:%d:%f", "message",17,2.5);
+  lua_pushboolean(L,format_finalizers==before);
+  return 2;
+}
+EXPORT int boundary_auxwhere(lua_State *L) {
+  luaL_where(L,(int)luaL_checkinteger(L,1));return 1;
+}
+EXPORT int boundary_auxerror(lua_State *L) {
+  const char *text=luaL_optlstring(L,1,"fallback",NULL);
+  return luaL_error(L,"aux %s %d",text,17);
+}
+EXPORT int boundary_auxcheck(lua_State *L) {
+  int mode=(int)luaL_optinteger(L,2,0);
+  size_t length;const char *text;lua_Integer integer;
+  switch (mode) {
+    case 0: case 1: case 2:
+      text=mode==0 ? luaL_checklstring(L,1,&length) : luaL_optlstring(L,1,mode==1 ? "fallback\0ignored" : NULL,&length);
+      if (text)lua_pushlstring(L,text,length);else lua_pushnil(L);
+      lua_pushinteger(L,(lua_Integer)length);lua_pushnumber(L,lua_type(L,1));return 3;
+    case 3: case 4:
+      integer=mode==3 ? luaL_checkinteger(L,1) : luaL_optinteger(L,1,77);
+      lua_pushlstring(L,(const char *)&integer,sizeof(integer));lua_pushinteger(L,integer);
+      lua_pushnumber(L,lua_type(L,1));return 3;
+    case 5: lua_pushnumber(L,luaL_optnumber(L,1,2.5));return 1;
+    case 6: luaL_checktype(L,1,5);lua_pushvalue(L,1);return 1;
+    case 7: luaL_checkany(L,1);lua_pushvalue(L,1);return 1;
+    case 8: {
+      static const char *const options[]={"first","second","1",NULL};
+      int option=luaL_checkoption(L,1,"second",options);
+      lua_pushinteger(L,option);lua_pushnumber(L,lua_type(L,1));return 2;
+    }
+    case 9: luaL_checkstack(L,(int)luaL_checkinteger(L,1),"aux room");lua_pushboolean(L,1);return 1;
+    case 10: return luaL_typerror(L,1,"special");
+    case 11: return luaL_argerror(L,1,lua_type(L,3)<=0 ? NULL : luaL_checklstring(L,3,NULL));
+    default: lua_pushnumber(L,luaL_checknumber(L,1));return 1;
+  }
+}
+static int aux_value(lua_State *L) {
+  double *number=(double *)luaL_checkudata(L,1,"deadlua.aux");lua_pushnumber(L,*number);return 1;
+}
+static int aux_set(lua_State *L) {
+  double *number=(double *)luaL_checkudata(L,1,"deadlua.aux");
+  *number=luaL_checknumber(L,2);lua_pushvalue(L,1);return 1;
+}
+static const luaL_Reg auxiliary_methods[]={{"get",aux_value},{"set",aux_set},{NULL,NULL}};
+EXPORT int boundary_auxuserdata(lua_State *L) {
+  double number=luaL_optnumber(L,1,17);
+  double *payload=(double *)lua_newuserdata(L,sizeof(double));*payload=number;
+  luaL_newmetatable(L,"deadlua.aux");luaL_register(L,NULL,auxiliary_methods);
+  lua_pushvalue(L,-1);lua_setfield(L,-2,"__index");lua_setmetatable(L,-2);
+  lua_pushlightuserdata(L,payload);return 2;
+}
+EXPORT int boundary_auxget(lua_State *L) {
+  int index=lua_type(L,2)<=0 ? 1 : (int)luaL_checkinteger(L,2);
+  double *number=(double *)luaL_checkudata(L,index,"deadlua.aux");lua_pushnumber(L,*number);return 1;
+}
+EXPORT int boundary_auxnewmetatable(lua_State *L) {
+  int created=luaL_newmetatable(L,luaL_checklstring(L,1,NULL));
+  lua_pushboolean(L,created);lua_insert(L,-2);return 2;
+}
+EXPORT int boundary_auxmetafield(lua_State *L) {
+  int before=lua_gettop(L),present;
+  const char *event=luaL_checklstring(L,2,NULL);
+  present=lua_toboolean(L,3) ? luaL_callmeta(L,1,event) : luaL_getmetafield(L,1,event);
+  lua_pushboolean(L,present);lua_insert(L,before+1);return lua_gettop(L)-before;
+}
+static int aux_echo(lua_State *L) {
+  lua_pushvalue(L,lua_upvalueindex(1));lua_pushvalue(L,lua_upvalueindex(2));
+  lua_getfield(L,LUA_ENVIRONINDEX,"_private_tag");return 3;
+}
+static const luaL_Reg auxiliary_library[]={{"echo",aux_echo},{"checked",aux_value},{"format",boundary_format},{"error",boundary_auxerror},{"where",boundary_auxwhere},{NULL,NULL}};
+EXPORT int boundary_auxopen(lua_State *L) {
+  const char *name=lua_type(L,1)<=0 ? NULL : luaL_checklstring(L,1,NULL);
+  int captures=lua_gettop(L)-(name ? 1 : 2);
+  if (!name)luaL_checktype(L,2,5);
+  if (captures)luaI_openlib(L,name,auxiliary_library,captures);
+  else luaL_register(L,name,auxiliary_library);
+  return 1;
+}
+EXPORT int boundary_auxfind(lua_State *L) {
+  const char *name=luaL_checklstring(L,2,NULL);
+  const char *conflict=luaL_findtable(L,1,name,3);
+  if (conflict)lua_pushstring(L,conflict);else lua_pushnil(L);
+  return conflict ? 1 : 2;
+}
+EXPORT int boundary_auxrefs(lua_State *L) {
+  int mode=(int)luaL_optinteger(L,3,0),reference;
+  if (mode) { luaL_unref(L,1,(int)luaL_checkinteger(L,2));lua_pushboolean(L,1);return 1; }
+  lua_pushvalue(L,2);reference=luaL_ref(L,1);lua_pushinteger(L,reference);return 1;
 }

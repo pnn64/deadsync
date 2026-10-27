@@ -100,4 +100,33 @@ impl NativeStack<'_, '_> {
         self.set_top(prefix + 1)?;
         self.set(-1, value)
     }
+    /// Concatenate only string/number operands without entering the scheduler
+    /// or checking the collector, matching Lua 5.1's formatted-message builder.
+    /// Zero and one operands have the same stack effects as `concatenate`.
+    ///
+    /// # Errors
+    /// Rejects pending errors, bad counts, nonprimitive operands or a full
+    /// stack for count zero. Type rejection leaves all operands unchanged.
+    pub fn concatenate_primitives(&mut self, count: usize) -> Result<(), Error> {
+        self.check_error()?;
+        let prefix = self
+            .top()
+            .checked_sub(count)
+            .ok_or_else(|| self.error(b"native concat stack underflow"))?;
+        if self.call.vm.registers[self.base + prefix..self.base + self.top()]
+            .iter()
+            .any(|value| !matches!(value, Value::String(_) | Value::Number(_)))
+        {
+            return Err(self.error(b"native formatted parts must be strings or numbers"));
+        }
+        if count < 2 {
+            return self.concatenate(count);
+        }
+        self.call.vm.concat_range(
+            self.base + prefix,
+            self.base + prefix,
+            self.base + self.top() - 1,
+        )?;
+        self.set_top(prefix + 1)
+    }
 }

@@ -368,6 +368,24 @@ impl NativeStack<'_, '_> {
     pub fn error(&self, message: &[u8]) -> Error {
         self.call.error(message)
     }
+    /// Construct a Lua 5.1 argument error with caller naming and method/self
+    /// adjustment. Negative indexes are reported literally. The error receives
+    /// its source location when it escapes the current native callback.
+    pub fn argument_error(&self, index: isize, detail: &[u8]) -> Error {
+        self.call.vm.argument_error_at(index as i64, detail)
+    }
+    /// Push a Lua 5.1 source-location prefix at the requested stack level.
+    /// Level zero, C frames, missing frames and unknown lines yield an empty
+    /// string. Levels count visible calls and tail-call placeholders.
+    ///
+    /// # Errors
+    /// Rejects a pending unprotected error or a full stack.
+    pub fn push_where(&mut self, level: isize) -> Result<(), Error> {
+        self.check_error()?;
+        let bytes = self.call.vm.native_where(level);
+        let prefix = self.intern(&bytes);
+        self.push(prefix)
+    }
     /// Construct an error retaining a Lua value's identity.
     pub fn raise(&self, value: Value) -> Error {
         self.call.raise(value)

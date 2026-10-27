@@ -470,6 +470,18 @@ private argument copies retaining them. The
 compare thirteen additional C API functions against the Windows/MSVC reference.
 The C API remains partial and production module loading remains unfinished.
 
+`NativeStack::push_where` provides Lua 5.1 source prefixes, and
+`argument_error` applies caller names and method/self adjustment. Primitive
+formatted-message concatenation preserves Lua 5.1's lack of a collector check
+inside the formatter. The development bridge adds C varargs formatting and
+auxiliary argument checks, tagged userdata, metafields, library registration,
+dotted table creation and reference handles. Its
+[auxiliary API checks](../../docs/testing/2026-10-27-rust-lua-native-auxiliary.md)
+compare the same C module against official Lua, including error-stack locals,
+binary strings, capture/environment inheritance and reference reclamation.
+These helpers extend the development boundary; full standalone parity and
+production native-module loading remain open.
+
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected
 nested Lua boundary; `call_and_return` appends its results without an intermediate

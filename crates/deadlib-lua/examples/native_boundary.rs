@@ -135,7 +135,15 @@ mod windows {
                     .stack
                     .push(self.stack.value(a as isize).unwrap_or(Value::Nil))?,
                 6 => value.number = self.stack.number(a as isize)?,
-                7 => return Err(self.stack.raise(self.stack.value(-1).unwrap_or(Value::Nil))),
+                7 => {
+                    let value = self.stack.value(-1).unwrap_or(Value::Nil);
+                    if self.stack.top() != 0 {
+                        self.stack.set_top(self.stack.top() - 1)?;
+                    }
+                    // Lua's handler call replaces the top error slot with its
+                    // function. That slot is not a local of the failing C frame.
+                    return Err(self.stack.raise(value));
+                }
                 8 => {
                     let count = usize::try_from(a)
                         .map_err(|_| self.stack.error(b"invalid probe call count"))?;
@@ -261,6 +269,20 @@ mod windows {
                         self.stack.value(a as isize),
                         Some(Value::Native(_))
                     ))
+                }
+                42 => {
+                    // SAFETY: the C auxiliary helper lends this message until return.
+                    let bytes =
+                        unsafe { std::slice::from_raw_parts(value.bytes.cast(), value.length) };
+                    let error = self.stack.argument_error(a as isize, bytes);
+                    let message = self.stack.intern(error.message_bytes());
+                    self.stack.push(message)?;
+                }
+                43 => self.stack.push_where(a as isize)?,
+                44 => {
+                    let count = usize::try_from(a)
+                        .map_err(|_| self.stack.error(b"invalid format-part count"))?;
+                    self.stack.concatenate_primitives(count)?;
                 }
                 25 => {
                     value.integer = match self.stack.value(a as isize) {
@@ -426,6 +448,18 @@ mod windows {
             "boundary_compare",
             "boundary_concat",
             "boundary_concat_prefix",
+            "boundary_format",
+            "boundary_format_gc",
+            "boundary_auxcheck",
+            "boundary_auxwhere",
+            "boundary_auxerror",
+            "boundary_auxuserdata",
+            "boundary_auxget",
+            "boundary_auxnewmetatable",
+            "boundary_auxmetafield",
+            "boundary_auxopen",
+            "boundary_auxfind",
+            "boundary_auxrefs",
             "boundary_cpcall",
         ] {
             let function = vm

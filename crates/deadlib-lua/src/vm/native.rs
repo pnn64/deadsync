@@ -670,6 +670,29 @@ impl Vm {
         );
         self.intern(&bytes)
     }
+    pub(super) fn native_where(&self, level: isize) -> Vec<u8> {
+        if level <= 0 {
+            return Vec::new();
+        }
+        let Ok(Some(index)) = self.stack_frame(level as usize) else {
+            return Vec::new();
+        };
+        let frame = self.frames[index];
+        let FrameKind::Lua(function) = frame.function else {
+            return Vec::new();
+        };
+        let closure = &self.functions[slot_index(function.0)];
+        let program = &self.programs[closure.program].data;
+        let prototype = &program.prototypes[closure.prototype];
+        let line =
+            prototype.debug_line(frame.pc().saturating_sub(1).min(prototype.lines.len() - 1));
+        if line == 0 {
+            return Vec::new();
+        }
+        let mut prefix = crate::bytecode::chunk_id(program.source(prototype));
+        prefix.extend_from_slice(format!(":{line}: ").as_bytes());
+        prefix
+    }
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {

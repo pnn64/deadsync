@@ -663,3 +663,145 @@ do
   print('comparison-roots',result,balanced)
   assert(result and balanced)
 end
+
+
+do
+  local function hex(s)return (s:gsub('.',function(c)return string.format('%02x',c:byte())end))end
+  local result=boundary_format('a\0ignored',nil,function()
+    for i=1,500 do local s=string.rep('x',i)..i end;collectgarbage()
+  end)
+  assert(result.pointer and result.stable)
+  print('format',hex(result.main),hex(result.va),result.unknown,result.pointer,result.stable)
+  assert(result.unknown=='literal % / %q %02d')
+  local result=boundary_format(nil);print('format-null',hex(result.main))
+  local oldpause=collectgarbage('setpause',0)
+  local text,uncollected=boundary_format_gc()
+  collectgarbage('setpause',oldpause)
+  assert(text=='parts:message:17:2.5' and uncollected)
+  print('format-gc',text,uncollected)
+  assert(boundary_auxwhere(0)=='' and boundary_auxwhere(-1)=='' and boundary_auxwhere(999)=='')
+  print('where',boundary_auxwhere(1))
+  local named=assert(loadstring('return function()return boundary_auxwhere(1)end','=aux-name'))()
+  assert(named()=='aux-name:1: ')
+  print('where-named',named())
+  local tail;tail=function(n)if n==0 then return boundary_auxwhere(2)end return tail(n-1)end
+  assert(tail(3)=='')
+end
+
+do
+  local text,length,kind=boundary_auxcheck(17,0)
+  assert(text=='17' and length==2 and kind==4)
+  local text,length,kind=boundary_auxcheck('a\0b',0)
+  assert(text=='a\0b' and length==3 and kind==4)
+  local text,length=boundary_auxcheck(nil,1);assert(text=='fallback' and length==8)
+  local text,length=boundary_auxcheck(nil,2);assert(text==nil and length==0)
+  local bytes,n,kind=boundary_auxcheck('7.9',3);assert(n==7 and #bytes==8 and kind==4)
+  assert(select(2,boundary_auxcheck(nil,4))==77 and boundary_auxcheck(nil,5)==2.5)
+  local object={};assert(boundary_auxcheck(object,6)==object and boundary_auxcheck(nil,7)==nil)
+  local option,kind=boundary_auxcheck(1,8);assert(option==2 and kind==4)
+  assert(boundary_auxcheck(nil,8)==1 and boundary_auxcheck('first\0ignored',8)==0)
+  assert(boundary_auxcheck(10,9))
+  for _,case in ipairs{{false,0},{false,3},{17,6},{'bad',8},{8001,9},{false,10},{false,11},{false,12}}do
+    local ok,e=pcall(boundary_auxcheck,case[1],case[2]);assert(not ok)
+    print('aux-error',case[2],e)
+  end
+  local ok,e=pcall(boundary_auxcheck);assert(not ok);print('aux-missing',e)
+  local ok,e=pcall(function()return boundary_auxerror('error\0tail')end)
+  assert(not ok);print('aux-located-error',e)
+  local holder={named=boundary_auxcheck}
+  local ok,e=pcall(function()return holder:named(10)end)
+  assert(not ok);print('aux-method-error',e)
+  local aliases={['nul\0tail']=boundary_auxcheck}
+  local ok,e=pcall(function()return aliases['nul\0tail'](false,0)end)
+  assert(not ok);print('aux-nul-name',#e,(e:gsub('%z','<NUL>')))
+end
+
+do
+  local created,mt=boundary_auxnewmetatable('deadlua.aux.test')
+  local again,same=boundary_auxnewmetatable('deadlua.aux.test')
+  assert(created and not again and mt==same)
+  debug.getregistry()['deadlua.aux.false']=false
+  local created,value=boundary_auxnewmetatable('deadlua.aux.false')
+  assert(not created and value==false)
+  local object,pointer=boundary_auxuserdata(17)
+  assert(object:get()==17 and object:set('42')==object and object:get()==42)
+  assert(boundary_auxget(object,-2)==42)
+  local tag=debug.getmetatable(object)
+  debug.setmetatable(pointer,tag);assert(boundary_auxget(pointer)==42)
+  debug.setmetatable(pointer,nil);assert(object:get()==42)
+  local wrong=newproxy(true)
+  for _,entry in ipairs{{false,1},{wrong,1},{wrong,-2}}do
+    local ok,e=pcall(boundary_auxget,entry[1],entry[2]);assert(not ok)
+    print('aux-userdata-error',entry[2],e)
+  end
+  local ok,e=pcall(function()return tag.get(false)end);assert(not ok)
+  print('aux-userdata-method-error',e)
+  local meta=setmetatable({},{__index=function()error('raw metafield lookup')end})
+  meta.value=false;meta.action=setmetatable({},{__call=function(_,obj)collectgarbage();return obj end})
+  local object=setmetatable({},meta)
+  local present,value=boundary_auxmetafield(object,'value',false);assert(present and value==false)
+  assert(boundary_auxmetafield(object,'missing',false)==false)
+  local present,value=boundary_auxmetafield(object,'action',true);assert(present and value==object)
+  local ok,e=pcall(boundary_auxmetafield,object,'value',true);assert(not ok)
+  print('aux-metafield-error',e)
+end
+
+do
+  local first,second={},{}
+  local original=boundary_environment(boundary_auxopen)
+  boundary_environment(boundary_auxopen,{_private_tag=42})
+  local module=boundary_auxopen('deadlua_aux.nested',first,second)
+  boundary_environment(boundary_auxopen,original)
+  assert(deadlua_aux.nested==module and package.loaded['deadlua_aux.nested']==module)
+  local a,b,tag=module.echo();assert(a==first and b==second and tag==42)
+  assert(boundary_environment(module.echo)._private_tag==42)
+  collectgarbage();a,b=module.echo();assert(a==first and b==second)
+  local weak=setmetatable({first,second},{__mode='v'});first=nil;second=nil;a=nil;b=nil
+  package.loaded['deadlua_aux.nested']=nil;deadlua_aux=nil;module=nil
+  collectgarbage();collectgarbage();assert(weak[1]==nil and weak[2]==nil)
+  local table={};assert(boundary_auxopen(nil,table)==table)
+  assert(table.echo() == nil and type(table.checked)=='function')
+  local cached={};package.loaded['deadlua_aux.cached']=cached
+  _G.deadlua_aux=false;assert(boundary_auxopen('deadlua_aux.cached')==cached)
+  _G.deadlua_aux=nil;package.loaded['deadlua_aux.cached']=nil
+  _G.deadlua_aux={blocked=false}
+  local ok,e=pcall(boundary_auxopen,'deadlua_aux.blocked.tail');assert(not ok)
+  print('aux-open-error',e);_G.deadlua_aux=nil
+  local root={};local found,conflict=boundary_auxfind(root,'a..b.')
+  assert(conflict==nil and found==root.a[''].b[''])
+  root.a.bad=false
+  assert(boundary_auxfind(root,'a.bad.tail')=='bad.tail')
+  print('aux-registration',tag,type(table.echo),conflict==nil)
+end
+
+do
+  local references={};local object={};local weak=setmetatable({object},{__mode='v'})
+  local first=boundary_auxrefs(references,object);assert(first==1 and references[first]==object)
+  object=nil;collectgarbage();assert(weak[1]==references[first])
+  assert(boundary_auxrefs(references,nil)==-1)
+  local second=boundary_auxrefs(references,{});assert(second==2)
+  assert(boundary_auxrefs(references,first,1));collectgarbage();collectgarbage();assert(weak[1]==nil)
+  local reused=boundary_auxrefs(references,42);assert(reused==first and references[reused]==42)
+  assert(boundary_auxrefs(references,-1,1))
+  print('aux-references',first,second,reused)
+end
+
+
+do
+  local observed,detail=0,false
+  local ok,e=xpcall(function()boundary_auxcheck(false,0)end,function(e)
+    for level=2,12 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_auxcheck then
+        for i=1,12 do
+          local name,value=debug.getlocal(level,i);if not name then break end
+          observed=i;if i==3 then detail=value=='string expected, got boolean'end
+        end
+        break
+      end
+    end
+    return e
+  end)
+  assert(not ok and detail and observed==3)
+  print('aux-error-stack',observed,detail)
+end

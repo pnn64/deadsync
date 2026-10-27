@@ -2,6 +2,7 @@
 #ifndef DEADLUA_BOUNDARY_API_H
 #define DEADLUA_BOUNDARY_API_H
 #include <stddef.h>
+#include <stdarg.h>
 #ifdef BOUNDARY_BUILD
 #define API __declspec(dllexport)
 #else
@@ -10,6 +11,7 @@
 typedef struct lua_State lua_State;
 typedef ptrdiff_t lua_Integer;
 typedef int (*lua_CFunction)(lua_State *);
+typedef struct luaL_Reg { const char *name; lua_CFunction func; } luaL_Reg;
 #define LUA_REGISTRYINDEX (-10000)
 #define LUA_ENVIRONINDEX (-10001)
 #define LUA_GLOBALSINDEX (-10002)
@@ -79,4 +81,29 @@ API const char *lua_typename(lua_State *, int);
 API int lua_equal(lua_State *, int, int);
 API int lua_lessthan(lua_State *, int, int);
 API void lua_concat(lua_State *, int);
+API const char *lua_pushvfstring(lua_State *, const char *, va_list);
+API const char *lua_pushfstring(lua_State *, const char *, ...);
+API int luaL_argerror(lua_State *, int, const char *);
+API int luaL_typerror(lua_State *, int, const char *);
+API void luaL_where(lua_State *, int);
+API int luaL_error(lua_State *, const char *, ...);
+API void luaL_checktype(lua_State *, int, int);
+API void luaL_checkany(lua_State *, int);
+API const char *luaL_checklstring(lua_State *, int, size_t *);
+API const char *luaL_optlstring(lua_State *, int, const char *, size_t *);
+API double luaL_optnumber(lua_State *, int, double);
+API lua_Integer luaL_checkinteger(lua_State *, int);
+API lua_Integer luaL_optinteger(lua_State *, int, lua_Integer);
+API void luaL_checkstack(lua_State *, int, const char *);
+API int luaL_checkoption(lua_State *, int, const char *, const char *const []);
+API int luaL_newmetatable(lua_State *, const char *);
+API void *luaL_checkudata(lua_State *, int, const char *);
+API int luaL_getmetafield(lua_State *, int, const char *);
+API int luaL_callmeta(lua_State *, int, const char *);
+API const char *luaL_findtable(lua_State *, int, const char *, int);
+API void luaL_register(lua_State *, const char *, const luaL_Reg *);
+API void luaL_openlib(lua_State *, const char *, const luaL_Reg *, int);
+#define luaI_openlib luaL_openlib
+API int luaL_ref(lua_State *, int);
+API void luaL_unref(lua_State *, int, int);
 #endif

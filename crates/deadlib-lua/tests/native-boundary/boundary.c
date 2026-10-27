@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 typedef struct BoundaryFrame {
   void *context;
@@ -149,8 +150,9 @@ API void lua_pushvalue(lua_State *L, int index) {
   BoundaryValue value = {0}; operation(L, 5, index, 0, &value);
 }
 API double luaL_checknumber(lua_State *L, int index) {
-  BoundaryValue value = {0}; operation(L, 6, index, 0, &value);
-  return value.number;
+  double number = lua_tonumber(L, index);
+  if (number == 0 && !lua_isnumber(L, index)) luaL_typerror(L, index, "number");
+  return number;
 }
 API int lua_error(lua_State *L) {
   BoundaryValue value = {0}; operation(L, 7, 0, 0, &value);
@@ -231,4 +233,182 @@ API void lua_remove(lua_State *L, int index) {
 }
 API void lua_insert(lua_State *L, int index) {
   BoundaryValue value = {0}; operation(L, 28, index, 0, &value);
+}
+
+
+/* C varargs stay in the ABI shim. String/number/table execution uses the VM. */
+API const char *lua_pushvfstring(lua_State *L, const char *format, va_list arguments) {
+  const char *at = format, *percent;
+  int parts = 1;
+  lua_pushstring(L, "");
+  while ((percent = strchr(at, '%')) != NULL) {
+    char one[3] = {0};
+    lua_pushlstring(L, at, (size_t)(percent-at));
+    switch (percent[1]) {
+      case 's': { const char *text = va_arg(arguments, const char *);
+        lua_pushstring(L, text ? text : "(null)"); break; }
+      case 'd': lua_pushnumber(L, va_arg(arguments, int)); break;
+      case 'f': lua_pushnumber(L, va_arg(arguments, double)); break;
+      case 'c': one[0] = (char)va_arg(arguments, int); lua_pushstring(L, one); break;
+      case 'p': { char pointer[4*sizeof(void *)+8];
+        sprintf(pointer, "%p", va_arg(arguments, void *)); lua_pushstring(L, pointer); break; }
+      case '%': lua_pushstring(L, "%"); break;
+      default: one[0] = '%'; one[1] = percent[1]; lua_pushstring(L, one); break;
+    }
+    parts += 2;
+    if (!percent[1]) { at = percent+1; break; }
+    at = percent+2;
+  }
+  lua_pushstring(L, at);
+  { BoundaryValue value = {0}; operation(L, 44, parts+1, 0, &value); }
+  return lua_tolstring(L, -1, NULL);
+}
+API const char *lua_pushfstring(lua_State *L, const char *format, ...) {
+  const char *text; va_list arguments;
+  va_start(arguments, format); text = lua_pushvfstring(L, format, arguments); va_end(arguments);
+  return text;
+}
+API void luaL_where(lua_State *L, int level) {
+  BoundaryValue value = {0}; operation(L, 43, level, 0, &value);
+}
+API int luaL_error(lua_State *L, const char *format, ...) {
+  va_list arguments;
+  luaL_where(L, 1); va_start(arguments, format);
+  lua_pushvfstring(L, format, arguments); va_end(arguments);
+  lua_concat(L, 2); return lua_error(L);
+}
+API int luaL_argerror(lua_State *L, int index, const char *detail) {
+  BoundaryValue value = {0};
+  if (!detail) detail = "(null)";
+  value.bytes = detail; value.length = strlen(detail);
+  operation(L, 42, index, 0, &value);
+  luaL_where(L, 1); lua_insert(L, -2); lua_concat(L, 2);
+  return lua_error(L);
+}
+API int luaL_typerror(lua_State *L, int index, const char *expected) {
+  const char *detail = lua_pushfstring(L, "%s expected, got %s", expected, lua_typename(L, lua_type(L, index)));
+  return luaL_argerror(L, index, detail);
+}
+API void luaL_checktype(lua_State *L, int index, int type) {
+  if (lua_type(L, index) != type) luaL_typerror(L, index, lua_typename(L, type));
+}
+API void luaL_checkany(lua_State *L, int index) {
+  if (lua_type(L, index) == -1) luaL_argerror(L, index, "value expected");
+}
+API const char *luaL_checklstring(lua_State *L, int index, size_t *length) {
+  const char *text = lua_tolstring(L, index, length);
+  if (!text) luaL_typerror(L, index, "string");
+  return text;
+}
+API const char *luaL_optlstring(lua_State *L, int index, const char *fallback, size_t *length) {
+  if (lua_type(L, index) <= 0) {
+    if (length) *length = fallback ? strlen(fallback) : 0;
+    return fallback;
+  }
+  return luaL_checklstring(L, index, length);
+}
+API double luaL_optnumber(lua_State *L, int index, double fallback) {
+  return lua_type(L, index) <= 0 ? fallback : luaL_checknumber(L, index);
+}
+API lua_Integer luaL_checkinteger(lua_State *L, int index) {
+  lua_Integer integer = lua_tointeger(L, index);
+  if (!integer && !lua_isnumber(L, index)) luaL_typerror(L, index, "number");
+  return integer;
+}
+API lua_Integer luaL_optinteger(lua_State *L, int index, lua_Integer fallback) {
+  return lua_type(L, index) <= 0 ? fallback : luaL_checkinteger(L, index);
+}
+API void luaL_checkstack(lua_State *L, int extra, const char *detail) {
+  if (!lua_checkstack(L, extra)) luaL_error(L, "stack overflow (%s)", detail);
+}
+API int luaL_checkoption(lua_State *L, int index, const char *fallback, const char *const options[]) {
+  const char *text = fallback ? luaL_optlstring(L,index,fallback,NULL) : luaL_checklstring(L,index,NULL);
+  int i;
+  for (i=0; options[i]; i++) if (!strcmp(text, options[i])) return i;
+  return luaL_argerror(L,index,lua_pushfstring(L,"invalid option '%s'",text));
+}
+API int luaL_newmetatable(lua_State *L, const char *name) {
+  lua_getfield(L,LUA_REGISTRYINDEX,name);
+  if (lua_type(L,-1) != 0) return 0;
+  lua_settop(L,-2); lua_newtable(L); lua_pushvalue(L,-1);
+  lua_setfield(L,LUA_REGISTRYINDEX,name); return 1;
+}
+API void *luaL_checkudata(lua_State *L, int index, const char *name) {
+  void *pointer = lua_touserdata(L,index);
+  if (pointer && lua_getmetatable(L,index)) {
+    lua_getfield(L,LUA_REGISTRYINDEX,name);
+    if (lua_rawequal(L,-1,-2)) { lua_settop(L,-3); return pointer; }
+  }
+  luaL_typerror(L,index,name); return NULL;
+}
+API int luaL_getmetafield(lua_State *L, int index, const char *event) {
+  if (!lua_getmetatable(L,index)) return 0;
+  lua_pushstring(L,event); lua_rawget(L,-2);
+  if (lua_type(L,-1) == 0) { lua_settop(L,-3); return 0; }
+  lua_remove(L,-2); return 1;
+}
+static int absolute_index(lua_State *L, int index) {
+  return index > 0 || index <= LUA_REGISTRYINDEX ? index : lua_gettop(L)+index+1;
+}
+API int luaL_callmeta(lua_State *L, int index, const char *event) {
+  index = absolute_index(L,index);
+  if (!luaL_getmetafield(L,index,event)) return 0;
+  lua_pushvalue(L,index); lua_call(L,1,1); return 1;
+}
+API const char *luaL_findtable(lua_State *L, int index, const char *path, int hint) {
+  const char *part = path;
+  lua_pushvalue(L,index);
+  for (;;) {
+    const char *end = strchr(part,'.');
+    if (!end) end = part+strlen(part);
+    lua_pushlstring(L,part,(size_t)(end-part)); lua_rawget(L,-2);
+    if (lua_type(L,-1) == 0) {
+      lua_settop(L,-2); lua_createtable(L,0,*end == '.' ? 1 : hint);
+      lua_pushlstring(L,part,(size_t)(end-part)); lua_pushvalue(L,-2); lua_settable(L,-4);
+    } else if (lua_type(L,-1) != 5) {
+      lua_settop(L,-3); return part;
+    }
+    lua_remove(L,-2);
+    if (!*end) return NULL;
+    part = end+1;
+  }
+}
+API void luaL_openlib(lua_State *L, const char *name, const luaL_Reg *functions, int captures) {
+  const luaL_Reg *entry;
+  if (name) {
+    int fields = 0;
+    for (entry=functions; entry->name; entry++) fields++;
+    luaL_findtable(L,LUA_REGISTRYINDEX,"_LOADED",1);
+    lua_getfield(L,-1,name);
+    if (lua_type(L,-1) != 5) {
+      lua_settop(L,-2);
+      if (luaL_findtable(L,LUA_GLOBALSINDEX,name,fields)) luaL_error(L,"name conflict for module '%s'",name);
+      lua_pushvalue(L,-1); lua_setfield(L,-3,name);
+    }
+    lua_remove(L,-2); lua_insert(L,-(captures+1));
+  }
+  for (entry=functions; entry->name; entry++) {
+    int i;
+    for (i=0; i<captures; i++) lua_pushvalue(L,-captures);
+    lua_pushcclosure(L,entry->func,captures); lua_setfield(L,-(captures+2),entry->name);
+  }
+  lua_settop(L,-captures-1);
+}
+API void luaL_register(lua_State *L, const char *name, const luaL_Reg *functions) {
+  luaL_openlib(L,name,functions,0);
+}
+API int luaL_ref(lua_State *L, int index) {
+  int reference;
+  index = absolute_index(L,index);
+  if (lua_type(L,-1) == 0) { lua_settop(L,-2); return -1; }
+  lua_rawgeti(L,index,0); reference = (int)lua_tointeger(L,-1); lua_settop(L,-2);
+  if (reference) { lua_rawgeti(L,index,reference); lua_rawseti(L,index,0); }
+  else reference = (int)lua_objlen(L,index)+1;
+  lua_rawseti(L,index,reference); return reference;
+}
+API void luaL_unref(lua_State *L, int index, int reference) {
+  if (reference < 0) return;
+  index = absolute_index(L,index);
+  lua_rawgeti(L,index,0); lua_rawseti(L,index,reference);
+  lua_pushinteger(L,reference); lua_rawseti(L,index,0);
 }

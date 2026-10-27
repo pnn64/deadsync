@@ -6,10 +6,11 @@ The first completion target remains arbitrary standalone Lua 5.1 programs with
 correct libraries, GC, closures, metatables, coroutines and errors. The current
 implementation is an early functional stage of that target.
 
-Current work follows correctness and Lua 5.1 compatibility first. Close known
-failures and expand differential coverage against official Lua before resuming
-performance tuning. Existing performance reports remain historical baselines;
-new compatibility milestones require correctness checks, not benchmark campaigns.
+Current work follows correctness and Lua 5.1 compatibility first. Performance
+tuning stays deferred until the full standalone Lua 5.1 parity gate is met.
+Close missing behavior and failures, run the full official suite, and expand
+differential coverage against official Lua. Existing performance reports remain
+historical baselines; compatibility milestones require correctness checks.
 Full standalone Lua 5.1 parity is still an open gate.
 
 ## Preservation and current scope
@@ -33,20 +34,22 @@ performance JSON keeps its recorded measurement provenance.
 | Persistent compiled cache | Opt-in ProgramCache persists the shared bytecode, constants, collector/debug metadata and native re-export words. Entries bind the format/dialect/target, Cargo compiler build and lexer character classes; full source/name equality guards filename collisions. Bounded decoding, integrity checks, Program verification and native tree/range checks reject incompatible entries. Temporary-file replacement and compile fallback preserve availability. Fresh-process source/native reloads and concurrent writers are tested. Directory eviction, a memory cache and package/CLI integration remain open; tiny/native inputs may reload more slowly than recompilation. |
 | Native host calls | Builtins and registered Rust function pointers use numeric native IDs and register argument ranges. HostCall borrows arguments, writes separate results and accesses up to 255 traced/mutable Lua captures. Private owned binding data stays separate from Lua upvalues. Protected nested Lua/native calls preserve outer frames, share the instruction quota and return arbitrary error values to Rust. Unprotected stack calls retain failing child frames for outer error handlers. Hooks, coroutine callers, resumed children, finalizers, preload modules and per-VM cached-program bindings are tested. Callback and nested-call measurements exist. Suspending Rust callback stacks, richer Rust host objects and broader error/overhead work remain open. |
 | Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
-| Machine code | Optional; defer until compatibility baselines and profiles identify profitable paths. |
+| Machine code | Optional; defer until full standalone Lua 5.1 parity, then use profiles to identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
 | Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records seventeen reference and Rust passes among eighteen probes, including `attrib.lua` and `verybig.lua`. `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. A separate standalone CLI audit records remaining mismatches against a checksum-pinned official executable. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
-| Performance | Initial reference harness exists. Expand throughput, startup, compile cost, allocations, live/peak memory, scaling, representative workloads and other Rust engines. Preserve samples and machine/build metadata. |
+| Performance | Deferred until full standalone Lua 5.1 parity. Preserve existing reference harnesses and historical measurements; later work covers throughput, startup, compile cost, allocations, live/peak memory and representative scaling. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
-Next work should finish the standalone engine: register allocation/resource limits, incremental collection,
-remaining standard libraries, complete diagnostics/debug behavior, native export/resource edges and
-cache integration/eviction. Production migration requires the complete compatibility and
-performance gates; the current regression corpus does not establish them.
+Next work should run unchanged `all.lua` and `main.lua` against both runtimes,
+retain failures and use them to direct compatibility fixes. The C/auxiliary
+APIs, production native loading and remaining language, library, debug, GC and
+resource behavior must also be completed. Selected passing probes and
+declaration counts do not close these gates. Production migration also requires
+the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 520 differential/adversarial integration tests, seventy-three unit tests and
+crate, 550 differential/adversarial integration tests, seventy-three unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -154,6 +157,19 @@ functions plus one auxiliary function. Validation lists the remaining 30 core
 names. Declarations are not proof of complete semantics or production C API
 availability. Full standalone Lua 5.1 and native loading remain open gates;
 performance tuning remains deferred.
+
+The [native auxiliary checks](testing/2026-10-27-rust-lua-native-auxiliary.md)
+add C formatted messages, source prefixes, argument/type/default/option checks,
+tagged userdata, raw metafields and metamethod calls, module registration,
+dotted table creation and reference handles. Formatting uses primitive VM
+concatenation without an extra collector check, matching Lua 5.1's observable
+finalizer timing. C error handlers exclude the error slot from the failing
+native frame's locals. Shared-source C cases cover bytes, stack effects,
+method/self names, environments, captured roots and reference reuse. Four new
+Rust groups accompany 24 additional declarations. The development header now
+declares 52 of 80 core and 23 of 36 auxiliary functions; validation lists missing
+names. Complete semantics, production native loading, the full official suite
+and standalone Lua 5.1 parity remain open. Performance work stays deferred.
 
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,
