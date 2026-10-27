@@ -2,6 +2,8 @@
 use deadlib_image_png::zlib::{Inflater, StreamStatus, decompress_prefix};
 use libfuzzer_sys::fuzz_target;
 use std::{io::Read, sync::OnceLock};
+#[path = "../support/reference.rs"]
+mod reference;
 #[path = "../../tests/support/huffman.rs"]
 mod wire;
 
@@ -47,7 +49,8 @@ fuzz_target!(|data: &[u8]| {
             assert!(expected.is_err());
         }
     }
-    if let Ok((raw, _)) = &expected {
+    if let Ok((raw, consumed)) = &expected {
+        reference::assert_zlib(&bytes[..*consumed], raw);
         let mut reference = Vec::new();
         let result = flate2::read::ZlibDecoder::new(bytes.as_slice())
             .take((limit + 1) as u64)

@@ -16,6 +16,7 @@ deadlib-image-png = { path = ".." }
 png = "0.18.1"
 flate2 = "1.1.10"
 crc32fast = "1.5.3"
+libdeflater = "=1.26.1"
 
 [[bin]]
 name = "decode"

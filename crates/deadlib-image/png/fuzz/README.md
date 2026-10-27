@@ -4,23 +4,25 @@ This is an isolated Cargo workspace. It never adds libFuzzer, png, flate2, or an
 other codec to the production dependency graph. All targets bound decompression,
 metadata, frame counts and input sizes before exercising untrusted inputs.
 
-On Linux with nightly Rust, rust-src, a C++ compiler, and cargo-fuzz:
+On Linux with nightly Rust, rust-src, Clang/C++ compilers, and cargo-fuzz:
 
 ```sh
 cargo run -p deadlib-image-png --example seed_fuzz
 cd crates/deadlib-image/png
 cargo +nightly fuzz run decode -- -runs=10000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
-cargo +nightly fuzz run zlib -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
+CC=clang CFLAGS="-fsanitize=address" cargo +nightly fuzz run zlib -- -runs=20000 -seed=782347 -max_len=262144 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run png_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run inflate_stream -- -runs=20000 -seed=782347 -max_len=65536 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run encode_stream -- -runs=20000 -seed=782347 -max_len=256 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run profiles -- -runs=20000 -seed=782347 -max_len=4096 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run deflate_stream -- -runs=20000 -seed=782347 -max_len=131072 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
-cargo +nightly fuzz run huffman -- -runs=20000 -seed=782347 -max_len=64 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
+CC=clang CFLAGS="-fsanitize=address" cargo +nightly fuzz run huffman -- -runs=20000 -seed=782347 -max_len=64 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
 ```
 
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
-extracts their IDAT zlib streams. Working corpora, crash artifacts and builds are
+extracts their IDAT zlib streams. It also adds 649 independent Huffman wire
+fixtures to the raw zlib corpus, including all 68 extended-distance positives.
+Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.
 An optional argument to `seed_fuzz` creates a fresh corpus root and refuses an
@@ -37,11 +39,10 @@ directory). This keeps each campaign's initial corpus separate from mutations.
 `decode` checks for native parser failures and compares every native sample when
 the independent Rust png decoder also accepts the image. Reference ancillary
 policies differ, so a reference rejection does not automatically mean a native
-sample bug. `zlib` compares every native-accepted stream with bounded flate2
-decompression. This raw harness currently assumes flate2 accepts every native
-positive. Published HDIST 31/32 definitions are known counterexamples, so a
-compatible positive oracle remains required for that target. The structured
-Huffman target and C compatibility tests explicitly verify those legal cases.
+sample bug. `zlib` compares every native-accepted stream with bounded libdeflate
+decompression, including published HDIST 31/32 definitions that default flate2
+rejects. It caps compressed input at 256 KiB and output at 1 MiB. The reference
+is confined to this isolated fuzz workspace; normal PNG dependencies are unchanged.
 Integration tests separately check generated valid streams and
 native output rejected for truncation/checksum/limit errors. Coverage counters
 include the harness and reference codecs, not just the native implementation.
@@ -97,11 +98,13 @@ family. It does not store the generated compressed streams in the fuzz input.
 Unmodified fixtures have independent exact-output/acceptance expectations.
 Mutated streams check buffered/fragmented acceptance, samples, prefix consumption,
 fused errors, progress, output tail guards and bounded inflater memory. Every
-native-accepted stream also checks flate2 output when that decoder accepts it.
+native-accepted stream checks libdeflate output, with flate2 as an additional
+comparison when that decoder accepts it.
 Default miniz/zlib reject unused HDIST 31/32 definitions permitted by the published
 RFC. The deterministic suite explicitly checks that policy, and a C compatibility
 build independently verifies all such positive fixtures. A reference rejection
-of an arbitrary mutation is therefore not treated as a native conformance verdict.
+of an arbitrary mutation is therefore not treated as a native conformance verdict;
+libdeflate now supplies the unconditional positive check.
 See `../huffman-conformance.json` and `../tests/oracle/README.md` for the two C
 configurations and their different literal-count behavior. Longer campaigns,
 arbitrary symbol permutations and native-only coverage analysis remain open.
@@ -142,6 +145,44 @@ and failed while preserving metadata, before any fuzzing started. Fresh Windows
 `Copy-Item` directories were compared byte for byte with the untouched seed
 generator output before use. No partly staged or previously mutated corpus was
 reused. Generate directly into a fresh Linux directory when reproducing there.
+
+## Compatible positive reference
+
+The raw target's old flate2-only assertion failed on the legal regression stream
+`reports/reference-hdist31.zlib`: native output is two zero bytes, while miniz
+rejects its unused distance definitions. The saved `cafedc93d` harness reproduces
+exit 77; the updated ASan harness accepts the exact input. Both replay logs and
+source/binary/fixture hashes are retained. Replays are excluded from campaign totals.
+
+The reference now uses pinned `libdeflater` / `libdeflate-sys` 1.26.1, bundling
+libdeflate 1.26. Its [header parser](https://github.com/ebiggers/libdeflate/blob/v1.26/lib/decompress_template.h)
+supports all 32 distance definitions. Its [tree builder](https://github.com/ebiggers/libdeflate/blob/v1.26/lib/deflate_decompress.c)
+also permits some malformed codes, so it serves as a positive-output oracle.
+Native and strict C negative assertions remain in the conformance tests.
+`fuzz/examples/reference_check.rs` verifies all 3,091 valid Huffman fixtures,
+including all 68 extended-distance cases, plus all 32 window/level headers on
+Windows and Linux. Native rejects all 16,554 malformed fixtures. A bounded
+64-byte reference probe accepts 64 excess-literal-count streams and one unused
+code branch; those reference acceptances do not change native validation.
+
+```sh
+cargo run --locked --manifest-path crates/deadlib-image/png/fuzz/Cargo.toml --release --example reference_check
+```
+
+Fresh campaigns pass 20,000 raw-zlib executions in 18 seconds (378 MiB peak) and
+10,000 structured-Huffman executions in 157 seconds (404 MiB). The raw corpus has
+810 files / 4,803,389 bytes with a 136,426-byte maximum; the selector corpus has
+649 files / 7,788 bytes. Every native-accepted Huffman mutation now has an
+independent positive check, including previously unsupported distance definitions.
+Clang 19.1.7 builds the C reference with AddressSanitizer too; archive references
+to `__asan_report_*` and defined `__asan_init` in both final binaries are verified.
+
+`reports/reference-source.json` records the commands, environment, package and
+bundled-source hashes, corpora, instrumented archives and binaries. The normal
+tests, Clippy, dependency boundary and isolated build are retained in
+`../reference-conformance.log` / `.json`. These 30,000 executions bring successful
+historical campaigns to 270,000 across eight targets. They are smoke campaigns;
+native-only fuzz coverage and longer runs remain open.
 
 The conformance follow-up used a fresh `fuzz/corpus/png_conformance_20261026`
 directory containing only the 175 checked-in PNGSuite files and independent

@@ -1,0 +1,44 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3532241745
+INFO: Loaded 1 modules   (3222 inline 8-bit counters): 3222 [0x5d6c9ef54fb0, 0x5d6c9ef55c46), 
+INFO: Loaded 1 PC tables (3222 PCs): 3222 [0x5d6c9ef55c48,0x5d6c9ef625a8), 
+/tmp/deadlib-image-zlib-flate2-cafedc93d: Running 1 inputs 1 time(s) each.
+Running: crates/deadlib-image/png/fuzz/reports/reference-hdist31.zlib
+
+thread '<unnamed>' (245451) panicked at fuzz_targets/zlib.rs:10:14:
+called `Result::unwrap()` on an `Err` value: Custom { kind: InvalidInput, error: "corrupt deflate stream" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+==245451== ERROR: libFuzzer: deadly signal
+    #0 0x5d6c9ed86a31  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x144a31) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #1 0x5d6c9ee62dea  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x220dea) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #2 0x5d6c9eeda3e1  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2983e1) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #3 0x781d97a4bd6f  (/lib/x86_64-linux-gnu/libc.so.6+0x3fd6f) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #4 0x781d97aa069b  (/lib/x86_64-linux-gnu/libc.so.6+0x9469b) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #5 0x781d97a4bc41  (/lib/x86_64-linux-gnu/libc.so.6+0x3fc41) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #6 0x781d97a344ab  (/lib/x86_64-linux-gnu/libc.so.6+0x284ab) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #7 0x5d6c9ef1f879  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2dd879) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #8 0x5d6c9ef1e4f8  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2dc4f8) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #9 0x5d6c9edd4524  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x192524) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #10 0x5d6c9ef1e781  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2dc781) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #11 0x5d6c9ef0cdf1  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2cadf1) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #12 0x5d6c9ef05e18  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2c3e18) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #13 0x5d6c9ef0d4dc  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2cb4dc) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #14 0x5d6c9ef31bdb  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2efbdb) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #15 0x5d6c9ef32c61  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2f0c61) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #16 0x5d6c9edae0a7  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x16c0a7) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #17 0x5d6c9edb0108  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x16e108) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #18 0x5d6c9edb2d2c  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x170d2c) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #19 0x5d6c9edd40b4  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x1920b4) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #20 0x5d6c9edd4e98  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x192e98) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #21 0x5d6c9edd37ad  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x1917ad) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #22 0x5d6c9eedb2a3  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x2992a3) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #23 0x5d6c9ede335f  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x1a135f) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #24 0x5d6c9ee09c17  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x1c7c17) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #25 0x5d6c9edd4f2d  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0x192f2d) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+    #26 0x781d97a35ca7  (/lib/x86_64-linux-gnu/libc.so.6+0x29ca7) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #27 0x781d97a35d64  (/lib/x86_64-linux-gnu/libc.so.6+0x29d64) (BuildId: 5e5b51f4c39af9ac589408c1dc432ba390a273cc)
+    #28 0x5d6c9ece7b20  (/tmp/deadlib-image-zlib-flate2-cafedc93d+0xa5b20) (BuildId: d994606bae9abe0922c0a31bf3e47a4b65adf128)
+
+NOTE: libFuzzer has rudimentary signal handlers.
+      Combine libFuzzer with AddressSanitizer or similar for better crash reports.
+SUMMARY: libFuzzer: deadly signal

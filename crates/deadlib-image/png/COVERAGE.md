@@ -24,7 +24,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 240,000 recorded successful sanitizer executions across milestones, including 20,000 selected-inflater runs; compatible raw positive oracle, longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 270,000 recorded successful sanitizer executions across milestones, including 30,000 with the compatible positive oracle; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -479,9 +479,34 @@ The selected ordinary library has 3,793/3,926 covered lines (96.61%),
 4,574/4,953 regions (92.35%) and 1,081/1,290 instrumented branch outcomes (83.80%).
 Results, environment and runner/source/executable hashes are under
 `coverage-reports/inflate-*`. Native fuzz coverage remains a separate open item.
-The general raw flate2 fuzzer also needs a compatible positive oracle for legal
+At that checkpoint, the general raw flate2 fuzzer needed a compatible positive oracle for legal
 HDIST 31/32 streams; the structured Huffman and C compatibility checks cover
-those positives, while default flate2 rejects them.
+those positives, while default flate2 rejects them. The next milestone resolves
+the general harness gap without changing production code.
+
+Positive-oracle milestone: pinned libdeflater/libdeflate-sys 1.26.1 supplies
+libdeflate 1.26 in the isolated fuzz workspace. Every native-accepted raw stream
+and structured Huffman mutation now has an independent sample check, including
+HDIST 31/32. The old saved harness fails on an exact legal regression fixture;
+the updated ASan binary passes it. Deterministic Windows/Linux checks validate
+all 3,091 positive fixtures, all 68 extended-distance cases and all 32 zlib
+window/level headers. Native rejects all 16,554 malformed fixtures. The C
+reference permits some malformed forms, so strict negative validation stays in
+the native/C suites. A 64-byte probe records its acceptance of 64 excess-literal
+count cases and one unused code branch.
+
+The seed generator adds 649 raw Huffman wires, producing 810 raw seeds totaling
+4,803,389 bytes; a 256 KiB input cap accommodates the largest 136,426-byte stream.
+Fresh ASan campaigns pass 20,000 raw executions (18 seconds, 378 MiB) and 10,000
+structured executions (157 seconds, 404 MiB). The C reference is instrumented
+with Clang 19.1.7 AddressSanitizer as well. Exact replay/campaign, source/package,
+corpus/archive/binary records are in `fuzz/reports/reference-source.json`.
+These add 30,000 successful executions, totaling 270,000 across eight targets;
+fixed-input replays are excluded. Normal tests (76 passed, five optional C checks
+ignored), both Clippy checks and the isolated offline build pass. The normal
+dependency graph remains only the local shared image crate, and production
+source is byte-for-byte the `cafedc93d` implementation. Validation records are
+`reference-conformance.log` / `.json`. Broader native fuzz coverage remains open.
 
 The requested end state is not yet achieved. Continue without application
 integration, preserving unrelated work and committing verified milestones:
@@ -490,8 +515,7 @@ integration, preserving unrelated work and committing verified milestones:
    covered indexed-color recovery, text decoding and encoder field distinctions.
 2. Resolve the open rows in the Third Edition clause matrix, including ancillary
    semantic edge cases and the scope of BCP47 extension semantics,
-   arbitrary Huffman symbol permutations, the general raw fuzzer's positive
-   reference policy, malformed APNG ordering, and unknown chunks.
+   arbitrary Huffman symbol permutations, malformed APNG ordering, and unknown chunks.
 3. Extend the generated image properties, broader structured mutations,
    independent APNG compositing comparisons, longer sanitizer campaigns and
    coverage review beyond the current streaming and CRC-repaired smoke targets.

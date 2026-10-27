@@ -1,0 +1,36 @@
+   Compiling libc v0.2.191
+   Compiling find-msvc-tools v0.1.15
+   Compiling shlex v2.0.1
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling arbitrary v1.5.0
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png)
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+   Compiling jobserver v0.1.35
+   Compiling cc v1.10.0
+   Compiling libdeflate-sys v1.26.1
+   Compiling libfuzzer-sys v0.4.13
+   Compiling libdeflater v1.26.1
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 22.31s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.17s
+     Running `/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/zlib -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/zlib/ -runs=1 -seed=782347 -timeout=10 /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-hdist31.zlib`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 782347
+INFO: Loaded 1 modules   (1289 inline 8-bit counters): 1289 [0x56e52d59fcd0, 0x56e52d5a01d9), 
+INFO: Loaded 1 PC tables (1289 PCs): 1289 [0x56e52d5a01e0,0x56e52d5a5270), 
+/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/zlib: Running 1 inputs 1 time(s) each.
+Running: /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-hdist31.zlib
+Executed /mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/reports/reference-hdist31.zlib in 3 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***

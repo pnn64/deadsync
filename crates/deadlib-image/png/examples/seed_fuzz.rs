@@ -27,12 +27,14 @@ fn main() -> std::io::Result<()> {
     let deflate_stream = corpus.join("deflate_stream");
     let huffman_dir = corpus.join("huffman");
     fs::create_dir_all(&huffman_dir)?;
+    fs::create_dir_all(&zlib)?;
     let cases = huffman::all_cases();
     let seeds = huffman::seed_indices(&cases);
     for &index in &seeds {
         let mut input = (index as u32).to_le_bytes().to_vec();
         input.extend_from_slice(&[0, 2, 3, 0, 0, 0, 0, 0]);
         fs::write(huffman_dir.join(format!("case-{index}")), input)?;
+        fs::write(zlib.join(format!("huffman-{index}")), &cases[index].bytes)?;
     }
     println!("Huffman: {} fixtures, {} seeds", cases.len(), seeds.len());
     fs::create_dir_all(&deflate_stream)?;
